@@ -1,4 +1,4 @@
-# kuna strict fix (P6, ActionMarkImplied load-crosses-store test; no option).
+# unlace strict fix (P6, ActionMarkImplied load-crosses-store test; no option).
 #
 # A load that reads bytes a later store overwrites must keep its own
 # statement ahead of the store.  Whether a load may print after a store is

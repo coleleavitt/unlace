@@ -8,15 +8,15 @@ acceptance bar.
 
 ## Implemented discovery behavior
 
-The durable fixture `decompiler/crates/kuna-analysis/tests/fixtures/x86listingswitch_i386`
+The durable fixture `decompiler/crates/unlace-analysis/tests/fixtures/x86listingswitch_i386`
 contains 24 directly called leaves, a four-case dispatcher at `0x100400`, an
 independent function at `0x100480` between the cases, and a real helper reachable
 only from case two. A callback word immediately follows the table. This command
 isolates AIF from the separate `fast_funcdisc` pointer-table entry heuristic:
 
 ```sh
-decompiler/target/release/kuna functions \
-  decompiler/crates/kuna-analysis/tests/fixtures/x86listingswitch_i386 \
+decompiler/target/release/unlace functions \
+  decompiler/crates/unlace-analysis/tests/fixtures/x86listingswitch_i386 \
   --mode aggressive --option fast_funcdisc off --option listing on --json
 ```
 
@@ -253,7 +253,7 @@ ranges and contention prevent a tight global performance claim.
 
 ## Original fixed-byte evidence
 
-The public fixture `decompiler/crates/kuna-analysis/tests/fixtures/switchtable_i386`
+The public fixture `decompiler/crates/unlace-analysis/tests/fixtures/switchtable_i386`
 has a four-entry absolute-pointer table. `dispatch` starts at `0x100000`, checks
 `eax <= 3`, and dispatches at `0x100009`. Its case starts are `0x100010`,
 `0x100017`, `0x10001e`, and `0x100025`; the default starts at `0x10002c`.
@@ -261,8 +261,8 @@ has a four-entry absolute-pointer table. `dispatch` starts at `0x100000`, checks
 The existing reference reader reaches each case:
 
 ```sh
-decompiler/target/release/kuna xrefs \
-  decompiler/crates/kuna-analysis/tests/fixtures/switchtable_i386 \
+decompiler/target/release/unlace xrefs \
+  decompiler/crates/unlace-analysis/tests/fixtures/switchtable_i386 \
   --to 0x100010 --kind jump --json
 ```
 
@@ -284,7 +284,7 @@ build of its exact source tree `d5fb1cb3`.
 ## Why copying the reference reader is insufficient
 
 The direct-table arm in `listing/xrefs.rs::build_with_focus` calls
-`kuna_switchtable::targets` with `cases=None`. That reader scans consecutive
+`unlace_switchtable::targets` with `cases=None`. That reader scans consecutive
 read-only pointers until a word fails its section test or reaches `jumptablemax`.
 A neighbouring callback array can contain perfectly valid code pointers.
 
@@ -295,8 +295,8 @@ entries. It builds an isolated temporary ELF; repository files are unchanged:
 python3 - <<'PY'
 from pathlib import Path
 import subprocess, tempfile
-kuna = Path('decompiler/target/release/kuna').resolve()
-source = Path('decompiler/crates/kuna-analysis/tests/fixtures/switchtable_i386.s').read_text()
+unlace = Path('decompiler/target/release/unlace').resolve()
+source = Path('decompiler/crates/unlace-analysis/tests/fixtures/switchtable_i386.s').read_text()
 source = source.replace('\t.section\t.rodata', '''\t.globl independent
 \t.type independent, @function
 independent:
@@ -308,12 +308,12 @@ independent:
 \t.size independent, .-independent
 \t.section\t.rodata''')
 source = source.replace('msg_alpha:\n', 'adjacent_callback_array:\n\t.long independent\nmsg_alpha:\n')
-directory = Path(tempfile.mkdtemp(prefix='kuna-x86listingswitch-'))
+directory = Path(tempfile.mkdtemp(prefix='unlace-x86listingswitch-'))
 assembly, binary = directory / 'adjacent.s', directory / 'adjacent'
 assembly.write_text(source)
 subprocess.run(['gcc', '-m32', '-nostdlib', '-no-pie', '-Wl,-Ttext=0x100000',
                 '-Wl,-e,dispatch', str(assembly), '-o', str(binary)], check=True)
-subprocess.run([str(kuna), 'xrefs', str(binary), '--from', 'dispatch',
+subprocess.run([str(unlace), 'xrefs', str(binary), '--from', 'dispatch',
                 '--kind', 'jump', '--json'], check=True)
 PY
 ```

@@ -1,5 +1,5 @@
 /* Fixture for the two obstack channels of `option libctypes off|opaque`
- * (tests/stages/kuna-libctypes.toml).
+ * (tests/stages/unlace-libctypes.toml).
  *
  * Built: gcc -g0 -O1 -o libctypes_obstack_import_x86_64 \
  *            libctypes_obstack_import_x86_64.c

@@ -10,7 +10,7 @@ offset = '0x100000'
 readonly = true
 hex = '03e0000800000000'
 
-# kuna wrapadd: a four-byte addition the machine wraps at 32 bits before a
+# unlace wrapadd: a four-byte addition the machine wraps at 32 bits before a
 # 64-bit sign extension prints as `value + 1` over a signed int, which
 # overflows (undefined C) at INT32_MAX. P9 emission / cast-policy; P0
 # assertion `option wrapadd`. Two passes over LLVM objects for x86-64,

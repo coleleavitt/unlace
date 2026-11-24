@@ -2,7 +2,7 @@
  * element its pointer is typed to.  Every object main passes ends at the last
  * byte the function touches, at the end of a readable page, so a printed read
  * or write of the whole field or element faults where the binary does not.
- * The round trip compiles kuna's printing of every function between the
+ * The round trip compiles unlace's printing of every function between the
  * markers against the export's header, links it with the prelude and main, and
  * compares the output with this binary's.  Built with -std=gnu11 at gcc -O0,
  * clang -O0, gcc -O2 and clang -O2. */
@@ -131,7 +131,7 @@ static unsigned char *page_end(unsigned n, const unsigned char *bytes)
 }
 int main(void)
 {
-    static const char name[] = "kuna";
+    static const char name[] = "unlace";
     unsigned char rb[24];
     const char *np = name;
     memcpy(rb, &np, 8);

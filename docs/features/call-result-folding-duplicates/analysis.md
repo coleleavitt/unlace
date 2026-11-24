@@ -2,7 +2,7 @@
 
 The witness calls `helper` once, narrows its return to sixteen bits, compares
 that value throughout an inner loop, and stores the same value after the loop.
-With `foldcallret` enabled, kuna made the direct call output implied because it
+With `foldcallret` enabled, unlace made the direct call output implied because it
 had one descendant (`SUBPIECE`). The derived low-word value had two descendants,
 but ordinary multiplier accounting considered the expression cheap enough to
 print twice. The resulting C called `helper()` in both sinks.

@@ -49,7 +49,7 @@ fn fauxware() -> String {
 /// failure).
 fn stub_decomp_dbg(tag: &str, c_body: &str, transcript: &str, stderr_text: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!(
-        "kuna_stub_dbg_{tag}_{}_{}",
+        "unlace_stub_dbg_{tag}_{}_{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -68,9 +68,9 @@ fn stub_decomp_dbg(tag: &str, c_body: &str, transcript: &str, stderr_text: &str)
          \x20 esac\n\
          done\n\
          if [ \"${{UNLACE_EXPECT_LOAD_LINE+x}}\" = x ] && [ \"$saw_load\" != 1 ]; then exit 8; fi\n\
-         [ -n \"$out\" ] && cat > \"$out\" <<'KUNA_C_EOF'\n{c_body}\nKUNA_C_EOF\n\
-         cat <<'KUNA_OUT_EOF'\n{transcript}\nKUNA_OUT_EOF\n\
-         cat >&2 <<'KUNA_ERR_EOF'\n{stderr_text}\nKUNA_ERR_EOF\n\
+         [ -n \"$out\" ] && cat > \"$out\" <<'UNLACE_C_EOF'\n{c_body}\nUNLACE_C_EOF\n\
+         cat <<'UNLACE_OUT_EOF'\n{transcript}\nUNLACE_OUT_EOF\n\
+         cat >&2 <<'UNLACE_ERR_EOF'\n{stderr_text}\nUNLACE_ERR_EOF\n\
          exit 0\n"
     );
     let mut fh = std::fs::File::create(&path).expect("create the decomp_dbg stub");
@@ -95,7 +95,7 @@ fn run_decompile(stub: &Path, target: &str) -> (String, String, Option<i32>) {
             stub.to_str().unwrap(),
         ])
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -619,12 +619,12 @@ fn hostile_scope() -> String {
 fn every_surface_reports_the_same_load_failure() {
     let bin = hostile_scope();
     let sp = std::env::temp_dir()
-        .join(format!("kuna_clidiag_nospecs_{}", std::process::id()))
+        .join(format!("unlace_clidiag_nospecs_{}", std::process::id()))
         .to_str()
         .unwrap()
         .to_string();
     let project_out = std::env::temp_dir().join(format!(
-        "kuna_clidiag_proj_{}_{}",
+        "unlace_clidiag_proj_{}_{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -654,7 +654,7 @@ fn every_surface_reports_the_same_load_failure() {
         let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(&argv)
             .output()
-            .expect("failed to spawn the kuna binary");
+            .expect("failed to spawn the unlace binary");
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
         assert_eq!(
             out.status.code(),
@@ -695,7 +695,7 @@ fn every_surface_reports_the_same_load_failure() {
 /// else's file.
 fn spaced_dir(tag: &str) -> PathBuf {
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
-        "kuna_pathtest_{tag}_{}_{} with space",
+        "unlace_pathtest_{tag}_{}_{} with space",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -729,7 +729,7 @@ fn a_binary_under_a_spaced_directory_decompiles() {
             specs().as_str(),
         ])
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     let _ = std::fs::remove_dir_all(&dir);
@@ -768,7 +768,7 @@ fn a_spaced_temp_dir_still_yields_c() {
         ])
         .env("TMPDIR", &dir)
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
 
@@ -839,7 +839,7 @@ fn a_call_that_finalizes_before_its_witness_recovers_its_argument() {
         let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(&argv)
             .output()
-            .expect("failed to spawn the kuna binary");
+            .expect("failed to spawn the unlace binary");
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
         assert_eq!(
             out.status.code(),
@@ -909,7 +909,7 @@ fn a_generated_name_the_inventory_prints_is_selectable_by_decompile() {
             sp.as_str(),
         ])
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     let inventory = String::from_utf8_lossy(&listed.stdout).into_owned();
     let inventory_err = String::from_utf8_lossy(&listed.stderr).into_owned();
     assert_eq!(
@@ -933,7 +933,7 @@ fn a_generated_name_the_inventory_prints_is_selectable_by_decompile() {
             sp.as_str(),
         ])
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     assert!(
@@ -978,7 +978,7 @@ fn a_name_that_already_resolved_is_not_re_decompiled_wider() {
             specs().as_str(),
         ])
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     assert_eq!(out.status.code(), Some(0), "must succeed: {stderr}");
@@ -1024,7 +1024,7 @@ fn a_prototype_declared_under_another_name_binds_on_both_surfaces() {
         let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(&argv)
             .output()
-            .expect("failed to spawn the kuna binary");
+            .expect("failed to spawn the unlace binary");
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
         assert_eq!(
             out.status.code(),
@@ -1088,7 +1088,7 @@ fn a_prototype_at_an_entry_address_binds_on_both_surfaces() {
         let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args(&argv)
             .output()
-            .expect("failed to spawn the kuna binary");
+            .expect("failed to spawn the unlace binary");
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
         assert_eq!(
             out.status.code(),
@@ -1146,7 +1146,7 @@ fn a_prototype_address_that_starts_no_function_is_rejected() {
             specs().as_str(),
         ])
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     assert!(
@@ -1184,14 +1184,14 @@ fn an_address_inside_a_function_is_decompiled_with_a_note_naming_it() {
             .args(extra)
             .args(["--sleighpath", sp.as_str()])
             .output()
-            .expect("failed to spawn the kuna binary");
+            .expect("failed to spawn the unlace binary");
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
         assert_eq!(out.status.code(), Some(0), "{extra:?}: {stderr}");
         (String::from_utf8_lossy(&out.stdout).into_owned(), stderr)
     };
     let note = |at: &str, owner: &str, entry: &str, offset: &str| {
         format!(
-            "note: {at} is interior to {owner} ({entry}+{offset}), not an entry kuna discovered; \
+            "note: {at} is interior to {owner} ({entry}+{offset}), not an entry unlace discovered; \
              decompiled from {at} as asked (--define-function {at} declares a function there)"
         )
     };
@@ -1241,7 +1241,7 @@ fn an_address_inside_a_function_is_decompiled_with_a_note_naming_it() {
         "one note per record: {stderr}"
     );
 
-    let out = std::env::temp_dir().join(format!("kuna_interior_project_{}", std::process::id()));
+    let out = std::env::temp_dir().join(format!("unlace_interior_project_{}", std::process::id()));
     let (_, stderr) = run(&[
         "decompile-project",
         &bin,
@@ -1435,7 +1435,7 @@ fn a_prototype_binds_to_the_address_the_run_selected() {
             specs().as_str(),
         ])
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     assert!(
@@ -1472,7 +1472,7 @@ fn an_unselected_address_that_starts_no_function_is_still_rejected() {
             specs().as_str(),
         ])
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     assert!(

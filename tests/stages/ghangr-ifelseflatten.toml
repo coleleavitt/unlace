@@ -5,7 +5,7 @@
 # is statement-terminating (every endpoint returns / aborts, matching angr's
 # is_statement_terminating) and whose else-clause is not, it drops the `else` and
 # re-parents the former else-body as the if's immediate follower in the parent
-# list. A pure print-tree splice (kuna_flatten_ifelse), no p-code cloned.
+# list. A pure print-tree splice (unlace_flatten_ifelse), no p-code cloned.
 #
 # Witness (self-contained, no relocations): a function that, after structuring,
 # keeps an explicit `else { a0 = 99; }` arm, i.e. a real 3-component BlockIf,
@@ -24,7 +24,7 @@
 # unsound for a non-terminating true-clause, so refusing it is correct, and that
 # safety is what these asserts lock.
 #
-# Stage-pipeline note: kuna's region structurer (default-on, DIV-12) and the
+# Stage-pipeline note: unlace's region structurer (default-on, DIV-12) and the
 # CollapseStructure fallback both already perform terminating-if guard-clause
 # flattening natively, so a 3-component BlockIf with a terminating true-clause
 # does not arise for ordinary compiler output. The residual the pass targets only
@@ -53,7 +53,7 @@ hex = 'f30f1efa89f885ff7f0c85f67e0d01f083ee0175f9c3b863000000c3'
 
 [script]
 commands = [
-    # kuna: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
+    # unlace: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
     'option gotoreduce off',
     'option crossjumprevert off',
     'option dedupitetail off',

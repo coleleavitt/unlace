@@ -3,7 +3,7 @@
 # Ported from decompiler/cpp/options.cc (OptionMaxLineWidth,
 # OptionCommentIndent), printlanguage.cc (setLineCommentIndent) and
 # prettyprint.cc (EmitPrettyPrint). Upstream prints through EmitPrettyPrint,
-# which breaks lines longer than maxlinewidth. kuna printed through the
+# which breaks lines longer than maxlinewidth. unlace printed through the
 # plain emitter only, so `option maxlinewidth` was accepted and did nothing.
 #
 # Stage P9 (emit). The default stays one line per statement; setting

@@ -26,7 +26,7 @@
 # %fs:0x28 and never touch the stack pointer, which is why the defect is
 # invisible on ELF corpora.
 #
-# Stage model: P6 "alias-facets".  kuna_cookiescramble.rs (always on) keeps
+# Stage model: P6 "alias-facets".  unlace_cookiescramble.rs (always on) keeps
 # an INT_XOR of a stack-pointer-derived Varnode from recording an escape site
 # for the call-site checker.
 #

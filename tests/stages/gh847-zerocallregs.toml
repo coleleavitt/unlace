@@ -1,4 +1,4 @@
-# GH-847 (kuna): gcc -fzero-call-used-regs ends every function by clearing
+# GH-847 (unlace): gcc -fzero-call-used-regs ends every function by clearing
 # the call-used registers that are not live at the return (xor %edx,%edx,
 # xor %ecx,%ecx, .., pxor %xmm0,%xmm0 .. pxor %xmm15,%xmm15, then ret), so
 # the register that carries the result is the one it leaves alone.  Return
@@ -8,7 +8,7 @@
 # `return 0`, and a long an undefined16 whose upper half is the cleared rdx.
 # Stage / sub-stage: P4 "output-prototype".  An output trial whose value
 # at the RETURN is a zero the clearing run before the return wrote is
-# retired before the output fill-in (kuna_zerocallregs.rs, always on).
+# retired before the output fill-in (unlace_zerocallregs.rs, always on).
 # Chunk 0x100000: gcc 11.4 -O2 -fno-inline -fzero-call-used-regs=all
 # -fcf-protection=none -c, all functions static noinline:
 #   int check(int *p) { return *p > 10 ? -5 : 0; }

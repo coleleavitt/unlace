@@ -74,7 +74,7 @@ fn query_language(
         .args(["--option", "armframes", "on"])
         .args(extra)
         .output()
-        .expect("run source-built kuna");
+        .expect("run source-built unlace");
     assert!(
         out.status.success(),
         "{}",

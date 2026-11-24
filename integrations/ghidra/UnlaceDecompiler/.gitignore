@@ -14,7 +14,7 @@ bin/
 # Jars dropped into lib/ by buildExtension.gradle's copyDependencies task
 lib/*.jar
 
-# The kuna native binary is a build artifact: it is copied into os/<platform>/
+# The unlace native binary is a build artifact: it is copied into os/<platform>/
 # from target/release/ before packaging (see os/linux_x86_64/README.md)
 os/*/unlace_ghidra
 os/*/unlace_ghidra.exe

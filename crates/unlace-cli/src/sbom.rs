@@ -192,7 +192,7 @@ pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 fn tool_version() -> &'static str {
-    option_env!("KUNA_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
+    option_env!("UNLACE_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
 }
 
 /// RFC 3339 UTC time: `SOURCE_DATE_EPOCH` when set, else now.

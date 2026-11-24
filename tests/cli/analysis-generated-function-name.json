@@ -2,7 +2,7 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_410",
@@ -36,5 +36,5 @@
       "no function"
     ]
   },
-  "notes": "Desired: a name kuna PRINTS is a name kuna ACCEPTS. `functions` reports sub_410 on this stripped ARM PIE via the DIV-20/DIV-68 discovery bundle for non-x86-64 images; single-function `decompile` injected only `listing on`, so the entry was absent and the by-name selector answered `no function matches`. --mode reliable because auto picks aggressive under 500 KiB, which names the bundle itself."
+  "notes": "Desired: a name unlace PRINTS is a name unlace ACCEPTS. `functions` reports sub_410 on this stripped ARM PIE via the DIV-20/DIV-68 discovery bundle for non-x86-64 images; single-function `decompile` injected only `listing on`, so the entry was absent and the by-name selector answered `no function matches`. --mode reliable because auto picks aggressive under 500 KiB, which names the bundle itself."
 }

@@ -2,7 +2,7 @@
 """Compile every synthesized struct declaration out of an exported project header
 and assert offsetof(struct_N, field_0xK) == K for every field.
 
-    kuna decompile-project <binary> -o proj-<tag> --option structsynth param
+    unlace decompile-project <binary> -o proj-<tag> --option structsynth param
     python3 docs/features/structsynth/offsetcheck.py [--m32] proj-<tag> [proj-<tag2> ...]
 
 `--m32` compiles with 32-bit pointers, which is what a project exported from a

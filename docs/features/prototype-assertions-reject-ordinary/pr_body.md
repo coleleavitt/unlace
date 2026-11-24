@@ -6,14 +6,14 @@ parameter position alike, while Ghidra's internal `int4` / `uint4` / `float8`
 spellings work. Five testers filed it independently in one round.
 
 ```console
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/fauxware authenticate \
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/fauxware authenticate \
     --assert 'prototype authenticate unsigned int authenticate(char *user,char *pass)'
 warning: --assert "prototype authenticate unsigned int authenticate(char *user,char *pass)" rejected: Syntax error at line 0 in stream
 extern unsigned int 
                 ^--
 ```
 
-The declaration kuna itself prints cannot be pasted back at it — the same
+The declaration unlace itself prints cannot be pasted back at it — the same
 function's header is `unsigned long authenticate(char *a0,char *a1)`. The
 worked example in `docs/cli.md` was one of the rejected forms.
 
@@ -49,7 +49,7 @@ All three of that probe's directives are rejected before this change and applied
 after.
 
 Gates: `make test` PARITY OK 675/675 · `make test-stages` PARITY OK ·
-`make rust-test` green · `make check-spec` OK · `kuna catalog --check` OK ·
+`make rust-test` green · `make check-spec` OK · `unlace catalog --check` OK ·
 `make test-cli` 32/32.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

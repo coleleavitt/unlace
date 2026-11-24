@@ -3,7 +3,7 @@
 # `report` calls a variadic function pointer twice; the second call is a tail
 # jump through r8, and the register holding its target was read as a fifth
 # argument until the register an indirect call jumps through stopped scoring
-# as one of its arguments (kuna_passthrough.rs, is_call_target). No callee
+# as one of its arguments (unlace_passthrough.rs, is_call_target). No callee
 # symbol carries a signature for a call through a pointer, so the only place
 # to state it is the call instruction.
 #

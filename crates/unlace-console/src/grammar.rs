@@ -2593,7 +2593,7 @@ impl<'a> CParse<'a> {
     fn new_anonymous_record(&mut self, union: bool) -> UnlaceResult<(String, Rc<Datatype>)> {
         self.anonymous_serial += 1;
         let name = format!(
-            "__kuna_anon_{:032x}_{}",
+            "__unlace_anon_{:032x}_{}",
             self.anonymous_key, self.anonymous_serial
         );
         let shell = if self.factory.find_by_name(&name)?.is_some() {

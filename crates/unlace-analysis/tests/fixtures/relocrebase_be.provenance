@@ -1,6 +1,6 @@
 relocrebase_be_* -- big-endian relocatable objects compiled with -g, for the
 analysis tier's rebased view of a big-endian object
-(crates/unlace-analysis/src/loader/kuna_relocrebase.rs tests,
+(crates/unlace-analysis/src/loader/unlace_relocrebase.rs tests,
 crates/unlace-cli/tests/relocrebase_be.rs).
 
 What they are

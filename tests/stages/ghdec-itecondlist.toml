@@ -1,4 +1,4 @@
-# decbench: in a RUN of structurally identical assignment diamonds, kuna
+# decbench: in a RUN of structurally identical assignment diamonds, unlace
 # re-rolls only every other one.
 #   Case: O0-bash-bash-shell_initialize  (docs/decbench/triage/)
 #
@@ -6,7 +6,7 @@
 # (`privileged_mode||restricted||should_be_restricted||running_setuid`) come
 # out as ONE re-rolled boolean assignment and TWO explicit
 # `if (...) v = 1; else { v = 0; }` diamonds.  Scaling a chain of N identical
-# diamonds, kuna recovers exactly ceil(N/2) of them (measured N = 1..8:
+# diamonds, unlace recovers exactly ceil(N/2) of them (measured N = 1..8:
 # 1 1 2 2 3 3 4 4).
 #
 # Source of this testcase (gcc -O0 -fno-pie -fno-stack-protector -c), three
@@ -24,8 +24,8 @@
 #       return x;
 #     }
 #
-# Root cause (P8, kuna's own passes).  `iteregion` and `iteboolean` share the
-# leaf helper `leaf_bblock` (`p8_structure/kuna_iteregion.rs`), which descends a
+# Root cause (P8, unlace's own passes).  `iteregion` and `iteboolean` share the
+# leaf helper `leaf_bblock` (`p8_structure/unlace_iteregion.rs`), which descends a
 # `BlockList` of ONE component but returns None for a list of two or more:
 #
 #     BlockType::Ls | BlockType::Graph =>

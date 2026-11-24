@@ -1,4 +1,4 @@
-# kuna #1288: every memory access, call and return of x86 real-mode code
+# unlace #1288: every memory access, call and return of x86 real-mode code
 # printed through a bare segment() call. The SLEIGH spec computes each
 # effective address with the user-op segment(seg,off), and the pspec names
 # it in a <segmentop> with the p-code res = (zext(base) << 4) + zext(inner).

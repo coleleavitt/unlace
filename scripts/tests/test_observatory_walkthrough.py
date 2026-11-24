@@ -31,15 +31,15 @@ class ConsoleScriptTests(unittest.TestCase):
 
 
 class StageAssemblyTests(unittest.TestCase):
-    def test_kuna_bin_override(self):
+    def test_unlace_bin_override(self):
         import os
         from unittest import mock
 
-        with mock.patch.dict(os.environ, {"KUNA_BIN": "/custom/kuna"}):
-            self.assertEqual(walkthrough._kuna_bin(Path("/r")), Path("/custom/kuna"))
+        with mock.patch.dict(os.environ, {"UNLACE_BIN": "/custom/unlace"}):
+            self.assertEqual(walkthrough._unlace_bin(Path("/r")), Path("/custom/unlace"))
         with mock.patch.dict(os.environ, {}, clear=True):
             self.assertEqual(
-                walkthrough._kuna_bin(Path("/r")), Path("/r/target/release/unlace")
+                walkthrough._unlace_bin(Path("/r")), Path("/r/target/release/unlace")
             )
 
 

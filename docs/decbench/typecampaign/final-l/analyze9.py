@@ -60,7 +60,7 @@ def classes(decs, keep=None):
     return n, tp, st, stp
 
 
-def kuna_decs(rows):
+def unlace_decs(rows):
     for k, v in rows.items():
         for d in (v.get("decisions") or {}).get("base") or []:
             yield k, d
@@ -127,7 +127,7 @@ def main():
     keep = both
     for lab in ARMS:
         if lab in rows:
-            out[f"kuna_{lab}"] = classes(kuna_decs(rows[lab]), keep)
+            out[f"unlace_{lab}"] = classes(unlace_decs(rows[lab]), keep)
     rv_vals = {}
     for r in ("ida", "binja", "ghidra", "angr"):
         rv = {}
@@ -147,7 +147,7 @@ def main():
     # ptr_struct TP by GT type name, round F -> round G
     def by_name(rowset, cls="ptr_struct"):
         c = collections.Counter()
-        for k, d in kuna_decs(rowset):
+        for k, d in unlace_decs(rowset):
             if (k, d["fn"]) in keep and d.get("cls") == cls and d["ok"] is True:
                 c[d.get("gt_type")] += 1
         return c
@@ -158,13 +158,13 @@ def main():
         com = set(rv) & both
         row = {"own": summarize(rv), "rival_on_common": summarize({k: rv[k] for k in com}), "by_opt": {}}
         for lab in ARMS:
-            row[f"kuna_{lab}_on_common"] = summarize({k: V[lab][k] for k in com})
+            row[f"unlace_{lab}_on_common"] = summarize({k: V[lab][k] for k in com})
         for opt in ("O0", "O2", "O2-noinline"):
             sub = {k: x for k, x in rv.items() if k[0].split("::")[1] == opt}
             subc = {k: x for k, x in sub.items() if k in both}
             row["by_opt"][opt] = {"rival": summarize(sub),
-                                  "kuna_roundL": summarize({k: V["roundL"][k] for k in subc}),
-                                  "kuna_roundI": summarize({k: V["roundI"][k] for k in subc})}
+                                  "unlace_roundL": summarize({k: V["roundL"][k] for k in subc}),
+                                  "unlace_roundI": summarize({k: V["roundI"][k] for k in subc})}
         rep["rivals"][r] = row
     (OUT / "analysis.json").write_text(json.dumps(rep, indent=1))
     print(json.dumps({k: v for k, v in rep.items() if k.startswith(("headline", "moves_", "per_project", "worse_I", "onto_"))},

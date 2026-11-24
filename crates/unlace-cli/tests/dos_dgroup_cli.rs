@@ -84,7 +84,7 @@ fn unlace(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
-        .expect("run kuna")
+        .expect("run unlace")
 }
 
 fn decompiled(stem: &str, image: &[u8], name: &str, extra: &[&str]) -> String {

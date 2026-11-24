@@ -3,7 +3,7 @@
 ## 1. The symptom
 
 `f(v) { sink((unsigned short)(v * 3)); }`, built with gcc -O2, is
-`lea (%rdi,%rdi,2),%edi; movzwl %di,%edi; jmp sink`. kuna on main prints
+`lea (%rdi,%rdi,2),%edi; movzwl %di,%edi; jmp sink`. unlace on main prints
 `sink(a0 * 3)` with `short a0`. C promotes `a0 * 3` to `int`, so the printed
 call passes the untruncated (or negative) product where the binary passes
 `zext16(v * 3)`, and `sink` reads the whole register. Upstream Ghidra 12.1
@@ -29,7 +29,7 @@ printed the p-code after every changing rule and action.
 
 The byte case has a second cause. Upstream's promotion tables
 (`CastStrategyC::localExtensionType`) treat TYPE_UNKNOWN as zero-extending,
-which is right for Ghidra's own `undefined1` spelling. kuna's `realtypes`
+which is right for Ghidra's own `undefined1` spelling. unlace's `realtypes`
 prints the same byte as `char`, so the check and the printed C disagree about
 the byte's signedness.
 

@@ -38,7 +38,7 @@ A declaration for the stack aggregate used in emitted C.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "stack_aggregate",
@@ -79,7 +79,7 @@ A declaration for the stack aggregate used in emitted C.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "stack_aggregate",
@@ -119,7 +119,7 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 9 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD ON THE SUPPRESSION HALF, CORRECTED ON THE 'AGGREGATE' AND 'OVERLAPPING' HALVES (captain in-tick, release binary 8df2a52e, arena .kuna-repipe/arena/9/6a09581717539b5175d122b9/target/phantomgate.exe).
+- round 9 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD ON THE SUPPRESSION HALF, CORRECTED ON THE 'AGGREGATE' AND 'OVERLAPPING' HALVES (captain in-tick, release binary 8df2a52e, arena .unlace-repipe/arena/9/6a09581717539b5175d122b9/target/phantomgate.exe).
 
 THE DEFECT IS EXACTLY ONE VARIABLE, AND IT IS PRINTER-SIDE, NOT MODEL-SIDE. Sweeping the emitted C for declared-vs-used v-names: 69 declared, 70 used, and the difference is the singleton {v12}. Meanwhile 'unlace decompile ... --json' .functions[0].variables lists 71 entries INCLUDING v12 -- {name: v12, type: unsigned long long, kind: stack, stack_offset: -1256, size: 8, 26 line_numbers}. So the model has the variable with a type, a storage slot and every use site; only the declaration LINE is missing. Any fix belongs in the P9 declaration loop, not in stack/symbol recovery. The emitted C is uncompilable as a result: v12._0_4_ = a1 & 0xff ^ v10._0_4_; at line 94 with no declaration anywhere.
 

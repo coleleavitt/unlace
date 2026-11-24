@@ -5,13 +5,13 @@ R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"
 BINS = {"fmt": f"{R}/O2/coreutils/stripped/fmt", "ls": f"{R}/O2/coreutils/stripped/ls",
         "sort": f"{R}/O2/coreutils/stripped/sort", "bash": f"{R}/O2/bash/stripped/bash"}
 WT = "/home/mahaloz/kwt/fieldtype"; SP = f"{WT}/specs"
-ARMS = {"main": (f"{WT}/.scratch/bin-main-4f037dae4/kuna", []),
-        "default": (f"{WT}/.scratch/bin-v11/kuna", []),
-        "on": (f"{WT}/.scratch/bin-v11/kuna", ["--option", "fieldtype", "on"])}
+ARMS = {"main": (f"{WT}/.scratch/bin-main-4f037dae4/unlace", []),
+        "default": (f"{WT}/.scratch/bin-v11/unlace", []),
+        "on": (f"{WT}/.scratch/bin-v11/unlace", ["--option", "fieldtype", "on"])}
 N = int(sys.argv[1]); outf = sys.argv[2]
 LMAX = float(os.environ.get("SPEED_LOAD_MAX", "40")); WMAX = float(os.environ.get("SPEED_WAIT_MAX", "900"))
 out = json.load(open(outf)) if os.path.exists(outf) else {}
-env = dict(os.environ, SLEIGHHOME=SP, KUNA_SPECS=SP)
+env = dict(os.environ, SLEIGHHOME=SP, UNLACE_SPECS=SP)
 names = list(ARMS)
 for name in sys.argv[3].split(","):
     b = BINS[name]

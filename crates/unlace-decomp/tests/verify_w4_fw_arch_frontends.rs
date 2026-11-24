@@ -93,7 +93,7 @@ fn adjustvma_negative_zero_and_plus_prefix() {
 // ---------------------------------------------------------------------------
 
 fn write_temp(name: &str, bytes: &[u8]) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("kuna_w4fwarch_{}_{}", std::process::id(), name));
+    let dir = std::env::temp_dir().join(format!("unlace_w4fwarch_{}_{}", std::process::id(), name));
     let _ = std::fs::create_dir_all(dir.parent().unwrap());
     std::fs::File::create(&dir)
         .unwrap()

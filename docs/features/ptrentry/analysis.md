@@ -3,7 +3,7 @@
 Step 2 of the approved ARM entry-recall sequence (`[PROPOSAL]` PR #239,
 `docs/features/arm-entry-granularity/`), and the one that proposal called *the
 prize*: **1,671 missed function entries, 56.8% of the whole ARM entry-recall gap**,
-all of them reachable only through a code-pointer word that kuna's shipped scan
+all of them reachable only through a code-pointer word that unlace's shipped scan
 already finds and then throws away.
 
 Every number below is measured on this branch against the **stripped** binaries
@@ -20,7 +20,7 @@ Cortex-M projects plus freertos and riot-os — 16 binaries x 3 optimisation lev
 
 | surface | ground truth | recall before | recall after | new entries | of which GT | **splits a real body** | outside any DWARF body | **entries lost** |
 |---|---|---|---|---|---|---|---|---|
-| `kuna functions` (Listing on) | 41,378 | 38,238 (92.4%) | **39,851 (96.3%)** | 1,694 | 1,613 (**95.2%**) | **0** | 81 | **0** |
+| `unlace functions` (Listing on) | 41,378 | 38,238 (92.4%) | **39,851 (96.3%)** | 1,694 | 1,613 (**95.2%**) | **0** | 81 | **0** |
 | `--option listing off` | 41,378 | 8,885 | 8,885 | 0 | — | 0 | 0 | **0** |
 
 **+1,613 recovered ground-truth functions at 95.2% precision, zero split bodies,
@@ -28,7 +28,7 @@ zero losses.** The proposal's acceptance bar was >= 80% ground truth with zero
 regression.
 
 The `listing off` surface (`--mode fast`, the WASM and Ghidra front-ends,
-single-function `kuna decompile`) is structurally unaffected: `ptrentry` is a
+single-function `unlace decompile`) is structurally unaffected: `ptrentry` is a
 Listing consumer — its whole precision model reads the code/data partition the
 recursive-descent walk leaves behind — so with no Listing there is nothing to
 consume. Zero new, zero lost, on all 48 images.
@@ -95,11 +95,11 @@ Two facts do the whole job:
    Rejecting it removes the remaining **8 splits** and costs 5 ground-truth
    entries.
 
-This is the kuna form of the line Ghidra draws between `OperandReferenceAnalyzer`
+This is the unlace form of the line Ghidra draws between `OperandReferenceAnalyzer`
 (which calls `createFunctions()` on targets derived from **instruction operands**)
 and `DataOperandReferenceAnalyzer`, which overrides `createFunctions` to a no-op
 with the comment *"don't ever create a function from a data pointer"* — the guard
-the proposal identified as the one worth importing. kuna cannot use Ghidra's
+the proposal identified as the one worth importing. unlace cannot use Ghidra's
 version directly: the Listing tier populates only `RefKind::Call`/`Code`
 (control-flow) references and leaves the data kinds unpopulated by design, so
 "which instruction loaded this word" does not exist. The containment pair recovers
@@ -205,7 +205,7 @@ hardware genuinely enters.
 
 ## 7. Strict no-op elsewhere
 
-Whole-binary `kuna decompile-all --json` output is **byte-identical** (sha256) with
+Whole-binary `unlace decompile-all --json` output is **byte-identical** (sha256) with
 the option off vs on for x86-64 (`gzip`), ARM Linux (`u-boot`), and the Cortex-M
 images with no admissible candidate (libopencm3 `blink.elf`, `miniblink.elf`,
 `tick_blink.elf`). The XML datatest path never builds an
@@ -218,16 +218,16 @@ Median of 5 whole-binary runs against a frozen release binary, off vs on:
 
 | surface | binary | off | on | delta |
 |---|---|---|---|---|
-| `kuna functions` | cleanflight | 2417.8 ms | 2435.4 ms | +0.73% |
-| `kuna functions` | nuttx | 1006.8 ms | 1010.9 ms | +0.40% |
-| `kuna functions` | libopencm3 msc.elf | 144.3 ms | 137.9 ms | -4.41% |
-| `kuna functions` | gzip (x86-64) | 341.9 ms | 332.9 ms | -2.62% |
-| `kuna decompile-all` | nuttx | 9166.3 ms | 9529.1 ms | +3.96% |
-| `kuna decompile-all` | libopencm3 msc.elf | 538.5 ms | 590.9 ms | +9.73% |
+| `unlace functions` | cleanflight | 2417.8 ms | 2435.4 ms | +0.73% |
+| `unlace functions` | nuttx | 1006.8 ms | 1010.9 ms | +0.40% |
+| `unlace functions` | libopencm3 msc.elf | 144.3 ms | 137.9 ms | -4.41% |
+| `unlace functions` | gzip (x86-64) | 341.9 ms | 332.9 ms | -2.62% |
+| `unlace decompile-all` | nuttx | 9166.3 ms | 9529.1 ms | +3.96% |
+| `unlace decompile-all` | libopencm3 msc.elf | 538.5 ms | 590.9 ms | +9.73% |
 
 The scan itself is one 4-byte-strided pass over the allocated sections plus one
 bounded speculative decode per surviving candidate, reusing the `GapDecoder` cache
-Stages 2-3 already warmed. On the discovery surface (`kuna functions`) that is
+Stages 2-3 already warmed. On the discovery surface (`unlace functions`) that is
 under 1% on both large ARM images and inside run-to-run noise elsewhere — gzip is a
 strict no-op (byte-identical output), so its -2.62% bounds the measurement error.
 
@@ -250,12 +250,12 @@ decbench carries. No DIV row: default output is byte-identical.
 
 ```bash
 # entry recall, before vs after, against DWARF ground truth
-kuna functions <stripped-arm-elf> --json                          # before
-kuna functions <stripped-arm-elf> --json --option ptrentry on     # after
+unlace functions <stripped-arm-elf> --json                          # before
+unlace functions <stripped-arm-elf> --json --option ptrentry on     # after
 # compare both against DW_AT_low_pc of the matching compiled/ binary, and classify
 # each new address as ground truth / inside another body / outside every body
 
 # the strict no-op check
-kuna decompile-all <x86-64-or-arm-linux-elf> --json | sha256sum
-kuna decompile-all <same> --json --option ptrentry on | sha256sum
+unlace decompile-all <x86-64-or-arm-linux-elf> --json | sha256sum
+unlace decompile-all <same> --json --option ptrentry on | sha256sum
 ```

@@ -1,8 +1,8 @@
-# kuna: a caller that hands back a callee's 64-bit result with only the
+# unlace: a caller that hands back a callee's 64-bit result with only the
 # high word changed returns all eight bytes, not void.
 #
 # Stage / sub-stage: P4 return recovery, the output trials of the
-# function's own RETURN (ActionReturnRecovery, p4_calls/kuna_retcallhalf.rs).
+# function's own RETURN (ActionReturnRecovery, p4_calls/unlace_retcallhalf.rs).
 # A strict fix: no option.
 #
 # Source (clang -target arm-linux-gnueabi -O2, bytes verbatim below; the

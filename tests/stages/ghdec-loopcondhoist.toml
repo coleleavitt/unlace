@@ -1,4 +1,4 @@
-# kuna `option loopcondhoist` (default-OFF opt-in), S8 goto-quality sub-stage:
+# unlace `option loopcondhoist` (default-OFF opt-in), S8 goto-quality sub-stage:
 # the DEFERRED `ruleBlockIfNoExit` scan inside `CollapseStructure`
 # (`p8_structure/blockaction.rs (CollapseStructure::collapse_internal)`).
 #

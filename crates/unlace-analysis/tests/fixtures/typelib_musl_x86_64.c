@@ -1,5 +1,5 @@
 /* Fixture for `option typelib` on an image linked against musl
- * (kuna-cli/tests/typelib.rs).
+ * (unlace-cli/tests/typelib.rs).
  *
  * Built against the musl 1.2.6 headers, with no musl toolchain: the C library
  * is a stub shared object carrying musl's soname, so the image imports the

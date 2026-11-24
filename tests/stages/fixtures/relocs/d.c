@@ -1,4 +1,4 @@
-/* Source of lld-nosht.elf (tests/stages/kuna-dynrelocs-dt.xml):
+/* Source of lld-nosht.elf (tests/stages/unlace-dynrelocs-dt.xml):
  *   zig cc -target x86_64-linux-gnu -O0 -fno-sanitize=all -g0 -fPIE -pie d.c -o lld.elf
  * then e_shoff, e_shnum and e_shstrndx zeroed, as sstrip does.
  * x64pic.o and a64pic.o are t.c built with -fPIC -O1 -g0 -c for

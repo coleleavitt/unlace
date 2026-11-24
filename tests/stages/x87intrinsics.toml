@@ -1,4 +1,4 @@
-# MSVC x86-32 one-operand x87 math intrinsics (kuna_x87intrinsic, kuna_x87intrinsics).
+# MSVC x86-32 one-operand x87 math intrinsics (unlace_x87intrinsic, unlace_x87intrinsics).
 #
 # MSVC compiles sin(x), cos(x), sqrt(x) and their siblings as `fld x; call
 # __CIsin`: the operand is in ST0 and the result returns there. No

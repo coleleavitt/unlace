@@ -1,4 +1,4 @@
-# Kuna `kernelcache` option on pre-fileset (prelinked) kernelcaches (P1
+# Unlace `kernelcache` option on pre-fileset (prelinked) kernelcaches (P1
 # code-data partition). The fixtures come from gen_prelinked.py.
 #
 # prelinked_merged.macho is an iOS 12-14 style kernel whose pointers are

@@ -1,4 +1,4 @@
-# Kuna #1631: nanoMIPS had no SLEIGH language, so nanoMIPS code could not be
+# Unlace #1631: nanoMIPS had no SLEIGH language, so nanoMIPS code could not be
 # loaded at all ("No sleigh specification for nanoMIPS:LE:32:default").
 #
 # The image is `nanomips-elf-gcc -O2` (MediaTek GNU Tools 2021.11-07, GCC

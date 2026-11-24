@@ -2,7 +2,7 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile-all",
     "{{BIN}}",
     "--max-fn-seconds",
@@ -40,7 +40,7 @@
       "\\(error: "
     ],
     "stderr_matches": [
-      "\\[kuna --jobs\\] note: a synthesized structure has a field type another process cannot rebuild"
+      "\\[unlace --jobs\\] note: a synthesized structure has a field type another process cannot rebuild"
     ],
     "stderr_absent": [
       "cannot install the synthesized structures",

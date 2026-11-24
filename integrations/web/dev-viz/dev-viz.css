@@ -47,7 +47,7 @@
 .phase-detail .phase-id{font:300 2.3rem/1 var(--disp);}.phase-detail h3{margin-bottom:4px}.phase-detail p{font-size:.7rem;line-height:1.55;color:var(--muted);}.phase-detail .phase-metric{text-align:right;color:var(--ink-2);font-size:.68rem;}.phase-detail strong{display:block;font:300 1.5rem/1.2 var(--disp);color:var(--ink);}
 .section-intro>p code,.fineprint.light code{font-size:.95em;color:var(--ink);}
 .arch-legend{border:0;padding:0 0 14px;}
-.legend-kuna{height:8px!important;}.legend-ported{background:#BFB6B3;}
+.legend-unlace{height:8px!important;}.legend-ported{background:#BFB6B3;}
 .legend-action{width:3px!important;height:14px!important;background:var(--red);}.legend-rule{width:2px!important;height:10px!important;background:var(--ink);}
 .arch-table{border-top:1px solid var(--ink);}
 .arch-head,.arch-row>summary{display:grid;grid-template-columns:minmax(150px,190px) minmax(160px,1fr) 52px 72px 64px 56px;gap:16px;align-items:center;}

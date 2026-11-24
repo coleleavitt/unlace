@@ -27,7 +27,7 @@
 # join, the shape swiftc emits for a large rawValue switch.  Its literal
 # addresses meet an INT_ADD before the tag, so they keep their text.
 #
-# Stage: P9 emission (ActionConstantPtr, kuna_swiftstrobj), strict fix, no
+# Stage: P9 emission (ActionConstantPtr, unlace_swiftstrobj), strict fix, no
 # option.  #1-#6 fail before the fix; #7-#10 pass with and without it.
 
 [image]

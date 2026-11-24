@@ -1,7 +1,7 @@
 {
  "opportunity": "Round E's O2 census: the largest O2-noinline blocker bucket is a program struct pointer declared void * in an otherwise-right function (143 functions O2-noinline, 20 O2; 66 gnulib Hash_table getters). Two causes: structsynth wants two offsets including 0 and never runs in a function whose lattice settles on its first pass, and nothing flows caller -> callee (protoorder is callee -> caller).",
  "test_name": "tests/cli calleevote-off-leaves-the-callee-untyped / calleevote-types-takes-what-every-caller-passes / calleevote-fields-reads-a-closed-getters-lone-field (two-pass over the whole-binary path), calleevote-leaves-a-relocatable-objects-callbacks-open (.o callback table), calleevote-leaves-a-mips-callback-open, calleevote-reads-a-table-in-code-at-address-zero, calleevote-keeps-a-frame-records-word-stores (+ its off arm), calleevote-leaves-a-long-callee-alone (+ calleevote-off-leaves-both-callees-untyped: the 32-line redo bound) + tests/stages/calleevote.xml (negative control) + 18 unit tests",
- "binary": "decompiler/crates/kuna-analysis/tests/fixtures/calleevote_x86_64",
+ "binary": "decompiler/crates/unlace-analysis/tests/fixtures/calleevote_x86_64",
  "selector": "peek_used",
  "func_addr": "0x1220",
  "angr_version": null,
@@ -197,7 +197,7 @@
   "base": "31ac2b26e (#708 passthrough, #709 structsynth locals, #710 slotptr, #712 protoorder cycles)"
  },
  "sweep": {
-  "surface": "kuna decompile-all <bin> --json --max-fn-seconds 120, --option calleevote off vs the default, same build, on origin/main 31ac2b26e (docs/features/calleevote/corpus-hunks.py + corpus-classes.py; per-binary counts in corpus-hunks.json)",
+  "surface": "unlace decompile-all <bin> --json --max-fn-seconds 120, --option calleevote off vs the default, same build, on origin/main 31ac2b26e (docs/features/calleevote/corpus-hunks.py + corpus-classes.py; per-binary counts in corpus-hunks.json)",
   "binaries": 31,
   "functions": 16843,
   "changed": 1894,
@@ -224,7 +224,7 @@
  },
  "speed": {
   "round_3": {
-   "surface": "kuna decompile-all <bin> --json --max-fn-seconds 120, --option calleevote off vs default, same final build (.scratch/v17 = 4f59a6eb1) on 3a42d864b (#712), arm order alternating, 15 rounds each (docs/features/calleevote/speed.py; raw samples speed.json under round_3)",
+   "surface": "unlace decompile-all <bin> --json --max-fn-seconds 120, --option calleevote off vs default, same final build (.scratch/v17 = 4f59a6eb1) on 3a42d864b (#712), arm order alternating, 15 rounds each (docs/features/calleevote/speed.py; raw samples speed.json under round_3)",
    "fmt_O2": {
     "min_ms": [
      4083.5,
@@ -356,7 +356,7 @@
    "outside_budget_set": "kmod O2-noinline +11.28% min (+11.20% median) and cmp O0 +7.91% min: the price of decompiling again the functions whose callers state a type; a binary where few functions take a vote pays almost nothing"
   },
   "round_4": {
-   "surface": "kuna decompile-all <bin> --json --max-fn-seconds 120, --option calleevote off vs default, same final build (.scratch/v28 = e5e65a8cd code) on 3a42d864b, arm order alternating, 15 rounds each (docs/features/calleevote/speed.py; raw samples speed.json under round_4); bash ran beside the final rust-test lane, the others on a quiet box (load 2-4)",
+   "surface": "unlace decompile-all <bin> --json --max-fn-seconds 120, --option calleevote off vs default, same final build (.scratch/v28 = e5e65a8cd code) on 3a42d864b, arm order alternating, 15 rounds each (docs/features/calleevote/speed.py; raw samples speed.json under round_4); bash ran beside the final rust-test lane, the others on a quiet box (load 2-4)",
    "fmt_O2": {
     "min_ms": [
      4100.1,
@@ -496,10 +496,10 @@
    "budget_verdict": "budget set (fmt, ls, sort, bash -O2) within +5%; outside it the second decompile of the functions whose callers state a type costs +7.6% (cmp -O0) to +11.5% (kmod -O2-noinline), stated in the PR body for the lander"
   },
   "round_5": {
-   "surface": "kuna decompile-all <bin> --json --max-fn-seconds 120, --option calleevote off vs the default, same build (.scratch/bins/kuna-cap32) on origin/main 31ac2b26e",
+   "surface": "unlace decompile-all <bin> --json --max-fn-seconds 120, --option calleevote off vs the default, same build (.scratch/bins/unlace-cap32) on origin/main 31ac2b26e",
    "note": "This box carried about eight other agents throughout (load average 30-41), and a 4-second binary's own CPU time varied 4.0-6.4 s with it, so an arm's minimum is its luckiest run and the interleaved min-of-15 is not reliable at the +-5% scale (kmod measured +9.4% by min and +1.7% by the median of the per-pair ratio in the SAME run). The primary number is therefore the redo pass's share of the run's own first pass, measured inside one process, which is what the option costs: nothing else about the run changes.",
    "redo_share_of_first_pass_pct": {
-    "method": "KUNA_CV_PHASELOG build (.scratch/bins/kuna-phase2, measurement only): time(callee_vote_rounds)/time(pass 1) in one process",
+    "method": "UNLACE_CV_PHASELOG build (.scratch/bins/unlace-phase2, measurement only): time(callee_vote_rounds)/time(pass 1) in one process",
     "kmod_O2-noinline": [
      3.81,
      3.37,
@@ -657,7 +657,7 @@
    }
   },
   "round_6": {
-   "surface": "kuna decompile-all <bin> --json --max-fn-seconds 120, the pre-change build against this one, BOTH at their defaults (so the delta is the budget's, not the option's), arm order alternating, on a box running two other workspace-test lanes (load 6-20). docs/features/calleevote/budget-speed.py; raw samples in speed.json under round_6",
+   "surface": "unlace decompile-all <bin> --json --max-fn-seconds 120, the pre-change build against this one, BOTH at their defaults (so the delta is the budget's, not the option's), arm order alternating, on a box running two other workspace-test lanes (load 6-20). docs/features/calleevote/budget-speed.py; raw samples in speed.json under round_6",
    "estimators": "interleaved min of N, and the median of the per-iteration after/before ratio -- each iteration's two runs sit in the same window, so the ratio cancels a load spike that hits both",
    "fmt_O2": {
     "n": 15,
@@ -712,7 +712,7 @@
   "make check-spec": "check-spec OK (lenient mode)",
   "check_spec --strict": "check-spec OK (strict mode)",
   "make test-cli": "tests/cli: 236/236 passed",
-  "kuna catalog --check": "catalog OK: documents exactly the registered kuna options",
+  "unlace catalog --check": "catalog OK: documents exactly the registered unlace options",
   "counters --check": "no drift: every hard-coded site agrees with the derived truth",
   "docs/options.md": "byte-fresh (regenerated from the final build; phase_catalog.json re-captured after the catalog text moved)",
   "make rust-test (lane script)": "RUST_TEST_RC=0; 7,462 passed, 0 failed, 38 ignored (lane 15:39-16:04Z on 391d06448)"
@@ -720,35 +720,35 @@
  "notes": "Measured and not shipped: refusing a value handed to a declared void * (-8 perfect, -28 improved, +3), byte/halfword lone fields (+10 credited, +2 worse), a settle pass for every structsynth candidate (no scored change). Known secondary effect: a callee's one-field record stated by protoorder can make a caller's interior-pointer argument a cast and leave the caller's own parameter long (diff O0 print_context_header: void * -> long, 5 scored rows, all misses either way).",
  "files": {
   "engine": [
-   "decompiler/crates/kuna-decomp/src/p4_calls/calleevote.rs",
-   "decompiler/crates/kuna-decomp/src/p4_calls/calleevote/tests.rs",
-   "decompiler/crates/kuna-decomp/src/p5_types/structsynth.rs",
-   "decompiler/crates/kuna-decomp/src/p5_types/coreaction_infertypes.rs",
-   "decompiler/crates/kuna-decomp/src/p4_calls/protoorder.rs"
+   "decompiler/crates/unlace-decomp/src/p4_calls/calleevote.rs",
+   "decompiler/crates/unlace-decomp/src/p4_calls/calleevote/tests.rs",
+   "decompiler/crates/unlace-decomp/src/p5_types/structsynth.rs",
+   "decompiler/crates/unlace-decomp/src/p5_types/coreaction_infertypes.rs",
+   "decompiler/crates/unlace-decomp/src/p4_calls/protoorder.rs"
   ],
   "driver": [
-   "decompiler/crates/kuna-cli/src/decompile_all.rs",
+   "decompiler/crates/unlace-cli/src/decompile_all.rs",
    "decompiler/crates/console/src/project.rs",
-   "decompiler/crates/kuna-analysis/src/loader/format/macho/chained.rs"
+   "decompiler/crates/unlace-analysis/src/loader/format/macho/chained.rs"
   ],
   "tests": [
    "tests/cli/calleevote-off-leaves-the-callee-untyped.json",
    "tests/cli/calleevote-types-takes-what-every-caller-passes.json",
    "tests/cli/calleevote-fields-reads-a-closed-getters-lone-field.json",
    "tests/stages/calleevote.xml",
-   "decompiler/crates/kuna-analysis/tests/fixtures/calleevote_x86_64(.c)",
+   "decompiler/crates/unlace-analysis/tests/fixtures/calleevote_x86_64(.c)",
    "tests/cli/calleevote-leaves-a-relocatable-objects-callbacks-open.json",
-   "decompiler/crates/kuna-analysis/tests/fixtures/calleevote_ops_x86_64.o(.c)",
+   "decompiler/crates/unlace-analysis/tests/fixtures/calleevote_ops_x86_64.o(.c)",
    "tests/cli/calleevote-leaves-a-mips-callback-open.json",
-   "decompiler/crates/kuna-analysis/tests/fixtures/calleevote_callback_mipsel(.c)",
+   "decompiler/crates/unlace-analysis/tests/fixtures/calleevote_callback_mipsel(.c)",
    "tests/cli/calleevote-reads-a-table-in-code-at-address-zero.json",
-   "decompiler/crates/kuna-analysis/tests/fixtures/calleevote_zero_x86_64(.c)",
+   "decompiler/crates/unlace-analysis/tests/fixtures/calleevote_zero_x86_64(.c)",
    "tests/cli/calleevote-keeps-a-frame-records-word-stores.json",
    "tests/cli/calleevote-off-keeps-a-frame-records-word-stores.json",
-   "decompiler/crates/kuna-analysis/tests/fixtures/calleevote_frame_x86_64(.c)",
-   "decompiler/crates/kuna-cli/tests/decompile_all_cli.rs (a_frame_records_char_pointer_pointer_is_not_its_type)",
+   "decompiler/crates/unlace-analysis/tests/fixtures/calleevote_frame_x86_64(.c)",
+   "decompiler/crates/unlace-cli/tests/decompile_all_cli.rs (a_frame_records_char_pointer_pointer_is_not_its_type)",
    "tests/cli/calleevote-buys-a-long-callee-with-the-budget.json",
-   "decompiler/crates/kuna-analysis/tests/fixtures/calleevote_budget_x86_64(.c)"
+   "decompiler/crates/unlace-analysis/tests/fixtures/calleevote_budget_x86_64(.c)"
   ],
   "docs": [
    "docs/spec/04-calls-and-prototypes.md",
@@ -789,7 +789,7 @@
    "probes_restored": "protoorder-types-keeps-a-float-in-a-gpr-an-integer and -extracted-float-bits-an-integer (MIPS) return to main's text: g3/g20 keep void *",
    "typesweep": "off vs default on 3a42d864b: 1,522 -> 1,575 perfect, 264 up / 3 down (gzip xmemdup), credited 1,771 -> 2,128, exported variable counts identical",
    "rounds_decide_against_first_decompile": "each round decided against the parameters the LAST decompile recovered, so a vote an earlier round made fell out of the next statement and the next redo lost it (coreutils ginstall need_copy O0 and copy O2-noinline ended unsigned long; tar O2-noinline 0x35910 needed three rounds); every round now decides against the first decompile's parameters, and a first statement that only repeats the callee's own record is not made (kmod round 1: 73 -> 49 redos). On 656e6c701 this moved 332/3 to 334/3 and changed nothing else over 21 binaries",
-   "rebased_onto_712": "main gained #712 (protoorder cycles); the convergence sweep now also forgets calleevote statements that name a superseded structure (kuna_calleevote::forget_statements_naming), mirroring #712 for protoorder. #712's probe protoorder-types-states-nothing-for-a-recursive-function runs with --option calleevote off: by default wrap and wrap2 take the char * their one caller passes"
+   "rebased_onto_712": "main gained #712 (protoorder cycles); the convergence sweep now also forgets calleevote statements that name a superseded structure (unlace_calleevote::forget_statements_naming), mirroring #712 for protoorder. #712's probe protoorder-types-states-nothing-for-a-recursive-function runs with --option calleevote off: by default wrap and wrap2 take the char * their one caller passes"
   },
   "round_4": {
    "char_pointer_pointer": "a char ** vote is refused where a pointer-width value loaded through the input or stored through it has a constant wider than a byte stored through it (splits_a_wide_constant, one level down); a pointer-to-pointer passed as the address of a caller's frame object is marked (Typed.frame) and refused where the callee loads or stores through it anywhere but [0, pointer width) (reaches_past_the_pointee); any vote is refused for a value used as the index of a PTRADD (indexes_a_pointer). Refusing every frame address instead costs 17 functions (parse_line(&keyword,&arg), next_field(&line), simple_strtoul(&p), quote_name_buf(&inbuf)): measured, not shipped",
@@ -812,7 +812,7 @@
   "round_6": {
    "what": "The flat 32-line refusal on the redo became a budget: the pass may reprint CALLEE_VOTE_BUDGET_PCT (5) percent of the lines the first pass printed, one budget for all three rounds, admitted shortest first (ties to the lower address), and a function printing at most CALLEE_VOTE_MAX_LINES (32) lines is admitted even once that is spent. A function the budget cannot reach is declined for the run (Ledger::decline: own + stated removed, so no later round proposes it and the convergence sweep has nothing to apply).",
    "why_not_incremental": "A redo costs exactly what the first decompile of the same function cost -- median ratio 1.01 over kmod -O2-noinline's 55 redos (range 0.97-1.05) -- so there is no overhead of its own to remove. Of a redo, 12.3% is the flow follow and 58.5% is the action pipeline before the first effective ActionInferTypes (it is inert until ActionStartTypes, which runs in fullloop after a whole mainloop), so 70.8% is work the vote provably cannot change. Re-running 'only type propagation and the emit tier' is not available either: ActionInferTypes sits inside the repeating mainloop and the pools that rewrite ops from the types it decides (ptrarith, ptrsubundo, structoffset0, structsynth) run after it in the same iteration. Reusing that 70.8% means checkpointing the Funcdata where ActionStartTypes first fires and re-entering the action tree at a position -- a pipeline-substrate change (Funcdata deep copy + positional re-entry), PROPOSAL-class, and the one lever that would make an unbounded redo affordable (kmod 10.5% -> about 3%).",
-   "instrument": "The redo pass is one call in decompile_callee_first, so its cost is read off a single run (its ms over the run's wall clock) instead of differenced from two whole-binary wall times, which on this box is noisier than the effect (round 5 measured the same kmod build +9.4% by min-of-15 and +2.3% by median). KUNA_CALLEEVOTE_TRACE=1 also prints the pass's deterministic line spend.",
+   "instrument": "The redo pass is one call in decompile_callee_first, so its cost is read off a single run (its ms over the run's wall clock) instead of differenced from two whole-binary wall times, which on this box is noisier than the effect (round 5 measured the same kmod build +9.4% by min-of-15 and +2.3% by median). UNLACE_CALLEEVOTE_TRACE=1 also prints the pass's deterministic line spend.",
    "redo_pass_share_of_a_run": {
     "flat_32_bound": {
      "kmod_O2-noinline": 3.4,
@@ -837,7 +837,7 @@
      "fmt_O2": 0.4,
      "crontab_O2-noinline": 0.0
     },
-    "note": "percent of the whole `kuna decompile-all --json` wall clock; the flat-bound column is what shipped in #711, so the option was already inside the project's +5% on every one of them and the round-G +5.54%/+5.92% were wall-difference noise"
+    "note": "percent of the whole `unlace decompile-all --json` wall clock; the flat-bound column is what shipped in #711, so the option was already inside the project's +5% on every one of them and the round-G +5.54%/+5.92% were wall-difference noise"
    },
    "line_spend_shipped": {
     "kmod_O2-noinline": "708 of 13,366 printed (5.3%), 40 redos (36 under the flat bound)",
@@ -886,7 +886,7 @@
    },
    "byte_identity": "with the budget at 0 the admitted set is the old one by construction (only the short functions are admitted, and a declined statement is withdrawn before anything is decompiled); checked as well -- decompile-all --json byte-identical to the pre-change build on 12 binaries (fmt/ls/sort O2, cmp O0, kmod O2-noinline, dpkg-divert O2, crontab O2-noinline, mv/factor O0, stty O2, check_subid_range O0, pwunconv O2), and the 444-slice typesweep reproducing main's 1,609 / .3688 exactly",
    "corpus_sweep": {
-    "surface": "kuna decompile-all <bin> --json --max-fn-seconds 120, the pre-change build against this one, both at their defaults, over the same 31 binaries the option's own sweep used (docs/features/calleevote/budget-hunks.py)",
+    "surface": "unlace decompile-all <bin> --json --max-fn-seconds 120, the pre-change build against this one, both at their defaults, over the same 31 binaries the option's own sweep used (docs/features/calleevote/budget-hunks.py)",
     "binaries": 31,
     "changed": 57,
     "classification": {
@@ -914,13 +914,13 @@
    "decline_keeps_a_printed_statement": "Ledger::keep records the statement a kept redo was printed with, and Ledger::decline restores it instead of dropping it, so the convergence sweep prints the body the batch printed; a function never redone still drops it, which is main's behaviour. Unit-tested both ways and mutation-checked; spec 04 paragraph added",
    "no_output_moved": "the review-round build against the build the PR measured: decompile-all --json byte-identical on the same 12 binaries, so the typesweep and speed blocks above stand",
    "pr_body": "the '0 worse' row count marked single-run; the perfect-count delta is the claim",
-   "gates": "on 0e85c41a2: make test PARITY OK 675/675; make test-stages PARITY OK; make test-cli 237/237; check-spec OK lenient+strict; kuna catalog --check OK; counters no drift; docs/options.md byte-fresh; make rust-test (lane) RUST_TEST_RC=0, 7,467 passed / 0 failed / 38 ignored. The earlier lane's single red was embedded_docs_match_the_files_on_disk, the stale-binary artifact of reflowing docs/cli.md after that lane's compile",
+   "gates": "on 0e85c41a2: make test PARITY OK 675/675; make test-stages PARITY OK; make test-cli 237/237; check-spec OK lenient+strict; unlace catalog --check OK; counters no drift; docs/options.md byte-fresh; make rust-test (lane) RUST_TEST_RC=0, 7,467 passed / 0 failed / 38 ignored. The earlier lane's single red was embedded_docs_match_the_files_on_disk, the stale-binary artifact of reflowing docs/cli.md after that lane's compile",
    "typesweep_at_final_code": "re-run at the review-round code, same driver and pin: 1,615 perfect of 10,748 (15.03%), mean .3697 -- the same numbers the PR measured, so nothing the review changed moved a score. Per-slice counts retained this time in docs/features/calleevote/budget-sweep.json (the full per-function rows.json is 16.7 MB and stays out of the tree)"
   }
  },
  "landing_remeasure": {
   "why": "origin/main gained #715 (structmerge, type-affecting) after this PR was measured on 796939d54; everything below is re-run on the rebased tree (the reviewed commits replayed on dbe854ba3, range-diff content-identical) against a build of dbe854ba3",
-  "main_build": "/home/mahaloz/kwt/castbench/bin-dbe854ba3/kuna (origin/main dbe854ba3)",
+  "main_build": "/home/mahaloz/kwt/castbench/bin-dbe854ba3/unlace (origin/main dbe854ba3)",
   "typesweep_444": {
    "surface": "444-slice campaign set, decbench 625e892 pinned (final-c/pindb.py), DECBENCH_NO_CACHE=1, both builds at their defaults",
    "main": {
@@ -940,7 +940,7 @@
    "note": "reproduces the PR's own same-tree measurement exactly (budget 0 = 1,609 / .3688, budget 5% = 1,615 / .3697, 69 improved, 0 worse)"
   },
   "castbench_full": {
-   "surface": "castbench.py full set (45 binaries), functions both kuna and IDA emit at one address",
+   "surface": "castbench.py full set (45 binaries), functions both unlace and IDA emit at one address",
    "shared_functions": 4815,
    "ida": {
     "casts": 37821,
@@ -1058,7 +1058,7 @@
    "make test-stages": "1329/1329 PARITY OK; baseline re-recorded identical to origin/main's",
    "check-spec": "OK lenient and strict",
    "make test-cli": "237/237",
-   "kuna catalog --check": "OK",
+   "unlace catalog --check": "OK",
    "counters --check": "no drift",
    "docs/options.md": "byte-fresh",
    "make rust-test (lane script)": "RUST_TEST_RC=0; 7,475 passed, 0 failed, 38 ignored"

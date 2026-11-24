@@ -8,7 +8,7 @@ fn complete_rust_integer_stores_match_native_bytes_and_calls() {
     if process::optional_output(Command::new("cc").arg("--version")).is_none() {
         return;
     }
-    let declarations = std::fs::read_to_string(common::fixture("go_store_value.kuna")).unwrap();
+    let declarations = std::fs::read_to_string(common::fixture("go_store_value.unlace")).unwrap();
     let names: Vec<_> = declarations
         .lines()
         .map(|line| line.split_whitespace().nth(1).unwrap())
@@ -53,7 +53,7 @@ fn complete_rust_integer_stores_match_native_bytes_and_calls() {
         "--language",
         "rust",
         "--assert",
-        &format!("@{}", common::fixture("go_store_value.kuna")),
+        &format!("@{}", common::fixture("go_store_value.unlace")),
         "--option",
         "ctypes",
         "off",

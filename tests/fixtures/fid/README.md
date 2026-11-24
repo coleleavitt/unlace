@@ -1,6 +1,6 @@
 # FID fixture
 
-The fingerprint fixtures for kuna's FID (Function-ID) port — a tiny, hermetic,
+The fingerprint fixtures for unlace's FID (Function-ID) port — a tiny, hermetic,
 **regenerable** set used by the `.fid` database + `unlace fid build` generator tests
 (FID PR3). The design doc (`docs/history/fid-design.md` §7) is retired — see
 `docs/history.md` and git history.
@@ -10,17 +10,17 @@ The fingerprint fixtures for kuna's FID (Function-ID) port — a tiny, hermetic,
 | File | What |
 |---|---|
 | `lib.c` | Three distinctive, self-contained functions (`kuna_crc32`, `kuna_strlen`, `kuna_memset`), each ≥ 4 code units, **no external libc call** — so each body is fully self-contained and its FID full hash is stable across link. `kuna_crc32` is the star: a CRC-32 loop with the magic `0xEDB88320` immediate. |
-| `main.c` | Calls each `kuna_*` (so the linker retains them in the stripped `prog`). |
+| `main.c` | Calls each `unlace_*` (so the linker retains them in the stripped `prog`). |
 | `lib.o` | **Vendored.** The compiled `lib.c` (see *Build* below). |
 | `lib.fid` | **Vendored.** The generated fingerprint DB — the committed output of `unlace fid build` over `lib.o`. |
-| `prog` | **Vendored.** The statically-linked, `-no-pie`, **stripped** x86-64 ELF (`lib.o` + `main.o`), the FID PR4 re-identification target. No symbol table; the FID e2e (`unlace-console/tests/verify_fid.rs`) renames its `sub_<addr>` placeholder back to `kuna_crc32` by full-hash match against `lib.fid`. The pinned VMA of `kuna_crc32` in `prog` is **`0x4017c0`** (`-static -no-pie` keeps it stable; recorded by the e2e as `KUNA_CRC32_VMA`). |
+| `prog` | **Vendored.** The statically-linked, `-no-pie`, **stripped** x86-64 ELF (`lib.o` + `main.o`), the FID PR4 re-identification target. No symbol table; the FID e2e (`unlace-console/tests/verify_fid.rs`) renames its `sub_<addr>` placeholder back to `kuna_crc32` by full-hash match against `lib.fid`. The pinned VMA of `kuna_crc32` in `prog` is **`0x4017c0`** (`-static -no-pie` keeps it stable; recorded by the e2e as `UNLACE_CRC32_VMA`). |
 
 The same `lib.o`/`lib.c`/`lib.fid` are mirrored into
 `crates/unlace-analysis/tests/fixtures/` as `fid_lib_x86_64.{o,c,fid}`
 (the `cargo test` fixtures home — the consistency gate `verify_fid_build.rs` reads
 them there).
 
-## Build (in the `kuna-dev` container)
+## Build (in the `unlace-dev` container)
 
 The vendored `lib.o` is **x86-64** (`x86:LE:64:default`), the architecture the FID
 design doc targets — see the *Architecture note* below. From this directory:
@@ -29,7 +29,7 @@ design doc targets — see the *Architecture note* below. From this directory:
 # 1. compile the library object (x86-64, the gcc default)
 gcc -O2 -ffreestanding -fno-stack-protector -c lib.c -o lib.o
 
-# 2. fingerprint it with kuna's own generator → the vendored .fid
+# 2. fingerprint it with unlace's own generator → the vendored .fid
 #    (SLEIGHHOME must point at the repo `specs/`; the x86-64 .sla compiles into the
 #     .sla cache on first use)
 SLEIGHHOME="$PWD/../../../specs" \
@@ -52,7 +52,7 @@ strip --strip-all prog                        # kuna_crc32 lands at VMA 0x4017c0
 After `strip --strip-all`, `kuna_crc32` is at **`0x4017c0`** (verify with
 `objdump -d prog --start-address=0x4017c0` before the strip, or `nm` the un-stripped
 `prog`). The FID e2e (`unlace-console/tests/verify_fid.rs`) hardcodes that VMA — bump
-`KUNA_CRC32_VMA` there if a toolchain change moves it. Note step 4 overwrites the
+`UNLACE_CRC32_VMA` there if a toolchain change moves it. Note step 4 overwrites the
 `-ffreestanding` `lib.o` from step 1 with a plain `-O2` one; `git checkout
 tests/fixtures/fid/lib.o` to restore the vendored (`.fid`-matching) object after
 building `prog`.

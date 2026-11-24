@@ -56,7 +56,7 @@ def collect(root: Path | None = None) -> dict:
                     {
                         "file": "/".join(parts[1:]),
                         "loc": loc,
-                        "native": parts[-1].startswith("kuna_"),
+                        "native": parts[-1].startswith("unlace_"),
                     }
                 )
     for folder in folders.values():
@@ -74,7 +74,7 @@ def collect(root: Path | None = None) -> dict:
                 "files": stat["files"],
                 "loc": stat["loc"],
                 "deps": sorted(
-                    dep["name"] for dep in package["dependencies"] if dep["name"].startswith("kuna-")
+                    dep["name"] for dep in package["dependencies"] if dep["name"].startswith("unlace-")
                 ),
             }
         )

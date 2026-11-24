@@ -4,24 +4,24 @@
   "track": "tooling",
   "round": 2,
   "test_name": "repipe round 2, challenge 6547b4d50f4238b24302b588",
-  "binary": "kuna-re-dataset/challenges/6547b4d50f4238b24302b588/bin/trappy attack.exe",
+  "binary": "unlace-re-dataset/challenges/6547b4d50f4238b24302b588/bin/trappy attack.exe",
   "selector": null,
   "func_addr": null,
   "option": null,
   "flag": null,
   "element_id": null,
   "change_kind": "correctness-fix",
-  "source_decompiler": "kuna",
-  "inspiration": "repipe round 2 need pe-function-inventory-labels; the rank tier it reuses is kuna's own issue-#197 canonical-entry model",
+  "source_decompiler": "unlace",
+  "inspiration": "repipe round 2 need pe-function-inventory-labels; the rank tier it reuses is unlace's own issue-#197 canonical-entry model",
   "default_on": true,
   "div": null,
   "scope": "small",
   "files": [
-    "decompiler/crates/kuna-analysis/src/analyzers/rtti/mod.rs",
-    "decompiler/crates/kuna-analysis/src/analyzers/rtti/vftable.rs",
+    "decompiler/crates/unlace-analysis/src/analyzers/rtti/mod.rs",
+    "decompiler/crates/unlace-analysis/src/analyzers/rtti/vftable.rs",
     "decompiler/crates/console/src/engine.rs",
     "decompiler/crates/console/tests/verify_rtti.rs",
-    "decompiler/crates/kuna-analysis/tests/fixtures/README.md",
+    "decompiler/crates/unlace-analysis/tests/fixtures/README.md",
     "tests/cli/pe-function-inventory-labels.json",
     "docs/spec/01-program-prep.md",
     "docs/re-needs/pe-function-inventory-labels.md"
@@ -31,9 +31,9 @@
     "make test": "PARITY OK 675/675",
     "make test-stages": "PARITY OK 600/600",
     "make check-spec": "OK",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "tests/cli": "17/17",
-    "make rust-test": "green (5,317 tests, 343 suites; run with KUNA_DECOMP_TEST unset -- the repipe worker exports it at kuna's own decomp_test_dbg, which makes the C++-oracle cross-checks in verify_w10_* compare kuna against itself and fail spuriously. kuna-decomp depends on neither crate this PR touches)"
+    "make rust-test": "green (5,317 tests, 343 suites; run with UNLACE_DECOMP_TEST unset -- the repipe worker exports it at unlace's own decomp_test_dbg, which makes the C++-oracle cross-checks in verify_w10_* compare unlace against itself and fail spuriously. unlace-decomp depends on neither crate this PR touches)"
   },
   "probe_flip": {
     "probe_still_passes": false,
@@ -44,14 +44,14 @@
   "promoted_probe": {
     "path": "tests/cli/pe-function-inventory-labels.json",
     "retargeted_from": "dataset bin/trappy attack.exe (10 vftable_<i>-named routines, 0x140001040/32B .. 0x140001de0/496B)",
-    "retargeted_to": "decompiler/crates/kuna-analysis/tests/fixtures/msvc_rtti_x64.exe (Box::vftable_0 at 0x140001040)",
+    "retargeted_to": "decompiler/crates/unlace-analysis/tests/fixtures/msvc_rtti_x64.exe (Box::vftable_0 at 0x140001040)",
     "why": "CI has no dataset; the vendored MSVC RTTI PE reproduces the identical defect, verified before the fix",
     "strengthened": "the acceptance is a single stdout_absent clause, which a dead rtti pass would also satisfy, so the promoted probe adds a positive `\"name\": \"Box::vfunc_0\"` clause and pins --mode aggressive rather than relying on auto's 500 KiB threshold to turn the rtti gate on"
   },
   "speed_method": "not measured: no pass, decode or analysis step was added or removed. The rtti change is one format string; the ranking change adds one rsplit_once + prefix test per (name, entry) pair inside an inventory sort that already compares strings",
   "sweep": {
     "targets": 19,
-    "surface": "kuna functions --json --mode aggressive over every in-repo PE fixture (9) + every C++/ELF fixture incl. the stripped Itanium-RTTI .so (8) + fauxware/aif_gap controls, plus the recorded dataset PE; kuna decompile-all --json over the 9 PE fixtures on the first arm",
+    "surface": "unlace functions --json --mode aggressive over every in-repo PE fixture (9) + every C++/ELF fixture incl. the stripped Itanium-RTTI .so (8) + fauxware/aif_gap controls, plus the recorded dataset PE; unlace decompile-all --json over the 9 PE fixtures on the first arm",
     "changed_files": 3,
     "changed_lines": 50,
     "residual_after_normalising_vftable_i_to_vfunc_i": 0,
@@ -60,7 +60,7 @@
     "regression_caught": "the FIRST arm (rename only) had a 4-line residual, and it was a real regression the rename introduced: at 0x140002c2c the canonical name flipped from the recovered `std::basic_streambuf::showmanyc` to `std::basic_stringbuf::vfunc_5`, because entry_name_rank's last tier is name LENGTH and vfunc_5 is one character shorter than vftable_5. That is what added the ranking change; the residual is 0 with it in"
   },
   "decisions": [
-    "The filed hypothesis -- 'public data aliases near code addresses are winning the canonical-name selection for discovered function entries' -- is OVERTURNED, and the need's hypothesis_status is updated to match. No data symbol is involved. `<Class>::vftable_<i>` is a name kuna SYNTHESISES in the rtti pass (R3, analyzers/rtti/mod.rs::emit_vftable_methods) and attaches to the address a vftable slot POINTS AT -- the virtual method, not the table. All 10 flagged entries are genuine .text routines and their classification as functions is correct.",
+    "The filed hypothesis -- 'public data aliases near code addresses are winning the canonical-name selection for discovered function entries' -- is OVERTURNED, and the need's hypothesis_status is updated to match. No data symbol is involved. `<Class>::vftable_<i>` is a name unlace SYNTHESISES in the rtti pass (R3, analyzers/rtti/mod.rs::emit_vftable_methods) and attaches to the address a vftable slot POINTS AT -- the virtual method, not the table. All 10 flagged entries are genuine .text routines and their classification as functions is correct.",
     "What is wrong is only the name, and it is wrong in a way that is not cosmetic: an MSVC class compiled under multiple inheritance really does own several vftables, so `<Class>::vftable_<i>` collides with the natural reading 'this class's i-th vftable'. On the recorded PE that made 496 bytes of std::basic_stringbuf code read as a vtable object. Renamed to `<Class>::vfunc_<i>`; only the table itself keeps the unindexed `<Class>::vftable` Data label.",
     "The captain's STOP clause (stop if correcting this changes function DISCOVERY rather than labelling) does not fire. The rtti pass does create functions -- SymFact{Function} runs add_function when find_function misses -- but which addresses it creates is untouched. Discovery is byte-identical: the sweep's only diff is the name string.",
     "Tooling track, so per docs/agents.md no option, no phases.toml row, no catalog counter and no tests/stages case. None were touched and no counter lease was taken -- which also means no collision with the phases.toml/docs/options.md leases held this round.",

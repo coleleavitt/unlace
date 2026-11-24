@@ -1,7 +1,7 @@
 # A stack pointer saved in a frame slot, restored, moved below the
 # outgoing-argument area and used both as a store's address and as the %rdi
 # of a call to nouse, which never reads %rdi.  Source of the bytes in
-# kuna-x86-directalias-freed.xml (as --64; objcopy -O binary -j .text).
+# unlace-x86-directalias-freed.xml (as --64; objcopy -O binary -j .text).
 #
 #   freed_call: w7(1,2,3,4,5,6, 7);
 #               p = restored - 48; *p = 0x55; nouse(p);

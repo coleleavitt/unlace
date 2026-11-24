@@ -1,7 +1,7 @@
-"""Mine the decbench results tree for functions kuna decompiles *better* than the rest.
+"""Mine the decbench results tree for functions unlace decompiles *better* than the rest.
 
-The mirror image of ``scripts.decbench.mine``: that one hunts kuna's losses to
-drive the improvement campaign, this one hunts kuna's **wins** to stock the
+The mirror image of ``scripts.decbench.mine``: that one hunts unlace's losses to
+drive the improvement campaign, this one hunts unlace's **wins** to stock the
 landing page's compare section (``integrations/web/compare-samples.js``).
 
     python3 -m scripts.decbench.showcase                       # rank the pool
@@ -10,12 +10,12 @@ landing page's compare section (``integrations/web/compare-samples.js``).
 
 A candidate is a single function, on an **optimized** build, that
 
-  * every one of kuna / ida / ghidra / binja / angr scored (so no pane is empty),
-  * kuna beats ``--rival`` (default ``ida``) on GED, and
-  * with ``--sweep`` (default) kuna beats *all four* rivals, so the sample holds
+  * every one of unlace / ida / ghidra / binja / angr scored (so no pane is empty),
+  * unlace beats ``--rival`` (default ``ida``) on GED, and
+  * with ``--sweep`` (default) unlace beats *all four* rivals, so the sample holds
     up whichever one the visitor picks from the dropdown.
 
-Ranking is by mean GED margin over the rivals; ``--perfect`` narrows to kuna
+Ranking is by mean GED margin over the rivals; ``--perfect`` narrows to unlace
 GED = 0 (structurally exact). One row per ``(project, function)`` — the same
 source function compiled into six openssh binaries is one candidate, not six.
 
@@ -23,9 +23,9 @@ source function compiled into six openssh binaries is one candidate, not six.
 cross-decompiler GED gaps are scoring artifacts rather than differences a human
 can see (``docs/decbench-loop.md`` → *GED quirks*), so a mined candidate is only
 a showcase after someone reads all six panes. ``--dump`` exists for exactly
-that: it writes ``<case-id>/{kuna,ida,ghidra,binja,angr,source}.c`` so an agent
+that: it writes ``<case-id>/{unlace,ida,ghidra,binja,angr,source}.c`` so an agent
 can be pointed at the directory. See ``docs/decbench-loop.md`` → *Finding good
-kuna examples* for the full recipe.
+unlace examples* for the full recipe.
 
 Provenance, which the page must not misstate: decbench decompiled the
 **stripped** binary with every decompiler, then renamed each function's own
@@ -44,7 +44,7 @@ from pathlib import Path
 
 from . import config
 
-DECS = ("kuna", "ida", "ghidra", "binja", "angr")
+DECS = ("unlace", "ida", "ghidra", "binja", "angr")
 RIVALS = ("ida", "ghidra", "binja", "angr")
 OPTIMIZED = ("O2", "O2-noinline")
 
@@ -84,7 +84,7 @@ def find_wins(
     sweep: bool = True,
     perfect: bool = False,
 ) -> list[dict]:
-    """Candidates where kuna out-scores ``rival`` (and, with ``sweep``, everyone)."""
+    """Candidates where unlace out-scores ``rival`` (and, with ``sweep``, everyone)."""
     pool = []
     for r in rows:
         if opts and r["opt_level"] not in opts:
@@ -92,22 +92,22 @@ def find_wins(
         ged = r["ged"]
         if not all(_finite(ged[d]) for d in DECS):
             continue
-        if not ged["kuna"] < ged[rival]:
+        if not ged["unlace"] < ged[rival]:
             continue
-        if perfect and ged["kuna"] != 0.0:
+        if perfect and ged["unlace"] != 0.0:
             continue
         size = r["size"] or 0
         if not (min_size <= size <= max_size):
             continue
-        wins = [d for d in RIVALS if ged["kuna"] < ged[d]]
+        wins = [d for d in RIVALS if ged["unlace"] < ged[d]]
         if sweep and len(wins) != len(RIVALS):
             continue
         c = dict(r)
         c["case_id"] = config.case_id(r["opt_level"], r["project"], r["binary"], r["function"])
         c["group_id"] = config.group_id(r["project"], r["function"])
         c["beats"] = wins
-        c["margin_rival"] = ged[rival] - ged["kuna"]
-        c["margin_mean"] = sum(ged[d] for d in RIVALS) / len(RIVALS) - ged["kuna"]
+        c["margin_rival"] = ged[rival] - ged["unlace"]
+        c["margin_mean"] = sum(ged[d] for d in RIVALS) / len(RIVALS) - ged["unlace"]
         pool.append(c)
 
     # One row per source function: keep the strongest instance (widest sweep,
@@ -119,7 +119,7 @@ def find_wins(
         if cur is None or rank > (len(cur["beats"]), cur["opt_level"] == "O2", cur["margin_mean"]):
             best[c["group_id"]] = c
     uniq = list(best.values())
-    uniq.sort(key=lambda c: (-(c["ged"]["kuna"] == 0.0), -c["margin_mean"], c["size"]))
+    uniq.sort(key=lambda c: (-(c["ged"]["unlace"] == 0.0), -c["margin_mean"], c["size"]))
     return uniq
 
 
@@ -134,7 +134,7 @@ def as_candidate(row: dict) -> dict:
     c = dict(row)
     c["case_id"] = config.case_id(row["opt_level"], row["project"], row["binary"], row["function"])
     c["group_id"] = config.group_id(row["project"], row["function"])
-    c["beats"] = [d for d in RIVALS if _finite(g[d]) and _finite(g["kuna"]) and g["kuna"] < g[d]]
+    c["beats"] = [d for d in RIVALS if _finite(g[d]) and _finite(g["unlace"]) and g["unlace"] < g[d]]
     c["margin_mean"] = 0.0
     return c
 
@@ -205,7 +205,7 @@ def dump_bundles(cands: list[dict], outdir: Path) -> list[dict]:
             entry = cache[key].get(c["function"])
             if entry:
                 addr, code = entry
-                if dec == "kuna":
+                if dec == "unlace":
                     address = addr
                 (d / f"{dec}.c").write_text(code)
                 lines[dec] = len(code.splitlines())
@@ -240,10 +240,10 @@ def dump_bundles(cands: list[dict], outdir: Path) -> list[dict]:
 # ── verification ──────────────────────────────────────────────────────────────
 
 def _defined_name(code: str) -> str | None:
-    """The identifier of the function *definition* kuna printed.
+    """The identifier of the function *definition* unlace printed.
 
     The signature is the first line that is neither blank nor one of the
-    ``/* WARNING: ... */`` banners kuna emits above it; the name is the last
+    ``/* WARNING: ... */`` banners unlace emits above it; the name is the last
     identifier before that line's opening paren.
     """
     import re  # noqa: PLC0415
@@ -258,15 +258,15 @@ def _defined_name(code: str) -> str | None:
 
 
 def verify_bundle(d: Path, timeout: int = 900) -> dict:
-    """Re-decompile one bundle's function with the CURRENT kuna and diff the pane.
+    """Re-decompile one bundle's function with the CURRENT unlace and diff the pane.
 
-    The recorded pane came from decbench's kuna 0.1.0 run, so before a sample
-    ships the page must still be what kuna prints *today*. Re-runs
+    The recorded pane came from decbench's unlace 0.1.0 run, so before a sample
+    ships the page must still be what unlace prints *today*. Re-runs
 
         unlace decompile-all <stripped binary> --addr <0xVMA>
 
     — the same whole-binary, load-once surface decbench's backend drives
-    (``decbench/decompilers/raw/kuna_raw.py``), Listing tier on by default, which
+    (``decbench/decompilers/raw/unlace_raw.py``), Listing tier on by default, which
     is what stripped ARM firmware needs to find the function at all — then applies
     decbench's one edit (rename ``sub_<addr>`` to the DWARF name) and diffs.
     """
@@ -275,20 +275,20 @@ def verify_bundle(d: Path, timeout: int = 900) -> dict:
     import subprocess  # noqa: PLC0415
 
     meta = json.loads((d / "meta.json").read_text())
-    recorded = (d / "kuna.c").read_text().rstrip()
+    recorded = (d / "unlace.c").read_text().rstrip()
     stripped, addr = meta.get("stripped_path"), meta.get("address")
     out = {"case_id": meta["case_id"], "function": meta["function"]}
     if not stripped or addr is None or not Path(stripped).is_file():
         return out | {"status": "no-binary", "identical": False}
 
-    cmd = [config.kuna_bin(), "decompile-all", stripped,
-           "--addr", config.kuna_addr(stripped, addr)]
+    cmd = [config.unlace_bin(), "decompile-all", stripped,
+           "--addr", config.unlace_addr(stripped, addr)]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return out | {"status": "timeout", "identical": False}
     if proc.returncode != 0:
-        return out | {"status": "kuna-failed", "identical": False,
+        return out | {"status": "unlace-failed", "identical": False,
                       "detail": (proc.stderr or "").strip()[-400:]}
 
     # strip the `// Function: <name> @ <addr>` header decompile-all prints
@@ -341,7 +341,7 @@ def emit_samples_js(picks: list[dict], bundles: Path) -> str:
             if not f.is_file():
                 continue
             vs.append(f"      {dec}:\n`{_js_literal(f.read_text().rstrip())}`,")
-        kuna = _js_literal((d / "kuna.c").read_text().rstrip())
+        unlace = _js_literal((d / "unlace.c").read_text().rstrip())
         gedjs = ", ".join(f"{d}: {ged[d]:g}" for d in DECS if _finite(ged[d]))
         out.append(
             f"  {{\n"
@@ -349,7 +349,7 @@ def emit_samples_js(picks: list[dict], bundles: Path) -> str:
             f"    name: {_js_str(p.get('name') or meta.get('label', p['case_id']))},\n"
             f"    meta: {_js_str(p.get('meta') or meta.get('meta_line', ''))},\n"
             f"    ged: {{ {gedjs} }},\n"
-            f"    kuna:\n`{kuna}`,\n"
+            f"    unlace:\n`{unlace}`,\n"
             f"    vs: {{\n" + "\n".join(vs) + "\n    },\n"
             f"  }},\n"
         )
@@ -372,14 +372,14 @@ def _render_table(cands: list[dict]) -> str:
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--rival", default="ida", choices=RIVALS,
-                    help="the decompiler kuna must beat (default: ida)")
+                    help="the decompiler unlace must beat (default: ida)")
     ap.add_argument("--opt", default=",".join(OPTIMIZED),
                     help="comma-separated opt levels (default: the optimized ones)")
     ap.add_argument("--min-size", type=int, default=22, help="min decompiled lines")
     ap.add_argument("--max-size", type=int, default=100, help="max decompiled lines")
     ap.add_argument("--no-sweep", action="store_true",
                     help="accept beating only --rival, not all four")
-    ap.add_argument("--perfect", action="store_true", help="require kuna GED == 0")
+    ap.add_argument("--perfect", action="store_true", help="require unlace GED == 0")
     ap.add_argument("--per-project", type=int, default=3, help="cap per project")
     ap.add_argument("--limit", type=int, default=40, help="shortlist size (0 = all)")
     ap.add_argument("--dump", metavar="DIR",
@@ -388,7 +388,7 @@ def main(argv=None) -> None:
                     help="render compare-samples.js entries for the picks in this "
                          "file ([{case_id,name}], optional meta); needs --dump's DIR")
     ap.add_argument("--verify", action="store_true",
-                    help="re-decompile every dumped bundle with the CURRENT kuna "
+                    help="re-decompile every dumped bundle with the CURRENT unlace "
                          "and report whether the recorded pane still reproduces")
     ap.add_argument("--cases", metavar="ID,ID,...",
                     help="restrict --verify to these case ids (any function, even "
@@ -449,7 +449,7 @@ def main(argv=None) -> None:
             for line in v.get("diff", [])[:12]:
                 print(f"        {line}")
         print(f"\n[showcase] {len(short) - bad}/{len(short)} panes reproduce "
-              f"with the current kuna build")
+              f"with the current unlace build")
         sys.exit(1 if bad else 0)
 
     if args.json:
@@ -457,7 +457,7 @@ def main(argv=None) -> None:
     else:
         print(f"[showcase] {len(cands)} candidates beat "
               f"{'all four rivals' if not args.no_sweep else args.rival}"
-              f"{' with kuna GED 0' if args.perfect else ''}"
+              f"{' with unlace GED 0' if args.perfect else ''}"
               f" on {'/'.join(opts)}; showing {len(short)}\n")
         print(_render_table(short))
 

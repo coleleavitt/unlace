@@ -1,7 +1,7 @@
 # Dev container — reproducible build + cross-arch fixture environment
 
 `.devcontainer/` provides a fully reproducible environment for (a) building and testing
-kuna and (b) building cross-architecture ELF test fixtures (x86-64, ARM32/Thumb, AArch64,
+unlace and (b) building cross-architecture ELF test fixtures (x86-64, ARM32/Thumb, AArch64,
 RISC-V64, MIPS/MIPSel/MIPS64el, PPC64le, SPARC64) **including their linkers**, plus
 **Windows/PE** (mingw-w64) and **Mach-O** (lld) fixtures for the multi-format loader work,
 Go, and a pinned Rust toolchain.
@@ -17,14 +17,14 @@ now be produced in-env.
 | File | Role |
 |---|---|
 | `.devcontainer/Dockerfile` | The image. **Env-only** — it does NOT copy the repo; the workspace is mounted at runtime so one image serves every branch/worktree. |
-| `.devcontainer/devcontainer.json` | VS Code / `devcontainer` CLI config. References the Dockerfile, runs as user `dev`, mounts the repo at `/workspaces/kuna`. |
+| `.devcontainer/devcontainer.json` | VS Code / `devcontainer` CLI config. References the Dockerfile, runs as user `dev`, mounts the repo at `/workspaces/unlace`. |
 
 ## Design notes
 
 - **Base `ubuntu:22.04`** — matches the host toolchain era so the vendored cross-arch ELF
   fixtures stay byte-reproducible.
 - **Env-only image** — the Dockerfile never `COPY`s the repo. Mount the worktree at
-  `/workspaces/kuna` at runtime. The build context is just `.devcontainer/` (tiny).
+  `/workspaces/unlace` at runtime. The build context is just `.devcontainer/` (tiny).
 - **Non-root `dev` user (uid 1000)** with **passwordless sudo** (`/etc/sudoers.d/dev`).
 - **Privileged by default** — `devcontainer.json` sets `privileged: true` and
   `runArgs: ["--privileged"]`. This (and passwordless sudo) is **intentional per project
@@ -40,7 +40,7 @@ now be produced in-env.
 From the repo root:
 
 ```bash
-docker build -t kuna-dev -f .devcontainer/Dockerfile .devcontainer
+docker build -t unlace-dev -f .devcontainer/Dockerfile .devcontainer
 ```
 
 (Build context is `.devcontainer` on purpose — the image is env-only, so it needs none of the
@@ -52,16 +52,16 @@ CLI, which reads `.devcontainer/devcontainer.json` directly.
 Mount the repo worktree and run the gates. From the repo root:
 
 ```bash
-# build all binaries (decomp_dbg, decomp_test_dbg, slacomp, kuna)
-docker run --rm -v "$(pwd)":/workspaces/kuna -w /workspaces/kuna kuna-dev \
+# build all binaries (decomp_dbg, decomp_test_dbg, slacomp, unlace)
+docker run --rm -v "$(pwd)":/workspaces/unlace -w /workspaces/unlace unlace-dev \
     bash -lc 'cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli'
 
 # the three required gates
-docker run --rm -v "$(pwd)":/workspaces/kuna -w /workspaces/kuna kuna-dev \
+docker run --rm -v "$(pwd)":/workspaces/unlace -w /workspaces/unlace unlace-dev \
     bash -lc 'cargo test -p unlace-harness --test parity datatests'         # 675/675 datatest parity  -> PARITY OK
-docker run --rm -v "$(pwd)":/workspaces/kuna -w /workspaces/kuna kuna-dev \
+docker run --rm -v "$(pwd)":/workspaces/unlace -w /workspaces/unlace unlace-dev \
     bash -lc 'cargo test -p unlace-harness --test parity stage_tests'  # stage-model corpus       -> PARITY OK
-docker run --rm -v "$(pwd)":/workspaces/kuna -w /workspaces/kuna kuna-dev \
+docker run --rm -v "$(pwd)":/workspaces/unlace -w /workspaces/unlace unlace-dev \
     bash -lc 'cargo nextest run --workspace --exclude unlace-wasm --profile ci'    # full cargo workspace suite
 ```
 
@@ -71,7 +71,7 @@ tree clean of artifacts (the `target/` produced is the host's own and is never c
 For an interactive session:
 
 ```bash
-docker run --rm -it -v "$(pwd)":/workspaces/kuna -w /workspaces/kuna kuna-dev bash -l
+docker run --rm -it -v "$(pwd)":/workspaces/unlace -w /workspaces/unlace unlace-dev bash -l
 ```
 
 ## Build a cross-arch fixture (the ARM-linker unblock)

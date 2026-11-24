@@ -1,4 +1,4 @@
-# Kuna: P1 environment binding, options dyldimage and dyldcrossrefs
+# Unlace: P1 environment binding, options dyldimage and dyldcrossrefs
 # (default on). The script loads one image out of the committed synthetic
 # dyld shared cache (crates/unlace-analysis/tests/fixtures/
 # dyld_cache_arm64e.py): a main file, a .01 sub-cache holding a

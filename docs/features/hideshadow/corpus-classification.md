@@ -3,8 +3,8 @@
 444 stripped ELFs: `{O0,O2,O2-noinline}/{coreutils,grep,gzip,diffutils,bzip2,findutils,tar,shadow}/stripped/*`
 (the type-campaign slice set). Both arms are the same binary, one invocation each:
 
-    kuna decompile-all <bin> --option hideshadow off
-    kuna decompile-all <bin> --option hideshadow on
+    unlace decompile-all <bin> --option hideshadow off
+    unlace decompile-all <bin> --option hideshadow on
 
 **434 byte-identical, 10 changed.** No function gained a line, no declaration
 moved, no variable was renumbered. Every changed hunk deletes an assignment

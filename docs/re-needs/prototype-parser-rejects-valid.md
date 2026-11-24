@@ -44,7 +44,7 @@ Specify the interpreter's code pointer through a prototype assertion.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x1005350",
@@ -90,7 +90,7 @@ Specify the interpreter's code pointer through a prototype assertion.
   },
   "timeout_s": 120,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "authenticate",

@@ -30,7 +30,7 @@
 # printed `hv(a1)` and `hw(a1 + 1)`; the install is declined.
 #
 # rlater @ 0x402000: the same shape behind an unrelated guard and call, so its
-# cascade is found from a later head (kuna_loweredswitchheads). A later head is
+# cascade is found from a later head (unlace_loweredswitchheads). A later head is
 # checked like every cascade, so its install is declined too and it prints
 # `hv(7)` and `hw(8)`.
 #

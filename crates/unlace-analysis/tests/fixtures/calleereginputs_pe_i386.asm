@@ -1,6 +1,6 @@
 ; Clean-room repro: calls to callees that read ECX (and EDX) before writing
 ; them, where the caller's own data flow does not prove the register is an
-; argument (kuna_calleereginputs).
+; argument (unlace_calleereginputs).
 ;
 ;   obj_set(this, x)    __thiscall, stores x into *this, `ret 4`.
 ;   obj_init(this)      __thiscall, zeroes *this, `ret`.

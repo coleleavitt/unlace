@@ -1,21 +1,21 @@
 ## The problem
 
-`kuna unpack` refuses every UPX image compressed with LZMA — which is what
+`unlace unpack` refuses every UPX image compressed with LZMA — which is what
 `upx --lzma` and `upx --best` write, so it is most of what is in the wild. The
-packed file is then a stub and a blob, and `kuna functions` reports nothing:
+packed file is then a stub and a blob, and `unlace functions` reports nothing:
 
 ```console
 $ upx --lzma -o /tmp/x.packed /usr/bin/head
-$ kuna unpack /tmp/x.packed
+$ unlace unpack /tmp/x.packed
 error: /tmp/x.packed: unsupported UPX image: compression method 14 (LZMA)
 
-$ kuna functions /tmp/x.packed --json
+$ unlace functions /tmp/x.packed --json
 { "binary": "/tmp/x.packed", "count": 0, "functions": [] }
 ```
 
 ## The fix
 
-- `kuna-analysis/src/upx/lzma.rs`: an LZMA1 decoder, written out rather than
+- `unlace-analysis/src/upx/lzma.rs`: an LZMA1 decoder, written out rather than
   taken as a dependency, for the same reason `nrv.rs` is — the input is a
   hostile file, so every array index, match distance and output write is
   bounds-checked and returns an error instead of panicking or emitting a
@@ -41,8 +41,8 @@ pass by accident. Plus the decoder's own unit tests, a mislabelled-stream case
 (an NRV block re-headed as method 14 must still fail, now in the decoder rather
 than by name), and `tests/cli/upx-lzma-compression-blocks.json`.
 
-On the need's witness (crackmes.one `68ae3bfc8fac2855fe6fb8ee`), `kuna unpack`
+On the need's witness (crackmes.one `68ae3bfc8fac2855fe6fb8ee`), `unlace unpack`
 now writes an 8,501,872-byte ELF that is **byte-identical to `upx -d`**, in
-0.24 s; `kuna functions` on it goes from 0 to 16,198.
+0.24 s; `unlace functions` on it goes from 0 to 16,198.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

@@ -33,7 +33,7 @@
 #
 # Stage / sub-stage: P4 "active-input-trial-scoring".  An unreferenced
 # argument REGISTER ends a CALL SITE's argument list when its next slot is
-# on the stack (kuna_stackarggap.rs, always on).  The function's own input
+# on the stack (unlace_stackarggap.rs, always on).  The function's own input
 # recovery is untouched (that is the own-input gap tolerance's territory),
 # and a call whose register file IS fully written keeps its stack argument.
 #

@@ -1,6 +1,6 @@
 # entryretdispatch design
 
-1. Reuse `kuna_retcallchain` as the single recognizer for explicit and automatic
+1. Reuse `unlace_retcallchain` as the single recognizer for explicit and automatic
    RET-call chains. Strengthen its provenance rather than add a second heuristic.
 2. Track affine addresses with signed constants, overlapping register aliases,
    exact stores/loads, and conservative invalidation. Stop at conditional flow.

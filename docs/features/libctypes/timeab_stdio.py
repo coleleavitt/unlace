@@ -1,8 +1,8 @@
-"""Interleaved min-of-N A/B between two kuna builds on identical commands."""
+"""Interleaved min-of-N A/B between two unlace builds on identical commands."""
 import subprocess, time, sys, os, statistics, json
 R="/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"
-REF="/home/mahaloz/kwt/libctypes-stdio-ref/decompiler/target/release/kuna"
-NEW="/home/mahaloz/kwt/libctypes-stdio/decompiler/target/release/kuna"
+REF="/home/mahaloz/kwt/libctypes-stdio-ref/decompiler/target/release/unlace"
+NEW="/home/mahaloz/kwt/libctypes-stdio/decompiler/target/release/unlace"
 SPECS_REF="/home/mahaloz/kwt/libctypes-stdio-ref/specs"
 SPECS_NEW="/home/mahaloz/kwt/libctypes-stdio/specs"
 CASES=[
@@ -13,7 +13,7 @@ CASES=[
 ]
 N=int(sys.argv[1]) if len(sys.argv)>1 else 15
 def run(k, specs, argv):
-    e=dict(os.environ); e["SLEIGHHOME"]=specs; e["KUNA_SPECS"]=specs
+    e=dict(os.environ); e["SLEIGHHOME"]=specs; e["UNLACE_SPECS"]=specs
     t=time.perf_counter()
     subprocess.run(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=e, check=False)
     return (time.perf_counter()-t)*1000

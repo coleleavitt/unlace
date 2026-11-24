@@ -2,7 +2,7 @@
 
 A function whose parameter is only ever used *by address* declares that parameter a
 second time inside its own body, under the same name and a different type — which is
-not valid C, so the function cannot be recompiled from `kuna decompile-project` output.
+not valid C, so the function cannot be recompiled from `unlace decompile-project` output.
 
 ```sh
 cat > d.s <<'EOF'
@@ -17,7 +17,7 @@ derive_key:  push %ebp; mov %esp,%ebp
 consume:     mov 0x4(%esp),%eax; mov (%eax),%eax; add 0x8(%esp),%eax; ret
 EOF
 as --32 d.s -o d.o && ld -m elf_i386 d.o -o d
-kuna decompile ./d derive_key
+unlace decompile ./d derive_key
 ```
 
 ```c
@@ -35,7 +35,7 @@ void derive_key(unsigned int a0,unsigned int a1)
 ## The fix
 
 - Upstream declares body locals by walking the ScopeLocal symbol table for
-  `no_category` symbols (`PrintC::emitScopeVarDecls`). kuna walks HighVariables
+  `no_category` symbols (`PrintC::emitScopeVarDecls`). unlace walks HighVariables
   instead and recognises a parameter by testing whether a `function_parameter`
   symbol contains the *storage* of one of the high's Varnodes. An `&parameter`
   reference has no such Varnode — it is the offset constant of a
@@ -61,7 +61,7 @@ unit tests for the symbol-identity predicate, and `tests/cli/address-taken-key-p
 carrying the need's acceptance regex verbatim against a newly vendored 4,532-byte i386
 ELF. `make test` PARITY OK 675/675 (byte-identical — the default-on evidence);
 `make test-stages` PARITY OK 712/712 (3 new assertions, none moved); `make test-cli`
-101/101; `make check-spec` green (strict too); `kuna catalog --check` OK; workspace
+101/101; `make check-spec` green (strict too); `unlace catalog --check` OK; workspace
 suite green (379 suites, 6,186 tests, 0 failures).
 
 Sweep: `decompile-all` in both arms over 66 crackme binaries, 14,474 functions —

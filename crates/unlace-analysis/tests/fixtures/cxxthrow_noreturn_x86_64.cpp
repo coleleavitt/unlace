@@ -1,5 +1,5 @@
 // Fixture source for the libstdc++ `std::__throw_*` no-return family (GH-273,
-// kuna DIV-78). Build (checked in as `cxxthrow_noreturn_x86_64`):
+// unlace DIV-78). Build (checked in as `cxxthrow_noreturn_x86_64`):
 //
 //   clang++ -O1 -no-pie -fno-pic -fno-asynchronous-unwind-tables \
 //           -o cxxthrow_noreturn_x86_64 cxxthrow_noreturn_x86_64.cpp

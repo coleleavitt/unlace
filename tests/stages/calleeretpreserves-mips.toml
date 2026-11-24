@@ -1,11 +1,11 @@
-# kuna GH-878: a pointer gcc keeps in $v1 across a call to a callee that
+# unlace GH-878: a pointer gcc keeps in $v1 across a call to a callee that
 # never writes $v1 printed as a local nothing assigns (or, in decompile-all,
 # as the high word of the call's result), and the function lost the
 # parameter it came from.
 #
 # Stage / sub-stage: P3 call guard (Heritage::guardCalls), the callee-body
-# write probe (p4_calls/kuna_rustabi.rs probe_callee_return_writes) and its
-# consumers p4_calls/kuna_calleeretpreserves.rs and kuna_calleepreserves.rs.
+# write probe (p4_calls/unlace_rustabi.rs probe_callee_return_writes) and its
+# consumers p4_calls/unlace_calleeretpreserves.rs and unlace_calleepreserves.rs.
 #
 # Two defects. The probe never finished a MIPS or ARM body: every `jr ra`
 # and `bx lr` runs the setISAMode user op, which stopped the walk, so no

@@ -9,7 +9,7 @@
 # failed to disassemble ("Unable to resolve constructor").  Other x86 tools
 # treat the register-form encoding as a (multi-byte) NOP.
 #
-# Fix (kuna GH-8790): add a mod=3 register-form variant to each of the two
+# Fix (unlace GH-8790): add a mod=3 register-form variant to each of the two
 # prefetch/NOP constructors so the reg-direct encoding decodes instead of
 # aborting.
 #

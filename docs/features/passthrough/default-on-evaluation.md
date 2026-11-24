@@ -17,7 +17,7 @@ whose own return is a value it did not compute".
 ## Round G, first pass: the return gate and the whole-corpus check
 
 `recovered_output` (`protoorder.rs`) states a callee's return only when
-`kuna_returnuncomputed::every_return_computes` holds of that callee: every live
+`unlace_returnuncomputed::every_return_computes` holds of that callee: every live
 RETURN must hand back a value produced in every byte and on every path. gnulib's
 `void version_etc_arn` ends its fallthrough on a `__fprintf_chk` and returns
 `CONCAT44(<leftover>, <that call's result>)`, which the pair repair's relaxed
@@ -98,7 +98,7 @@ again with no option in its command.
 
 The **return** arm. A source-`void` wrapper that tail-calls a value-returning
 function compiles to exactly the `jmp` that a wrapper returning what it calls
-does, and `rax` holds the callee's result at the RETURN either way. kuna claims
+does, and `rax` holds the callee's result at the RETURN either way. unlace claims
 it: right for 5,458 of 5,615 gained returns across both corpora, wrong for 157 —
 6 on the GNU corpus, 151 on the disjoint one, where e2fsprogs's one-line bitmap
 accessors and openssh's `blf_key` family are written that way. `--option

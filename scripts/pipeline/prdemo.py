@@ -1,6 +1,6 @@
 """Generate a real before/after demonstration for a feature's PR body.
 
-Given a feature record (docs/features/<slug>/record.json), this captures the ACTUAL kuna
+Given a feature record (docs/features/<slug>/record.json), this captures the ACTUAL unlace
 decompilation of the feature's target function with the option off (before) and on (after),
 plus the reference decompiler's rendering of the same function (the goal), and emits a
 markdown block the pipeline embeds in the PR's opening comment. Real captured output, not a
@@ -24,8 +24,8 @@ from .. import decompile as kdecompile
 _FENCE = "```"
 
 
-def _kuna(binary, selector, func_addr, option, value, extra_options=None):
-    """Decompile in kuna with one option flipped; name-first, address-fallback.
+def _unlace(binary, selector, func_addr, option, value, extra_options=None):
+    """Decompile in unlace with one option flipped; name-first, address-fallback.
 
     ``extra_options`` (a list of ``[name, value]`` pairs) are applied to BOTH the
     before and after renderings — companion flags a feature requires to be active
@@ -38,16 +38,16 @@ def _kuna(binary, selector, func_addr, option, value, extra_options=None):
     if name_sel:
         try:
             return kdecompile.decompile(binary, selector, options=opts,
-                                        timeout=config.KUNA_TIMEOUT)
+                                        timeout=config.UNLACE_TIMEOUT)
         except kdecompile.DecompileError:
             pass
     if func_addr:
         try:
             return kdecompile.decompile(binary, func_addr, by_address=True, options=opts,
-                                        timeout=config.KUNA_TIMEOUT)
+                                        timeout=config.UNLACE_TIMEOUT)
         except kdecompile.DecompileError as e:
-            return "// kuna decompilation failed: %s" % e
-    return "// kuna decompilation unavailable (no name/address)"
+            return "// unlace decompilation failed: %s" % e
+    return "// unlace decompilation unavailable (no name/address)"
 
 
 def _angr(binary, selector, test_name):
@@ -119,8 +119,8 @@ def generate(record=None, *, option=None, binary=None, selector=None, func_addr=
     func = selector
     binbase = os.path.basename(binary) if binary else "?"
 
-    before = _kuna(binary, selector, func_addr, option, "off", extra_options)
-    after = _kuna(binary, selector, func_addr, option, "on", extra_options)
+    before = _unlace(binary, selector, func_addr, option, "off", extra_options)
+    after = _unlace(binary, selector, func_addr, option, "on", extra_options)
     mb, ma = metrics(before), metrics(after)
 
     default_lbl_off = " *(default)*" if not default_on else ""
@@ -129,7 +129,7 @@ def generate(record=None, *, option=None, binary=None, selector=None, func_addr=
     out = []
     out.append("## Before / after — `%s` in `%s`" % (func, binbase))
     out.append("")
-    out.append("Real captured kuna output on the function this feature was built for, with "
+    out.append("Real captured unlace output on the function this feature was built for, with "
                "`option %s` flipped. Ported from **%s**%s."
                % (option, source_decompiler,
                   (" — %s" % inspiration) if inspiration else ""))
@@ -141,11 +141,11 @@ def generate(record=None, *, option=None, binary=None, selector=None, func_addr=
     if speed_row:
         out.append(speed_row)
     out.append("")
-    out.append("<details open><summary><b>kuna — before (<code>option %s off</code>)</b></summary>\n" % option)
+    out.append("<details open><summary><b>unlace — before (<code>option %s off</code>)</b></summary>\n" % option)
     out.append("%sc\n%s\n%s" % (_FENCE, before.strip(), _FENCE))
     out.append("\n</details>")
     out.append("")
-    out.append("<details open><summary><b>kuna — after (<code>option %s on</code>)</b></summary>\n" % option)
+    out.append("<details open><summary><b>unlace — after (<code>option %s on</code>)</b></summary>\n" % option)
     out.append("%sc\n%s\n%s" % (_FENCE, after.strip(), _FENCE))
     out.append("\n</details>")
 

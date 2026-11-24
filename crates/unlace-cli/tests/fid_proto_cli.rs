@@ -16,7 +16,7 @@ fn unlace() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .env("SLEIGHHOME", common::repo_root().join("specs"))
-        .env_remove("kuna_fid_db");
+        .env_remove("unlace_fid_db");
     command
 }
 
@@ -41,7 +41,7 @@ fn decompile(db: &Path, extra: &[&str]) -> String {
         .arg(common::repo_root().join("tests/fixtures/fid/protos/prog"))
         .args(["--option", "fid", "on"])
         .args(extra)
-        .env("kuna_fid_db", db)
+        .env("unlace_fid_db", db)
         .output()
         .expect("run unlace decompile-all");
     assert!(
@@ -111,7 +111,7 @@ fn a_stated_prototype_the_body_reads_past_is_dropped_and_reported() {
     let fixtures = common::repo_root().join("tests/fixtures/fid/protos");
     let scratch = tempfile::tempdir().unwrap();
     let db = scratch.path().join("short.fid");
-    let stated = scratch.path().join("stated.kuna");
+    let stated = scratch.path().join("stated.unlace");
     std::fs::write(
         &stated,
         "# one parameter short\nprototype parse_header int parse_header(unsigned char *buf,unsigned int len)\n",
@@ -169,7 +169,7 @@ fn decompile_layouts(db: &Path) -> (String, String) {
         .arg("decompile-all")
         .arg(layouts().join("prog"))
         .args(["--option", "fid", "on"])
-        .env("kuna_fid_db", db)
+        .env("unlace_fid_db", db)
         .output()
         .expect("run unlace decompile-all");
     let stderr = String::from_utf8_lossy(&result.stderr).into_owned();

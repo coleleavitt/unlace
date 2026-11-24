@@ -1,12 +1,12 @@
-# Perplexity iOS 26.46.0 — kuna vs IDA 9.5 gap report (2026-11-21)
+# Perplexity iOS 26.46.0 — unlace vs IDA 9.5 gap report (2026-11-21)
 
 Inputs: decrypted `Perplexity.app` 26.46.0 (released 2026-11-18), main executable
 `/home/cole/Downloads/perplexity-26.46.0/ext/Payload/Perplexity.app/Perplexity` (Mach-O arm64, 72 MB,
 stripped, Swift-heavy, chained fixups) plus the 174 `Frameworks/*.framework` (31 of them real code; the
-rest are 34 KB stubs). Raw outputs: `/home/cole/Downloads/perplexity-26.46.0/gaps/` (kuna JSON,
+rest are 34 KB stubs). Raw outputs: `/home/cole/Downloads/perplexity-26.46.0/gaps/` (unlace JSON,
 side-by-side `*.sbs.txt`, IDA `ida/*.decomp.json`, `.i64` databases, logs).
 
-kuna: branch `all` at b6168f82f (worktree `~/RustProjects/forks/kuna-wt-perplexity`, dev profile
+unlace: branch `all` at b6168f82f (worktree `~/RustProjects/forks/kuna-wt-perplexity`, dev profile
 opt-level 1, binary `~/RustProjects/forks/kuna-target/perplexity/debug/kuna`), always run with
 `--option objc on --option swiftmetadata on --option cfstrings on --option importdata on --option objcsdk
 iPhoneOS16.5.sdk`. IDA: 9.5 headless (`idat64 -A -S`), Hex-Rays arm64, Swift plugin on.
@@ -15,21 +15,21 @@ Note: the main checkout `~/RustProjects/forks/kuna` was on `main` (upstream mirr
 
 ## 0. Numbers
 
-| | kuna | IDA |
+| | unlace | IDA |
 |---|---|---|
 | main binary `functions` / auto-analysis | 270,680 in 10.1 s wall, 3.2 GB RSS (`--jobs 8`) | 263,818 in ~8.5 min, 1.5 GB RSS, 1.07 GB `.i64` |
 | of which `__got` import slots listed as size-0 functions | **7,865** (see gap 3) | 0 |
 | ObjC methods named | 9,615 | 8,986 |
 | other named (Swift metadata, exports) | 50,373 | 34,135 |
-| functions only one side finds (code) | +177 `objc_msgSend$` stubs IDA skips (IDA quirk #93) | +1,180 tiny (4–36 B) cold tails/landing pads kuna keeps inside the owner |
+| functions only one side finds (code) | +177 `objc_msgSend$` stubs IDA skips (IDA quirk #93) | +1,180 tiny (4–36 B) cold tails/landing pads unlace keeps inside the owner |
 | decompile 300 random main-binary functions (`decompile-all --addr …`) | 52.7 s, 1.14 GB (≈7 s load + 0.15 s/fn); 0 errors, 0 timeouts | 37.9 s incl. 33 s db load (≈15 ms/fn) |
 | cmark-gfm.framework `decompile-all` (377 fns, C) | **200 s**, 125 MB; `_cmark_utf8proc_case_fold` (14.6 KB) alone 139 s "in variable merging", 60 s budget exceeded | 21.8 s total |
 | AppAuthCore (705 fns, ObjC) / DeviceKit (456, Swift) / nanopb (73, C) | 1.7 s / 2.9 s / 0.8 s | 3.5 s / 3.4 s / 1.4 s |
 | crashes / panics | none observed (91 + 300 main functions, 1,611 framework functions) | none |
 
-gotos (readability, GED proxy): kuna prints fewer gotos than IDA almost everywhere (tp300: 59 vs 147;
+gotos (readability, GED proxy): unlace prints fewer gotos than IDA almost everywhere (tp300: 59 vs 147;
 cmark-gfm 1,375 vs 2,416; AppAuthCore 7 vs 44), the exceptions are listed in gap 9.
-Names: kuna wins outright on stripped Swift (metadata-derived `<Type:Proto>.method` names where IDA has
+Names: unlace wins outright on stripped Swift (metadata-derived `<Type:Proto>.method` names where IDA has
 `sub_`); IDA wins on import-slot and literal naming (gaps 2, 3, 5).
 
 ## 1. New gaps, ranked by impact
@@ -38,11 +38,11 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
 `rlm.lsp`/`codeflow` on the `all` tree; "status" says whether an open fork PR already claims it.
 
 ### G1. A callee's `x0` result consumed directly by the next call or by the return is dropped; the function turns `void`
-- Visible: every sampled corpus. tp300: 132/300 functions kuna-`void` where IDA returns; 98 of those IDA
+- Visible: every sampled corpus. tp300: 132/300 functions unlace-`void` where IDA returns; 98 of those IDA
   returns a call result; AppAuthCore 41, DeviceKit 190 (119 call results), nanopb 14/73.
 - ObjC form (worst, wrong code): `+[Singular getLinkFromLaunchOptions:]` 0x1020bddd0
   ```c
-  // kuna
+  // unlace
   objc_msgSend$allKeys(arg1);
   v1 = (objc_object *)UIApplicationLaunchOptionsURLKey;
   if (objc_msgSend$containsObject:()) {              // receiver AND argument gone
@@ -54,7 +54,7 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
   (`-[OIDAuthStatePendingAction initWithAction:andDispatchQueue:](...)` result dropped, then
   `objc_msgSend$addObject:()` with no receiver/argument). 13 zero-arg `objc_msgSend$…()` in AppAuthCore.
   Reproduces with `objcsdk` off.
-- C form: nanopb `_pb_decode_bool` 0x5530: kuna `void …{ if (_pb_decode_varint32_eof(a0,&v1,NULL)) *a1 = v1 != 0; }`,
+- C form: nanopb `_pb_decode_bool` 0x5530: unlace `void …{ if (_pb_decode_varint32_eof(a0,&v1,NULL)) *a1 = v1 != 0; }`,
   IDA `result = pb_decode_varint32_eof(...); if (result) *a2 = v4 != 0; return result;`.
   `_pb_get_encoded_size` 0x65c8 also loses two pass-through params (`_pb_encode(&v1)` vs `pb_encode(&v5, a2, a3)`).
 - Swift form: `<…CodingKeys:Swift.Hashable>.hashValue.getter` 0x101324704: `sub_1013245e8(v1); Swift.Hasher._finalize()();`
@@ -72,9 +72,9 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
 
 ### G2. Swift stdlib / runtime stubs unnamed when the import exists only in the chained-fixups import table
 - Visible: 12 of the 31 Swift-package frameworks ship with `strip`ped undefined symbols: DeviceKit 79 nlist undefineds
-  vs 170 chained imports; RevenueCat 245 vs 1,475. kuna names only stubs it can resolve from `LC_DYSYMTAB`/nlist:
+  vs 170 chained imports; RevenueCat 245 vs 1,475. unlace names only stubs it can resolve from `LC_DYSYMTAB`/nlist:
   **DeviceKit 39/57 `__stubs` entries `sub_fcXX`, RevenueCat 696/848**; in the main binary (full nlist) 0/4,676.
-- Snippet (DeviceKit `Device.BatteryState.description.getter` 0xcb94): kuna `sub_fc80(0x28); … sub_fcbc(dat_14ab0,dat_14ab8); sub_fc50(...)`,
+- Snippet (DeviceKit `Device.BatteryState.description.getter` 0xcb94): unlace `sub_fc80(0x28); … sub_fcbc(dat_14ab0,dat_14ab8); sub_fc50(...)`,
   IDA `` `_StringGuts.grow(_:)`(41); `dispatch thunk of CustomStringConvertible.description.getter`(...); `String.append(_:)` ``.
   `unlace read DeviceKit 0x14ad8` already labels the `__got` slot `$ss11_StringGutsV4growyySiF` (raw, undemangled), so the
   bind name is known to the loader; only the stub→slot→name step and the demangle are missing.
@@ -110,11 +110,11 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
 
 ### G5. Swift small-string pairs and `mov/movk` literal builds stay raw
 - Visible: 566 16-hex-digit constants in tp300; every `CodingKeys.stringValue.getter`, `rawValue.getter`, `description.getter`.
-  kuna decodes a small string **at a call site** (`sub_1015fd8e8(0x736d61726170,"params")`, `(…,"workflow_config")`) but not when
+  unlace decodes a small string **at a call site** (`sub_1015fd8e8(0x736d61726170,"params")`, `(…,"workflow_config")`) but not when
   the pair is **returned or stored**: `v1 = 0x736f705f6d726f66; … v2 = 0xe900000000000074; return *(unsigned __int128 *)v3;`
   (`"form_pos" / "t"`); 0x102cafa90 prints `(unsigned long)v20 & 0xffff0000ffffffff | 0x5f7400000000` for a `mov/movk/movk`
-  chain IDA folds to one constant. Large immortal strings work (`"read_write_token"`), IDA has them raw — kuna is ahead there.
-- Owner: the `fatstr`/`swiftstr` idiom in `p3_dataflow`/`p5_types` (`kuna_swift*.rs`, `swift-gaps` track #31) — call-site only;
+  chain IDA folds to one constant. Large immortal strings work (`"read_write_token"`), IDA has them raw — unlace is ahead there.
+- Owner: the `fatstr`/`swiftstr` idiom in `p3_dataflow`/`p5_types` (`unlace_swift*.rs`, `swift-gaps` track #31) — call-site only;
   the `return`/`store` pair and the `return-dupe` split that keeps `movk` partials as separate SSA values.
 - Status: PR #1736 (`fatstr`) covers the store form (`*(unsigned long *)&v1[8] = (unsigned long)"shape"`), tested in §1b.
 
@@ -122,7 +122,7 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
 - Visible: tp300 11 bare `(...)(); // jump-as-call` in 10 functions; DeviceKit 5; all `resume_parent` continuations
   (`(*(void (*)(void))async_context->resume_parent)();`), vtable/witness tail dispatch.
 - Worst case DeviceKit `swift56override_swift_task_create_common` 0x4454:
-  `cmp x5,#0x20; mov w8,#0x20; csel x5,x5,x8,hi; br x6` → kuna `(*a6)(); // jump-as-call` (the clamp is dead-code-eliminated),
+  `cmp x5,#0x20; mov w8,#0x20; csel x5,x5,x8,hi; br x6` → unlace `(*a6)(); // jump-as-call` (the clamp is dead-code-eliminated),
   IDA `if (a6 <= 0x20) a6 = 32; return a7(a1,a2,a3,a4,a5,a6);`. Also cmark `_cmark_node_get_type_string` `(*v2)()` (x0 live; IDA same bug).
 - Owner: `p2_lift` BRANCHIND→CALLIND rewrite (`jump-as-call` warning emitter) gives the synthetic call a `void(void)` prototype;
   Ghidra's equivalent assigns the default (`unknown`) prototype so live inputs survive as `in_xN`.
@@ -155,29 +155,29 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
   PR #1815 adds 101 concurrency ones, not `_swift_stdlib_*`).
 
 ### G9. Unbounded relative jump tables (Swift multi-payload enum `switch`) are not recovered; re2c scanner tables and switch-return tables spawn bogus functions
-- Swift: `sub_102c50318` (13.3 KB, IDA 3,241 lines) → kuna 518 lines ending in
+- Swift: `sub_102c50318` (13.3 KB, IDA 3,241 lines) → unlace 518 lines ending in
   `return (*(…)(v5 * 4UL + 0x102c50bf0))(); // jump-as-call` where `v5 = *(unsigned short *)(swift_getEnumCaseMultiPayload(...) * 2 + 0x1033d1aa6)`.
   The index is a call result (bounded only by the enum's case count from metadata), so `JumpBasic` finds no range; 3/300 tp300
   functions, each losing most of its body. Also `sub_101e44550`.
-- C: cmark-gfm `__scan_html_block_start` (IDA one function, 4,484 B): kuna truncates at 0x16b8c (`funcboundflow` warning) because
+- C: cmark-gfm `__scan_html_block_start` (IDA one function, 4,484 B): unlace truncates at 0x16b8c (`funcboundflow` warning) because
   the `adr x10,…; ldrb w11,[x8,x9]; add x10,x10,x11,lsl#2; br x10` targets were made functions (`sub_16b8c`, `sub_16bc4`, `sub_16d70`,
   `sub_175b0`, `sub_177a4`); `_cmark_node_get_type_string` spawns 24 12-byte `sub_f49c…sub_f5cc` (the switch itself decompiles
-  correctly). 35 only-kuna functions in cmark-gfm, all of this kind.
+  correctly). 35 only-unlace functions in cmark-gfm, all of this kind.
 - Owner: `p2_lift/loweredswitch.rs` / `jumptable` models (`JumpBasic2`, `switchtrim`) and the discovery pass that
   registers jump-table targets as starts (`unlace-analysis` function discovery, `calltable`/`addrtable` votes).
 - Status: PR #1819 (`relswitch`) drops bogus starts for *hardened* (`cmp/csel`-clamped) arm64e tables; neither the
   unclamped `getEnumCaseMultiPayload` index nor the plain-arm64 re2c tables are covered.
 
 ### G10. Structure/readability regressions vs IDA in specific shapes
-- `sub_102cafa90` (enum→small-string switch, 1,116 B): IDA 144 lines, kuna **1,241 lines**, prototype
+- `sub_102cafa90` (enum→small-string switch, 1,116 B): IDA 144 lines, unlace **1,241 lines**, prototype
   `swift.type_metadata * (swift.AsyncContext *async_context, …a5)` on a function that never touches x22, `return-dupe x17`,
   phantom cases `0x4f/0x5d/0x7f…`, variable storage comments `d0 | pc | ram 0x686372616573 | x0 …` (string bytes used as RAM
   addresses). Owner: `returndup`/`earlyreturn` (p8) on a 256-way table + the `swiftasync` "async by reading the register"
   classifier (PR #1815 description) misfiring, + variable merging (`p6_variables`) across `pc`/`ram` storage.
 - cmark `_S_render_node` 0xe6f8: 20 gotos vs IDA 7 (shared call tails `label_eb7c/eb90/eafc` not duplicated or sunk);
-  kuna>IDA gotos in 15/300 tp300 functions and 9/377 cmark functions.
+  unlace>IDA gotos in 15/300 tp300 functions and 9/377 cmark functions.
 - `_cmark_utf8proc_case_fold`: 139 s in variable merging for one 14.6 KB function (IDA: seconds). Perf item for the
-  `kuna --max-fn-seconds` default (60 s) on generated switch code.
+  `unlace --max-fn-seconds` default (60 s) on generated switch code.
 
 ### G11. Constant pointers into `__cstring` print as integers or `&dat_` when the expression type is not `char*`
 - cmark-gfm: 69 instances in 8 functions (`(*v7)(a0,a1,0x28abe,0,0)` = `" ("`, `v3 = &dat_28a62` = `".SH"` chosen by `csel` against
@@ -222,7 +222,7 @@ stacks #1736 theme-swift + #1815) and re-run on the same addresses:
 
 ## 3. IDA-informed backlog — what is still open
 
-Sources: `kuna-ida95/findings/TRIAGE.md` (118 findings; done 53 / partial 28 / noted 26 / skipped 5 / won't-do 3 / deferred 3),
+Sources: `unlace-ida95/findings/TRIAGE.md` (118 findings; done 53 / partial 28 / noted 26 / skipped 5 / won't-do 3 / deferred 3),
 `INTEGRATION.md`, `docs/decbench/backlog-ida.md` and `novel.md` (both are generated decbench GED tables from 2026-08-03,
 not IDA-comparison items; still the open readability backlog: 2,687 and 2,301 dedup groups). Fork PR state as of today:
 `gh pr list -R Noelo-Lab/kuna --author coleleavitt --state merged` = 73 merged (the whole `apple/*` wave on 11-09, the
@@ -264,8 +264,8 @@ tables and plain-arm64 re2c tables, G10 (0x102cafa90 async misclassification + 8
 
 ## 4. Where the raw material is
 - `gaps/main.functions.json` (+`.stderr` with `/usr/bin/time -v`), `gaps/ida/Perplexity.funcs.json` (IDA inventory), `gaps/ida/Perplexity.i64` (1.07 GB — delete when done).
-- `gaps/main.sample{0,1,2}.kuna.json` + `gaps/main.sample.sbs.txt` (91 stratified functions side by side; `gaps/main.sample.addrs.json` says which category each came from), `gaps/ida/Perplexity.sample.decomp.json`.
-- `gaps/main.tp300.kuna.json` / `gaps/ida/Perplexity.tp300.decomp.json` (300 random functions, timing).
-- `gaps/<framework>.kuna.json`, `gaps/<framework>.sbs.txt`, `gaps/ida/<framework>.decomp.json` for cmark-gfm, AppAuthCore, DeviceKit, nanopb; `gaps/cmark.*.c` single-function timings.
+- `gaps/main.sample{0,1,2}.unlace.json` + `gaps/main.sample.sbs.txt` (91 stratified functions side by side; `gaps/main.sample.addrs.json` says which category each came from), `gaps/ida/Perplexity.sample.decomp.json`.
+- `gaps/main.tp300.unlace.json` / `gaps/ida/Perplexity.tp300.decomp.json` (300 random functions, timing).
+- `gaps/<framework>.unlace.json`, `gaps/<framework>.sbs.txt`, `gaps/ida/<framework>.decomp.json` for cmark-gfm, AppAuthCore, DeviceKit, nanopb; `gaps/cmark.*.c` single-function timings.
 - `gaps/open-prs.tsv`, `gaps/merged-prs.tsv`.
 - Worktrees created for this run (safe to remove): `~/RustProjects/forks/kuna-wt-perplexity` (`all`), `kuna-wt-pplx-objc`, `kuna-wt-pplx-swift`, with target dirs `~/RustProjects/forks/kuna-target/{perplexity,pplx-objc,pplx-swift}`.

@@ -1,10 +1,10 @@
 /* Fixture for the `libctypes` stdio stream data symbols
- * (tests/stages/kuna-libctypes.toml, passes 6-8).
+ * (tests/stages/unlace-libctypes.toml, passes 6-8).
  *
  * Built: gcc -O1 -o libctypes_streams_x86_64 libctypes_streams_x86_64.c
  *        gcc -O1 -shared -fPIC -o libctypes_streams_so_x86_64.so \
  *                                 libctypes_streams_x86_64.c
- *        gcc -O1 -shared -fPIC -DKUNA_STREAM_NAME_COLLISION \
+ *        gcc -O1 -shared -fPIC -DUNLACE_STREAM_NAME_COLLISION \
  *                -o libctypes_streams_collide_so_x86_64.so \
  *                   libctypes_streams_x86_64.c
  *        (no `-g`, on purpose — the point is what the image says WITHOUT
@@ -28,14 +28,14 @@
  * name out of `.symtab`.
  *
  * The third build adds a global of the image's own spelled `stdout_ptr` — the
- * one name kuna MINTS rather than reads. It is `static`, so it lands in
+ * one name unlace MINTS rather than reads. It is `static`, so it lands in
  * `.symtab` and not in `.dynsym`, which is the half a `.dynsym`-only lookup
  * would miss. `stdin` is untouched there, so the decline has to be per name.
  */
 #define _GNU_SOURCE
 #include <stdio.h>
 
-#ifdef KUNA_STREAM_NAME_COLLISION
+#ifdef UNLACE_STREAM_NAME_COLLISION
 static long stdout_ptr = 7;
 long *keep_stdout_ptr = &stdout_ptr;
 __attribute__((noinline)) long own_ptr(void) { return stdout_ptr; }

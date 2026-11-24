@@ -21,7 +21,7 @@ pipeline non-linear. The algorithms themselves live in chapters 01–09; this is
 they are hosted, ordered, configured, and restarted.
 
 Overlapping DWARF stack locals are views of shared bytes. Before seeding local
-symbols, `kuna_dwarfstack` groups connected overlapping intervals into one union
+symbols, `unlace_dwarfstack` groups connected overlapping intervals into one union
 with an exact byte extent. Locals of one type at one offset (a compiler reusing
 a frame slot for identically typed variables) are a single view, so such a group
 stays one ordinary local under the first debug name. Each remaining view is a
@@ -45,7 +45,7 @@ modifiers are applied; qualifiers following `*` attach to that pointer, includin
 in parameters and return types. A qualified type retains its underlying shape
 for existing type consumers and an interned link to its unqualified type for
 identity and spelling. Typedefs retain their own names and inherit the underlying
-qualification. Kuna's type encoder preserves anonymous qualified layers in a
+qualification. Unlace's type encoder preserves anonymous qualified layers in a
 `qualified` element with a qualifier bit mask and an underlying type reference;
 unqualified types keep their existing encoding.
 
@@ -57,7 +57,7 @@ described in chapter 01, §1.3.
 
 ## 0.1 The two tiers
 
-kuna is two engines with one boundary. The **program-preparation tier**
+unlace is two engines with one boundary. The **program-preparation tier**
 (`unlace-analysis`, chapter 01) looks at the whole binary once — loader parse, symbol
 and relocation markup, strings, DWARF, entry discovery, the Listing, the no-return
 family — and produces *facts*. The **decompiler tier** (`unlace-decomp`, chapters
@@ -72,7 +72,7 @@ within a page; range queries visit only intersecting pages and trim their bounda
 rows. The index key remains independent of mutable instruction addresses, and
 cloned Listings retain independent records.
 
-(kuna) The hand-off is a three-step *stash → flags → gated commit* protocol, and
+(unlace) The hand-off is a three-step *stash → flags → gated commit* protocol, and
 the order is load-bearing:
 
 1. **Stash at load.** `crates/unlace-console/src/engine.rs
@@ -282,7 +282,7 @@ Four front-ends drive one engine assembly:
   (`crates/unlace-harness/src/bin/decomp_test_dbg.rs`), which drives the
   same bootstrap over the XML corpus. This is the parity surface: it never arms
   the watchdog and (on the XML path) never runs tier one.
-- (kuna) **`unlace decompile`** (`crates/unlace-cli/src/decompile/script.rs
+- (unlace) **`unlace decompile`** (`crates/unlace-cli/src/decompile/script.rs
   (build_script_for_input)`) — subprocess-per-function: it scripts a fresh `decomp_dbg` for
   each request, so every invocation re-parses the SLEIGH spec and re-runs the
   whole-binary analysis. It injects `option listing on` by default (unless the
@@ -313,7 +313,7 @@ Four front-ends drive one engine assembly:
   in-process surfaces' message and exit code rather than the C. A refused
   `option` line is read the same way and reported ahead of it (`option_failure`,
   below).
-- (kuna) **`unlace decompile-all` / `unlace functions`**
+- (unlace) **`unlace decompile-all` / `unlace functions`**
   (`crates/unlace-cli/src/decompile_all.rs (run, decompile_all)`) — the
   whole-binary, machine-readable surface: load and analyze **once** in-process
   (`bootstrap_from_object` → options → `commit_pending_analysis`, i.e. the
@@ -396,15 +396,15 @@ Four front-ends drive one engine assembly:
   other miss keeps its by-name `NotFound`. A binary that really does carry a
   symbol spelled like a placeholder is unaffected: the fallback runs only after
   the name match found nothing. This exists because a placeholder carries no
-  information beyond the address while kuna prints them for entries the canonical
+  information beyond the address while unlace prints them for entries the canonical
   inventory does not hold — a recovered tail call renders `sub_1170(a0)` at a
-  call target that discovery folded into the enclosing function, and `kuna
+  call target that discovery folded into the enclosing function, and `unlace
   strings` names a literal's owner from the reference walk's own flow attribution
   (`crates/unlace-cli/src/strings.rs (owning_function)`), which reaches
-  starts the inventory never recorded — so the name kuna printed was one the
+  starts the inventory never recorded — so the name unlace printed was one the
   by-name selector then refused.
 
-  (kuna, issue #666) A second miss retry covers the ABI decoration the container
+  (unlace, issue #666) A second miss retry covers the ABI decoration the container
   applies to a C identifier. Mach-O stores `int main(void)` as `_main`, so the
   spelling a caller reads in the source is not a name the image carries at all,
   and `unlace decompile <macho> main` missed on an image whose symbol table held
@@ -419,7 +419,7 @@ Four front-ends drive one engine assembly:
   a caller who types the decorated spelling has typed a name the image carries,
   and reading `_main` as `main` would invent a decoration rather than strip one.
 
-  (kuna, issue #666) A miss that remains a miss reports what the image DOES
+  (unlace, issue #666) A miss that remains a miss reports what the image DOES
   carry, because the front-end cannot know. `EntryLookupError::NotFound`
   (`crates/unlace-console/src/entry_selector.rs`) carries two facts the
   selector model is the only thing in a position to state: the nearest spelling
@@ -478,7 +478,7 @@ Four front-ends drive one engine assembly:
   both executable and keep the ambiguity error, as does every candidate set on a
   sectionless image, where the test reads every address as executable.
 
-  (kuna, issue #667) An ambiguity that survives that narrowing has to offer a
+  (unlace, issue #667) An ambiguity that survives that narrowing has to offer a
   selector the INPUT has. `.section+0xOFFSET` and `SECTION_INDEX:0xOFFSET`
   resolve against `object_sections`, which a relocatable load fills and a linked
   one leaves empty, so the unconditional "use a section-qualified selector" hint
@@ -488,7 +488,7 @@ Four front-ends drive one engine assembly:
   input, and a linked image is given the address form, spelled out once per
   candidate so the answer is pasteable rather than a grammar to apply. The
   per-candidate line follows the same fact. A relocatable object's definitions
-  and an undefined external really do sit at addresses kuna minted, and stay
+  and an undefined external really do sit at addresses unlace minted, and stay
   labelled `synthetic`; a candidate a linked image maps itself does not, and is
   reported at the address the program runs at. This is
   what makes Mach-O behave the way ELF already did by naming only the PLT stub.
@@ -503,14 +503,14 @@ Four front-ends drive one engine assembly:
   candidate, so it outranks the filter; nothing undeclared is lifted with it, and
   the filter is unchanged for every image whose flags mean what they say.
 
-  (kuna) **The run-level discovery verdict is read off that same executable set,
+  (unlace) **The run-level discovery verdict is read off that same executable set,
   never off the canonical inventory.** An unfiltered run that found no function
   is reported as the failure it is — non-zero exit, the reason on stderr and in
   the document's `error` field — and the question "found no function" has to mean
   *no body*, because the canonical inventory retains import pointer slots for
   call naming and an image can consist of nothing else. The reported NEOLite PE
   enumerates six imported Win32 names at its Import Address Table and no body at
-  all, so `decompile-all` named the cause while `unlace functions` and `kuna
+  all, so `decompile-all` named the cause while `unlace functions` and `unlace
   functions --summary` answered `count: 6` with a null error and exit 0 — the
   packed-image diagnosis the caller can act on, withheld from the two surfaces an
   agent orients with first. All three now ask
@@ -521,7 +521,7 @@ Four front-ends drive one engine assembly:
   the answer for that file. A declaration is still what clears the verdict: one
   declared body makes the run a run.
 
-  (kuna) **The native decompile verdict is also read after the selected functions
+  (unlace) **The native decompile verdict is also read after the selected functions
   run.** Selection succeeded and individual failures were isolated, but a non-empty
   result set with no `FuncResult::code` body is not a usable decompilation. The shared
   `crates/unlace-console/src/project.rs (BatchOutcome)` classifier makes
@@ -565,7 +565,7 @@ Four front-ends drive one engine assembly:
   this" — the browser inventory and the `unlace decompile-graph` document (§9.7) —
   and they must not answer it differently.
 
-  (kuna) **The listing surfaces read the same section flags to choose a view.**
+  (unlace) **The listing surfaces read the same section flags to choose a view.**
   `unlace disassemble` and its `unlace read` spelling
   (`crates/unlace-cli/src/disassemble.rs (render)`) are one command with
   two renderings of one walk: decoded instructions, or the bytes as a hexdump
@@ -588,7 +588,7 @@ Four front-ends drive one engine assembly:
   nothing in the program, which is what sent two RE-loop testers to `xxd` and
   `objdump -s` (`docs/re-needs/cli-mode-read-raw.md`).
 
-  (kuna) **The byte view says which of its bytes are the file's** (GH #1379).
+  (unlace) **The byte view says which of its bytes are the file's** (GH #1379).
   It lists the load image, the bytes the decompiler and the browser's Data tab
   read, and that image is not the file wherever a load-time fixup lands: a
   chained-fixup rebase or an ELF `RELATIVE` slot holds the pointer the loader
@@ -604,15 +604,15 @@ Four front-ends drive one engine assembly:
   image's. What the listed bytes are there is decided by comparing the two: the
   file's when they agree (also where the file
   already holds the loader's value, as a GNU ld x86-64 `RELATIVE` slot or a `REL`
-  or `RELR` one does), kuna's zero placeholder for an unvalued bind whose image
+  or `RELR` one does), unlace's zero placeholder for an unvalued bind whose image
   bytes are zero, and the loader's value otherwise. A span that overlaps anything
   but a rebase whose bytes already are its target also gets one note, on stderr
   and in the JSON `notes`, naming up to three slots; a rebase that still holds its
   chain word or a `RELA` zero is named, since those bytes are
   not the pointer. A relocatable object lists no slots (coverage `none`) although
-  its bytes are kuna's relocated layout of it.
+  its bytes are unlace's relocated layout of it.
 
-  (kuna) **A listing names the branch targets it decoded across, and `--follow`
+  (unlace) **A listing names the branch targets it decoded across, and `--follow`
   decodes from them.** A straight-line walk assumes every byte in the range
   starts an instruction or is inside one; hand-written and obfuscated code breaks
   that deliberately, and the resulting listing is not merely short a row — it
@@ -660,7 +660,7 @@ Four front-ends drive one engine assembly:
   because it costs a second walk and the straight line is the right answer for
   compiler output (`docs/re-needs/linear-disassembly-silently-skips.md`).
 
-  (kuna) **A window the caller bounded is answered without the discovery walk.**
+  (unlace) **A window the caller bounded is answered without the discovery walk.**
   `--count`, `--bytes` and an explicit `start-end` range each bound the listing on
   their own (`crates/unlace-cli/src/disassemble.rs
   (window_is_caller_bounded)`), so such a target does not need the program-wide
@@ -675,7 +675,7 @@ Four front-ends drive one engine assembly:
   an entry at that address (`crates/unlace-cli/src/disassemble.rs
   (windowed_answer_is_final)`). Anything else — a name only discovery invents, an
   address only it knows, a bare address in a data section — reloads with the full
-  bundle and answers exactly as it did before, which is what keeps `kuna
+  bundle and answers exactly as it did before, which is what keeps `unlace
   disassemble sub_1190` from becoming the "no function matches" regression
   `docs/re-needs/analysis-generated-function-name.md` records. A listing whose
   length is the function extent is never bounded by the caller, so it always takes
@@ -699,10 +699,10 @@ Four front-ends drive one engine assembly:
   A decompile failure degrades to the incomplete-function response shape so the
   GUI never desyncs.
 
-  (kuna) **The Phase-3 lazy providers** make ghidra-mode consume the program
+  (unlace) **The Phase-3 lazy providers** make ghidra-mode consume the program
   facts the host already has. The wire has no enumerate-the-program query, so
   eager pre-population (what the console's analysis commit does) is impossible;
-  kuna instead ports upstream's lazy `ScopeGhidra` model to the seams its own
+  unlace instead ports upstream's lazy `ScopeGhidra` model to the seams its own
   pipeline reads. `RemoteScope`
   (`crates/unlace-middle/src/infra/remote_provider.rs`) is installed on
   the `Architecture` at registerProgram (after the cspec `<global>` ranges and
@@ -729,7 +729,7 @@ Four front-ends drive one engine assembly:
   the mapsym answer (the Java `Function.getName()` echo), getCodeLabel demoted
   to fallback. The decoded `<function noreturn>` fact truncates flow at
   no-return call sites, exactly as the console's analysis facts do.
-  Types: registerProgram decodes the wire `<coretypes>` (so kuna's core-type
+  Types: registerProgram decodes the wire `<coretypes>` (so unlace's core-type
   ids equal the host's), and a `find_by_id` miss fetches the definition with
   getDataType (`crates/unlace-middle/src/substrate/dtype.rs
   (decode_type, decode_core_types, find_by_id_or_remote)`); composites intern
@@ -748,7 +748,7 @@ Four front-ends drive one engine assembly:
   Because that lookup is a host query, an undefined name is not a local miss:
   Ghidra's callback throws `No Register Defined`, which the host logs as an
   `Unexpected Exception` with a stack trace before the exception frame ever
-  reaches kuna — recoverable on the wire, but visible to the user and
+  reaches unlace — recoverable on the wire, but visible to the user and
   unsuppressible from this side. So a *speculative* by-name lookup — a pass
   asking "does this language happen to have register X?" rather than resolving
   a name the host itself supplied — must go through the probe seam
@@ -838,8 +838,8 @@ Four front-ends drive one engine assembly:
   instead of re-querying unboundedly.  setOptions follows the upstream
   reset-then-apply contract (`Architecture::reset_wire_defaults` + the DIV-77
   preset layer before every decode) because Java delta-encodes the list.
-  ghidra-mode also prints a `Kuna v…` plate comment (the release
-  `KUNA_VERSION` bake, `kuna_banner_text`) at the top of every function —
+  ghidra-mode also prints a `Unlace v…` plate comment (the release
+  `UNLACE_VERSION` bake, `unlace_banner_text`) at the top of every function —
   cache-only, HEADER-typed, rendered by the printer's plate arm
   (`crates/unlace-emit/src/p9_emit/printc.rs
   (emit_comment_func_header)`), which also renders the host's PLATE comments;
@@ -855,11 +855,11 @@ Four front-ends drive one engine assembly:
   registerProgram also applies the CLI `aggressive` ENGINE-TIER preset (the
   GUI has no `--mode` surface) and flips address-derived fallback naming to the
   Ghidra GUI convention `FUN_`/`DAT_`/`LAB_` (DIV-77) via
-  `Architecture::kuna_name_style` — kuna's angr-style local naming stays on.
+  `Architecture::unlace_name_style` — unlace's angr-style local naming stays on.
   None of this touches the standalone path: no provider installed means every
   seam takes its frozen-snapshot branch, byte-identically.
 
-  (kuna) **The Phase-4 full response encode** makes the `decompileAt` answer
+  (unlace) **The Phase-4 full response encode** makes the `decompileAt` answer
   carry everything the native GUI features consume, in the upstream child
   order (`Funcdata::encode`,
   `crates/unlace-middle/src/substrate/funcdata_encode.rs`): the base
@@ -871,20 +871,20 @@ Four front-ends drive one engine assembly:
   (`crates/unlace-middle/src/p0_knowledge/database.rs
   (Database::encode_scope, Symbol::encode_header, SymbolEntry::encode)`):
   every `<symbol>` carries its NONZERO id (internal `SYMBOL_ID_BASE`-range for
-  kuna-invented symbols; Java's `HighSymbol.decodeHeader` throws on 0), every
+  unlace-invented symbols; Java's `HighSymbol.decodeHeader` throws on 0), every
   `<mapsym>` at least one storage entry (`<addr>`/`<hash>` + its uselimit
   `<rangelist>`), parameters their `cat=0` + slot `index` + exact storage (the
   Java rename path re-commits the whole signature when these disagree with the
   database), and the `<scope>` opens positionally with `<parent>` +
   `<rangelist>` because `LocalSymbolMap.decodeScope` skips both blind.
-  Because kuna's naming pass binds plain strings (`kuna_name`) instead of the
+  Because unlace's naming pass binds plain strings (`unlace_name`) instead of the
   C++ `ActionNameVars::linkSymbols` Symbol objects, two mechanisms supply the
   ids the wire needs. First, the naming pass RECORDS the bind it actually made
-  (`HighVariable::kuna_link_symbol`,
+  (`HighVariable::unlace_link_symbol`,
   `crates/unlace-bandb/src/p6_variables/coreaction_cleanup.rs`) when
   a high resolves to a covering localmap entry — and, for a `&symbol`
   REFERENCE, the identity of the Symbol referred to
-  (`HighVariable::kuna_ref_symbol`, set by `Funcdata::link_symbol_reference`,
+  (`HighVariable::unlace_ref_symbol`, set by `Funcdata::link_symbol_reference`,
   the port of C++ `Varnode::setSymbolReference` →
   `HighVariable::setSymbolReference`). That second record is what a stack
   aggregate reached ONLY through `&sym` — a `char v [16]` passed to `memcmp`,
@@ -893,7 +893,7 @@ Four front-ends drive one engine assembly:
   read for the declaration only, because such a high encodes
   `class="constant"`, where Java's `HighConstant.decode` does nothing with a
   mapped local symref. Second, an encode-time link
-  pass (`Funcdata::kuna_link_high_symbols`) gives every REMAINING named high a
+  pass (`Funcdata::unlace_link_high_symbols`) gives every REMAINING named high a
   **wire-only symbol**
   (`crates/unlace-middle/src/p0_knowledge/database.rs (WireSymbol)`):
   a mapped one at its storage when nothing covers it, or — when a Symbol does
@@ -943,7 +943,7 @@ Four front-ends drive one engine assembly:
   The rename/retype PERSISTENCE loop closes the circle: a GUI edit is a DB
   write (`HighFunctionDBUtil.updateDBVariable`) followed by an event-driven
   re-decompile whose getMappedSymbols answer now carries the edited local in
-  the function's `<localdb>` (Java `LocalSymbolMap.grabFromFunction`).  kuna
+  the function's `<localdb>` (Java `LocalSymbolMap.grabFromFunction`).  unlace
   decodes those non-parameter locals
   (`crates/unlace-middle/src/infra/remote_provider.rs
   (RemoteLocalVar)`) and seeds them into the fresh `Funcdata` along FOUR
@@ -954,28 +954,28 @@ Four front-ends drive one engine assembly:
   (`Funcdata::seed_mapped_symbols` / `Funcdata::seed_usepoint_symbols`,
   surviving restructure's typelock-keep rule); a mapped, namelocked-only local
   (a plain rename) — which C++ itself never keeps as a Symbol — stages as a
-  NAME RECOMMENDATION (`Architecture::kuna_pending_name_recs` →
+  NAME RECOMMENDATION (`Architecture::unlace_pending_name_recs` →
   `Funcdata::seed_name_recommendations`), the `ScopeLocal::nameRecommend`
   mechanism of chapter [06](06-variables-and-merge.md) §6.4; and the same two
   cases in DYNAMIC (`<hash>`) storage — the class Java writes for every
   variable that `requiresDynamicStorage`, i.e. unique-space representatives and
   `splitOutMergeGroup` products — seed as a dynamic Symbol
   (`Funcdata::seed_dynamic_symbols`) or a DYNAMIC name recommendation
-  (`Architecture::kuna_pending_dyn_recs` →
+  (`Architecture::unlace_pending_dyn_recs` →
   `Funcdata::seed_dynamic_recommendations`, applied through
   `DynamicHash::find_varnode` by
-  `Funcdata::kuna_apply_dynamic_recommendations`).  Dropping the hash-storage
+  `Funcdata::unlace_apply_dynamic_recommendations`).  Dropping the hash-storage
   half would silently revert renames of exactly the register/temporary
   variables users rename most.  The host's declared prototype MODEL and its
   EXACT committed parameter storage ride along too
-  (`Architecture::kuna_pending_proto_model`,
+  (`Architecture::unlace_pending_proto_model`,
   `Funcdata::apply_locked_prototype_with_model`, and the decoded cat-0
   storage threaded into `Funcdata::apply_mapped_params`, whose slots are
   counted in the SAME compacted basis `RemoteProto::to_pieces` builds).  The
   storage echo is the load-bearing half: Java's `checkFullCommit` compares the
   parameter COUNT, each `categoryIndex`, and each storage — never the model
-  name — so a kuna-rederived storage or a slot skew force-rewrites the user's
-  signature on the next rename.  The model rides along because the storage kuna
+  name — so a unlace-rederived storage or a slot skew force-rewrites the user's
+  signature on the next rename.  The model rides along because the storage unlace
   would otherwise derive comes from it, not because Java inspects it.  Those
   echoed pieces carry the `ParameterPieces` lock bits (`TYPELOCK|NAMELOCK`),
   never the same-named `varnode_flags` ones — the two namespaces share no bit,
@@ -985,7 +985,7 @@ Four front-ends drive one engine assembly:
   typelock) and the host's declared types and names get re-derived instead of
   applied.
 
-(kuna) **Locating the engine and the specs.** `unlace` is the whole toolchain
+(unlace) **Locating the engine and the specs.** `unlace` is the whole toolchain
 (`crates/unlace-cli/src/paths.rs (decomp_dbg, slacomp, specs_dir)`). The
 decompiler console and the SLEIGH compiler are library entry points
 (`crates/unlace-console/src/consolemain.rs (main)`,
@@ -1020,7 +1020,7 @@ The spec root resolves in this order: `UNLACE_SPECS`, then `UNLACE_ROOT`'s `spec
 then the built-in tree, then the first directory that holds a
 `Ghidra/Processors` tree among the checkout's `specs/`, a `specs/` inside or next
 to the directory holding `unlace`, and the current directory's. A checkout build is
-recognised by its path, `<root>/target/[<triple>/]<profile>/kuna`; any
+recognised by its path, `<root>/target/[<triple>/]<profile>/unlace`; any
 other directory has no repo root, and popping three parents off it lands on a path
 that exists nowhere, so the pop is refused rather than reported. The
 environment overrides (`UNLACE_ROOT`, `UNLACE_SPECS`, `UNLACE_DECOMP_DBG`,
@@ -1035,7 +1035,7 @@ starting a compiler (`crates/unlace-cli/src/specs.rs (run)`). It identifies
 pinned Ghidra compiler element-stream comparisons separately from decompiler
 behavioral assertions; neither substitutes for the other.
 
-(kuna) **Compiler filenames.** The single-file `slacomp` command accepts one input
+(unlace) **Compiler filenames.** The single-file `slacomp` command accepts one input
 and at most one output filename. It appends `.slaspec` or `.sla` when the filename
 has no extension; dots in parent directories do not count. Explicit matching
 suffixes, including the filenames `.slaspec` and `.sla`, are accepted unchanged,
@@ -1044,7 +1044,7 @@ the input's sibling `.sla`. Extra positional arguments fail before compilation.
 Both filename arguments use the same normalization rule
 (`crates/unlace-slacomp/src/bin/slacomp.rs (with_extension)`).
 
-(kuna) **Compiler exit status.** `slacomp` exits 0 only when every spec it was
+(unlace) **Compiler exit status.** `slacomp` exits 0 only when every spec it was
 asked for compiled and its `.sla` exists. An unrecoverable error (a parse or
 consistency error, a symbol redefinition, an unwritable output) prints its
 message, writes no `.sla` and exits 2; a compiler result of 0 whose output file
@@ -1360,14 +1360,14 @@ adjustment. It does not copy the entire definition first. The expansion table
 contains only completed definitions; an invalid macro index still rejects the
 expansion.
 
-(kuna) **Mixed builds.** The engine binary `unlace` runs can come from a different
+(unlace) **Mixed builds.** The engine binary `unlace` runs can come from a different
 build than `unlace` itself (an override naming another install, or a sibling left
 behind when only `unlace` was rebuilt), and nothing in the output shows it. So every
 spawn of `decomp_dbg` or `decomp_test_dbg` exports the parent's identity as
 `UNLACE_PARENT_BUILD`
 (`crates/unlace-console/src/buildstamp.rs (identity, answer_parent, report)`).
 The child compares it with its own before reading its arguments and, only when the
-two differ, writes one `kuna-build-mismatch: <identity>` line to stderr. `unlace`
+two differ, writes one `unlace-build-mismatch: <identity>` line to stderr. `unlace`
 removes that line from the captured stderr before anything reads it and prints one warning per
 process naming both paths, both identities, and the flag or variable that chose the
 child. Stdout is not involved, so no transcript, datatest result or `--json`
@@ -1389,11 +1389,11 @@ input is a Cargo rerun trigger and an unreadable input fails the build rather th
 silently weakening the identity. `unlace-cli`'s own sources are outside both hashes:
 they are not part of either child.
 
-(kuna) **Loading a spec.** A `.sla` is a zlib stream behind a `sla\x04` header,
+(unlace) **Loading a spec.** A `.sla` is a zlib stream behind a `sla\x04` header,
 inflated and checksum-verified in full before a single element is decoded
 (`crates/unlace-sleigh/src/slaformat.rs (FormatDecode::ingest_stream)`).
 
-(kuna) **Constructor templates on first use.** Most of a `.sla` is the
+(unlace) **Constructor templates on first use.** Most of a `.sla` is the
 `<construct_tpl>` p-code template of every constructor, and a run builds p-code
 for few of them. The symbol-table decode therefore keeps each template's encoded
 bytes (`Decoder::skip_element_raw`, which only a byte-encoded decoder provides;
@@ -1424,12 +1424,12 @@ one step, while a read that reaches the chunk's end stays on the byte cursor,
 which is where end-of-stream is detected (`marshal.rs
 (PackedDecode::read_integer)`).
 
-(kuna) **The option-name contract.** Every `unlace` surface that takes
+(unlace) **The option-name contract.** Every `unlace` surface that takes
 `--option NAME VALUE` checks the NAME in its own parser, before a binary is
 opened or a `decomp_dbg` spawned
 (`crates/unlace-cli/src/optname.rs (check)`), against the two tables the
-engine dispatches on: the kuna stage-model options
-(`crates/unlace-middle/src/p0_knowledge/options.rs (KUNA_OPTION_NAMES)`)
+engine dispatches on: the unlace stage-model options
+(`crates/unlace-middle/src/p0_knowledge/options.rs (UNLACE_OPTION_NAMES)`)
 and the upstream `OptionDatabase` element ids
 (`crates/unlace-middle/src/p0_knowledge/options.rs
 (UPSTREAM_OPTION_ELEMENTS)`). An unrecognized name exits 2 and names the nearest
@@ -1442,9 +1442,9 @@ reports an unknown name as an `Execution error:` on **stdout** while keeping the
 session alive and exiting 0, and the driver deliberately does not treat a console
 diagnostic as a verdict (§0.2), so the rejection had nowhere to surface.
 
-(kuna) **The option-value contract.** The VALUE is the engine's to judge — each
+(unlace) **The option-value contract.** The VALUE is the engine's to judge — each
 option owns its grammar (`on`/`off`, a closed word set, a count, a prototype
-model name) and only `Architecture::set_kuna_option` and `OptionDatabase::set`
+model name) and only `Architecture::set_unlace_option` and `OptionDatabase::set`
 know it — so, unlike the NAME, it cannot be checked in the parser. The in-process
 surfaces get the refusal as a `Result` and stop
 (`crates/unlace-cli/src/decompile_all.rs (apply_one_option)`), while the
@@ -1467,7 +1467,7 @@ engine accepts, including one upstream's own lenient parsers tolerate, is
 untouched; so is a two-parameter form such as `--option togglerule "subright
 off"`, which reaches the console as the three tokens it wants.
 
-(kuna) **Surfacing a failed function.** A per-function pipeline abort is
+(unlace) **Surfacing a failed function.** A per-function pipeline abort is
 *recoverable*: the drive catches the unwind and returns the reason as an error
 (`crates/unlace-decomp/src/infra/decompile_drive.rs (panic_message)`
 recovers the panic payload's text — it must take the `catch_unwind` payload by
@@ -1485,7 +1485,7 @@ must make the failure observable:
   following `print C` renders a shell with no structured blocks; the arm
   therefore stamps the reason onto that `Funcdata`
   (`crates/unlace-middle/src/substrate/funcdata.rs
-  (Funcdata::set_kuna_pipeline_failure)`) so the emitted comment names the
+  (Funcdata::set_unlace_pipeline_failure)`) so the emitted comment names the
   abort instead of blaming structuring (chapter
   [09](09-emission.md) §9.2).
 - `unlace decompile` recognizes that notice in the subprocess transcript
@@ -1495,7 +1495,7 @@ must make the failure observable:
   command exits 0 with a plausible-looking empty function, because the rendered
   shell is not empty (DIV-45; the contract is `docs/cli.md`).
 
-(kuna) **The stdout boundary.** Every CLI command renders its output and hands it
+(unlace) **The stdout boundary.** Every CLI command renders its output and hands it
 to `crates/unlace-cli/src/output.rs (emit)` rather than calling
 `println!`, which panics — exit 101, with a Rust panic trace on stderr — as soon
 as a downstream reader closes the pipe, because Rust `SIG_IGN`s SIGPIPE and the
@@ -1515,7 +1515,7 @@ on stderr while the `Compiling <spec>:` line that attributes them is on stdout,
 and capturing both would print every warning of a run ahead of every progress
 line (DIV-89).
 
-(kuna) **The parity gates.** The datatest and stage corpora are plain cargo tests
+(unlace) **The parity gates.** The datatest and stage corpora are plain cargo tests
 (`crates/unlace-harness/tests/parity.rs`): each corpus runs in-process through the harness's
 datatest runner, every `*.xml` directly in the corpus directory, from the repository root.
 The passing assertions become `data:<name>` keys (a repeated name's Nth occurrence is
@@ -1532,7 +1532,7 @@ in that driver. The script module owns command ordering and path quoting. Raw
 and object-image loads retain their distinct spellings, explicit options follow
 injected defaults, and each assertion keeps its existing application slot.
 
-(kuna) **The console's filename grammar.** `unlace decompile` is the one front-end
+(unlace) **The console's filename grammar.** `unlace decompile` is the one front-end
 that reaches the engine through a console *script* rather than an in-process
 call: it writes `load file <path>` / `openfile write <path>` into `decomp_dbg`'s
 stdin (`crates/unlace-cli/src/decompile/script.rs (build_script_for_input)`), where the
@@ -1562,7 +1562,7 @@ written is now reported on stderr, once per target — the CLI forwards that int
 its failure report, so a write that did not happen is never mistaken for a
 decompiler that produced nothing.
 
-(kuna) **One decompile step, two surfaces.** Every front-end turns a function
+(unlace) **One decompile step, two surfaces.** Every front-end turns a function
 into a `Funcdata` through the same driver-tier step
 (`crates/unlace-console/src/decompile_step.rs (decompile_one)`), which
 wraps the engine drive
@@ -1610,7 +1610,7 @@ delegates this question to its return settling pass. A batch that visits its
 selection in ordinary order uses the same raw caller evidence as a single
 function, even when the caller is outside the selection.
 
-(kuna) **Surface defaults.** The drivers inject their defaults before the option
+(unlace) **Surface defaults.** The drivers inject their defaults before the option
 pass, from one shared table
 (`crates/unlace-cli/src/decompile_all.rs (driver_default_options)`), and
 which bundle a surface takes is named at its one call site rather than inferred: `option listing on` (DIV-15 — without the Listing the
@@ -1643,7 +1643,7 @@ a by-name selection with `no function matches`.
 The gap that forced this: on a non-x86-64 image `unlace functions` listed, and
 `unlace decompile-all` decompiled, entries that exist only because
 `funcstart_patterns` found them, while `unlace decompile <that generated name>`
-answered that no such function exists. kuna printed a name it would not then
+answered that no such function exists. unlace printed a name it would not then
 accept, which is worse than not finding the function at all — an agent cannot
 tell a name it mistyped from a name the tool minted. It hid behind the mode
 policy, since `auto` resolves to `aggressive` under 500 KiB and that preset names
@@ -1665,7 +1665,7 @@ script this surface has always emitted, and only a MISS — not an ambiguity, no
 load failure, not a pipeline abort, and never an `--addr` selector — buys the
 second one.
 
-(kuna) **The watchdog.** `decompile-all --max-fn-seconds N` (`0` disables) is
+(unlace) **The watchdog.** `decompile-all --max-fn-seconds N` (`0` disables) is
 driver policy, not a phase-model option. An unfiltered whole-binary run in the
 resolved `fast` preset defaults to 10 seconds per function. Native selected
 runs and other presets retain 120 seconds, and an explicit value always wins.
@@ -1731,7 +1731,7 @@ it names no site, so the loop driving the walk names it. While a flow-time table
 (`budget.rs (JumpTableScope)`) a site from inside that recovery — an
 action of the reduced `jumptable` pipeline, say — is suffixed with the indirect
 jump's address. Each drive starts with no site and restores the enclosing
-drive's on exit. A memory-limit trip keeps its unsuffixed message. `kuna
+drive's on exit. A memory-limit trip keeps its unsuffixed message. `unlace
 decompile` passes the same budget to `decomp_dbg` (`--max-fn-seconds N`,
 default 120 like its `--json` face, `0` none), which sets it process-wide
 (`decompile_drive.rs (set_default_fn_budget_secs)`) for every drive whose
@@ -1864,7 +1864,7 @@ without a budget, and the console/parity paths set one only through
 unprobed SLEIGH work, assembly/JSON construction, total project time, or
 memory.
 
-(kuna) **Synthesized structures across a batch.** With `structsynth` on, a
+(unlace) **Synthesized structures across a batch.** With `structsynth` on, a
 function decompiled later can measure more of a record that an earlier one has
 already named. The layout ledger then mints the larger layout beside the older
 one instead of widening it (chapter [05](05-types.md) §5.2, struct synthesis).
@@ -1888,7 +1888,7 @@ the budget reaches only outliers: an AutoIt-compiled 1.2 MB image names
 superseded `this` records in 37 bodies of about 1,500 lines, the interior
 entries of one interpreter routine, and redoing them took a fifth of its run.
 
-(kuna) **A result read from a `void` function.** After each function of the
+(unlace) **A result read from a `void` function.** After each function of the
 callee-first plan, the driver decompiles again every function recovered `void`
 whose result a caller reads
 (`crates/unlace-cli/src/decompile_all/callee_first.rs (VoidReads::settle)`), each
@@ -1903,7 +1903,7 @@ recovery is chapter [04](04-calls-and-prototypes.md)'s. A redo that fails keeps
 the first body. The worker pool, which has no callee-first order, does not run
 it.
 
-(kuna) Which `struct_N` a layout becomes is decided by the order the program is
+(unlace) Which `struct_N` a layout becomes is decided by the order the program is
 visited in, so the whole-program surfaces that keep a ledger take the SAME
 order. `decompile-project` asks
 `crates/unlace-cli/src/decompile_all.rs (callee_first_decision)` the
@@ -1929,7 +1929,7 @@ another kept definition names it. The test reads names and never needs a body,
 so it also holds for streamed records, whose `code` is already `None` by the
 time the header is built.
 
-(kuna) **The worker pool.** The per-function loop is ~96% of a whole-binary run's
+(unlace) **The worker pool.** The per-function loop is ~96% of a whole-binary run's
 wall clock, and the engine is structurally single-threaded: a `Funcdata` holds
 `Rc<ArchContext>` and the flow environment a raw `*const Architecture`, so nothing
 in the pipeline is `Send`. `--jobs N` on `decompile-all`, `decompile-project` and
@@ -1967,7 +1967,7 @@ abandonment across PID namespaces sharing the same temporary directory. When
 the temporary filesystem cannot lock files, the pool runs without a marker, so
 its directory is never a sweep candidate.
 
-Names use `kuna-jobs-v2-<pid>-<suffix>` so older PID-based sweepers do not recognize
+Names use `unlace-jobs-v2-<pid>-<suffix>` so older PID-based sweepers do not recognize
 them as cleanup candidates. The PID remains diagnostic. Legacy and unmarked
 directories are left alone because their ownership cannot be proved. Normal guard
 cleanup and the workers' parent-pipe cleanup still release their own directories.
@@ -2024,7 +2024,7 @@ names would become one, or when the text spells a structure name the renaming
 does not cover or spells one inside a string or character literal
 (`crates/unlace-bandb-core/src/p5_types/structsynth/shard.rs
 (rename_identifiers)`), and when a name it covers is a symbol's rather than a
-type's -- nothing kuna names spells a `struct_N`, but a binary's own symbols
+type's -- nothing unlace names spells a `struct_N`, but a binary's own symbols
 could. On `tar` O2, 100 of the 106 functions that synthesize
 are renamed. The rest are decompiled a second time by the same workers, each of
 which first destroys the structures it minted itself, and every type built on
@@ -2252,7 +2252,7 @@ still reaches the result sink exactly once, which the positional merge and the
 streamed writer below both depend on, and the closing warning reports what the
 re-runs recovered separately from what is still lost.
 
-(kuna) **The streamed export.** `decompile-project --stream`
+(unlace) **The streamed export.** `decompile-project --stream`
 (`crates/unlace-cli/src/project_stream.rs`) is the same pool and the
 same per-function loop with the opposite contract. It is driver policy too — a
 flag rather than a `phases.toml` row, and off by default — and it exists
@@ -2332,7 +2332,7 @@ the only trace. Progress writes are the exception in both directions: the status
 file and the running README report on the export rather than being it, so a
 failed rewrite of either warns and is retried on the next tick.
 
-(kuna) **Progress without streaming.** `decompile-project --progress`
+(unlace) **Progress without streaming.** `decompile-project --progress`
 (`crates/unlace-cli/src/project_stream/progress.rs`) keeps the half of
 the streamed contract a pipeline polls — `.streaming` and a per-function feed —
 and drops the incremental artifacts, which is what cost reproducibility. It does not
@@ -2358,7 +2358,7 @@ landing on top of the export's own. The previous export's `.c`, `.h` and `.asm`
 are removed where `--stream` would truncate them, so the folder never
 pairs a new feed with an old body.
 
-(kuna) **Declared function boundaries.** Every function boundary the engine knows
+(unlace) **Declared function boundaries.** Every function boundary the engine knows
 is derived: discovery supplies the entries, and the extent is the
 address-contiguous clip `[entry, next_entry)` over an unbounded flow follow
 (`crates/unlace-console/src/funcextent.rs`). That is the wrong answer on
@@ -2386,7 +2386,7 @@ set `declare_function` writes
 (`crates/unlace-console/src/engine.rs (ConsoleProgram::declared_entries)`)
 is consulted by the section-flag filter above.
 
-(kuna) The same lying flags reach the **run verdict**. A run that discovered
+(unlace) The same lying flags reach the **run verdict**. A run that discovered
 nothing is a failure only when the image carries executable content — a data-only
 relocatable object and a resource-only PE have no functions to find, and failing
 those would turn a correct answer into an error
@@ -2403,7 +2403,7 @@ resource-only case keeps its honest empty answer.
 
 Two surfaces reach it. The console command is `function bounds <start> [<end>]
 [as <name>]`
-(`crates/unlace-console/src/console.rs (IfcKunaFunctionBounds)`),
+(`crates/unlace-console/src/console.rs (IfcUnlaceFunctionBounds)`),
 which takes plain integers rather than the `parse_machaddr` address grammar
 precisely because that grammar's `[space,offset,size]` size is indistinguishable
 from the address width for a small size, and keys the name with `as` so a
@@ -2418,9 +2418,9 @@ after `commit_pending_analysis`
 (`crates/unlace-cli/src/decompile_all.rs (load_program)`): in both, a
 declaration is applied after discovery has had its say, because it is an assertion
 that outranks it. Durability is caller-carried — the `@file` form is the artifact,
-and kuna does not write boundaries back into the image.
+and unlace does not write boundaries back into the image.
 
-(kuna, issue #1438) **A declaration the image does not map** is still honored:
+(unlace, issue #1438) **A declaration the image does not map** is still honored:
 the entry enumerates, resolves by name and names its call sites, which is what a
 routine in a boot ROM or another module, called at a fixed address, needs. What
 a declaration cannot supply is bytes, so `declare_function` measures each one
@@ -2449,7 +2449,7 @@ about the decompile changes: an unmapped entry is still refused by the command
 that needs its bytes, and a partial extent still bounds flow where it was
 declared to end.
 
-(kuna) **Caller assertions (`--assert`).** Declared boundaries are one fact an
+(unlace) **Caller assertions (`--assert`).** Declared boundaries are one fact an
 agent can state; the assertion plane is the rest of them. Everything the engine
 knows about a program it derived, and the console has long carried the commands
 that correct each derivation — `rename`, `retype`, `map param`, `map return`,
@@ -2501,7 +2501,7 @@ a storage property.
 Four application points, and the ordering between them is forced rather than
 stylistic. **Image-scoped** directives state what memory holds before anything
 reads it. `bytes` replaces the mapped bytes at an address with the caller's own
-(`assertions::apply_image_scoped` -> `LoadImage::kuna_overlay_bytes`, implemented
+(`assertions::apply_image_scoped` -> `LoadImage::unlace_overlay_bytes`, implemented
 by the object and TE loaders' `overlay_span` methods);
 `readonly` and `volatile` OR one boolean
 Varnode property over a memory range, and must be stated before the image's
@@ -2546,7 +2546,7 @@ script surface (`crates/unlace-cli/src/decompile/script.rs (build_script_for_inp
 emits the same facts at the same three slots, with the same conditional second
 `decompile`.
 
-(kuna) **`callproto` states the prototype of one call instruction.** A
+(unlace) **`callproto` states the prototype of one call instruction.** A
 `prototype` describes a function and reaches a call through the callee's symbol;
 a call through a pointer or a register has no such symbol, and a variadic
 callback takes different arguments at each call, so the only place the fact can
@@ -2580,10 +2580,10 @@ function on the in-process one. Like `flow`, the directive withdraws the
 the call's inputs, and `calltargettype` (chapter 05) still gives the target of
 such an indirect call the stated type, so the call stays one C can make.
 
-(kuna) **A symbol-scoped directive reaches the register locals too, by mapping a
+(unlace) **A symbol-scoped directive reaches the register locals too, by mapping a
 Symbol over their storage.** `name`/`type` resolve their target through
 `ScopeLocal::query_by_name`, which sees only the locals a `Symbol` backs: the
-stack slots and the parameters. Every register-resident local kuna prints
+stack slots and the parameters. Every register-resident local unlace prints
 (`v6 // rax`) is a HighVariable the naming pass named directly, with nothing in
 the scope behind it, so the plane could not name the majority of a function's
 variables — while `unlace decompile --help` taught `type v2 char[16]` on exactly
@@ -2685,7 +2685,7 @@ Three properties of that mapping are load-bearing, each measured on
   resolver verifies that the hash selects the same HighVariable and width;
   unresolved or ambiguous identities are rejected.
 
-(kuna) **Every `name`/`type` in one batch reads its identifier against the same
+(unlace) **Every `name`/`type` in one batch reads its identifier against the same
 pass.** A batch is the directives applied between two decompiles: the
 in-process surface's list, or the script's `rename`/`retype` lines. Mapping a
 register local's Symbol used to clear the analysis (after upstream
@@ -2693,7 +2693,7 @@ register local's Symbol used to clear the analysis (after upstream
 identifier up in, so of two independent renames the second always answered
 `No symbol named:`, in either order. Nothing needs that clear -- both surfaces
 rebuild the IR from the scope for the second pass -- so the pass is left intact,
-and `Funcdata::kuna_directive_symbols` records every Symbol the batch renamed,
+and `Funcdata::unlace_directive_symbols` records every Symbol the batch renamed,
 retyped or created, keyed by the identifier the pass printed for it.
 `crates/unlace-console/src/hightarget.rs` then gives an identifier
 two readings, in order:
@@ -2749,7 +2749,7 @@ directly across rebuilds. Later edits replace the saved replay for that entry,
 and explicitly loading the already-selected entry clears its replay and starts
 a fresh local analysis. Clearing the architecture clears the session records.
 
-(kuna) **A `prototype` directive binds to `<func>`, whatever name its declaration
+(unlace) **A `prototype` directive binds to `<func>`, whatever name its declaration
 carries.** The operand says which function the signature describes; the
 declaration supplies the return type, the parameter types and the parameter
 names. That is what makes the directive usable on the function an agent has just
@@ -2764,11 +2764,11 @@ left the selected function with its recovered one — silently, and `exit 0` eve
 under `--assert-strict`, because the console reported no error for a prototype it
 had genuinely parsed. The console spelling of the directive is therefore
 `map prototype <func> <C declaration>`
-(`crates/unlace-console/src/console.rs (IfcKunaMapPrototype)` ->
+(`crates/unlace-console/src/console.rs (IfcUnlaceMapPrototype)` ->
 `ifacedecomp.rs (bind_prototype)`), which takes the target as its first token and
 parks the pieces under it; `parse line extern` keeps its upstream meaning.
 
-(kuna) **`<func>` is a name first and an ENTRY ADDRESS second.** Both surfaces
+(unlace) **`<func>` is a name first and an ENTRY ADDRESS second.** Both surfaces
 resolve the operand through
 `crates/unlace-console/src/assertions.rs (resolve_proto_target)`. An
 existing name first goes through the same public `ConsoleProgram::resolve_entry`
@@ -2798,7 +2798,7 @@ path only when it resolves and nothing of that name exists, and never errors.
 The same resolution serves the cross-function `param <func>::<i>` /
 `return <func>::<storage>` qualifier.
 
-(kuna) **A by-address selection installs its own symbol, so a directive can name
+(unlace) **A by-address selection installs its own symbol, so a directive can name
 it.** `load addr <vma>` builds the `Funcdata` and follows flow from an address
 without installing a `FunctionSymbol` there (the symbol-table `addFunction` is a
 later boundary), which is fine for printing C and fatal for the assertion plane:
@@ -2826,7 +2826,7 @@ external-symbol note rather than `not mapped in this input` — and folds the
 ARM/Thumb mode bit out of the address, so the declaration lands where every later
 resolution of it looks.
 
-(kuna) **A by-address selection inside another function is said to be one.**
+(unlace) **A by-address selection inside another function is said to be one.**
 Pointing `--addr` at an address is how an entry discovery missed gets
 decompiled at all, so a selection that starts no inventory entry is decompiled
 from where it points rather than refused or moved. The same command at an
@@ -2836,11 +2836,11 @@ cited as function entries (issue #1039). The fragment's `sub_<addr>` name
 selects the same address, so the question is asked of the address a selection
 RESOLVES to, whatever its spelling — a name, a numeric address with or without
 the Thumb mode bit, an object's section coordinate: the canonical entry
-immediately below it whose inventory size — the address-contiguous clip `kuna
+immediately below it whose inventory size — the address-contiguous clip `unlace
 functions` reports, or a declared extent — reaches past it
 (`crates/unlace-console/src/engine.rs (ConsoleProgram::entries_containing)`,
 which enumerates the inventory once for a whole batch of targets). An address
-that is itself an entry, or that no extent covers, has no answer. `kuna
+that is itself an entry, or that no extent covers, has no answer. `unlace
 decompile` asks the console with `function containing <selector>` before
 installing the selection's symbol and reads the answer off the transcript; the
 in-process surfaces (`decompile --json`, `decompile-all`, `decompile-project`)
@@ -2856,15 +2856,15 @@ there, so `unlace decompile --json` of an entry stays byte-identical to its
 `--define-function` at the address registers an entry there before the
 question is asked, which is how a caller says the fragment is meant.
 
-(kuna) **The C the assertion plane accepts is the C it prints.** Six directives
+(unlace) **The C the assertion plane accepts is the C it prints.** Six directives
 carry a C declaration, and every one of them goes through the console's
 C-declaration grammar (`crates/unlace-console/src/grammar.rs (CParse)`),
 a port of upstream's `grammar.y`. Upstream has no scalar keywords at all: a base
 type is whatever `TypeFactory::findByName` answers, so only Ghidra's own `int4` /
-`uint8` / `float8` core-type names parse. kuna's printer, though, spells those
+`uint8` / `float8` core-type names parse. unlace's printer, though, spells those
 types the way the target's own compiler would (§9,
 `crates/unlace-emit/src/p9_emit/ctypes.rs`), which left the two
-halves speaking different languages: a declaration kuna had just emitted could
+halves speaking different languages: a declaration unlace had just emitted could
 not be pasted back at it, and the manual's own example
 (`prototype authenticate int authenticate(char *user,char *pass)`) was rejected
 as a syntax error.
@@ -2899,7 +2899,7 @@ that happens to be spelled with a keyword resolve to exactly the interned type
 they always did. Only combinations, and the keywords the type factory does not
 name, take the width-driven path.
 
-(kuna) **An `enum` is laid out and numbered as C lays it out.** Upstream's
+(unlace) **An `enum` is laid out and numbered as C lays it out.** Upstream's
 `newEnum` interns every parsed enum at the type factory's `enumsize`, which
 `setupSizes` fills with the default data space's address size — eight bytes on
 x86-64, AArch64 and every other 64-bit target — so a struct member after an enum
@@ -2929,7 +2929,7 @@ value once, so the first enumerator keeps it and the later alias is not
 recorded. Only the C grammar interns an enum at a default width; DWARF and the
 Ghidra wire give theirs explicitly and are unaffected.
 
-(kuna) **A tag survives being declared.** `findByName` is also how the lexer
+(unlace) **A tag survives being declared.** `findByName` is also how the lexer
 classifies every other identifier, so the moment `struct JSValue { … };` interns
 the tag, `JSValue` stops reaching the parser as an identifier and comes back as
 a type name. Upstream's `struct_or_union_specifier` reads its tag from the
@@ -2944,14 +2944,14 @@ decided by the construction action, not by the token — `oldStruct` rejects a t
 that names something other than a struct with the kind error it always had, so
 `struct int4` is refused for saying `struct`, not for being unparseable.
 
-(kuna) **A tag may be named before its body.** Upstream's `oldStruct` and
+(unlace) **A tag may be named before its body.** Upstream's `oldStruct` and
 `oldUnion` reject a tag that names no type yet, so a record could not mention
 itself (`typedef struct Node { struct Node *next; };`, or a callback member
 `void (*cb)(struct Node *)`), two records could not point at each other, and the
 forward declaration `typedef struct Node Node;` was refused. C declares such a
 tag as an incomplete record, and the grammar now does the same
 (`crates/unlace-console/src/grammar.rs (CParse::old_struct)` through
-`TypeFactory::kuna_declare_record`). A tagged body declares its tag before its
+`TypeFactory::unlace_declare_record`). A tagged body declares its tag before its
 members are read, so the members can name it; a body for a tag that is already
 complete is refused (`Cannot redefine a completed record`), and a member that
 holds an incomplete record by value, or an array of one, is refused as C refuses
@@ -2972,7 +2972,7 @@ Nested records therefore reach the emitted type definitions instead of becoming
 `undefinedN` fields. An anonymous struct or union used directly in a typedef
 keeps the declared typedef name.
 
-(kuna) **A name that is also a type name is still a name.** The same
+(unlace) **A name that is also a type name is still a name.** The same
 `findByName` classification reaches the declarator, where C says the identifier
 being declared hides any type of that spelling. Upstream's `direct_declarator`
 reads only the identifier terminal, so a variable or parameter named after an
@@ -2995,7 +2995,7 @@ first specifier of a run is unchanged, so `code *p` is still a pointer to
 `code`, and the two positions that changed were both hard errors ("Syntax
 error" and "Multiple type specifiers") before.
 
-(kuna) **A `prototype` declaration may name its calling convention**, which is
+(unlace) **A `prototype` declaration may name its calling convention**, which is
 the other half of speaking the target's own C: on Windows every declaration
 worth pasting carries one. An identifier the loaded compiler spec registered as
 a prototype model is classified as a function specifier rather than as a bare
@@ -3040,11 +3040,11 @@ wanted, so silence there is the failure this plane exists to end.
 Durability is caller-carried, as it is for boundaries: `--assert @FILE` is the
 artifact.
 
-(kuna) **Declarations from a header (`--types`).** A program built against a
-library that kuna carries no table for shows that library's handles and option
+(unlace) **Declarations from a header (`--types`).** A program built against a
+library that unlace carries no table for shows that library's handles and option
 codes as bare integers, and stating each prototype and enum as its own
 `--assert` does not scale to a header. `--types <file.h|dir>` reads a header and
-states its declarations on the same plane. `kuna_cheader::load_types` cuts the
+states its declarations on the same plane. `unlace_cheader::load_types` cuts the
 text into top-level declarations: it blanks comments, skips `#` lines (a
 `# <line> "<file>"` marker re-anchors the position it reports), ends a
 declaration at a `;` outside braces and parentheses, drops a function body, and
@@ -3086,7 +3086,7 @@ qualifiers (`_Nullable`, `_Nonnull`, `_Null_unspecified` and their
 double-underscore spellings) are dropped, and a block pointer declarator
 (`void (^done)(int)`, `typedef void (^block_t)(void)`) is spelled `void *done`:
 a block is passed as a pointer to its block object, which is all a caller
-sees (`cheader.rs (block_pointers)`). kuna runs no preprocessor unless `--types-cpp <cc>`
+sees (`cheader.rs (block_pointers)`). unlace runs no preprocessor unless `--types-cpp <cc>`
 names one; then each header is piped through `<cc> -E` and the output is what
 is cut.
 
@@ -3107,7 +3107,7 @@ header its diagnostics name is left out and it runs again (at most 32 times),
 and the includes left out are named on stderr. The Objective-C `@interface`,
 `@protocol` and `@implementation` bodies and the `@class` and forward
 `@protocol` lines a C-mode run leaves in a framework's text are blanked, line
-for line, and the text goes through `kuna_cheader::load_text`, the reader
+for line, and the text goes through `unlace_cheader::load_text`, the reader
 `--types` uses: every record, enum and typedef becomes a `typedef` directive,
 and a `prototype` directive is kept only for a name the image imports. These
 directives go ahead of the `--types` ones, which go ahead of the caller's
@@ -3167,13 +3167,13 @@ recovered bodies, and on the script surface it deleted them silently: nothing
 looks for a `decompile` that raised, so the run exited 0 with the printer's
 "structured blocks unavailable" shell and an empty stderr while `--json`, driving
 the same engine in process, exited 1 on the same command. Every per-function abort
-is now stamped onto the retained `Funcdata` (`set_kuna_pipeline_failure`) so that
+is now stamped onto the retained `Funcdata` (`set_unlace_pipeline_failure`) so that
 shell names its reason, and the script surface reports the raised abort the way it
 already reported the swallowed one.
 
 A `callee` directive states where one indirect call goes. The engine cannot
 derive the destination of `call *(%rax)`, and it already has the store for it:
-the per-function `Override` keeps an indirect-call redirect, which kuna plants
+the per-function `Override` keeps an indirect-call redirect, which unlace plants
 itself when it resolves a call and restarts. The directive plants the same
 redirect before flow (`crates/unlace-console/src/calleeoverride.rs
 (plant)`). It first decodes the instruction at the call site and accepts an
@@ -3190,7 +3190,7 @@ flow, so the engine records it on the `Funcdata` after the follow and both
 surfaces turn that record into a `fatal` rejection, as they do for a refused
 `flow` (`assertions::record_rejected_callee_overrides`, and the console's
 `Rejected override indirect ...` line). The planted redirect is consulted before
-any resolution of kuna's own, so the statement outranks a destination kuna
+any resolution of unlace's own, so the statement outranks a destination unlace
 would have recovered (the import a GOT-slot call loads). Two `callee`
 directives for one call site leave the later one planted; the same function
 reports the earlier one rejected.
@@ -3205,7 +3205,7 @@ the next link's `ret`, and ends the flow there, so everything past the first
 recovered call is dead and prints as `return;`. The caller gets one call and no
 evidence the chain exists. So both surfaces extend the directive before they seed
 it (`crates/unlace-console/src/retcallchain.rs
-(kuna_chain_sites)`): a straight-line walk from the function's entry decodes each
+(unlace_chain_sites)`): a straight-line walk from the function's entry decodes each
 instruction through a `PcodeEmit` that records each raw op and how the
 instruction leaves, follows an unconditional direct branch, falls through
 ordinary instructions, and stops at conditional or indirect control flow. A
@@ -3239,7 +3239,7 @@ flow-call-override-retain.md`): one directive against a 22-link body, which went
 from `LoadLibraryA(s_40151e);` to the whole self-unpacking sequence.
 
 The same bounded walk recognizes a chain reached from the function entry
-without a directive (`kuna_entry_chain_sites`; the P2 `entryretdispatch`
+without a directive (`unlace_entry_chain_sites`; the P2 `entryretdispatch`
 recovery, DIV-168, always on). Before the shared
 decompile step follows flow, every recognized link without an explicit caller
 fact is seeded as `call`. Caller-stated flow classifications own their sites;
@@ -3284,7 +3284,7 @@ space="ram"/>`), so on any ordinary image an added range was global before the
 caller spoke; only the removal direction moves the C. Exposing an assertion that
 is measurably a no-op would be the same failure the plane is built to avoid.
 
-(kuna) **Load-time env bridges.** Loader gates are consumed *inside* the
+(unlace) **Load-time env bridges.** Loader gates are consumed *inside* the
 bootstrap — before any console `option` line can possibly run — so the option
 surface alone cannot deliver them; each is bridged through a process environment
 variable exported first. Both CLI paths use the bindings and value conversions
@@ -3321,7 +3321,7 @@ runtime `on_or_off` parser.
 The matching `option` is still applied afterwards so the run's configuration
 record is honest.
 
-(kuna) **Explicit load options.** The environment is the CLI's channel, not
+(unlace) **Explicit load options.** The environment is the CLI's channel, not
 the only one.
 `crates/unlace-middle/src/p0_knowledge/loadoptions.rs (LoadOptions)`
 holds every load-time setting: the load-time catalog options, the fat slice,
@@ -3349,7 +3349,7 @@ switch, so its load-time half, the DWARF function-pointer mapping, follows the
 load's options or `UNLACE_CALLTARGETTYPE`, never the console line. Scopes belong
 to one thread and nest: the most recently entered live scope is in force, and
 releasing a scope out of order removes only its own options.
-Kuna enters and leaves its scopes inside each synchronous call; a caller that
+Unlace enters and leaves its scopes inside each synchronous call; a caller that
 enters one itself must not hold it across an `.await` on a shared executor
 thread.
 
@@ -3444,7 +3444,7 @@ returns the existing low-level error for a wider numerator, without modifying
 the result arrays.
 
 Floating-point constant evaluation uses `crates/unlace-num/src/float.rs`
-(`FloatFormat`). (kuna) Besides upstream's IEEE binary32 and binary64 defaults,
+(`FloatFormat`). (unlace) Besides upstream's IEEE binary32 and binary64 defaults,
 `Translate::set_default_float_formats` registers binary16 (2 bytes: 5 exponent
 bits, bias 15, 10 fraction bits), so the half-precision p-code of AArch64 FP16
 and RISC-V Zfh is typed, folded and printed as float: the `float2` core type,
@@ -3462,7 +3462,7 @@ The per-function IR is one container, `Funcdata`
 (`crates/unlace-middle/src/substrate/funcdata.rs (Funcdata)`), owning
 slotmap arenas keyed by three generational id newtypes — `VarnodeId`, `OpId`,
 `BlockId` (`crates/unlace-middle/src/substrate/context.rs`). Where the
-C++ original links objects with raw pointers, kuna links them with arena keys: a
+C++ original links objects with raw pointers, unlace links them with arena keys: a
 stale handle is a caught lookup failure, not a use-after-free. The arenas are the
 varnode bank (`crates/unlace-middle/src/substrate/varnode.rs
 (VarnodeBank)` — storage-sorted def/free/input trees), the op bank
@@ -3707,7 +3707,7 @@ and an agent writes:
   <name>`, the console's `load function` and the DB scope path all key on the
   string the symbol table holds, so a printer-side rewrite would put a name in
   the `.c` that cannot be handed back. Chapter 01 §1.1 states the byte-level
-  behavior; here it only matters that the name in `prog.symbols`, in `kuna
+  behavior; here it only matters that the name in `prog.symbols`, in `unlace
   functions`, in the `.c`/`.h`/`.asm` export and in the Scope chain is ONE
   string, and that it is decided before the symbol reaches this database.
   The same split is also a **resource** seam, and a second gate bounds it.
@@ -3758,7 +3758,7 @@ and an agent writes:
 - **The Override store** (`crates/unlace-middle/src/p0_knowledge/overrides.rs
   (Override)`): per-function commands that override pipeline decisions — flow
   reclassification, direct-call redirects, prototype replacement, multistage
-  jump-table requests, dead-code delays, forced gotos, and (kuna) per-call-site
+  jump-table requests, dead-code delays, forced gotos, and (unlace) per-call-site
   output type locks (`insert_output_typelock`, applied by the P5
   `sitetypelock` action — chapter 05). Its defining property is
   that it **survives `Funcdata::clear`**
@@ -3767,25 +3767,25 @@ and an agent writes:
   discovers a decision too late writes the correction here and requests a
   restart, and the restarted run reads it back (§0.7).
 - **The typed assertion facade** (`crates/unlace-middle/src/p0_knowledge/assert.rs
-  (validate_assertion, Dispatch)`) (kuna): `kassert <phase> <subphase> …`
+  (validate_assertion, Dispatch)`) (unlace): `kassert <phase> <subphase> …`
   validates a request against the phase registry, computes the *reported* minimal
   rewind scope, logs it, and routes it to whichever battle-tested store already
   implements it (Override, proto locks, retype/rename, an option). It adds a
   model over the stores, not a new mechanism.
 - **The option surface** (`crates/unlace-middle/src/p0_knowledge/options.rs
-  (OptionDatabase, KUNA_OPTION_NAMES)`): upstream options dispatch by registered
-  element id through `OptionDatabase::set`; the kuna-added options are an
+  (OptionDatabase, UNLACE_OPTION_NAMES)`): upstream options dispatch by registered
+  element id through `OptionDatabase::set`; the unlace-added options are an
   allowlisted name set routed to
   `crates/unlace-decomp/src/p0_knowledge/option_dispatch.rs
-  (set_kuna_option)`, which writes the live flag the consuming pass reads.
-  A migrated option is a type in its pass's module that implements `KunaOption`
-  (`crates/unlace-middle/src/substrate/optionset.rs (KunaOption, OptionSet)`):
-  its value lives in the engine's `kuna_options` set, indexed by a dense id the type
+  (set_unlace_option)`, which writes the live flag the consuming pass reads.
+  A migrated option is a type in its pass's module that implements `UnlaceOption`
+  (`crates/unlace-middle/src/substrate/optionset.rs (UnlaceOption, OptionSet)`):
+  its value lives in the engine's `unlace_options` set, indexed by a dense id the type
   takes on first use, and every per-function `ArchContext` carries a copy, so neither
   structure names the pass. A set built for the engine reads each option's shipped
-  value (`KunaOption::shipped`) until the dispatch sets it; a bare `ArchContext`
-  reads `KunaOption::unset`, the value its field initialiser held. An `on`/`off`
-  option is declared with `kuna_flag!` (a `bool` newtype whose parse is the
+  value (`UnlaceOption::shipped`) until the dispatch sets it; a bare `ArchContext`
+  reads `UnlaceOption::unset`, the value its field initialiser held. An `on`/`off`
+  option is declared with `unlace_flag!` (a `bool` newtype whose parse is the
   console's `on_or_off`); a type read by middle-band code (`jumptable`,
   `funcdata_block`) is declared in that module, so the core never names a pass.
   A pass's per-function side tables follow the same shape
@@ -3799,7 +3799,7 @@ and an agent writes:
   the pass installs its shared value on `Architecture` while the specs load (through a
   pass hook), and each per-function `ArchContext` holds a clone that shares it.
   Run-wide mutable pass ledgers live in an `ArchTables` on `Architecture`
-  (`arch.kuna_tables.get::<T>()`), and the output-language printer is held as a
+  (`arch.unlace_tables.get::<T>()`), and the output-language printer is held as a
   `PrintHandle` (`crates/unlace-middle/src/substrate/printhandle.rs (PrintHandle)`),
   so the core drives the printer without naming the emit band; `printc::ArchPrintExt`
   lends the concrete C printer to the passes that render.
@@ -3835,7 +3835,7 @@ and an agent writes:
   surrogate pairs for non-BMP characters. Unsorted objects borrow their stored
   field order directly. Sorted output orders borrowed field references stably,
   preserving duplicate-key order, and applies the same policy to nested objects.
-- **Modes (option presets)** (kuna)
+- **Modes (option presets)** (unlace)
   (`crates/unlace-middle/src/p0_knowledge/modes.rs (MODE_TABLE, mode_overrides)`,
   applied by `crates/unlace-middle/src/infra/architecture.rs (apply_mode)`):
   a *mode* is a named, ordered list of `(option, value)` overrides layered over the
@@ -3868,11 +3868,11 @@ and an agent writes:
   Overrides are applied *before* the user's `--option` (last-write, so an
   explicit `--option` still wins). Discover with `unlace modes`; full membership
   and exact byte boundaries are in [docs/modes.md](../modes.md).
-- **The restart log** (kuna)
+- **The restart log** (unlace)
   (`crates/unlace-middle/src/p0_knowledge/restartlog.rs (RestartLog)`):
   owned by the engine `Architecture` so it survives function clears; every
   restart trigger records *why* (§0.7). Observability only.
-- **The DEX model** (kuna, `option dexmodel`)
+- **The DEX model** (unlace, `option dexmodel`)
   (`crates/unlace-middle/src/p0_knowledge/dex.rs (DexModel)`): the
   parsed DEX file a DEX image carries on its `Architecture` (one per file of an
   APK, each with the base it is mapped at), answering what the
@@ -3895,15 +3895,15 @@ and an agent writes:
   per-function snapshot carries no model, so the constant pool is empty and the
   register payloads are not applied.
 - The phase registry itself
-  (`crates/unlace-middle/src/p0_knowledge/phases.rs (KunaPhase)`):
-  P0–P9 with Band-B membership (`KunaPhase::in_band_b` — P3..P6), queryable at
+  (`crates/unlace-middle/src/p0_knowledge/phases.rs (UnlacePhase)`):
+  P0–P9 with Band-B membership (`UnlacePhase::in_band_b` — P3..P6), queryable at
   the console. The model behind it is [docs/phases.md](../phases.md).
 
 **Effective defaults — the single narrative.** A knob's effective value is
 layered, in order: (1) the engine default —
 `crates/unlace-middle/src/infra/architecture.rs (reset_defaults_internal)`
 is the *single source*, and the `default` column of
-`crates/unlace-decomp/phases.toml` mirrors it (a hard-coded live-default assertion, `crates/unlace-middle/src/infra/architecture/tests.rs (kuna_anchor_flags_default_to_div_values)`, pins the engine defaults to the DIV values; the toml column mirrors them by convention); (2)
+`crates/unlace-decomp/phases.toml` mirrors it (a hard-coded live-default assertion, `crates/unlace-middle/src/infra/architecture/tests.rs (unlace_anchor_flags_default_to_div_values)`, pins the engine defaults to the DIV values; the toml column mirrors them by convention); (2)
 the file frontend's mode policy (`auto` when omitted) resolves to a concrete
 preset, and load-time members plus explicit load-time options are exported
 before bootstrap with last-write precedence; (3) per-program loader adjustments
@@ -3939,7 +3939,7 @@ The **per-function snapshot**
 IR-boundary slice of the god object that passes and rules may reach while the
 pipeline holds `&mut Funcdata`. It shares the engine's single address-space
 manager, type factory, string manager, and loader by `Rc`, and *copies* the
-scalar configuration — every tuning value and (kuna) every rule gate — plus
+scalar configuration — every tuning value and (unlace) every rule gate — plus
 read-only snapshots of the global symbol scope, callee prototypes, and tracked
 registers.
 
@@ -3962,12 +3962,12 @@ The copy happens in exactly one place:
 called from `(Architecture::new_funcdata)` when a function's `Funcdata` is
 built. Two consequences:
 
-- **The flag-copy hazard** (kuna). A gate a rule reads through the per-function
+- **The flag-copy hazard** (unlace). A gate a rule reads through the per-function
   handle (`data.get_arch().<flag>`) exists twice — on the god object (where
   `option`/`kassert` writes it) and on `ArchContext` (where the rule reads it).
   If `build_arch_handle` does not copy it, the rule silently reads the
   `ArchContext` constructor default (`crates/unlace-middle/src/substrate/context.rs
-  (ArchContext::new_shared)`) — deliberately `false` for the kuna rule gates, so
+  (ArchContext::new_shared)`) — deliberately `false` for the unlace rule gates, so
   hand-built fixtures keep gated rules inert — regardless of what the option
   surface wrote. The symptom is an option that parses, is confirmed, appears in
   the catalog — and changes nothing. Every new per-function-consumed flag must be threaded
@@ -3981,7 +3981,7 @@ built. Two consequences:
   already followed (§0.8), and that adoption is refused the moment any command at
   all — an `option` among them — has run since the load.
 
-(kuna) The tracked-register snapshot is the context database's track base plus the
+(unlace) The tracked-register snapshot is the context database's track base plus the
 loader's register seeds for the entry being built
 (`crates/unlace-middle/src/infra/architecture.rs (Architecture::loader_entry_tracks)`,
 today only the PowerPC64 ELFv1 TOC of §1.3). The seeds are merged into that one
@@ -4001,7 +4001,7 @@ so `build_arch_handle` derives them at most once per state of that database and
 hands every `Funcdata` a shared `Rc` to the same pair, keyed on a monotone
 mutation generation the database bumps in every one of its `&mut self` entry
 points (`crates/unlace-middle/src/p0_knowledge/database.rs
-(kuna_generation)`). A mutation between two function builds — a `map addr`, a
+(unlace_generation)`). A mutation between two function builds — a `map addr`, a
 rename, a recovered prototype — moves the generation and both snapshots are
 rebuilt on the next build, so what a `Funcdata` sees is still the database as of
 its own build and the emitted C does not move.
@@ -4020,7 +4020,7 @@ can be compared on any binary.
 The pipeline's execution order is not the folder order. Every per-function run
 executes a single declarative pass tree, `universal_sched`
 (`crates/unlace-decomp/src/infra/universalaction.rs (universal_sched)`,
-based on upstream `ActionDatabase::universalAction`, with kuna-specific passes).
+based on upstream `ActionDatabase::universalAction`, with unlace-specific passes).
 The tree is built
 once per engine as `SchedNode` values (Action leaf / Pool of rules / Group /
 RestartGroup), *filtered* by the root variant's enabled group list
@@ -4050,7 +4050,7 @@ forms), determined-branch pruning, node joining, and conditional-execution/
 conditional-constant analysis. Phases 3–6 therefore do not run as a sequence:
 they co-evolve inside mainloop until mutual quiescence — the Band-B fixpoint
 (`crates/unlace-middle/src/p0_knowledge/phases.rs
-(KunaPhase::in_band_b)`). Fullloop's own tail (likely-trash, switch
+(UnlacePhase::in_band_b)`). Fullloop's own tail (likely-trash, switch
 normalization, (angr) lowered-switch detection and stack-guard stripping, return
 splitting and the (angr) return-duplication family, unjustified params, active
 return) runs between mainloop convergences.
@@ -4062,7 +4062,7 @@ has invalidated earlier work does not edit backwards; it requests a restart by
 setting the restart-pending flag, having first persisted its lesson into the
 knowledge plane (§0.7).
 
-**The restart machinery, as actually implemented** (kuna): the in-tree
+**The restart machinery, as actually implemented** (unlace): the in-tree
 RestartGroup (`crates/unlace-middle/src/infra/action.rs
 (ActionRestartGroup::apply)`, budget `max = 1`) cannot re-follow flow — the
 action loop carries only the IR-boundary handle, not the SLEIGH translator — so
@@ -4089,14 +4089,14 @@ change count stops rising; `rule_onceperfunc` latches done), and
 `ActionPool::process_op` walks each op's per-opcode rule list *resetting the walk
 to index 0 whenever a rule changes the op's opcode* — rules observe each other's
 effects mid-op, and the reset order is part of the observable output. The C++
-cursor is a map iterator whose `++` is O(1); kuna models it as the last consumed
+cursor is a map iterator whose `++` is O(1); unlace models it as the last consumed
 `SeqNum` (so it survives the op's own deletion) and reads a short *run* of
 successors per tree descent rather than one search per op, discarding the run
 whenever the optree epoch above moves — any op created or destroyed by anything
 other than the pool's own consumption of the op it just left. The visit order is
 the search's, one buffered value at a time.
 
-The `decompile` listing is checked byte-for-byte against a maintained kuna
+The `decompile` listing is checked byte-for-byte against a maintained unlace
 schedule snapshot, including its added passes, flags, numbering and separators.
 It is not an independent C++ oracle. The tests separately pin pass presence and
 adjacency, root-filter behavior and the empty `UNPORTED_ALLOWLIST`
@@ -4104,7 +4104,7 @@ adjacency, root-filter behavior and the empty `UNPORTED_ALLOWLIST`
 require an intentional schedule change; matching it alone does not prove
 decompilation parity, which remains covered by the output regression suites.
 
-**Embedder hooks** (kuna). Code that links `kuna-decomp` can extend the default
+**Embedder hooks** (unlace). Code that links `unlace-decomp` can extend the default
 tree without replacing it, through a registry on the `Architecture`
 (`crates/unlace-decomp/src/infra/hooks.rs (HookRegistry)`,
 reached by `crates/unlace-middle/src/infra/architecture.rs
@@ -4138,7 +4138,7 @@ Flow-follow itself runs *before* the tree (the upstream `followFlow` →
 (reset_defaults_internal)`), applied at
 `crates/unlace-decomp/src/infra/decompile_drive.rs (follow_flow_on_fd)`.
 
-**Where a run's time went** (kuna). The schedule can be asked to account for
+**Where a run's time went** (unlace). The schedule can be asked to account for
 itself: with `UNLACE_ACTION_PROF` set to a path, every `apply` call is timed and
 the engine writes an exclusive-time table there
 (`crates/unlace-middle/src/substrate/actionprof.rs`), rewritten each time
@@ -4162,12 +4162,12 @@ one cached read per `apply`.
 
 The pipeline is a fixpoint machine wearing a pipeline's clothes. Beyond the
 in-tree repeat groups (§0.6), these are the edges where a *later* phase dirties
-an *earlier* phase's artifact, what each persists, and where each lives in kuna.
+an *earlier* phase's artifact, what each persists, and where each lives in unlace.
 (The mechanism taxonomy — local fixpoint, staged re-entry, restart-with-hints,
 reduced sub-query, knowledge-store re-run — derives from the 2026-06 stage-model
 study summarized in `docs/history.md`; every row below is re-verified against the Rust.)
 
-| Edge | Mechanism | Trigger | Survives / persisted where | kuna anchor |
+| Edge | Mechanism | Trigger | Survives / persisted where | unlace anchor |
 |---|---|---|---|---|
 | rule pools → themselves | local fixpoint | any rule fires; opcode change rewinds the per-op rule walk | — | `crates/unlace-middle/src/infra/action.rs (ActionPool::process_op)` |
 | P2 → P2, jump-table recovery | reduced sub-query | `BRANCHIND` with unrecovered targets mid flow-follow | recovered table → `jumpvec`; the cloned partial is discarded | `crates/unlace-decomp/src/infra/decompile_drive.rs (run_jumptable_pipeline)`, driven from `crates/unlace-lift/src/p2_lift/flow.rs (generate_ops_with_jumptables)` |
@@ -4175,12 +4175,12 @@ study summarized in `docs/history.md`; every row below is re-verified against th
 | P4 → Band B, late prototype | restart + persisted hint | a resolved indirect call's prototype cannot be merged in place (`late_restriction` fails) | `Override::insert_indirect_override` — the re-flow rebuilds the CALLIND as a direct CALL | `crates/unlace-middle/src/p4_calls/fspec.rs (FuncCallSpecs::deindirect, FuncCallSpecs::force_set)` |
 | (angr) P2 → P2, lowered switch | detect-then-restart, two halves | a comparison cascade recognized as a compiler-lowered switch after simplification | the recovered cascade record, in a store shared by both halves | detect in fullloop writes + requests restart, install in mainloop (before heritage) reads on the restarted run — `crates/unlace-lift/src/p2_lift/loweredswitch.rs (ActionLowerSwitchDetect, ActionLowerSwitchInstall)` |
 | P5 → P2, determined branch | in-loop re-entry | constant folding decides a conditional branch, removing a CFG edge | the simplified ops themselves | `crates/unlace-bandb/src/p3_dataflow/coreaction_early.rs (ActionDeterminedBranch)`, inside mainloop |
-| (kuna/angr) P7/P8 structuring fallback | degraded re-run | the region structurer cannot collapse the graph to a single root | nothing; `sblocks` is re-seeded clean | `crates/unlace-structure/src/p8_structure/blockaction.rs (ActionBlockStructure)` falls back to `CollapseStructure` after `crates/unlace-structure/src/p8_structure/region_structurer.rs (run_region_structurer)` declines |
+| (unlace/angr) P7/P8 structuring fallback | degraded re-run | the region structurer cannot collapse the graph to a single root | nothing; `sblocks` is re-seeded clean | `crates/unlace-structure/src/p8_structure/blockaction.rs (ActionBlockStructure)` falls back to `CollapseStructure` after `crates/unlace-structure/src/p8_structure/region_structurer.rs (run_region_structurer)` declines |
 | P0 → everything, the outer loop | knowledge-store re-run | an operator/agent writes an assertion (`option`, `kassert`, override) and re-decompiles | the entire P0 store | `crates/unlace-middle/src/p0_knowledge/assert.rs (Dispatch)`; the console rebuilds the IR per `decompile`, re-seeding stashed facts — `crates/unlace-decomp/src/infra/decompile_drive.rs (decompile_func_full_with_override_dyn)` (§0.8 is when the rebuild is skipped) |
 
-**Partly implemented in kuna**: the upstream jump-table *size-mismatch*
+**Partly implemented in unlace**: the upstream jump-table *size-mismatch*
 restart. When `matchModel` finds a flow-time table of one address whose late
-model has more entries, kuna persists `Override::insert_multistage_jump` (with
+model has more entries, unlace persists `Override::insert_multistage_jump` (with
 the late model's targets) and restarts, at most once per jump
 (`crates/unlace-middle/src/p2_lift/jumptable.rs (JumpTable::request_multistage)`;
 §2.3 *Multistage recovery* has the guard and reach checks). Every other size
@@ -4191,7 +4191,7 @@ Mechanisms are mutually disabling by design: no restart, and no dead-code-delay
 bump, fires inside the jump-table sub-decompilation — the sub-query must answer
 its one question and be discarded, never mutate P0.
 
-(kuna) Every restart trigger and suppressed trigger records its reason in the
+(unlace) Every restart trigger and suppressed trigger records its reason in the
 engine-owned restart log
 (`crates/unlace-middle/src/p0_knowledge/restartlog.rs (RestartLog)`),
 because a function that silently decompiles twice is otherwise invisible.
@@ -4202,7 +4202,7 @@ The console has two commands that build IR for a function, and a `unlace decompi
 <bin> <fn>` runs both: `load function <fn>` (or `load addr`), then `decompile`.
 Upstream follows the flow once — C++ `IfcFuncload` follows it, and `IfcDecompile`
 re-runs the action pipeline on *that* `Funcdata` after
-`Architecture::clearAnalysis`. kuna's `decompile` instead builds a fresh
+`Architecture::clearAnalysis`. unlace's `decompile` instead builds a fresh
 `Funcdata` and follows the flow again, because a decompile is seeded with facts
 that `load function` never applied — and some of them are consumed AT FLOW TIME,
 so re-seeding them onto an already-followed IR would be too late:
@@ -4286,7 +4286,7 @@ Conventions worth knowing before reading anything:
   `crates/unlace-decomp/src/infra/universalaction.rs` +
   `crates/unlace-decomp/src/infra/universalaction/tests.rs`).
 - **C++ citations in code comments** (`decompiler/cpp/<file>.cc`) are upstream
-  Ghidra anchors at the pinned `GHIDRA_REV` (`docs/history.md`) — the tree kuna
+  Ghidra anchors at the pinned `GHIDRA_REV` (`docs/history.md`) — the tree unlace
   was ported from — not paths in this repository.
 - **`Funcdata` methods are phase-owned**: find the owning phase through the impl
   map (§0.3) rather than grepping one giant file.

@@ -1,4 +1,4 @@
-kuna-typelib 1
+unlace-typelib 1
 target linux x86_64
 source musl 1.2.6
 T ACTION m=unsigned int	int

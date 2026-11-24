@@ -1,13 +1,13 @@
 {
- "opportunity": "structsynth typed a synthesized field from the first access of its widest width; at -O0 a field is reloaded per use, so the first load is often an integer add or a compare with a constant and a buffer handed to memmove is declared long. Of the 362 casts on synthesized record members over the 4,815 functions kuna and IDA both emit, about 135 read an integer-declared field as a pointer.",
+ "opportunity": "structsynth typed a synthesized field from the first access of its widest width; at -O0 a field is reloaded per use, so the first load is often an integer add or a compare with a constant and a buffer handed to memmove is declared long. Of the 362 casts on synthesized record members over the 4,815 functions unlace and IDA both emit, about 135 read an integer-declared field as a pointer.",
  "test_name": "tests/stages/fieldtype.xml (13 assertions; pass 1 option fieldtype off, pass 2 on over the gcc -O0 fixture, passes 3-4 over clang -O2 with operand_refs on; #12 an index read at a table and handed to write and #13 a number merged with a string on its way to fprintf stay numbers in both passes, and fail with the previous evidence rule) + unit tests (p5_types/fieldtype.rs tests, p4_calls/calleevote/tests.rs only_the_input_naming_a_superseded_record_is_forgotten) + compiled round trip decompile_all_cli.rs a_pointer_field_round_trips_through_the_printed_c (gcc -O0, clang -O0, gcc -O2, clang -O2 fixtures x option off/on x gcc/clang; the index and the merged number pinned as integers in both arms)",
- "binary": "decompiler/crates/kuna-analysis/tests/fixtures/fieldtype_gcc_O0_x86_64",
+ "binary": "decompiler/crates/unlace-analysis/tests/fixtures/fieldtype_gcc_O0_x86_64",
  "selector": "buf_shift",
  "option": "fieldtype",
  "flag": "field_type",
  "change_kind": "type-inference",
  "tier": "transform",
- "source_decompiler": "kuna",
+ "source_decompiler": "unlace",
  "default_on": false,
  "default_value": "off",
  "values": "on|off",
@@ -68,12 +68,12 @@
     121
    ]
   },
-  "more_read": "all 14 shared: sort -O0 mergelines_node +20 (lo/hi proven only as pointers to undefined 8-byte words; the locals they are read into stay long and each read pays a cast), diff -O2 read_files +3 (buffer fields now void * / char *, indexed by variables), gnulib hash transfer_entries x10 +1 each (the entry's next pointer is now long *, the bucket it is stored into is still a record kuna reads as long[]), tar -O0 append_incremental_renames +1 (a pointer field assigned a callee's integer return), diff -O0 0x124fe +1 (a char * field read into an unsigned char * local); outside the shared set tar's gnulib regex (+2..+9 each) indexes fields proven only void * by computed byte offsets",
+  "more_read": "all 14 shared: sort -O0 mergelines_node +20 (lo/hi proven only as pointers to undefined 8-byte words; the locals they are read into stay long and each read pays a cast), diff -O2 read_files +3 (buffer fields now void * / char *, indexed by variables), gnulib hash transfer_entries x10 +1 each (the entry's next pointer is now long *, the bucket it is stored into is still a record unlace reads as long[]), tar -O0 append_incremental_renames +1 (a pointer field assigned a callee's integer return), diff -O0 0x124fe +1 (a char * field read into an unsigned char * local); outside the shared set tar's gnulib regex (+2..+9 each) indexes fields proven only void * by computed byte offsets",
   "previous_rule": "the rule this PR first shipped (any access type, merged ones included) gave 32,073 -> 31,900 on main 632437155 (71 fewer -191, 13 more +18) and declared e2fsck's problem_context.num and db->blk char *"
  },
  "census": {
   "address_of_family_shared": {
-   "kuna": 2783,
+   "unlace": 2783,
    "ida": 1864,
    "element_of_scalar_pointer": 1843,
    "opaque_libc_shell_member": 763,
@@ -345,7 +345,7 @@
  },
  "round_trip": "fieldtype_x86_64.c: buf_shift, ent_release, range_walk, cell_val, pctx_print, slot_post x 4 builds x 2 arms x 2 compilers print the binary's own lines (cell_val left out of the clang builds, pctx_print out of gcc -O2, each for a reason that holds in both arms); ops_run checked by spelling only (a code pointer is spelled void *, not callable C in either arm)",
  "known_limits": "an integer only ever added and handed to a declared void * parameter is declared void *; the option never makes a field an integer (a field main's first-access rule already declares a pointer keeps it, e.g. an index at -O2 whose one load feeds both a table read and write)",
- "sweep_fix": "kuna_calleevote::Ledger::forget_naming forgets only the inputs naming a superseded record; byte-identical to main on the 45 castbench binaries with fieldtype off",
+ "sweep_fix": "unlace_calleevote::Ledger::forget_naming forgets only the inputs naming a superseded record; byte-identical to main on the 45 castbench binaries with fieldtype off",
  "speed": {
   "method": "interleaved min-of-15 decompile-all --json --max-fn-seconds 120, three arms rotated (origin/main 4f037dae4, this build at its default, this build with fieldtype on), one warm-up each (speed.py, raw samples in speed.json)",
   "results": {

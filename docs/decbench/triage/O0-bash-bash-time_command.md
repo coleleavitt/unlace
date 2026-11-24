@@ -16,7 +16,7 @@ confidence: high
 Everything below is the *same* region of the function: the two `-O0` boolean
 assignments at the top of the body. The rest of the function matches IDA
 statement-for-statement, so this is the whole structural delta (IDA 8 `if`s,
-kuna 10 `if`s; nothing else differs).
+unlace 10 `if`s; nothing else differs).
 
 **ida (stored) — GED 0, isomorphic to the source CFG**
 
@@ -30,7 +30,7 @@ kuna 10 `if`s; nothing else differs).
   if ( posixly_correct && v21 )
 ```
 
-**kuna (stored, benchmark run) — GED 55**
+**unlace (stored, benchmark run) — GED 55**
 
 ```c
   v26 = dat_173a54;
@@ -49,7 +49,7 @@ kuna 10 `if`s; nothing else differs).
   }
 ```
 
-**kuna (fresh, today's build, `--mode reliable` == what `auto` picks for this 1.5 MB binary) — GED 26**
+**unlace (fresh, today's build, `--mode reliable` == what `auto` picks for this 1.5 MB binary) — GED 26**
 
 ```c
   v26 = subshell_environment;
@@ -90,9 +90,9 @@ on pyjoern CFGs, every pane parsed identically):
 | ida (stored) | 28 / 44 | **0** (isomorphism) |
 | angr (stored) | 36 / 54 | 34 |
 | ghidra (stored) | 43 / 62 | 59 |
-| kuna (stored) | 41 / 58 | 55 (reproduces the recorded value) |
-| kuna (fresh, today) | 34 / 51 | 26 |
-| kuna + hand boolean re-roll | 28 / 43 | 6 |
+| unlace (stored) | 41 / 58 | 55 (reproduces the recorded value) |
+| unlace (fresh, today) | 34 / 51 | 26 |
+| unlace + hand boolean re-roll | 28 / 43 | 6 |
 
 `scripts.decbench.rescore` agrees: `before 55, after 26, delta -29` at
 commit `895b1f1b`.
@@ -126,15 +126,15 @@ The second idiom (`nullcmd`, `0x4eacb`-`0x4eb17`) is the same shape with a
 
 ## Analysis
 
-**Structural symptom (one).** kuna renders each `-O0` short-circuit boolean
+**Structural symptom (one).** unlace renders each `-O0` short-circuit boolean
 assignment as an explicit two-arm `if`/`else` constant diamond plus a separate
 store — `if ((a0) && (...)) v2 = 1; else v2 = 0; v28 = v2;` — where the source
 and Hex-Rays have a single boolean-valued assignment. Two of them add 6 CFG
 blocks / 8 edges to a 28-node function; they are *the entire* remaining
-difference from IDA's pane (removing them by hand takes kuna from 34n/51e to
+difference from IDA's pane (removing them by hand takes unlace from 34n/51e to
 28n/43e, i.e. exactly the source's node count).
 
-**Root cause.** Nothing in kuna can turn a *structured* short-circuit condition
+**Root cause.** Nothing in unlace can turn a *structured* short-circuit condition
 plus constant 0/1 arms back into a boolean expression:
 
 - P3 `RuleConditionalMove`
@@ -165,7 +165,7 @@ stay as it is; the decision that is missing is a structured-tree one.
 expression at the microcode level regardless of how many predecessors the
 constant arms have, so its pane keeps the source's `x = a && b;` shape and hits
 the metric's isomorphism fast path (GED 0). ghidra (59) and angr (34) both
-expand the idiom too — kuna is not an outlier, it is the same class of miss.
+expand the idiom too — unlace is not an outlier, it is the same class of miss.
 
 **Not the answer:** swept `condfold on`, `condfold wide`, `iteexpr on`,
 `returndup on`, `regionedgeorder on` and `--mode aggressive` — all produce
@@ -173,11 +173,11 @@ byte-identical output to the default run on this function. No existing option
 closes it.
 
 **Secondary observations (no GED impact, not the symptom):**
-- kuna calls `sub_4e553(stderr,v33,v14,v13,v17,v16)` with 6 arguments; the callee
+- unlace calls `sub_4e553(stderr,v33,v14,v13,v17,v16)` with 6 arguments; the callee
   (`print_formatted_time`) takes 9 — the three stack-passed arguments are missing.
   That is a P4 prototype/parameter-recovery miss on a prototype-less static callee;
   IDA recovers all 9.
-- The residual GED 6 in the hypothetical is one missing edge at the tail: kuna
+- The residual GED 6 in the hypothetical is one missing edge at the tail: unlace
   flips the source's `if (code) siglongjmp(...); return rv;` into
   `if (!v31) return v27; siglongjmp(...);`, so the trailing no-return call has no
   fall-through successor while the source's has one. Not worth a feature.
@@ -199,7 +199,7 @@ default-off until an ablation earns the flip — same judgment-call category as
    condition already prints as `(!a0) || ((*a0 == 4 && !x) && !y)` — literally the
    source's `nullcmd` expression — so the re-roll should run before/with the
    existing negation choice rather than fight it.
-3. Printer: reuse `PrintC::emit_block_if`'s existing `kuna_iteregion` path in
+3. Printer: reuse `PrintC::emit_block_if`'s existing `unlace_iteregion` path in
    `p9_emit/printc.rs`; this is the same print-only marking, no p-code mutation.
 
 **Owning files.** `decompiler/crates/unlace-decomp/src/p8_structure/iteregion.rs`,

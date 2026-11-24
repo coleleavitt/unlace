@@ -1,4 +1,4 @@
-# Kuna (IDA 9.5 gooMBA design, linear MBA without SMT): P3 simplification
+# Unlace (IDA 9.5 gooMBA design, linear MBA without SMT): P3 simplification
 # quiescence, option mba (default off).
 #
 #   0x1000 mba_add: mov eax,edi; xor edi,esi; and eax,esi; lea eax,[rdi+rax*2]; ret

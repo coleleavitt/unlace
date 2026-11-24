@@ -17,21 +17,21 @@ K and L are at the end, and the raw rows are in `final-l/`.
 | `ptr_char` / `ptr_void` / `ptr_ptr` | 20.6% / 1.5% / 18.3% | **39.3% / 18.8% / 36.8%** | 1st, 1st, 2nd (binja 36.8% / 12.8%; ida 38.3% on `ptr_ptr`) |
 | `bool` / `struct_val` / `ptr_struct` | 21.6% / 0.0% / 0.0% | **42.5% / 28.5% / 4.1%** | 1st, 2nd (ghidra 30.6%), 1st |
 | decbench#93 counterfactual (credit any struct pointer) | 848 | **2,262** (21.0%), mean .4599 | +588 functions over the final build's own count |
-| **casts**, the 4,815 functions kuna and IDA both emit | 40,583 — **1.073× IDA** | **32,073 — 0.848× IDA** | −21.0%, after peaking at 45,126 (1.193×) in round G; fewer than IDA at every opt level (O0 0.815×, O2 0.907×, O2-noinline 0.816×) |
+| **casts**, the 4,815 functions unlace and IDA both emit | 40,583 — **1.073× IDA** | **32,073 — 0.848× IDA** | −21.0%, after peaking at 45,126 (1.193×) in round G; fewer than IDA at every opt level (O0 0.815×, O2 0.907×, O2-noinline 0.816×) |
 | cast density on the same functions, per 100 statements / per 1,000 lines (IDA 26.99 / 155.4) | 33.4 / 211.6 | **27.0 / 169.6** | per statement exactly IDA's density (peak 37.5 in round G), per line 1.09×; by level O0 27.6 (IDA 31.0), O2-noinline 24.1 (IDA 24.8), and **O2 29.2 against IDA's 26.1 (1.12×)**, the one level still denser |
 | goal 2: declarations, fmt/ls/sort/du O0+O2 | 7,085; 151 `[16]` blobs; 11 phantom `// rdx` | **6,956; 65; 7** | −1.8%, −57%; `fmt::main` calls `sub_3700` with 2/2/2 arguments (was 1/2/3) and declares no phantom |
 | goal 3: TRex mean, pooled O0 / O2 | 3.638 / 1.579 | **4.508 / 1.967** | +24% / +25%; GT struct parameters typed as a struct 0 → 173 of 538 (O0), 0 → 95 of 297 (O2) |
 | goal 3: layout, fields only (P / R / F1) | none (no records) | **.8713 / .0932 / .1684** | nesting F1 0 → .0036 |
 | speed, whole-binary `decompile-all`, min-of-15 against the baseline | — | -O2 fmt / ls / sort / bash **+1.3% / +2.6% / +4.2% / +8.9%**; -O2-noinline kmod / dpkg-divert / crontab **+14.8% / +16.3% / +10.6%** | since round G −2.9% to +4.2% on all seven, but over the +5% budget against the baseline on four: `protoorder` 11–12%, `calleevote` + `passthrough` 5.5%, the cast options 2.5% (bash 4–7%) |
 
-**What each goal achieved.** *Primitives:* `bool` doubled (boolbyte, bytehonest) and kuna is 1st or 2nd
+**What each goal achieved.** *Primitives:* `bool` doubled (boolbyte, bytehonest) and unlace is 1st or 2nd
 on every integer and `char` class; the signedness work is real in the C and in TRex but worth zero on a
 metric that strips `unsigned`. *Variables:* the leanest declarer got leaner, the 128-bit blobs are mostly
 gone, and the named bad case (`fmt::main`'s phantom `rdx` arguments) is fixed by prototype recovery, not
 by hiding. *Structs:* from no records at all to 173 of 538 struct parameters typed as a struct at .87
 field precision, 579 correctly named library records, and +588 functions the moment decbench credits a
 struct pointer as one. *Casts* (rounds I–L, the user's newest ask): the count the type work had pushed to
-1.19× IDA is 0.85×, per statement kuna prints exactly IDA's density, the user's base64 witness shape
+1.19× IDA is 0.85×, per statement unlace prints exactly IDA's density, the user's base64 witness shape
 goes from 33 casts to 7, every removed cast is proven value-preserving by compiled round trips, and no
 type was weakened to lose one — the last three rounds' type levers (`elemptr`, `callrettype`,
 `callbacktype`) are also worth +59 perfect functions.
@@ -46,7 +46,7 @@ identity, and the sweep settles two `e2fsck` parameters lower); `libctypes glibc
 **The ceilings** no engine work moves on this metric: register-resident ground truth is 25,821 of
 65,715 GT variables (39.3%) and no stripped decompiler exports register locals; 10,559 variables carry a
 program-defined struct name no stripped binary holds; at -O2, 85.8% of functions hold at least one
-unmatchable variable, and on the reachable ones kuna converts 43.8%, level with -O0. Signedness,
+unmatchable variable, and on the reachable ones unlace converts 43.8%, level with -O0. Signedness,
 variable count and call arity score zero by construction, so every arity change was judged on DWARF.
 
 **Ranked open levers.**
@@ -66,7 +66,7 @@ variable count and call arity score zero by construction, so every arity change 
 4. **Layout recall .0932 and nesting F1 .0036** — 8,563 of 9,443 ground-truth fields are never claimed.
    The one measured lever, `structheadless closed`, lifts recall to .1131 and removes 1,420 casts, and
    stays off for its precision (.8298).
-5. **`ptr_ptr`**, the one pointer class a rival still leads by rate: IDA 38.3%, kuna 36.8% (674 TP).
+5. **`ptr_ptr`**, the one pointer class a rival still leads by rate: IDA 38.3%, unlace 36.8% (674 TP).
 6. **Speed against the baseline** (L.6). Each round was timed against the one before and came within
    about +5% of it, but the final build is over the budget against the campaign baseline on bash (+8.9%) and on kmod, dpkg-divert and
    crontab -O2-noinline (+14.8%, +16.3%, +10.6%). With every campaign option off it runs at the
@@ -88,8 +88,8 @@ and `10a0db235`, and **Rounds H and I** (the first round of the cast campaign) o
 
 | | binary | commit |
 |---|---|---|
-| **baseline** | `/home/mahaloz/kwt/_baseline/kuna` (pinned copy) | main `809712e9` (2026-09-16) |
-| **final** | `/home/mahaloz/kwt/_final/kuna` (pinned copy) | main `d96e3408` (2026-09-19, charbyte #683) |
+| **baseline** | `/home/mahaloz/kwt/_baseline/unlace` (pinned copy) | main `809712e9` (2026-09-16) |
+| **final** | `/home/mahaloz/kwt/_final/unlace` (pinned copy) | main `d96e3408` (2026-09-19, charbyte #683) |
 
 decbench `main` @ `625e892` (the checkout the baseline was taken with), results tree
 `full_run_address_2026-09-11`, `DECBENCH_NO_CACHE=1`, read-only on the tree.
@@ -99,10 +99,10 @@ decbench `main` @ `625e892` (the checkout the baseline was taken with), results 
 | goal | instrument | baseline | final | reading |
 |---|---|---|---|---|
 | type_match (A) | typesweep, 444 slices / 10,748 functions | **848** perfect (7.89%), mean **.2645** | **986** perfect (9.17%), mean **.2895** | +138 perfect, +9.5% mean; 1,449 functions improved, 8 worse |
-| vs IDA (same 10,273 functions) | canonical replay of the tree's IDA rows | kuna 8.12% / .2718 vs ida 8.33% / .2682 | kuna **9.43% / .2978** vs ida 8.33% / .2682 | kuna passes IDA on perfect and widens its mean lead; binja still leads (12.28% / .3422) |
+| vs IDA (same 10,273 functions) | canonical replay of the tree's IDA rows | unlace 8.12% / .2718 vs ida 8.33% / .2682 | unlace **9.43% / .2978** vs ida 8.33% / .2682 | unlace passes IDA on perfect and widens its mean lead; binja still leads (12.28% / .3422) |
 | goal 1: primitives | per-GT-class match rate | bool 21.6%, char 53.7%, int 50–59% | **bool 42.8%**, char 53.7%, int unchanged | bool doubled (1st of five by 27 points); int/char were already 1st and cannot move on this metric |
 | goal 2: variables | varcensus, fmt/ls/sort/du O0+O2 | 7,085 non-thunk declarations, 151 `[16]` blobs | 6,945 (−2.0%), **66** blobs (−56%) | fewer, cleaner declarations; the fmt::main phantom arguments are fixed only with `argclobber on` (opt-in) |
-| goal 3: structs | structscore layout-F1 (835 GT struct-pointer params) | 0.0 (kuna synthesized no structs) | **0.138** (P 0.8945, R 0.0746); 182 params typed as a struct | first nonzero struct recovery; TRex Fig. 6 mean up on all 8 binaries |
+| goal 3: structs | structscore layout-F1 (835 GT struct-pointer params) | 0.0 (unlace synthesized no structs) | **0.138** (P 0.8945, R 0.0746); 182 params typed as a struct | first nonzero struct recovery; TRex Fig. 6 mean up on all 8 binaries |
 | speed | whole-binary `decompile-all`, min-of-11 interleaved | — | fmt +0.6%, ls +1.0%, sort +1.3%, bash +2.5% | the whole campaign's default-on work costs at most 2.5%, inside the +5% budget |
 
 ## 1. type_match — the 444-slice typesweep
@@ -111,8 +111,8 @@ decbench `main` @ `625e892` (the checkout the baseline was taken with), results 
 O0/O2/O2-noinline, `--workers 24`, run with **both** pinned binaries on the same day against the same
 checkpoints. Control: the re-run of the pinned baseline binary reproduces the 2026-09-16 capture exactly —
 10,748/10,748 functions, 848 perfect, aggregate 2843.28, **0 values differ** — so every delta below is the
-binary, not the harness or the tree. (Agreement with the tree's published kuna verdicts: 97.08% for the
-baseline binary, 84.88% for the final one; the tree was scored with a kuna older than both.)
+binary, not the harness or the tree. (Agreement with the tree's published unlace verdicts: 97.08% for the
+baseline binary, 84.88% for the final one; the tree was scored with a unlace older than both.)
 
 | slice | functions | perfect base → final | perfect % | mean base → final | improved | worse |
 |---|---:|---|---|---|---:|---:|
@@ -139,29 +139,29 @@ measured (−0.151% perfect on its 300 slices) and accepted when the user flippe
 closed because, under the struct-crediting rule the user asked decbench for, it removes more correct struct
 pointers than it fixes. The 8th is tar `write_directory_file_entry(void *data)` now typed `FILE *`.
 
-### Where kuna stands against the other decompilers
+### Where unlace stands against the other decompilers
 
 The rivals' columns are decbench's `main` metric replayed over the **variables the tree stored for them**
 (`finalsweep.py rivals`, the same `_match_structured` `reeval_typematch.py` runs, no `--emit`), on the same
-444 slices. Each rival's function set is a subset of kuna's, so each row pairs the rival with kuna on exactly
+444 slices. Each rival's function set is a subset of unlace's, so each row pairs the rival with unlace on exactly
 the rival's functions.
 
 | decompiler (functions it scored) | all: perfect % / mean | O0 | O2 | O2-noinline |
 |---|---|---|---|---|
 | **binja** (10,366) | 12.28% / .3422 | 20.36% / .4956 | 3.43% / .1868 | 8.52% / .2632 |
-| kuna final, same functions | 9.35% / .2969 | 16.42% / .4465 | 2.13% / .1542 | 5.74% / .2144 |
-| kuna baseline, same functions | 8.02% / .2711 | 14.27% / .4165 | 1.65% / .1351 | 4.81% / .1893 |
+| unlace final, same functions | 9.35% / .2969 | 16.42% / .4465 | 2.13% / .1542 | 5.74% / .2144 |
+| unlace baseline, same functions | 8.02% / .2711 | 14.27% / .4165 | 1.65% / .1351 | 4.81% / .1893 |
 | **ida** (10,273) | 8.33% / .2682 | 13.70% / .3835 | 2.27% / .1485 | 5.78% / .2072 |
-| kuna final, same functions | **9.43% / .2978** | **16.43% / .4467** | 2.27% / **.1558** | 5.67% / **.2117** |
-| kuna baseline, same functions | 8.12% / .2718 | 14.28% / .4167 | 1.77% / .1357 | 4.83% / .1869 |
+| unlace final, same functions | **9.43% / .2978** | **16.43% / .4467** | 2.27% / **.1558** | 5.67% / **.2117** |
+| unlace baseline, same functions | 8.12% / .2718 | 14.28% / .4167 | 1.77% / .1357 | 4.83% / .1869 |
 | **angr** (10,502) | 8.27% / .2652 | 14.89% / .4109 | 1.64% / .1346 | 4.95% / .1827 |
-| kuna final, same functions | 9.31% / .2926 | 16.43% / .4467 | 2.24% / .1539 | 5.70% / .2057 |
+| unlace final, same functions | 9.31% / .2926 | 16.43% / .4467 | 2.24% / .1539 | 5.70% / .2057 |
 | **ghidra** (10,673) | 6.84% / .2367 | 11.29% / .3394 | 1.48% / .1320 | 5.24% / .1886 |
-| kuna final, same functions | 9.14% / .2904 | 16.43% / .4467 | 2.16% / .1521 | 5.49% / .2051 |
+| unlace final, same functions | 9.14% / .2904 | 16.43% / .4467 | 2.16% / .1521 | 5.49% / .2051 |
 
-kuna went from **4th of five** on perfect% (behind binja, IDA and angr, each on its own functions) to **2nd**
+unlace went from **4th of five** on perfect% (behind binja, IDA and angr, each on its own functions) to **2nd**
 (behind binja), and stayed 2nd on mean with the gap to binja cut from .071 to .045. The campaign opened on
-"kuna is last-of-four at O2": on this slice set it now ties IDA's O2 perfect rate, leads it on O2 mean (.1558
+"unlace is last-of-four at O2": on this slice set it now ties IDA's O2 perfect rate, leads it on O2 mean (.1558
 vs .1485), and is within 0.11 points of it on O2-noinline perfect while leading on mean. binja's lead is
 `ptr_char` and `ptr_void` (below).
 
@@ -174,7 +174,7 @@ only adds the class — the scores are unchanged (checked function-by-function a
 TP / GT variables of that class (a miss and a wrong type both count against it). Rival rates are over the GT
 variables of the functions that rival scored.
 
-| GT class | GT vars | share | kuna baseline | **kuna final** | ida | binja | ghidra | angr |
+| GT class | GT vars | share | unlace baseline | **unlace final** | ida | binja | ghidra | angr |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | `ptr_struct` | 14,252 | 21.7% | 0.0% (0) | **2.5% (355)** | 2.4% (328) | 2.8% (389) | 2.3% (325) | 2.3% (315) |
 | `ptr_char` | 14,645 | 22.3% | 20.6% (3,015) | 20.7% (3,028) | 24.4% (3,543) | 36.8% (5,323) | 18.3% (2,675) | 16.4% (2,361) |
@@ -194,7 +194,7 @@ variables of the functions that rival scored.
 | other (float, funcptr, unions, …) | 1,189 | 1.8% | 7.8% (93) | 7.8% (93) | 12.0% (142) | 11.7% (139) | 5.3% (63) | 4.2% (48) |
 | **all GT variables** | 65,715 | | 25.4% (16,676) | **28.0% (18,396)** | 24.1% (15,469 / 64,241) | 30.7% (19,801 / 64,526) | 21.5% (14,106 / 65,562) | 24.5% (15,730 / 64,273) |
 
-| storage | GT vars | kuna baseline | **kuna final** | ida | binja | ghidra | angr |
+| storage | GT vars | unlace baseline | **unlace final** | ida | binja | ghidra | angr |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | argument | 21,577 (32.8%) | 36.1% | **40.4%** | 40.6% | 48.4% | 35.4% | 33.3% |
 | stack | 18,317 (27.9%) | 48.5% | **52.8%** | 38.2% | 51.8% | 35.6% | 46.8% |
@@ -203,7 +203,7 @@ variables of the functions that rival scored.
 What moved, and which PR moved it:
 
 * **`ptr_struct` 0 → 355**, all libc names: `FILE *` 252, `stat *` 46, `passwd *` 18, `tm *` 12, `group *` 11,
-  `DIR *` 10 (libctypes #651/#658, stdio streams #672). kuna is now at parity with IDA/ghidra/angr and 34 TP
+  `DIR *` 10 (libctypes #651/#658, stdio streams #672). unlace is now at parity with IDA/ghidra/angr and 34 TP
   behind binja on the class that was its literal zero.
 * **`struct_val` 0 → 497** (2nd of five, behind ghidra's 541): by-value libc structures on the stack — `stat`
   412, `sigset_t` 50, `termios` 10, `sigaction` 9 — the same libctypes vocabulary reaching the frame slots.
@@ -211,7 +211,7 @@ What moved, and which PR moved it:
 * **`bool` 21.6% → 42.8%**: `bool` 99 → 549 TP from boolbyte (#664, on by #680), `undefined1` 589 → 821 TP from
   bytehonest (#650 — the honest width-only spelling decbench credits against `_Bool`, as it does IDA's `_BYTE`).
 * **The integer and `char` classes did not move and could not**: decbench strips `unsigned` and maps
-  `int4`/`uint4` → `int`, so signedness (#656, 377 declarations flipped) scores zero by construction. kuna was
+  `int4`/`uint4` → `int`, so signedness (#656, 377 declarations flipped) scores zero by construction. unlace was
   already 1st or 2nd on every one of them.
 * **`ptr_prim` −18** is the structsynth false-positive class above; **`ptr_char` +13** is flat — binja's 36.8%
   is the largest single gap left (−2,295 TP), and the lever for it (ptrfromuse, protoorder) is not on by
@@ -252,7 +252,7 @@ that no statement assigns, the shape of a phantom register argument; counted by 
 | **total** | | **7,085 → 6,945 (−2.0%)** | 969 → 974 | **151 → 66 (−56%)** | 261 → 252 | 58 → 56 |
 
 85 of the 140 fewer declarations are mulblob's (#671, the 128-bit multiply operand blobs); the rest are spread
-across the type PRs and were not attributed one by one. kuna was already the leanest declarer of the four
+across the type PRs and were not attributed one by one. unlace was already the leanest declarer of the four
 (3.33 declarations per function against IDA's 4.07 before the campaign), and `type_match` gives a missing or an
 extra variable exactly zero, so none of this moves §1.
 
@@ -282,7 +282,7 @@ deliberately changes no call arity, so it would not fix this either.
 ## 5. Goal 3 — structs
 
 `scripts.decbench.structscore --all` on fmt/ls/sort/du, O0 and O2, each binary run with the baseline and with
-the final kuna (the final one has structsynth `param` on by default, #655 → #682):
+the final unlace (the final one has structsynth `param` on by default, #655 → #682):
 
 | opt | binary | TRex mean 0-6 | mean 0-5 | `is_c_struct` passed | `c_primitive` passed | params typed as a struct / GT struct params | layout F1 (filler counted) |
 |---|---|---|---|---|---|---|---|
@@ -388,13 +388,13 @@ largest (protoorder, ptrfromuse void) were measured stacked: **1,309 perfect** o
 
 ## 8. What the metric can and cannot see, and the ceilings left
 
-* **Register-resident ground truth: 25,821 of 65,715 GT variables (39.3%).** kuna exports arguments, stack symbols
+* **Register-resident ground truth: 25,821 of 65,715 GT variables (39.3%).** unlace exports arguments, stack symbols
   and framelayout slots — never a register local — so it scores 4 of them; no rival does better than 1.4%. This caps
   the achievable mean near 0.6 for everyone and it is most of the O2 gap: TRex's `defined` step is 77–81% of the
   final binary's O2 loss in §5.
 * **Program-defined struct names: 10,559 of 14,252 `ptr_struct` GT variables (16.1% of all GT).** `hash_entry`,
   `Hash_table`, `fileinfo`, `predicate`, `tar_stat_info`, … — a stripped binary does not carry these names and no
-  decompiler recovers them: every one of kuna's 355 `ptr_struct` TPs is a libc name, and so is every rival's
+  decompiler recovers them: every one of unlace's 355 `ptr_struct` TPs is a libc name, and so is every rival's
   (IDA 328: `FILE` 315, `DIR` 11, `__sigset_t` 2). Of the rest, 2,472 carry a libc/POSIX name (by a hand list:
   `FILE`, `stat`, `passwd`, `obstack`, …) and are the reachable pool, and 1,221 are the restrict artifact below.
   structsynth recovers the *shape*, which `type_match`
@@ -419,7 +419,7 @@ round-B binary as the middle column, so every number below reads baseline → ro
 
 | | binary | commit |
 |---|---|---|
-| **round C** | `/home/mahaloz/kwt/_final-c/kuna` (pinned copy) | main `d8b9c0b1` (2026-09-20, ptrfromuse-on #690) |
+| **round C** | `/home/mahaloz/kwt/_final-c/unlace` (pinned copy) | main `d8b9c0b1` (2026-09-20, ptrfromuse-on #690) |
 
 **Metric pin.** The decbench checkout moved past `625e892` (the campaign's metric, decisions §11)
 and `type_match._effective_offset` is gone in the newer code, so the instruments import-fail
@@ -434,7 +434,7 @@ round-B capture exactly, 10,748/10,748 functions, 986 perfect, **0 values differ
 | goal | instrument | baseline | round B | round C | reading |
 |---|---|---|---|---|---|
 | type_match | typesweep, 444 slices / 10,748 functions | 848 perfect (7.89%), mean .2645 | 986 (9.17%), .2895 | **1,349** (12.55%), **.3403** | +363 perfect over round B; 1,384 improved, 2 worse, **0 dropped off perfect** |
-| vs the other decompilers | canonical replay, each rival on its own functions | 4th of five | 2nd | **1st** | on binja's 10,366 functions kuna is 12.29% / .3427 against binja's 12.28% / .3422; against IDA's set 12.60% / .3464 vs 8.33% / .2682 |
+| vs the other decompilers | canonical replay, each rival on its own functions | 4th of five | 2nd | **1st** | on binja's 10,366 functions unlace is 12.29% / .3427 against binja's 12.28% / .3422; against IDA's set 12.60% / .3464 vs 8.33% / .2682 |
 | goal 1: primitives | per-GT-class match rate | bool 21.6% | bool 42.8% | unchanged | the int/char/bool classes were already 1st or 2nd and did not move this round |
 | goal 2: variables | varcensus, fmt/ls/sort/du O0+O2 | 7,085 declarations | 6,945 | 6,970 (+25) | the phantom-`rdx` locals go 11 → 9; `fmt::main` still calls `sub_3700` with 1, 2 and 3 arguments by default |
 | goal 3: structs | structscore TRex mean / layout precision | 3.638 / 1.579, layout 0 | 3.750 / 1.660, P .8945 | **4.108 / 1.893**, P **.5520** | TRex up on all eight builds; per-parameter layout precision is a **regression**, and it is protoorder's (below) |
@@ -498,7 +498,7 @@ Round C is a pointer round: +1,176 `char *`, +562 `void *`, +93 primitive pointe
 pointers, and nothing else moves by more than 4. That is protoorder carrying a callee's recovered
 parameter type back to the call site and `ptrfromuse void` declaring a dereferenced-only
 parameter, which is why the whole gain sits on `argument` (40.4% → 48.9%, now the best of five).
-kuna's overall variable rate passes binja's for the first time (30.9% of 65,715 GT variables
+unlace's overall variable rate passes binja's for the first time (30.9% of 65,715 GT variables
 against binja's 30.7% of the 64,526 in the functions it scored), and `ptr_char` remains the
 largest single gap to it (−1,119 TP).
 
@@ -661,7 +661,7 @@ round C as the previous column, so every number reads baseline → round B → r
 
 | | binary | commit |
 |---|---|---|
-| **round D** | `/home/mahaloz/kwt/_final-d/kuna` (pinned copy) | main `4c7704e0` (2026-09-20) |
+| **round D** | `/home/mahaloz/kwt/_final-d/unlace` (pinned copy) | main `4c7704e0` (2026-09-20) |
 
 Metric pin unchanged (decisions §12): decbench `625e892` extracted read-only, the venv's
 editable finder repointed at it by `final-c/pindb.py`.
@@ -671,7 +671,7 @@ editable finder repointed at it by `final-c/pindb.py`.
 | goal | instrument | round C | round D | reading |
 |---|---|---|---|---|
 | type_match | typesweep, 444 slices / 10,748 functions | 1,349 perfect (12.55%), mean .3403 | **1,349** (12.55%), mean **.3405** | 13 improved, **0 worse**, none on or off perfect; aggregate 3,657.76 → 3,659.62 |
-| vs the other decompilers | canonical replay, each rival on its own functions | 1st of five | **1st**, unchanged | on binja's 10,366 functions kuna is 12.29% / .3429 against binja's 12.28% / .3422 |
+| vs the other decompilers | canonical replay, each rival on its own functions | 1st of five | **1st**, unchanged | on binja's 10,366 functions unlace is 12.29% / .3429 against binja's 12.28% / .3422 |
 | goal 1: primitives | per-GT-class match rate | — | `int_u8` 50.8% → **51.0%** | +15 `unsigned long` and +4 `long`, all #694; every other class is byte-identical |
 | goal 2: variables | varcensus, fmt/ls/sort/du O0+O2 | 6,970 declarations, 9 phantom `// rdx` | 6,967, **7** | **`fmt::main` now calls `sub_3700` with 2, 2 and 2 arguments by default** and declares no phantom `rdx` local |
 | goal 3: structs | structscore TRex / per-parameter layout precision | 4.108 / 1.893, P **.5520** | 4.108 / 1.893, P **.8709** | the round-C regression is **repaired**; F1 .1021 → **.1678**, above round B's .1376 |
@@ -683,7 +683,7 @@ editable finder repointed at it by `final-c/pindb.py`.
 
 Same 444 slices, same `--baseline-only` invocation at `--workers 12`. Control: `scripts/decbench/`
 is byte-identical between round C's `d8b9c0b1` and this round's `4c7704e0`, so the only thing that
-differs between the two columns is the kuna binary.
+differs between the two columns is the unlace binary.
 
 | slice | functions | base | round B | round C | **round D** | mean C → **D** |
 |---|---:|---:|---:|---:|---:|---|
@@ -737,19 +737,19 @@ integer type where round C had made it a `void *`; `ptr_void` holds at 17.6% (61
 narrowing costs nothing on the class ptrfromuse won. Storage is unchanged: argument 48.9%,
 stack 53.2%, register-only 0.0%.
 
-The rivals' replay, each decompiler paired with kuna on exactly the functions that decompiler
+The rivals' replay, each decompiler paired with unlace on exactly the functions that decompiler
 scored (`final/finalsweep.py rivals`, the round-B replay unchanged — neither the results tree nor the
 pinned metric moved):
 
-| decompiler (functions it scored) | rival: perfect % / mean | kuna round C | **kuna round D** |
+| decompiler (functions it scored) | rival: perfect % / mean | unlace round C | **unlace round D** |
 |---|---|---|---|
 | **binja** (10,366) | 12.28% / .3422 | 12.29% / .3427 | **12.29% / .3429** |
 | **ida** (10,273) | 8.33% / .2682 | 12.60% / .3464 | **12.60% / .3466** |
 | **angr** (10,502) | 8.27% / .2652 | 12.75% / .3439 | **12.75% / .3441** |
 | **ghidra** (10,673) | 6.84% / .2367 | 12.55% / .3416 | **12.55% / .3418** |
 
-kuna stays 1st of five on perfect % and on mean. binja still leads at O2 (3.43% against kuna's
-2.95% on its own functions) and kuna leads every other cell.
+unlace stays 1st of five on perfect % and on mean. binja still leads at O2 (3.43% against unlace's
+2.95% on its own functions) and unlace leads every other cell.
 
 ### D.3 Goal 2 — variables, and `fmt::main`
 
@@ -833,7 +833,7 @@ unchanged from round C, as it must be — the rows are the same:
 | **round D** | 1,349 | **1,575 (+226)** | +1,569 | .3405 → **.3850** |
 
 **decbench#94** (`_parse_type_die` has no `DW_TAG_restrict_type` arm, so `char *restrict` arrives as
-the GT type `void`) is new this round, and the answer is that the bug costs kuna almost nothing.
+the GT type `void`) is new this round, and the answer is that the bug costs unlace almost nothing.
 A copy of the pinned checkout with the tag added to the `const`/`volatile` arm — one line, the
 checkout itself untouched — re-scores all 444 slices:
 
@@ -903,7 +903,7 @@ to `reliable` there rather than `aggressive`.
      synthesized field is never itself a struct pointer).
   4. **`ptr_void` at O2** and the O2 gap generally: 3.09% perfect against 12.55% pooled.
 * **Ceilings, unchanged.** Register-resident ground truth is 25,821 of 65,715 GT variables (39.3%) and
-  kuna exports none of them; the restrict artifact (D.5) is 98.2% inside that same set; signedness,
+  unlace exports none of them; the restrict artifact (D.5) is 98.2% inside that same set; signedness,
   variable count and call arity are worth zero on `type_match` by construction, which is why #689's
   fix to `fmt::main` shows up in varcensus and nowhere else.
 
@@ -921,7 +921,7 @@ reads baseline → round B → round C → round D → round E.
 
 | | binary | commit |
 |---|---|---|
-| **round E** | `/home/mahaloz/kwt/_final-e/kuna` (pinned copy) | main `2da619852` (2026-09-22, #706) |
+| **round E** | `/home/mahaloz/kwt/_final-e/unlace` (pinned copy) | main `2da619852` (2026-09-22, #706) |
 
 Metric pin unchanged (decisions §12): decbench `625e892` extracted read-only, with the venv's
 editable finder repointed at it by `final-c/pindb.py`. Control: the round-D binary re-run on this
@@ -934,7 +934,7 @@ Between round D's `4c7704e0` and `2da619852`, `scripts/decbench/` changes only i
 | goal | instrument | round D | round E | reading |
 |---|---|---|---|---|
 | type_match | typesweep, 444 slices / 10,748 functions | 1,349 perfect (12.55%), mean .3405 | **1,353** (12.59%), mean **.3415** | 70 improved, 1 worse; 4 onto perfect, 0 off; aggregate 3,659.62 → 3,669.96. All of it is #692 |
-| vs the other decompilers | canonical replay, each rival on its own functions | 1st of five | **1st**, unchanged | on binja's 10,366 functions kuna is 12.33% / .3439 against binja's 12.28% / .3422 |
+| vs the other decompilers | canonical replay, each rival on its own functions | 1st of five | **1st**, unchanged | on binja's 10,366 functions unlace is 12.33% / .3439 against binja's 12.28% / .3422 |
 | `ptr_struct` | per-GT-class match rate | 3.0% (422) | **3.3% (474)** | `obstack *` 34, `termios *` 6, `re_pattern_buffer *` 4, one `lconv *` and one `utmp *`; binja 2.8% |
 | `ptr_char` | per-GT-class match rate | 28.7% (4,204) | **28.9% (4,232)** | +28, again #692, most of it grep `EGexecute`'s buffer pointers; binja 36.8% |
 | goal 2: variables | varcensus, fmt/ls/sort/du O0+O2 | 6,967 declarations, 7 phantom `// rdx` | 6,967, 7 | unchanged; `fmt::main` is byte-identical to round D (2/2/2, no phantom local) |
@@ -1018,23 +1018,23 @@ results tree and the pinned metric did not move). Only the rows that moved:
 `ptr_struct` TPs by name, round D → E: `FILE *` 305 → 310, `stat *` 55, **`obstack *` 0 → 34**,
 `passwd *` 18 → 17, `tm *` 15, `group *` 11 → 13, `DIR *` 10, **`termios *` 0 → 6**,
 **`re_pattern_buffer *` 0 → 4**, `lconv *` and `utmp *` 1 each. `struct_val` gains `statfs` 5 and
-`mbstate_t` 3. kuna's lead on `ptr_struct` over binja widens from 33 to 85 TP; `ptr_char` stays the
+`mbstate_t` 3. unlace's lead on `ptr_struct` over binja widens from 33 to 85 TP; `ptr_char` stays the
 largest class gap, −1,091 TP to binja.
 
-The rivals' replay, each decompiler paired with kuna on exactly the functions that decompiler
+The rivals' replay, each decompiler paired with unlace on exactly the functions that decompiler
 scored:
 
-| decompiler (functions it scored) | rival: perfect % / mean | kuna round D | **kuna round E** |
+| decompiler (functions it scored) | rival: perfect % / mean | unlace round D | **unlace round E** |
 |---|---|---|---|
 | **binja** (10,366) | 12.28% / .3422 | 12.29% / .3429 | **12.33% / .3439** |
 | **ida** (10,273) | 8.33% / .2682 | 12.60% / .3466 | **12.64% / .3476** |
 | **angr** (10,502) | 8.27% / .2652 | 12.75% / .3441 | **12.79% / .3451** |
 | **ghidra** (10,673) | 6.84% / .2367 | 12.55% / .3418 | **12.58% / .3428** |
 
-kuna stays 1st of five on perfect % and on mean. By level, binja still leads kuna on its own
+unlace stays 1st of five on perfect % and on mean. By level, binja still leads unlace on its own
 functions at O2 (3.43% / .1868 against 2.95% / .1844) and at O2-noinline (8.52% / .2632 against
-8.28% / .2582) — round D's "kuna leads every other cell" was wrong about O2-noinline, where
-round D stood at 8.25% / .2571 — and kuna leads at O0 (20.95% / .5053 against 20.36% / .4956) and
+8.28% / .2582) — round D's "unlace leads every other cell" was wrong about O2-noinline, where
+round D stood at 8.25% / .2571 — and unlace leads at O0 (20.95% / .5053 against 20.36% / .4956) and
 every cell against IDA, angr and ghidra.
 
 ### E.3 Goal 2 — variables, and `fmt::main`
@@ -1158,7 +1158,7 @@ quiet re-run. bash is 1.3 MB, so `--mode auto` resolves to `reliable` there rath
 |---|---|---|---|
 | `charptr-on` | `charptr` default on | no PR; evaluation on branch `feat/charptr-on` (`docs/features/charptr/next-levers.md` there) | the flip fails two criteria on `ce008ce2b`: `make test-cli` 213/219 (protoorder's `char` pointee exemption turns 8-byte constant stores into byte stores) and the typesweep (1,353 → 1,353, 2 up / 4 down, −0.57). It found the next `char *` lever instead (E.9) |
 | `structlocals` | `structsynth locals` — also synthesize a record for a pointer a call returns | built and gated on branch `feat/structlocals`, no PR opened | typesweep 1,353 = 1,353 (0 up / 0 down; 713 scored variables differ only in `struct_N` numbering); record-typed call-defined locals 40 → 128 on 14 builds (105 on a GT struct pointer); new-record precision .839; `make test` 675/675, stages and `test-cli` green, workspace suite 7,377 passed. Metric-neutral here: most such locals are registers or `framelayout` filler slots, which the metric cannot see |
-| `o2census` | why kuna is 3.09% perfect at -O2 | investigation, report in `final-e/o2census/` | E.8 |
+| `o2census` | why unlace is 3.09% perfect at -O2 | investigation, report in `final-e/o2census/` | E.8 |
 
 ### E.8 The O2 census — the gap is the ceiling, not the engine
 
@@ -1173,15 +1173,15 @@ which decbench matches only by name and no decompiler exports, or the restrict-`
 decbench#93 would credit. **P** is everything else. A function takes the worst tier of its
 variables.
 
-| opt | functions | U | S | P | kuna perfect | perfect / P |
+| opt | functions | U | S | P | unlace perfect | perfect / P |
 |---|---:|---:|---:|---:|---:|---:|
 | O0 | 4,286 | 360 (8.4%) | 1,870 (43.6%) | 2,056 (48.0%) | 894 | 43.5% |
 | O2 | 2,394 | **2,055 (85.8%)** | 170 (7.1%) | 169 (7.1%) | 74 | **43.8%** |
 | O2-noinline | 4,068 | 2,865 (70.4%) | 480 (11.8%) | 723 (17.8%) | 379 | 52.4% |
 
-On the functions the pinned metric can score as perfect at all, kuna converts 43.8% at O2 and
+On the functions the pinned metric can score as perfect at all, unlace converts 43.8% at O2 and
 43.5% at O0. The pinned ceiling at O2 is 169 functions (7.06%); with #93 crediting, 339 (14.2%).
-At the variable level, 62.6% of O2's 21,038 GT variables are U, and of the reachable P tier kuna
+At the variable level, 62.6% of O2's 21,038 GT variables are U, and of the reachable P tier unlace
 has 49.7% right.
 
 * **Inlined callees are scored as the outer function's locals.** decbench counts
@@ -1192,7 +1192,7 @@ has 49.7% right.
   change — +197 perfect, more than any engine lever measured this round, and a metric fix like
   #93 and #94.
 * **Restrict** is 1,798 O2 GT variables, 98.5% of them register-only (round D's #94 finding again).
-* **binja's O2 lead** (79 against 68 perfect on its functions) is 23 wins: `dir_name`, where kuna
+* **binja's O2 lead** (79 against 68 perfect on its functions) is 23 wins: `dir_name`, where unlace
   drops a pass-through argument, and register-only GT named `result` or `i` that binja's own
   variable names happen to equal.
 
@@ -1223,7 +1223,7 @@ The reachable blockers, as functions that would become perfect if only that buck
      too) **+46**, +188, 160 up / 1 down. About nine times the best `charptr` ever measured
      (+4 perfect), and a few lines behind an option value. Needs the corpus diff, speed and a stage test.
   2. **Type a `framelayout` filler slot from the value stored into it, pointer types only.** 805 of
-     the 1,625 `char *` variables only binja gets right are -O0 slots kuna exports as `undefined8`
+     the 1,625 `char *` variables only binja gets right are -O0 slots unlace exports as `undefined8`
      while its own C body types the value `char *`; 3,018 stack GT variables across all classes land
      on a filler slot and miss. Levers 1 + 2 together would bring `ptr_char` to at most ~5,230 TP
      against binja's 5,323. `pinky::print_long_entry` (E.1) is this class too.
@@ -1237,7 +1237,7 @@ The reachable blockers, as functions that would become perfect if only that buck
      table, a request-relative `--jobs` recipe to make `nest` a default candidate, and landing
      `structlocals`.
 * **Ceilings, unchanged.** Register-resident ground truth is 25,821 of 65,715 GT variables (39.3%)
-  and kuna exports none of them; at O2 that ceiling alone makes 85.8% of functions unreachable.
+  and unlace exports none of them; at O2 that ceiling alone makes 85.8% of functions unreachable.
   Signedness, variable count and call arity are worth zero on `type_match` by construction.
 
 ## Round F — 2026-09-23
@@ -1251,7 +1251,7 @@ baseline → round B → round C → round D → round E → round F.
 
 | | binary | commit |
 |---|---|---|
-| **round F** | `/home/mahaloz/kwt/_final-f/kuna` (pinned copy) | main `810b7dc86` (2026-09-23, #708) |
+| **round F** | `/home/mahaloz/kwt/_final-f/unlace` (pinned copy) | main `810b7dc86` (2026-09-23, #708) |
 
 Metric pin unchanged (decisions §12): decbench `625e892` extracted read-only, with the venv's editable
 finder repointed at it by `final-c/pindb.py`. Two controls. `scripts/decbench/`,
@@ -1265,7 +1265,7 @@ rows exactly — 10,748/10,748 functions, **0 values differ**.
 | goal | instrument | round E | round F | reading |
 |---|---|---|---|---|
 | type_match | typesweep, 444 slices / 10,748 functions | 1,353 perfect (12.59%), mean .3415 | **1,522** (14.16%), mean **.3553** | 581 improved, 6 worse; 170 onto perfect, 1 off; aggregate 3,669.96 → 3,818.77 |
-| vs the other decompilers | canonical replay, each rival on its own functions | 1st of five | **1st**, and O0 is no longer close | on binja's 10,366 functions kuna is 13.95% / .3582 against binja's 12.28% / .3422; at O0 **24.82% against 20.36%** |
+| vs the other decompilers | canonical replay, each rival on its own functions | 1st of five | **1st**, and O0 is no longer close | on binja's 10,366 functions unlace is 13.95% / .3582 against binja's 12.28% / .3422; at O0 **24.82% against 20.36%** |
 | `ptr_char` | per-GT-class match rate | 28.9% (4,232) | **34.6% (5,060)** | round E's largest gap closes from −1,091 TP to −263 against binja's 36.8% (5,323); +653 of the +828 are stack slots |
 | `ptr_struct` | per-GT-class match rate | 3.3% (474) | **4.0% (568)** | +94, all stack slots; binja 2.8% (389) |
 | storage | stack / argument match rate | 53.4% / 49.2% | **57.6% / 50.0%** | +761 stack TP and +175 argument TP; register-only stays 0.0% |
@@ -1336,7 +1336,7 @@ recursive functions, which had no way to state what they recovered.
 | `grep::main` -O2 | `idx_t newkeycc` | `undefined8` | `long *` |
 | `split::main` -O2 | `long int to_write` | `undefined8` | `char *` |
 
-The pinned metric credits an exported `undefined8` against an 8-byte integer, so a filler slot kuna says
+The pinned metric credits an exported `undefined8` against an 8-byte integer, so a filler slot unlace says
 nothing about scores for free; once `slotptr` gives it the type of the value stored into it, a wrong body
 type becomes a visible miss. In `shred::dorewind` the body reads
 `v1 = (int *)lseek(fd,0,0); v2 = v1; if (1 <= (long)v1) v2 = __errno_location();` — `lseek`'s `long`
@@ -1371,22 +1371,22 @@ results tree nor the pinned metric moved). Only the rows that moved, plus the tw
 | register only | 25,821 | 0.0% | 0.0% | 0.4% | 1.4% |
 
 `ptr_char` gains 828 TP, 653 of them stack slots — round E's lever 2 predicted "805 of the 1,625 `char *`
-variables only binja gets right are -O0 slots kuna exports as `undefined8`", and that is what `slotptr`
+variables only binja gets right are -O0 slots unlace exports as `undefined8`", and that is what `slotptr`
 collected. `ptr_struct` TPs by name, round E → F: `FILE *` 310 → 337, `obstack *` 34 → 58, `passwd *`
 17 → 34, `group *` 13 → 23, `tm *` 15 → 19, `DIR *` 10 → 14, `dirent *` 2 → 5, `lconv *` 1 → 3,
 `spwd *` 0 → 2; `stat *` 55 and `termios *` 6 are unchanged. The `ptr_char` gap to binja is
 now 2.2 points, down from 7.9.
 
-The rivals' replay, each decompiler paired with kuna on exactly the functions that decompiler scored:
+The rivals' replay, each decompiler paired with unlace on exactly the functions that decompiler scored:
 
-| decompiler (functions it scored) | rival: perfect % / mean | kuna round E | **kuna round F** |
+| decompiler (functions it scored) | rival: perfect % / mean | unlace round E | **unlace round F** |
 |---|---|---|---|
 | **binja** (10,366) | 12.28% / .3422 | 12.33% / .3439 | **13.95% / .3582** |
 | **ida** (10,273) | 8.33% / .2682 | 12.64% / .3476 | **14.28% / .3621** |
 | **angr** (10,502) | 8.27% / .2652 | 12.79% / .3451 | **14.40% / .3592** |
 | **ghidra** (10,673) | 6.84% / .2367 | 12.58% / .3428 | **14.17% / .3567** |
 
-kuna stays 1st of five and its O0 lead over binja goes from 0.6 points to **4.5** (24.82% / .5389 against
+unlace stays 1st of five and its O0 lead over binja goes from 0.6 points to **4.5** (24.82% / .5389 against
 20.36% / .4956 on binja's own functions). binja still leads at O2 (3.43% / .1868 against 2.95% / .1847)
 and at O2-noinline (8.52% / .2632 against 8.33% / .2591) — both cells `passthrough` would take (F.7).
 
@@ -1523,7 +1523,7 @@ reported throughout. bash is 1.3 MB, so `--mode auto` resolves to `reliable` the
      rounds, but 8,626 of 9,443 ground-truth fields are still never claimed, and a synthesized field is
      almost never itself a struct pointer.
 * **Ceilings, unchanged.** Register-resident ground truth is 25,821 of 65,715 GT variables (39.3%) and
-  kuna exports none of them; at O2 that ceiling alone makes 85.8% of functions unreachable (E.8).
+  unlace exports none of them; at O2 that ceiling alone makes 85.8% of functions unreachable (E.8).
   Signedness, variable count and call arity are worth zero on `type_match` by construction — which is why
   #708, the round's only arity change, has to be judged on DWARF rather than on this page.
 
@@ -1538,7 +1538,7 @@ pin, so every number reads baseline → round B → C → D → E → F → G.
 
 | | binary | commit |
 |---|---|---|
-| **round G** | `/home/mahaloz/kwt/_final-g/kuna` (pinned copy) | main `10a0db235` (2026-09-23, #716) |
+| **round G** | `/home/mahaloz/kwt/_final-g/unlace` (pinned copy) | main `10a0db235` (2026-09-23, #716) |
 
 Metric pin unchanged (decisions §12): decbench `625e892` extracted read-only, with the venv's editable
 finder repointed at it by `final-c/pindb.py`. Three controls this round. `scripts/decbench/`,
@@ -1552,9 +1552,9 @@ functions, **0 values differ** — and so does the round-C binary, 1,349 and mea
 | goal | instrument | round F | round G | reading |
 |---|---|---|---|---|
 | type_match | typesweep, 444 slices / 10,748 functions | 1,522 perfect (14.16%), mean .3553 | **1,609** (14.97%), mean **.3688** | 457 improved, 7 worse; 88 onto perfect, 1 off; aggregate 3,818.77 → 3,963.45 |
-| vs the other decompilers | canonical replay, each rival on its own functions | 1st of five, binja still ahead at O2 | **1st at every optimization level** | on binja's 10,366 functions kuna is 14.76% / .3707 against 12.28% / .3422; O0 **25.71 vs 20.36**, O2 **3.60 vs 3.43**, O2-noinline **9.15 vs 8.52** |
+| vs the other decompilers | canonical replay, each rival on its own functions | 1st of five, binja still ahead at O2 | **1st at every optimization level** | on binja's 10,366 functions unlace is 14.76% / .3707 against 12.28% / .3422; O0 **25.71 vs 20.36**, O2 **3.60 vs 3.43**, O2-noinline **9.15 vs 8.52** |
 | the O2 wall | perfect at -O2 | 74 (3.09%), unmoved since round C | **89 (3.72%)** | the first -O2 movement in four rounds; -O2-noinline 383 → **416** |
-| `ptr_char` | per-GT-class match rate | 34.6% (5,060) | **38.0% (5,572)** | kuna passes binja (36.8%, 5,323) on the class that was 1,091 TP behind at round E; +330 of the +512 are arguments |
+| `ptr_char` | per-GT-class match rate | 34.6% (5,060) | **38.0% (5,572)** | unlace passes binja (36.8%, 5,323) on the class that was 1,091 TP behind at round E; +330 of the +512 are arguments |
 | `ptr_ptr` | per-GT-class match rate | 28.6% (525) | **31.0% (569)** | binja 30.8%; ida still leads at 38.3% |
 | storage | argument / stack match rate | 50.0% / 57.6% | **52.0% / 58.6%** | +430 argument TP and +195 stack TP; register-only stays 0.0% |
 | goal 2: variables | varcensus, fmt/ls/sort/du O0+O2 | 6,975 declarations, 65 `[16]` blobs, 7 phantom `// rdx` | **6,970**, 65, 7 | five fewer declarations over 2,918 functions; `fmt::main` is byte-identical to round F (2/2/2, no phantom local) |
@@ -1659,21 +1659,21 @@ results tree nor the pinned metric moved). Only the rows that moved, plus the tw
 
 The whole round lands on arguments: `ptr_char` +330 argument TP and +182 stack, `ptr_ptr` +44 argument,
 `int_s4` +29, `ptr_prim` +11/+9, against −10 `bool` stack (G.1) and −3 `ptr_void` argument (`xmemdup`).
-`ptr_char` is the class the campaign has chased since round D, and at 38.0% kuna now holds it: +249 TP
+`ptr_char` is the class the campaign has chased since round D, and at 38.0% unlace now holds it: +249 TP
 over binja, having been 1,119 behind at round D. `ptr_struct` does not move at all — `calleevote fields`
 synthesizes records, and a synthesized `struct_N *` is not a GT struct name under the pinned metric —
 the same records are worth +322 credited functions under decbench#93 (G.5).
 
-The rivals' replay, each decompiler paired with kuna on exactly the functions that decompiler scored:
+The rivals' replay, each decompiler paired with unlace on exactly the functions that decompiler scored:
 
-| decompiler (functions it scored) | rival: perfect % / mean | kuna round F | **kuna round G** |
+| decompiler (functions it scored) | rival: perfect % / mean | unlace round F | **unlace round G** |
 |---|---|---|---|
 | **binja** (10,366) | 12.28% / .3422 | 13.95% / .3582 | **14.76% / .3707** |
 | **ida** (10,273) | 8.33% / .2682 | 14.28% / .3621 | **15.09% / .3751** |
 | **angr** (10,502) | 8.27% / .2652 | 14.40% / .3592 | **15.23% / .3729** |
 | **ghidra** (10,673) | 6.84% / .2367 | 14.17% / .3567 | **14.94% / .3698** |
 
-kuna is 1st of five, and for the first time it leads **at every optimization level**: against binja on
+unlace is 1st of five, and for the first time it leads **at every optimization level**: against binja on
 binja's own functions, O0 25.71% / .5481 against 20.36% / .4956, O2 3.60% / .1979 against 3.43% / .1868,
 and O2-noinline 9.15% / .2751 against 8.52% / .2632. Both -O2 cells were binja's in round F, and
 `passthrough` is what took them.
@@ -1809,7 +1809,7 @@ than the vote itself (G.8, lever 5).
 * **Ranked next levers**, by measured effect:
   1. **Upstream metric fixes, now worth more than any engine change.** decbench#93 crediting is
      **+572** functions (G.5) and the inlined-callee fix E.8 measured is worth O2 74 → 153 and
-     O2-noinline 380 → 498. Both are larger than any lever kuna has left on its own.
+     O2-noinline 380 → 498. Both are larger than any lever unlace has left on its own.
   2. **Naming a synthesized record.** `ptr_struct` is 4.0% (568 of 14,252) and did not move this round,
      yet `calleevote` made 2,723 of those misses correct pointers-to-structure under #93. The only
      mechanism that converts one under the pinned metric is giving the record the library type's name,
@@ -1819,12 +1819,12 @@ than the vote itself (G.8, lever 5).
      (recall .0960, precision .8730) and needs a review; nesting has had none.
   4. **`ptr_char`'s reachable misses are down to 1,930.** Of the 9,073 misses, 7,143 are register-only
      and nothing can reach them; what is left is 955 arguments and 975 stack slots. The class gap to
-     binja is now +249 TP in kuna's favour, so this stops being the campaign's first lever.
+     binja is now +249 TP in unlace's favour, so this stops being the campaign's first lever.
   5. **`calleevote`'s redo cost** — the accuracy is settled, but a second decompile of a callee costs
      +5.5% on kmod -O2-noinline and +5.9% on dpkg-divert, the only budget breach of the round.
      Making the vote incremental would return it.
 * **Ceilings, unchanged.** Register-resident ground truth is 25,821 of 65,715 GT variables (39.3%) and
-  kuna exports none of them; at O2 that ceiling alone makes 85.8% of functions unreachable (E.8).
+  unlace exports none of them; at O2 that ceiling alone makes 85.8% of functions unreachable (E.8).
   Signedness, variable count and call arity are worth zero on `type_match` by construction — which is why
   #716, an arity change, had to be judged on DWARF rather than on this page.
 
@@ -1853,7 +1853,7 @@ settles `reconfigure_bool`'s two `char *` parameters to `unsigned long`.
 Round I is the first round of the **cast campaign**. The user's ask, verbatim: *"We should work do have
 less casting BECAUSE our typing system is better and requires less explicit casting because we already
 know what it is. Look at IDA Pro. Note: that does not mean just hide casts, it means meaningfully remove
-them when possible."* The census had found kuna printing 1.19× IDA's casts on the same functions, and the
+them when possible."* The census had found unlace printing 1.19× IDA's casts on the same functions, and the
 campaign's own type work had made it worse. Round I landed three cast levers from the ranked plan and the
 `calleevote` speed fix round G left open:
 
@@ -1870,7 +1870,7 @@ touches the ported `CastStrategyC`.
 
 | | binary | commit |
 |---|---|---|
-| **final** | `/home/mahaloz/kwt/_final-i/kuna` (pinned copy) | main `b3878d32e` (2026-09-24, #724) |
+| **final** | `/home/mahaloz/kwt/_final-i/unlace` (pinned copy) | main `b3878d32e` (2026-09-24, #724) |
 
 Metric pin unchanged (decisions §12). Controls: `scripts/decbench/`, `layoutscore.py`, `nestscore.py`
 and `varcensus.py` are byte-identical between `10a0db235` and `b3878d32e`. The round-G binary re-run on
@@ -1883,7 +1883,7 @@ Stage-3 figures exactly (7,085 declarations, 151 blobs; TRex 3.638 / 1.579).
 
 | goal | instrument | round G | **final** | reading |
 |---|---|---|---|---|
-| **casts** | castbench, the 4,815 functions kuna and IDA both emit (45 binaries) | 45,126 casts, 236.8 / kloc, **1.193× IDA** | **38,602**, 202.5 / kloc, **1.021× IDA** | −6,524 (−14.5%); 1,353 functions fewer, **1** more; below the campaign baseline (40,583, 1.073×) for the first time |
+| **casts** | castbench, the 4,815 functions unlace and IDA both emit (45 binaries) | 45,126 casts, 236.8 / kloc, **1.193× IDA** | **38,602**, 202.5 / kloc, **1.021× IDA** | −6,524 (−14.5%); 1,353 functions fewer, **1** more; below the campaign baseline (40,583, 1.073×) for the first time |
 | type_match | typesweep, 444 slices / 10,748 functions | 1,609 perfect (14.97%), mean .3688 | **1,615** (15.03%), mean **.3697** | 69 improved, **0 worse**, 6 onto perfect — all #719; the three cast levers move 0 of 10,748 values |
 | vs the other decompilers | each rival on its own functions | 1st at every opt level | 1st at every opt level | on binja's functions 14.82% / .3717 against 12.28% / .3422 |
 | `ptr_char` / `ptr_ptr` | per-GT-class match rate | 38.0% / 31.0% | **38.4% (5,624) / 32.9% (603)** | +52 and +34 TP, 81 of the 92 new TP are arguments |
@@ -1898,7 +1898,7 @@ Stage-3 figures exactly (7,085 declarations, 151 blobs; TRex 3.638 / 1.579).
 0 false positives / 0 false negatives on a 696-span hand audit) over 45 decbench binaries — coreutils
 fmt/ls/sort/du/cp/tail/wc, grep, gzip, diffutils cmp/diff/diff3/sdiff, tar, find — at -O0, -O2 and
 -O2-noinline. Every number is on the **4,815 functions every arm and IDA emit at the same address**, so the
-function set is identical across the four kuna arms and IDA. Arms are whole-binary `unlace decompile-all
+function set is identical across the four unlace arms and IDA. Arms are whole-binary `unlace decompile-all
 --json` at defaults; the round-H arm is the castbench `main-dbe854ba3` run (`final-i/cast4.json`).
 
 | arm | casts | per 1,000 lines | per 100 statements | **vs IDA (count)** |
@@ -1914,11 +1914,11 @@ function set is identical across the four kuna arms and IDA. Arms are whole-bina
 | O2 | 1,067 | 13,459 (154.5) | 15,177 — 1.128× | 16,265 — 1.208× | **14,208 — 1.056×** (216.8) |
 | O2-noinline | 1,756 | 12,167 (145.0) | 12,175 — 1.001× | 13,809 — 1.135× | **11,803 — 0.970×** (181.2) |
 
-The campaign's type work took kuna from 1.073× IDA to 1.193×; round I takes it to **1.021×**, 4.9% under
-the baseline's count, and at -O2-noinline kuna now prints fewer casts than IDA. Two honest caveats. Per
-line the gap is wider than per count — kuna prints 190,585 code lines on these functions against IDA's
+The campaign's type work took unlace from 1.073× IDA to 1.193×; round I takes it to **1.021×**, 4.9% under
+the baseline's count, and at -O2-noinline unlace now prints fewer casts than IDA. Two honest caveats. Per
+line the gap is wider than per count — unlace prints 190,585 code lines on these functions against IDA's
 243,379, so its 202.5 casts per 1,000 lines are 1.30× IDA's (per statement, 1.19×). And the other side of
-the ledger moved the right way too: kuna now casts **less than IDA on 1,873 of the 4,815 functions**
+the ledger moved the right way too: unlace now casts **less than IDA on 1,873 of the 4,815 functions**
 (38.9%; baseline 36.9%, round G 35.2%) and more on 1,539 (32.0%; round G 39.3%).
 
 Which PR removed what — the landed commits are option-gated except #719, so the ladder is built from
@@ -1969,7 +1969,7 @@ What is left against IDA, by the census counter's shape key over the same functi
 non-dividing offset, a jump-as-call base — and pointer difference); `(unsigned long *)&v`, an object read at
 another width, 1,252 → 3; a constant address cast to a pointer, 871 → 0 in the three commonest pointer
 types (#723 names them); and
-`(char *)<call>`, 1,994 → 1,172, the libc returns kuna has no signature for.
+`(char *)<call>`, 1,994 → 1,172, the libc returns unlace has no signature for.
 
 ### I.2 type_match
 
@@ -2020,7 +2020,7 @@ Same classifier, same 65,715 GT variables; rivals' columns unchanged. The rows t
 | stack (18,317) | 58.6% | **58.7%** | 38.2% | 51.8% |
 | register only (25,821) | 0.0% | 0.0% | 0.4% | 1.4% |
 
-| decompiler (functions it scored) | rival: perfect % / mean | kuna round G | **kuna final** |
+| decompiler (functions it scored) | rival: perfect % / mean | unlace round G | **unlace final** |
 |---|---|---|---|
 | **binja** (10,366) | 12.28% / .3422 | 14.76% / .3707 | **14.82% / .3717** |
 | **ida** (10,273) | 8.33% / .2682 | 15.09% / .3751 | **15.15% / .3761** |
@@ -2149,7 +2149,7 @@ instrument below they move nothing (L.1, L.3).
 
 | | binary | commit |
 |---|---|---|
-| **final** | `/home/mahaloz/kwt/castbench/bin-632437155/kuna` (pinned copy) | main `632437155` (2026-09-27, #731) |
+| **final** | `/home/mahaloz/kwt/castbench/bin-632437155/unlace` (pinned copy) | main `632437155` (2026-09-27, #731) |
 
 Main has since gained #748 (a configuration refactor), #746 and #742 (web), and round M's first
 strict fixes (#755, #756, #765), which landed while this page was measured; the final build stays
@@ -2164,7 +2164,7 @@ Metric pin unchanged (decisions §12); `scripts/decbench/` is byte-identical bet
 
 | goal | instrument | round I | **final** | reading |
 |---|---|---|---|---|
-| **casts** | castbench, the 4,815 functions kuna and IDA both emit (45 binaries) | 38,602, 202.5 / kloc, 32.1 / 100 statements, **1.021× IDA** | **32,073**, 169.6 / kloc, **27.0 / 100 statements, 0.848× IDA** | −6,529 (−16.9%); 1,299 functions fewer, 28 more; per statement now exactly IDA's density; fewer than IDA at every opt level |
+| **casts** | castbench, the 4,815 functions unlace and IDA both emit (45 binaries) | 38,602, 202.5 / kloc, 32.1 / 100 statements, **1.021× IDA** | **32,073**, 169.6 / kloc, **27.0 / 100 statements, 0.848× IDA** | −6,529 (−16.9%); 1,299 functions fewer, 28 more; per statement now exactly IDA's density; fewer than IDA at every opt level |
 | the witness | `elemptr_x86_64.c` base64 decoder, gcc -O0 | `w_decode` 33 casts, `w_build` 9 | **7 and 1** | every table access a subscript (L.2) |
 | type_match | typesweep, 444 slices / 10,748 functions | 1,615 perfect (15.03%), mean .3697 | **1,674 (15.57%)**, mean **.3752** | 239 improved, 2 worse, 59 onto perfect; rounds J and K move 0 of 10,748 values |
 | vs the other decompilers | each rival on its own functions | 1st at every opt level | 1st at every opt level | on binja's functions 15.39% / .3769 against 12.28% / .3422 |
@@ -2198,11 +2198,11 @@ Arms are whole-binary `unlace decompile-all --json` at defaults; rounds I, J and
 | O2 | 1,067 | 13,459 (154.5 / 26.06) | 14,208 — 1.056× | 13,135 — 0.976× | **12,206 — 0.907×** (187.8 / 29.24) |
 | O2-noinline | 1,756 | 12,167 (145.0 / 24.76) | 11,803 — 0.970× | 10,841 — 0.891× | **9,933 — 0.816×** (153.4 / 24.14) |
 
-By count kuna now prints 15% fewer casts than IDA on the same functions, and fewer at every opt level.
+By count unlace now prints 15% fewer casts than IDA on the same functions, and fewer at every opt level.
 Density, the caveat round I carried (decisions §30): per statement the final build is **exactly IDA's
-26.99 per 100**; per line it is 1.09× (169.6 against 155.4 per 1,000 lines, because kuna prints 189,081
-lines on these functions against IDA's 243,379). **-O2 is the one level where kuna is still denser**:
-29.24 against 26.06 per 100 statements (1.12×, was 1.21× in round K) and 1.22× per line. kuna casts less
+26.99 per 100**; per line it is 1.09× (169.6 against 155.4 per 1,000 lines, because unlace prints 189,081
+lines on these functions against IDA's 243,379). **-O2 is the one level where unlace is still denser**:
+29.24 against 26.06 per 100 statements (1.12×, was 1.21× in round K) and 1.22× per line. unlace casts less
 than IDA on **2,168 of the 4,815 functions** (45.0%; round I 38.9%) and more on 1,173 (24.4%; round I
 32.0%).
 
@@ -2276,7 +2276,7 @@ function of the batch agrees, and other functions of `cmp` name their first elem
 (`qword_10220[a1] = lseek(dword_100B0[a1], qword_10200[a1], 1)`).
 
 What is left against IDA, by cast family (the census counter's shapes, signedness merged — IDA's
-`_QWORD` and `__int64` and kuna's `unsigned long` and `long` are one cast; `final-l/shapes9.py`):
+`_QWORD` and `__int64` and unlace's `unsigned long` and `long` are one cast; `final-l/shapes9.py`):
 
 | family | round I | round K | **final** | IDA | final − IDA |
 |---|---:|---:|---:|---:|---:|
@@ -2287,14 +2287,14 @@ What is left against IDA, by cast family (the census counter's shapes, signednes
 | other integer casts | 5,836 | 5,835 | 5,505 | 10,331 | −4,826 |
 | other pointer casts | 15,963 | 15,834 | 14,752 | 19,601 | −4,849 |
 
-The four families kuna still prints more of: widenings `castwiden` declines (a comparison, a shift, a
+The four families unlace still prints more of: widenings `castwiden` declines (a comparison, a shift, a
 unary minus, `(unsigned long)c + l` beside a signed `long`, an operand whose type is unknown), led by
 `(long)v` +1,331 and `(long)(expr)` +443; addresses taken at another type, `(int *)&x` +431,
 `(long *)&x` +275 and `(char **)&x` +264 — `elemptr`'s step raised the family by 263 with its narrow-load
 spelling, and `castobject` reaches only locked out-parameters; a call's pointer result, `(char *)f()` +201 (was
 +822; `callrettype`) and `(long *)f()` +186, now mostly a right return meeting integer storage; and
 constant addresses, which rose by 114 in round L where `elemptr` and `callrettype` gave one static two
-pointee types and `globalref` refused it. What IDA pays and kuna does not: `(long *)(expr)` −3,557
+pointee types and `globalref` refused it. What IDA pays and unlace does not: `(long *)(expr)` −3,557
 (IDA's `*((_QWORD *)a1 + k)`), `(int)v` −1,726, `(char *)(expr)` −1,076, `(int *)(expr)` −1,012,
 `(unsigned char)f()` −910.
 
@@ -2382,7 +2382,7 @@ another variable:
   `callrettype` types the caller's `readdir` wrapper result as the `dirent *` it is, so the argument
   prints as `&v6->field_0x13` (`d_name`) where it was `&((char *)v6)[0x13]`, and `calleevote` does not
   read a record member's address as a `char *` vote; the parameter falls back to `void *`.
-- `who` -O2 `who`, 0.3077 → 0.2308: the frame slot at −0x80 is the variable kuna gives
+- `who` -O2 `who`, 0.3077 → 0.2308: the frame slot at −0x80 is the variable unlace gives
   `time_string()`'s result, now its `char *`; DWARF places `entries`, a `long`, at the same offset
   (the -O2 frame shares the slot).
 
@@ -2411,7 +2411,7 @@ Same classifier, same 65,715 GT variables; the rivals' columns are unchanged. Th
 | stack (18,317) | 58.7% | **59.1%** | 38.2% | 51.8% |
 | register only (25,821) | 0.0% | 0.0% | 0.4% | 1.4% |
 
-| decompiler (functions it scored) | rival: perfect % / mean | kuna round I | **kuna final** |
+| decompiler (functions it scored) | rival: perfect % / mean | unlace round I | **unlace final** |
 |---|---|---|---|
 | **binja** (10,366) | 12.28% / .3422 | 14.82% / .3717 | **15.39% / .3769** |
 | **ida** (10,273) | 8.33% / .2682 | 15.15% / .3761 | **15.72% / .3816** |
@@ -2420,7 +2420,7 @@ Same classifier, same 65,715 GT variables; the rivals' columns are unchanged. Th
 
 Against binja on binja's functions: O0 **27.02%** / .5561 against 20.36% / .4956, O2 **3.78%** / .2030
 against 3.43% / .1868, O2-noinline **9.29%** / .2800 against 8.52% / .2632. `ptr_ptr` is the one
-pointer class a rival still leads by rate: IDA 38.3% of its own 1,748 variables (670 TP), kuna 36.8%
+pointer class a rival still leads by rate: IDA 38.3% of its own 1,748 variables (670 TP), unlace 36.8%
 of 1,834 (674 TP).
 
 ### L.5 Goals 2 and 3, and the decbench#93 counterfactual
@@ -2512,7 +2512,7 @@ dpkg-divert −0.3%), so the cost is all behind options, and three account for i
 building the call graph costs about 3 ms on kmod (one function decompiled with the option named and
 with it off, 354 against 351 ms), and every arm emits the same 541 functions, so the time is spent
 inside the decompiles themselves, not the schedule (461 of kmod's 541 functions state a prototype
-their callers then read, `KUNA_PROTOORDER_TRACE=1`); that is where a profile should look. An earlier ablation of 29 single
+their callers then read, `UNLACE_PROTOORDER_TRACE=1`); that is where a profile should look. An earlier ablation of 29 single
 options under heavier load (`final-l/ablate11.json`) agrees on the groups and on `protoorder`, and
 cannot separate the rest (±6% on a single option).
 
@@ -2567,23 +2567,23 @@ Nothing the cast plan or round I left open is still open: #723, #720 and #718 la
 The campaign-wide list is in the summary at the top of this page. What these rounds change in it:
 `structheadless closed` joins the opt-in list; `castwiden on` keeps every literal unsuffixed, at +928
 casts against the default `literal`; the cast residue is re-ranked by family against IDA (L.1); and
--O2 is the one level where kuna still prints more casts per statement than IDA.
+-O2 is the one level where unlace still prints more casts per statement than IDA.
 
 ## Reproduce
 
 Tools are in `final/` (paths are this machine's; each is a thin driver over the repo's own instruments).
 
 ```bash
-export KUNA_DECBENCH_RESULTS=/home/mahaloz/github/decbench/results/full_run_address_2026-09-11 DECBENCH_NO_CACHE=1
+export UNLACE_DECBENCH_RESULTS=/home/mahaloz/github/decbench/results/full_run_address_2026-09-11 DECBENCH_NO_CACHE=1
 P="--project coreutils --project grep --project gzip --project diffutils --project bzip2 --project findutils --project tar --project shadow --opt O0 --opt O2 --opt O2-noinline"
 # headline + per-class decisions (one run per binary), then the canonical report
-KUNA_BIN=<kuna> PYTHONPATH=final ~/.virtualenvs/decbench/bin/python -m finalsweep kuna $P --workers 24 --out <dir>
+UNLACE_BIN=<unlace> PYTHONPATH=final ~/.virtualenvs/decbench/bin/python -m finalsweep unlace $P --workers 24 --out <dir>
 ~/.virtualenvs/decbench/bin/python -m scripts.decbench.typesweep --report-only --out <dir>
 # rivals (read-only replay of the tree's stored variables)
 PYTHONPATH=final ~/.virtualenvs/decbench/bin/python -m finalsweep rivals $P --rival ida --rival binja --rival ghidra --rival angr --out <dir>
 python3 final/analyze.py            # tables above
 python3 final/goal2.py              # varcensus + never-written locals
-KUNA_BIN=<kuna> ~/.virtualenvs/decbench/bin/python -m scripts.decbench.structscore <R>/{O0,O2}/coreutils/stripped/{fmt,ls,sort,du} --all
+UNLACE_BIN=<unlace> ~/.virtualenvs/decbench/bin/python -m scripts.decbench.structscore <R>/{O0,O2}/coreutils/stripped/{fmt,ls,sort,du} --all
 python3 final/speed.py 11           # interleaved whole-binary timing
 ```
 
@@ -2592,7 +2592,7 @@ Round C reruns the same drivers from `final-c/` with the metric pin in front of 
 
 ```bash
 export DECBENCH_PIN=<extracted 625e892 tree>     # final-c/pindb.py repoints the editable finder
-KUNA_BIN=<kuna> PYTHONPATH=final-c python -m finalsweep kuna $P --workers 12 --out <dir>
+UNLACE_BIN=<unlace> PYTHONPATH=final-c python -m finalsweep unlace $P --workers 12 --out <dir>
 python3 final-c/analyze3.py                      # baseline / round B / round C, classes, rivals
 python3 final-c/credit93.py base=<rows> roundB=<rows> roundC=<rows>
 python3 final-c/goal2c.py                        # varcensus + argclobber arm
@@ -2609,7 +2609,7 @@ pinned checkout (`final-d/decbench94-restrict.patch`; the checkout itself is nev
 ```bash
 cp -a <625e892 tree> <tree>-r94 && patch -p1 -d <tree>-r94 < final-d/decbench94-restrict.patch
 for PIN in <625e892 tree> <tree>-r94; do
-  DECBENCH_PIN=$PIN KUNA_BIN=<kuna> PYTHONPATH=final-c python -m finalsweep kuna $P --workers 12 --out <dir>
+  DECBENCH_PIN=$PIN UNLACE_BIN=<unlace> PYTHONPATH=final-c python -m finalsweep unlace $P --workers 12 --out <dir>
 done
 python3 final-d/analyze4.py       # base / B / C / D, classes, rivals, the #94 replay
 python3 final-d/moved4.py         # moved.csv + report-slices.md
@@ -2622,7 +2622,7 @@ Round E uses `final-e/` the same way. The two attribution builds (`bisect.sh`, `
 swept exactly like the round binary, and the round-D binary is re-run on the new tree as the control:
 
 ```bash
-DECBENCH_PIN=<625e892 tree> KUNA_BIN=<kuna> PYTHONPATH=final-c python -m finalsweep kuna $P --workers 12 --out <dir>
+DECBENCH_PIN=<625e892 tree> UNLACE_BIN=<unlace> PYTHONPATH=final-c python -m finalsweep unlace $P --workers 12 --out <dir>
 python3 final-e/analyze5.py       # base / B / C / D / E (+ the D control), classes, rivals
 python3 final-e/moved5.py         # moved.csv + report-slices.md
 python3 final-c/credit93.py base=<rows> roundB=<rows> roundC=<rows> roundD=<rows> roundE=<rows>
@@ -2641,7 +2641,7 @@ bisect builds (`finalsweepopt.py` reads `SWEEP_OPTS="<name> <value>"` and runs t
 flip), and a `structscore` arm with the same flip:
 
 ```bash
-DECBENCH_PIN=<625e892 tree> KUNA_BIN=<kuna> PYTHONPATH=final-f python -m finalsweep kuna $P --workers 12 --out <dir>
+DECBENCH_PIN=<625e892 tree> UNLACE_BIN=<unlace> PYTHONPATH=final-f python -m finalsweep unlace $P --workers 12 --out <dir>
 bash final-f/sweep-arms.sh && bash final-f/sweep-arm2.sh   # slotptr off, passthrough on, structsynth param, protoorder types
 python3 final-f/analyze6.py       # base / B / C / D / E / F (+ the E control), classes, rivals
 python3 final-f/moved6.py         # moved.csv + report-slices.md
@@ -2683,7 +2683,7 @@ final build; and the cast instrument is `castbench` (`/home/mahaloz/kwt/castbenc
 ```bash
 bash final-i/sweep.sh               # final, round H, and the round-G and round-C binaries as controls
 bash final-i/phase2.sh              # cast options off (typesweep + castbench), structscore, goal 2, ablations, layout
-bash final-i/cb.sh <arm> <kuna>     # castbench full for one binary (base, g, i)
+bash final-i/cb.sh <arm> <unlace>     # castbench full for one binary (base, g, i)
 bash final-i/cbopt.sh <arm> <name> <value> ...          # castbench on the final build with options flipped
 python3 final-i/analyze8.py         # base / B / C / D / E / F / G / H / I (+ controls, cast-off arm), classes, rivals
 python3 final-i/moved8.py           # moved.csv + report-slices.md

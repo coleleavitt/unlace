@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scan `kuna decompile-all` C output for orphan gotos: an emitted `goto label_X;`
+"""Scan `unlace decompile-all` C output for orphan gotos: an emitted `goto label_X;`
 whose `label_X:` never appears in the same function body (invalid C).
 
 Usage: orphan_scan.py <out.c> [out.c ...]

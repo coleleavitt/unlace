@@ -40,12 +40,12 @@ pub const SWIFTTYPES_ENV: &str = "UNLACE_SWIFTTYPES";
 /// The `--slice` fat Mach-O slice override.
 pub const MACHO_SLICE_ENV: &str = "UNLACE_MACHO_SLICE";
 /// The external `.pdb` file to apply.
-pub const PDB_PATH_ENV: &str = "kuna_pdb_path";
+pub const PDB_PATH_ENV: &str = "unlace_pdb_path";
 /// A symbol store to look the `.pdb` up in, `<cache dir>` or
 /// `<cache dir>*<server URL>`; with a URL a missing `.pdb` is downloaded.
-pub const PDB_SYMSRV_ENV: &str = "kuna_pdb_symsrv";
+pub const PDB_SYMSRV_ENV: &str = "unlace_pdb_symsrv";
 /// The external `.fid` function-ID database to apply.
-pub const FID_DB_ENV: &str = "kuna_fid_db";
+pub const FID_DB_ENV: &str = "unlace_fid_db";
 /// The FLIRT `.sig` files, or directories of them, to match.
 pub const FLIRT_SIGS_ENV: &str = "UNLACE_FLIRT_SIGS";
 /// `off` skips the Objective-C metadata pass at load.

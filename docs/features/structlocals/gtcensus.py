@@ -5,7 +5,7 @@ sys.path.insert(0, os.environ.get("PINDB_DIR", str(Path(__file__).resolve().pare
 import pindb; pindb.pin()
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from scripts.decbench import structscore as SS
-RES = Path(os.environ.get("KUNA_DECBENCH_RESULTS", "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"))
+RES = Path(os.environ.get("UNLACE_DECBENCH_RESULTS", "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"))
 
 def loc_class(die):
     a = die.attributes.get("DW_AT_location")

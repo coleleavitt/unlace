@@ -1,24 +1,24 @@
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor,as_completed
 import importlib.util,os,json,time,hashlib,subprocess,threading,multiprocessing,shutil,gzip
-spec=importlib.util.spec_from_file_location('timing','/tmp/kuna-angr-reference/parallel-timing.py')
+spec=importlib.util.spec_from_file_location('timing','/tmp/unlace-angr-reference/parallel-timing.py')
 timing=importlib.util.module_from_spec(spec);spec.loader.exec_module(timing)
 def worker(job):return timing.case(job)
 def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 def main():
-    workdirs=[Path('/tmp/kuna-rust-fmt-'+slug)for slug in ['pieces-f874','str','write']]
+    workdirs=[Path('/tmp/unlace-rust-fmt-'+slug)for slug in ['pieces-f874','str','write']]
     configs=[json.loads((w/'timing-cases.json').read_text())for w in workdirs]
     plan_names=['timing-candidate-index-plan.json','timing-candidate-index-plan.json','timing-plan.json']
     plans=[json.loads((w/name).read_text())for w,name in zip(workdirs,plan_names)]
-    assert 'ALL CANDIDATE-INDEX CORRECTNESS AND COMPLETE OUTPUT EQUIVALENCE PASSED'in Path('/tmp/kuna-angr-reference/validate-candidate-index.log').read_text()
-    assert 'BOTH CANDIDATE-INDEX FEATURES READY FOR DECLARED TIMINGS' in Path('/tmp/kuna-angr-reference/breadth-69fa-recovery.log').read_text()
+    assert 'ALL CANDIDATE-INDEX CORRECTNESS AND COMPLETE OUTPUT EQUIVALENCE PASSED'in Path('/tmp/unlace-angr-reference/validate-candidate-index.log').read_text()
+    assert 'BOTH CANDIDATE-INDEX FEATURES READY FOR DECLARED TIMINGS' in Path('/tmp/unlace-angr-reference/breadth-69fa-recovery.log').read_text()
     assert 'WRITE RECOVERY READY FOR DECLARED TIMINGS' in (workdirs[2]/'breadth-69fa.log').read_text()
     unexpected=[]
     for p in Path('/proc').iterdir():
         if not p.name.isdigit()or int(p.name)==os.getpid():continue
         try:args=(p/'cmdline').read_bytes().decode(errors='replace').split('\0')
         except OSError:continue
-        if args and Path(args[0]).name not in ['bash','timeout','rg']and any(prefix in ' '.join(args)for prefix in ['/home/mahaloz/kwt/angr-rust-','/tmp/kuna-rust-']):unexpected.append({'pid':int(p.name),'args':args})
+        if args and Path(args[0]).name not in ['bash','timeout','rg']and any(prefix in ' '.join(args)for prefix in ['/home/mahaloz/kwt/angr-rust-','/tmp/unlace-rust-']):unexpected.append({'pid':int(p.name),'args':args})
     assert not unexpected,unexpected
     allowed=os.sched_getaffinity(0);pairs=set()
     for cpu in sorted(allowed):
@@ -38,7 +38,7 @@ def main():
         assert all(sha(Path(config['root'])/p)==h for p,h in source.items())
         parent=json.loads((w/'parent-source-before-commit.json').read_text())
         assert all(sha(Path(config['base'])/p)==h for p,h in parent['files'].items())
-        hashes={side:sha(Path(config[key])/'decompiler/target/release/kuna')for side,key in [('baseline','base'),('patched','root')]}
+        hashes={side:sha(Path(config[key])/'decompiler/target/release/unlace')for side,key in [('baseline','base'),('patched','root')]}
         assert hashes['baseline']==parent['binary_sha256'];digests.append(hashes)
         config['baseline_commit']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=config['base'],text=True).strip()
         config['baseline_has_pending_feature']=bool(subprocess.check_output(['git','status','--porcelain'],cwd=config['base']))
@@ -65,7 +65,7 @@ def main():
         for attempt in attempts[1:]:shutil.copy2(attempts[0]/'cpu-samples.json.gz',attempt/'cpu-samples.json.gz')
     accepted_features=[]
     for f,(w,config,plan,attempt)in enumerate(zip(workdirs,configs,plans,attempts)):
-        assert all(sha(Path(config[key])/'decompiler/target/release/kuna')==digests[f][side]for side,key in [('baseline','base'),('patched','root')])
+        assert all(sha(Path(config[key])/'decompiler/target/release/unlace')==digests[f][side]for side,key in [('baseline','base'),('patched','root')])
         records=[]
         for index,record in sorted(results[f]):
             timing.inference(record,plan,index);records.append(record);(attempt/f'timing-{record["fixture"]}.json').write_text(json.dumps(record,indent=2)+'\n')

@@ -1,6 +1,6 @@
 # fdeinterior - an FDE interior is not a function start
 
-kuna promotes C++ exception landing pads, aggressive-gap-walk starts and stray
+unlace promotes C++ exception landing pads, aggressive-gap-walk starts and stray
 prologue-pattern hits to **top-level functions**, because nothing in the commit
 path can tell that they sit in the middle of a function that already exists. The
 `.eh_frame` FDE table is exactly the missing information, and using it removes
@@ -12,11 +12,11 @@ path can tell that they sit in the middle of a function that already exists. The
 ## 1. The measured defect
 
 A purpose-built `g++ -O0 -g` probe: `probe_try_catch` spans `[0x2acf, 0x2ba7)` -
-one function, one `.cfi_startproc`/`.cfi_endproc` pair, one FDE. kuna's function
+one function, one `.cfi_startproc`/`.cfi_endproc` pair, one FDE. unlace's function
 list contains three extra entries inside it.
 
 ```
-$ kuna functions probe_O0 --json
+$ unlace functions probe_O0 --json
   0x2acf probe_try_catch
   0x2b0b sub_2b0b        <- .gcc_except_table landing pad (catch dispatch)
   0x2b1a sub_2b1a        <- second byte of the `je 2b6b` at 0x2b19
@@ -44,13 +44,13 @@ The rivals:
 |---|---|
 | **IDA Pro 9.2** | `get_func(0x2b0b).start_ea == 0x2acf` - part of the parent, taken from the FDE |
 | **Ghidra 12.1** | `getFunctionContaining(0x102b0b)` returns none (its `GccExceptionAnalyzer` errored on this PIE - a Ghidra bug, not a model) |
-| **kuna (before)** | three separate functions |
+| **unlace (before)** | three separate functions |
 
 IDA's model is the target.
 
 ## 2. Root cause - three producers, one missing fact
 
-`kuna functions` / `decompile-all` resolve `--mode auto`, and `auto` picks
+`unlace functions` / `decompile-all` resolve `--mode auto`, and `auto` picks
 **`aggressive`** for anything under 500 KiB (`p0_knowledge/modes.rs`), which turns
 on `eh_frame_full`, `aif`, `funcstart_patterns`, `listing` and more. Instrumenting
 the commit boundary (`engine.rs (commit_pending_analysis)`) attributes the three
@@ -75,7 +75,7 @@ DBGENTRY2 pass=aif           on=true addr=0x2b1a
 Flipping `--option eh_frame_full off` alone does not fix the list (that was
 checked first) - it removes two of the three and leaves `aif`'s.
 
-The common cause is one missing fact. A kuna `FunctionSymbol` is an **entry
+The common cause is one missing fact. A unlace `FunctionSymbol` is an **entry
 address with no extent**: `Database::add_function` takes an address, and
 `find_function` answers "is a function registered AT this address", never "is this
 address INSIDE one". Every oracle's dedup is therefore an equality test, and a
@@ -128,7 +128,7 @@ is untouched by construction.
 
 ## 4. Breadth - 72 x86-64 C binaries, 0 real functions lost
 
-`kuna functions <stripped>` with the option off vs on, over the decbench O0 and O2
+`unlace functions <stripped>` with the option off vs on, over the decbench O0 and O2
 trees (coreutils, bash, gzip, tar, grep, diffutils, openssh, e2fsprogs, gnutls,
 dpkg, zlib, bzip2, findutils, kmod). Every dropped entry is classified against the
 matching **unstripped** binary's `FUNC` symbols (address *and* size, so "inside a
@@ -170,7 +170,7 @@ Other populations:
 
 ### 4.1 The emitted C
 
-`kuna decompile-all` before/after, comparing every surviving function's body:
+`unlace decompile-all` before/after, comparing every surviving function's body:
 
 | binary | off | on | removed | added | **bodies changed** | **names changed** |
 |---|---|---|---|---|---|---|
@@ -189,7 +189,7 @@ rendering (DIV-59) is identical in both and cancels out of the diff.
 `tailcallentry` (#259) recovers +561 ARM entries; `ptrentry` (#255) and
 `cortexmvectors` add more. This option removes entries, so the composition was
 measured on the same corpus and the same surface `docs/features/tailcallentry/`
-used - `kuna functions --mode aggressive`, **with `--option tailcallentry on`**,
+used - `unlace functions --mode aggressive`, **with `--option tailcallentry on`**,
 `fdeinterior` off vs on, over every ARM image in the three optimisation trees:
 
 ```
@@ -215,7 +215,7 @@ population this option cannot see.
   path), so `make test` is 675/675 and `make test-stages` 394/394 with no re-pin
   and no per-test opt-out.
 * Leaving it off would leave the default surface - `auto` -> `aggressive` under
-  500 KiB - producing garbage entries on every C++ binary kuna is pointed at.
+  500 KiB - producing garbage entries on every C++ binary unlace is pointed at.
 
 `--option fdeinterior off` restores the previous discovery set exactly (asserted
 end-to-end in `verify_fdeinterior.rs`).

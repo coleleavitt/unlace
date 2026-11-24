@@ -1,11 +1,11 @@
-# itecondlist — kuna re-rolls only every other diamond in a chain
+# itecondlist — unlace re-rolls only every other diamond in a chain
 
 Campaign case: `docs/decbench/triage/O0-bash-bash-shell_initialize.md` (IDA pool,
 margin 105, tier L).
 
 ## The symptom, named
 
-In a **run** of structurally identical two-arm assignment diamonds, kuna's own
+In a **run** of structurally identical two-arm assignment diamonds, unlace's own
 `iteregion` / `iteboolean` passes re-roll only **ceil(N/2) of N**. The rest print
 as `if (c) V = A; else { V = B; }` — three extra CFG blocks and four extra edges
 each against a source that wrote one `?:` or one boolean assignment.
@@ -27,7 +27,7 @@ occurrences of one identical 4-clause `||` chain, all in argument position:
   initialize_bashopts     (privileged_mode||restricted||should_be_restricted||running_setuid);
 ```
 
-kuna before, 1 of 3 re-rolled:
+unlace before, 1 of 3 re-rolled:
 
 ```c
   v1 = shell_is_restricted(shell_name);
@@ -50,7 +50,7 @@ kuna before, 1 of 3 re-rolled:
   initialize_bashopts(v2);
 ```
 
-kuna after, 3 of 3, source-identical:
+unlace after, 3 of 3, source-identical:
 
 ```c
   v1 = shell_is_restricted(shell_name);
@@ -137,7 +137,7 @@ the condition-leaf descent. That is the whole defect.
 ## Owning phase
 
 **P8** — Structured AST & goto quality
-(`decompiler/crates/kuna-decomp/src/p8_structure/`), spec chapter
+(`decompiler/crates/unlace-decomp/src/p8_structure/`), spec chapter
 `docs/spec/08-structuring.md` section 8.3.
 
 ## Why the fix is sound
@@ -208,7 +208,7 @@ was dispatched at the same time and merged first. DIV numbers are claimed on
 (#252 declines a datatype copy split into a read-only output, a different
 mechanism entirely).
 
-Both PRs also moved the `decompiler/crates/kuna-base/src/xml.rs` corpus count
+Both PRs also moved the `decompiler/crates/unlace-base/src/xml.rs` corpus count
 187 -> 188, so the rebase resolves it to **189**, and `docs/baseline-stages.json`
 was **re-recorded** on the merged base rather than hand-merged (the auto-merge
 left a stale `375` in `data_footer`; the correct figure is 381 = 369 + 6 for

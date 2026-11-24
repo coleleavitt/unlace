@@ -3,7 +3,7 @@
 #
 # angr inlines a call's return value into its single use site, e.g.
 #   if (timespec_cmp(...) <= -1) { ... }
-# Ghidra/kuna instead force EVERY call output to be `explicit` in
+# Ghidra/unlace instead force EVERY call output to be `explicit` in
 # ActionMarkExplicit::baseExplicit (coreaction.cc:3105, the
 # `if (op->isCall()) return -1;` arm), so a single-use call result always
 # spills to its own named local:
@@ -13,7 +13,7 @@
 # moves the call's evaluation to the use site, which would reorder it past any
 # intervening side-effecting statement.
 #
-# The kuna `foldcallret` option (S6 explicit-marking sub-stage, opt-in
+# The unlace `foldcallret` option (S6 explicit-marking sub-stage, opt-in
 # default-off) relaxes that rule for call outputs that are order-safe to fold:
 # exactly one non-marker use, in the same basic block, with no intervening
 # call/load/store between the call and its use.

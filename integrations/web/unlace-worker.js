@@ -1,16 +1,16 @@
-// kuna-worker.js — isolate synchronous WASI execution from the browser UI.
-import { loadKuna } from './kuna-web.js';
+// unlace-worker.js — isolate synchronous WASI execution from the browser UI.
+import { loadUnlace } from './unlace-web.js';
 import { makeZip } from './zip.js';
 
-let kuna = null;
+let unlace = null;
 let binary = null;
 let fileName = 'binary';
 let mode = 'auto';
 let language = 'auto';
 
-function requireKuna() {
-  if (!kuna) throw new Error('worker is not initialized');
-  return kuna;
+function requireUnlace() {
+  if (!unlace) throw new Error('worker is not initialized');
+  return unlace;
 }
 
 function requireBinary() {
@@ -34,64 +34,64 @@ function session(params) {
 async function dispatch(method, params) {
   switch (method) {
     case 'init':
-      kuna = await loadKuna({ ...params, onSpec: (rel, bytes) => self.postMessage({ spec: { rel, bytes } }) });
-      return { result: params.engine ? {} : { engine: kuna.engine } };
+      unlace = await loadUnlace({ ...params, onSpec: (rel, bytes) => self.postMessage({ spec: { rel, bytes } }) });
+      return { result: params.engine ? {} : { engine: unlace.engine } };
     case 'build':
-      return { result: { build: await requireKuna().buildId() } };
+      return { result: { build: await requireUnlace().buildId() } };
     case 'setBinary':
-      requireKuna();
+      requireUnlace();
       binary = params.bytes instanceof Uint8Array ? params.bytes : new Uint8Array(params.bytes);
       fileName = params.fileName || 'binary';
       mode = params.mode || 'auto';
       language = params.language || 'auto';
       return {
         result: {
-          format: kuna.formatName(binary),
+          format: unlace.formatName(binary),
           size: binary.byteLength,
         },
       };
     case 'list':
-      return { result: await requireKuna().list(requireBinary(), session(params)) };
+      return { result: await requireUnlace().list(requireBinary(), session(params)) };
     case 'decompile':
       return {
-        result: await requireKuna().decompile(requireBinary(), params.target, session(params)),
+        result: await requireUnlace().decompile(requireBinary(), params.target, session(params)),
       };
     case 'inspect':
       return {
-        result: await requireKuna().inspect(requireBinary(), params.target, session(params)),
+        result: await requireUnlace().inspect(requireBinary(), params.target, session(params)),
       };
     case 'read':
       return {
-        result: await requireKuna().read(
+        result: await requireUnlace().read(
           requireBinary(), params.address, params.length, session(params),
         ),
       };
     case 'xrefs':
       return {
-        result: await requireKuna().xrefs(requireBinary(), params.target, session(params)),
+        result: await requireUnlace().xrefs(requireBinary(), params.target, session(params)),
       };
     case 'strings':
-      return { result: await requireKuna().strings(requireBinary(), session(params)) };
+      return { result: await requireUnlace().strings(requireBinary(), session(params)) };
     case 'data':
       return {
-        result: await requireKuna().data(requireBinary(), params.address, params.length, session(params)),
+        result: await requireUnlace().data(requireBinary(), params.address, params.length, session(params)),
       };
     case 'uses':
       return {
-        result: await requireKuna().uses(requireBinary(), params.address, params.length, session(params)),
+        result: await requireUnlace().uses(requireBinary(), params.address, params.length, session(params)),
       };
     case 'project': {
       const name = safeName(params.displayName || fileName);
-      const project = await requireKuna().project(requireBinary(), name, {
+      const project = await requireUnlace().project(requireBinary(), name, {
         mode,
         assertions: directives(params.assertions),
       });
       const entries = Object.entries(project.files)
-        .map(([entryName, data]) => ({ name: `${name}.kuna/${entryName}`, data }));
+        .map(([entryName, data]) => ({ name: `${name}.unlace/${entryName}`, data }));
       const zip = makeZip(entries);
       return {
         result: {
-          downloadName: `${name}.kuna.zip`,
+          downloadName: `${name}.unlace.zip`,
           bytes: zip.buffer,
           count: project.count,
           ok: project.ok,

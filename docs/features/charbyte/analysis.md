@@ -3,7 +3,7 @@
 Why a byte read through a `char *` is declared `unsigned char`, how often it
 happens, and what the fix changes. Measured on the decbench
 `full_run_address_2026-09-11` stripped binaries, coreutils `fmt`, `ls`, `sort` and
-`grep` at `-O0` and `-O2` (3,248 functions), with `kuna decompile-all --json`
+`grep` at `-O0` and `-O2` (3,248 functions), with `unlace decompile-all --json`
 under the default `--mode auto`.
 
 **Metric effect: zero by construction for the signedness it fixes.** decbench's
@@ -90,7 +90,7 @@ shares a join with the `int *quoted_dollar_at_p` parameter had come out
 `(char)*v14` reads. The second propagation is now compared with the first,
 Varnode by Varnode, and kept only if every type is unchanged or is the same type
 with `uint1` read as `char` through any depth of pointers and arrays
-(`kuna_charbyte::keep_or_restore`); otherwise the first propagation's types are
+(`unlace_charbyte::keep_or_restore`); otherwise the first propagation's types are
 restored and the function prints exactly as with the option off. On the 8
 binaries the guard never fires (their output is byte-identical with and without
 it); on bash -O2 it restores `param_expand`, leaving 12 changed functions.
@@ -125,7 +125,7 @@ these classes.
 the same classes; declarations 227 -> 224 (three `unsigned char` bytes join an
 existing `char` variable of the same storage), parameters 38 -> 38, JSON
 variables 216 -> 216. One more class appears there: a constant added to the byte
-takes `char` with it and prints the way kuna already prints arithmetic on any
+takes `char` with it and prints the way unlace already prints arithmetic on any
 `char` (`v = v - 0x30` becomes `v += '\xd0'`; 6 lines, where the off arm already
 has 14 such lines). It is value-preserving (oracle below) but no easier to read.
 
@@ -149,7 +149,7 @@ converts the byte with no cast to show it. The printer's cast machinery
 covers every op that cares about signedness (comparisons, extensions, shifts,
 divisions); it does not cover three places:
 
-* **A call argument or a returned value.** kuna folds the `movzx` of a byte
+* **A call argument or a returned value.** unlace folds the `movzx` of a byte
   passed to a call into a one-byte argument. `logit("%d",c)` prints the same
   in both arms, but with `char c` C passes -128 for the byte 0x80 where the
   binary passes 128. The reviewer's gcc -O2 recompile gave 128 of 256 values
@@ -163,7 +163,7 @@ divisions); it does not cover three places:
 * **One-byte arithmetic that reaches either of those** (`f(c + 1)`): C does
   the arithmetic on the promoted value, so the sign of `c` reaches the call.
 
-`kuna_charbyte::read_without_cast` walks each byte forward through copies,
+`unlace_charbyte::read_without_cast` walks each byte forward through copies,
 joins and one-byte arithmetic and reports a `CALL`, `CALLIND`, `CALLOTHER`,
 `RETURN` or `BRANCHIND` reader. Such a byte is never recorded, and if the
 second propagation retypes one anyway (a sibling read through the retyped
@@ -174,7 +174,7 @@ through the address it was loaded from (`c = *p; *p = c + 1;`) met a `char *`
 only through that sum's default signed vote (`INT_ADD` outputs are
 `get_base(1, TYPE_INT)` = `char`), so a genuine `unsigned char *` counter
 became `char *` with `*p = c + '\x01'` (gcc -O0 `inc`/`dec`/`bump`, mirai -O2
-0xce90 `resolv_lookup`'s `uint8_t` counter). `kuna_charbyte::is_counter`
+0xce90 `resolv_lookup`'s `uint8_t` counter). `unlace_charbyte::is_counter`
 excludes it the same way. The first version matched any stored sum and also
 excluded mirai's printf copies, whose `*buf = d + '0'` is character arithmetic;
 the rule now requires the store to go back through the load's own address
@@ -197,7 +197,7 @@ into or out of one that stayed `unsigned char *` through a `COPY`,
 and dash -O2 0x16310, where the cast was not printed but the walker's byte
 stayed `unsigned char` behind a `char *`.
 
-**Census after the fix** (`kuna decompile-all --json`, both arms of one build
+**Census after the fix** (`unlace decompile-all --json`, both arms of one build
 on 6e4f6fa5 + this branch, 34 binaries, 13,747 functions: the 8 above, the
 reviewer's 26 - bash/tar/ssh/libedit/dash/diff/cut/tr/expr/od/xmlwf/gzip/
 bzip2/mirai at -O2 and the coreutils/cronie/dash/diff/gzip/xmlwf/bzip2/mirai

@@ -76,11 +76,11 @@
 use unlace_base::error::UnlaceResult;
 
 /// The `<callfixup name=…>` of the 64-bit helpers, `__ftol` and `__ftol2`.
-pub const FIXUP_NAME: &str = "kuna_msvcftol";
+pub const FIXUP_NAME: &str = "unlace_msvcftol";
 
 /// The `<callfixup name=…>` of the `ftol2.obj` SSE2 entries, which return only
 /// `EAX` (`cvttsd2si eax, …`) and are emitted only for 32-bit conversions.
-pub const FIXUP_NAME_SSE: &str = "kuna_msvcftol_sse";
+pub const FIXUP_NAME_SSE: &str = "unlace_msvcftol_sse";
 
 /// The registers the body reads or writes. Presence of all of them (at a 32-bit
 /// default code space) is the architecture guard: `ST0` exists only on x86, and

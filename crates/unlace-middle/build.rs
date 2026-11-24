@@ -163,7 +163,7 @@ fn gen_surfaces(out: &mut String, rows: &[Surface]) {
 fn gen_settables(out: &mut String, rows: &[Settable]) {
     writeln!(
         out,
-        "/// settableTable: one row per kuna ArchOption -- the LLM control surface."
+        "/// settableTable: one row per unlace ArchOption -- the LLM control surface."
     )
     .unwrap();
     writeln!(
@@ -370,7 +370,7 @@ fn gen_option_values(out: &mut String, rows: &[Settable]) {
     .unwrap();
     writeln!(
         out,
-        "    /// reproducing `kunaLiveValue`'s bool / inverted-bool / print mapping."
+        "    /// reproducing `unlaceLiveValue`'s bool / inverted-bool / print mapping."
     )
     .unwrap();
     writeln!(out, "    ///").unwrap();

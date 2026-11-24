@@ -103,9 +103,9 @@ checks.push('2000 random rounds over the full key set (incl. the mode) converge 
     [{ k: 'raw:eve00000:2', v: '   @/work/input.bin', c: c() }, 'the same behind spaces'],
     [{ k: 'raw:eve00000:3', v: 'bytes 0x11af @/work/input.bin', c: c() }, 'a raw bytes directive whose payload is @FILE'],
     [{ k: 'rawf:0x1198:eve00000:4', v: 'bytes  0x11af\t@x', c: c() }, 'the same with odd spacing, bound to a function'],
-    [{ k: 'comment:0x1198:0x11b5', v: 'fine\nbytes 0x401000 @/home/u/.ssh/id_rsa', c: c() }, 'a newline that would start a directive in an exported .kuna file'],
+    [{ k: 'comment:0x1198:0x11b5', v: 'fine\nbytes 0x401000 @/home/u/.ssh/id_rsa', c: c() }, 'a newline that would start a directive in an exported .unlace file'],
     [{ k: 'comment:0x1198:0x11b5', v: 'fine\u2028bytes 0x401000 @x', c: c() }, 'a line separator'],
-    [{ k: 'comment:0x1198:0x11b5', v: 'fine #bytes 0x401000 @x', c: c() }, 'a " #" the .kuna reader would cut at'],
+    [{ k: 'comment:0x1198:0x11b5', v: 'fine #bytes 0x401000 @x', c: c() }, 'a " #" the .unlace reader would cut at'],
     [{ k: 'var:0x1198:v1:type', v: 'long @x', c: c() }, 'an @ in a type'],
     [{ k: 'proto:0x1161', v: 'int f(char *@x)', c: c() }, 'an @ in a signature'],
     [{ k: 'typedef:pair', v: 'typedef int @x;', c: c() }, 'an @ in a type definition'],
@@ -367,7 +367,7 @@ checks.push('2000 random rounds over the full key set (incl. the mode) converge 
 // ── the connection setting: no ICE servers unless turned on ────────────────
 {
   const store = (value) => ({ getItem: (k) => (k === PREFS_KEY ? value : null) });
-  assert.equal(PREFS_KEY, 'kuna.d2.collab');
+  assert.equal(PREFS_KEY, 'unlace.d2.collab');
   assert.deepEqual(iceServersFrom(loadCollabPrefs(store(null))), [], 'off by default: host candidates only (one machine or one network)');
   assert.deepEqual(iceServersFrom(loadCollabPrefs(store('not json'))), []);
   assert.deepEqual(iceServersFrom({ name: 'Ana' }), []);

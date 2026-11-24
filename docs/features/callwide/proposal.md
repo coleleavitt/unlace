@@ -11,7 +11,7 @@ admission is sealed MIPS only; ARM remains an unchanged refusal control.
 ## Decision and initial scope
 
 Add `callwide off|on`, initially default off, owned by one P4 module,
-`kuna-decomp/src/p4_calls/callwide.rs`. With `callwide on` and
+`unlace-decomp/src/p4_calls/callwide.rs`. With `callwide on` and
 `bejoin evidence`, a complete proof may retain both output words and give a
 producer and all its calls one ABI-order eight-byte integer representation.
 `callwide off` preserves current output. Existing `bejoin off` and `bejoin on`
@@ -196,7 +196,7 @@ declaration capture after temporary C rendering and before body publication.
 Maintain proof dependencies on effective image bytes, established entries,
 flow/model, positive prototypes and options. Clear/rebuild on changed byte,
 function, flow or prototype assertions, architecture clear/unload or ABI
-changes. `Database::kuna_generation` alone is not an image-byte epoch. Reflows
+changes. `Database::unlace_generation` alone is not an image-byte epoch. Reflows
 seed fresh Funcdata views from the same immutable verdict; cached OpId or
 VarnodeId values cannot survive. Late direct-target resolution may consume an
 already complete verdict, not create a new promotion after consumers render.
@@ -218,13 +218,13 @@ Paths below are relative to `decompiler/crates/`.
 
 | Area | Change |
 |---|---|
-| `kuna-decomp/src/p4_calls/callwide.rs` (new) | bounded proof, MIPS admission, immutable verdict and refusal reasons |
-| `kuna-decomp/src/p4_calls/kuna_bejoin{,/evidence}.rs` | combine source-specific verdicts; consistent joins and high-only reads |
-| `kuna-decomp/src/p4_calls/coreaction_protos.rs` | narrow proven-pair retention hook before output-map derivation |
-| `kuna-decomp/src/infra/{architecture,decompile_drive}.rs`, `substrate/funcdata.rs` | dependency lifetime, per-drive views and restart seeding |
-| `kuna-analysis/src/analyzers/dwarf/callwide.rs` (new) | bounded explicit scalar declaration provenance; ordinary DWARF behavior unchanged |
+| `unlace-decomp/src/p4_calls/callwide.rs` (new) | bounded proof, MIPS admission, immutable verdict and refusal reasons |
+| `unlace-decomp/src/p4_calls/unlace_bejoin{,/evidence}.rs` | combine source-specific verdicts; consistent joins and high-only reads |
+| `unlace-decomp/src/p4_calls/coreaction_protos.rs` | narrow proven-pair retention hook before output-map derivation |
+| `unlace-decomp/src/infra/{architecture,decompile_drive}.rs`, `substrate/funcdata.rs` | dependency lifetime, per-drive views and restart seeding |
+| `unlace-analysis/src/analyzers/dwarf/callwide.rs` (new) | bounded explicit scalar declaration provenance; ordinary DWARF behavior unchanged |
 | `console/src/{engine,project}.rs` | positive declaration provenance, shared preflight before rendering, invalidation |
-| `kuna-cli/src/decompile_all.rs`, `decompile.rs`, worker/project drivers | full proof before selection or export; text console and JSON agreement |
+| `unlace-cli/src/decompile_all.rs`, `decompile.rs`, worker/project drivers | full proof before selection or export; text console and JSON agreement |
 
 Single JSON uses `decompile_json -> load_program`; plain text launches the
 external console instead. A hook only in `load_program` is insufficient.

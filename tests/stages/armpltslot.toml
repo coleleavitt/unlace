@@ -1,4 +1,4 @@
-# kuna issue testcase: the partial sums a GNU ld A32 PLT stub builds its
+# unlace issue testcase: the partial sums a GNU ld A32 PLT stub builds its
 # slot's address from are not filed as data references in the
 # cross-reference index; the slot is.
 #
@@ -49,11 +49,11 @@ commands = [
 ]
 
 [[match]]
-name = "KUNA-ARMPLTSLOT #1: main's call through the puts stub renders"
+name = "UNLACE-ARMPLTSLOT #1: main's call through the puts stub renders"
 count = 1
 regex = '^  puts\("hello"\);$'
 
 [[match]]
-name = "KUNA-ARMPLTSLOT #2: main's calls through the printf and strlen stubs render"
+name = "UNLACE-ARMPLTSLOT #2: main's calls through the printf and strlen stubs render"
 count = 1
 regex = '^  printf\("%d %zu\\n",v1,strlen\(v2\)\);$'

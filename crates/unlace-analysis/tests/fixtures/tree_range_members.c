@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifndef KUNA_EMITTED_TREE_TYPES
+#ifndef UNLACE_EMITTED_TREE_TYPES
 typedef struct Node {
   struct Node *left;
   struct Node *parent;
@@ -25,7 +25,7 @@ __attribute__((ms_abi, noinline)) void consume_range(Tree *tree, const Range *ra
   tree->size = range->first->key + range->last->key;
 }
 
-#ifndef KUNA_EMITTED_TREE_BODY
+#ifndef UNLACE_EMITTED_TREE_BODY
 __attribute__((ms_abi, noinline)) void tree_range(Tree *tree, int key, int tag) {
   Node *head = tree->head;
   Node *first = head;

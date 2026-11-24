@@ -37,7 +37,7 @@ LAB_08000792:
 IDA (stored) and angr (stored) likewise open with `sub_80003D0(); sub_8000304(); ...` /
 `sub_80003d1(); sub_8000305(); ...`.
 
-kuna (stored 2026-07-27 AND fresh today — structurally identical, only DIV-34..39 print
+unlace (stored 2026-07-27 AND fresh today — structurally identical, only DIV-34..39 print
 normalization differs, e.g. `v3 = v3 + -0x10` -> `addr = &addr[-0x10]`):
 
 ```c
@@ -115,7 +115,7 @@ main(void)
   switch (c = console_getc(1)) {
   case 'f': case 'F': ...
   case 'n': case 'N': ...
-  case 'p': case 'P':                       /* the block kuna hoists to the top */
+  case 'p': case 'P':                       /* the block unlace hoists to the top */
    console_puts("Previous ");
    switch (c = console_getc(1)) { ... }
    break;
@@ -146,7 +146,7 @@ code is emitted as unreachable dead code.
         data.finalize_forloop_printing();
 ```
 
-Upstream `ActionFinalStructure::apply` (blockaction.cc:2192) opens with the call kuna skips:
+Upstream `ActionFinalStructure::apply` (blockaction.cc:2192) opens with the call unlace skips:
 
 ```cpp
   graph.orderBlocks();          // <-- not ported
@@ -167,10 +167,10 @@ Upstream `ActionFinalStructure::apply` (blockaction.cc:2192) opens with the call
   return (bl1->getIndex() < bl2->getIndex());   // otherwise by index
 ```
 
-kuna already maintains the invariant this sort depends on: `BlockGraph::add_block`
+unlace already maintains the invariant this sort depends on: `BlockGraph::add_block`
 (`decompiler/crates/unlace-decomp/src/substrate/block.rs:1712`) faithfully keeps a composite's
 `index` at the *minimum* over its components, and `identify_internal` (block.rs:1782) removes
-the absorbed nodes and *appends* the new composite at the end of the parent's list. So kuna
+the absorbed nodes and *appends* the new composite at the end of the parent's list. So unlace
 ported the producer of the ordering key and never ported its only consumer: whenever
 structuring cannot collapse the function to a single top-level component, the residual list
 is in whatever order the collapse happened to append, and printing (`emit_block_graph`,
@@ -184,10 +184,10 @@ same `new_block_*` / `identify_internal` primitives and all end at the same
 `ActionFinalStructure`. No existing option closes this.
 
 **Why the reference wins:** Ghidra/IDA/angr all order the function body from the entry. Ghidra
-in particular reaches the *same* goto-heavy shape as kuna on this function (17 gotos, no
+in particular reaches the *same* goto-heavy shape as unlace on this function (17 gotos, no
 `while(true)`) and still reads correctly, purely because `orderBlocks()` runs.
 
-**Why the metric missed it.** kuna is the *best* scorer here (GED 58 vs angr 77, ghidra 85,
+**Why the metric missed it.** unlace is the *best* scorer here (GED 58 vs angr 77, ghidra 85,
 ida 79) — decbench builds its CFG from the emitted statements and edges, and permuting three
 top-level components barely perturbs node/edge sets. The score cannot see that the entry is
 unreachable. This is a case where the winning pane contains a correctness defect.
@@ -228,7 +228,7 @@ label_1234b:
   v10 = (uint1 *)s2;
 ```
 
-**Secondary observation (not the reported symptom, no action proposed here):** kuna emits the
+**Secondary observation (not the reported symptom, no action proposed here):** unlace emits the
 ARM `setISAMode(1)` userop as a call statement before every `blx` (12 occurrences in this
 function); Ghidra's pane has none. That inflates LOC but adds no CFG nodes, so it does not
 move GED.
@@ -261,7 +261,7 @@ move `docs/baseline.json` assertions. Recommended sequence: implement unflagged,
 improvement and gate behind `finalorder` with a DIV row rather than re-pinning the baseline.
 
 Risks:
-- `compare_final_order` reads `last_op()` on composite blocks; kuna's `last_op` equivalent
+- `compare_final_order` reads `last_op()` on composite blocks; unlace's `last_op` equivalent
   must be checked to return the same thing upstream does for a `BlockGraph` (upstream
   `FlowBlock::lastOp` is virtual and returns null for a non-basic block unless overridden) —
   getting this wrong only misplaces return-terminated components, never the entry.

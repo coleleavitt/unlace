@@ -15,7 +15,7 @@ for k in order:
         k, q["off"]["min_ms"], q["on"]["min_ms"],
         q["delta_min_pct"], q["delta_median_pct"], c["delta_min_pct"]))
 rows += ["",
- "Same build, both arms, `kuna decompile-all --json --max-fn-seconds 120`, the arms alternated",
+ "Same build, both arms, `unlace decompile-all --json --max-fn-seconds 120`, the arms alternated",
  "per iteration and the minimum taken. The first four columns are min-of-11 at a quiet moment;",
  "the last is the first pass, min-of-15, taken while other campaign lanes were running.",
  "**Worst delta %+.2f%% quiet, %+.2f%% contended — inside the +5%% budget either way.**" % (worst, worst_c),
@@ -33,7 +33,7 @@ doc.write_text(t)
 rec = pathlib.Path('docs/features/callbacktype/record.json')
 d = json.loads(rec.read_text())
 d["speed"] = {
-    "method": ("interleaved whole-binary `kuna decompile-all --json --max-fn-seconds 120`, "
+    "method": ("interleaved whole-binary `unlace decompile-all --json --max-fn-seconds 120`, "
                "`--option callbacktype off` against the new default, same build "
                "(docs/features/callbacktype/speed.py); min-of-11 at a quiet moment, with the "
                "first contended min-of-15 pass kept beside it"),

@@ -43,7 +43,7 @@
     "workspace": "cargo test --workspace --no-fail-fast on the immediately prior 7c890180 main: exit 0; all workspace and doc-test targets passed, with only their declared ignored tests. After the final 7b9948f rebase (#577 streamed project export), the touched code paths were audited as disjoint and the focused suite, release build, promoted probe, dataset acceptance, both spec modes, catalog, counters, and mergecheck were rerun and passed.",
     "cli_sweep": "The debug-binary sweep passed 131/134 probes. The new probe passed. Two unrelated wall-time budgets were expectedly unsuitable for a debug binary; one unrelated 60-second probe timed out under concurrent load.",
     "spec": "make check-spec and python3 tools/check_spec.py --strict: OK",
-    "catalog": "decompiler/target/debug/kuna catalog --check: OK",
+    "catalog": "decompiler/target/debug/unlace catalog --check: OK",
     "counters": "190 settables; tiers 61/70/59; stage corpus 275 (83 core + 192 stage); next ElementId 4164; no drift",
     "mergecheck": "scripts.repipe.mergecheck against origin/main: ok=true, rejects=0; only pre-existing DIV-76/DIV-77 duplicate warnings"
   },

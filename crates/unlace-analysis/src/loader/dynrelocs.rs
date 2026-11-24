@@ -846,7 +846,7 @@ where
             continue;
         }
         if packed {
-            out.push(format!("the {name} table at 0x{start:x} ({size} bytes) is Android-packed, which kuna does not decode"));
+            out.push(format!("the {name} table at 0x{start:x} ({size} bytes) is Android-packed, which unlace does not decode"));
         } else if !covered(start, start.saturating_add(size)) {
             out.push(format!(
                 "the {name} table at 0x{start:x} ({size} bytes) is in no relocation section"

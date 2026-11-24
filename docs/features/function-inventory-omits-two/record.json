@@ -2,15 +2,15 @@
   "need_id": "function-inventory-omits-two",
   "track": "loader",
   "scope": "small",
-  "opportunity": "RE-need function-inventory-omits-two \u2014 `kuna functions` on an x64 MSVC VM crackme listed 228 entries and omitted the handlers at 0x140003c60 and 0x1400041b0, whose pointers occupy entries 27 and 28 of the handler table (crackmes.one 69b7492049fa49a2a260218f bin/vm.exe, round 12).",
-  "test_name": "kuna functions inventory, witness + 150-binary dataset PE sweep",
-  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/pe_reloctable_x86_64.exe",
+  "opportunity": "RE-need function-inventory-omits-two \u2014 `unlace functions` on an x64 MSVC VM crackme listed 228 entries and omitted the handlers at 0x140003c60 and 0x1400041b0, whose pointers occupy entries 27 and 28 of the handler table (crackmes.one 69b7492049fa49a2a260218f bin/vm.exe, round 12).",
+  "test_name": "unlace functions inventory, witness + 150-binary dataset PE sweep",
+  "binary": "decompiler/crates/unlace-analysis/tests/fixtures/pe_reloctable_x86_64.exe",
   "selector": "0x140001060",
   "option": null,
   "flag": null,
   "change_kind": "analysis-oracle",
   "tier": "analysis",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "default_on": true,
   "div_row": null,
   "decisions": [
@@ -20,7 +20,7 @@
     "The hull guard is also the precondition: an image vouching for no code region abstains. That excludes PE32 without an exception directory (72 of the 152 swept, one carrying 3287 relocated code addresses) and the ARM/ARM64 8-byte record form, which has no EndAddress. A documented scope limit, taken deliberately over seeding thousands of unvetted addresses.",
     "NO new option, and no phases.toml/options.rs/catalog/DIV/docs/options.md edits. A relocation is the image's own statement that the word is an address, so this corrects wrong output rather than adding a judgement call \u2014 the docs/agents.md carve-out for a strict bug fix, and the same shape the sibling loader-track need arm-inventory-omits-41 (#537) shipped with this round. It is also what the leases allowed: counter:catalog, counter:div, file:phases.toml and file:docs/options.md were all held by the rax-preserving-stack-probe builder.",
     "No tests/stages/ XML testcase: the datatest/stages path uses LoadImageXml over <bytechunk> and never constructs an ObjectLoadImage, so a PE data-directory oracle is unreachable from it. Gated on cargo tests in the owning crate plus the promoted CLI probe instead (the same deviation relocobjects/cortexmvectors/arm-inventory-omits-41 recorded).",
-    "The refuter's size hazard held and is a correction, not a regression: seeding gives the bounder something to stop at, so sub_140003c50 goes 32 -> 16 and sub_140004050 384 -> 352 on the witness (plus sub_140003bc0 144 -> 96, sub_140003db0 464 -> 400). 31 entries disappear corpus-wide and every one is a start the new seed supersedes rather than a loss \u2014 0x140028d1c in CrackVM-V2.exe was four bytes into the MOV RAX,[RSP+0x28] that opens the function its vtable slot names, and the new start 0x140028d18 is the real entry (kuna's own RTTI naming agrees: std::codecvt::vfunc_8)."
+    "The refuter's size hazard held and is a correction, not a regression: seeding gives the bounder something to stop at, so sub_140003c50 goes 32 -> 16 and sub_140004050 384 -> 352 on the witness (plus sub_140003bc0 144 -> 96, sub_140003db0 464 -> 400). 31 entries disappear corpus-wide and every one is a start the new seed supersedes rather than a loss \u2014 0x140028d1c in CrackVM-V2.exe was four bytes into the MOV RAX,[RSP+0x28] that opens the function its vtable slot names, and the new start 0x140028d18 is the real entry (unlace's own RTTI naming agrees: std::codecvt::vfunc_8)."
   ],
   "acceptance": {
     "probe_id": "p-7893d3fda03c",
@@ -32,7 +32,7 @@
   "promoted_probe": {
     "path": "tests/cli/function-inventory-omits-two.json",
     "retargeted_from": "dataset challenges/69b7492049fa49a2a260218f/bin/vm.exe (44032 bytes)",
-    "retargeted_to": "decompiler/crates/kuna-analysis/tests/fixtures/pe_reloctable_x86_64.exe (3584 bytes, hand-assembled)",
+    "retargeted_to": "decompiler/crates/unlace-analysis/tests/fixtures/pe_reloctable_x86_64.exe (3584 bytes, hand-assembled)",
     "why": "`verify --promote` refuses a dataset target (CI has no dataset) and the witness is a third-party crackme. The fixture is the same shape: a PE32+ whose .rdata pointer table names a handler that has no .pdata record and no call site, sitting in a hole between two described bodies. The twin also carries the two negatives, so it guards the guards as well as the fix.",
     "verified_on_witness": true
   },
@@ -57,7 +57,7 @@
   },
   "sweep": {
     "corpus": "152 PE images in the RE dataset (80 PE32+, 72 PE32); 150 compared, 2 (hideandseek.exe, Medusa.exe) time out at 120 s on BOTH arms",
-    "method": "`kuna functions --json` before and after, inventories compared as {address: (name, size)} maps",
+    "method": "`unlace functions --json` before and after, inventories compared as {address: (name, size)} maps",
     "errors_changed": 0,
     "binaries_with_a_changed_inventory": 38,
     "entries_added": 747,
@@ -71,6 +71,6 @@
     "make test-stages": "725/725 PARITY OK",
     "make check-spec": "OK",
     "make test-cli": "109/109",
-    "kuna catalog --check": "catalog OK"
+    "unlace catalog --check": "catalog OK"
   }
 }

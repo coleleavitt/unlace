@@ -1,4 +1,4 @@
-/* kuna RE-friction dashboard — vanilla ES2019, no build step, no CDN.
+/* unlace RE-friction dashboard — vanilla ES2019, no build step, no CDN.
  *
  * The server publishes one payload per cache generation and pushes {"seq":N} over SSE when
  * that generation advances; this file refetches /api/state on a bump and otherwise sits idle.
@@ -274,14 +274,14 @@ function renderRejected(n) {
   $('f-count').textContent = (n.rejected || []).length + ' rejected';
   if (!keys.length) {
     $('e-body').innerHTML = nothing('Nothing rejected yet',
-      'This pile is the honest denominator: <code>already-supported</code> means the tester was wrong, not that kuna was bad.');
+      'This pile is the honest denominator: <code>already-supported</code> means the tester was wrong, not that unlace was bad.');
     return;
   }
   var why = {
-    'already-supported': 'the acceptance probe PASSED at filing — kuna already does this',
+    'already-supported': 'the acceptance probe PASSED at filing — unlace already does this',
     'not-reproducible': 'the probe FAILED at filing — the symptom did not replay',
     'unprobeable': 'real friction with no machine-checkable predicate',
-    'user-error': 'the tester drove kuna wrong',
+    'user-error': 'the tester drove unlace wrong',
     'covered-by-option': 'an existing option already closes it — a default-flip candidate'
   };
   $('e-body').innerHTML = keys.map(function (k) {
@@ -503,10 +503,10 @@ $('h-stop').addEventListener('click', function () {
   openDrawer('stop the run', '', '<div class="sec"><h4>This dashboard is read-only</h4>'
     + '<p style="font-size:.8125rem;line-height:1.8">It never posts, and it cannot stop a run. '
     + 'Graceful drain — in-flight agents finish and INTEGRATE still runs:</p>'
-    + '<pre>touch ' + esc(sup.stop_path || '.kuna-repipe/STOP') + '</pre>'
+    + '<pre>touch ' + esc(sup.stop_path || '.unlace-repipe/STOP') + '</pre>'
     + '<p style="font-size:.8125rem;line-height:1.8">Hard stop — SIGTERM to the recorded pids, '
     + 'every worktree and arena kept intact for forensics:</p>'
-    + '<pre>touch ' + esc(sup.abort_path || '.kuna-repipe/ABORT') + '</pre></div>');
+    + '<pre>touch ' + esc(sup.abort_path || '.unlace-repipe/ABORT') + '</pre></div>');
 });
 
 /* SSE is the only push channel; the poll is the fallback when it will not open. */

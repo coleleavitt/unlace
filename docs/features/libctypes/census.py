@@ -4,7 +4,7 @@ metric — the numbers in `glibc.md` and `corpus-hunk-classification-glibc.txt`.
     python3 docs/features/libctypes/census.py <dir>..
 
 Each `<dir>` holds one `<tag>.opaque.c` / `<tag>.glibc.c` pair per binary, each
-the output of `kuna decompile-all <bin> --option libctypes opaque|glibc`.
+the output of `unlace decompile-all <bin> --option libctypes opaque|glibc`.
 `fieldnames.txt` beside this file is the set of member names the published
 layouts install; it is what makes the cross-field bucket a member claim rather
 than any piece write.

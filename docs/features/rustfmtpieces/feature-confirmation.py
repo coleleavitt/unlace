@@ -2,13 +2,13 @@ from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor,as_completed
 import importlib.util,os,json,time,hashlib,subprocess,threading,multiprocessing,shutil,statistics
 
-spec=importlib.util.spec_from_file_location('timing','/tmp/kuna-angr-reference/parallel-timing.py')
+spec=importlib.util.spec_from_file_location('timing','/tmp/unlace-angr-reference/parallel-timing.py')
 timing=importlib.util.module_from_spec(spec);spec.loader.exec_module(timing)
 def worker(job):return timing.case(job)
 def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 def main():
-    declaration=Path('/tmp/kuna-angr-reference/feature-confirmation-plan.json');study=json.loads(declaration.read_text())
+    declaration=Path('/tmp/unlace-angr-reference/feature-confirmation-plan.json');study=json.loads(declaration.read_text())
     workdirs=[Path(p)for p in study['workdirs']];configs=[json.loads((w/'timing-cases.json').read_text())for w in workdirs]
     initials=[w/'timing-randomized-attempts'/study['initial_attempt']for w in workdirs]
     reserved={c for pair in json.loads((initials[0]/'cpu-selection.json').read_text())['assignments'].values()for c in pair.values()}
@@ -46,10 +46,10 @@ def main():
             args=(p/'cmdline').read_bytes().decode(errors='replace').split('\0');status=(p/'status').read_text();parent=int(next(line.split()[1]for line in status.splitlines()if line.startswith('PPid:')))
             processes[int(p.name)]=(parent,args)
         except(OSError,StopIteration):continue
-    roots={pid for pid,(_,args)in processes.items()if args[:3]==['python3','-u','/tmp/kuna-angr-reference/batch-timing.py']}
+    roots={pid for pid,(_,args)in processes.items()if args[:3]==['python3','-u','/tmp/unlace-angr-reference/batch-timing.py']}
     trusted=set(roots)
     for _ in range(10):trusted|={pid for pid,(parent,_)in processes.items()if parent in trusted}
-    owned_prefixes=['/home/mahaloz/kwt/angr-rust-','/tmp/kuna-rust-']
+    owned_prefixes=['/home/mahaloz/kwt/angr-rust-','/tmp/unlace-rust-']
     unexpected=[{'pid':pid,'arguments':args}for pid,(_,args)in processes.items()if pid!=os.getpid()and pid not in trusted and args and Path(args[0]).name not in ['bash','timeout','rg']and any(prefix in ' '.join(args)for prefix in owned_prefixes)]
     audit={'allowed_shared_measurement_roots':sorted(roots),'allowed_descendants':sorted(trusted),'unexpected_owned_processes':unexpected};assert not unexpected,audit
     stamp=time.strftime('%Y%m%d-%H%M%S',time.gmtime());attempts=[];digests=[]
@@ -58,7 +58,7 @@ def main():
         for name in ['timing-randomized-plan.json','timing-cases.json','feature-confirmation-plan.json','feature-confirmation.py']:shutil.copy2(w/name,attempt/name)
         (attempt/'owned-process-audit.json').write_text(json.dumps(audit,indent=2)+'\n')
         (attempt/'cpu-selection.json').write_text(json.dumps({'assignments':assignments,'reserved_initial_pairs':sorted(reserved),'idle_pct':idle},indent=2)+'\n')
-        hashes={side:sha(Path(config[key])/'decompiler/target/release/kuna')for side,key in [('baseline','base'),('patched','root')]};digests.append(hashes)
+        hashes={side:sha(Path(config[key])/'decompiler/target/release/unlace')for side,key in [('baseline','base'),('patched','root')]};digests.append(hashes)
         assert all(r['binaries_sha256']==hashes for r in oldrecords[feature].values())
         config['baseline_commit']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=config['base'],text=True).strip()
     os.sched_setaffinity(0,allowed-reserved-{c for pair in selected for c in pair})
@@ -80,7 +80,7 @@ def main():
     while not all((a/'monitor.json').exists()for a in initials):time.sleep(5)
     accepted_features=[]
     for feature,(w,config,plan,initial,attempt)in enumerate(zip(workdirs,configs,plans,initials,attempts)):
-        assert all(sha(Path(config[key])/'decompiler/target/release/kuna')==digests[feature][side]for side,key in [('baseline','base'),('patched','root')])
+        assert all(sha(Path(config[key])/'decompiler/target/release/unlace')==digests[feature][side]for side,key in [('baseline','base'),('patched','root')])
         results=[]
         for index,row in enumerate(config['cases']):
             name=row[0];old=oldrecords[feature][name];record=dict(old);record['original_plan']=old['plan'];record['plan']=plan

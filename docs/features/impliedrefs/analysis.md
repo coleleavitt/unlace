@@ -28,7 +28,7 @@ They are the two independent halves of one decision:
 
 ## 2. What moving them does
 
-Measured with `kuna decompile-all` on the decbench coreutils `fmt` -O2 stripped
+Measured with `unlace decompile-all` on the decbench coreutils `fmt` -O2 stripped
 binary (151 functions), counting declared locals out of the emitted C:
 
 | value | `impliedrefs` decls | functions changed | `termdup` decls | functions changed |

@@ -1,4 +1,4 @@
-# (kuna) `calleearitycut` fixture -- RE-friction round 8, need
+# (unlace) `calleearitycut` fixture -- RE-friction round 8, need
 # `bytecode-reader-call-site` (challenge 673da52e9b533b4c22bd2eeb, ELF x86-64
 # `Layers`, sub_9d9c0 -> sub_875e0 @0x9d9d8), reduced to three caller/callee
 # pairs.

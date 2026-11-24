@@ -14,7 +14,7 @@ the PE"* and reported:
 ## The filed hypothesis is overturned; the symptom stands
 
 The hypothesis was *"public data aliases near code addresses are winning the canonical-name
-selection"*. No data symbol is involved. `<Class>::vftable_<i>` is a name **kuna synthesises**:
+selection"*. No data symbol is involved. `<Class>::vftable_<i>` is a name **unlace synthesises**:
 the MSVC RTTI pass (R3, `analyzers/rtti/mod.rs::emit_vftable_methods`) walks each recovered
 vftable and emits a `SymFact{Function}` at the address each slot **points at** — the virtual
 method, not the table. All 10 entries are genuine `.text` routines and classifying them as
@@ -68,9 +68,9 @@ also satisfy, so the promoted probe adds a positive `"name": "Box::vfunc_0"` cla
 
 ## Sweep
 
-`kuna functions --json --mode aggressive` over **19 targets** — all 9 in-repo PE fixtures, all 8
+`unlace functions --json --mode aggressive` over **19 targets** — all 9 in-repo PE fixtures, all 8
 C++/ELF fixtures including the stripped Itanium-RTTI `.so`, the `fauxware`/`aif_gap` controls,
-and the recorded dataset PE — plus `kuna decompile-all --json` over the 9 PE fixtures.
+and the recorded dataset PE — plus `unlace decompile-all --json` over the 9 PE fixtures.
 
 - 3 files changed, 50 lines; **residual after normalising `::vftable_<i>` → `::vfunc_<i>`: 0**.
   Every changed line anywhere is exactly that one name.
@@ -90,9 +90,9 @@ pair inside an inventory sort that already compares those strings.
 | `make test-stages` | **PARITY OK**, 600/600 assertions |
 | `make rust-test` | green — 5,317 tests over 343 suites |
 | `make check-spec` | `check-spec OK` |
-| `kuna catalog --check` | `catalog OK: documents exactly the registered kuna options` |
+| `unlace catalog --check` | `catalog OK: documents exactly the registered unlace options` |
 | `python -m scripts.repipe.clitests` | 17/17 |
-| new unit tests | 3 in `console::engine`, 1 in `kuna-analysis::rtti`, `verify_rtti.rs` updated |
+| new unit tests | 3 in `console::engine`, 1 in `unlace-analysis::rtti`, `verify_rtti.rs` updated |
 
 Tooling track: no option, no `phases.toml` row, no catalog counter, no `tests/stages` case — so
 no counter or file lease was taken.

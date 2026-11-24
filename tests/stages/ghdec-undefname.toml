@@ -9,15 +9,15 @@
 # 8 hex digits.  Upstream that string is unobservable: `ActionNameVars::apply`
 # renames every still-undefined Symbol before it returns, and `PrintC` reads
 # `sym->getDisplayName()` LIVE at emit time, so the render always sees the
-# final name.  kuna diverges on both counts.  The name is cached per
-# HighVariable (`HighVariable::kuna_name`), and the catch-all rename, though
+# final name.  unlace diverges on both counts.  The name is cached per
+# HighVariable (`HighVariable::unlace_name`), and the catch-all rename, though
 # ported as `Database::assign_default_names`, had zero call sites.  So the
 # placeholder reached the emitted C, the `variables` array of
 # `decompile-all` in JSON mode, and the `.asm` stack-frame comments of
 # `decompile-project`.
 #
 # Both producers are closed at the tail of `name_local_highs_angr`
-# (`p6_variables/kuna_undefname.rs`), the same place the port already resolves
+# (`p6_variables/unlace_undefname.rs`), the same place the port already resolves
 # this class of ordering hazard for the spacebase pass:
 #
 #   * stale cache.  `resolve_default_name_override` renames the covering
@@ -26,7 +26,7 @@
 #     returns the Symbol's CURRENT display name.  A partial-cover high visited
 #     before its whole-cover sibling therefore caches the placeholder, the
 #     sibling then renames the shared Symbol to `vN`, and nothing back-fills
-#     the first cache.  The tail re-reads the Symbol once, kuna's stand-in for
+#     the first cache.  The tail re-reads the Symbol once, unlace's stand-in for
 #     upstream's live `getDisplayName()`.
 #   * never renamed.  A Symbol no high covers wholly keeps the placeholder in
 #     the Symbol table itself.  The tail wires
@@ -70,7 +70,7 @@
 #
 # Bytes are iproute2 6.1 (O2-noinline, stripped) `set_qlen` at 0x2b420 with
 # its five callees stubbed and the one string it passes to `perror`.  The
-# source builds a single `struct ifreq ifr`; kuna splits the frame into a
+# source builds a single `struct ifreq ifr`; unlace splits the frame into a
 # 16-byte name buffer plus a 4-byte slot at stack - 0x38 for the union member,
 # and NO high covers that slot wholly, so `resolve_default_name_override` was
 # never reached for it and the Symbol kept its placeholder in the Symbol table

@@ -55,7 +55,7 @@ commands = [
 ]
 
 [[match]]
-name = "KUNA-GUARDEDLOOP #1: append's walk tests at the top inside the guard (default)"
+name = "UNLACE-GUARDEDLOOP #1: append's walk tests at the top inside the guard (default)"
 count = 1
 literal = [
     'if (a0) {',
@@ -64,7 +64,7 @@ literal = [
 ]
 
 [[match]]
-name = "KUNA-GUARDEDLOOP #2: drain's loop is a while loop with no guard (default)"
+name = "UNLACE-GUARDEDLOOP #2: drain's loop is a while loop with no guard (default)"
 count = 1
 literal = [
     'v1 = a0[1];',
@@ -72,11 +72,11 @@ literal = [
 ]
 
 [[match]]
-name = 'KUNA-GUARDEDLOOP #3: guardedloop off keeps both do-while loops'
+name = 'UNLACE-GUARDEDLOOP #3: guardedloop off keeps both do-while loops'
 count = 2
 literal = 'do {'
 
 [[match]]
-name = "KUNA-GUARDEDLOOP #4: guardedloop off keeps drain's guard"
+name = "UNLACE-GUARDEDLOOP #4: guardedloop off keeps drain's guard"
 count = 1
 literal = 'if (v1 != a0[2]) {'

@@ -179,22 +179,22 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-LOWEREDSWITCHBITS #1: the on pass prints one switch'
+name = 'UNLACE-LOWEREDSWITCHBITS #1: the on pass prints one switch'
 count = 1
 literal = 'switch('
 
 [[match]]
-name = 'KUNA-LOWEREDSWITCHBITS #2: the off pass keeps both bit masks'
+name = 'UNLACE-LOWEREDSWITCHBITS #2: the off pass keeps both bit masks'
 count = 1
 literal = '& 0xc19'
 
 [[match]]
-name = 'KUNA-LOWEREDSWITCHBITS #3: the switch labels every value of the three bodies'
+name = 'UNLACE-LOWEREDSWITCHBITS #3: the switch labels every value of the three bodies'
 count = 12
 regex = '^ *case 0x[0-9a-f]+:$'
 
 [[match]]
-name = 'KUNA-LOWEREDSWITCHBITS #4: the two-call body takes CODE_BLOCK, LINK, IMAGE and both custom nodes'
+name = 'UNLACE-LOWEREDSWITCHBITS #4: the two-call body takes CODE_BLOCK, LINK, IMAGE and both custom nodes'
 count = 1
 regex = [
     '^ *case 0x8005:$',

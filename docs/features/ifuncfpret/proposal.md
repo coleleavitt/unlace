@@ -1,20 +1,20 @@
 # [PROPOSAL] IFUNC-stub tail calls & FP-return recovery
 
 Status: **proposal** (large / multi-part — no implementation in this PR).
-Origin: the interp-bee/jit-bee IDA-vs-kuna study (`docs/features/funcboundflow/analysis.md`, finding #2).
+Origin: the interp-bee/jit-bee IDA-vs-unlace study (`docs/features/funcboundflow/analysis.md`, finding #2).
 
 ## Symptom
 
 `f64_log_base @ 0xf090` is `log(arg2) / log(arg1)`:
 
 ```
-IDA:   double sub_F090(double a1, double a2)        KUNA:  float8 sub_f090(void)
+IDA:   double sub_F090(double a1, double a2)        UNLACE:  float8 sub_f090(void)
        { double v3 = sub_15620(a2);                        { float8 v1; float8 v2;
          return v3 / sub_15620(a1); }                        sub_15620(); sub_15620();
                                                              return v1 / v2; }   // v1,v2 UNINITIALIZED
 ```
 
-kuna drops the `double` parameters and reads `xmm0` uninitialized, because it types
+unlace drops the `double` parameters and reads `xmm0` uninitialized, because it types
 the callee `sub_15620` (a glibc `log` errno wrapper) as returning **`void`**. Every
 `f64_*` math wrapper in the binary has the same shape, so this is the whole
 math-function family.
@@ -31,11 +31,11 @@ math-function family.
    so `tailcalljump` (default-on) does **not** fire on `sub_15620`'s `jmp 0x7350`.
    Flow instead walks INTO the stub, whose `jmp *GOT` becomes an unresolved
    `CALLIND`, and `sub_15620` renders `(*dat_def20)(); return;`.
-4. With the tail call unrecovered, `sub_15620` has no value at its return → kuna
+4. With the tail call unrecovered, `sub_15620` has no value at its return → unlace
    concludes the prototype returns **`void`**.
 5. That `void` prototype is applied to every caller. IDA instead infers `double`
    from the **caller's** use of `xmm0` after the call (call-site output recovery),
-   but a `void` callee prototype pre-empts that inference in kuna.
+   but a `void` callee prototype pre-empts that inference in unlace.
 
 ## Implementation status (2026-08-12)
 
@@ -98,7 +98,7 @@ process if 0/675).
   only return path is an unresolved indirect tail-call, leave the return **unknown**
   rather than `void`, so call-site output recovery is not pre-empted.
 - **Stage D — call-site xmm0 output recovery.** With the callee return unknown,
-  a caller that reads `xmm0` after the call recovers a `double` return (kuna's
+  a caller that reads `xmm0` after the call recovers a `double` return (unlace's
   ParamMeasure/output path already does this for known cases; verify it fires here).
 
 ## Test strategy

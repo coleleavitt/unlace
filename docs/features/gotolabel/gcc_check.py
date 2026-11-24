@@ -2,7 +2,7 @@
 """For every function whose text changed between two decompile-all trees, run
 `gcc -fsyntax-only` on the before and after text and report the diagnostic delta.
 
-A prelude of `typedef char <t>;` lines is synthesized for the pseudo-types kuna
+A prelude of `typedef char <t>;` lines is synthesized for the pseudo-types unlace
 prints (`code`, `undefined4`, ...) so gcc parses past the signature and reaches
 its label check; the same prelude is used for both sides.
 """

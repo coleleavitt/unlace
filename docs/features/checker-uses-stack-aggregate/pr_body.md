@@ -1,7 +1,7 @@
 ## The problem
 
 `sub_140001740` in `phantomgate.exe` writes both halves of `v12` and repeatedly
-uses its address, but kuna emitted no declaration for `v12`. The model already
+uses its address, but unlace emitted no declaration for `v12`. The model already
 carried the local, its type, stack offset, and use sites; only P9 dropped the
 declaration.
 

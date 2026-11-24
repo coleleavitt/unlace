@@ -1,4 +1,4 @@
-# (kuna) `zeroidiomuse` fixture -- RE-friction round 12, need
+# (unlace) `zeroidiomuse` fixture -- RE-friction round 12, need
 # `argument-recovery-drops-both` (challenge 67f9bdc38f555589f3530a85, stripped
 # ELF x86-64 `WeeperVM--Level_1`, sub_113d9 -> sub_110ff @0x11477), reduced to
 # one loop.

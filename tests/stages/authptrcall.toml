@@ -7,7 +7,7 @@
 # LC_DYSYMTAB indirect-symbol entries, so only its chained bind names the
 # import.
 #
-# Stage / sub-stage: P1 external-refinement. `loader/kuna_authptrcall.rs`
+# Stage / sub-stage: P1 external-refinement. `loader/unlace_authptrcall.rs`
 # names each addend-free bind slot of __auth_ptr after its import and paints
 # it Varnode::externref, the `peimportcall` facts, so ActionDeindirect
 # resolves the call.

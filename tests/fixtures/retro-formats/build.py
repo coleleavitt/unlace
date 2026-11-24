@@ -276,7 +276,7 @@ def write_z64(work):
     assert symbols["_start"] == base
     head = bytearray(0x1000)
     struct.pack_into(">3I", head, 0, 0x80371240, 0xf, base)
-    head[0x20:0x34] = b"KUNA RETRO".ljust(20)
+    head[0x20:0x34] = b"UNLACE RETRO".ljust(20)
     return bytes(head) + pad(image, 16)
 
 

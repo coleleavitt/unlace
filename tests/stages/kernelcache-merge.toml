@@ -1,4 +1,4 @@
-# Kuna `kernelcache` option, several entries in one image (P1 code-data
+# Unlace `kernelcache` option, several entries in one image (P1 code-data
 # partition). The fixture is the two-entry kernel collection from
 # gen_fileset.py wrapped in IMG4; the kext's widget_kernel_table returns the
 # address of the kernel's kernel_table.

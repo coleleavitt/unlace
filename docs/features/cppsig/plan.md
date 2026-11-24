@@ -63,7 +63,7 @@ A refusal must leave the function exactly as `off` would.
 
 ## 6. Verification
 
-- Four gates + `kuna catalog --check`, counters **derived** from a fresh green build.
+- Four gates + `unlace catalog --check`, counters **derived** from a fresh green build.
 - Speed: interleaved min-of-N, N >= 13 (an n=13 run showed +4.01% on a 108 ms case that
   resolved to +0.19% at n=31 — contention, not regression).
 - Sweep: `decompile-all` before/after over C **and** C++ binaries, classifying every hunk,

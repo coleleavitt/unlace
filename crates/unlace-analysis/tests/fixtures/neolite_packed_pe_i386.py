@@ -207,7 +207,7 @@ def compress(blocks):
 
 SNIPPET = bytes.fromhex("558bec8b4508034d0c5dc39090909090")  # 16 bytes, x86
 TEXT = SNIPPET * 256                                          # 4096 bytes
-DATA = b"kuna neolite fixture payload\0"
+DATA = b"unlace neolite fixture payload\0"
 RSRC = b"stored plaintext the packer left alone\0" * 4
 
 IMAGE_BASE = 0x400000

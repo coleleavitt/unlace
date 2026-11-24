@@ -21,12 +21,12 @@
     },
     {
       "what": "no phase option or stage-model fixture",
-      "detail": "This is a strict kuna-analysis metadata-decoding correction: the object format already determines whether bit zero is address or Thumb state. There is no user judgment to expose, and no kuna-decomp phase behavior, option metadata, catalog counter, DIV entry, or stages baseline is involved."
+      "detail": "This is a strict unlace-analysis metadata-decoding correction: the object format already determines whether bit zero is address or Thumb state. There is no user judgment to expose, and no unlace-decomp phase behavior, option metadata, catalog counter, DIV entry, or stages baseline is involved."
     }
   ],
   "inertness": {
     "rule": "The result changes only when Objective-C metadata contains an odd IMP and the parsed object architecture is not 32-bit ARM. Even IMPs on every architecture are byte-identical; every non-ObjC analysis is outside this pass; ARM32 retains the previous normalization.",
-    "evidence": "The full kuna-analysis crate suite passed 748 unit tests plus 3 integration tests, and the unchanged datatest and stages baselines passed 675/675 and 779/779. The full Rust workspace suite also passed with KUNA_DECOMP_TEST unset."
+    "evidence": "The full unlace-analysis crate suite passed 748 unit tests plus 3 integration tests, and the unchanged datatest and stages baselines passed 675/675 and 779/779. The full Rust workspace suite also passed with UNLACE_DECOMP_TEST unset."
   },
   "acceptance": {
     "acceptance_id": "a-78b86f730467",
@@ -36,15 +36,15 @@
     "promoted_to": "tests/cli/x86-64-objective-c.json"
   },
   "gates": {
-    "cargo test -p kuna-analysis analyzers::objc --lib": "13/13 passed",
-    "cargo test -p kuna-analysis": "748 unit tests and 3 integration tests passed",
+    "cargo test -p unlace-analysis analyzers::objc --lib": "13/13 passed",
+    "cargo test -p unlace-analysis": "748 unit tests and 3 integration tests passed",
     "make test": "PARITY OK 675/675",
-    "kuna test --datatests --datatests-dir tests/stages": "PARITY OK 779/779",
+    "unlace test --datatests --datatests-dir tests/stages": "PARITY OK 779/779",
     "make test-cli": "129/129 passed, including the promoted x86-64-objective-c probe",
     "make check-spec": "check-spec OK",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "scripts.repipe.verify --need x86-64-objective-c": "PASS; counts pass 1, fail 0",
     "rustfmt": "methods.rs check clean; mod.rs retains origin/main's pre-existing rustfmt differences to avoid an unrelated whole-module rewrite",
-    "make rust-test": "full cargo workspace suite passed with KUNA_DECOMP_TEST explicitly unset"
+    "make rust-test": "full cargo workspace suite passed with UNLACE_DECOMP_TEST explicitly unset"
   }
 }

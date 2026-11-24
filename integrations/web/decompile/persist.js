@@ -1,13 +1,13 @@
 // persist.js — keep each binary's edit session in localStorage, keyed by a
 // hash of the binary's bytes, so reloading the page (or loading the same file
 // again) restores the student's renames, retypes and patches. A live session
-// joined from someone else is kept apart (`kuna.d2.shared.`), so it never
+// joined from someone else is kept apart (`unlace.d2.shared.`), so it never
 // overwrites the student's own. DOM-free: the storage object is passed in;
 // every write survives a full or throwing store.
 import { sha256Hex } from '../sha256.js';
 
-const SESSION_PREFIX = 'kuna.d2.session.';
-const INDEX_KEY = 'kuna.d2.index';
+const SESSION_PREFIX = 'unlace.d2.session.';
+const INDEX_KEY = 'unlace.d2.index';
 
 /** FNV-1a (32-bit) of `bytes`, as 8 hex digits. */
 export function fnv1a32(bytes, seed = 0x811c9dc5) {

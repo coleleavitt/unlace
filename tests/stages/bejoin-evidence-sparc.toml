@@ -1,4 +1,4 @@
-# kuna option bejoin evidence (the default), GH-815: SPARC returns a long
+# unlace option bejoin evidence (the default), GH-815: SPARC returns a long
 # long in %o0:%o1 with the HIGH word in %o0.  A function that widens an
 # argument after a call printed its halves swapped, or the argument
 # shifted into the high word (option bejoin off, upstream's join):

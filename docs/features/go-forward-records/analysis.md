@@ -16,7 +16,7 @@ a strong ownership cycle.
 
 `repro.go` and `repro.rs` reproduce the library-visible failure using a stripped
 Go image. Build the Go file with `go build -ldflags='-s -w' -o node repro.go`,
-then compile the Rust probe against the built `kuna_console` rlib and its release
+then compile the Rust probe against the built `unlace_console` rlib and its release
 `deps` directory. Pass the binary and spec directory as its two arguments. The
 baseline prints `Node size: 16; Next pointee size: 0`.
 

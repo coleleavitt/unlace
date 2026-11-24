@@ -1,4 +1,4 @@
-# kuna: a 64-bit return whose high register the function sets to zero keeps
+# unlace: a 64-bit return whose high register the function sets to zero keeps
 # all eight bytes, so the zero-extension stays in the printed C.
 #
 # Stage / sub-stage: P3 sub-variable flow, the RETURN pull

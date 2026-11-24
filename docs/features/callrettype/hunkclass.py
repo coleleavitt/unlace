@@ -1,6 +1,6 @@
 """Classify every function callrettype changes: types and conversions only, or more.
 
-hunkclass.py OFF.json ON.json   (kuna decompile-all --json of one binary, option off / on)
+hunkclass.py OFF.json ON.json   (unlace decompile-all --json of one binary, option off / on)
 
 A function whose code differs is normalized on both sides: casts dropped, struct_N and
 vN/aN numbering erased, the literal spellings a type picks (0 / NULL / '\\0') unified,

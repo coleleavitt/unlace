@@ -1,7 +1,7 @@
 # calleearity — whole-corpus before/after (standing requirement 7)
 
 Method and corpus identical to `docs/features/varargstackargs/sweep.md`:
-`kuna decompile-all <bin> --json` with `--option calleearity off` and
+`unlace decompile-all <bin> --json` with `--option calleearity off` and
 `--option calleearity on`, per-function `code` diffed, 57 binaries stratified over
 PE x86·x86-64·ARM, ELF x86·x86-64·ARM·ARM64·MIPS·SPARC·PPC64 and Mach-O
 x86-64·PPC·ARM64; 11 fail to load identically in both arms and are excluded.
@@ -57,7 +57,7 @@ a value alive causes. Classified:
   argument being the `objc_retainAutoreleasedReturnValue()` result).
 * **1 function** — `free()` → `free(0)` (`PolyMLP sub_140001400`). Verified against
   the disassembly: `mov rcx,rbx` with `rbx == 0` at `0x140001749`, so the promoted
-  value is the one kuna's dataflow already believed; the OFF rendering hides it.
+  value is the one unlace's dataflow already believed; the OFF rendering hides it.
 * **2 functions** — no call changes arity; only the variable map shifts, because a
   promoted argument keeps a value live (`sub_46d58`'s own parameter also retypes
   from `char *a0[16]` to `char *a0`, and its body loses a cast).

@@ -1,11 +1,11 @@
 {
- "opportunity": "kuna's built-in prototype tables share one width-stable type vocabulary, so all 108 aggregate-pointer slots in them are spelled `void *`. `void *` never matches a ground-truth `FILE *` (the metric's width-only generosity has no pointer entry), and named-struct pointers are 22.5% of matchable GT variables -- a class kuna scores 0.0% on while ida scores 432 / ghidra 382 / binja 523 TP on the same 92-binary sample. The libc/POSIX-namable slice of it is ~4.1% of matchable GT (FILE 605 occurrences, stat 255, passwd 136).",
- "test_name": "tests/stages/libctypes.xml (26 assertions over ten `load file` passes on five real ELFs; #5/#6 pin that the DWARF layout of `stat` survives the option being on, #16-#25 the stdio stream slots in both link kinds, #26 the `datasyms off` interaction) + 30 unit tests in analyzers::protos::kuna_libctypes::tests (the table invariants, the glibc layouts and the stream shapes) + kuna-cli/tests/decompile_project_cli.rs (header_syntax_checks_when_a_type_shares_a_name_with_a_function) + console project::tests::typedef_names_reads_every_declarator_shape + tests/cli/structdefs-json-types-array.json",
+ "opportunity": "unlace's built-in prototype tables share one width-stable type vocabulary, so all 108 aggregate-pointer slots in them are spelled `void *`. `void *` never matches a ground-truth `FILE *` (the metric's width-only generosity has no pointer entry), and named-struct pointers are 22.5% of matchable GT variables -- a class unlace scores 0.0% on while ida scores 432 / ghidra 382 / binja 523 TP on the same 92-binary sample. The libc/POSIX-namable slice of it is ~4.1% of matchable GT (FILE 605 occurrences, stat 255, passwd 136).",
+ "test_name": "tests/stages/libctypes.xml (26 assertions over ten `load file` passes on five real ELFs; #5/#6 pin that the DWARF layout of `stat` survives the option being on, #16-#25 the stdio stream slots in both link kinds, #26 the `datasyms off` interaction) + 30 unit tests in analyzers::protos::unlace_libctypes::tests (the table invariants, the glibc layouts and the stream shapes) + unlace-cli/tests/decompile_project_cli.rs (header_syntax_checks_when_a_type_shares_a_name_with_a_function) + console project::tests::typedef_names_reads_every_declarator_shape + tests/cli/structdefs-json-types-array.json",
  "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2/coreutils/stripped/fmt",
  "selector": "0x2f30",
  "func_addr": "0x2f30",
  "option": "libctypes",
- "flag": "KUNA_LIBCTYPES (load-time env bridge) + Architecture::analysis_libctypes (catalog visibility)",
+ "flag": "UNLACE_LIBCTYPES (load-time env bridge) + Architecture::analysis_libctypes (catalog visibility)",
  "element_id": null,
  "change_kind": "analysis-enablement",
  "tier": "analysis",
@@ -45,7 +45,7 @@
  },
  "selection_rule": "a retarget restates a shipped signature with the same arity and variadic slot, so it needs no new evidence; a NEW name needs a machine-readable declaration (`gcc -aux-info`) AND corpus weight, measured as PLT call sites over the 524 stripped O0+O2 decbench ELFs. Kept: rewind 117, __uflow 77, fgetc 57, freopen 32, funlockfile 20, getdelim 18, flockfile 18, popen 17, pclose 17. Rejected: fgetc_unlocked 0, fmemopen 0, __underflow 0 (and no installed declaration to reduce).",
  "benchmark": {
-  "instrument": "scripts.decbench.typesweep (decbench main's TypeMatchMetric), DECBENCH_NO_CACHE=1, KUNA_BIN pinned to this branch's release build",
+  "instrument": "scripts.decbench.typesweep (decbench main's TypeMatchMetric), DECBENCH_NO_CACHE=1, UNLACE_BIN pinned to this branch's release build",
   "corpus": "results/full_run_address_2026-09-11, O0+O2, 6 projects, 214 slices, 5298 scored functions",
   "control": "baseline arm vs the tree's published type_match: 5158 agree / 140 differ (97.36%)",
   "projects": {
@@ -122,7 +122,7 @@
   "spelling_and_the_metric": "The scored surface is the STRIPPED image (typesweep decompiles `stripped_of(unstripped)` and takes ground truth from the twin), and there no DWARF type is held, so the table mints and prints the bare `FILE` -- `normalize_type('FILE *') & normalize_type('FILE *')` = {'FILE *','FILE*'}, a match. On a `-g` image the adopted definition is the platform's own and prints under ITS tag, `_IO_FILE *`; that spelling is NOT accepted for a ground-truth `FILE *` -- decbench/metrics/type_match.py `_POINTEE_MAP` (built from TYPE_MAP) has no `_IO_FILE` row, so `normalize_type('_IO_FILE *') & normalize_type('FILE *')` is empty. No measurement in this record runs on an unstripped image, so nothing here is affected; a future one over `-g` images would score every adopted stream slot a miss, and the fix for that is the metric's alias table, not a second spelling of the type."
  },
  "corpus_sweep": {
-  "method": "`kuna decompile-all` off vs opaque over 7 stripped binaries (fmt/ls/grep/gzip/tar O2, find/diff O0), every changed line put in a bucket plus a control-flow/call/constant skeleton comparison per function; full output and the residual-bucket shape histogram in corpus-hunk-classification.txt",
+  "method": "`unlace decompile-all` off vs opaque over 7 stripped binaries (fmt/ls/grep/gzip/tar O2, find/diff O0), every changed line put in a bucket plus a control-flow/call/constant skeleton comparison per function; full output and the residual-bucket shape histogram in corpus-hunk-classification.txt",
   "functions": 3702,
   "functions_gained_or_lost": 0,
   "ptrsub_functional_form_off": 0,
@@ -176,8 +176,8 @@
    "reading": "+229 (+22.9%) over the 7 sweep binaries, concentrated in tar/grep/gzip/find/diff; ls goes DOWN by one. Same class as the `field_0x` count in the -g sweep -- an offset that was a cast becoming a slot of a named pointee. The follow-up `glibc` value, which gives the stream shell real field names, retires the stdio half of it."
   },
   "export_c_cost": {
-   "what": "`kuna decompile-project` writes a `.c` alongside the `.h`. The exported body has never compiled (it is a reading aid, not a rebuildable source tree), but this option makes it measurably less so: the named shells stay `type_incomplete`, so the `.h` declares `typedef struct FILE FILE; /* opaque */` while the `.c` declares objects of that type and reads fields out of them. The PR's export claim covers the `.h` only.",
-   "method": "kuna decompile-project <O2/coreutils/stripped/ls> -o D --option libctypes off|opaque ; cc -std=c99 -fsyntax-only -I D D/ls.c 2>&1 | grep -c 'error:'",
+   "what": "`unlace decompile-project` writes a `.c` alongside the `.h`. The exported body has never compiled (it is a reading aid, not a rebuildable source tree), but this option makes it measurably less so: the named shells stay `type_incomplete`, so the `.h` declares `typedef struct FILE FILE; /* opaque */` while the `.c` declares objects of that type and reads fields out of them. The PR's export claim covers the `.h` only.",
+   "method": "unlace decompile-project <O2/coreutils/stripped/ls> -o D --option libctypes off|opaque ; cc -std=c99 -fsyntax-only -I D D/ls.c 2>&1 | grep -c 'error:'",
    "errors_off": 911,
    "errors_on": 969,
    "delta": 58,
@@ -293,11 +293,11 @@
   "make test-stages": "datatests: 1022/1022 assertions passed -- PARITY OK",
   "make test-cli": "tests/cli: 172/172 passed",
   "make check-spec": "check-spec OK (lenient mode) / check-spec OK (strict mode)",
-  "kuna catalog --check": "catalog OK: documents exactly the registered kuna options",
+  "unlace catalog --check": "catalog OK: documents exactly the registered unlace options",
   "counters --check": "no drift: every hard-coded site agrees with the derived truth",
-  "docs/options.md": "regenerated from `kuna catalog --markdown`",
-  "make rust-test": "RUST_TEST_RC=0 on commit cf9e5555 (the lane script; log .scratch/rev4/rust-test.log, 2026-09-16T23:26:33Z -> 2026-09-16T23:46:28Z): 414 `test result: ok` blocks, 0 `test result: FAILED`. cf9e5555 is the only commit of this round that touches a .rs file (the `Ty::NamedPtr` doc comment); every commit after it changes docs/features/libctypes/* and docs/spec/* only, and no cargo test reads either (options_md_fresh.rs reads docs/options.md, unchanged since the previous round). The 15 analyzers::protos::kuna_libctypes unit tests, p0_knowledge::kuna_libctypes::tests::libctypes_env_gate, header_syntax_checks_when_a_type_shares_a_name_with_a_function and project::tests::typedef_names_reads_every_declarator_shape are all present and ok.",
-  "re-run": "every gate above except `make rust-test` was re-run on a `make binaries` build of the branch tip after the lane finished: test 675/675 PARITY OK, test-stages 1022/1022 PARITY OK, test-cli 172/172, check-spec OK lenient + OK strict, catalog --check OK, counters --check no drift, `kuna catalog --markdown | diff - docs/options.md` clean."
+  "docs/options.md": "regenerated from `unlace catalog --markdown`",
+  "make rust-test": "RUST_TEST_RC=0 on commit cf9e5555 (the lane script; log .scratch/rev4/rust-test.log, 2026-09-16T23:26:33Z -> 2026-09-16T23:46:28Z): 414 `test result: ok` blocks, 0 `test result: FAILED`. cf9e5555 is the only commit of this round that touches a .rs file (the `Ty::NamedPtr` doc comment); every commit after it changes docs/features/libctypes/* and docs/spec/* only, and no cargo test reads either (options_md_fresh.rs reads docs/options.md, unchanged since the previous round). The 15 analyzers::protos::unlace_libctypes unit tests, p0_knowledge::unlace_libctypes::tests::libctypes_env_gate, header_syntax_checks_when_a_type_shares_a_name_with_a_function and project::tests::typedef_names_reads_every_declarator_shape are all present and ok.",
+  "re-run": "every gate above except `make rust-test` was re-run on a `make binaries` build of the branch tip after the lane finished: test 675/675 PARITY OK, test-stages 1022/1022 PARITY OK, test-cli 172/172, check-spec OK lenient + OK strict, catalog --check OK, counters --check no drift, `unlace catalog --markdown | diff - docs/options.md` clean."
  },
  "catalog_counts": {
   "settables": 208,
@@ -308,21 +308,21 @@
   "note": "re-derived with scripts.repipe.counters --fix on a freshly built tree after rebasing onto #647/#648"
  },
  "files": [
-  "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes.rs",
-  "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes/tests.rs",
-  "decompiler/crates/kuna-analysis/src/analyzers/protos/mod.rs",
-  "decompiler/crates/kuna-analysis/src/passes.rs",
-  "decompiler/crates/kuna-analysis/tests/fixtures/libctypes_stat_x86_64",
-  "decompiler/crates/kuna-analysis/tests/fixtures/libctypes_stat_x86_64.c",
-  "decompiler/crates/kuna-cli/src/decompile.rs",
-  "decompiler/crates/kuna-cli/src/decompile_all.rs",
-  "decompiler/crates/kuna-cli/tests/decompile_project_cli.rs",
+  "decompiler/crates/unlace-analysis/src/analyzers/protos/libctypes.rs",
+  "decompiler/crates/unlace-analysis/src/analyzers/protos/libctypes/tests.rs",
+  "decompiler/crates/unlace-analysis/src/analyzers/protos/mod.rs",
+  "decompiler/crates/unlace-analysis/src/passes.rs",
+  "decompiler/crates/unlace-analysis/tests/fixtures/libctypes_stat_x86_64",
+  "decompiler/crates/unlace-analysis/tests/fixtures/libctypes_stat_x86_64.c",
+  "decompiler/crates/unlace-cli/src/decompile.rs",
+  "decompiler/crates/unlace-cli/src/decompile_all.rs",
+  "decompiler/crates/unlace-cli/tests/decompile_project_cli.rs",
   "decompiler/crates/console/src/engine.rs",
   "decompiler/crates/console/src/console.rs",
   "decompiler/crates/console/src/project.rs",
-  "decompiler/crates/kuna-decomp/phases.toml",
-  "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
-  "decompiler/crates/kuna-decomp/src/p0_knowledge/libctypes.rs",
+  "decompiler/crates/unlace-decomp/phases.toml",
+  "decompiler/crates/unlace-decomp/src/infra/architecture.rs",
+  "decompiler/crates/unlace-decomp/src/p0_knowledge/libctypes.rs",
   "docs/spec/01-program-prep.md",
   "docs/spec/09-emission.md",
   "tests/stages/libctypes.xml"
@@ -332,11 +332,11 @@
  "default_value": "opaque",
  "default_decision": {
   "verdict": "ship default-OFF in this PR; the flip is a separate PR (campaign Stage 3)",
-  "evidence_for_on": "typesweep 214 slices / 5298 functions: +39 perfect, 0 moved off perfect, 386 improved, 0 worsened; make test 675/675 PARITY OK with the gate forced on (KUNA_LIBCTYPES=opaque); make test-stages 1022/1022 PARITY OK with the gate forced on; whole-binary sweep over 7 stripped binaries shows no wrong-output hunk and no change in the PTRSUB( count; six unstripped twins keep or gain named-field accesses; speed worst +2.01% on the minimum.",
-  "blocker": "`make test-cli` goes 171/172 with the gate forced on: the promoted probe tests/cli/changing-namestyle-invalidates-discovered.json pins `sub_1249(void *param_1)` on decompiler/crates/kuna-analysis/tests/fixtures/stripped_dynamic_x86_64, and that parameter becomes `FILE *`. The new spelling is CORRECT -- the body is fclose(param_1) / fread(...,param_1) -- but rewriting another feature's regression probe belongs in the flip PR with that justification, not in the PR that introduces the option."
+  "evidence_for_on": "typesweep 214 slices / 5298 functions: +39 perfect, 0 moved off perfect, 386 improved, 0 worsened; make test 675/675 PARITY OK with the gate forced on (UNLACE_LIBCTYPES=opaque); make test-stages 1022/1022 PARITY OK with the gate forced on; whole-binary sweep over 7 stripped binaries shows no wrong-output hunk and no change in the PTRSUB( count; six unstripped twins keep or gain named-field accesses; speed worst +2.01% on the minimum.",
+  "blocker": "`make test-cli` goes 171/172 with the gate forced on: the promoted probe tests/cli/changing-namestyle-invalidates-discovered.json pins `sub_1249(void *param_1)` on decompiler/crates/unlace-analysis/tests/fixtures/stripped_dynamic_x86_64, and that parameter becomes `FILE *`. The new spelling is CORRECT -- the body is fclose(param_1) / fread(...,param_1) -- but rewriting another feature's regression probe belongs in the flip PR with that justification, not in the PR that introduces the option."
  },
  "speed": {
-  "method": "interleaved off/opaque pairs through the load-time env bridge (`kuna decompile-all --option libctypes off|opaque`), MINIMUM and median of 15 pairs each, alternating which arm runs first; the MINIMUM is the honest read because the box is shared. Re-measured on the rebased tree after the DWARF-order fix.",
+  "method": "interleaved off/opaque pairs through the load-time env bridge (`unlace decompile-all --option libctypes off|opaque`), MINIMUM and median of 15 pairs each, alternating which arm runs first; the MINIMUM is the honest read because the box is shared. Re-measured on the rebased tree after the DWARF-order fix.",
   "rows": [
    {
     "case": "fmt decompile-all (152 fn)",
@@ -372,9 +372,9 @@
   "within_budget": true,
   "why": "the load-time cost is ~20 `get_type_struct`/`find_by_name` calls (the `fmt functions` row, +0.08% on the minimum, is that cost in isolation). The whole-binary rows carry the real cost: a named 216-byte pointee participates in type propagation where a `void *` did not. The `fmt functions` median (+14.92% against a +0.08% minimum) and the `ls` median are contention from a concurrent gate run, not signal."
  },
- "ablation_evidence": "`kuna decompile-all` over the whole O2/coreutils/stripped/fmt: this branch with `--option libctypes off` is byte-identical to the main tree's own build (0 of 4,069 lines differ).",
+ "ablation_evidence": "`unlace decompile-all` over the whole O2/coreutils/stripped/fmt: this branch with `--option libctypes off` is byte-identical to the main tree's own build (0 of 4,069 lines differ).",
  "dwarf_sweep": {
-  "method": "`kuna decompile-all` off vs opaque over 6 UNSTRIPPED (-g) twins; `named field` = a `->name` access that is not `->field_0xNN`",
+  "method": "`unlace decompile-all` off vs opaque over 6 UNSTRIPPED (-g) twins; `named field` = a `->name` access that is not `->field_0xNN`",
   "rows": [
    {
     "twin": "O0 findutils find",
@@ -438,23 +438,23 @@
  "default_flip": {
   "what": "the default moves off -> opaque; nothing about the pass changes. `--option libctypes off` restores the shipped `void *` tables.",
   "files": [
-   "decompiler/crates/kuna-decomp/src/p0_knowledge/libctypes.rs (unset env => on, mirroring the dwarfstructs bridge)",
-   "decompiler/crates/kuna-cli/src/decompile.rs + decompile_all.rs (the two load-time env bridges: off-token polarity, token passed through verbatim like the symbolnamebound bridge, so a later layout value cannot read as `off`)",
-   "decompiler/crates/kuna-decomp/src/infra/architecture.rs (reset_defaults_internal)",
-   "decompiler/crates/kuna-decomp/phases.toml (default + use_when + example)",
-   "decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json (byte capture recaptured)",
-   "decompiler/crates/kuna-ghidra/tests/ghidra_sim_e2e.rs (PIN_FAILLOG_C_LINES[0] 285 -> 286)",
+   "decompiler/crates/unlace-decomp/src/p0_knowledge/libctypes.rs (unset env => on, mirroring the dwarfstructs bridge)",
+   "decompiler/crates/unlace-cli/src/decompile.rs + decompile_all.rs (the two load-time env bridges: off-token polarity, token passed through verbatim like the symbolnamebound bridge, so a later layout value cannot read as `off`)",
+   "decompiler/crates/unlace-decomp/src/infra/architecture.rs (reset_defaults_internal)",
+   "decompiler/crates/unlace-decomp/phases.toml (default + use_when + example)",
+   "decompiler/crates/unlace-decomp/tests/fixtures/phase_catalog.json (byte capture recaptured)",
+   "decompiler/crates/unlace-ghidra/tests/ghidra_sim_e2e.rs (PIN_FAILLOG_C_LINES[0] 285 -> 286)",
    "docs/options.md, docs/spec/01-program-prep.md, docs/features/libctypes/flip.md",
    "tests/stages/libctypes.xml (restores `opaque`, not `off`, in its last command)",
    "tests/cli/changing-namestyle-invalidates-discovered.json (`void *param_1` -> `FILE *param_1`)",
    "docs/features/libctypes/byvalue.py (the by-value scanner)"
   ],
   "moved_stage_assertions": [],
-  "moved_stage_assertions_note": "NONE. `make test-stages` is 1038/1038 PARITY OK and a --save-baseline re-record of docs/baseline-stages.json on the flipped build is byte-identical to the file in the tree (100,769 bytes each), so no re-record was needed. Checked two further ways rather than taken from the green line: (a) a throwaway fixture that loads a real ELF and asserts `int4 fclose(FILE *a0)` with NO `option` command passes on this build and fails under KUNA_LIBCTYPES=off, so the harness really sees the new default; (b) all 16 stage fixtures that `load file` were replayed through decomp_dbg in both arms with their own `option libctypes` commands removed -- 15 are byte-identical and the 16th is libctypes.xml itself (void */FILE *, plus get_prefix losing a shadow local `c` that merges into v3).",
+  "moved_stage_assertions_note": "NONE. `make test-stages` is 1038/1038 PARITY OK and a --save-baseline re-record of docs/baseline-stages.json on the flipped build is byte-identical to the file in the tree (100,769 bytes each), so no re-record was needed. Checked two further ways rather than taken from the green line: (a) a throwaway fixture that loads a real ELF and asserts `int4 fclose(FILE *a0)` with NO `option` command passes on this build and fails under UNLACE_LIBCTYPES=off, so the harness really sees the new default; (b) all 16 stage fixtures that `load file` were replayed through decomp_dbg in both arms with their own `option libctypes` commands removed -- 15 are byte-identical and the 16th is libctypes.xml itself (void */FILE *, plus get_prefix losing a shadow local `c` that merges into v3).",
   "datatests_structural": "0 of 83 tests/datatests/*.xml contain `load file`, so the 675 assertions cannot observe this tier; make test is 675/675 PARITY OK and is not evidence either way.",
   "typesweep": {
-   "instrument": "scripts.decbench.typesweep (decbench main's TypeMatchMetric), DECBENCH_NO_CACHE=1, KUNA_BIN pinned to this branch's release build, --workers 16, --dump-decisions",
-   "arms": "base = KUNA_LIBCTYPES=off (verified byte-identical to a binary built from origin/main), test = --option libctypes opaque (= the new default), so `improved` reads in the direction of the flip",
+   "instrument": "scripts.decbench.typesweep (decbench main's TypeMatchMetric), DECBENCH_NO_CACHE=1, UNLACE_BIN pinned to this branch's release build, --workers 16, --dump-decisions",
+   "arms": "base = UNLACE_LIBCTYPES=off (verified byte-identical to a binary built from origin/main), test = --option libctypes opaque (= the new default), so `improved` reads in the direction of the flip",
    "corpus": "results/full_run_address_2026-09-11, projects coreutils grep gzip diffutils bzip2 findutils tar shadow x O0/O2/O2-noinline = 444 slices, 10748 scored functions",
    "controls": {
     "baseline_vs_published_agree": 10075,
@@ -597,14 +597,14 @@
      "base": 0.16666666666666666,
      "test": 0.0,
      "gt": "int write_directory_file_entry(void *entry, void *data) -- the hash_do_for_each callback signature",
-     "kuna_off": "void * (a match)",
-     "kuna_on": "FILE * (a miss)",
-     "verdict": "NOT a defect. The GT type is a POINTER, not a scalar we have started calling a pointer, so it is not the shape the sweep watches for; and kuna's answer is what the body does -- sub_1f1c0 hands that argument to fwrite_unlocked eight times. tar's own first line is `FILE *fp = data;`. The metric holds the declaration, kuna reports the use. 1 function in 10,748, not systematic."
+     "unlace_off": "void * (a match)",
+     "unlace_on": "FILE * (a miss)",
+     "verdict": "NOT a defect. The GT type is a POINTER, not a scalar we have started calling a pointer, so it is not the shape the sweep watches for; and unlace's answer is what the body does -- sub_1f1c0 hands that argument to fwrite_unlocked eight times. tar's own first line is `FILE *fp = data;`. The metric holds the declaration, unlace reports the use. 1 function in 10,748, not systematic."
     }
    ]
   },
   "corpus_sweep": {
-   "method": "`kuna decompile-all` off vs the new default over 9 stripped binaries (fmt/ls/grep/gzip/tar/bzip2 O2, find/diff O0, shadow useradd O2-noinline); every changed line bucketed AND every function's skeleton -- control-flow keyword sequence + call-target multiset + numeric-literal multiset, identifiers and types normalised away -- compared",
+   "method": "`unlace decompile-all` off vs the new default over 9 stripped binaries (fmt/ls/grep/gzip/tar/bzip2 O2, find/diff O0, shadow useradd O2-noinline); every changed line bucketed AND every function's skeleton -- control-flow keyword sequence + call-target multiset + numeric-literal multiset, identifiers and types normalised away -- compared",
    "functions": 4301,
    "functions_gained_or_lost": 0,
    "call_target_multiset_changed_in": 0,
@@ -736,7 +736,7 @@
    }
   },
   "off_arm_is_main": {
-   "method": "kuna decompile-all over 9 whole binaries: this branch with KUNA_LIBCTYPES=off vs a release binary built from origin/main (f02365cc, extracted with `git archive` and built in .scratch)",
+   "method": "unlace decompile-all over 9 whole binaries: this branch with UNLACE_LIBCTYPES=off vs a release binary built from origin/main (f02365cc, extracted with `git archive` and built in .scratch)",
    "result": "byte-identical on all 9",
    "lines": {
     "O2 coreutils fmt": 4069,
@@ -754,7 +754,7 @@
    "file": "tests/cli/changing-namestyle-invalidates-discovered.json",
    "was": "sub_1249\\\\(void \\\\*param_1\\\\)",
    "now": "sub_1249\\\\(FILE \\\\*param_1\\\\)",
-   "justification": "The probe proves that a name `kuna functions` reports still selects its function when --option namestyle ghidra changes how names are PRINTED; `param_1` (rather than `a0`) is what pins that the style applied, and that is untouched. The parameter of sub_1249 in decompiler/crates/kuna-analysis/tests/fixtures/stripped_dynamic_x86_64 is passed to fread and fclose and nothing else, so `FILE *` is the correct spelling. Same anchor, same parameter, one spelling: exactly as tight as it was."
+   "justification": "The probe proves that a name `unlace functions` reports still selects its function when --option namestyle ghidra changes how names are PRINTED; `param_1` (rather than `a0`) is what pins that the style applied, and that is untouched. The parameter of sub_1249 in decompiler/crates/unlace-analysis/tests/fixtures/stripped_dynamic_x86_64 is passed to fread and fclose and nothing else, so `FILE *` is the correct spelling. Same anchor, same parameter, one spelling: exactly as tight as it was."
   },
   "speed": {
    "method": "interleaved off/default pairs, alternating which arm runs first; MINIMUM of 15 pairs is the honest read on a shared box. Arm A = `--option libctypes off`, arm B = no option (the new default).",
@@ -809,11 +809,11 @@
    "make test-stages": "datatests: 1038/1038 assertions passed -- PARITY OK; a --save-baseline re-record is byte-identical to docs/baseline-stages.json (100,769 bytes), so no assertion moved and no re-record was needed",
    "make test-cli": "tests/cli: 178/178 passed",
    "make check-spec": "check-spec OK (lenient mode) / check-spec OK (strict mode)",
-   "kuna catalog --check": "catalog OK: documents exactly the registered kuna options",
+   "unlace catalog --check": "catalog OK: documents exactly the registered unlace options",
    "counters --check": "no drift: every hard-coded site agrees with the derived truth",
-   "docs/options.md": "byte-fresh (`kuna catalog --markdown | diff - docs/options.md` clean)",
+   "docs/options.md": "byte-fresh (`unlace catalog --markdown | diff - docs/options.md` clean)",
    "make rust-test": "RUST_TEST_RC=0 via the lane script on the branch tip (LANE: start 2026-09-17T05:05:58Z, done rc=0 05:21:43Z): 415 `test result: ok` blocks, 7,098 tests ok, 0 `test result: FAILED`, options_md_matches_the_generator_byte_for_byte ok. An earlier round found the two expectations this PR moves (catalog_bytecompat's phase_catalog.json capture, ghidra_sim_faillog_pins' C-line count); both are fixed in this branch and every round since is clean.",
-   "off_arm_is_still_main": "all nine sweep binaries, this branch's rebuilt `kuna --option libctypes off` vs a release binary built from origin/main (f02365cc): byte-identical -- fmt 4069, ls 13677, grep 18257, tar 56725, find 20839, diff 13102, gzip 9358, bzip2 9769, useradd 11487 lines. Re-run after the CLI env-bridge change."
+   "off_arm_is_still_main": "all nine sweep binaries, this branch's rebuilt `unlace --option libctypes off` vs a release binary built from origin/main (f02365cc): byte-identical -- fmt 4069, ls 13677, grep 18257, tar 56725, find 20839, diff 13102, gzip 9358, bzip2 9769, useradd 11487 lines. Re-run after the CLI env-bridge change."
   }
  },
  "speed_flip": {
@@ -866,7 +866,7 @@
  },
  "glibc": {
   "what": "the third value: the PUBLISHED glibc x86-64 field layouts of the nine aggregates whose members are part of the platform's API -- FILE, stat, timespec, timeval, tm, passwd, group, option, dirent. `opaque` gives each named aggregate a real width and no members, so a field access renders `f->field_0x8` and the loaded value keeps whatever the cast said; `glibc` installs the real members, so the same access is `f->_IO_read_ptr` and the value takes the FIELD's type.",
-  "module": "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes/glibc.rs",
+  "module": "decompiler/crates/unlace-analysis/src/analyzers/protos/libctypes/glibc.rs",
   "provenance": "every offset/width/alignment measured on this machine with offsetof/sizeof/_Alignof against the installed headers (glibc 2.35, x86-64); the program and its output are in docs/features/libctypes/glibc.md. Nothing restated from memory.",
   "target_gate": "installed only on an ELF for x86-64 whose .dynstr names glibc (the `libc.so.6` soname or a GLIBC_2.x symbol version). musl, another libc, another architecture and a statically linked image keep the opaque shells -- and a static image loses nothing, because these tables match IMPORTED names only.",
   "laid_out": [
@@ -911,7 +911,7 @@
     "glibc": 2,
     "retracted": "an earlier version of this record, of glibc.md and of the PR body said `PTRSUB(` stays 0/0 EVERYWHERE. FALSE. O2/libselinux/libselinux.so.1 goes 0 -> 2.",
     "counterexample": "O2/libselinux/stripped/libselinux.so.1 sub_13530 @0x13530: `v50 = (int *)v14;` and `v61 = (int *)v14;` become `v50 = PTRSUB(v14,0);` / `v61 = PTRSUB(v14,0);`. v14 is a FILE *, v50/v61 are int *. opaque gives FILE no member at offset 0 so RulePtrsubUndo removes the PTRSUB; glibc puts _flags there, the PTRSUB is MATCHING, and the printer falls back to the functional form instead of &v14->_flags.",
-    "pre_existing_on_main": "the same fallback is reachable on origin/main today wherever a struct is DWARF-complete: `kuna decompile-all O2/libselinux/compiled/libselinux.so.1 | grep -c 'PTRSUB('` = 3 (PTRSUB(aeref.ae,0x30) x2 and PTRSUB(v2,0x30) = *newsid), with no libctypes value involved. The `glibc` value REACHES a pre-existing printer shape on stripped images; it does not introduce it.",
+    "pre_existing_on_main": "the same fallback is reachable on origin/main today wherever a struct is DWARF-complete: `unlace decompile-all O2/libselinux/compiled/libselinux.so.1 | grep -c 'PTRSUB('` = 3 (PTRSUB(aeref.ae,0x30) x2 and PTRSUB(v2,0x30) = *newsid), with no libctypes value involved. The `glibc` value REACHES a pre-existing printer shape on stripped images; it does not introduce it.",
     "scope": "2 sites in 26 binaries, all in one function of one library. Rare, but the 0/0 control claim was wrong and the honest number is 2."
    },
    "field_0x_accesses": {
@@ -1015,7 +1015,7 @@
    }
   },
   "benchmark": {
-   "instrument": "scripts.decbench.typesweep (decbench main's TypeMatchMetric), DECBENCH_NO_CACHE=1, KUNA_BIN pinned to this branch's release build; base arm = the shipped default `opaque`, test arm = `--option libctypes glibc`",
+   "instrument": "scripts.decbench.typesweep (decbench main's TypeMatchMetric), DECBENCH_NO_CACHE=1, UNLACE_BIN pinned to this branch's release build; base arm = the shipped default `opaque`, test arm = `--option libctypes glibc`",
    "corpus": "results/full_run_address_2026-09-11, O0 + O2 + O2-noinline, 8 projects, 444 slices, 10748 scored functions",
    "control": "baseline arm vs the tree's published type_match: 9505 agree / 1243 differ (88.44%, the tree was scored before this campaign's merges); 10590 functions hand the metric byte-identical variables[] and 0 of them score differently",
    "pooled": {
@@ -1124,7 +1124,7 @@
    "flip_conditions": "a later flip wants the propagation reach bounded (or the copy_internal shape understood) and a typesweep that is positive rather than flat."
   },
   "speed": {
-   "method": "interleaved opaque/glibc pairs (`kuna decompile-all --option libctypes opaque|glibc`), MINIMUM and median of 15 pairs each, alternating which arm runs first. The MINIMUM is the honest read: the box was shared with another agent's corpus sweep throughout.",
+   "method": "interleaved opaque/glibc pairs (`unlace decompile-all --option libctypes opaque|glibc`), MINIMUM and median of 15 pairs each, alternating which arm runs first. The MINIMUM is the honest read: the box was shared with another agent's corpus sweep throughout.",
    "rows": [
     {
      "case": "fmt decompile-all (152 fn)",
@@ -1152,7 +1152,7 @@
    "measured_before_the_reserved_row_drop": "yes. Dropping stat::__pad0/__glibc_reserved and FILE::__pad5/_unused2 removes four field mints per program at load and can only subtract work, so the rows above stand as an upper bound. An independent min-of-N reproduced the shape: fmt +1.17% when the measurement is load-dominated, du whole-binary -1.36% at n=11."
   },
   "project_export": {
-   "method": "kuna decompile-project <libctypes_glibc_x86_64> -o D --option libctypes off|opaque|glibc; cc -std=c99 -fsyntax-only over the generated .h and over the generated .c",
+   "method": "unlace decompile-project <libctypes_glibc_x86_64> -o D --option libctypes off|opaque|glibc; cc -std=c99 -fsyntax-only over the generated .h and over the generated .c",
    "header_errors": {
     "off": 0,
     "opaque": 0,
@@ -1169,17 +1169,17 @@
  },
  "stdio": {
   "what": "the stdio STREAM SLOTS as typed data symbols. The rest of the table types a stream where a CALL says what it is; the slots themselves were untyped storage (named by `datasyms`, an `undefined<size>` word) or, in a shared object, not named at all. This step emits a typed DATA symbol for each, keyed on the dynamic relocation that binds it -- which is also the evidence that the name is the C library's and not a global the program happens to spell `stdout`.",
-  "module": "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes/streams.rs",
+  "module": "decompiler/crates/unlace-analysis/src/analyzers/protos/libctypes/streams.rs",
   "carrier": "AnalysisOutput::typed_data (new `TypedDataFact`), committed in console/src/engine.rs as arm 4b with `typelock|namelock` -- after the DWARF data globals (1a) and the string literals (4) so a richer source keeps its address, before the loader `.dynsym` data stream (4a) so its untyped naming of the same slot stands down.",
   "shapes": {
    "copy": "R_*_COPY on a DEFINED symbol whose st_size is the pointer width: the .bss word the run-time loader fills with libc's own `FILE *stdout`. Type `FILE *`, name `stdout`. (coreutils fmt: 0xc088 / 0xc090 / 0xc0c0.)",
    "glob_dat_undefined": "R_*_GLOB_DAT on an UNDEFINED symbol: the GOT word holds the stream's ADDRESS. Type `FILE **`, name `stdout_ptr` -- the address is not the stream, and calling it one would make the emitted `*stdout` an indirection the program does not perform. (libselinux.so.1: 0x2bf38 / 0x2bf48 / 0x2bfe8.)",
    "glob_dat_defined": "declined: the same image's own copy slot, in a mixed executable (shadow useradd copy-relocates stdout/stderr AND keeps a GOT slot pointing at each copy, while its stdin is undefined). The relocation fill and the RELRO constant-fold already render those.",
-  "glob_dat_name_taken": "declined: the GLOB_DAT arm MINTS `<stream>_ptr`, so it stands down when either symbol table already spells that name -- otherwise an image with its own `stdout_ptr` global would print two different addresses under one identifier ((*stdout_ptr)->field_0x28 ... + stdout_ptr). BOTH tables are read: a `static long stdout_ptr` reaches .symtab only, and .symtab is where the loader's data symbols are named from. Repro + unit test: libctypes_streams_collide_so_x86_64.so (the fixture source built a third time with -DKUNA_STREAM_NAME_COLLISION), which yields `stdin_ptr` alone. Costs nothing measured: readelf -sW over all 75662 ELF images in the decbench tree finds 0 that spell any of the three _ptr names, and the four binaries the sweep moves give the same changed-line counts with the check as without (tar 2, libselinux.so.1 68, libstdbuf.so 12, useradd 8)."
+  "glob_dat_name_taken": "declined: the GLOB_DAT arm MINTS `<stream>_ptr`, so it stands down when either symbol table already spells that name -- otherwise an image with its own `stdout_ptr` global would print two different addresses under one identifier ((*stdout_ptr)->field_0x28 ... + stdout_ptr). BOTH tables are read: a `static long stdout_ptr` reaches .symtab only, and .symtab is where the loader's data symbols are named from. Repro + unit test: libctypes_streams_collide_so_x86_64.so (the fixture source built a third time with -DUNLACE_STREAM_NAME_COLLISION), which yields `stdin_ptr` alone. Costs nothing measured: readelf -sW over all 75662 ELF images in the decbench tree finds 0 that spell any of the three _ptr names, and the four binaries the sweep moves give the same changed-line counts with the check as without (tar 2, libselinux.so.1 68, libstdbuf.so 12, useradd 8)."
   },
   "scope": "linked ELF only, on the four architectures whose relocation numbering the loader knows (x86-64, AArch64, i386, ARM); a spelling occurring more than once in `.dynsym` is declined, and so is the GLOB_DAT arm when the image already spells the `<stream>_ptr` name it would mint (.symtab or .dynsym); the `FILE` is the one `named_aggregate` hands the rest of the table, so an image holding a different `FILE` contributes no stream symbol rather than a contradictory one.",
   "corpus_sweep": {
-   "method": "`kuna decompile-all` over 12 stripped binaries, this branch against a release build of the then-current origin/main (39fdc804) in its own worktree; every changed LINE classified. docs/features/libctypes/corpus-hunk-classification-stdio.txt + classify_stdio.py.",
+   "method": "`unlace decompile-all` over 12 stripped binaries, this branch against a release build of the then-current origin/main (39fdc804) in its own worktree; every changed LINE classified. docs/features/libctypes/corpus-hunk-classification-stdio.txt + classify_stdio.py.",
    "binaries": 12,
    "byte_identical_binaries": 8,
    "byte_identical_binaries_note": "fmt, ls O2, ls O0, grep, gzip, find, diff, bzip2. The four that move are the two shared objects (libselinux.so.1 68, libstdbuf.so 12 changed sides), useradd (8, the mixed image) and tar (2, one stack slot assigned the copy-relocated stdout).",
@@ -1197,7 +1197,7 @@
    "cost": "LOCAL MERGING, at more than one site. Typing a slot FILE*/FILE** stops it merging with the unrelated values a scalar local had absorbed: that adds a declaration and renumbers every local after it, so one retyped slot can account for most of a function's changed lines. Measured against the same base build on two binaries outside the twelve, with v<N> normalised so the second number is semantic hunks rather than renumbering -- O2/libedit/libedit.so.0.0.70 rl_initialize 57 changed lines / 15 normalised / 10 -> 11 declarations (a new `FILE **`), fn_complete2 2 / 2 / 36 -> 36; i386_pie_nl 294 / 72 over six functions (main, usage, close_stdout, nl_file, set_program_name, emit_bug_reporting_address), +1 declaration in main and +1 in close_stdout. The normalised residue is still only the three disclosed classes (got-slot-named, cast-removed, decl-typed-FILE); nothing moves a statement, address, call target or literal. close_stdout is the shape: one `unsigned int v3` carried BOTH stream pointers and splits into `FILE *v1`."
   },
   "benchmark": {
-   "instrument": "scripts.decbench.typesweep, decbench main's TypeMatchMetric, DECBENCH_NO_CACHE=1, --baseline-only run twice with KUNA_BIN pinned first to a then-current origin/main (39fdc804) release build and then to this branch's.",
+   "instrument": "scripts.decbench.typesweep, decbench main's TypeMatchMetric, DECBENCH_NO_CACHE=1, --baseline-only run twice with UNLACE_BIN pinned first to a then-current origin/main (39fdc804) release build and then to this branch's.",
    "corpus": "8 projects x O0 / O2 / O2-noinline = 444 slices, 10748 scored functions",
    "control": "main arm agrees with the tree's published type_match on 9505/10748 (88.44%); branch arm 9504 -- the one function that differs is the one that moved.",
    "perfect_main": 959,
@@ -1216,13 +1216,13 @@
   "default": "no new option and no new value -- the stream slots ride the existing `libctypes` gate (`off` emits nothing; `opaque` and `glibc` both emit, differing only in whether the pointee has members).",
   "tests": "tests/stages/libctypes.xml passes 6-9 (the exe and the .so built from one source, each once `off` and once `opaque`), assertions #16-#25, plus pass 10 / #26 for the `datasyms off` interaction; 7 unit tests in protos/libctypes/tests.rs (the seventh pins the minted-name decline on libctypes_streams_collide_so_x86_64.so); tests/cli/structdefs-json-types-array.json retargeted (main of i386_pie_nl now references two libc shells, so `types` carries FILE ahead of option, each pinned by name, .h text and size).",
   "files": [
-   "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes/streams.rs",
-   "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes.rs",
-   "decompiler/crates/kuna-analysis/src/pass.rs",
+   "decompiler/crates/unlace-analysis/src/analyzers/protos/libctypes/streams.rs",
+   "decompiler/crates/unlace-analysis/src/analyzers/protos/libctypes.rs",
+   "decompiler/crates/unlace-analysis/src/pass.rs",
    "decompiler/crates/console/src/engine.rs",
-   "decompiler/crates/kuna-analysis/tests/fixtures/libctypes_streams_x86_64{,.c}",
-   "decompiler/crates/kuna-analysis/tests/fixtures/libctypes_streams_so_x86_64.so",
-   "decompiler/crates/kuna-analysis/tests/fixtures/libctypes_streams_collide_so_x86_64.so",
+   "decompiler/crates/unlace-analysis/tests/fixtures/libctypes_streams_x86_64{,.c}",
+   "decompiler/crates/unlace-analysis/tests/fixtures/libctypes_streams_so_x86_64.so",
+   "decompiler/crates/unlace-analysis/tests/fixtures/libctypes_streams_collide_so_x86_64.so",
    "tests/stages/libctypes.xml",
    "tests/cli/structdefs-json-types-array.json",
    "docs/spec/01-program-prep.md",

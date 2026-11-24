@@ -1,5 +1,5 @@
 // Self-contained Mach-O fixture for by-value aggregates in type encodings and
-// global blocks (tests/stages/kuna-objcstructs.toml): an ivar and a method
+// global blocks (tests/stages/unlace-objcstructs.toml): an ivar and a method
 // argument of struct type (`{CGRect={CGPoint=dd}{CGSize=dd}}`), an array ivar
 // (`[4i]`), and a global block literal (`_NSConcreteGlobalBlock`) whose
 // descriptor carries a signature. `-x` strips local symbols. See

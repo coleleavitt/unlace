@@ -1,4 +1,4 @@
-// Fixture source for the exception-table tests (kuna `itaniumeh`).
+// Fixture source for the exception-table tests (unlace `itaniumeh`).
 //
 //   clang++ -O2 -fPIC -fexceptions -c ehcatch.cc -o x.o
 //   ld.lld -shared -o ehcatch_x86_64.so x.o

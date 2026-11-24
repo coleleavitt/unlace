@@ -1,4 +1,4 @@
-Stripped PE32 i386 fixture for kuna_calleestackargs (tests/stages/calleeargs.toml).
+Stripped PE32 i386 fixture for unlace_calleestackargs (tests/stages/calleeargs.toml).
 
 byval_pe_i386.cpp and byval_pe_i386_impl.cpp are compiled by Visual C++ 2005 SP1
 (`cl /O2 /c`, outputs renamed byval_pe_i386_c.obj and byval_pe_i386_impl.obj).

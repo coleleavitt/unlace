@@ -38,7 +38,7 @@ Recover the fork wrapper return value and conditional errno handling.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_80488e0",
@@ -72,7 +72,7 @@ Recover the fork wrapper return value and conditional errno handling.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "shared_wrapper"

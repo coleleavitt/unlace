@@ -48,7 +48,7 @@ pub struct Plan {
 #[doc(hidden)]
 pub static WITH_UNSIGNED_RESULT: OpToken = OpToken {
     print1: "({ use std::io::Write as _; match ",
-    print2: " { std::result::Result::Ok(()) => 0u64, std::result::Result::Err(_kuna_io_error) => std::mem::transmute::<std::io::Error, *mut ()>(_kuna_io_error) as usize as u64 } })",
+    print2: " { std::result::Result::Ok(()) => 0u64, std::result::Result::Err(_unlace_io_error) => std::mem::transmute::<std::io::Error, *mut ()>(_unlace_io_error) as usize as u64 } })",
     stage: 2,
     precedence: 66,
     associative: false,
@@ -63,7 +63,7 @@ pub static WITH_UNSIGNED_RESULT: OpToken = OpToken {
 #[doc(hidden)]
 pub static WITH_SIGNED_RESULT: OpToken = OpToken {
     print1: "({ use std::io::Write as _; match ",
-    print2: " { std::result::Result::Ok(()) => 0i64, std::result::Result::Err(_kuna_io_error) => std::mem::transmute::<std::io::Error, *mut ()>(_kuna_io_error) as usize as i64 } })",
+    print2: " { std::result::Result::Ok(()) => 0i64, std::result::Result::Err(_unlace_io_error) => std::mem::transmute::<std::io::Error, *mut ()>(_unlace_io_error) as usize as i64 } })",
     stage: 2,
     precedence: 66,
     associative: false,

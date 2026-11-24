@@ -1,4 +1,4 @@
-# kuna issue testcase: a predicated ARM instruction's condition skip is not
+# unlace issue testcase: a predicated ARM instruction's condition skip is not
 # filed as a jump to the next instruction in the cross-reference index.
 #
 # Issue:      unlace-analysis-armcondskip - `unlace xrefs` from any
@@ -44,11 +44,11 @@ commands = [
 ]
 
 [[match]]
-name = "KUNA-ARMCONDSKIP #1: clamp's first predicated pair renders as a comparison"
+name = "UNLACE-ARMCONDSKIP #1: clamp's first predicated pair renders as a comparison"
 count = 1
 regex = '^  if \(a0 < a1\)$'
 
 [[match]]
-name = "KUNA-ARMCONDSKIP #2: clamp's second predicated pair renders as an assignment"
+name = "UNLACE-ARMCONDSKIP #2: clamp's second predicated pair renders as an assignment"
 count = 1
 regex = '^    a0 = a2;$'

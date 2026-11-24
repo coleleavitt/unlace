@@ -1,6 +1,6 @@
 // compare-samples.js — the data behind the "compare" section of the landing page.
 //
-// Each sample is one function, decompiled by kuna, shown next to the same
+// Each sample is one function, decompiled by unlace, shown next to the same
 // function as rendered by something else (another decompiler, or the original
 // source). The page reads only this file — adding a sample is a data edit, no
 // markup changes.
@@ -10,7 +10,7 @@
 //            right one. A rival with no entry renders a "not recorded yet"
 //            placeholder, so a half-filled sample is honest rather than empty.
 //            `ged` (optional) is the measured DecBench score per decompiler;
-//            the page prints the kuna/rival pair under the dropdowns.
+//            the page prints the unlace/rival pair under the dropdowns.
 //
 // There is deliberately NO per-sample commentary field. The page shows the
 // provenance line and the measured score, and lets the two panes speak; a
@@ -30,11 +30,11 @@
 //
 //   python3 -m scripts.decbench.showcase --perfect --dump /tmp/cands
 //   python3 -m scripts.decbench.showcase --dump /tmp/cands --verify   # still reproduces?
-//   ... read all six panes of every candidate, reject the ones that flatter kuna ...
+//   ... read all six panes of every candidate, reject the ones that flatter unlace ...
 //   python3 -m scripts.decbench.showcase --dump /tmp/cands --emit picks.json
 //
 // The full procedure, including what disqualifies a sample, is
-// `docs/decbench-loop.md` → *Finding good kuna examples*. `--verify` re-runs the
+// `docs/decbench-loop.md` → *Finding good unlace examples*. `--verify` re-runs the
 // current build over every pane below; keep it passing.
 //
 // Do not paste anything hand-written or reconstructed into a pane — the section
@@ -57,7 +57,7 @@ export const SAMPLES = [
   // was recorded locally against the classic SAILR `fmt` binary (angr-dev
   // binaries/tests/x86_64/decompiler/fmt, coreutils, gcc 8.4.0 -O2), copied and
   // `strip --strip-all`ed exactly as decbench's run driver does, with decbench's
-  // one relabel (`main`) applied. kuna and IDA on 2026-07-29 (kuna 0.1.0 release
+  // one relabel (`main`) applied. unlace and IDA on 2026-07-29 (unlace 0.1.0 release
   // build @ HEAD; IDA Professional 9.2 via decbench's idalib backend, code
   // normalization included); ghidra/binja/angr on 2026-08-03, through decbench's
   // own raw backends (`scripts/decompile_one.py`) at the versions the DecBench
@@ -67,7 +67,7 @@ export const SAMPLES = [
     id: 'O2-coreutils-fmt-main',
     name: "main() — coreutils fmt, x86-64",
     meta: "coreutils fmt · ELF x86-64 · gcc 8.4.0 -O2, stripped · 0x1900",
-    kuna:
+    unlace:
 `long long main(uint4 a0,void *a1)
 {
   uint1 *v1;
@@ -1382,8 +1382,8 @@ LABEL_401cab:
     id: 'O2-openssh-portable-scp-sshbuf_b64tod',
     name: "sshbuf_b64tod() — openssh-portable scp, x86-64",
     meta: "openssh-portable scp · ELF x86-64 · gcc -O2, stripped · 0x2c500",
-    ged: { kuna: 0, ida: 15, ghidra: 4, binja: 5, angr: 26 },
-    kuna:
+    ged: { unlace: 0, ida: 15, ghidra: 4, binja: 5, angr: 26 },
+    unlace:
 `/* WARNING: earlyreturn: hoisted 2 const-guard early-return(s) in sshbuf_b64tod */
 int4 sshbuf_b64tod(unsigned long a0,char *a1)
 
@@ -1648,8 +1648,8 @@ sshbuf_b64tod(struct sshbuf *buf, const char *b64)
     id: 'O2-noinline-dpkg-dpkg-packages',
     name: "packages() — dpkg, x86-64",
     meta: "dpkg · ELF x86-64 · gcc -O2 -fno-inline, stripped · 0x14780",
-    ged: { kuna: 0, ida: 5, ghidra: 3, binja: 11, angr: 5 },
-    kuna:
+    ged: { unlace: 0, ida: 5, ghidra: 3, binja: 11, angr: 5 },
+    unlace:
 `unsigned long packages(int8 *a0)
 
 {
@@ -1935,8 +1935,8 @@ LABEL_414853:
     id: 'O2-noinline-zlib-libz.so.1.2-gz_look',
     name: "gz_look() — zlib libz.so.1.2, x86-64",
     meta: "zlib libz.so.1.2 · ELF x86-64 · gcc -O2 -fno-inline, stripped · 0xec60",
-    ged: { kuna: 3, ida: 8, ghidra: 8, binja: 13, angr: 4 },
-    kuna:
+    ged: { unlace: 3, ida: 8, ghidra: 8, binja: 13, angr: 4 },
+    unlace:
 `/* WARNING: earlyreturn: hoisted 4 const-guard early-return(s) in gz_look */
 unsigned long gz_look(void *a0)
 
@@ -2468,8 +2468,8 @@ LABEL_40ec8b:
     id: 'O2-noinline-openssh-portable-sshd-should_drop_connection',
     name: "should_drop_connection() — openssh-portable sshd, x86-64",
     meta: "openssh-portable sshd · ELF x86-64 · gcc -O2 -fno-inline, stripped · 0x102d0",
-    ged: { kuna: 0, ida: 12, ghidra: 11, binja: 12, angr: 11 },
-    kuna:
+    ged: { unlace: 0, ida: 12, ghidra: 11, binja: 12, angr: 11 },
+    unlace:
 `/* WARNING: earlyreturn: hoisted 3 const-guard early-return(s) in should_drop_connection */
 bool should_drop_connection(int4 a0)
 
@@ -2733,8 +2733,8 @@ unsigned int should_drop_connection(int a0)
     id: 'O2-libacl-setfacl-seq_get_cmd',
     name: "seq_get_cmd() — libacl setfacl, x86-64",
     meta: "libacl setfacl · ELF x86-64 · gcc -O2, stripped · 0x5340",
-    ged: { kuna: 2, ida: 11, ghidra: 7, binja: 6, angr: 3 },
-    kuna:
+    ged: { unlace: 2, ida: 11, ghidra: 7, binja: 6, angr: 3 },
+    unlace:
 `/* WARNING: earlyreturn: hoisted 3 const-guard early-return(s) in seq_get_cmd */
 uint8 seq_get_cmd(int8 *a0,int4 a1,int8 *a2)
 
@@ -2930,8 +2930,8 @@ unsigned int seq_get_cmd(struct_0 **a0, unsigned int a1, struct_0 **a2)
     id: 'O2-cronie-crontab-strcmp_until',
     name: "strcmp_until() — cronie crontab, x86-64",
     meta: "cronie crontab · ELF x86-64 · gcc -O2, stripped · 0x80f0",
-    ged: { kuna: 18, ida: 26, ghidra: 19, binja: 26, angr: 28 },
-    kuna:
+    ged: { unlace: 18, ida: 26, ghidra: 19, binja: 26, angr: 28 },
+    unlace:
 `int4 strcmp_until(char *a0,char *a1,char a2)
 
 {
@@ -3093,8 +3093,8 @@ LAB_00108127:
     id: 'O2-noinline-tar-tar-sys_exec_command',
     name: "sys_exec_command() — tar, x86-64",
     meta: "tar · ELF x86-64 · gcc -O2 -fno-inline, stripped · 0x2b640",
-    ged: { kuna: 0, ida: 6, ghidra: 8, binja: 8, angr: 6 },
-    kuna:
+    ged: { unlace: 0, ida: 6, ghidra: 8, binja: 8, angr: 6 },
+    unlace:
 `unsigned int sys_exec_command(unsigned long a0,char a1,unsigned long a2)
 
 {
@@ -3276,8 +3276,8 @@ long long sys_exec_command(char *a0, char a1, struct_1 *a2)
     id: 'O2-iproute2-ip-xdp_parse',
     name: "xdp_parse() — iproute2 ip, x86-64",
     meta: "iproute2 ip · ELF x86-64 · gcc -O2, stripped · 0x427a0",
-    ged: { kuna: 0, ida: 5, ghidra: 20, binja: 39, angr: 22 },
-    kuna:
+    ged: { unlace: 0, ida: 5, ghidra: 20, binja: 39, angr: 22 },
+    unlace:
 `/* WARNING: earlyreturn: hoisted 1 const-guard early-return(s) in xdp_parse */
 unsigned long xdp_parse(int4 *a0,void *a1,unsigned long a2,unsigned long a3,char a4,char a5,unsigned int a6)
 
@@ -3712,8 +3712,8 @@ int xdp_parse(void)
     id: 'O2-noinline-cleanflight-cleanflight_DALRCF405-sendSatalliteSignalQualityAsTemperature2',
     name: "sendSatalliteSignalQualityAsTemperature2() — cleanflight_DALRCF405, ARM",
     meta: "cleanflight_DALRCF405 · ELF ARM · gcc -O2 -fno-inline, stripped · 0x80339d8",
-    ged: { kuna: 0, ida: 3, ghidra: 3, binja: 8, angr: 3 },
-    kuna:
+    ged: { unlace: 0, ida: 3, ghidra: 3, binja: 8, angr: 3 },
+    unlace:
 `/* WARNING: iteregion: rewrote 1 if/else assignment diamond(s) to ?: ternary in sendSatalliteSignalQualityAsTemperature2 */
 void sendSatalliteSignalQualityAsTemperature2(uint4 a0)
 

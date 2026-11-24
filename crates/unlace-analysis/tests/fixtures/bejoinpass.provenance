@@ -1,6 +1,6 @@
 bejoinpass_mips32_O2, bejoinpass_ppc32_O2.o -- MIPS32 and PowerPC big-endian
 images for option bejoinpass: a register pair a call hands back and the
-function returns untouched (GH-904; tests/stages/kuna-bejoinpass.toml and
+function returns untouched (GH-904; tests/stages/unlace-bejoinpass.toml and
 tests/cli/bejoinpass-*.json).
 
 What they are

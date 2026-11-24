@@ -49,7 +49,7 @@ An accurate three-argument EVP_DigestFinal_ex call.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_14000b970",
@@ -87,7 +87,7 @@ An accurate three-argument EVP_DigestFinal_ex call.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_14000b970",
@@ -133,4 +133,4 @@ _none recorded_
 
 - filed by cluster.py from 2 observation(s)
 - round 10 REFUTER: hypothesis **upheld** (was inconclusive). Refuted by experiment on crackmes.exe (6869d705) at sub_14000b970. Default emits EVP_DigestFinal_ex(v3,v9,v7,a3,1) -- 5 args for a 3-arg function. 'unlace functions --json' shows EVP_DigestFinal_ex at 0x140014568 with size 0, i.e. a body-less IAT import, so the engine has no body to derive arity from and infers it from surviving call-site register/stack state. Supplying the real signature via --assert 'prototype EVP_DigestFinal_ex int EVP_DigestFinal_ex(void *ctx,unsigned char *md,unsigned int *s)' collapses the call to EVP_DigestFinal_ex(ctx,md,v6) -- exactly 3 args, with parameter names propagated. So the filed cause (import argument inference mistakes surviving state for parameters) is correct AND the prototype plumbing already lands correctly on a size-0 import, which means a fix that attaches known import prototypes works through this path. CAVEAT for the builder: prototypes bind by NAME and this binary carries memcmp twice (a local thunk at 0x140012acc size 6 and the import at 0x140014308 size 0), so a name-keyed import type library must decide which of a duplicate pair it binds -- see the overturned verdict on comparison-calls-lose-live, where that duplication defeats the same fix.
-- round 10 REFUTER: hypothesis **upheld**. EVIDENCE TRANSCRIBED (captain, tick 10:05Z) -- the upheld verdict was set by the 09:46Z tick, which recorded its experiment ONLY in rounds/10/round.json and left this decision log empty. Copying it here, where a builder actually reads it. Not re-run by me. Experiment on .kuna-repipe/arena/10/6869d705aadb6eeafb399027 (crackmes.exe): default emits EVP_DigestFinal_ex(v3,v9,v7,a3,1) -- five arguments for a three-argument function. unlace functions --json places EVP_DigestFinal_ex at 0x140014568 with SIZE 0, i.e. a body-less IAT import, so its arity is inferred from surviving call-site state. Declaring the prototype collapses the call to EVP_DigestFinal_ex(ctx,md,v6). CONCLUSION THE ORIGINAL TICK DREW: the prototype plumbing DOES reach a size-0 import, so an import type-library fix works through this path. CONTRAST WORTH KNOWING, from this tick's refutation of both-argument-recovery-options: the same symptom there came from a 552-byte STATICALLY-LINKED varargs body, not a size-0 import, so 'no prototype' has at least two distinct sources and a size-0-import fix will not cover the varargs-wrapper case.
+- round 10 REFUTER: hypothesis **upheld**. EVIDENCE TRANSCRIBED (captain, tick 10:05Z) -- the upheld verdict was set by the 09:46Z tick, which recorded its experiment ONLY in rounds/10/round.json and left this decision log empty. Copying it here, where a builder actually reads it. Not re-run by me. Experiment on .unlace-repipe/arena/10/6869d705aadb6eeafb399027 (crackmes.exe): default emits EVP_DigestFinal_ex(v3,v9,v7,a3,1) -- five arguments for a three-argument function. unlace functions --json places EVP_DigestFinal_ex at 0x140014568 with SIZE 0, i.e. a body-less IAT import, so its arity is inferred from surviving call-site state. Declaring the prototype collapses the call to EVP_DigestFinal_ex(ctx,md,v6). CONCLUSION THE ORIGINAL TICK DREW: the prototype plumbing DOES reach a size-0 import, so an import type-library fix works through this path. CONTRAST WORTH KNOWING, from this tick's refutation of both-argument-recovery-options: the same symptom there came from a 552-byte STATICALLY-LINKED varargs body, not a size-0 import, so 'no prototype' has at least two distinct sources and a size-0-import fix will not cover the varargs-wrapper case.

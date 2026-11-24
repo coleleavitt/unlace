@@ -11,7 +11,7 @@ from scripts.repipe import counters, mergecheck
 
 class CatalogCountRenameTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="kuna-mergecheck-test-")
+        temporary = tempfile.TemporaryDirectory(prefix="unlace-mergecheck-test-")
         self.addCleanup(temporary.cleanup)
         self.repo = Path(temporary.name)
         self.git("init", "-q")
@@ -56,7 +56,7 @@ class CatalogCountRenameTests(unittest.TestCase):
             '[[settable]]\noption = "{}"'.format(option) for option in options) + "\n")
         self.write(counters.REL_CATALOG_FIXTURE, json.dumps(
             [{"option": option} for option in options], indent=2) + "\n")
-        name = "KUNA-CATALOG #15: {} registry rows plus six individual queries".format(count)
+        name = "UNLACE-CATALOG #15: {} registry rows plus six individual queries".format(count)
         queries = ["returnpair", "fast_funcdisc", "armframes", "armframes",
                    "bytearrayc", "bytearrayc"]
         self.write(counters.REL_CATALOG_XML,
@@ -81,7 +81,7 @@ class CatalogCountRenameTests(unittest.TestCase):
     def test_valid_321_to_322_rename_is_reported_without_rejecting(self):
         with mock.patch.object(mergecheck, "_catalog_count_rename", return_value=None):
             previous = self.assert_rejected()
-            self.assertIn('"data:KUNA-CATALOG #15: 321 registry rows plus six individual queries"',
+            self.assertIn('"data:UNLACE-CATALOG #15: 321 registry rows plus six individual queries"',
                           next(item.detail for item in previous if item.id == "line-removed"))
         findings = self.findings()
         self.assertEqual(mergecheck.rejects(findings), [])

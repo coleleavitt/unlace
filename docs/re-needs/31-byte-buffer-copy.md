@@ -38,7 +38,7 @@ Faithful C for the buffer copy before the second transform.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_15dc",
@@ -81,7 +81,7 @@ Faithful C for the buffer copy before the second transform.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_15dc",

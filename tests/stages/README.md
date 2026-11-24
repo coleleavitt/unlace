@@ -5,7 +5,7 @@
 A stage test is a `.toml` file here (they all are; the runner still reads Ghidra-style `<decompilertest>` XML too; the
 vendored `tests/datatests` corpus stays XML). Both run through the same datatest runner
 (`cargo test -p unlace-harness --test parity stage_tests`, or `decomp_test_dbg`). The runner puts the
-`KUNA_*`/`UNLACE_*` environment back to its starting state before each file, so a load-time `option`
+`UNLACE_*`/`UNLACE_*` environment back to its starting state before each file, so a load-time `option`
 one file's script sets (exported to the environment for `load file`) does not reach the next file;
 a test that needs such an option sets it itself:
 
@@ -68,7 +68,7 @@ literal = 'if (8 < x)'          # a substring of one output line
 
 ```sh
 UNLACE_PARITY_FILES=wideslice cargo test -p unlace-harness --test parity stage_tests
-UNLACE_PARITY_FILES='tests/stages/kuna-swift*,gh558-*' cargo test -p unlace-harness --test parity stage_tests
+UNLACE_PARITY_FILES='tests/stages/unlace-swift*,gh558-*' cargo test -p unlace-harness --test parity stage_tests
 target/debug/decomp_test_dbg -sleighpath specs -path tests/stages datatests wideslice.toml
 ```
 

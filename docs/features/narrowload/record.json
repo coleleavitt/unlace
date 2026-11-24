@@ -1,7 +1,7 @@
 {
  "opportunity": "A LOAD narrower than its pointer's pointee printed as a read of the whole field or element, truncated or masked: `(unsigned short)a0->field_0x8` for `movzwl 8(%rdi)`, `(a0->field_0x48 & 0x2000) != 0` for `testb $0x20,0x49(%rbx)`, `(int)a0[a1]` for a 4-byte read of a `long` element. The value is the same on little-endian, but the printed C reads bytes the program never reads and faults when the object ends at the last byte the program reads (a page end).",
- "test_name": "tests/stages/narrowload.xml (11 assertions; #1-#6 fail on main, #9-#11 fail when the AND form ignores the type lock) + tests/stages/elemptr.xml #17/#18 (now 2 bytes wide in both passes) + kuna-cli/tests/decompile_all_cli.rs a_narrow_read_round_trips_through_the_printed_c (fails on main) + a_narrow_read_of_a_declared_record_round_trips_through_the_printed_c (-g builds; fails on main with elemptr off and on the record-only gate) + an_element_pointer_round_trips_through_the_printed_c (the elemptr off arm's field now also sits at the page end)",
- "binary": "decompiler/crates/kuna-analysis/tests/fixtures/narrowload_{gcc,clang}_{O0,O2}_x86_64 (built from narrowload_x86_64.c) and narrowload_dwarf_{gcc,clang}_{O0,O2}_x86_64 (built -g from narrowload_dwarf_x86_64.c)",
+ "test_name": "tests/stages/narrowload.xml (11 assertions; #1-#6 fail on main, #9-#11 fail when the AND form ignores the type lock) + tests/stages/elemptr.xml #17/#18 (now 2 bytes wide in both passes) + unlace-cli/tests/decompile_all_cli.rs a_narrow_read_round_trips_through_the_printed_c (fails on main) + a_narrow_read_of_a_declared_record_round_trips_through_the_printed_c (-g builds; fails on main with elemptr off and on the record-only gate) + an_element_pointer_round_trips_through_the_printed_c (the elemptr off arm's field now also sits at the page end)",
+ "binary": "decompiler/crates/unlace-analysis/tests/fixtures/narrowload_{gcc,clang}_{O0,O2}_x86_64 (built from narrowload_x86_64.c) and narrowload_dwarf_{gcc,clang}_{O0,O2}_x86_64 (built -g from narrowload_dwarf_x86_64.c)",
  "selector": "r_low",
  "func_addr": "0x15f0 (gcc -O2 build)",
  "option": null,
@@ -15,8 +15,8 @@
   "stages": "1478/1478 PARITY OK after re-recording (11 narrowload assertions, elemptr #17/#18 renamed)"
  },
  "root_cause": "RuleExpandLoad (cleanup pool) rewrites a LOAD narrower than its pointer's pointee as a LOAD of the whole pointee and takes the bytes back out with a SUBPIECE (truncation form) or inside `(V & C) == D` compares (AND form). elemptr (#731) kept the load narrow only when no type-locked Varnode sat at the base of the pointer chain, and only with elemptr on; every remaining site on main is behind a lock (a structsynth parameter, a declared prototype), and with elemptr off every inferred pointer and every declared record reached through a call result or a loop phi widened too.",
- "fix": "The truncation form is never taken. The AND form is taken only when the widened pointer is a PTRSUB field of a record or union a declaration laid out (not a structsynth-minted record, not a bare pointer's target or an array element) AND that pointer reaches a type-locked Varnode through PTRADD/PTRSUB/INT_ADD/COPY/CAST alone (elemptr's former keeps_load_narrow walk, now without the elemptr gate): p3_dataflow/narrowload.rs widens_into_declared_field. A declared record reached through a call's result, a loop's phi or a loaded pointer keeps its narrow read. kuna_elemptr::keeps_load_narrow is removed. Nothing widens a STORE (TypeOpStore::getInputCast casts the pointer of a narrow store); the fixture's 1-, 2- and 4-byte stores at a page end are checked.",
- "roundtrip": "narrowload_x86_64.c: 17 functions read/write 1, 2 and 4 bytes of wider record fields and elements; main passes objects that end at the last byte touched, at a page end. decompile-project with elemptr on and off, printed functions compiled with gcc and clang against the export header and linked with the fixture's own prelude/main: main's kuna -> SIGSEGV on all 16 (4 builds x 2 compilers x 2 arms); fix -> all 16 print what the binary prints. narrowload_dwarf_x86_64.c (-g): 3 functions mask one byte of a declared record's 4-byte field through a call's result, a loop's phi and a loaded pointer, each object ending at that byte at a page end; runs print `1 0 2 1`. main 632437155: elemptr on 8/8 OK, elemptr off 8/8 SIGSEGV; the previous head (AND form gated on the declared record alone) 16/16 SIGSEGV; this fix 16/16 OK. With the lock walk disabled the test fails: `gcc_O0 on: a narrow read printed wide, as 0x8100`.",
+ "fix": "The truncation form is never taken. The AND form is taken only when the widened pointer is a PTRSUB field of a record or union a declaration laid out (not a structsynth-minted record, not a bare pointer's target or an array element) AND that pointer reaches a type-locked Varnode through PTRADD/PTRSUB/INT_ADD/COPY/CAST alone (elemptr's former keeps_load_narrow walk, now without the elemptr gate): p3_dataflow/narrowload.rs widens_into_declared_field. A declared record reached through a call's result, a loop's phi or a loaded pointer keeps its narrow read. unlace_elemptr::keeps_load_narrow is removed. Nothing widens a STORE (TypeOpStore::getInputCast casts the pointer of a narrow store); the fixture's 1-, 2- and 4-byte stores at a page end are checked.",
+ "roundtrip": "narrowload_x86_64.c: 17 functions read/write 1, 2 and 4 bytes of wider record fields and elements; main passes objects that end at the last byte touched, at a page end. decompile-project with elemptr on and off, printed functions compiled with gcc and clang against the export header and linked with the fixture's own prelude/main: main's unlace -> SIGSEGV on all 16 (4 builds x 2 compilers x 2 arms); fix -> all 16 print what the binary prints. narrowload_dwarf_x86_64.c (-g): 3 functions mask one byte of a declared record's 4-byte field through a call's result, a loop's phi and a loaded pointer, each object ending at that byte at a page end; runs print `1 0 2 1`. main 632437155: elemptr on 8/8 OK, elemptr off 8/8 SIGSEGV; the previous head (AND form gated on the declared record alone) 16/16 SIGSEGV; this fix 16/16 OK. With the lock walk disabled the test fails: `gcc_O0 on: a narrow read printed wide, as 0x8100`.",
  "corpus_diff": {
   "castbench_default": {
    "binaries": 45,
@@ -162,7 +162,7 @@
   }
  },
  "speed": {
-  "method": "two pinned release builds (main 632437155 castbench arm, this branch with the type-lock walk), kuna decompile-all --json --max-fn-seconds 120 on O2 fmt/ls/sort/bash, arms interleaved and order-alternated, one warm-up each discarded, min and median-of-ratios of 15 (docs/features/narrowload/speed.py; samples in speed.json)",
+  "method": "two pinned release builds (main 632437155 castbench arm, this branch with the type-lock walk), unlace decompile-all --json --max-fn-seconds 120 on O2 fmt/ls/sort/bash, arms interleaved and order-alternated, one warm-up each discarded, min and median-of-ratios of 15 (docs/features/narrowload/speed.py; samples in speed.json)",
   "measurements": [
    {
     "label": "fmt_O2",
@@ -229,7 +229,7 @@
   "make check-spec": "OK (lenient mode)",
   "check_spec --strict": "OK (strict mode)",
   "make test-cli": "269/269 passed",
-  "kuna catalog --check": "catalog OK",
+  "unlace catalog --check": "catalog OK",
   "counters --check": "no drift",
   "docs/options.md": "byte-fresh",
   "phases.toml": "parses with tomllib",
@@ -237,22 +237,22 @@
   "castbench": "all 45 exports byte-identical to the previous head"
  },
  "files": [
-  "decompiler/crates/kuna-decomp/src/p3_dataflow/narrowload.rs",
-  "decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_8.rs",
-  "decompiler/crates/kuna-decomp/src/p3_dataflow/mod.rs",
-  "decompiler/crates/kuna-decomp/src/p5_types/elemptr.rs",
-  "decompiler/crates/kuna-decomp/phases.toml",
+  "decompiler/crates/unlace-decomp/src/p3_dataflow/narrowload.rs",
+  "decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_8.rs",
+  "decompiler/crates/unlace-decomp/src/p3_dataflow/mod.rs",
+  "decompiler/crates/unlace-decomp/src/p5_types/elemptr.rs",
+  "decompiler/crates/unlace-decomp/phases.toml",
   "docs/options.md",
   "docs/spec/03-ssa-and-simplification.md",
   "docs/spec/05-types.md",
   "tests/stages/narrowload.xml",
   "tests/stages/elemptr.xml",
   "docs/baseline-stages.json",
-  "decompiler/crates/kuna-base/src/xml.rs",
-  "decompiler/crates/kuna-cli/tests/decompile_all_cli.rs",
-  "decompiler/crates/kuna-analysis/tests/fixtures/narrowload_x86_64.c",
-  "decompiler/crates/kuna-analysis/tests/fixtures/README.md",
-  "decompiler/crates/kuna-analysis/tests/fixtures/narrowload_dwarf_x86_64.c",
+  "decompiler/crates/unlace-base/src/xml.rs",
+  "decompiler/crates/unlace-cli/tests/decompile_all_cli.rs",
+  "decompiler/crates/unlace-analysis/tests/fixtures/narrowload_x86_64.c",
+  "decompiler/crates/unlace-analysis/tests/fixtures/README.md",
+  "decompiler/crates/unlace-analysis/tests/fixtures/narrowload_dwarf_x86_64.c",
   "docs/features/narrowload/hunks-dwarf.txt"
  ],
  "notes": "The castbench shared set moves by one cast: the truncation form and its narrow spelling carry one cast each; the fts flag tests that gain a byte cast (`((unsigned char *)&a0->field_0x48)[1] & 0x20`) are outside the IDA-shared set. A debug build (make rust-test) panics splitting a 16-byte constant in p3_dataflow/subflow.rs (a shift of 64 or more; pre-existing, release wraps the shift); the DWARF fixture avoids 16-byte zero stores so every function exports in both builds.",

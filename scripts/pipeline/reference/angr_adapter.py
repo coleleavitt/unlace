@@ -1,7 +1,7 @@
 """angr reference-decompiler adapter.
 
-Bridges the two-interpreter gap: the kuna venv has no angr, so this runs
-``_angr_runner.py`` under $KUNA_PIPELINE_ANGR_PYTHON as a subprocess and parses its
+Bridges the two-interpreter gap: the unlace venv has no angr, so this runs
+``_angr_runner.py`` under $UNLACE_PIPELINE_ANGR_PYTHON as a subprocess and parses its
 JSON. Pins the angr version into every ReferenceResult for reproducibility.
 """
 from __future__ import annotations

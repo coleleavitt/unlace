@@ -1,4 +1,4 @@
-# kuna option bejoin (off by default, GH-904; on here): a two-register value is joined in the order
+# unlace option bejoin (off by default, GH-904; on here): a two-register value is joined in the order
 # the output rule consumed its registers, and a pair on memory-mapped
 # registers is built as a value.
 #

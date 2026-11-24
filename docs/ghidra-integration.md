@@ -1,17 +1,17 @@
-# Using kuna as Ghidra's decompiler core
+# Using unlace as Ghidra's decompiler core
 
-How kuna replaces the native `decompile` process behind Ghidra's stock GUI — the
-architecture, the wire protocol, what kuna already has, what each phase adds, and the
-response contracts that make the GUI actually work. Audience: kuna developers
+How unlace replaces the native `decompile` process behind Ghidra's stock GUI — the
+architecture, the wire protocol, what unlace already has, what each phase adds, and the
+response contracts that make the GUI actually work. Audience: unlace developers
 implementing Phases 2–4 (Phase 1 — the protocol-complete, engine-stubbed binary plus the
 extension that spawns it — is on branch `feat/ghidra-mode`).
 
 **Citation convention.** Ghidra sources are cited as `file:line` against the Ghidra
 12.2-DEV checkout at commit `f9e13846` (2026-06-16). Java paths are under
 `Ghidra/Features/Decompiler/src/main/java/ghidra/app/decompiler/` unless otherwise
-noted; C++ paths under `Ghidra/Features/Decompiler/src/decompile/cpp/`. kuna's own
+noted; C++ paths under `Ghidra/Features/Decompiler/src/decompile/cpp/`. unlace's own
 pinned port anchor is `GHIDRA_REV` `cef869af` (2026-06-01, `docs/history.md`); the one
-protocol-relevant delta between the two revisions is called out in §8. kuna paths are
+protocol-relevant delta between the two revisions is called out in §8. unlace paths are
 relative to `crates/`.
 
 ---
@@ -21,15 +21,15 @@ relative to `crates/`.
 Ghidra's Java GUI talks to its decompiler through a **child process** named `decompile`,
 spawned lazily on the first decompile request (`DecompInterface.java:267`) and driven
 over stdin/stdout with a burst-framed binary protocol (`DecompileProcess.java:54-63`).
-Upstream, that process is the C++ `ghidra_opt` build — the same DECCORE engine kuna
+Upstream, that process is the C++ `ghidra_opt` build — the same DECCORE engine unlace
 ported, linked against a `GHIDRA` glue group (`ghidra_process.cc`, `ghidra_arch.cc`,
-`ghidra_translate.cc`, …) that kuna deliberately excluded from the port (LOSS-002,
+`ghidra_translate.cc`, …) that unlace deliberately excluded from the port (LOSS-002,
 see `docs/history.md`).
 
-**kuna reimplements exactly that glue group**: a new **`unlace-ghidra`** crate producing a
-binary that speaks the full decompiler-process protocol, backed by kuna's engine. The
+**unlace reimplements exactly that glue group**: a new **`unlace-ghidra`** crate producing a
+binary that speaks the full decompiler-process protocol, backed by unlace's engine. The
 stock Ghidra GUI and its entire Java side stay byte-for-byte untouched; the only
-Ghidra-side artifact is a tiny extension (`integrations/ghidra/KunaDecompiler/`, §7)
+Ghidra-side artifact is a tiny extension (`integrations/ghidra/UnlaceDecompiler/`, §7)
 that points the spawn at our binary.
 
 Rejected alternatives, for the record:
@@ -39,7 +39,7 @@ Rejected alternatives, for the record:
   with ~28 `new DecompInterface()` call sites across the tree and no injection seam.
   A fork covers only the call sites you rewrite, breaks the "normal Ghidra GUI" goal,
   and is unmaintainable against upstream.
-- **A shim process wrapping kuna's existing CLI.** The protocol is not
+- **A shim process wrapping unlace's existing CLI.** The protocol is not
   request/response: the native side issues **callback queries mid-decompile**
   (per-instruction p-code, symbols at an address, bytes, types — §4) that a
   `unlace decompile-all` wrapper cannot answer; and the response is not C text but a
@@ -104,7 +104,7 @@ Even codes open, odd codes close.
 | 16 / 17 | native message (warnings) | native → Java |
 
 String streams (14/15) carry either raw ASCII (command names, decimal archids, the
-`t`/`f` answers) or a **packed** binary document (kuna's bit-exact
+`t`/`f` answers) or a **packed** binary document (unlace's bit-exact
 `unlace-base/src/marshal.rs` `PackedEncode`/`PackedDecode`) — every packed byte is
 nonzero, so the closing burst's leading `0x00` terminates ingestion. The only XML on
 the wire is the four `registerProgram` spec strings.
@@ -167,7 +167,7 @@ establishing the CALLOTHER index table.
 
 ## 4. P-code comes from Java, per instruction (decided)
 
-kuna ships a full SLEIGH engine and vendors every upstream spec, so the tempting
+unlace ships a full SLEIGH engine and vendors every upstream spec, so the tempting
 shortcut is to disassemble locally and use the wire only for bytes/symbols. **Rejected**
 — Phase 2 ports `GhidraTranslate` faithfully (`ghidra_translate.cc:120-156`: one
 `getPcode` query per instruction, register-name caches, no p-code cache), because:
@@ -185,10 +185,10 @@ shortcut is to disassemble locally and use the wire only for bytes/symbols. **Re
    a language; the tspec carries only address spaces + endianness + uniqbase, not a
    language id (`SleighLanguage.encodeTranslator`); and `flushNative`'s cache semantics
    (Java flushes after every function) are designed around Java being the source of
-   truth for all program facts. A local-SLEIGH kuna would need out-of-band language
+   truth for all program facts. A local-SLEIGH unlace would need out-of-band language
    resolution the protocol simply does not carry.
 
-Consequence for kuna: `Architecture.translate` is today a **concrete `Sleigh`** field
+Consequence for unlace: `Architecture.translate` is today a **concrete `Sleigh`** field
 (`unlace-decomp/src/infra/architecture.rs:836`). Phase 2 introduces a `Translate` seam on
 `Architecture` — an **enum over `{Sleigh, GhidraTranslate}`**, not a `Box<dyn>`, to keep
 `manage()` (the space-manager accessor) concrete and the standalone path untouched. The
@@ -211,9 +211,9 @@ Phase 2 only wires that manager into an `Architecture`.
 The wire has **no enumerate-the-program query**. Symbols arrive one address at a time
 (`getMappedSymbols`), types one id at a time (`getDataType`), comments per function
 (`getComments`), strings per address (`getStringData`), inject bodies per call site
-(`getPcodeInject` family). Eager pre-population — the pattern kuna's analysis tier uses
+(`getPcodeInject` family). Eager pre-population — the pattern unlace's analysis tier uses
 (`ConsoleProgram::commit_pending_analysis`) — is therefore **impossible**, not merely
-inferior: there is nothing to enumerate. kuna needs the upstream lazy model:
+inferior: there is nothing to enumerate. unlace needs the upstream lazy model:
 
 - **`ScopeGhidra`** (`database_ghidra.cc`): every lookup checks a local cache, then
   queries, then materializes the answer — including negative answers as `<hole>` ranges
@@ -230,7 +230,7 @@ inferior: there is nothing to enumerate. kuna needs the upstream lazy model:
 
 The C++ virtuals these classes override were deliberately collapsed in the port (the
 `Scope`/`ScopeInternal` merge, `unlace-decomp/src/p0_knowledge/database.rs`), so Phase 3
-relocated the lazy model to the seams the kuna pipeline actually reads
+relocated the lazy model to the seams the unlace pipeline actually reads
 (**shipped** — `unlace-decomp/src/infra/remote_provider.rs`):
 
 - **`RemoteScope`** (the `ScopeGhidra` port at the GlobalQuery boundary): installed on
@@ -245,7 +245,7 @@ relocated the lazy model to the seams the kuna pipeline actually reads
   `RemoteProviderFetch` trait (implemented in `unlace-ghidra/src/provider.rs` over the
   shared client); the standalone path installs nothing and stays byte-identical.
 - **`TypeFactoryGhidra`**: the wire `<coretypes>` decode replaces the default core
-  types at registerProgram (so kuna's type ids match the host's), and
+  types at registerProgram (so unlace's type ids match the host's), and
   `TypeFactoryImpl::find_by_id_or_remote` fetches unknown types with getDataType
   through the `RemoteTypeFetch` trait (`substrate/dtype.rs` `decode_type`/
   `decode_type_no_ref`/`decode_core_types`); `clear_noncore` evicts on flush.
@@ -257,7 +257,7 @@ relocated the lazy model to the seams the kuna pipeline actually reads
   address and fires getExternalRef at the POINTER address; the returned function
   materializes at its own entry (name/prototype/noreturn), and the pointer symbol
   itself types as pointer-to-code. Java maps the slot with one byte of storage;
-  kuna maps the whole pointer and flags it `externref`, as upstream does, so a
+  unlace maps the whole pointer and flags it `externref`, as upstream does, so a
   call through a PE import slot prints as the import.
 - **String literals**: Ghidra defines a string as a read-only `char[N]` or
   `wchar_t[N]` under a label (`s_…`, `u_…`). The printer's read-only check asks
@@ -268,7 +268,7 @@ relocated the lazy model to the seams the kuna pipeline actually reads
   their full path, one token per scope.
 - **Call-fixups** arrive as the `<inject>` of a function's `<prototype>` (the
   Call-Fixup Installer's tag on `__chkstk`, `_guard_dispatch_icall_nop`,
-  `__security_check_cookie`, the x86 EH/SEH prolog helpers). kuna resolves the
+  `__security_check_cookie`, the x86 EH/SEH prolog helpers). unlace resolves the
   name against the cspec call-fixups and injects the getCallFixup payload at
   each call, so those helpers vanish from the C as they do in stock Ghidra.
 - **Tracked registers**: the pspec `<tracked_set>` decodes as the static default,
@@ -281,9 +281,9 @@ relocated the lazy model to the seams the kuna pipeline actually reads
   registerProgram baseline (`Architecture::reset_wire_defaults` + the DIV-77
   ghidra-mode preset layer) and then applies the deltas — a previously-sent
   non-default option reverts when the user sets it back to default.
-- **The `Kuna v…` banner**: ghidra-mode prints a one-line plate comment
-  (`/* Kuna v<MAJOR.MINOR> */`, the release `KUNA_VERSION` bake) at the top of
-  every decompiled function so it is visible in the GUI that kuna is the active
+- **The `Unlace v…` banner**: ghidra-mode prints a one-line plate comment
+  (`/* Unlace v<MAJOR.MINOR> */`, the release `UNLACE_VERSION` bake) at the top of
+  every decompiled function so it is visible in the GUI that unlace is the active
   core.  Cache-only (never written back to the host); standalone output has no
   banner.
 - **flushNative** clears everything in the upstream order
@@ -308,7 +308,7 @@ Printing correct C is not enough. The `decompileAt` response is a packed `<doc>`
 - **ast ↔ markup refid consistency**: markup tokens carry `ATTRIB_VARREF`/`ATTRIB_OPREF`
   that Java resolves *against the first `<function>`'s decoded `<ast>`*
   (`ClangVariableToken.java:147-163`, `PcodeSyntaxTree.java:309,365`). Click-to-address,
-  hover, highlight, and rename-target resolution all ride on these ids — kuna's
+  hover, highlight, and rename-target resolution all ride on these ids — unlace's
   `EmitMarkup` `MarkupRef` fields (op time / varnode create-index) must match what
   `Funcdata::encode` emits into the `<ast>`.
 - **DB symbol-id echo**: `<mapsym>` symbols must carry the *real Ghidra database symbol
@@ -332,8 +332,8 @@ plugin**. The factory caches the resolved path in a private static with an early
 decompile (`DecompInterface.java:267`), so any plugin constructor in the tool runs
 inside the pre-spawn window. Ghidra's flat classpath (all classes in the unnamed module,
 `GhidraClassLoader.java:34`) means `setAccessible(true)` works with no `--add-opens`.
-The extension (`integrations/ghidra/KunaDecompiler/`) resolves the binary in two steps:
-first the `-Dkuna.decompiler.exe=<path>` dev override (a JVM system property, for
+The extension (`integrations/ghidra/UnlaceDecompiler/`) resolves the binary in two steps:
+first the `-Dunlace.decompiler.exe=<path>` dev override (a JVM system property, for
 pointing at a fresh `cargo build` without reinstalling the extension), then — the normal
 path — the unlace binary shipped in the extension's **own** module `os/` dir under the
 **distinct name `unlace_ghidra`**, resolved with the two-arg
@@ -353,13 +353,13 @@ release mode only (`GhidraLauncher.java:182-183`).
 `unlace-ghidra` targets a **pinned Ghidra release** (the 12.2 vintage). There is no
 protocol handshake — the interface version (major=6/minor=1,
 `cpp/architecture.cc:35-36`) is exposed only through `getSignatureSettings` and only
-BSim reads it. The real skew risk is **option drift**, already live between kuna's
+BSim reads it. The real skew risk is **option drift**, already live between unlace's
 `GHIDRA_REV` (`cef869af`) and the 12.2-DEV head (`f9e13846`): upstream added a
 `baddatacount` option (ELEM_BADDATACOUNT=290, moving ELEM_UNKNOWN to 291,
 `ElementId.java:293,464`), and an older core receiving that unknown `<optionslist>`
 element throws `ParseError` → `setOptions` answers `f` → Java fails the whole
 program-open with "Did not accept decompiler options" (`DecompInterface.java:301-303`).
-kuna therefore **deliberately diverges from upstream: unknown option elements are
+unlace therefore **deliberately diverges from upstream: unknown option elements are
 skipped with a warning instead of failing the command** — one stale option must not
 brick the decompiler view. This is output-invariant for known options; it shipped
 with Phase 3 (`OptionDatabase::decode_lenient` behind the real `setOptions`) and is
@@ -369,19 +369,19 @@ A second, smaller **deliberate divergence** hardens the process against a malfor
 archid. Upstream reads the id with `sin >> dec >> id` (`ghidra_process.cc:89-96`); on a
 non-numeric or overflowing payload C++11 leaves the stream in a failed state, and the
 next `readToAnyBurst` sees the failbit and `exit(1)`s the whole process
-(`ghidra_arch.cc:95-96`) — one bad command kills the session. kuna's `parse_arch_id`
+(`ghidra_arch.cc:95-96`) — one bad command kills the session. unlace's `parse_arch_id`
 instead returns `-1`, which the caller turns into the ordinary "No architecture
 registered with decompiler" `JavaError`: the client sees a clean exception on that one
 command and the process stays alive for the next.
 
-## 9. What kuna already has vs. the seam inventory
+## 9. What unlace already has vs. the seam inventory
 
 Already in the tree (verified):
 
 | asset | where | state |
 |---|---|---|
 | Packed marshaling, bit-exact | `unlace-base/src/marshal.rs` (`PackedDecode` :1424, `PackedEncode` :2008) | done — the payload codec is the ported one |
-| `KunaError::Java` | `unlace-base/src/error.rs:145-153` | done — the C++ `JavaError` carrier |
+| `UnlaceError::Java` | `unlace-base/src/error.rs:145-153` | done — the C++ `JavaError` carrier |
 | Token-markup emitter | `unlace-decomp/src/s9_emit/prettyprint.rs:719` (`EmitMarkup`, packed clang doc) | ported, **unreachable** — PrintC hardwires `EmitNoMarkup` (`printc.rs:1015`) |
 | Signature engine | `unlace-decomp/src/infra/signature.rs` + `analyzesigs.rs` | ported; the four signature commands are wire-glue, not engine work |
 | Signature element ids | `signature.rs:73-87` — 258, 259, 260, 263, 265, 266, 267, 269, upstream-numbered | done; the gaps 261/262/264/268 are ours to add |
@@ -390,15 +390,15 @@ Already in the tree (verified):
 | `ContextDatabase` trait | `unlace-sleigh/src/globalcontext.rs:340` | ready |
 | `Translate` trait + trait-typed lift | `unlace-sleigh/src/translate.rs:386`; `flow.rs:1321` | ready at the consumer; owner is concrete |
 
-Protocol element ids to add (upstream numbers, wire compat — kuna's own 4000+ range is
-for kuna-invented ids only, and none of these are taken): **229** (`doc`), **239–257**
+Protocol element ids to add (upstream numbers, wire compat — unlace's own 4000+ range is
+for unlace-invented ids only, and none of these are taken): **229** (`doc`), **239–257**
 (the query commands, §3 — note 241=`getcallfixup`, 242=`getcallmech`,
 243=`getcallotherfixup`, verified against `ghidra_arch.cc:30-48` and
 `ElementId.java:377-385`), **261/262/264/268** (`major`/`minor`/`settings`/`sigsettings`).
 
 The engine-seam inventory, with honest difficulty:
 
-| seam | kuna today | work | phase |
+| seam | unlace today | work | phase |
 |---|---|---|---|
 | `LoadImage` | trait ready | **trivial** — `GhidraLoadImage::load_fill` = `getBytes` | 2 |
 | `ContextDatabase` | trait ready | **trivial** — `ContextGhidra` implements `getTrackedSet` only (upstream throws on the rest, `ghidra_context.hh:36-47`) | 2 |
@@ -428,13 +428,13 @@ What breaks when a partial core omits pieces — all failure modes are clean:
 | `<jumptablelist>` | switch analyzer finds no tables | unrecovered switches in the listing |
 
 **Load-time analysis facts are the other half of this.** A wire session never loads
-the image on kuna's side — the program database is Ghidra's — so every kuna analysis
+the image on unlace's side — the program database is Ghidra's — so every unlace analysis
 pass that reads the file itself contributes nothing to the GUI path. The largest one
 today is `formatstring static`, the load-time printf/scanf format resolver: through
 the CLI a `printf("%s %d", …)` call has its variadic arguments typed from the format
 constant read out of `.rodata`, and through the wire it does not. Ghidra ships its own
 `FormatStringAnalyzer` for this, so the fact is available on the host side; carrying it
-across the wire (or having kuna open the file alongside the session) is future work.
+across the wire (or having unlace open the file alongside the session) is future work.
 The ghidra-sim differential in §11 therefore runs its CLI arm with `formatstring off`,
 so the pinned line-diff band measures markup fidelity rather than this known gap.
 
@@ -453,7 +453,7 @@ so the pinned line-diff band measures markup fidelity rather than this known gap
   `tests/ghidra_sim/` drive the FULL wire lifecycle in-process (registerProgram →
   setAction → decompileAt×N → flushNative → deregister) against vendored ELFs
   (`tests/bug-repro/faillog` fast; `sort`/`grep` breadth), with the mock-Java end
-  answered from **kuna's own analysis** (`ghidra_sim/oracle.rs`:
+  answered from **unlace's own analysis** (`ghidra_sim/oracle.rs`:
   `bootstrap_from_object` for bytes/labels, the real Sleigh re-encoded as wire
   `<inst>` documents for getPcode, a tspec *generated* from the Sleigh's space
   manager so packed space indices agree by construction; getMappedSymbols answers
@@ -472,7 +472,7 @@ so the pinned line-diff band measures markup fidelity rather than this known gap
   every PR, which matters because the workspace suite is skipped on internal PRs).
 - **Phase 3+: DecompileDebug captures as fixtures.** Ghidra's "Debug Function
   Decompilation" action (`DecompInterface.enableDebug`, `DebugDecompilerAction.java:38-73`)
-  records every callback answer into an `<xml_savefile>` — exactly the document kuna's
+  records every callback answer into an `<xml_savefile>` — exactly the document unlace's
   datatest corpus already consumes. Captures give us *recorded Java-side query answers*
   to replay against `unlace-ghidra` without a live Ghidra (de-risking the sim's
   synthesized `<mapsym>` shapes), and `DecompileDebugXmlLoader` (Features/Base) can
@@ -498,7 +498,7 @@ so the pinned line-diff band measures markup fidelity rather than this known gap
 - [x] Protocol element ids 229, 239–257, 261, 262, 264, 268 (upstream numbers).
 - [x] tspec `<sleigh>` parse → real `AddrSpaceManager` (`GhidraTranslate::decode`), so
       `decompileAt` decodes real `<addr>` parameters.
-- [x] Ghidra extension (`integrations/ghidra/KunaDecompiler/`): plugin + reflection
+- [x] Ghidra extension (`integrations/ghidra/UnlaceDecompiler/`): plugin + reflection
       exepath swap, binary shipped as `os/<platform>/unlace_ghidra`.
 - [x] These two documents.
 
@@ -572,7 +572,7 @@ pins now hold the Phase-3 level.
       mapsym, positional `<parent>`+`<rangelist>`, params cat=0+index+exact
       storage.
 - [x] `<highlist>` (`Funcdata::encode_high`, `substrate/funcdata_encode.rs`)
-      + the encode-time symbol-link pass (`kuna_link_high_symbols` — the
+      + the encode-time symbol-link pass (`unlace_link_high_symbols` — the
       C++ `ActionNameVars::linkSymbols` stand-in) attaching/creating localmap
       symbols for named highs so `<high symref>` resolves in the just-encoded
       `<localdb>`; global `<high>`s echo the REAL host DB id
@@ -617,8 +617,8 @@ pins now hold the Phase-3 level.
       (Java-side decode instead of `GhidraLoadImage` bytes).
 - [ ] `<override>` / child-`<scope>` statics (Java skips both); the C++
       `collectNameRecs` harvest (standalone symbols → recommendations).
-- [ ] `kuna_apply_dynamic_recommendations` runs BEFORE the naming walk rather
-      than after linking (kuna fuses the two upstream stages into one pass), so
+- [ ] `unlace_apply_dynamic_recommendations` runs BEFORE the naming walk rather
+      than after linking (unlace fuses the two upstream stages into one pass), so
       it creates a dynamic Symbol where upstream renames an existing one.  The
       upstream guards are reproduced against the scope instead of the high —
       see `docs/spec/06-variables-and-merge.md` §6.4.

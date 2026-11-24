@@ -10,10 +10,10 @@ Wave 7's builder implemented the fix and was **SIGKILLed (rc=137) mid `make rust
 `679f4a70` (also tagged `salvage/r2w7-decompiling-3396`) and deleted the worktree. Nothing
 was pushed.
 
-The commit makes `kuna decompile <bin> <fn>` stop following the same function's flow twice —
+The commit makes `unlace decompile <bin> <fn>` stop following the same function's flow twice —
 `load function` and `decompile` each rebuilt the whole lift, block build and per-jump-table
 sub-decompilation from scratch. 8 files: `console` `decompile_step.rs` /
-`ifacedecomp.rs` / `interface.rs`, `kuna-decomp/src/infra/decompile_drive.rs`, a new
+`ifacedecomp.rs` / `interface.rs`, `unlace-decomp/src/infra/decompile_drive.rs`, a new
 `console/tests/verify_flowreuse.rs` (211 lines), `docs/spec/00-overview.md`, and a
 drafted `pr_body.md`. This is **attempt 2**: attempt 1 (#380, merged) removed the O(N²)
 dead-list scan and took the witness 71.5s -> 19.4s; the acceptance bar is a median under
@@ -32,7 +32,7 @@ dead-list scan and took the witness 71.5s -> 19.4s; the acceptance bar is a medi
 3. Read the existing diff critically. Reusing a followed flow across `load function` and
    `decompile` is a correctness question, not only a speed one: the facts a decompile is
    seeded with (`map address` symbols, DWARF stack locals, `type varnode` usepoints,
-   `map hash` dynamic symbols) are consumed **at flow time**, which is why kuna rebuilt.
+   `map hash` dynamic symbols) are consumed **at flow time**, which is why unlace rebuilt.
    Convince yourself the reuse path cannot silently drop one of them — a wrong decompile
    that is 3x faster fails this need, and `verify_flowreuse.rs` is wave 7's own test, so it
    is not independent evidence.

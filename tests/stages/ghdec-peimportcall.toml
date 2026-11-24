@@ -1,16 +1,16 @@
 # PE import-call binding.
 #
 # Issue: decbench case O0-mydoom-mydoom-mmsender_th (IDA, Ghidra and angr all
-# score GED 0; kuna scored 37). A Windows `call dword ptr [IAT slot]` lifts to
+# score GED 0; unlace scored 37). A Windows `call dword ptr [IAT slot]` lifts to
 # a CALLIND whose target is the contents of a global. The only pass that
 # resolves such a target - ActionDeindirect - gates on `Varnode::externref`,
 # which upstream sets from an ExternRefSymbol (`Scope::addExternalRef`) that
-# kuna's port never carried, so the call kept no name, no prototype and, worst,
+# unlace's port never carried, so the call kept no name, no prototype and, worst,
 # no no-return flow effect: a function ending in `ExitProcess`/`ExitThread`
 # ran straight on and absorbed the next function's whole body.
 #
 # Stage / sub-stage: P1 external-refinement (`unlace-analysis`
-# `loader/kuna_peimportcall.rs` paints the slot ranges) feeding the P4/P9
+# `loader/unlace_peimportcall.rs` paints the slot ranges) feeding the P4/P9
 # deindirect seam (`Architecture::query_function` carries the callee's
 # no-return flag onto the prototype `ActionDeindirect` merges).
 #
@@ -32,7 +32,7 @@
 # `bail` prints `ExitProcess(a0)`, not `ExitProcess()`: `win32sigs` (DIV-141)
 # supplies the import's one-UINT prototype, which is what the source declares.
 # Likewise the bound `objc_msgSend` takes the receiver and selector its
-# `(self, op, ...)` declaration fixes (`analyzers/objc/kuna_objcruntime.rs`).
+# `(self, op, ...)` declaration fixes (`analyzers/objc/unlace_objcruntime.rs`).
 
 [image]
 arch = 'x86:LE:64:default:gcc'

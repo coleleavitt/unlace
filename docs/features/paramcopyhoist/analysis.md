@@ -6,7 +6,7 @@ Triage record: `docs/decbench/triage/O0-e2fsprogs-e2fsck-save_output-rederive.md
 
 ## The gap
 
-`kuna decompile --addr 0x4eeb6` on `O0/e2fsprogs/stripped/e2fsck`:
+`unlace decompile --addr 0x4eeb6` on `O0/e2fsprogs/stripped/e2fsck`:
 
 ```c
   v11 = *(unsigned long *)(v4 + 0x28);
@@ -24,7 +24,7 @@ Triage record: `docs/decbench/triage/O0-e2fsprogs-e2fsck-save_output-rederive.md
 The source (`logfile.i`) writes through the parameter, so its entry block holds
 only the frame setup, and in the binary all three spills are likewise in the
 entry basic block (`4eec2/4eec6/4eeca`; the entry ends at the `je` at `4eee2`).
-kuna is internally inconsistent about the identical construct: parameter 1's
+unlace is internally inconsistent about the identical construct: parameter 1's
 copy-shadow lands in the entry block, parameters 2 and 3 sink below their
 guards, splitting the source's single entry block into three.
 
@@ -33,7 +33,7 @@ Measured with the real GED (`scripts.decbench.rescore`):
 | | nodes | edges | GED |
 |---|---|---|---|
 | source | 46 | 72 | — |
-| kuna base | 53 | 77 | **29.0** |
+| unlace base | 53 | 77 | **29.0** |
 | hoisted | 51 | 77 | **17.0** |
 
 -12 GED. The round-2 refuter also measured the alternative of deleting the
@@ -78,7 +78,7 @@ This is a **divergence**, not a port bug: upstream Ghidra sinks
 
 ## Breadth
 
-`kuna decompile-all --json` over four O0 binaries, counting top-level (brace
+`unlace decompile-all --json` over four O0 binaries, counting top-level (brace
 depth 1) `vN = aM;` statements emitted after the first top-level control-flow
 statement:
 
@@ -90,7 +90,7 @@ statement:
 | O0 bzip2/bzip2 | 160 | 3 (1.9%) | 3 | 5 |
 | **total** | **3031** | **121 (4.0%)** | **200** | **318** |
 
-So ~4 in 10 top-level parameter copy-shadows kuna emits are outside the entry
+So ~4 in 10 top-level parameter copy-shadows unlace emits are outside the entry
 block.
 
 ## Three things that had to be measured, not reasoned

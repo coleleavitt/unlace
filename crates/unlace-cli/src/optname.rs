@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     fn a_catalogued_name_from_either_table_is_accepted() {
-        assert!(is_known("loweredswitch"), "a kuna stage-model option");
+        assert!(is_known("loweredswitch"), "a unlace stage-model option");
         assert!(is_known("setlanguage"), "an upstream OptionDatabase option");
         assert!(
             is_known("readonly"),

@@ -1,9 +1,9 @@
 ## Problem
 
-Kuna moved valid odd x86-64 Objective-C IMP addresses down by one byte; on the vendored witness it bound the selector to padding and produced a one-byte function instead of the method body. The original dataset witness likewise moved `-[CrackMeManager checkCode:]` from metadata IMP `0x100001d2b` to `0x100001d2a`:
+Unlace moved valid odd x86-64 Objective-C IMP addresses down by one byte; on the vendored witness it bound the selector to padding and produced a one-byte function instead of the method body. The original dataset witness likewise moved `-[CrackMeManager checkCode:]` from metadata IMP `0x100001d2b` to `0x100001d2a`:
 
 ```bash
-kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/macho_objc_odd_imp '-[Greeter greet:]' --json
+unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/macho_objc_odd_imp '-[Greeter greet:]' --json
 ```
 
 ```json
@@ -20,6 +20,6 @@ The regression coverage proves both directions: a vendored x86-64 Mach-O keeps i
 
 - The promoted CLI acceptance resolves `-[Greeter greet:]` at exactly `0x100000641`.
 - The original dataset witness resolves `-[CrackMeManager checkCode:]` at exactly `0x100001d2b` with its full body.
-- Objective-C analyzer tests, the full `kuna-analysis` suite, datatests, stage tests, CLI tests, specification/catalog checks, and the Rust workspace suite pass.
+- Objective-C analyzer tests, the full `unlace-analysis` suite, datatests, stage tests, CLI tests, specification/catalog checks, and the Rust workspace suite pass.
 
 🤖 Generated with [OpenAI Codex](https://openai.com/codex/)

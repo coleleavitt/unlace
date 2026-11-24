@@ -38,7 +38,7 @@ Specify the Windows API calling convention while repairing stack arguments.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_401ba0",
@@ -72,7 +72,7 @@ Specify the Windows API calling convention while repairing stack arguments.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_401ba0",
@@ -126,11 +126,11 @@ REPRO (same arena binary as resource-loader-c-retains: arena/7/6442366033c5d4393
 Drop the __stdcall and the SAME declaration is accepted. Reproduces at HEAD.
 
 1. FILE AND LINE. crates/unlace-console/src/grammar.rs:1362-1366, CParse::lookup_identifier:
-    // glb->hasModel(nm) -> FUNCTION_SPECIFIER. The kuna Architecture has no
+    // glb->hasModel(nm) -> FUNCTION_SPECIFIER. The unlace Architecture has no
     // model registry, so this never fires (it would classify e.g.
     // "__stdcall" as a function specifier).  // STUB(w6-fspec-2)
     IdentClass::Identifier
-Upstream classifies any identifier the Architecture knows as a prototype model into a FUNCTION_SPECIFIER token; kuna returns plain Identifier, so '__stdcall' lands where the grammar expects a type specifier and the parse dies as 'Bad C syntax'. Nothing else is missing: the REST OF THE PATH IS ALREADY PORTED -- TypeSpecifiers::function_specifier (grammar.rs:1074), the duplicate guard at 1503-1506 ('Multiple parameter models'), and merge_spec_dec copying it into TypeDeclarator::model (1455) all exist and are dead for want of the lookup. And the models themselves exist: specs/Ghidra/Processors/x86/data/languages/x86win.cspec declares __stdcall, __cdecl, __fastcall and __thiscall. So this is a registry lookup, not a feature.
+Upstream classifies any identifier the Architecture knows as a prototype model into a FUNCTION_SPECIFIER token; unlace returns plain Identifier, so '__stdcall' lands where the grammar expects a type specifier and the parse dies as 'Bad C syntax'. Nothing else is missing: the REST OF THE PATH IS ALREADY PORTED -- TypeSpecifiers::function_specifier (grammar.rs:1074), the duplicate guard at 1503-1506 ('Multiple parameter models'), and merge_spec_dec copying it into TypeDeclarator::model (1455) all exist and are dead for want of the lookup. And the models themselves exist: specs/Ghidra/Processors/x86/data/languages/x86win.cspec declares __stdcall, __cdecl, __fastcall and __thiscall. So this is a registry lookup, not a feature.
 
 2. THE ACCEPTANCE IS SATISFIABLE BY A FIX THAT DOES NOTHING -- FLAG THIS AT B_DONE. The acceptance asserts only exit 0 + stderr_absent 'rejected'. A patch that merely SWALLOWS the keyword (lexes it, drops it on the floor, keeps the default __cdecl model) passes verbatim while the declared convention is silently ignored -- which on i386 is the difference between callee-pops and caller-pops and would MIS-model the stack. Require the acceptance (or a stage test) to prove the convention is HONORED: assert a __stdcall-declared callee actually changes the caller's stack behaviour vs the same declaration without it, not just that the error stopped. Same rule the refute-tick memory records for absence needs.
 

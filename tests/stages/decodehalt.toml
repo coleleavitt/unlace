@@ -1,4 +1,4 @@
-# kuna decodehalt (DIV-151): a RETURN kuna planted because it could NOT
+# unlace decodehalt (DIV-151): a RETURN unlace planted because it could NOT
 # decode the bytes says so, instead of printing as an ordinary `return;`.
 #
 # FlowInfo ends a path it cannot follow with an ARTIFICIAL HALT - a
@@ -8,7 +8,7 @@
 # (printc.cc:774) renders them as the pseudo-calls halt_baddata() /
 # halt_unimplemented() / halt_missing(), and processInstruction buffers
 # "Bad instruction - Truncating control flow here" at the failing address
-# plus a header warning on the function.  kuna ported the halt but neither
+# plus a header warning on the function.  unlace ported the halt but neither
 # the rendering nor the warnings, so a function that ran off into bytes it
 # could not read ended with a bare `return;` and nothing said so.
 #

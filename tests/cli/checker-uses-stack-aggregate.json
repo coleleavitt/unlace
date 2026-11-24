@@ -2,7 +2,7 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "stack_aggregate"

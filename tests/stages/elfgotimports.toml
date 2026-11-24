@@ -2,12 +2,12 @@
 #
 # Issue: a -fPIC read of data another image defines loads a GOT slot the
 # dynamic loader fills with the symbol's address (R_*_GLOB_DAT), then loads
-# through it. kuna painted PE and Mach-O import slots externref but never an
+# through it. unlace painted PE and Mach-O import slots externref but never an
 # ELF GOT slot, so the read printed as `*dat_<slot>` (libcurl, libssl and
 # libxml2 on this host all read stdout, environ or a library global that way).
 #
 # Stage / sub-stage: P1 environment-binding, the ELF GOT import slots
-# (`unlace-analysis/src/loader/kuna_elfgotimports.rs`: reported as import slots,
+# (`unlace-analysis/src/loader/unlace_elfgotimports.rs`: reported as import slots,
 # named and painted externref), rendered by P9 naming-policy
 # `PrintC::op_load` (`importdata`).
 #

@@ -7,16 +7,16 @@ IDA later is just a new adapter here.
 """
 from .base import ReferenceDecompiler, ReferenceResult
 from .angr_adapter import AngrReference
-from .kuna_adapter import KunaReference
+from .unlace_adapter import UnlaceReference
 
 #: Registry of available reference decompilers by name.
 #:
-#: ``unlace`` makes the kuna engine itself a reference, so the same compare machinery
-#: can run kuna against another reference (or be the reference for a future tool) --
-#: not just angr-vs-kuna.
+#: ``unlace`` makes the unlace engine itself a reference, so the same compare machinery
+#: can run unlace against another reference (or be the reference for a future tool) --
+#: not just angr-vs-unlace.
 REGISTRY = {
     "angr": AngrReference,
-    "kuna": KunaReference,
+    "unlace": UnlaceReference,
 }
 
 
@@ -31,4 +31,4 @@ def get_reference(name="angr", **kw):
 
 
 __all__ = ["ReferenceDecompiler", "ReferenceResult", "AngrReference",
-           "KunaReference", "REGISTRY", "get_reference"]
+           "UnlaceReference", "REGISTRY", "get_reference"]

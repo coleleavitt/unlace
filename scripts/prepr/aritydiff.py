@@ -1,6 +1,6 @@
-"""Compare the call arities two kuna builds print over real binaries.
+"""Compare the call arities two unlace builds print over real binaries.
 
-    python -m scripts.prepr.aritydiff BASE_KUNA HEAD_KUNA [--corpus msvc32] [BINARY ...]
+    python -m scripts.prepr.aritydiff BASE_UNLACE HEAD_UNLACE [--corpus msvc32] [BINARY ...]
         [--option NAME VALUE] [--verbose] [--json] [--max-fn-seconds N]
 
 Both builds run `unlace decompile-all --json` over every binary. In each function
@@ -158,24 +158,24 @@ def compare(binary: str, before: dict[str, dict], after: dict[str, dict]) -> Bin
     return report
 
 
-def decompile(kuna: str, binary: Path, options: list[str], max_fn_seconds: int) -> dict[str, dict]:
+def decompile(unlace: str, binary: Path, options: list[str], max_fn_seconds: int) -> dict[str, dict]:
     result = subprocess.run(
-        [kuna, "decompile-all", str(binary), "--json", "--max-fn-seconds", str(max_fn_seconds), *options],
+        [unlace, "decompile-all", str(binary), "--json", "--max-fn-seconds", str(max_fn_seconds), *options],
         capture_output=True, text=True, errors="replace",
     )
     if result.returncode != 0 or not result.stdout.strip():
-        raise RuntimeError(f"{kuna} decompile-all {binary} failed: {result.stderr.strip()[:400]}")
+        raise RuntimeError(f"{unlace} decompile-all {binary} failed: {result.stderr.strip()[:400]}")
     return functions(result.stdout)
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("base", help="the kuna binary built from the base commit")
-    parser.add_argument("head", help="the kuna binary built from the change")
+    parser.add_argument("base", help="the unlace binary built from the base commit")
+    parser.add_argument("head", help="the unlace binary built from the change")
     parser.add_argument("binaries", nargs="*", type=Path, help="extra binaries to compare")
     parser.add_argument("--corpus", action="append", default=[],
                         help=f"a corpus to include: {', '.join(sorted(corpus.CORPORA))} (pinned), or local "
-                             "(the binaries listed in $KUNA_PREPR_LOCAL)")
+                             "(the binaries listed in $UNLACE_PREPR_LOCAL)")
     parser.add_argument("--option", nargs=2, action="append", default=[], metavar=("NAME", "VALUE"),
                         help="an option for the head build only")
     parser.add_argument("--max-fn-seconds", type=int, default=30)

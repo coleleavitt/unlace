@@ -6,7 +6,7 @@
 <sweep-dir>/rows.json is typesweep's output (arms `base` and `test`).
 <class-rows.json> is a campaign `finalsweep` rows.json whose decisions carry the
 DWARF class (`cls`) of every ground-truth variable; the ground truth does not
-depend on the kuna build, so a variable is joined to its class by (slice,
+depend on the unlace build, so a variable is joined to its class by (slice,
 function, position in the function's ground-truth list), checked by name.
 """
 import collections

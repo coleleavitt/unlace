@@ -233,7 +233,7 @@ impl AssertLog {
     pub fn render_list(&self) -> String {
         let mut os = String::new();
         if self.entries.is_empty() {
-            os.push_str("No kuna assertions recorded this session\n");
+            os.push_str("No unlace assertions recorded this session\n");
             return os;
         }
         os.push_str(

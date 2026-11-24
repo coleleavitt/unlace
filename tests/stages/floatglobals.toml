@@ -1,5 +1,5 @@
 # A global the program only moves through floating-point registers is a
-# float (option floatglobals, kuna_floatglobals.rs). The script loads three
+# float (option floatglobals, unlace_floatglobals.rs). The script loads three
 # in-tree linked images of floatglobal.c (source beside them): gcc -O2 for
 # x86-64, gcc -O2 for AArch64 and for hard-float ARM.
 #

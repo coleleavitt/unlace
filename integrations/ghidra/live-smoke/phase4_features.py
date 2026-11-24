@@ -10,9 +10,9 @@ What it proves (each section prints PASS/FAIL and lands in PHASE4_REPORT.md):
                    symbols), and `getC()` carries CLEAN type spellings (no
                    `unsigned_long__`-style `IllegalCharCppTransformer` mangle).
   2. symbols     — the HighFunction's LocalSymbolMap decoded params + locals
-                   (ids, storage) from kuna's `<localdb>`/`<highlist>`.
+                   (ids, storage) from unlace's `<localdb>`/`<highlist>`.
   3. rename      — the KEYSTONE: `HighFunctionDBUtil.updateDBVariable` renames
-                   a kuna-delivered local HighSymbol; verified against the DB
+                   a unlace-delivered local HighSymbol; verified against the DB
                    variable AT THE SAME STORAGE (a wrong symbol id silently
                    renames the wrong thing), then re-decompiled to show the
                    new name in the C.
@@ -21,16 +21,16 @@ What it proves (each section prints PASS/FAIL and lands in PHASE4_REPORT.md):
                    mismatch forces a whole-signature commit — r2 §4).
   6. jumptables  — `toggleJumpLoads` + `toggleSyntaxTree(false)` +
                    `toggleCCode(false)` (the switch-analyzer configuration):
-                   `HighFunction.getJumpTables()` decodes kuna's
+                   `HighFunction.getJumpTables()` decodes unlace's
                    `<jumptablelist>` (cases + loadtables), and
                    `DecompilerSwitchAnalysisCmd` re-creates the jump
                    references from it after they are deleted.
   7. paramid     — the `paramid` action + parammeasures toggle:
-                   `DecompileResults.getHighParamID()` decodes kuna's
+                   `DecompileResults.getHighParamID()` decodes unlace's
                    `<parammeasures>`.
 
-Environment: as kuna_vs_stock.py (GHIDRA_INSTALL_DIR, KUNA_GHIDRA_EXE,
-KUNA_SMOKE_BINARY, KUNA_SMOKE_OUT), plus KUNA_SMOKE_FUNCTION (default: main).
+Environment: as unlace_vs_stock.py (GHIDRA_INSTALL_DIR, UNLACE_GHIDRA_EXE,
+UNLACE_SMOKE_BINARY, UNLACE_SMOKE_OUT), plus UNLACE_SMOKE_FUNCTION (default: main).
 """
 
 import os
@@ -39,13 +39,13 @@ import sys
 import traceback
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-KUNA_GHIDRA = os.environ.get(
-    "KUNA_GHIDRA_EXE",
+UNLACE_GHIDRA = os.environ.get(
+    "UNLACE_GHIDRA_EXE",
     os.path.join(REPO, "target", "release", "unlace_ghidra"),
 )
-BINARY = os.environ.get("KUNA_SMOKE_BINARY")
-FUNCTION = os.environ.get("KUNA_SMOKE_FUNCTION", "main")
-OUT = os.path.abspath(os.environ.get("KUNA_SMOKE_OUT", "live-phase4-out"))
+BINARY = os.environ.get("UNLACE_SMOKE_BINARY")
+FUNCTION = os.environ.get("UNLACE_SMOKE_FUNCTION", "main")
+OUT = os.path.abspath(os.environ.get("UNLACE_SMOKE_OUT", "live-phase4-out"))
 
 REPORT = []
 
@@ -62,10 +62,10 @@ def check(name, ok, detail=""):
 
 def main():
     if not BINARY:
-        print("usage: KUNA_SMOKE_BINARY=/path/to/prog python3 phase4_features.py")
+        print("usage: UNLACE_SMOKE_BINARY=/path/to/prog python3 phase4_features.py")
         sys.exit(1)
-    if not os.path.exists(KUNA_GHIDRA):
-        print(f"FATAL: unlace_ghidra not built at {KUNA_GHIDRA}")
+    if not os.path.exists(UNLACE_GHIDRA):
+        print(f"FATAL: unlace_ghidra not built at {UNLACE_GHIDRA}")
         sys.exit(1)
     os.makedirs(OUT, exist_ok=True)
     # The probe MUTATES the program database (renames/retypes/reference
@@ -89,7 +89,7 @@ def main():
     with pyghidra.open_program(
         BINARY,
         project_location=os.path.join(OUT, "ghidra_project"),
-        project_name="kuna_phase4",
+        project_name="unlace_phase4",
         analyze=True,
     ) as flat:
         program = flat.getCurrentProgram()
@@ -104,9 +104,9 @@ def main():
             print(f"FATAL: no function named {FUNCTION}")
             sys.exit(1)
 
-        field.set(None, KUNA_GHIDRA)
+        field.set(None, UNLACE_GHIDRA)
         log(f"# Phase-4 live feature report — {os.path.basename(BINARY)}::{FUNCTION}")
-        log(f"core: {KUNA_GHIDRA}")
+        log(f"core: {UNLACE_GHIDRA}")
         log()
 
         # ---- 1+2: full decompile: signature, symbols, clean spellings ------
@@ -121,7 +121,7 @@ def main():
         hf = res.getHighFunction()
         dfunc = res.getDecompiledFunction()
         c = str(dfunc.getC()) if dfunc else ""
-        with open(os.path.join(OUT, f"kuna_{FUNCTION}.c"), "w") as fh:
+        with open(os.path.join(OUT, f"unlace_{FUNCTION}.c"), "w") as fh:
             fh.write(c)
         sig = str(dfunc.getSignature()) if dfunc else ""
         proto = hf.getFunctionPrototype()
@@ -182,7 +182,7 @@ def main():
             old_name = str(target.getName())
             storage = target.getStorage()
             pcaddr = target.getPCAddress()
-            new_name = "kuna_ren_probe"
+            new_name = "unlace_ren_probe"
             # The collateral set must be non-trivial to mean anything: on a
             # fresh analysis the DB has no committed locals, so ALSO commit the
             # decoded locals first (HighFunctionDBUtil.commitLocalNamesToDatabase
@@ -233,14 +233,14 @@ def main():
                 failures += 1
             # Optional deep-debug: capture the full wire session (query answers
             # included) around the re-decompile via DecompInterface.enableDebug.
-            if os.environ.get("KUNA_SMOKE_DEBUGXML"):
+            if os.environ.get("UNLACE_SMOKE_DEBUGXML"):
                 from java.io import File as JFile
                 dbg_path = os.path.join(OUT, "post_rename_session.xml")
                 ifc.enableDebug(JFile(dbg_path))
             # Event-driven re-decompile: the new name must come back in the C.
             res2 = ifc.decompileFunction(func, 120, monitor)
             c2 = str(res2.getDecompiledFunction().getC())
-            with open(os.path.join(OUT, f"kuna_{FUNCTION}_renamed.c"), "w") as fh:
+            with open(os.path.join(OUT, f"unlace_{FUNCTION}_renamed.c"), "w") as fh:
                 fh.write(c2)
             lsm2 = res2.getHighFunction().getLocalSymbolMap()
             names2 = sorted(str(s.getName()) for s in lsm2.getSymbols())
@@ -285,7 +285,7 @@ def main():
                              err is None and retyped == [str(new_dt.getName())],
                              f"wanted {new_dt.getName()}, got {retyped}"):
                     failures += 1
-                with open(os.path.join(OUT, f"kuna_{FUNCTION}_retyped.c"), "w") as fh:
+                with open(os.path.join(OUT, f"unlace_{FUNCTION}_retyped.c"), "w") as fh:
                     fh.write(c4)
 
         # ---- 5: parameter rename (cat-0 + index + exact storage) -----------
@@ -293,7 +293,7 @@ def main():
             p0 = params[0]
             # An in-place rename is only meaningful if the decoded prototype
             # ALREADY agrees with the database — otherwise getDatabaseParameter
-            # force-commits kuna's whole signature and the rename "lands"
+            # force-commits unlace's whole signature and the rename "lands"
             # regardless (the vacuous PASS this check used to be).  Commit the
             # signature first, then assert storage+ordinal equality decoded-vs-DB
             # BEFORE renaming.
@@ -333,7 +333,7 @@ def main():
             err = None
             try:
                 HighFunctionDBUtil.updateDBVariable(
-                    p0, "kuna_param_probe", None, SourceType.USER_DEFINED)
+                    p0, "unlace_param_probe", None, SourceType.USER_DEFINED)
             except Exception:
                 err = traceback.format_exc()
             finally:
@@ -342,7 +342,7 @@ def main():
                 log(err)
             db_params = [str(p.getName()) for p in func.getParameters()]
             if not check("param rename lands on the DB parameter",
-                         err is None and "kuna_param_probe" in db_params,
+                         err is None and "unlace_param_probe" in db_params,
                          f"{old_p} -> DB params now {db_params}"):
                 failures += 1
         ifc.dispose()
@@ -373,7 +373,7 @@ def main():
 
         # DecompilerSwitchAnalysisCmd end-to-end: delete the computed jump's
         # references, then let the analyzer command rebuild them from the
-        # DecompileResults kuna produced under the analyzer's configuration.
+        # DecompileResults unlace produced under the analyzer's configuration.
         if jts:
             from ghidra.app.cmd.function import DecompilerSwitchAnalysisCmd
             sw_addr = jts[0].getSwitchAddress()

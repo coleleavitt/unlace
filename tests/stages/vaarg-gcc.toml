@@ -1,4 +1,4 @@
-# kuna `vaarg` stage test (gcc): the x86-64 SysV va_arg read through a va_list
+# unlace `vaarg` stage test (gcc): the x86-64 SysV va_arg read through a va_list
 # pointer. With vaarg off the gp_offset/fp_offset compare, the register save
 # area read and the overflow read print as raw loads, stores and address
 # arithmetic. With vaarg on each function reads one va_arg(a0,T).

@@ -7,18 +7,18 @@ is usually that the recovered one is wrong and the name is `sub_...`. It exits 0
 even under `--assert-strict`, and `--json` applies the same directive.
 
 ```console
-$ kuna decompile ./fauxware authenticate \
+$ unlace decompile ./fauxware authenticate \
     --assert 'prototype authenticate void *hashit(void *out,void *input)' \
     --assert-strict | head -1
 unsigned long authenticate(char *a0,char *a1)
 
-$ kuna decompile ./fauxware authenticate \
+$ unlace decompile ./fauxware authenticate \
     --assert 'prototype authenticate void *hashit(void *out,void *input)' \
     --assert-strict --json | grep -m1 -E '"status"|void \*'
       "status": "applied",
 ```
 
-(`fauxware` is `decompiler/crates/kuna-analysis/tests/fixtures/fauxware`, in the
+(`fauxware` is `decompiler/crates/unlace-analysis/tests/fixtures/fauxware`, in the
 repo. Spell the declaration `void *authenticate(...)` instead and the text
 surface applies it — the name in the declaration is the discriminator, not the
 output format.)
@@ -42,13 +42,13 @@ output format.)
 
 ## The tests
 
-`a_prototype_declared_under_another_name_binds_on_both_surfaces` (kuna-cli, drives
+`a_prototype_declared_under_another_name_binds_on_both_surfaces` (unlace-cli, drives
 the real `decomp_dbg` on the fixture and fails on the unpatched tree),
 `a_declaration_written_under_another_name_still_binds_to_its_target`
 (console, the in-process twin), three guards for the new command including
 that `map param`/`map addr`/`map fun` still resolve, and the promoted probe
 `tests/cli/text-output-silently-ignores.json`. Gates: `make test` PARITY OK
 675/675, `make test-stages` PARITY OK 635/635, `make test-cli` 38/38,
-`make check-spec` OK, `kuna catalog --check` OK, `make rust-test` green.
+`make check-spec` OK, `unlace catalog --check` OK, `make rust-test` green.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

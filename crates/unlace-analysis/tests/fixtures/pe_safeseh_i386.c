@@ -1,4 +1,4 @@
-/* SafeSEH fixture for kuna (PE32). Built without a C runtime: this file supplies the
+/* SafeSEH fixture for unlace (PE32). Built without a C runtime: this file supplies the
    load configuration and registers two exception handlers with the .safeseh directive. */
 typedef unsigned int u32;
 

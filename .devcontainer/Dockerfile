@@ -1,7 +1,7 @@
-# kuna dev container — reproducible build + cross-arch fixture environment.
+# unlace dev container — reproducible build + cross-arch fixture environment.
 #
-# This image is ENV-ONLY: it does NOT COPY the kuna repo. The workspace is mounted
-# at runtime (/workspaces/kuna), so the same image serves every branch/worktree.
+# This image is ENV-ONLY: it does NOT COPY the unlace repo. The workspace is mounted
+# at runtime (/workspaces/unlace), so the same image serves every branch/worktree.
 #
 # Base is ubuntu:22.04 deliberately: it matches the host toolchain era so the
 # vendored cross-arch ELF test fixtures stay byte-reproducible.
@@ -107,5 +107,5 @@ RUN rustc --version | grep -q '1\.90\.0' \
     && cargo --version \
     && arm-linux-gnueabihf-gcc --version
 
-WORKDIR /workspaces/kuna
+WORKDIR /workspaces/unlace
 CMD ["/bin/bash", "-l"]

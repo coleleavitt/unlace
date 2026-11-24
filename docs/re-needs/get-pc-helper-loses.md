@@ -41,7 +41,7 @@ Preserve the incoming buffer argument across a helper that only writes EBX.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x8049f20",
@@ -80,7 +80,7 @@ Preserve the incoming buffer argument across a helper that only writes EBX.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x8049f20",
@@ -135,7 +135,7 @@ Preserve the incoming buffer argument across a helper that only writes EBX.
 0x8049f42  MOV EDX,[EBP + 0x8]     ; the `path` parameter
 ```
 
-kuna emits `__lxstat(3,path,v1)` with `unsigned int v1; // edx`. The controlled comparison is
+unlace emits `__lxstat(3,path,v1)` with `unsigned int v1; // edx`. The controlled comparison is
 inside the one function: `path` is loaded from the frame AFTER the call and is recovered;
 `buf` is loaded from the frame BEFORE it and is lost. The only difference between the two is
 that EDX crosses the CALL, and EDX is in the i386 cdecl killedbycall set -- while the callee

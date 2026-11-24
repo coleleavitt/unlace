@@ -1,4 +1,4 @@
-# kuna option bejoinpass whole (the default), GH-904: a big-endian register
+# unlace option bejoinpass whole (the default), GH-904: a big-endian register
 # pair a call hands back and the function returns untouched is one value.
 #
 # bejoin joins a function's returned pair by that function's own proof and

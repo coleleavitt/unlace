@@ -1,4 +1,4 @@
-/* Source of riscv64.o, mips.o and ppc32.o (tests/stages/kuna-reloc-families.xml):
+/* Source of riscv64.o, mips.o and ppc32.o (tests/stages/unlace-reloc-families.xml):
  *   zig cc -target riscv64-freestanding-none -fno-pic -mcmodel=medlow -mno-relax -O1 -g0 -c t.c -o riscv64.o
  *   zig cc -target mips-freestanding-none -fno-pic -O1 -g0 -c t.c -o mips.o
  *   zig cc -target mips-linux-gnu -fpic -O1 -g0 -c t.c -o mipspic.o

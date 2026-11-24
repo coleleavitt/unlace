@@ -1,15 +1,15 @@
-"""Time kuna over the nightly sample and score its output with decbench's own code.
+"""Time unlace over the nightly sample and score its output with decbench's own code.
 
-Mirrors how decbench scores kuna for the published leaderboard: kuna sees a
+Mirrors how decbench scores unlace for the published leaderboard: unlace sees a
 fully-stripped copy (`strip --strip-all`) of each binary, runs as
 `unlace decompile-all <stripped> --json --max-fn-seconds 600` in its default mode, its
-output is parsed by decbench's kuna backend, re-labeled to the DWARF names of the
+output is parsed by decbench's unlace backend, re-labeled to the DWARF names of the
 unstripped binary (`scripts/run_benchmark.py::_relabel_to_dwarf` in the decbench
 checkout), and scored for GED against the dataset's published source CFGs and for
 type_match against DWARF.
 
 Timing runs one decompile at a time so a binary's CPU time is not inflated by its
-neighbours. With `--baseline-kuna` (last night's build) each binary is decompiled by
+neighbours. With `--baseline-unlace` (last night's build) each binary is decompiled by
 both builds back to back, alternating which goes first, so the speed comparison is an
 A/B on one machine rather than a comparison across two runners. Scoring then runs in
 parallel and uses tonight's output only.
@@ -17,8 +17,8 @@ parallel and uses tonight's output only.
 Must run under a Python that imports `decbench` and `rust_joern`:
 
     python -m scripts.nightly.bench --sample sample.json --data data/ \
-        --kuna kuna --specs specs/ --decbench-root decbench/ --out out/ \
-        [--baseline-kuna base/kuna --baseline-specs base/specs]
+        --unlace unlace --specs specs/ --decbench-root decbench/ --out out/ \
+        [--baseline-unlace base/unlace --baseline-specs base/specs]
 """
 from __future__ import annotations
 
@@ -63,10 +63,10 @@ def strip_copy(src: Path, dest: Path) -> Path:
     return dest
 
 
-def run_kuna(kuna: Path, specs: Path, binary: Path, out: Path, timeout: float) -> dict:
+def run_unlace(unlace: Path, specs: Path, binary: Path, out: Path, timeout: float) -> dict:
     """One timed `decompile-all`; CPU time comes from the child's own rusage."""
-    env = dict(os.environ, KUNA_SPECS=str(specs))
-    cmd = [str(kuna), "decompile-all", str(binary), "--json",
+    env = dict(os.environ, UNLACE_SPECS=str(specs))
+    cmd = [str(unlace), "decompile-all", str(binary), "--json",
            "--max-fn-seconds", str(MAX_FN_SECONDS)]
     err = out.with_suffix(".stderr")
     start = time.perf_counter()
@@ -102,9 +102,9 @@ def time_sample(entries: list[dict], work: Path, arms: list[tuple[str, Path, Pat
         stripped = work / key / "stripped" / Path(key).name
         order = arms if i % 2 == 0 else list(reversed(arms))
         timings[key] = {}
-        for label, kuna, specs in order:
+        for label, unlace, specs in order:
             out = work / key / f"{label}.json"
-            timings[key][label] = run_kuna(kuna, specs, stripped, out, timeout)
+            timings[key][label] = run_unlace(unlace, specs, stripped, out, timeout)
             if label != "new":
                 out.unlink(missing_ok=True)
         new = timings[key]["new"]
@@ -136,12 +136,12 @@ def score_binary(entry: dict, data: Path, work: Path, decbench_root: Path,
     """Per-function GED and type_match for one binary's `new` output.
 
     A function decbench can measure (non-degenerate source CFG for GED, DWARF
-    ground truth for type_match) that kuna's output does not yield a value for is
+    ground truth for type_match) that unlace's output does not yield a value for is
     recorded as `null`: a failure, not an abstention.
     """
     from decbench.decompilers.base import DecompilerConfig
     from decbench.decompilers.provenance import sanitize_native_provenance
-    from decbench.decompilers.raw.kuna_raw import RawKunaDecompiler
+    from decbench.decompilers.raw.unlace_raw import RawUnlaceDecompiler
     from decbench.metrics import type_match as tm
     from decbench.pipeline.evaluate import evaluate_decompilation
     from decbench.publish.cfg_export import rebuild_cfg
@@ -172,7 +172,7 @@ def score_binary(entry: dict, data: Path, work: Path, decbench_root: Path,
     emitted = 0
     scored = {}
     if payload is not None:
-        decompiler = RawKunaDecompiler(DecompilerConfig())
+        decompiler = RawUnlaceDecompiler(DecompilerConfig())
         decompiler._payload_cache[str(stripped)] = payload
         result = decompiler.decompile_binary(stripped, function_names=set(addr2name) or None)
         sanitize_native_provenance(result, stripped, defer_unavailable=True)
@@ -233,8 +233,8 @@ def cpu_model() -> str:
     return platform.processor() or "unknown"
 
 
-def kuna_version(kuna: Path) -> str:
-    p = subprocess.run([str(kuna), "--version"], capture_output=True, text=True)
+def unlace_version(unlace: Path) -> str:
+    p = subprocess.run([str(unlace), "--version"], capture_output=True, text=True)
     return (p.stdout or p.stderr).strip()
 
 
@@ -242,9 +242,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--sample", type=Path, required=True)
     ap.add_argument("--data", type=Path, required=True)
-    ap.add_argument("--kuna", type=Path, required=True)
+    ap.add_argument("--unlace", type=Path, required=True)
     ap.add_argument("--specs", type=Path, required=True)
-    ap.add_argument("--baseline-kuna", type=Path)
+    ap.add_argument("--baseline-unlace", type=Path)
     ap.add_argument("--baseline-specs", type=Path)
     ap.add_argument("--baseline-label", default="", help="what the baseline build is (sha/run)")
     ap.add_argument("--label", default="", help="what tonight's build is (sha)")
@@ -254,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--timeout", type=float, default=900, help="per-binary decompile cap (s)")
     args = ap.parse_args(argv)
 
-    os.environ["KUNA_BIN"] = str(args.kuna.resolve())
+    os.environ["UNLACE_BIN"] = str(args.unlace.resolve())
     sample = json.loads(args.sample.read_text())
     entries = sample["binaries"]
     work = args.out / "work"
@@ -264,9 +264,9 @@ def main(argv: list[str] | None = None) -> int:
         strip_copy(args.data / entry["binary_path"],
                    work / entry["binary_path"] / "stripped" / Path(entry["binary_path"]).name)
 
-    arms = [("new", args.kuna.resolve(), args.specs.resolve())]
-    if args.baseline_kuna:
-        arms.append(("baseline", args.baseline_kuna.resolve(),
+    arms = [("new", args.unlace.resolve(), args.specs.resolve())]
+    if args.baseline_unlace:
+        arms.append(("baseline", args.baseline_unlace.resolve(),
                      (args.baseline_specs or args.specs).resolve()))
     t0 = time.perf_counter()
     timings = time_sample(entries, work, arms, args.timeout)
@@ -304,9 +304,9 @@ def main(argv: list[str] | None = None) -> int:
         "schema": 1,
         "meta": {
             "label": args.label,
-            "kuna_version": kuna_version(args.kuna),
-            "baseline_label": args.baseline_label if args.baseline_kuna else None,
-            "baseline_version": kuna_version(args.baseline_kuna) if args.baseline_kuna else None,
+            "unlace_version": unlace_version(args.unlace),
+            "baseline_label": args.baseline_label if args.baseline_unlace else None,
+            "baseline_version": unlace_version(args.baseline_unlace) if args.baseline_unlace else None,
             "dataset": sample["dataset"],
             "dataset_revision": sample["revision"],
             "config": sample["config"],

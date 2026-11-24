@@ -1270,7 +1270,7 @@ impl RemoteScope {
     /// `resolve_external_ref` fires at most once per decoded externref answer.
     fn note_failure(&self, addr: &Address, what: &str) {
         let mut st = self.state.borrow_mut();
-        let mut msg = String::from("Warning: kuna ghidra-mode: ");
+        let mut msg = String::from("Warning: unlace ghidra-mode: ");
         msg.push_str(what);
         msg.push_str(" at ");
         let _ = addr.print_raw(&mut msg);

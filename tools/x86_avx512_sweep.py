@@ -11,7 +11,7 @@ FP16, BF16, GFNI/VAES/VPCLMULQDQ; never AVX10.2 or APX, which have their own pro
 Intel-syntax line with fixed operands (zmm1/zmm18/zmm3/zmm4, k1, [rax + 8*r9 + 2N] for a memory
 operand of compressed displacement N, imm 3). llvm-mc assembles them (lines it rejects are
 dropped), each padded to 16 bytes so a wrong length cannot shift the rest; llvm-objdump and
-unlace (with KUNA_SPECS/SLEIGHHOME at --specs) disassemble the image, and every instruction whose
+unlace (with UNLACE_SPECS/SLEIGHHOME at --specs) disassemble the image, and every instruction whose
 bytes or text (case, spacing and LLVM's decimal displacements normalised) differ is a finding.
 With --base-specs the same image is also disassembled with another spec tree, and the findings
 are split into fixed, regressed and unchanged. Exit status 1 when a finding regressed.
@@ -124,7 +124,7 @@ def llvm_rows(elf, mattr):
 
 
 def unlace_rows(unlace, elf, specs, end):
-    env = dict(os.environ, KUNA_SPECS=specs, SLEIGHHOME=specs)
+    env = dict(os.environ, UNLACE_SPECS=specs, SLEIGHHOME=specs)
     out = {}
     for l in run([unlace, "disassemble", elf, "0x1000-0x%x" % end], env=env).stdout.splitlines():
         m = re.match(r"^0x([0-9a-f]+)\s+(\S+)\s+(.*)$", l)

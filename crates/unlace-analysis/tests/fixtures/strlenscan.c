@@ -1,5 +1,5 @@
-/* kuna `strlenscan` fixture: gcc 9 expands strlen inline as
-   `or rcx,-1; xor eax,eax; repnz scasb; not rcx` (ECX on i386), which kuna
+/* unlace `strlenscan` fixture: gcc 9 expands strlen inline as
+   `or rcx,-1; xor eax,eax; repnz scasb; not rcx` (ECX on i386), which unlace
    printed as a do/while over the string plus `~count` arithmetic.  The
    length must stay where the scan was: before a store, a call or a free that
    follows it, and once on each side of a branch that joins.  The two

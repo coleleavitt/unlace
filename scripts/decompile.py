@@ -93,14 +93,14 @@ def decompile(
     if not by_address and _looks_like_addr(target):
         by_address = True
 
-    out_file = tempfile.NamedTemporaryFile(prefix="kuna_c_", suffix=".c", delete=False)
+    out_file = tempfile.NamedTemporaryFile(prefix="unlace_c_", suffix=".c", delete=False)
     out_path = out_file.name
     out_file.close()
 
     regions_path = None
     if regions:
         regions_file = tempfile.NamedTemporaryFile(
-            prefix="kuna_regions_", suffix=".txt", delete=False
+            prefix="unlace_regions_", suffix=".txt", delete=False
         )
         regions_path = regions_file.name
         regions_file.close()

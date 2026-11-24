@@ -4,7 +4,7 @@ The option shipped default-off in the PR that introduced it, with the flip held
 back as its own change. This is that change: one default, plus the two
 expectations in the tree that pinned the old spelling.
 
-Everything measured here is `KUNA_LIBCTYPES=off` (= `main`'s default, verified
+Everything measured here is `UNLACE_LIBCTYPES=off` (= `main`'s default, verified
 byte-identical below) against the new default.
 
 ## What moved in the corpora
@@ -26,7 +26,7 @@ taken from a green line:
 
 * *The default really reaches the stage harness.* A throwaway fixture that loads
   a real ELF and asserts `int4 fclose(FILE \*a0)` with **no `option` command at
-  all** passes on this build and fails under `KUNA_LIBCTYPES=off`. The harness is
+  all** passes on this build and fails under `UNLACE_LIBCTYPES=off`. The harness is
   seeing the new default, not a stale one.
 * *Only one of the 16 stage fixtures that `load file` changes output at all.*
   Each of the 16 scripts was replayed through `decomp_dbg` in both arms (its own
@@ -54,7 +54,7 @@ test after it.
 `sub_1249\(void \*param_1\)`. That parameter is passed to `fread` and `fclose`
 and nothing else, so it is now `FILE *`; the pattern becomes
 `sub_1249\(FILE \*param_1\)`. The probe exists to prove that a name
-`kuna functions` reports still selects its function when `--option namestyle
+`unlace functions` reports still selects its function when `--option namestyle
 ghidra` changes how names are PRINTED, and `param_1` (rather than `a0`) is what
 pins that the style applied — that is untouched, and the assertion is exactly as
 tight as it was: same anchor, same parameter, one spelling.
@@ -62,8 +62,8 @@ tight as it was: same anchor, same parameter, one spelling.
 ## Type recovery — the sweep the default rests on
 
 `scripts.decbench.typesweep`, decbench main's `TypeMatchMetric`,
-`DECBENCH_NO_CACHE=1`, `KUNA_BIN` pinned to this branch's release build. Base arm
-is `KUNA_LIBCTYPES=off`, test arm `--option libctypes opaque`, so "improved"
+`DECBENCH_NO_CACHE=1`, `UNLACE_BIN` pinned to this branch's release build. Base arm
+is `UNLACE_LIBCTYPES=off`, test arm `--option libctypes opaque`, so "improved"
 reads in the direction of the flip.
 
 8 projects × `O0` / `O2` / `O2-noinline` = **444 slices, 10,748 scored functions**.
@@ -100,15 +100,15 @@ both arms and **0** of them score differently; 0 slice errors.
 
 `tar::O2-noinline::tar` `write_directory_file_entry`, .167 → .0. Ground truth is
 `int write_directory_file_entry (void *entry, void *data)` — the
-`hash_do_for_each` callback signature — and kuna's `data` went from `void *` (a
+`hash_do_for_each` callback signature — and unlace's `data` went from `void *` (a
 match) to `FILE *` (a miss).
 
 It is not the defect shape the sweep is watching for: the ground truth is a
-POINTER, not a scalar that we have started calling a pointer. And kuna's answer
+POINTER, not a scalar that we have started calling a pointer. And unlace's answer
 is what the body does:
 
 ```
-$ kuna decompile-all <O2-noinline/tar/stripped/tar> --addr 0x1f1c0
+$ unlace decompile-all <O2-noinline/tar/stripped/tar> --addr 0x1f1c0
 unsigned long sub_1f1c0(int8 a0,FILE *a1)
 {
   ...
@@ -122,7 +122,7 @@ code has. One function in 10,748.
 
 ## Whole-binary output — 9 binaries, 4,301 functions
 
-`kuna decompile-all` off vs default over `fmt`/`ls`/`grep`/`gzip`/`tar`/`bzip2`
+`unlace decompile-all` off vs default over `fmt`/`ls`/`grep`/`gzip`/`tar`/`bzip2`
 `-O2`, `find`/`diff` `-O0` and shadow `useradd` `-O2 -fno-inline`. Every changed line is
 bucketed and, independently, every function's **skeleton** — its control-flow
 keyword sequence, its call-target multiset and its numeric-literal multiset,
@@ -271,8 +271,8 @@ where a `void *` did not.
 
 ## `off` is still `main`
 
-`kuna decompile-all` over all nine whole binaries, this branch's build with
-`KUNA_LIBCTYPES=off` against a release binary built from `origin/main`
+`unlace decompile-all` over all nine whole binaries, this branch's build with
+`UNLACE_LIBCTYPES=off` against a release binary built from `origin/main`
 (f02365cc): **byte-identical on every one** — fmt 4,069 lines, ls 13,677, grep
 18,257, gzip 9,358, tar 56,725, find 20,839, diff 13,102, useradd 11,487,
 bzip2 9,769.

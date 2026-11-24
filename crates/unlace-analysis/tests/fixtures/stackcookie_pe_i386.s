@@ -1,4 +1,4 @@
-# kuna fixture: MSVC frame cookies (`/GS`, EH) stored on the stack below a
+# unlace fixture: MSVC frame cookies (`/GS`, EH) stored on the stack below a
 # call's arguments. The cookie is a global XORed with the stack or frame
 # pointer; only the epilogue reads it back.
 #   gsseh   (0x401000): an SEH frame with a /GS cookie pushed below it, then

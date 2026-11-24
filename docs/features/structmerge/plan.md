@@ -14,14 +14,14 @@ structure-recovery`, tier `transform`, default `off`. Registered in
   (`agreement_is_evidence`), the merged member list (`plan`), and the partner
   choice (most shared claims, then smallest, then first minted).
 * `p5_types/structsynth/ledger.rs` -- `lookup_or_mint` takes the mode and
-  calls `kuna_structmerge::merge` when nothing held answers and before minting
+  calls `unlace_structmerge::merge` when nothing held answers and before minting
   the layout alone; `merge_window` bounds the partner search by size. The
   layout algebra (`FieldKey`, `Layout`, `Member`, `layout_of`,
   `layout_of_fields`, `keeps_unclaimed`, `answers_for`) widens from
   `pub(super)` to `pub(crate)` so the new module can use it.
 * `p5_types/structsynth/shard.rs` -- a worker's recording lookup passes
   `Off`, so a `--jobs N` run never merges.
-* `KUNA_STRUCTMERGE_TRACE=1` prints one line per candidate considered, with the
+* `UNLACE_STRUCTMERGE_TRACE=1` prints one line per candidate considered, with the
   number of shared claims and the verdict.
 
 ## Tests

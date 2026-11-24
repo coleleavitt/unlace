@@ -8,7 +8,7 @@
 #   (same build): two PEIMs, the first locating the PPI the second installs;
 # - uefi_fv/TcgMorLockSmm.efi (edk2-stable202502, OvmfX64 with SMM, as
 #   shipped in Debian's ovmf 2025.02-8): an SMM driver.
-# uefi_fv/kuna-uefi.index is what `kuna unpack` with its protocols flag writes
+# uefi_fv/unlace-uefi.index is what `unlace unpack` with its protocols flag writes
 # for the three modules of that directory.
 #
 # Pass 1 (`uefi off`, the bug): a function other than the entry calls a boot

@@ -5,7 +5,7 @@ pointer slot that veneer reads — so asking for it by name was refused. Every o
 of the nine imports in this Mach-O crackme is that shape.
 
 ```
-$ kuna decompile ./bin/main strcmp
+$ unlace decompile ./bin/main strcmp
 error: selector "strcmp" is ambiguous; candidates:
   strcmp at synthetic 0x100003ede
   strcmp at synthetic 0x100008030
@@ -15,7 +15,7 @@ use a section-qualified selector to choose one candidate
 Only `--addr` reached the function. The same names fared worse on `disassemble`
 and `read`, which do not report the ambiguity — they fall through to the raw
 symbol table and answer at the pointer word, so on a MinGW PE
-`kuna disassemble ./a.exe memcpy` listed eight bytes of import table as
+`unlace disassemble ./a.exe memcpy` listed eight bytes of import table as
 instructions.
 
 ## The fix
@@ -48,6 +48,6 @@ CLI surface against the vendored `macho_imports`.
 Swept across 163 vendored images: of 155 duplicated names, 134 go from the
 ambiguity error to a resolved veneer and none go the other way; on `disassemble`
 and `read`, 78 names move from the pointer word to its thunk, and 77 of those old
-answers were ones kuna itself flagged as "in a non-executable data section".
+answers were ones unlace itself flagged as "in a non-executable data section".
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

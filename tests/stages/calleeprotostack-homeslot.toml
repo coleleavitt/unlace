@@ -1,4 +1,4 @@
-# kuna calleeprotostack: a store into the caller's home slot is dropped when its
+# unlace calleeprotostack: a store into the caller's home slot is dropped when its
 # address is passed to a declared callee.
 #
 # MSVC x64 spills a value into the home slot its caller allocated above the
@@ -22,7 +22,7 @@
 # home slot's address escaped, so the call must keep its guard over it.
 #
 # Stage: P3 heritage call guarding.  The declared-callee stack contract
-# (kuna_calleeprotostack.rs, always on) must keep the store.
+# (unlace_calleeprotostack.rs, always on) must keep the store.
 
 [image]
 arch = 'x86:LE:64:default:windows'

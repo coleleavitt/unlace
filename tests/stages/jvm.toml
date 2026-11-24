@@ -1,4 +1,4 @@
-# Kuna Java class-file loader (jvmmodel): the committed class built from
+# Unlace Java class-file loader (jvmmodel): the committed class built from
 # tests/stages/fixtures/jvm/Hello.java, and the same class in a JAR, load
 # with the JVM spec. The constant pool names the methods, fields and strings
 # the invoke, field and ldc payloads reference; each method's descriptor is its

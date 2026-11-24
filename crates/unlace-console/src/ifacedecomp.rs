@@ -677,7 +677,7 @@ fn read_varnode(
         // The residual `beginLoc(defsize,loc)`..`endLoc` storage walk
         // (exactly one of pc/uq given) — not on this boundary's bank surface.
         Err(
-            "kuna rust port: readVarnode loc-scan arm needs the beginLoc/endLoc bank iterator"
+            "unlace rust port: readVarnode loc-scan arm needs the beginLoc/endLoc bank iterator"
                 .to_string(),
         )
     }
@@ -3757,7 +3757,7 @@ impl unlace_decomp::overrides::FuncProtoOverride for PiecesProtoOverride {
         // STUB(W4): FuncProto::encode of an override is a debug/save surface absent
         // from the datatest corpus.
         Err(unlace_base::error::UnlaceError::lowlevel(
-            "kuna rust port: prototype-override encode needs the W4 FuncProto::encode",
+            "unlace rust port: prototype-override encode needs the W4 FuncProto::encode",
         ))
     }
     fn print_raw(&self, s: &mut String) {

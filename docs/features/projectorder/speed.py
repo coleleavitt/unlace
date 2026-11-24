@@ -19,7 +19,7 @@ BINS = [("fmt O2", f"{R}/O2/coreutils/stripped/fmt"),
         ("sort O2", f"{R}/O2/coreutils/stripped/sort"),
         ("du O0", f"{R}/O0/coreutils/stripped/du")]
 WT = "/home/mahaloz/kwt/layoutvote"
-K = {"before": f"{WT}/.scratch/bin/kuna-base", "after": f"{WT}/decompiler/target/release/kuna"}
+K = {"before": f"{WT}/.scratch/bin/unlace-base", "after": f"{WT}/decompiler/target/release/unlace"}
 ARMS = ["before", "after"]
 SPECS = f"{WT}/specs"
 
@@ -30,7 +30,7 @@ for name, b in BINS:
     for i in range(N):
         for lab in (ARMS if i % 2 == 0 else ARMS[::-1]):
             d = tempfile.mkdtemp(prefix="projectorder-")
-            env = dict(os.environ, SLEIGHHOME=SPECS, KUNA_SPECS=SPECS)
+            env = dict(os.environ, SLEIGHHOME=SPECS, UNLACE_SPECS=SPECS)
             t0 = time.perf_counter()
             p = subprocess.run([K[lab], "decompile-project", b, "-o", d, "--max-fn-seconds", "120"],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)

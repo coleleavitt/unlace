@@ -346,7 +346,7 @@ pub(crate) fn run_pool(
     let plan = plan_chunks(targets, cfg.chunk, jobs);
     let banner = |plan: &[Vec<usize>], workers: usize| {
         format!(
-            "[kuna --jobs] {total} functions, {} chunk(s) of {}..{}, {workers} worker process(es)",
+            "[unlace --jobs] {total} functions, {} chunk(s) of {}..{}, {workers} worker process(es)",
             plan.len(),
             plan.iter().map(Vec::len).min().unwrap_or(0),
             plan.iter().map(Vec::len).max().unwrap_or(0)
@@ -465,7 +465,7 @@ pub(crate) fn run_pool_streaming(
     let workers = affordable_jobs(cfg, STREAM_TAG).min(total);
     workers_out.store(workers, Ordering::SeqCst);
     let banner = format!(
-        "[kuna --stream] {total} functions, entry-point-first dynamic scheduling, \
+        "[unlace --stream] {total} functions, entry-point-first dynamic scheduling, \
          {workers} worker process(es)"
     );
     let session = Session::open(cfg, inventory)?;
@@ -826,7 +826,7 @@ impl Pool<'_> {
             if !self.gate.allows() {
                 if self.gate.first_refusal() {
                     eprintln!(
-                        "[kuna {}] warning: {RUN_RERUN_FAILURES} or more re-runs have failed or \
+                        "[unlace {}] warning: {RUN_RERUN_FAILURES} or more re-runs have failed or \
                          could not start, more than the workers have delivered, so functions a \
                          worker leaves unfinished are not re-run while that lasts.",
                         self.tag
@@ -1509,7 +1509,7 @@ fn structsynth_shard_note(cfg: &PoolConfig, tag: &str) -> Option<String> {
         return None;
     }
     Some(format!(
-        "[kuna {tag}] note: structsynth is off in the worker processes: each process would \
+        "[unlace {tag}] note: structsynth is off in the worker processes: each process would \
          number its own struct_N, so one name could stand for two layouts. Re-run with \
          --jobs 1 for synthesized structures."
     ))
@@ -1596,14 +1596,14 @@ fn anomaly_lines(
     let mut lines = Vec::new();
     if tripped > 0 && max_fn_seconds > 0 {
         lines.push(format!(
-            "[kuna {tag}] warning: {tripped} function(s) hit the {max_fn_seconds}s per-function \
+            "[unlace {tag}] warning: {tripped} function(s) hit the {max_fn_seconds}s per-function \
              watchdog. It is wall-clock, so heavy functions can trip it under parallel load that \
              would pass serially — re-run with a larger --max-fn-seconds (or 0) if you need them."
         ));
     }
     if retries.recovered > 0 {
         lines.push(format!(
-            "[kuna {tag}] {} function(s) left unfinished by a failed worker process were re-run \
+            "[unlace {tag}] {} function(s) left unfinished by a failed worker process were re-run \
              one at a time and recovered.",
             retries.recovered
         ));
@@ -1614,7 +1614,7 @@ fn anomaly_lines(
             n => format!(" {n} of them failed again when re-run on their own."),
         };
         lines.push(format!(
-            "[kuna {tag}] warning: {lost} function(s) have no result because their worker process \
+            "[unlace {tag}] warning: {lost} function(s) have no result because their worker process \
              failed (crash, OOM kill, an external signal, or the stall watchdog); they are `error` \
              records in the output.{again} Re-run those functions, with fewer --jobs if the \
              machine ran out of memory."
@@ -1654,7 +1654,7 @@ fn affordable_jobs(cfg: &PoolConfig, tag: &str) -> usize {
     };
     if cfg.jobs_auto {
         eprintln!(
-            "[kuna {tag}] auto: {affordable} worker(s), not {} — one worker needs about {:.1} GB \
+            "[unlace {tag}] auto: {affordable} worker(s), not {} — one worker needs about {:.1} GB \
              here and {:.1} GB is free{capped}. Pass --jobs N to override.",
             cfg.jobs,
             gb(per_worker),
@@ -1668,7 +1668,7 @@ fn affordable_jobs(cfg: &PoolConfig, tag: &str) -> usize {
         " on this machine"
     };
     eprintln!(
-        "[kuna {tag}] warning: {} workers at about {:.1} GB each is more than the {:.1} GB free\
+        "[unlace {tag}] warning: {} workers at about {:.1} GB each is more than the {:.1} GB free\
          {place}; expect swapping or an OOM kill. {affordable} would fit.",
         cfg.jobs,
         gb(per_worker),
@@ -2004,7 +2004,7 @@ impl Faults {
         let (faults, rejected) = Faults::parse(&raw);
         for directive in rejected {
             eprintln!(
-                "[kuna {tag}] warning: ignoring unreadable {JOBS_FAULT_ENV} directive {directive:?}"
+                "[unlace {tag}] warning: ignoring unreadable {JOBS_FAULT_ENV} directive {directive:?}"
             );
         }
         faults
@@ -2218,7 +2218,7 @@ impl Progress {
             .map(|seconds| format!(", ETA {}", hms(seconds)))
             .unwrap_or_default();
         eprintln!(
-            "[kuna {}] {done}/{} functions ({:.1}%), {} elapsed{eta}",
+            "[unlace {}] {done}/{} functions ({:.1}%), {} elapsed{eta}",
             self.tag,
             self.total,
             frac * 100.0,
@@ -2231,7 +2231,7 @@ impl Progress {
     /// came back for a run that stopped early.
     fn finish(&self, count: usize, start: Instant) {
         eprintln!(
-            "[kuna {}] done: {count} functions in {}",
+            "[unlace {}] done: {count} functions in {}",
             self.tag,
             hms(start.elapsed().as_secs_f64())
         );
@@ -2571,7 +2571,7 @@ mod tests {
             detail: None,
         };
         let expected = [
-            b"KUNAJOBRES12\x01\x55\0\0\0".as_slice(),
+            b"UNLACEJOBR12\x01\x55\0\0\0".as_slice(),
             b"\x10\0\0\0\0\0\0\0\x20\0\0\0\0\0\0\0",
             b"\xff\xff\xff\xff\xff\xff\xff\xff",
             b"\x01\0\0\0f\0\x01\x01\0\0\0e\0\0",
@@ -2760,7 +2760,7 @@ mod tests {
                 assert!(same(r, &a));
             }
         }
-        assert!(decode_results(b"not a kuna stream").is_none());
+        assert!(decode_results(b"not a unlace stream").is_none());
     }
 
     fn target(addr: u64) -> TargetSpec {
@@ -2808,12 +2808,12 @@ mod tests {
             },
         ];
         assert_eq!(decode_spec(&encode_spec(&targets)).unwrap(), targets);
-        assert!(decode_spec(b"KUNAJOBSPEC3\xff\xff\xff\xff").is_none());
+        assert!(decode_spec(b"UNLACEJOBSP3\xff\xff\xff\xff").is_none());
     }
 
     #[test]
     fn spec_encoding_matches_the_version_three_wire_layout() {
-        let expected = b"KUNAJOBSPEC3\x01\0\0\0\
+        let expected = b"UNLACEJOBSP3\x01\0\0\0\
             \0\x10\0\0\0\0\0\0\
             \x03\0\0\0ram\x08\0\0\0sub_1000\
             \0\0\0\0\x20\0\0\0\0\0\0\0\
@@ -3227,7 +3227,7 @@ mod tests {
             },
         );
         assert_eq!(all_back.len(), 1);
-        assert!(all_back[0].starts_with("[kuna --jobs] 20 function(s) left unfinished"));
+        assert!(all_back[0].starts_with("[unlace --jobs] 20 function(s) left unfinished"));
         assert!(
             !all_back[0].contains("warning"),
             "nothing is missing: {all_back:?}"
@@ -3244,8 +3244,8 @@ mod tests {
         );
         assert_eq!(mixed.len(), 3, "{mixed:?}");
         assert!(mixed[0].contains("1 function(s) hit the 10s per-function watchdog"));
-        assert!(mixed[1].starts_with("[kuna --stream] 18 function(s)"));
-        assert!(mixed[2].starts_with("[kuna --stream] warning: 3 function(s) have no result"));
+        assert!(mixed[1].starts_with("[unlace --stream] 18 function(s)"));
+        assert!(mixed[2].starts_with("[unlace --stream] warning: 3 function(s) have no result"));
         assert!(mixed[2].contains(" 2 of them failed again when re-run on their own."));
 
         let unretried = anomaly_lines((0, 5), 0, JOBS_TAG, none);
@@ -3337,7 +3337,7 @@ mod tests {
     fn structsynth_shard_note_for_every_run_that_would_synthesize() {
         let note = structsynth_shard_note(&cfg(0, 0.0), JOBS_TAG).expect("default param");
         assert!(
-            note.starts_with("[kuna --jobs] note: structsynth is off"),
+            note.starts_with("[unlace --jobs] note: structsynth is off"),
             "{note}"
         );
         let project = PoolConfig {

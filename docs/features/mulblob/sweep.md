@@ -1,6 +1,6 @@
 # mulblob — whole-corpus before/after sweep
 
-`kuna decompile-all` in both arms over 12 binaries from the frozen decbench tree
+`unlace decompile-all` in both arms over 12 binaries from the frozen decbench tree
 (`results/full_run_address_2026-09-11`), O0 / O2 / O2-noinline:
 
 ```

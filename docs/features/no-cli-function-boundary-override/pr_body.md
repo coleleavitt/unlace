@@ -3,13 +3,13 @@
 `docs/re-needs/no-cli-function-boundary-override.md` (severity **blocker**, track `tooling`, scope `large`):
 
 > The console has `map function <addr> [name] [nocode]` and `load addr <addr> [name]`, both
-> functional. The `kuna` binary can emit neither […] Worse, `function F spans [start,end)`
+> functional. The `unlace` binary can emit neither […] Worse, `function F spans [start,end)`
 > does not exist ANYWHERE — extent is derived in `console/src/funcextent.rs` as
 > `[entry, min(next_entry, section_end))` with no override […] On an obfuscated or packed
 > image, where discovery is exactly what fails, the agent has no lever.
 
 **1 instance**, captain-seeded, with an independent round-2 witness recorded in T_TRIAGE
-(`overlapping-anti-disassembly-sequence`: `kuna decompile … 0x80489e6 --addr` exiting 1 at an
+(`overlapping-anti-disassembly-sequence`: `unlace decompile … 0x80489e6 --addr` exiting 1 at an
 internal target). Round 1 hit the same wall three times.
 
 ## The hypothesis was half wrong
@@ -32,10 +32,10 @@ Filed hypothesis: *"the cheap half is exposure, the expensive half is the stubs.
 
 ```bash
 # two functions merged into one: say where the first really ends
-kuna decompile-all ./packed.bin --json --addr 0x13c9 --define-function 0x13c9-0x1420=stage1
+unlace decompile-all ./packed.bin --json --addr 0x13c9 --define-function 0x13c9-0x1420=stage1
 
 # keep what you worked out, and pass it to every later command
-kuna functions ./packed.bin --json --define-function @bounds.txt
+unlace functions ./packed.bin --json --define-function @bounds.txt
 ```
 
 - **`start`** declares the entry the way `map function` does — function symbol, name→address
@@ -48,7 +48,7 @@ kuna functions ./packed.bin --json --define-function @bounds.txt
   caller-carried by design: the `@file` is the artifact.
 - Declarations are applied **after** the analysis commit, so they override discovery rather
   than compete with it.
-- The console spelling is one new kuna-only command, `function bounds <start> [<end>] [as
+- The console spelling is one new unlace-only command, `function bounds <start> [<end>] [as
   <name>]`. It takes plain integers rather than the `parse_machaddr` grammar, whose
   `[space,offset,size]` size is indistinguishable from the address width for a small size.
 
@@ -105,30 +105,30 @@ The A/B on one build, same address:
 | `make test-stages` | **PARITY OK** — 594/594 assertions |
 | `make rust-test` | green |
 | `make check-spec` | OK |
-| `kuna catalog --check` | OK |
+| `unlace catalog --check` | OK |
 | acceptance probe | **PASS** |
 
 **Inertness, measured rather than asserted.** Both parity corpora are symbol-less bytechunks
 and never reach the real-ELF loader path, so they cannot see this change. Sweeping
 `decompile-all --json` over **all 73 real-ELF fixtures** in
-`kuna-analysis/tests/fixtures/`, main's release `kuna` vs this branch's: **0 differ**. Every
+`unlace-analysis/tests/fixtures/`, main's release `unlace` vs this branch's: **0 differ**. Every
 byte of output is unchanged for a run that declares nothing.
 
 > **Note for whoever runs `make rust-test` next in a repipe worktree:** `verify_w10_proto_unlock`
-> fails spuriously unless `KUNA_DECOMP_TEST` is unset. The harness points that variable — which
+> fails spuriously unless `UNLACE_DECOMP_TEST` is unset. The harness points that variable — which
 > the test reads as the *C++* oracle path — at a Rust `decomp_test_dbg`, so the test compares
 > Rust against Rust and reports "oracle signature drifted". CI does not set it.
 
 ## Not closed (stated, not hidden)
 
 - `xrefs` and `strings` load through the same `Args` but do not accept the flag.
-- kuna never writes boundaries back into the image; the `@file` is the durable artifact.
+- unlace never writes boundaries back into the image; the `@file` is the durable artifact.
 - Renaming is supported only as the `=NAME` half of a declaration — general rename/prototype
   override is the separate open need `no-cli-rename-or-prototype-override`, and
   `no-cli-data-code-override` / `no-cli-structuring-override` are likewise untouched.
 - **`analysis-generated-function-name` is NOT affected** — checked, since this branch touches
-  `kuna-cli/src/decompile.rs`. A *declared* name resolves as a selector here
-  (`kuna decompile <bin> stage1` works for an entry the image never named), but an
+  `unlace-cli/src/decompile.rs`. A *declared* name resolves as a selector here
+  (`unlace decompile <bin> stage1` works for an entry the image never named), but an
   *analysis-generated* `sub_<addr>` selector already resolved on main for the same fixture,
   and resolves identically with and without this change. Nothing here closes or moves that
   need.

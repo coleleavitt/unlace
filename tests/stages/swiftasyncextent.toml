@@ -11,7 +11,7 @@
 # unrelated code printed as `sub_102cafa90(swift.type_metadata
 # *async_context,...)`.
 #
-# Stage / sub-stage: P4 prototype models (`kuna_swiftcall.rs`
+# Stage / sub-stage: P4 prototype models (`unlace_swiftcall.rs`
 # `callee_evidence`): only the calls between the function's entry and
 # the next known entry count.
 #

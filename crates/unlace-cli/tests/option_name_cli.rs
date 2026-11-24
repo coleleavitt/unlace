@@ -15,24 +15,24 @@ use std::process::{Command, Output};
 /// `disassemble`'s parser, and `decompile-project`/`decompile-graph`/`functions`
 /// share `decompile-all`'s, but a template each keeps a future split honest.
 const SURFACES: &[&[&str]] = &[
-    &["decompile", "/nonexistent/kuna-binary", "main"],
-    &["decompile-all", "/nonexistent/kuna-binary"],
-    &["decompile-project", "/nonexistent/kuna-binary"],
-    &["decompile-graph", "/nonexistent/kuna-binary"],
-    &["functions", "/nonexistent/kuna-binary"],
-    &["disassemble", "/nonexistent/kuna-binary", "main"],
-    &["read", "/nonexistent/kuna-binary", "main"],
-    &["xrefs", "/nonexistent/kuna-binary", "--to", "0x0"],
-    &["strings", "/nonexistent/kuna-binary"],
-    &["crypto", "/nonexistent/kuna-binary"],
-    &["blobs", "/nonexistent/kuna-binary"],
+    &["decompile", "/nonexistent/unlace-binary", "main"],
+    &["decompile-all", "/nonexistent/unlace-binary"],
+    &["decompile-project", "/nonexistent/unlace-binary"],
+    &["decompile-graph", "/nonexistent/unlace-binary"],
+    &["functions", "/nonexistent/unlace-binary"],
+    &["disassemble", "/nonexistent/unlace-binary", "main"],
+    &["read", "/nonexistent/unlace-binary", "main"],
+    &["xrefs", "/nonexistent/unlace-binary", "--to", "0x0"],
+    &["strings", "/nonexistent/unlace-binary"],
+    &["crypto", "/nonexistent/unlace-binary"],
+    &["blobs", "/nonexistent/unlace-binary"],
 ];
 
 fn run(argv: &[String]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(argv)
         .output()
-        .expect("failed to spawn the kuna binary")
+        .expect("failed to spawn the unlace binary")
 }
 
 /// `<subcommand> --option <name> off <rest..>`.
@@ -120,9 +120,9 @@ fn a_bad_name_is_answered_without_specs() {
         .args(&argv)
         .env_remove("SLEIGHHOME")
         .env_remove("UNLACE_SPECS")
-        .env_remove("KUNA_SPECS")
+        .env_remove("UNLACE_SPECS")
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     assert_eq!(out.status.code(), Some(2), "{}", stderr_of(&out));
     assert!(
         stderr_of(&out).contains("zzzznotanoption"),

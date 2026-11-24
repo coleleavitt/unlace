@@ -1,4 +1,4 @@
-# Kuna #849: a register-controlled ARM LSL uses the low eight count bits.
+# Unlace #849: a register-controlled ARM LSL uses the low eight count bits.
 # The authored 12-byte function is `mov r1,#1; mov r0,r1,lsl r0; bx lr`.
 # The ARM result is zero for low8 counts 32 through 255, but plain C `<<`
 # has undefined behavior there. Counts 256 and 288 distinguish the ARM

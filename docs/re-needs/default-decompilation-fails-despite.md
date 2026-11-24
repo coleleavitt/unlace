@@ -38,7 +38,7 @@ Recover the complete keyfile reader.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x80484f2",
@@ -71,7 +71,7 @@ Recover the complete keyfile reader.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x80484f2",

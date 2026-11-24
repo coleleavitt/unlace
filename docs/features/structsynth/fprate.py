@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Classify every parameter structsynth retypes by what DWARF says it is.
 
-    KUNA_BIN=<release kuna> ~/.virtualenvs/decbench/bin/python \
+    UNLACE_BIN=<release unlace> ~/.virtualenvs/decbench/bin/python \
         docs/features/structsynth/fprate.py [census|arm]
 
 Two readings of the same 8-binary census:
@@ -30,8 +30,8 @@ SETS = {
 }
 BINS = SETS[sys.argv[1] if len(sys.argv) > 1 else "census"]
 SYNTH = re.compile(r"struct_\d+")
-if os.environ.get("KUNA_BIN"):
-    SS.KUNA = os.environ["KUNA_BIN"]
+if os.environ.get("UNLACE_BIN"):
+    SS.UNLACE = os.environ["UNLACE_BIN"]
 
 
 def param_pointees(twin: Path) -> dict:

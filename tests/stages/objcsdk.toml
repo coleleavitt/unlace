@@ -7,10 +7,10 @@
 # (`objc_msgSend$setHidden:();`), `setAlpha:` showed the bit pattern of its
 # double in an integer slot, and `setFrame:` passed one garbage word for a
 # CGRect. The declarations exist in the SDK the app was built against; Apple
-# headers may not ship with kuna, so they are read at load from a directory
+# headers may not ship with unlace, so they are read at load from a directory
 # the user names.
 #
-# Stage / sub-stage: P1 external-refinement. `analyzers/objc/kuna_objcsdk.rs`
+# Stage / sub-stage: P1 external-refinement. `analyzers/objc/unlace_objcsdk.rs`
 # reads `@interface`/`@protocol` bodies (methods, `@property` getter/setter
 # pairs honouring `getter=`/`setter=`/`readonly`) and `typedef`s, encodes each
 # declaration the way the runtime metadata would (`v@:d`), and the stub

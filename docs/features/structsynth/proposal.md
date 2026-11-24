@@ -1,6 +1,6 @@
 # structsynth — the proposal, and the default it settled on
 
-This started as a go/no-go: should kuna synthesize a structure type — a layout
+This started as a go/no-go: should unlace synthesize a structure type — a layout
 that is not in the binary — from the constant-offset dereferences of a pointer
 parameter? The answer was **go, opt-in**: the pass ships as
 `--option structsynth off|param`, **default `off`**, and deliberately not in the
@@ -48,7 +48,7 @@ cannot name an undeclared offset:
 | layout F1 | 0.0 on every binary before, 0.029 – 0.232 after |
 | counting filler as a claim as well | 798 of 1,021 = 0.782 |
 
-Read precision, not F1: the before-F1 is 0 by construction because kuna
+Read precision, not F1: the before-F1 is 0 by construction because unlace
 synthesized no structures at all, so the F1 gain is a tautology dressed as a
 result. **About 1 in 10 claimed fields is at an (offset, size) DWARF does not
 have.** Recall is structurally low and always will be — the layout only has the

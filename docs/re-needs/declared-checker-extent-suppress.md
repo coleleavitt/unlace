@@ -38,7 +38,7 @@ Treat 0x140001740 through 0x140002300 as one checker, including its VM handlers.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140001740",
@@ -76,7 +76,7 @@ Treat 0x140001740 through 0x140002300 as one checker, including its VM handlers.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140001740",
@@ -115,7 +115,7 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 9 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD, AND THE DIRECTIVE IS NOT INERT -- IT REGISTERS AND ONLY THE EXTENT IS IGNORED (captain in-tick, release binary 8df2a52e, arena .kuna-repipe/arena/9/6a09581717539b5175d122b9/target/phantomgate.exe).
+- round 9 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD, AND THE DIRECTIVE IS NOT INERT -- IT REGISTERS AND ONLY THE EXTENT IS IGNORED (captain in-tick, release binary 8df2a52e, arena .unlace-repipe/arena/9/6a09581717539b5175d122b9/target/phantomgate.exe).
 
 THE FILED CAUSE IS RIGHT: the declared [start,end) does not reach funcboundflow's "next function entry" test. Six discovered entries sit strictly inside the declared 0x140001740-0x140002300 extent (0x140001de8/88, 0x140001e40/344, 0x140001f98/72, 0x140001fe0/64, 0x140002020/648, 0x1400022a8/88) and the cut still fires five times.
 

@@ -313,7 +313,7 @@ fn permanent_stack_lifetimes_keep_escaped_pointers_and_simultaneous_views() {
     }
     let image = PathBuf::from(common::fixture("lifetimes_stack_x86_64"));
     common::process::required_output(&mut Command::new(&image));
-    let contracts = vec![format!("@{}.kuna", image.display())];
+    let contracts = vec![format!("@{}.unlace", image.display())];
     for (function, expected) in [
         ("stack_reuse", 67),
         ("escaped_alias", 7),
@@ -335,7 +335,7 @@ fn permanent_stack_lifetimes_keep_escaped_pointers_and_simultaneous_views() {
 fn shifted_declared_objects_decline_without_splitting_prior_storage() {
     let image = PathBuf::from(common::fixture("lifetimes_objects_x86_64"));
     common::process::required_output(&mut Command::new(&image));
-    let contracts = vec![format!("@{}.kuna", image.display())];
+    let contracts = vec![format!("@{}.unlace", image.display())];
     for function in ["obj_global_shifted", "obj_volatile_shifted"] {
         let enabled = decompile(&image, function, &contracts);
         assert!(!enabled.contains("union stack_views_"), "{enabled}");
@@ -358,7 +358,7 @@ fn escaped_scalar_writes_reach_every_observer_and_readback() {
     }
     let image = PathBuf::from(common::fixture("lifetimes_stack_x86_64"));
     common::process::required_output(&mut Command::new(&image));
-    let contracts = vec![format!("@{}.kuna", image.display())];
+    let contracts = vec![format!("@{}.unlace", image.display())];
     for (function, cases, publications) in [
         ("escaped_indirect_write", &[("", 7)][..], 1),
         ("escaped_indirect_partial", &[("", 0x1122aa44)][..], 1),

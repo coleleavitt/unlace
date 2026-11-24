@@ -64,13 +64,13 @@ class CompareTests(unittest.TestCase):
         done = unittest.mock.Mock(returncode=0, stdout='{"functions": []}', stderr="")
         with unittest.mock.patch.dict("os.environ", clear=True), \
                 unittest.mock.patch("subprocess.run", return_value=done) as run:
-            aritydiff.decompile("kuna", Path("x.exe"), [], 30)
-        self.assertNotIn("KUNA_SPECS", run.call_args.kwargs.get("env") or {})
+            aritydiff.decompile("unlace", Path("x.exe"), [], 30)
+        self.assertNotIn("UNLACE_SPECS", run.call_args.kwargs.get("env") or {})
 
 
 class CorpusTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="kuna-prepr-test-")
+        temporary = tempfile.TemporaryDirectory(prefix="unlace-prepr-test-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.member = b"MZ fake launcher"
@@ -101,7 +101,7 @@ class CorpusTests(unittest.TestCase):
         binary.write_bytes(b"MZ")
         listing = self.root / "local.txt"
         listing.write_text(f"# machine-local\n\n{binary}  # a comment\n")
-        with unittest.mock.patch.dict("os.environ", {"KUNA_PREPR_LOCAL": str(listing)}):
+        with unittest.mock.patch.dict("os.environ", {"UNLACE_PREPR_LOCAL": str(listing)}):
             self.assertEqual(corpus.resolve("local"), [binary])
             listing.write_text(f"{self.root / 'missing.exe'}\n")
             with self.assertRaises(FileNotFoundError):

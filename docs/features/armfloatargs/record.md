@@ -89,7 +89,7 @@ Three option-on shapes printed calls that disagreed with their callees:
 ## Third review corrections
 
 Three option-on shapes still printed calls that disagreed with their callees;
-`armfloatargs_calls.c` (fixtures in `kuna-analysis/tests/fixtures`, clang 14,
+`armfloatargs_calls.c` (fixtures in `unlace-analysis/tests/fixtures`, clang 14,
 ARM and Thumb at -O0 and -O2, and Thumb -Os) holds one of each:
 
 - `x3(float, float, float, double)` passes its double to `k7(float, float,

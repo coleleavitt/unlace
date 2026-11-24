@@ -38,7 +38,7 @@ Decompile checkCode: at the exact IMP stored in Objective-C metadata.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "-[CrackMeManager checkCode:]",
@@ -73,7 +73,7 @@ Decompile checkCode: at the exact IMP stored in Objective-C metadata.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "-[Greeter greet:]",
@@ -125,7 +125,7 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 11 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD, and the mechanism is a single named line. Symptom reproduced at the default: decompile BIN '-[CrackMeManager checkCode:]' --json returns address 0x100001d2a, size 1, body "return;". Byte-level proof from the fat image's x86_64 slice (cpu 0x01000007 at file 0x1000): the method_t at 0x1000046c0 reads name=0x1000033d5 ("checkCode:"), types=0x1000035b4, imp=0x100001d2b -- the IMP is ODD in the metadata. Bytes at 0x100001d2a are c3 55 48 89 e5: a RET ending the previous function, then PUSH RBP / MOV RBP,RSP at 0x100001d2b. So kuna is reading the IMP correctly and then corrupting it.
+- round 11 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD, and the mechanism is a single named line. Symptom reproduced at the default: decompile BIN '-[CrackMeManager checkCode:]' --json returns address 0x100001d2a, size 1, body "return;". Byte-level proof from the fat image's x86_64 slice (cpu 0x01000007 at file 0x1000): the method_t at 0x1000046c0 reads name=0x1000033d5 ("checkCode:"), types=0x1000035b4, imp=0x100001d2b -- the IMP is ODD in the metadata. Bytes at 0x100001d2a are c3 55 48 89 e5: a RET ending the previous function, then PUSH RBP / MOV RBP,RSP at 0x100001d2b. So unlace is reading the IMP correctly and then corrupting it.
 
   THE LINE: unlace-analysis/src/analyzers/objc/methods.rs:152 strip_thumb(imp) = imp & !1u64, applied UNCONDITIONALLY at both method_t decoders (line 106 large/absolute, line 137 small/relative) with no architecture test. Its own doc comment states the premise that this binary falsifies: "On AArch64 / x86 this is a no-op (those IMPs are even-aligned)". Here it is not.
 

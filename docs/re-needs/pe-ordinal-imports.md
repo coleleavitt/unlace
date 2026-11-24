@@ -40,7 +40,7 @@ Read a PE that imports the BSTR/VARIANT API or WinSock by ordinal and see API na
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x401200",
@@ -83,7 +83,7 @@ Read a PE that imports the BSTR/VARIANT API or WinSock by ordinal and see API na
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x401200",

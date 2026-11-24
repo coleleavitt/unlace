@@ -5,7 +5,7 @@
 #
 # clang -O2 for armv7a loads x into r0, compares it, returns it with a
 # conditional `bxgt lr` and tail-calls ext with it in the same register
-# (ldr r0,[r0]; cmp r0,#5; bxgt lr; b ext), and kuna printed `ext();`.
+# (ldr r0,[r0]; cmp r0,#5; bxgt lr; b ext), and unlace printed `ext();`.
 # Funcdata::onlyOpUse refuses the r0 trial because the value also feeds the
 # compare and the other path's RETURN.
 #

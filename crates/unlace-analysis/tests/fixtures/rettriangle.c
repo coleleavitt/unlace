@@ -1,4 +1,4 @@
-/* kuna `rettriangle` fixture: a one-block `if` before a constant return,
+/* unlace `rettriangle` fixture: a one-block `if` before a constant return,
    `if (c) f(); return 0;`, whose shared epilogue `returndup` split into
    `if (!c) return 0; f(); return 0;`.  guard_first is the source's own guard
    clause, which compiles to the same shape; two_way joins two conditions.

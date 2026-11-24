@@ -50,7 +50,7 @@ function normalizeInsn(insn, entry) {
  * One function as the page works with it, from either an `inspect` document or
  * a plain `decompile` document (an engine build without `inspect`): the latter
  * has no tokens and no instructions, and says so through `tokens_error` and
- * `hasInstructions`. kuna's end-of-line notes leave the code for `notes`
+ * `hasInstructions`. unlace's end-of-line notes leave the code for `notes`
  * (tags.js `splitNotes`).
  */
 export function normalizeInspect(result) {

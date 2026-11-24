@@ -34,7 +34,7 @@ For optional execution validation, use the same compiler/assembler/linker and
 QEMU's O32 BE/LE user emulators:
 
 ```sh
-python3 replay.py --kuna "$KUNA" --specs "$KUNA_SPECS" --cc "$MIPS_CC" \
+python3 replay.py --unlace "$UNLACE" --specs "$UNLACE_SPECS" --cc "$MIPS_CC" \
   --assembler "$MIPS_AS" --ld "$MIPS_LD" --qemu-be "$QEMU_MIPS" \
   --qemu-le "$QEMU_MIPSEL" --out "$RESULTS"
 ```

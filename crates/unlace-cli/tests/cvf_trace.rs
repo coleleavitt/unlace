@@ -254,7 +254,7 @@ fn pe_trace_names_only_free_placeholders() {
         binary.as_os_str(),
         "--json".as_ref(),
     ]);
-    assert!(stderr.contains("[kuna cvftrace]"), "{stderr}");
+    assert!(stderr.contains("[unlace cvftrace]"), "{stderr}");
     assert!(
         json.contains("\"KEPT\"") && !json.contains("LOST"),
         "{json}"

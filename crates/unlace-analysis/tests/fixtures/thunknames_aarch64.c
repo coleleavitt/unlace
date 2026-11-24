@@ -1,4 +1,4 @@
-/* kuna `thunknames`: one-instruction `b <target>` thunks with no symbol of
+/* unlace `thunknames`: one-instruction `b <target>` thunks with no symbol of
  * their own. `.Lthunk` jumps to release_box, `.Lthunk2` jumps to `.Lthunk`,
  * and drop_box / drop_two call them with bl. release_box's prototype comes
  * from its DWARF. Rebuild: see README.md. */

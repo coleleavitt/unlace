@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Per-parameter layout precision against DWARF, top level and at depth.
 
-    KUNA_BIN=<kuna> DECBENCH_PIN=<pinned decbench> ~/.virtualenvs/decbench/bin/python \
+    UNLACE_BIN=<unlace> DECBENCH_PIN=<pinned decbench> ~/.virtualenvs/decbench/bin/python \
         layoutdepth.py [ARM_JSON]
 
 `structscore.measure_layout` scores a claimed field only against the TOP-LEVEL

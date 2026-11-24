@@ -3,7 +3,7 @@
 # (binaries/tests/mips/ld.so.1), its 9936 bytes copied at their link
 # address.  Its STORE pointers pass a chain of MULTIEQUALs and additions;
 # the stackstoreguard walk back along a pointer's definitions
-# (kuna_storereach.rs pointer_pieces) visited every path, which never
+# (unlace_storereach.rs pointer_pieces) visited every path, which never
 # finished, and unlace decompile-all hung on the binary even with
 # max-fn-seconds set.  The walk now remembers what each Varnode at each
 # depth gave, so it visits each value once.  Stage: P3 heritage

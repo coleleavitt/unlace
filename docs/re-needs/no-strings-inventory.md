@@ -1,6 +1,6 @@
 ---
 need_id: no-strings-inventory
-title: kuna cannot list or search the strings in a binary
+title: unlace cannot list or search the strings in a binary
 track: tooling
 status: closed
 severity: major
@@ -18,7 +18,7 @@ closing_pr: 367
 
 ## Symptom
 
-Filed by round-1 testers on the crackmes corpus. See `.kuna-repipe/rounds/1/gate.json` for the verbatim observations and their replayed transcripts.
+Filed by round-1 testers on the crackmes corpus. See `.unlace-repipe/rounds/1/gate.json` for the verbatim observations and their replayed transcripts.
 
 ## Acceptance
 

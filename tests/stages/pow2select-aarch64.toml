@@ -1,4 +1,4 @@
-# kuna `pow2select`: clang selects with csel / csneg on AArch64.  Signed
+# unlace `pow2select`: clang selects with csel / csneg on AArch64.  Signed
 # `x / 4` is `v = x + 3; if (0 <= x) v = x; return v >> 2;` and `x % 8` is
 # `v = x & 7; if (0 <= -x) v = -(-x & 7);` (for `x % 2`, `-(x & 1)`).  With
 # the option on (the default) the division prints as `x / 4` and the

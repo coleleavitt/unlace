@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Launch ONE feature worker: an isolated git worktree + a headless agent session
-# that implements one angr-inspired kuna feature end-to-end and opens a PR.
+# that implements one angr-inspired unlace feature end-to-end and opens a PR.
 #
 # Invoked by tools/pipeline/run.sh, but runnable standalone for a single iteration:
 #   WORKER_ID=w1 OPP_ID='test_x::main' TEST_NAME=test_x SELECTOR=main \
@@ -11,8 +11,8 @@
 # tools/pipeline/run.sh garbage-collects a worktree only once its PR is merged/closed.
 set -uo pipefail
 
-REPO="${KUNA_REPO:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel)}"
-KUNA_PY="${KUNA_PY:-$HOME/.virtualenvs/kuna/bin/python}"
+REPO="${UNLACE_REPO:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel)}"
+UNLACE_PY="${UNLACE_PY:-$HOME/.virtualenvs/unlace/bin/python}"
 BACKEND="${WORKER_BACKEND:-claude}"
 if [ "$BACKEND" = codex ]; then
   MODEL="${WORKER_MODEL:-gpt-5.6-sol}"
@@ -67,7 +67,7 @@ esac
 # Unset == the angr fleet's behaviour, byte for byte.
 PROMPT_TMPL="${WORKER_PROMPT:-$REPO/tools/pipeline/worker_prompt.md}"
 BRANCH_PREFIX="${WORKER_BRANCH_PREFIX:-feat/angr-}"
-STATE_DIRNAME="${PIPELINE_STATE_DIRNAME:-.kuna-pipeline}"
+STATE_DIRNAME="${PIPELINE_STATE_DIRNAME:-.unlace-pipeline}"
 WORKER_BUDGET_USD="${WORKER_BUDGET_USD:-}"      # empty = no --max-budget-usd flag
 WORKER_SESSION_ID="${WORKER_SESSION_ID:-}"      # empty = let claude allocate one
 WORKER_EXTRA_PROMPT="${WORKER_EXTRA_PROMPT:-}"  # file spliced in at {{SIBLINGS}}
@@ -79,9 +79,9 @@ WORKER_PREPARE_ONLY="${WORKER_PREPARE_ONLY:-0}" # test seam: stop after worktree
 export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
 
 # Keep ALL pipeline state in the MAIN tree so `scripts.pipeline.status` (run from the main
-# tree) sees this worker's heartbeats. Without this, the worktree's KUNA_ROOT would route
-# state into the worktree's own .kuna-pipeline and the main-tree status would go stale.
-export KUNA_PIPELINE_STATE_DIR="${KUNA_PIPELINE_STATE_DIR:-$REPO/$STATE_DIRNAME}"
+# tree) sees this worker's heartbeats. Without this, the worktree's UNLACE_ROOT would route
+# state into the worktree's own .unlace-pipeline and the main-tree status would go stale.
+export UNLACE_PIPELINE_STATE_DIR="${UNLACE_PIPELINE_STATE_DIR:-$REPO/$STATE_DIRNAME}"
 
 # Normal mode opens a fresh branch off main. Implementation mode (IMPL_PROPOSAL=1) resumes
 # an APPROVED proposal's existing branch (RESUME_BRANCH) instead of branching fresh.
@@ -121,7 +121,7 @@ git_common_dir() {
 if [ "$IMPL_PROPOSAL" = 1 ]; then
   log "resuming approved proposal on existing branch $BRANCH"
   git -C "$REPO" worktree add "$WT" "$BRANCH" >>"$LOG" 2>&1 || {
-    "$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "resume worktree add failed"
+    "$UNLACE_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "resume worktree add failed"
     exit 1
   }
 elif [ -d "$WT" ] \
@@ -137,17 +137,17 @@ elif [ -d "$WT" ] \
   log "reusing the existing worktree $WT, already on $BRANCH"
 elif [ -e "$WT" ]; then
   log "refusing to replace ambiguous existing path $WT; inspect it and choose explicit recovery"
-  "$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "ambiguous worktree path exists" >>"$LOG" 2>&1
+  "$UNLACE_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "ambiguous worktree path exists" >>"$LOG" 2>&1
   exit 1
 elif git -C "$REPO" show-ref --verify --quiet "refs/heads/$BRANCH"; then
   log "refusing to reuse ambiguous existing branch $BRANCH without its exact worktree; set IMPL_PROPOSAL=1 and RESUME_BRANCH to resume it, or WORKER_BRANCH to create a fresh branch"
-  "$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "ambiguous branch exists without worktree" >>"$LOG" 2>&1
+  "$UNLACE_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "ambiguous branch exists without worktree" >>"$LOG" 2>&1
   exit 1
 else
   log "creating worktree $WT on $BRANCH (base $BASE_BRANCH)"
   git -C "$REPO" worktree add -b "$BRANCH" "$WT" "$BASE_BRANCH" >>"$LOG" 2>&1 || {
     log "worktree add failed; preserving every existing path and ref"
-    "$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "worktree add failed" >>"$LOG" 2>&1
+    "$UNLACE_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "worktree add failed" >>"$LOG" 2>&1
     exit 1
   }
 fi
@@ -158,7 +158,7 @@ fi
 BASE_MARKER="$LOG_DIR/$WORKER_ID.base"
 EXPECTED_BASE="$(git -C "$WT" merge-base HEAD "$BASE_BRANCH" 2>/dev/null)" || {
   log "cannot determine the branch point between $BRANCH and $BASE_BRANCH"
-  "$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "base commit resolution failed" >>"$LOG" 2>&1
+  "$UNLACE_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "base commit resolution failed" >>"$LOG" 2>&1
   exit 1
 }
 MARKED_BASE="$(cat "$BASE_MARKER" 2>/dev/null || true)"
@@ -171,7 +171,7 @@ else
      || ! mv -f "$BASE_MARKER_TMP" "$BASE_MARKER"; then
     rm -f "$BASE_MARKER_TMP"
     log "cannot initialize base marker $BASE_MARKER"
-    "$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "base marker initialization failed" >>"$LOG" 2>&1
+    "$UNLACE_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "base marker initialization failed" >>"$LOG" 2>&1
     exit 1
   fi
   log "initialized base marker $BASE_MARKER at $EXPECTED_BASE"
@@ -182,15 +182,15 @@ fi
 # --pid $$ is THIS driver's pid, which lives as long as the worker does. Without it the
 # inventory records the ephemeral `state register` process and reap() cannot tell a live
 # worker from a dead one.
-"$KUNA_PY" -m scripts.pipeline.state register --worker "$WORKER_ID" --slug "$SLUG" \
+"$UNLACE_PY" -m scripts.pipeline.state register --worker "$WORKER_ID" --slug "$SLUG" \
   --branch "$BRANCH" --opportunity "$OPP_ID" --pid $$ >>"$LOG" 2>&1
 
-# --- 2. env: kuna tooling targets THIS worktree --
-export KUNA_ROOT="$WT"
-export KUNA_DECOMP_DBG="$WT/target/release/decomp_dbg"
-export KUNA_SPECS="$WT/specs"
+# --- 2. env: unlace tooling targets THIS worktree --
+export UNLACE_ROOT="$WT"
+export UNLACE_DECOMP_DBG="$WT/target/release/decomp_dbg"
+export UNLACE_SPECS="$WT/specs"
 export SLEIGHHOME="$WT/specs"
-export KUNA_PIPELINE_ANGR_PYTHON="${KUNA_PIPELINE_ANGR_PYTHON:-$HOME/.virtualenvs/decbench/bin/python}"
+export UNLACE_PIPELINE_ANGR_PYTHON="${UNLACE_PIPELINE_ANGR_PYTHON:-$HOME/.virtualenvs/decbench/bin/python}"
 
 # docs/agents.md's worktree hygiene, enforced here rather than left to the prompt -- the
 # prompt did not carry it, and both failures below have actually happened on this machine.
@@ -206,10 +206,10 @@ trap cleanup_target EXIT
 
 # --- 3. initial build so the worker's analyze phase has working binaries ----
 log "building binaries in worktree (initial)"
-"$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --phase setup >>"$LOG" 2>&1
+"$UNLACE_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --phase setup >>"$LOG" 2>&1
 ( cd "$WT" && cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli ) >>"$LOG" 2>&1 || {
   log "initial build failed"
-  "$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "initial build failed"
+  "$UNLACE_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "initial build failed"
   exit 1
 }
 
@@ -222,9 +222,9 @@ else
   RESUME_PROPOSAL_LINE=""
 fi
 PROMPT_FILE="$LOG_DIR/$WORKER_ID.prompt.md"
-"$KUNA_PY" - "$PROMPT_TMPL" "$PROMPT_FILE" "$WORKER_EXTRA_PROMPT" \
+"$UNLACE_PY" - "$PROMPT_TMPL" "$PROMPT_FILE" "$WORKER_EXTRA_PROMPT" \
   "$WORKER_ID" "$OPP_ID" "$TEST_NAME" "$SELECTOR" "$BINARY" "${ARCH:-none}" \
-  "$SLUG" "$BRANCH" "$WT" "$KUNA_PY" "$DATE" "$WORKER_AGENT" "$WORKER_COMMAND" \
+  "$SLUG" "$BRANCH" "$WT" "$UNLACE_PY" "$DATE" "$WORKER_AGENT" "$WORKER_COMMAND" \
   "$WORKER_DECIDER_INSTRUCTIONS" "$WORKER_TRAILER" "$WORKER_GENERATED_WITH" \
   "$RESUME_PROPOSAL_LINE" "$BASE_MARKER" <<'PY' || {
 import pathlib, re, sys
@@ -232,7 +232,7 @@ import pathlib, re, sys
 template_path, output_path, extra_path = sys.argv[1:4]
 names = (
     "WORKER_ID", "OPPORTUNITY_ID", "TEST_NAME", "SELECTOR", "BINARY", "ARCH",
-    "SLUG", "BRANCH", "WORKTREE", "KUNA_PY", "DATE", "WORKER_AGENT",
+    "SLUG", "BRANCH", "WORKTREE", "UNLACE_PY", "DATE", "WORKER_AGENT",
     "WORKER_COMMAND", "WORKER_DECIDER_INSTRUCTIONS", "WORKER_TRAILER",
     "WORKER_GENERATED_WITH", "RESUME_PROPOSAL", "WORKER_BASE_FILE",
 )
@@ -247,18 +247,18 @@ if missing:
 pathlib.Path(output_path).write_text(token.sub(lambda match: values[match.group(1)], template))
 PY
   log "prompt render failed"
-  "$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "prompt render failed" >>"$LOG" 2>&1
+  "$UNLACE_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "prompt render failed" >>"$LOG" 2>&1
   exit 1
 }
 
 # --- 5. headless implementation session, in the worktree -------------------
 log "launching $BACKEND (model $MODEL${REASONING:+, reasoning $REASONING}, timeout ${WORKER_TIMEOUT}s)"
-"$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --phase analyze >>"$LOG" 2>&1
+"$UNLACE_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --phase analyze >>"$LOG" 2>&1
 
 RESULT_JSON="$LOG_DIR/$WORKER_ID.result.json"
 if ! : > "$RESULT_JSON"; then
   log "cannot initialize result file $RESULT_JSON"
-  "$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "result file initialization failed" >>"$LOG" 2>&1
+  "$UNLACE_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "result file initialization failed" >>"$LOG" 2>&1
   exit 1
 fi
 case "$BACKEND" in
@@ -282,7 +282,7 @@ case "$BACKEND" in
     FINAL_TEXT="$LOG_DIR/$WORKER_ID.final.txt"
     if ! : > "$EVENTS_JSONL" || ! : > "$FINAL_TEXT"; then
       log "cannot initialize Codex transcript files under $LOG_DIR"
-      "$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "transcript initialization failed" >>"$LOG" 2>&1
+      "$UNLACE_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "transcript initialization failed" >>"$LOG" 2>&1
       exit 1
     fi
     # Disable Codex's own multi-agent feature: every concurrent worker must hold a pipeline
@@ -302,7 +302,7 @@ case "$BACKEND" in
     RC=$?
     # Preserve the same result.json contract used by the captain and recovery notes while
     # retaining Codex's full JSONL stream separately.
-    if ! "$KUNA_PY" - "$EVENTS_JSONL" "$FINAL_TEXT" "$RESULT_JSON" "$RC" <<'PY'
+    if ! "$UNLACE_PY" - "$EVENTS_JSONL" "$FINAL_TEXT" "$RESULT_JSON" "$RC" <<'PY'
 import json, pathlib, sys
 events_path, final_path, result_path, rc = sys.argv[1:]
 thread_id = ""
@@ -336,7 +336,7 @@ PY
 esac
 
 # capture the session id so a reviewer can resume the exact session on the PR
-SID="$("$KUNA_PY" - "$RESULT_JSON" <<'PY' 2>/dev/null
+SID="$("$UNLACE_PY" - "$RESULT_JSON" <<'PY' 2>/dev/null
 import json,sys
 try:
     d=json.load(open(sys.argv[1]))
@@ -345,7 +345,7 @@ except Exception:
     print("")
 PY
 )"
-[ -n "$SID" ] && "$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --note "session=$SID" >>"$LOG" 2>&1
+[ -n "$SID" ] && "$UNLACE_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --note "session=$SID" >>"$LOG" 2>&1
 
 if [ $RC -ne 0 ]; then
   # An account quota kill is indistinguishable from a crash by exit code alone: Claude exits a
@@ -353,7 +353,7 @@ if [ $RC -ne 0 ]; then
   # discriminator is the `result` string, and both of round 2's builders died this way
   # ("You've hit your session limit"). Read it ONLY on the failure path: a finished session can
   # mention a limit in its own prose, and treating that as a quota kill would mislabel good work.
-  QUOTA="$("$KUNA_PY" - "$RESULT_JSON" <<'QEOF' 2>/dev/null
+  QUOTA="$("$UNLACE_PY" - "$RESULT_JSON" <<'QEOF' 2>/dev/null
 import json, re, sys
 try:
     d = json.load(open(sys.argv[1]))
@@ -406,8 +406,8 @@ QEOF
   elif [ -z "$(git -C "$WT" status --porcelain 2>/dev/null)" ]; then
     log "nothing uncommitted to preserve in $WT"
   else
-    WT_PHASE="$("$KUNA_PY" -m scripts.pipeline.state list --json 2>/dev/null \
-      | "$KUNA_PY" -c 'import json,sys,os
+    WT_PHASE="$("$UNLACE_PY" -m scripts.pipeline.state list --json 2>/dev/null \
+      | "$UNLACE_PY" -c 'import json,sys,os
 d = json.load(sys.stdin)
 w = (d.get("workers") or {}).get(os.environ.get("WORKER_ID","")) or {}
 print(w.get("phase") or "unknown")' 2>/dev/null || echo unknown)"
@@ -424,7 +424,7 @@ print(w.get("phase") or "unknown")' 2>/dev/null || echo unknown)"
   fi
 
   log "$BACKEND session exited rc=$RC (timeout=124); leaving worktree for inspection"
-  "$KUNA_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "$NOTE" >>"$LOG" 2>&1
+  "$UNLACE_PY" -m scripts.pipeline.state update --worker "$WORKER_ID" --status failed --note "$NOTE" >>"$LOG" 2>&1
   exit $RC
 fi
 

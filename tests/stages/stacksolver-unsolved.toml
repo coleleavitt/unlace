@@ -1,4 +1,4 @@
-# kuna #1288: decompiling a PKLITE-packed DOS executable grew memory without
+# unlace #1288: decompiling a PKLITE-packed DOS executable grew memory without
 # bound. Its compressed body decodes as code, and stray 0x4c bytes are
 # `DEC SP`.
 #

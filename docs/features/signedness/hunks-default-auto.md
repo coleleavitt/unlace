@@ -2,8 +2,8 @@
 
 What changed when `auto` became the default, over twelve whole binaries from
 nine projects — eight x86-64 and four 32-bit ARM (Cortex-M) firmware images:
-`kuna decompile-all <bin>` (the new default) diffed against
-`kuna decompile-all <bin> --option signedness upstream` (what the same build
+`unlace decompile-all <bin>` (the new default) diffed against
+`unlace decompile-all <bin> --option signedness upstream` (what the same build
 printed before the flip), function by function, with every changed line-pair
 classified mechanically.
 

@@ -10,10 +10,10 @@
  "subphase": "output-prototype",
  "change_kind": "type-inference",
  "tier": "transform",
- "source_decompiler": "kuna",
- "inspiration": "2026-09-24 cast census (kwt/castcensus measure.md shape #4: `(char *)<call>` 1,994 kuna vs 1,172 IDA on the shared functions)",
+ "source_decompiler": "unlace",
+ "inspiration": "2026-09-24 cast census (kwt/castcensus measure.md shape #4: `(char *)<call>` 1,994 unlace vs 1,172 IDA on the shared functions)",
  "witness": {
-  "repro": "gcc -O0 -o demo demo.c && kuna decompile-all demo, with demo.c = '#include <stdio.h>\\n__attribute__((noinline)) FILE *pick(int e) { return e ? stderr : stdout; }\\nint stream_no(int e) { return fileno(pick(e)) * 10 + e; }\\nint main(int argc, char **argv) { return stream_no(argc > 1); }'; the in-repo fixture callrettype_gcc_O0_x86_64 (pick_stream/stream_no) is the same shape",
+  "repro": "gcc -O0 -o demo demo.c && unlace decompile-all demo, with demo.c = '#include <stdio.h>\\n__attribute__((noinline)) FILE *pick(int e) { return e ? stderr : stdout; }\\nint stream_no(int e) { return fileno(pick(e)) * 10 + e; }\\nint main(int argc, char **argv) { return stream_no(argc > 1); }'; the in-repo fixture callrettype_gcc_O0_x86_64 (pick_stream/stream_no) is the same shape",
   "before": [
    "FILE * pick(int a0)",
    "v1 = (FILE *)pick(a0);"
@@ -65,7 +65,7 @@
   }
  },
  "castbench": {
-  "set": "full: 45 binaries (coreutils fmt ls sort du cp tail wc, grep, gzip, diffutils cmp diff diff3 sdiff, tar, find) x O0/O2/O2-noinline; functions kuna and IDA both emit",
+  "set": "full: 45 binaries (coreutils fmt ls sort du cp tail wc, grep, gzip, diffutils cmp diff diff3 sdiff, tar, find) x O0/O2/O2-noinline; functions unlace and IDA both emit",
   "base": "castbench main arm of origin/main 0096e984d (/home/mahaloz/kwt/castbench/main-0096e984d); --option callrettype off on the branch prints the same bytes on all 45 binaries",
   "shared_functions": 4815,
   "ida_casts": 37821,
@@ -259,7 +259,7 @@
   "rust_test": "7631 passed, 0 failed (lane on 9b17957d6, rebased on 29cfedee0)"
  },
  "soundness": {
-  "round_trip": "kuna-cli/tests/decompile_all_cli.rs a_call_result_typed_by_its_callee_round_trips_through_the_printed_c: gcc and clang at -O0 and -O2 compile every printed fixture function, option off and on; the output must equal the binary's. Classes: pointer result (char *, FILE *), signed long result, the `cached` tie control, and two callers that zero-extend a callee's short / int result in place before returning it (use_s16_as_u, use_neg_as_unsigned; called through their printed prototypes, 50000 4294967293) beside widen_signed, whose sign extension agrees with neg32's int, and two that keep neg32's int in an unsigned int and hand it back as unsigned long through the last 32-bit write (keep_widened: a -O0 reload or mov %eax,%eax; keep_across: kept in %ebx or a stack slot across an opaque call), read whole as (unsigned long)keep_widened(1) >> 1 (2147483646); the test fails on the previous head (gcc -O0 printed int keep_widened). pass_widened keeps neg32's int in an unsigned int and passes it to halve(unsigned long) (mov %eax,%edi zero-extends; the dead-bit trimming drops that extension), read as pass_widened(1) (2147483647); with the argument refusal removed the gcc -O0 build prints 9223372036854775807. The float class (a declared float result) is covered by a_float_in_a_general_register_keeps_its_integer_uses_round_trip (cc).",
+  "round_trip": "unlace-cli/tests/decompile_all_cli.rs a_call_result_typed_by_its_callee_round_trips_through_the_printed_c: gcc and clang at -O0 and -O2 compile every printed fixture function, option off and on; the output must equal the binary's. Classes: pointer result (char *, FILE *), signed long result, the `cached` tie control, and two callers that zero-extend a callee's short / int result in place before returning it (use_s16_as_u, use_neg_as_unsigned; called through their printed prototypes, 50000 4294967293) beside widen_signed, whose sign extension agrees with neg32's int, and two that keep neg32's int in an unsigned int and hand it back as unsigned long through the last 32-bit write (keep_widened: a -O0 reload or mov %eax,%eax; keep_across: kept in %ebx or a stack slot across an opaque call), read whole as (unsigned long)keep_widened(1) >> 1 (2147483646); the test fails on the previous head (gcc -O0 printed int keep_widened). pass_widened keeps neg32's int in an unsigned int and passes it to halve(unsigned long) (mov %eax,%edi zero-extends; the dead-bit trimming drops that extension), read as pass_widened(1) (2147483647); with the argument refusal removed the gcc -O0 build prints 9223372036854775807. The float class (a declared float result) is covered by a_float_in_a_general_register_keeps_its_integer_uses_round_trip (cc).",
   "class_harness": "per-function round trip with printed prototypes (each function its own translation unit, main calling through the printed prototypes, 64-bit reads), 25 shapes x gcc -O0, gcc -O2, gcc -O2 -fno-ipa-ra, clang -O0, clang -O2: stores to a wider slot (pointer, global, 16-bit, both signs), returns (reload, callee-saved move, arithmetic, merge, 16-bit, both signs), arguments to a wider parameter (direct, merged, second slot, arithmetic, 16-bit, both signs), wider locals. Before the argument refusal 20 builds differed from option off (arg64, argphi, arg2, arg2k at all five compilers); after it 0 differ. The same harness finds three shapes that compute a wrong value with the option off too (main): a 32-bit value returned from an unsigned long function after arithmetic or a merge prints int (wmul, wphi), and a signed 32-bit expression passed to a wider parameter whose extension the trimming dropped (argadd); none involves the vote. The reviewer's rv/cx harness (45 functions) and the rev3 harness (20 return shapes): 0 differ."
  },
  "speed": {
@@ -360,7 +360,7 @@
   "rules": "high_contradicts (another call's result of the other class; beside a pointer a non-address number, a load through the pointer, a sum of integers) and a returned result beside a returned non-address number; only statements the variable's type carries; functions up to AUDIT_MAX_OPS = 1000 live p-code ops",
   "history": "v1 audited every statement and also votes a later pass refused: fmt -O2 +76% (quotearg_buffer_restyled redone for no change), bash -O2 +55% (218 redos, 51.6 s); narrowed to the above; the 2,000-op cap still let a 1,992-op dpkg-divert function cost 10% of its run, so the cap is 1,000"
  },
- "stale_statements": "A callee decompiled again after its callers (calleevote redo, convergence sweep) records again; callers decompiled before keep the statement they read. A redo the run discards (arity moved, or failed) restores the earlier statement (kuna_callrettype::restore), so the record describes the printed body.",
+ "stale_statements": "A callee decompiled again after its callers (calleevote redo, convergence sweep) records again; callers decompiled before keep the statement they read. A redo the run discards (arity moved, or failed) restores the earlier statement (unlace_callrettype::restore), so the record describes the printed body.",
  "landing_recheck": {
   "base": "243177605 (#718 callbacktype, default on)",
   "castbench": {

@@ -1,8 +1,8 @@
 from pathlib import Path
 import os, sys, json, time, threading, subprocess, runpy, statistics, shutil
 
-w = Path('/tmp/kuna-rust-panic-d850')
-cpu=int(os.environ.get('KUNA_TIMING_CPU','77'))
+w = Path('/tmp/unlace-rust-panic-d850')
+cpu=int(os.environ.get('UNLACE_TIMING_CPU','77'))
 siblings=list(map(int,Path(f'/sys/devices/system/cpu/cpu{cpu}/topology/thread_siblings_list').read_text().strip().split(',')))
 assert len(siblings)==2 and cpu in siblings
 sibling=next(c for c in siblings if c!=cpu)
@@ -32,7 +32,7 @@ thread = threading.Thread(target=monitor)
 thread.start()
 try:
     with (attempt/'timing.log').open('w') as log:
-        result = subprocess.run(['python3', str(w/'timing.py')]+sys.argv[1:], env=os.environ|{'KUNA_TIMING_OUT': str(attempt)}, stdout=log, stderr=subprocess.STDOUT)
+        result = subprocess.run(['python3', str(w/'timing.py')]+sys.argv[1:], env=os.environ|{'UNLACE_TIMING_OUT': str(attempt)}, stdout=log, stderr=subprocess.STDOUT)
 finally:
     done.set()
     thread.join()

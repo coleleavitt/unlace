@@ -1,6 +1,6 @@
 ---
 need_id: no-disassembly-command
-title: kuna cannot show instructions for a function or address
+title: unlace cannot show instructions for a function or address
 track: tooling
 status: closed
 severity: major
@@ -18,7 +18,7 @@ closing_pr: 367
 
 ## Symptom
 
-Filed by round-1 testers on the crackmes corpus. See `.kuna-repipe/rounds/1/gate.json` for the verbatim observations and their replayed transcripts.
+Filed by round-1 testers on the crackmes corpus. See `.unlace-repipe/rounds/1/gate.json` for the verbatim observations and their replayed transcripts.
 
 ## Acceptance
 

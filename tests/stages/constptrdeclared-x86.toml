@@ -1,4 +1,4 @@
-# kuna: a constant flowing into a return value or call argument whose
+# unlace: a constant flowing into a return value or call argument whose
 # declared type cannot hold a data pointer is not inferred as a pointer.
 # dret and cd move the bits of &table into a double (0x404040, the
 # denormal 2.08038790635732e-317); they printed (double)table, a

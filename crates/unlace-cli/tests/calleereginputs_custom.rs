@@ -21,7 +21,7 @@ fn run(args: &[&str]) -> (String, String, bool) {
     let output = Command::new(unlace())
         .args(args)
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     (
         String::from_utf8_lossy(&output.stdout).into_owned(),
         String::from_utf8_lossy(&output.stderr).into_owned(),
@@ -192,7 +192,7 @@ fn custom_surfaces_agree_or_say_why_not() {
     let fixture = common::fixture("calleeregcustom_pe_i386.exe");
 
     // The serial project export prints the parameter in the `.c` and the `.h`.
-    let dir = common::scratch_file("calleeregcustom", "kuna");
+    let dir = common::scratch_file("calleeregcustom", "unlace");
     let dir = dir.to_str().unwrap();
     let (_, stderr, ok) = run(&[
         "decompile-project",
@@ -255,7 +255,7 @@ fn custom_surfaces_agree_or_say_why_not() {
     );
 
     // A streamed export prints in decompile order and warns that `custom` is inert.
-    let stream = common::scratch_file("calleeregcustom-stream", "kuna");
+    let stream = common::scratch_file("calleeregcustom-stream", "unlace");
     let (_, stderr, ok) = run(&[
         "decompile-project",
         &fixture,

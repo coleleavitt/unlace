@@ -1,4 +1,4 @@
-# kuna `option cortexmpriv` (default-OFF opt-in, ON in the `aggressive` preset),
+# unlace `option cortexmpriv` (default-OFF opt-in, ON in the `aggressive` preset),
 # P2 lift/inline-inject: the synthesized `isCurrentModePrivileged`
 # `<callotherfixup>` registered in `infra/architecture.rs`
 # (`register_cortexmpriv_fixup`) and consumed at

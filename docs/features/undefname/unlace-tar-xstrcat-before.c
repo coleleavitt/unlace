@@ -1,4 +1,4 @@
-// tar-xstrcat  tar @ 0x611a0  (kuna after the undefname fix)
+// tar-xstrcat  tar @ 0x611a0  (unlace before the undefname fix)
 // ScopeLocal symbol table (the --json `variables` array):
 //   {"name": "param_1", "type": "int8", "kind": "arg", "arg_index": 0, "stack_offset": null, "size": 8}
 //   {"name": "param_2", "type": "uint8 *", "kind": "arg", "arg_index": 1, "stack_offset": null, "size": 8}
@@ -7,6 +7,7 @@
 
 char * sub_611a0(int8 a0,uint8 *a1)
 {
+  uint4 $$undef00000000; // stack - 0x58
   unsigned long *v1;
   char *v10;
   bool v11; // cf
@@ -29,13 +30,13 @@ char * sub_611a0(int8 a0,uint8 *a1)
     v9 = a0;
     do {
       v4 = v12 & 0xffffffff;
-      if (0x30 <= (uint4)v12) { // branch-flip
+      if (0x30 <= (uint4)$$undef00000000) { // branch-flip
         v1 = &v13[1];
         v7 = v13;
         v13 = v1;
       }
       else {
-        v12 = (uint8)((uint4)v12 + 8);
+        v12 = (uint8)((uint4)$$undef00000000 + 8);
         v7 = (unsigned long *)(v4 + v6);
       }
       v4 = strlen((char *)*v7);

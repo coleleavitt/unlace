@@ -1,4 +1,4 @@
-# kuna calleeretpurge: an i386 SysV struct-returning callee pops its own
+# unlace calleeretpurge: an i386 SysV struct-returning callee pops its own
 # hidden result pointer with `ret $4`, and its caller is compiled around it.
 #
 # Source (gcc -m32 -O2 -fomit-frame-pointer):

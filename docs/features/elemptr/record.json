@@ -1,7 +1,7 @@
 {
  "opportunity": "A pointer-width value the program uses only as an array of one element type -- a parameter indexed byte by byte, the buffer malloc returned, a global that holds an allocated table, a constant table in .data read with a computed index -- is declared long or void * (or not at all), so every access prints as an integer sum behind casts: *(char *)((long)v6 + (long)v8), *(unsigned char *)((long)v1 + 0x4020). TypeOpIntAdd votes an integer for both operands of p + i and refuses to carry the loaded element's pointer back over the add (typeop.cc:1217).",
  "test_name": "tests/stages/elemptr.xml (26 assertions, pass 1 option elemptr off, pass 2 on; #10/#11 a returned 2-byte element unsigned, #12 the decoder's ?: arm reads the typed global with no (int), #13 a length compared against a pointer difference stays a number, #14-#16 an int counter stored into an unsigned table stays int, #17/#18 a 2-byte field through a pointer a callee reads as uint4 * is read 4 wide and truncated with the option off and 2 wide with it on, #19/#20 a global stepped by bytes and a table's first element read by name keep their integer form, #21/#22 an element loaded through an address in the returned register is returned as an integer, #23-#26 a 15-byte table holding a zero byte merged with a parameter the option types is its address, never a string literal) + unit tests (p5_types/elemptr/tests.rs, p9_emit/globalref/tests.rs) + compiled round trip decompile_all_cli.rs an_element_pointer_round_trips_through_the_printed_c (six lines; the sixth compares and hashes the zero-byte table) + decompile_all_cli.rs element_pointers_under_jobs_match_the_serial_run (--jobs 4 == --jobs 1 on decompile-all and decompile-project with --option protoorder off) + tests/cli/elemptr-keeps-a-global-another-function-steps-by-bytes-an-integer.json (a batch) and tests/cli/elemptr-passes-a-table-with-a-zero-byte-as-its-address.json (a caller passing the table to a callee's typed parameter)",
- "binary": "decompiler/crates/kuna-analysis/tests/fixtures/elemptr_gcc_O0_x86_64",
+ "binary": "decompiler/crates/unlace-analysis/tests/fixtures/elemptr_gcc_O0_x86_64",
  "selector": "w_decode",
  "func_addr": null,
  "angr_version": null,
@@ -22,7 +22,7 @@
   "after": "char * w_decode(char *a0,...); v2 = (a0[v7] != '=') ? (int)dat_300040e0[(unsigned char)a0[v7]] : 0; v6[v8] = (char)(v5 >> 0x10); dat_300040e0[dat_30004060[v2]] = (char)v2;"
  },
  "castbench": {
-  "set": "full, 45 binaries x O0/O2/O2-noinline, 4,815 functions kuna, IDA and main share",
+  "set": "full, 45 binaries x O0/O2/O2-noinline, 4,815 functions unlace, IDA and main share",
   "ida": {
    "casts": 37821,
    "per_kloc": 155.4,
@@ -294,7 +294,7 @@
   "reviewer_fixtures_round_p": "ct, cu, cv, cw, cy, cz, ra, rb, rc, rd at gcc/clang -O0/-O1/-O2, compiled with gcc and clang: 112 arms, 0 worse than main, 10 that fail to link on main too (CONCAT helpers)"
  },
  "speed": {
-  "method": "one pinned release binary (the engine at this head, on b273c2259), kuna decompile-all --json --max-fn-seconds 120, --option elemptr off vs default, arms interleaved and order-alternated, one warm-up discarded, min and median-of-ratios of 15 (docs/features/elemptr/speed.py)",
+  "method": "one pinned release binary (the engine at this head, on b273c2259), unlace decompile-all --json --max-fn-seconds 120, --option elemptr off vs default, arms interleaved and order-alternated, one warm-up discarded, min and median-of-ratios of 15 (docs/features/elemptr/speed.py)",
   "measurements": [
    {
     "label": "fmt_O2",
@@ -360,7 +360,7 @@
   "make_test_stages": "datatests: 1467/1467 assertions passed, PARITY OK (baseline = main's plus the 26 elemptr keys; no key removed)",
   "make_test_cli": "tests/cli: 268/268 passed",
   "check_spec": "check-spec OK (lenient mode) + check-spec OK (strict mode)",
-  "kuna_catalog_check": "catalog OK: documents exactly the registered kuna options",
+  "unlace_catalog_check": "catalog OK: documents exactly the registered unlace options",
   "counters_check": "no drift: every hard-coded site agrees with the derived truth",
   "options_md": "byte-fresh",
   "phases_toml": "parses with python3 tomllib",
@@ -376,6 +376,6 @@
   "f_hunks": "1,255 functions over 45 binaries, 19 flagged by structural.py, every one read and classified; plus a disjoint 32-binary sweep (556 functions, 25 with more casts, read)",
   "g_modes": "nothing to do: a default-on option is outside the aggressive preset's default-off scope",
   "h_castbench": "33,289 -> 32,073 (0.880x -> 0.848x IDA) against a fresh build of main f96e80805, 301 fewer (-1,242), 18 more (+26), all read",
-  "workspace_tests": "5 kuna-cli tests pinned the integer spelling: a_load_is_not_printed_after_a_store_into_its_bytes, an_implied_cast_round_trips_through_the_printed_c, a_signed_only_variable_round_trips_through_the_printed_c follow the subscript; a_conditional_arm_cast_round_trips_through_the_printed_c (castternary) and a_variable_index_and_a_byte_pointer_difference_round_trip_through_the_printed_c (castindex) keep their pins with elemptr off and also compile and run the elemptr-on output, which computes the same values"
+  "workspace_tests": "5 unlace-cli tests pinned the integer spelling: a_load_is_not_printed_after_a_store_into_its_bytes, an_implied_cast_round_trips_through_the_printed_c, a_signed_only_variable_round_trips_through_the_printed_c follow the subscript; a_conditional_arm_cast_round_trips_through_the_printed_c (castternary) and a_variable_index_and_a_byte_pointer_difference_round_trip_through_the_printed_c (castindex) keep their pins with elemptr off and also compile and run the elemptr-on output, which computes the same values"
  }
 }

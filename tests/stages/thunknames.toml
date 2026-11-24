@@ -8,7 +8,7 @@
 # is named.
 #
 # Stage / sub-stage: P1 environment-binding.
-# unlace-console engine/kuna_thunknames.rs decodes the first instruction of
+# unlace-console engine/unlace_thunknames.rs decodes the first instruction of
 # every discovered entry and, after every other name source, renames a
 # placeholder thunk `j_<target>`; a thunk to a thunk becomes `j_j_<target>`.
 # Each thunk also takes its target's prototype, so the callers' first

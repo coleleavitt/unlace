@@ -48,14 +48,14 @@ byte is spelled unsigned and the upstream reading stands.
   disabled; #11 and #12 fail when the cast ignores the trim evidence.
 - `tests/stages/endptrbound.toml` #5: its `push_back(v2,*v3)` argument is
   a `movzx edx, byte [rsi]` byte and now reads `push_back(v2,(uint1)*v3)`.
-- `roundtrip/roundtrip.sh <kuna> [<base-kuna>]` (`CC=gcc` or `CC=clang`):
+- `roundtrip/roundtrip.sh <unlace> [<base-unlace>]` (`CC=gcc` or `CC=clang`):
   compile-and-run check of eleven callers, value by value against the binary
-  and against a base kuna (NEW_WRONG).
-- `kuna_lang` / `kuna_langrust` tests pin `integer_promotion` (C on, Rust off).
+  and against a base unlace (NEW_WRONG).
+- `unlace_lang` / `unlace_langrust` tests pin `integer_promotion` (C on, Rust off).
 
 ## 4. Verification
 
-The four gates plus `make test-cli`, `kuna catalog --check` and
+The four gates plus `make test-cli`, `unlace catalog --check` and
 `counters --check`; the corpus diff classified by `classify_diff.py` and
 `breakdown.py`; typesweep over the 444-slice set; interleaved min-of-15 timing
 of `decompile-all` (`record.json`).

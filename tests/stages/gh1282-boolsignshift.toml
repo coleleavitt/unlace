@@ -15,7 +15,7 @@
 #   while (uVar1 = 0x80 - (((uVar2 < 0x80) << 7) >> 7), 0x80 < uVar1) {
 #
 # Stage model: S3 "simplification-quiescence" (which algebraic/peephole rules
-# fire).  The kuna fix is a simplification rule (group "analysis", always on)
+# fire).  The unlace fix is a simplification rule (group "analysis", always on)
 # that recognizes `(b << k) s>> k` with NZMask(b) fitting in the low
 # (width*8 - k) bits and rewrites it to the sign-extended-mask form `0 - b`,
 # eliminating the shift-by-7 noise: no `<< 7) >> 7` appears anywhere in the

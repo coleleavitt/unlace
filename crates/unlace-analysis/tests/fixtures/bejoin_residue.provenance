@@ -2,7 +2,7 @@ bejoin_spill_ppc32_O0.o, bejoin_spill_sparc32_O0.o, bejoin_handoff_ppc32_O2.o,
 bejoin_handoff_mips32_O2.o, bejoin_discard_sparc32_O0.o,
 bejoin_discard_mips32_O1.o -- PowerPC, SPARC and MIPS32 big-endian objects for
 the option bejoin evidence and callers and option bejoinpass whole shapes of
-GH-904 and GH-815 (tests/stages/kuna-bejoin-residue.toml).
+GH-904 and GH-815 (tests/stages/unlace-bejoin-residue.toml).
 
 What they are
   bejoin_spill.c at -O0: widen and uwiden widen an argument after a call,

@@ -147,7 +147,7 @@ for label, table, kind, data_offset in [
          "type_" + label + "_tab:", ".byte 7", string(table), ".byte 32,25", ".byte 0")
 cu_end("types")
 emit('.section .note.GNU-stack,"",@progbits')
-with tempfile.TemporaryDirectory(prefix="kuna-go-int-error-") as directory:
+with tempfile.TemporaryDirectory(prefix="unlace-go-int-error-") as directory:
     directory = Path(directory)
     source, obj = directory / "fixture.S", directory / "fixture.o"
     source.write_text("\n".join(lines) + "\n")

@@ -5,7 +5,7 @@
 The i386 `bm3.exe` entry at `0x401757` is a 105-byte dispatcher built from
 repeated `push <continuation>; push <callee>; ret` links. A RET consumes the
 callee address, the callee returns to the pushed continuation, and the next
-link repeats. Default kuna stopped at the first RET and emitted only `return;`,
+link repeats. Default unlace stopped at the first RET and emitted only `return;`,
 losing calls including `LoadLibraryA` and `GetProcAddress`.
 
 The existing explicit `flow 0x40176f call` assertion proved the rest of the

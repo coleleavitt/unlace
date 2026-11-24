@@ -6,7 +6,7 @@
 # byte of code that is present can be read.
 #
 # Stage / sub-stage: P1 container parse, the Mach-O range tolerance
-# (`unlace-analysis/src/loader/kuna_machotolerance.rs
+# (`unlace-analysis/src/loader/unlace_machotolerance.rs
 # (clamp_out_of_file_ranges)`), applied at `load file` beside the ELF and PE
 # header repairs. Each segment, section, symbol table and string table that
 # runs past the end of the file is clamped, in a copy of the image, to the

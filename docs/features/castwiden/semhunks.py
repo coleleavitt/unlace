@@ -332,7 +332,7 @@ class Env:
         self.vars, self.funcs, self.ret, self.structs = vars_, funcs, ret, structs
 
 
-# Library prototypes kuna's call-argument rule trusts, as canonical types, for the
+# Library prototypes unlace's call-argument rule trusts, as canonical types, for the
 # functions the corpora call with a widened argument.
 LIBC = {
     "memchr": ("void*", ["void*", "i32", "u64"]), "memcpy": ("void*", ["void*", "void*", "u64"]),

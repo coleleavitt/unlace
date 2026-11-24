@@ -48,7 +48,7 @@ Ghidra (stored, GED 5) - the faithful shape, one `do { } while(true)` with the b
   } while( true );
 ```
 
-kuna stored (2026-07-27 benchmark, GED 43) - main loop already gone, flush tail still present:
+unlace stored (2026-07-27 benchmark, GED 43) - main loop already gone, flush tail still present:
 
 ```c
   v4 = 0x4c;
@@ -68,10 +68,10 @@ kuna stored (2026-07-27 benchmark, GED 43) - main loop already gone, flush tail 
   return 0;
 ```
 
-kuna fresh, today, stripped binary, `--addr 0x4053c4`, no flags - byte-for-byte the same
+unlace fresh, today, stripped binary, `--addr 0x4053c4`, no flags - byte-for-byte the same
 structure as the stored block (only DIV-34..39 print normalization differs). Main loop still gone.
 
-kuna fresh, today, non-stripped binary, `msg_b64enc`, identical under no-flag (`auto`->`aggressive`)
+unlace fresh, today, non-stripped binary, `msg_b64enc`, identical under no-flag (`auto`->`aggressive`)
 AND `--mode reliable` - a further collapse; the flush tail is now folded away too:
 
 ```c
@@ -140,13 +140,13 @@ static int msg_b64enc(char *outbuf, struct msgstate_t *state)
 
 ## Analysis
 
-**Structural symptom (one):** the whole `for(;;)` read/encode loop is deleted. kuna emits a
+**Structural symptom (one):** the whole `for(;;)` read/encode loop is deleted. unlace emits a
 straight-line body (3 basic blocks) where the source has 22 nodes / 30 edges and every other
-decompiler emits 2-3 loops. The variable `inlen` does not appear in kuna's output at all, and
+decompiler emits 2-3 loops. The variable `inlen` does not appear in unlace's output at all, and
 the `TEST EAX,EAX / JZ` at 0x405491 has become an unconditional branch to the epilogue - i.e.
-kuna *proved* `inlen == 0` after the call, so the loop body is unreachable and is removed.
+unlace *proved* `inlen == 0` after the call, so the loop body is unreachable and is removed.
 
-**Root cause: kuna does not materialize stack-passed call arguments, so a pointer-to-local
+**Root cause: unlace does not materialize stack-passed call arguments, so a pointer-to-local
 handed to a callee on the stack never escapes.** The store `[ESP+0xc] = &inlen` is never
 attached to the CALLIND as an argument, so it has no reader, so it is dead; the LEA dies with
 it; nothing ever observes that `&inlen` left the frame. The stack slot is then treated as
@@ -169,7 +169,7 @@ int work2(char *buf, int n) {
 }
 ```
 
-kuna today:
+unlace today:
 
 ```c
   do {
@@ -215,7 +215,7 @@ applies the PE IAT prototype for `ReadFile`, so the 4th parameter is a typed `LP
 
 **Not a metric artifact.** Source CFG is 22 nodes / 30 edges (real control flow, not a Joern
 parse failure), GED is exact (not approximated), and the reference panes are complete functions,
-not truncations. kuna genuinely deleted 19 of 22 blocks.
+not truncations. unlace genuinely deleted 19 of 22 blocks.
 
 **No existing option closes it.** Swept `stackalias on`, `condfold wide`, `operand_refs on`,
 `listing on`, `--mode reliable`, `--mode aggressive`: all produce the identical collapsed body.
@@ -253,7 +253,7 @@ Mechanism, in dependency order:
    (heritage.rs:1535) - the x86-64 register-argument control already behaves correctly, so the
    guard machinery itself looks sound; it is the escape fact that is missing.
 4. Separately (smaller, independent value): apply PE IAT import prototypes so `ReadFile`,
-   `CreateFileA`, `CloseHandle` render named and typed rather than `(*dat_411350)()`. kuna
+   `CreateFileA`, `CloseHandle` render named and typed rather than `(*dat_411350)()`. unlace
    already *knows* these names - `unlace functions mydoom.exe --json` lists `ReadFile @ 0x411350` -
    the decompiler just does not consume them for the indirect-call target.
 

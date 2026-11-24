@@ -1,4 +1,4 @@
-# kuna retpolinethunk: a call through a retpoline thunk is an indirect call.
+# unlace retpolinethunk: a call through a retpoline thunk is an indirect call.
 #
 # Source (clang -O2 -mretpoline):
 #

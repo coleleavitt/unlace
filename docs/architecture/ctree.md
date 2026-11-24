@@ -82,9 +82,9 @@ The decompile root ends with the block tree in `Funcdata::sblocks` (§0.10 level
 
 | Decision | Where it is decided | How the printer applies it |
 |---|---|---|
-| `iteregion` (diamond → `v = c ? a : b;`), `iteboolean` (`v = a && b;`) | P8 `kuna_iteregion`, `kuna_iteboolean` mark the `CBRANCH` | `emit_block_if` re-matches the diamond: `emit_block_if_ite`, `emit_block_if_bool` |
-| `switchmerge` (an if-chain on one value → `switch`) | `kuna_switchmerge::switch_plans`, computed in `emit_function_body` | `emit_block` swaps the `If` for `emit_block_switch` |
-| `gotonext` (goto → `break`/`continue`/nothing) | `kuna_gotonext::goto_rewrites`, same place | `emit_goto_statement` and the label filter |
+| `iteregion` (diamond → `v = c ? a : b;`), `iteboolean` (`v = a && b;`) | P8 `unlace_iteregion`, `unlace_iteboolean` mark the `CBRANCH` | `emit_block_if` re-matches the diamond: `emit_block_if_ite`, `emit_block_if_bool` |
+| `switchmerge` (an if-chain on one value → `switch`) | `unlace_switchmerge::switch_plans`, computed in `emit_function_body` | `emit_block` swaps the `If` for `emit_block_switch` |
+| `gotonext` (goto → `break`/`continue`/nothing) | `unlace_gotonext::goto_rewrites`, same place | `emit_goto_statement` and the label filter |
 | `voidtailreturn` (no trailing `return;`) | `elidable_void_tail_return`, same place | `emit_basic_block_ops` skips the op |
 | `braceelide`, `else if` | `if_body_elides`, the pending brace | in `emit_block_if` |
 | for loops | `BlockKind::WhileDo`'s `initialize_op`/`iterate_op` (P8) | `emit_for_loop` |

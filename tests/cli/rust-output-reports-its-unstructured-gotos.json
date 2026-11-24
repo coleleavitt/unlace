@@ -2,7 +2,7 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "irreducible",
@@ -31,7 +31,7 @@
       "eq": 0
     },
     "stdout_matches": [
-      "panic!\\(\\\\\"kuna: unstructured goto to label_",
+      "panic!\\(\\\\\"unlace: unstructured goto to label_",
       "\"unstructured_gotos\": 1",
       "\"error\": null"
     ],

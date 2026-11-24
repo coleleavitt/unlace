@@ -1,11 +1,11 @@
 ## The problem
 
-A function whose flow exceeds kuna's 100000-instruction budget decompiled to
+A function whose flow exceeds unlace's 100000-instruction budget decompiled to
 nothing at all, and the error named no way out. Any in-repo fixture reproduces it
 once the budget is small enough to reach:
 
 ```console
-$ kuna decompile-all decompiler/crates/kuna-analysis/tests/fixtures/midstring_x86_64 \
+$ unlace decompile-all decompiler/crates/unlace-analysis/tests/fixtures/midstring_x86_64 \
       --functions main --option maxinstruction 5 --json
       "size": 48,
       "code": null,
@@ -18,7 +18,7 @@ that instruction anyway, so the next address was queued and the walk carried on 
 the end of the reachable body, now with one halt per instruction:
 
 ```console
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/fauxware main \
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/fauxware main \
       --option maxinstruction 5 --option errortoomanyinstructions off
 void main(char *a0,char *a1)
 {
@@ -50,7 +50,7 @@ died at a failed 11.5 GB allocation after 38 s at `maxinstruction` 2000 and at
   follows flow and does not; the engine, console and datatest defaults are unchanged,
   which is why neither parity corpus can move.
 - The warning header names both knobs, because an error that names no remedy is what
-  sent the reporter through `kuna catalog` looking for an option that was never
+  sent the reporter through `unlace catalog` looking for an option that was never
   there: `--option maxinstruction N` raises the budget, `--option
   errortoomanyinstructions on` makes the overrun fatal again.
 
@@ -61,12 +61,12 @@ the 100000 instructions the budget allows.
 
 `tests/cli/checker-exceeds-instruction-ceiling.json` (the promoted acceptance,
 restated on a 16 KB in-repo fixture because CI has no dataset) and a two-pass
-`kuna-cli` integration test: `--option errortoomanyinstructions on` must still give
+`unlace-cli` integration test: `--option errortoomanyinstructions on` must still give
 `code: null` and the old error. `decompile_e2e.rs` now asserts the bounded run emits
 *less* C than the unbounded one — it did not before. `decompile-all` over all 156
 analysis fixtures is byte-identical on both arms.
 
 Gates: `make test` PARITY OK 675/675, `make test-stages` PARITY OK, `make rust-test`
-green (5,615 passed / 0 failed), `make check-spec` OK, `make test-cli` 34/34, `kuna catalog --check` OK.
+green (5,615 passed / 0 failed), `make check-spec` OK, `make test-cli` 34/34, `unlace catalog --check` OK.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

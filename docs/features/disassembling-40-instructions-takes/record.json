@@ -8,7 +8,7 @@
   "round": 6,
   "attempt": 1,
   "date": "2026-09-07",
-  "symptom": "Disassembling 40 instructions takes about 21 seconds (major, 1 instance, challenge 69d7f15a8afd9d6c48b48871). `kuna disassemble ./crackme_shroud.exe 0x140001000 --addr --count 40 --json` returned 40 instructions in 20.9154 s and 20.7541 s.",
+  "symptom": "Disassembling 40 instructions takes about 21 seconds (major, 1 instance, challenge 69d7f15a8afd9d6c48b48871). `unlace disassemble ./crackme_shroud.exe 0x140001000 --addr --count 40 --json` returned 40 instructions in 20.9154 s and 20.7541 s.",
   "hypothesis_filed": "Address-based disassembly pays for whole-image analysis.",
   "hypothesis_verdict": "upheld, and the round-5 refuter's correction of it is exact",
   "decisions": [
@@ -22,14 +22,14 @@
     },
     {
       "what": "the derived-window case is not attempted at all, rather than attempted and rolled back",
-      "detail": "`kuna disassemble <target>` with no `--count`/`--bytes`/range takes its stop from `function_extent_at`, which the walk can shorten by discovering a closer next entry. That is decided from argv before any load, so the full walk runs FIRST and the double load never happens there: measured +0.6% (noise) on the witness."
+      "detail": "`unlace disassemble <target>` with no `--count`/`--bytes`/range takes its stop from `function_extent_at`, which the walk can shorten by discovering a closer next entry. That is decided from argv before any load, so the full walk runs FIRST and the double load never happens there: measured +0.6% (noise) on the witness."
     },
     {
       "what": "the loader tolerance notes had to become say-once, or the invariance claim was false",
-      "detail": "The first sweep found 21 differences in 3,838 cases, ALL stderr and ALL the same shape: a second load of the same image re-announces `[kuna] ELF section table unusable ...`, the PE data-directory clamp, and the ET_REL report. Routed the six loader-note sites through a new `kuna_base::notes::say_once`, keyed by the image so two images with identical note text each get theirs. Re-swept: 0 differences."
+      "detail": "The first sweep found 21 differences in 3,838 cases, ALL stderr and ALL the same shape: a second load of the same image re-announces `[unlace] ELF section table unusable ...`, the PE data-directory clamp, and the ET_REL report. Routed the six loader-note sites through a new `unlace_base::notes::say_once`, keyed by the image so two images with identical note text each get theirs. Re-swept: 0 differences."
     }
   ],
-  "mechanism": "`disassemble::render` runs a windowed load first when `window_is_caller_bounded` (--count | --bytes | an explicit start-end range). `windowed_options` appends `listing off` + `fast_funcdisc off` -- the two gates of `kuna_analysis::passes::run_listing_consumers` -- to the resolved `--mode` option list, skipping any the caller named. `windowed_answer_is_final` keeps that answer only when the region carries a name AND (it came from a function entry OR `decide_view` agrees for both settings of `from_entry`). Otherwise the command reloads with the full bundle and answers exactly as before.",
+  "mechanism": "`disassemble::render` runs a windowed load first when `window_is_caller_bounded` (--count | --bytes | an explicit start-end range). `windowed_options` appends `listing off` + `fast_funcdisc off` -- the two gates of `unlace_analysis::passes::run_listing_consumers` -- to the resolved `--mode` option list, skipping any the caller named. `windowed_answer_is_final` keeps that answer only when the region carries a name AND (it came from a function entry OR `decide_view` agrees for both settings of `from_entry`). Otherwise the command reloads with the full bundle and answers exactly as before.",
   "measurement": {
     "method": "interleaved base/new, same shell, taskset-pinned to one core, warmup + 5 reps (9 on the small fixtures)",
     "targets": [
@@ -77,21 +77,21 @@
   "acceptance": "scripts.repipe.verify --need disassembling-40-instructions-takes --json -- PASS on the rebased tree (wall_ms median 1873.9 < 10000; 1 closed, 0 regressed)",
   "tests": [
     "tests/cli/disassembling-40-instructions-takes.json (repointed to the in-repo ssh-sk-helper fixture, min of 5 < 600 ms -- 833 ms on base; CI has no dataset)",
-    "decompiler/crates/kuna-cli/tests/disassemble_cli.rs::a_name_only_the_discovery_walk_invents_still_resolves",
-    "decompiler/crates/kuna-cli/tests/disassemble_cli.rs::a_bounded_listing_agrees_with_the_walk_it_skipped",
-    "decompiler/crates/kuna-cli/src/disassemble.rs::tests::a_window_is_the_callers_when_count_bytes_or_a_range_bounds_it",
-    "decompiler/crates/kuna-cli/src/disassemble.rs::tests::the_windowed_load_turns_the_discovery_walk_off_unless_the_caller_named_it",
-    "decompiler/crates/kuna-cli/src/disassemble.rs::tests::the_windowed_answer_stands_only_when_the_walk_could_not_have_changed_it"
+    "decompiler/crates/unlace-cli/tests/disassemble_cli.rs::a_name_only_the_discovery_walk_invents_still_resolves",
+    "decompiler/crates/unlace-cli/tests/disassemble_cli.rs::a_bounded_listing_agrees_with_the_walk_it_skipped",
+    "decompiler/crates/unlace-cli/src/disassemble.rs::tests::a_window_is_the_callers_when_count_bytes_or_a_range_bounds_it",
+    "decompiler/crates/unlace-cli/src/disassemble.rs::tests::the_windowed_load_turns_the_discovery_walk_off_unless_the_caller_named_it",
+    "decompiler/crates/unlace-cli/src/disassemble.rs::tests::the_windowed_answer_stands_only_when_the_walk_could_not_have_changed_it"
   ],
-  "sweep": "3,838 `kuna disassemble` / `kuna read` invocations over 139 in-repo binaries (ELF/PE/Mach-O/COFF, x86-64/i386/ARM/AArch64/Thumb/MIPS/PPC/RISC-V/SPARC, executables, shared objects and relocatable objects), base vs new, comparing stdout, stderr and exit code. Targets per binary: `main` bounded and unbounded, and for five entries each (first, a generated `sub_*`, a symbol-named one, the last) the address form bounded by --count/--bytes/range/unbounded, the address+1 mid-function form, the `--as data` form, `kuna read`, and the name form. Result: 0 stdout differences, 0 exit-code differences, 0 stderr differences.",
-  "no_div_row": "No DIV row: the registry records why a kuna DEFAULT differs from upstream, and this changes no default and no output -- `kuna disassemble` has no upstream counterpart at all, and the DIV-15/DIV-20/DIV-68 driver bundles are untouched for every surface. The behaviour is described in docs/spec/00-overview.md and docs/cli.md instead. (`counter:div` was also held by a live builder this round.)",
+  "sweep": "3,838 `unlace disassemble` / `unlace read` invocations over 139 in-repo binaries (ELF/PE/Mach-O/COFF, x86-64/i386/ARM/AArch64/Thumb/MIPS/PPC/RISC-V/SPARC, executables, shared objects and relocatable objects), base vs new, comparing stdout, stderr and exit code. Targets per binary: `main` bounded and unbounded, and for five entries each (first, a generated `sub_*`, a symbol-named one, the last) the address form bounded by --count/--bytes/range/unbounded, the address+1 mid-function form, the `--as data` form, `unlace read`, and the name form. Result: 0 stdout differences, 0 exit-code differences, 0 stderr differences.",
+  "no_div_row": "No DIV row: the registry records why a unlace DEFAULT differs from upstream, and this changes no default and no output -- `unlace disassemble` has no upstream counterpart at all, and the DIV-15/DIV-20/DIV-68 driver bundles are untouched for every surface. The behaviour is described in docs/spec/00-overview.md and docs/cli.md instead. (`counter:div` was also held by a live builder this round.)",
   "gates": {
     "make test": "PARITY OK, datatests 675/675 assertions passed (post-rebase)",
     "make test-stages": "PARITY OK (post-rebase)",
     "make check-spec": "check-spec OK",
     "make test-cli": "tests/cli 65/65 passed (includes the promoted probe)",
-    "kuna catalog --check": "catalog OK: documents exactly the registered kuna options",
-    "make rust-test": "369 suites green; the single failure is kuna-decomp::verify_w10_proto_unlock::w10_proto_unlock_const_return_collapses_no_tied_roundtrip, the known KUNA_DECOMP_TEST artifact -- the repipe launcher points the C++ oracle at kuna's own decomp_test_dbg, and the assertion requires `xunknown4` which no kuna build prints. Falsified per the recipe: `env -u KUNA_DECOMP_TEST cargo test -p kuna-decomp --test verify_w10_proto_unlock` is 4/4 green, which is how CI runs it (no C++ tree exists there).",
+    "unlace catalog --check": "catalog OK: documents exactly the registered unlace options",
+    "make rust-test": "369 suites green; the single failure is unlace-decomp::verify_w10_proto_unlock::w10_proto_unlock_const_return_collapses_no_tied_roundtrip, the known UNLACE_DECOMP_TEST artifact -- the repipe launcher points the C++ oracle at unlace's own decomp_test_dbg, and the assertion requires `xunknown4` which no unlace build prints. Falsified per the recipe: `env -u UNLACE_DECOMP_TEST cargo test -p unlace-decomp --test verify_w10_proto_unlock` is 4/4 green, which is how CI runs it (no C++ tree exists there).",
     "scripts.repipe.mergecheck --against origin/main": "merge guards clean, 0 rejects; all shared counters re-derived and agree (159 settables, tiers 41/64/54, 250 corpus files, next ElementId 4151)"
   },
   "status": "merged-pending"

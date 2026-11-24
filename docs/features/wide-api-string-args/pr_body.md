@@ -2,13 +2,13 @@
 
 RE-friction round 2, need `wide-api-string-args` (major, 1 instance, challenge
 `65acadf3eef082e477ff5ede` — `ObfuscationFiesta.exe`, PE32+), filed by a tester
-reverse-engineering the binary with kuna:
+reverse-engineering the binary with unlace:
 
 > **Wide Windows API string arguments collapse to one-character strings**
 > Rendered calls such as `LoadLibraryW("n")` and `FindWindowW("O",0)`, losing the
 > remainder of the UTF-16 strings and making anti-debugging checks opaque.
 
-The DLL and window-class names *are* the content of such a check. `kuna strings
+The DLL and window-class names *are* the content of such a check. `unlace strings
 --encoding utf16` had been printing them in full all along — the difference
 between the two surfaces was the whole tell.
 
@@ -24,18 +24,18 @@ whose run test accepts a *single* visible character (it exists for the residual
 short strings the main pass misses). At a wide literal it reads the first unit's
 low byte plus the high-byte NUL behind it as a complete `char[2]`. `operand_refs`
 is a `--mode aggressive` member and `auto` picks aggressive for anything under
-500 KiB, so it is what the `kuna` binary runs by default — which is also why the
+500 KiB, so it is what the `unlace` binary runs by default — which is also why the
 symptom is invisible under `--mode reliable`, where the same call rendered the
 bare `LoadLibraryW(0x1400074b8)`.
 
 Both ends of the real fix already existed and were simply not wired together:
-`stringinv.rs` had a UTF-16 matcher whose only consumer was `kuna strings`,
+`stringinv.rs` had a UTF-16 matcher whose only consumer was `unlace strings`,
 and `stringmanage.rs` has handled `charsize == 2` since the port.
 
 ## Mechanism — `widestrings` (new option, `on|off`, default **on**, DIV-110)
 
 `widestrings.rs` is the 2-byte width of `StringLiteralPass` — Ghidra
-`StringsAnalyzer`'s `allCharWidths` arm, which kuna's 1-byte port left as a
+`StringsAnalyzer`'s `allCharWidths` arm, which unlace's 1-byte port left as a
 documented seam. It is the **same** matcher widened, not a different one: the same
 printable-ASCII recognizer over each unit's low byte, the same require-NUL-end
 rule, the same minimum length of 5, over the same section set, reading units on
@@ -50,7 +50,7 @@ commit's `occupied` guard against `operand_refs`' one-character read. Against
 zero high byte, so five consecutive 1-byte-charset bytes never occur inside a wide
 run and neither width can reach the other's address.
 
-The UTF-16 matcher moved from `stringinv.rs` (the `kuna strings` query) into
+The UTF-16 matcher moved from `stringinv.rs` (the `unlace strings` query) into
 the new module and is now called by both, so the reported inventory and the
 committed markup remain one scan.
 
@@ -61,7 +61,7 @@ $ python -m scripts.repipe.verify --need wide-api-string-args --json
 "counts": { "total": 1, "pass": 1, "fail": 0, "closed": 1, "regressed": 0 }
 ```
 
-On the witness, `kuna decompile ObfuscationFiesta.exe sub_140002530`:
+On the witness, `unlace decompile ObfuscationFiesta.exe sub_140002530`:
 
 ```c
 -  v105 = LoadLibraryW("n");                   +  v105 = LoadLibraryW(L"ntdll.dll");
@@ -91,7 +91,7 @@ Whole-binary A/B on the witness: **42 changed lines, every one a recovery** —
 - `decompiler/crates/console/tests/verify_widestrings.rs` — 4 cross-crate
   end-to-end tests: the on-arm renders `L"ntdll.dll"`, the off-arm leaves the
   address untyped, the commit plants `s_140002100` only with the width on, and —
-  with `operand_refs` on, the pass set a default `kuna decompile` runs — the
+  with `operand_refs` on, the pass set a default `unlace decompile` runs — the
   off-arm reproduces the recorded `LoadLibraryW("n")` verbatim while the on-arm
   outranks it.
 - `widestrings.rs` unit tests: the widened matcher, short/unterminated
@@ -106,7 +106,7 @@ Whole-binary A/B on the witness: **42 changed lines, every one a recovery** —
 | `make test-stages` | **PARITY OK** |
 | `make rust-test` | **green** (351 suites, 0 failures) |
 | `make check-spec` | OK (strict mode too) |
-| `kuna catalog --check` | catalog OK |
+| `unlace catalog --check` | catalog OK |
 | `make test-cli` | 26/26 |
 | `scripts.repipe.verify --need wide-api-string-args` | acceptance **PASS** |
 

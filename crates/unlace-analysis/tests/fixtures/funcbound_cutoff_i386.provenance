@@ -19,7 +19,7 @@ Why it is vendored rather than rebuilt
 
 Where it came from
   The RE-friction loop's round-10 witness: challenge
-  5ab77f5c33c5d40ad448c615 in the kuna-re-dataset crackme corpus ("trace_p by
+  5ab77f5c33c5d40ad448c615 in the unlace-re-dataset crackme corpus ("trace_p by
   taviso", https://crackmes.one/crackme/5ab77f5c33c5d40ad448c615),
   `bin/trace-p.zip.__x/crackme`, byte-identical.
 

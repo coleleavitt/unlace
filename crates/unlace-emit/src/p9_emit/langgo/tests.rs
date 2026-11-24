@@ -227,10 +227,10 @@ fn literals_are_not_sanitized_as_identifiers() {
         Highlight::const_color,
     ));
     assert_eq!(p.emit_mut().output_str(), "\"hello, world\"");
-    assert_eq!(identifier("range"), "_kuna_ident_72616e6765");
-    assert_eq!(identifier("123name"), "_kuna_ident_3132336e616d65");
-    assert_eq!(path("pkg::select"), "pkg._kuna_ident_73656c656374");
-    assert_ne!(identifier("range"), identifier("_kuna_ident_72616e6765"));
+    assert_eq!(identifier("range"), "_unlace_ident_72616e6765");
+    assert_eq!(identifier("123name"), "_unlace_ident_3132336e616d65");
+    assert_eq!(path("pkg::select"), "pkg._unlace_ident_73656c656374");
+    assert_ne!(identifier("range"), identifier("_unlace_ident_72616e6765"));
     assert_ne!(identifier("a-b"), identifier("a_b"));
     for reserved in ["uint64", "nil", "unsafe", "math"] {
         assert_ne!(identifier(reserved), reserved);

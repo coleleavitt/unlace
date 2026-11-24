@@ -1,5 +1,5 @@
 /* macho_cfstring fixture: a linked arm64 Mach-O with three hand-built CFString
-   constants in __DATA_CONST,__cfstring, for kuna's `cfstrings` pass. The second
+   constants in __DATA_CONST,__cfstring, for unlace's `cfstrings` pass. The second
    string is longer than one 32-byte entry, so the third entry sits right behind
    an entry whose string would not fit in it. */
 struct cfstr { const long *isa; long flags; const char *str; long len; };

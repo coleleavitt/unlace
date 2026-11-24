@@ -7,7 +7,7 @@
 # calls to the rebuilt Mach-O, so the session spans several images.
 #
 # Stage / sub-stage: P1 environment-binding, the dyld cache rebuild
-# (`kuna_dyldcache/extract.rs (DyldCache::extract_with)`), inside
+# (`unlace_dyldcache/extract.rs (DyldCache::extract_with)`), inside
 # `load file`; `option dyldimage` is set before `load file`.
 #
 # Pass 1 (`dyldimage /usr/lib/libcaller.dylib`, the BUG): libcallee's

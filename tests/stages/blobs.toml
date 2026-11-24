@@ -1,4 +1,4 @@
-# Kuna GH-1649: embedded images and archives (`blobs on|off`, default on).
+# Unlace GH-1649: embedded images and archives (`blobs on|off`, default on).
 #
 # Issue: a PNG, JPEG, GIF, zip or gzip stored in `.rodata` was visible only as
 # the string fragments of its header (`PNG`, `IHDR`, `IDATx`), and a function
@@ -8,7 +8,7 @@
 # (`unlace-analysis/src/analyzers/blobs`) finds each magic number in the mapped
 # sections and keeps a candidate only when its container structure walks to
 # its end, which gives the exact length. The commit
-# (`unlace-console/src/kuna_blobdata.rs`) plants `<kind>_<addr>` typed
+# (`unlace-console/src/unlace_blobdata.rs`) plants `<kind>_<addr>` typed
 # `unsigned char[length]` and drops the string facts inside the file. A
 # constant equal to a file's first address is weighed as a pointer even below
 # the pointer lower bound and with a mask-like bit pattern (`0x3c0`).

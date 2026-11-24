@@ -11,7 +11,7 @@ Track: `quality`.
 > The same decompilation identifies `sub_140008160(0x28)`, `sub_140008160(v33)`
 > and other sized calls, but renders several paths as `sub_140008160()` with no
 > argument, destroying the buffer-size dataflow.
-> probe: `kuna decompile {{BIN}} 0x1400024a0 --addr` contains `sub_140008160();`
+> probe: `unlace decompile {{BIN}} 0x1400024a0 --addr` contains `sub_140008160();`
 > acceptance: same command does **not** contain `sub_140008160();`
 
 Reproduced on a fresh build of `fca7a971`:
@@ -69,7 +69,7 @@ register argument.
 
 P4 (calls & prototypes), sub-stage **trial-finalization**, in
 `FuncCallSpecs::build_input_from_trials`
-(`decompiler/crates/kuna-decomp/src/p4_calls/funcdata_callsite.rs`) — the point where
+(`decompiler/crates/unlace-decomp/src/p4_calls/funcdata_callsite.rs`) — the point where
 `deriveInputMap` has set the `used` flags and the CALL op's final input list has not
 been written yet, so both the trial map and the argument Varnodes are still in hand.
 Spec chapter: `docs/spec/04-calls-and-prototypes.md` 4.2.

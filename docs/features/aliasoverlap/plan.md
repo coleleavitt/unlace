@@ -33,9 +33,9 @@ a load past a store that overwrites some of its bytes.
 
 ## 2. Tests
 
-- `kuna-cli/tests/decompile_all_cli.rs`
+- `unlace-cli/tests/decompile_all_cli.rs`
   `a_load_is_not_printed_after_a_store_into_its_bytes`: fixture
-  `kuna-analysis/tests/fixtures/aliasoverlap_x86_64` (+ `.c`, README row); checks
+  `unlace-analysis/tests/fixtures/aliasoverlap_x86_64` (+ `.c`, README row); checks
   statement order in six functions and compiles the printed C against the
   source. Main: 3 of 6 functions return a different value; fix: 0.
 - `tests/stages/aliasoverlap.toml`: the same six functions as a bytechunk,

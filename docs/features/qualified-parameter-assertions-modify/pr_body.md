@@ -6,7 +6,7 @@ the directive was applied to whichever function was being decompiled — the
 caller — and the function it named was left alone, with no rejection.
 
 ```console
-$ kuna decompile ./a.out authenticate --assert 'param open::0 RDI char *pathname'
+$ unlace decompile ./a.out authenticate --assert 'param open::0 RDI char *pathname'
 unsigned long authenticate(char *pathname,char *a1)
 ...
   v4 = open(a0,0);
@@ -14,7 +14,7 @@ unsigned long authenticate(char *pathname,char *a1)
 
 `authenticate`'s own first parameter has been renamed and retyped to `open`'s
 declared one; the call to `open` is untouched. Exit code 0, nothing on stderr.
-(`a.out` here is `decompiler/crates/kuna-analysis/tests/fixtures/fauxware`.)
+(`a.out` here is `decompiler/crates/unlace-analysis/tests/fixtures/fauxware`.)
 
 ## The fix
 
@@ -38,7 +38,7 @@ declared one; the call to `open` is untouched. Exit code 0, nothing on stderr.
   lower to exactly the console lines they did before.
 
 ```console
-$ kuna decompile ./a.out authenticate --assert 'param open::0 RDI char *pathname'
+$ unlace decompile ./a.out authenticate --assert 'param open::0 RDI char *pathname'
 unsigned long authenticate(char *a0,char *a1)
 ...
   v4 = open(a0);

@@ -1,4 +1,4 @@
-# Kuna `osclassinfo` option (P1 external refinement): DriverKit class
+# Unlace `osclassinfo` option (P1 external refinement): DriverKit class
 # records.
 #
 # The fixture (gen_dext.py) is a stripped arm64 executable whose

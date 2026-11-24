@@ -17,7 +17,7 @@ function classified. Classes:
   the value.
 
 Earlier revisions of this change also counted a load of the global as a read of
-the value: kuna's SSA gives a pointer store no effect on a global, so a load
+the value: unlace's SSA gives a pointer store no effect on a global, so a load
 after a store is the store's `COPY`, and rules had fed the value into it. Those
 revisions split such a value and printed the value where the binary reads memory
 (`gi = u; *p = k; return gi / 16;` returned `u / 16` for `p == &gi`). Most -O0

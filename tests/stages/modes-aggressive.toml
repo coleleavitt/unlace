@@ -7,7 +7,7 @@
 #
 # `reliable` == the shipped defaults (an empty override list, a no op alias);
 # `aggressive` turns ON every recovery/analysis pass, INCLUDING `returndup`
-# (angr ReturnDuplicatorHigh, p8_structure/kuna_returndup.rs).  `returndup` is
+# (angr ReturnDuplicatorHigh, p8_structure/unlace_returndup.rs).  `returndup` is
 # a shipped default since DIV-54, but `aggressive` still names it, so the preset
 # OWNS the option: an explicit `option returndup off` earlier in the script is
 # re-enabled by `mode aggressive` and not by `mode reliable`.  That makes

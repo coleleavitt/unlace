@@ -1,5 +1,5 @@
 /* macho_cfstring_chained_arm64 fixture: CFString constants in a chained-fixup
-   arm64 Mach-O, for kuna's `cfstrings` pass. Each entry's `data` pointer is a
+   arm64 Mach-O, for unlace's `cfstrings` pass. Each entry's `data` pointer is a
    chained rebase. `kUtf16` is a UTF-16 entry (flag 0x10) whose characters live
    in __TEXT,__ustring; `kNul` holds an embedded NUL; `pass_greeting` hands a
    CFString to an imported function as a call argument. */

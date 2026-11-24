@@ -2,9 +2,9 @@
 
 ## `list_action_decompile_snapshot.txt`
 
-Regression snapshot of kuna's `decompile` action tree, rendered by
+Regression snapshot of unlace's `decompile` action tree, rendered by
 `SchedNode::list_action_dump` with the default decompile groups. It began as a
-Ghidra `list action` capture, but has since been updated to include kuna passes
+Ghidra `list action` capture, but has since been updated to include unlace passes
 such as `structsynth`, `constspaceload` and `callpush`. It is not an independent
 C++ oracle.
 

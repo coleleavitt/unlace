@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a kuna type library from the musl libc headers.
+"""Build a unlace type library from the musl libc headers.
 
     scripts/typelib/gen_musl.py --arch x86_64 \
         -o crates/unlace-console/typelib/linux-x86_64.ktl
@@ -233,7 +233,7 @@ def measure(model: Model, umbrella: pathlib.Path, flags, workdir: pathlib.Path):
     """`(size, alignment, [(offset, size) per member])` of every record, from the compiler."""
     lines = [f'#include "{umbrella}"']
     lines += [f"#undef {member}" for member in model.member_names()]
-    lines.append("const unsigned long kuna_layout[] = {")
+    lines.append("const unsigned long unlace_layout[] = {")
     for _, probe, members in model.records.values():
         lines.append(f"sizeof({probe}), _Alignof({probe}),")
         for _, _, path in members:
@@ -242,7 +242,7 @@ def measure(model: Model, umbrella: pathlib.Path, flags, workdir: pathlib.Path):
     probe = workdir / "layout.c"
     probe.write_text("\n".join(lines) + "\n")
     asm = run(["clang", *flags, "-S", "-o", "-", str(probe)]).stdout
-    values = [int(v) for v in constants(asm, "kuna_layout")]
+    values = [int(v) for v in constants(asm, "unlace_layout")]
     layouts, at = {}, 0
     for name, (_, _, members) in model.records.items():
         end = at + 2 + 2 * len(members)
@@ -323,7 +323,7 @@ class Glibc:
         for feature in ("-D_GNU_SOURCE", "-D_DEFAULT_SOURCE"):
             passed = self.passing(feature, conditions)
             bound = [key[2:] for key in passed if key.startswith("F ")]
-            symbols = self.table(feature, "kuna_symbols", bound)
+            symbols = self.table(feature, "unlace_symbols", bound)
             rebound = {f"F {name}" for name, symbol in zip(bound, symbols) if name != symbol}
             agree |= set(passed) - rebound
         return sorted({key for key, _ in conditions} - agree)
@@ -343,13 +343,13 @@ class Glibc:
         records = self.passing(feature, [(n, f"__builtin_classify_type(*({spelled[n]} *)0) >= 12") for n in sized])
         out = {}
         rows = [f"sizeof({spelled[n]})" for n in integers] + [f"(({spelled[n]})-1 < 0)" for n in integers]
-        values = [int(v) for v in self.table(feature, "kuna_integers", rows)]
+        values = [int(v) for v in self.table(feature, "unlace_integers", rows)]
         for at, name in enumerate(integers):
             width, signed = values[at], values[len(integers) + at]
             if width in INTEGERS:
                 out[name] = ("" if signed else "unsigned ") + INTEGERS[width]
         rows = [f"sizeof({spelled[n]})" for n in records] + [f"_Alignof({spelled[n]})" for n in records]
-        values = [int(v) for v in self.table(feature, "kuna_records", rows)]
+        values = [int(v) for v in self.table(feature, "unlace_records", rows)]
         for at, name in enumerate(records):
             out[name] = f"{values[at]},{values[len(records) + at]}"
         return out
@@ -390,7 +390,7 @@ def main():
     ap.add_argument("--cc", default="cc", help="compiler with glibc headers, for --measure-glibc")
     args = ap.parse_args()
     differs_file = pathlib.Path(__file__).resolve().parent / f"glibc-{args.arch}.differs"
-    with tempfile.TemporaryDirectory(prefix="kuna-typelib-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="unlace-typelib-") as tmp:
         workdir = pathlib.Path(tmp)
         src = args.musl_src or fetch_musl(workdir)
         umbrella, flags, headers = prepare(src, args.arch, workdir)

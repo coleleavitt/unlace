@@ -41,7 +41,7 @@ in `analysis.md`. Headline numbers, all measured on a scratch build of the candi
 
 ### 2.1 Mechanism
 
-`decompiler/crates/kuna-decomp/src/p4_calls/funcdata_callsite.rs`, `check_input_trial_use`,
+`decompiler/crates/unlace-decomp/src/p4_calls/funcdata_callsite.rs`, `check_input_trial_use`,
 the `is_spacebase` arm (line 116 at HEAD):
 
 ```rust
@@ -62,7 +62,7 @@ Nothing else changes. No new module, no new pass, no new action, no registration
 
 ### 2.2 Owning module and spec chapter
 
-- Code: `decompiler/crates/kuna-decomp/src/p4_calls/funcdata_callsite.rs` (P4, calls).
+- Code: `decompiler/crates/unlace-decomp/src/p4_calls/funcdata_callsite.rs` (P4, calls).
 - Spec: `docs/spec/04-calls-and-prototypes.md`, section *"`ActionActiveParam` — does this
   argument exist?"*. That chapter **already describes the correct behaviour** ("outside the
   caller's local stack range"), so the spec edit is a short prose addition recording that stack
@@ -108,7 +108,7 @@ disappear and become arguments.
 The repo rule cuts both ways and a human should decide; here is the case for each.
 
 **No option (pure bug fix).** CLAUDE.md: *"a strict bug fix that only corrects wrong output
-needs no flag."* This restores upstream Ghidra behaviour, matches kuna's own normative spec
+needs no flag."* This restores upstream Ghidra behaviour, matches unlace's own normative spec
 chapter, and its output changes are strictly-more-correct wherever inspected (the SPARC
 struct-return pointer, the mydoom loop, the ssh-add ternaries). 675/675 datatests are
 unaffected.
@@ -116,8 +116,8 @@ unaffected.
 **Gated (recommended).** The same rule's other half: *"Anything that can change emitted C ships
 behind a named option"*, and *"when in doubt, gate it"*. This changes emitted C at a large
 fraction of call sites in every stripped binary on every architecture — the broadest single
-output change the project has shipped. kuna's product thesis is that decision points are
-flippable and discoverable from `kuna catalog`; a change this wide with a known artifact class
+output change the project has shipped. unlace's product thesis is that decision points are
+flippable and discoverable from `unlace catalog`; a change this wide with a known artifact class
 (over-recovery on unprototyped `__cdecl` callees, section 3) should have an ablation handle that
 an agent can find from `symptoms` alone.
 
@@ -151,7 +151,7 @@ ON with the breach recorded rather than absorbed. If the budget is judged to bin
 Per `docs/improvement-pipeline.md` section 3's checklist:
 
 1. **The change** — the one-argument correction above, plus the corrected comment. Marked
-   `// (kuna)`? No: it is a ported-core file being brought *back* into line with its anchor, so
+   `// (unlace)`? No: it is a ported-core file being brought *back* into line with its anchor, so
    the anchor comment stays and no divergence marker is added.
 2. **`phases.toml` `[[settable]]` row** — `callsitestackargs`, every field populated:
    `tier = "core"`, `change_kind = "correctness-fix"`,
@@ -162,7 +162,7 @@ Per `docs/improvement-pipeline.md` section 3's checklist:
    variable is written through a pointer argument disappears"*, *"`?:` guards feeding a logging
    call are dead-code eliminated"*, *"outgoing-argument stack slots render as locals commented
    `// stack - 0xNN`"*.
-3. **Register in** `src/p0_knowledge/options.rs` (`KUNA_OPTION_NAMES`).
+3. **Register in** `src/p0_knowledge/options.rs` (`UNLACE_OPTION_NAMES`).
 4. **Bump the hard-coded catalog counts** — `src/p0_knowledge/phases/tests.rs`,
    `tests/catalog_bytecompat.rs` + its `tests/fixtures/phase_catalog.json` fixture, and the
    `tests/stages/catalog.toml` count assertions (the `ghidra-upstream` /
@@ -179,7 +179,7 @@ Per `docs/improvement-pipeline.md` section 3's checklist:
    legitimate expectation change, not an absorbed regression — the PR must show the before/after
    C, as `analysis.md` section 6 does. Then re-record `docs/baseline-stages.json`.
    **`docs/baseline.json` is NOT re-pinned and does not move.**
-7. **Regenerate** `docs/options.md` (`kuna catalog --markdown`).
+7. **Regenerate** `docs/options.md` (`unlace catalog --markdown`).
 8. **Spec** — `docs/spec/04-calls-and-prototypes.md` prose addition; `make check-spec`.
 
 ## 5. Ablation plan
@@ -187,7 +187,7 @@ Per `docs/improvement-pipeline.md` section 3's checklist:
 1. Develop default-OFF; confirm default output is byte-identical to `main` on a sample of
    binaries (diff `decompile-all --json` output).
 2. Flip the default ON in the architecture reset path + the `phases.toml` `default =`, rebuild,
-   run `kuna test --all --baseline docs/baseline.json`. **Already measured on a scratch build:
+   run `unlace test --all --baseline docs/baseline.json`. **Already measured on a scratch build:
    675/675, PARITY OK.** If any assertion moves in the real implementation, it is adjudicated
    assertion-by-assertion in the PR body; the baseline is not re-pinned under any circumstance.
 3. Speed:
@@ -206,14 +206,14 @@ Per `docs/improvement-pipeline.md` section 3's checklist:
    real option.
 5. decbench rescore of the two originating cases
    (`python3 -m scripts.decbench.rescore --record …`) to splice `ged_before`/`ged_after`.
-6. Whole workspace: `make rust-test`, `make check-spec`, `kuna catalog --check`.
+6. Whole workspace: `make rust-test`, `make check-spec`, `unlace catalog --check`.
 
 ## 6. Risks
 
 | Risk | Assessment |
 |---|---|
 | Emitted C changes at a large fraction of call sites in every binary | Real and intended. Bounded by the ablation: 0/675 datatest assertions, 1 stage assertion (itself a fix). |
-| **Over-recovery** on unprototyped `__cdecl`/indirect callees — stale outgoing-argument slots from a previous call are accepted as arguments (mydoom: `CloseHandle` renders with 5 arguments) | The main quality regression risk. Upstream Ghidra behaves the same for a genuinely unprototyped callee; it escapes via PE IAT import prototypes, which kuna does not yet apply to indirect-call targets. Sequenced as increment 2. Trading 192 empty argument lists for a handful of over-long ones is the right trade, but the PR must show it, not hide it. |
+| **Over-recovery** on unprototyped `__cdecl`/indirect callees — stale outgoing-argument slots from a previous call are accepted as arguments (mydoom: `CloseHandle` renders with 5 arguments) | The main quality regression risk. Upstream Ghidra behaves the same for a genuinely unprototyped callee; it escapes via PE IAT import prototypes, which unlace does not yet apply to indirect-call targets. Sequenced as increment 2. Trading 192 empty argument lists for a handful of over-long ones is the right trade, but the PR must show it, not hide it. |
 | More live CALL inputs -> more heritage / merge / DCE work | **Measured: real on i386** (+6.2% to +8.2%), within noise on x86-64 and ARM. Proportional to the arguments actually recovered, not a constant factor. Over the +5% budget; see the open question in §2.4. |
 | Local-variable maps change (`scope_local_mark_not_mapped` now un-maps outgoing-argument ranges) | This is the correct behaviour and the mechanism by which pseudo-locals become arguments. Watch for aggregate/array retyping of adjacent stack slots (the SPARC case shows one). |
 | Non-x86 architectures under-tested | SPARC verified (improves). ARM Cortex-M covered by the 30-binary sweep (`chibios/ch.elf`: `short_calls` 628 -> 420 across three opt levels, no failures); MIPS, PPC, AArch64 covered only by the datatest corpus. The robustness sweep in section 5.4 is the gate and has already returned clean. |

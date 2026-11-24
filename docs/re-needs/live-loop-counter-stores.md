@@ -38,7 +38,7 @@ Recover terminating checker loops and the final serial computation.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140002530"
@@ -68,7 +68,7 @@ Recover terminating checker loops and the final serial computation.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140002530"
@@ -125,7 +125,7 @@ THE BINARY SAYS THE COUNTER IS A STACK SLOT AND THE STORE IS REALLY THERE. `unla
   0x1400035ff  MOV dword ptr [RSP + 0x84],EAX      <- the store the output loses
   0x140003606  CMP dword ptr [RSP + 0x84],0x5
   0x14000360e  JGE 0x140003629
-One slot, [RSP+0x84], is loaded, incremented, stored back, and re-read by the test. kuna renders the LOAD side correctly (v55 <= 4) and misplaces the STORE side (v7 = ...). So the load and the store of one stack slot end up on two different variables.
+One slot, [RSP+0x84], is loaded, incremented, stored back, and re-read by the test. unlace renders the LOAD side correctly (v55 <= 4) and misplaces the STORE side (v7 = ...). So the load and the store of one stack slot end up on two different variables.
 
 RULED OUT -- DO NOT SPEND THE BUILDER HERE: DIV-105 / tiedstorekeep (the shipped "marker copy-propagation deletes frame stores" pass) IS NOT THE CAUSE. A/B on the arena binary:
   --option tiedstorekeep off -> for (v57 = 0; v57 <= 4; v7 = v57 + 1)

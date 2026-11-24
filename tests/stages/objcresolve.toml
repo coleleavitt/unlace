@@ -11,7 +11,7 @@
 # `objc_msgSend$inner(self)` to a `Holder *`.
 #
 # Fix: the ObjC analysis hands the engine its class table (own methods,
-# superclass, class_t and selector addresses; `p5_types/kuna_objcrettype.rs`).
+# superclass, class_t and selector addresses; `p5_types/unlace_objcrettype.rs`).
 # P5 `TypeOpCall::getOutputLocal` answers for `alloc`/`new`/`objc_alloc*` on a
 # folded class reference with that class's pointer and for `init.../self/
 # retain/autorelease/copy` with the receiver's class (`objcrettype`); the P9

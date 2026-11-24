@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate `pe_switchshared_x86_64.exe` - a minimal PE32+ carrying the MSVC
-x64 shape GH-1824 reports as missing from `kuna xrefs`: two switches in one
+x64 shape GH-1824 reports as missing from `unlace xrefs`: two switches in one
 function sharing a single hoisted `LEA RDI,[__ImageBase]`, where every case
 body of the first switch ends in a `JMP` to the second dispatch, so a linear
 walk back from the second `JMP RAX` never reaches the base:

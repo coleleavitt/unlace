@@ -127,7 +127,7 @@ fn stripped_go_main_folds_its_stack_growth_prologue_under_auto() {
         eprintln!("verify_go_morestack: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_go_morestack_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_go_morestack_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_stripped");
     if !build_go(&dir, &out_bin) {

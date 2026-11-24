@@ -3,7 +3,7 @@
   "kind": "cli",
   "timeout_s": 120,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile-graph",
     "{{BIN}}",
     "--functions",

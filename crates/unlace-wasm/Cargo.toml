@@ -26,7 +26,7 @@ unlace-decomp.workspace = true
 # mirroring `unlace decompile-all` exactly. No new crate enters the dependency
 # graph.
 object.workspace = true
-# (kuna outlang) `sourcelang::detect_compiler` backs the auto language policy:
+# (unlace outlang) `sourcelang::detect_compiler` backs the auto language policy:
 # a Rust binary renders as Rust unless the caller names a language.
 unlace-analysis.workspace = true
 

@@ -38,15 +38,15 @@ forged chain before it can exhaust the stack.
 `cppproto` gates at the analysis **commit** because it selects between two fact
 sets. This one changes how a *single* fact set is built, inside `load file`, which
 runs upstream of every `option` command — so the live gate is a process env var
-(`kuna_decomp::kuna_typedepth::TYPEDEPTH_ENV`), the `relocobjects` /
+(`unlace_decomp::unlace_typedepth::TYPEDEPTH_ENV`), the `relocobjects` /
 `i386_pie_plt` pattern:
 
 - `p0_knowledge/typedepth.rs` — `TYPEDEPTH_ENV`, `typedepth_enabled()`,
   `set_typedepth_env()`.
-- `Architecture::analysis_typedepth` + a `set_kuna_option` arm that also writes the
+- `Architecture::analysis_typedepth` + a `set_unlace_option` arm that also writes the
   env var (for `option typedepth off` *before* `load file` in one process).
-- `kuna decompile` exports it onto the `decomp_dbg` subprocess;
-  `kuna decompile-all` adds it to `apply_loadtime_env` + `is_loadtime_gate`.
+- `unlace decompile` exports it onto the `decomp_dbg` subprocess;
+  `unlace decompile-all` adds it to `apply_loadtime_env` + `is_loadtime_gate`.
 - `console.rs` maps it for `phase catalog`'s live `current` field.
 
 Full `settableTable` row in `phases.toml` (every field incl. `tier` + `symptoms`)
@@ -80,7 +80,7 @@ mapping byte for byte.
 
 ## 6. Verification
 
-- Four gates + `kuna catalog --check`, every counter **derived** from a fresh green
+- Four gates + `unlace catalog --check`, every counter **derived** from a fresh green
   build (`settable` 92 -> 93, tier analysis 31 -> 32, catalog JSON rows 91 -> 92,
   bytecompat fixture regenerated).
 - Speed: interleaved min-of-N, N >= 13, on the load-dominated surface (the mapper

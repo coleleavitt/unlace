@@ -1,7 +1,7 @@
 ppc32-pic-driver.so -- a PPC32 secure-PLT PIC shared object linked through the
 compiler driver, for the `ppc32picimports` proof
 (crates/unlace-cli/tests/ppc32_imports.rs and
-tests/stages/kuna-ppc32picimports-driver.toml).
+tests/stages/unlace-ppc32picimports-driver.toml).
 
 What it is
   A 5,228-byte stripped big-endian ELF32 shared object. It carries the standard

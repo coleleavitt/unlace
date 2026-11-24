@@ -12,7 +12,7 @@
 #
 # THIS FIXTURE IS THE NEGATIVE CONTROL.  A callee states its return only
 # after its own decompile in a whole-binary `decompile-all`
-# (`kuna_narrowret::record`, called where `park_recovered_proto` is true,
+# (`unlace_narrowret::record`, called where `park_recovered_proto` is true,
 # which only crates/unlace-cli/src/decompile_all.rs sets).  This
 # harness decompiles ONE function from a byte image, so nothing is stated:
 # each callee still narrows its own return exactly as before (#1, #2), each

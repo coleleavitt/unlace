@@ -20,7 +20,7 @@
     "minor": 25
   },
   "by_reject_reason": {
-    "duplicate of batch-silently-omits-explicitly: one root cause (the section-flag-only image_has_executable_content test in unlace-cli/src/decompile_all.rs:1628-1653), one command, one binary, one builder. Its acceptance demanded `decompile-all <BIN> --json` exit NONZERO, which the correct fix -- count > 0 on a binary kuna demonstrably decompiles -- can never satisfy, so held open it was an unclosable need that also invited a builder to ship an error path over working analysis. The mechanism and the residual diagnostic ask are recorded in the survivor's decision log.": 1,
+    "duplicate of batch-silently-omits-explicitly: one root cause (the section-flag-only image_has_executable_content test in unlace-cli/src/decompile_all.rs:1628-1653), one command, one binary, one builder. Its acceptance demanded `decompile-all <BIN> --json` exit NONZERO, which the correct fix -- count > 0 on a binary unlace demonstrably decompiles -- can never satisfy, so held open it was an unclosable need that also invited a builder to ship an error path over working analysis. The mechanism and the residual diagnostic ask are recorded in the survivor's decision log.": 1,
     "duplicate of string-copy-destination-incorrectly: the same KeyCheker.exe challenge, sub_140002240 command, target, probe, and acceptance were already filed in round 3. PR #575 closes the shared resolver-address defect; retain the earlier filing as the canonical closure and preserve this later filing only in the rejected ledger.": 1
   },
   "needs": [
@@ -1335,7 +1335,7 @@
     },
     {
       "need_id": "no-cli-function-boundary-override",
-      "title": "an agent cannot tell kuna where a function starts or ends",
+      "title": "an agent cannot tell unlace where a function starts or ends",
       "track": "tooling",
       "status": "closed",
       "severity": "blocker",
@@ -3378,7 +3378,7 @@
     },
     {
       "need_id": "local-type-assertion-target",
-      "title": "Local type assertion cannot target the register temporary printed by kuna",
+      "title": "Local type assertion cannot target the register temporary printed by unlace",
       "track": "tooling",
       "status": "closed",
       "severity": "major",
@@ -6268,7 +6268,7 @@
     },
     {
       "need_id": "no-disassembly-command",
-      "title": "kuna cannot show instructions for a function or address",
+      "title": "unlace cannot show instructions for a function or address",
       "track": "tooling",
       "status": "closed",
       "severity": "major",
@@ -6299,7 +6299,7 @@
     },
     {
       "need_id": "no-strings-inventory",
-      "title": "kuna cannot list or search the strings in a binary",
+      "title": "unlace cannot list or search the strings in a binary",
       "track": "tooling",
       "status": "closed",
       "severity": "major",
@@ -6418,7 +6418,7 @@
       "pr": null,
       "closed_in_round": null,
       "closing_pr": null,
-      "reject_reason": "duplicate of batch-silently-omits-explicitly: one root cause (the section-flag-only image_has_executable_content test in unlace-cli/src/decompile_all.rs:1628-1653), one command, one binary, one builder. Its acceptance demanded `decompile-all <BIN> --json` exit NONZERO, which the correct fix -- count > 0 on a binary kuna demonstrably decompiles -- can never satisfy, so held open it was an unclosable need that also invited a builder to ship an error path over working analysis. The mechanism and the residual diagnostic ask are recorded in the survivor's decision log.",
+      "reject_reason": "duplicate of batch-silently-omits-explicitly: one root cause (the section-flag-only image_has_executable_content test in unlace-cli/src/decompile_all.rs:1628-1653), one command, one binary, one builder. Its acceptance demanded `decompile-all <BIN> --json` exit NONZERO, which the correct fix -- count > 0 on a binary unlace demonstrably decompiles -- can never satisfy, so held open it was an unclosable need that also invited a builder to ship an error path over working analysis. The mechanism and the residual diagnostic ask are recorded in the survivor's decision log.",
       "score": 13.862944,
       "path": "docs/re-needs/rejected/batch-decompilation-succeeds-bodies.md"
     },

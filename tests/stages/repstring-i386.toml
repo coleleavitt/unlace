@@ -1,4 +1,4 @@
-# kuna GH-1650 `repstring`: SLEIGH lifts an x86 repeat prefix as a loop
+# unlace GH-1650 `repstring`: SLEIGH lifts an x86 repeat prefix as a loop
 # inside the one instruction, so an inlined copy, fill or compare printed as
 # `while (n) { *p = *q; n -= 1; ... }` or
 # `do { if (!n) return 1; ... } while (x == y);`.

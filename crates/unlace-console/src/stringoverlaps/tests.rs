@@ -119,7 +119,7 @@ int main(void) {{
         .unwrap()
         .as_nanos();
     let dir = std::env::temp_dir().join(format!(
-        "kuna-string-overlaps-{}-{stamp}",
+        "unlace-string-overlaps-{}-{stamp}",
         std::process::id()
     ));
     std::fs::create_dir(&dir).unwrap();

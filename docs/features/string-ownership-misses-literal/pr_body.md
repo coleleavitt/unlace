@@ -1,6 +1,6 @@
 ## The problem
 
-`kuna strings` and `kuna xrefs` lose every reference a switch case body forms: the
+`unlace strings` and `unlace xrefs` lose every reference a switch case body forms: the
 reference walk's successors are an instruction's static branch targets plus
 fall-through, and a computed jump has neither, so the walk stops dead at the
 dispatch and the case bodies are never decoded. The fixture added here is the
@@ -8,7 +8,7 @@ reduction — a `dispatch` whose four cases each push a literal — and on the
 unpatched tree four of its five literals belong to nobody:
 
 ```console
-$ kuna strings decompiler/crates/kuna-analysis/tests/fixtures/switchtable_i386 \
+$ unlace strings decompiler/crates/unlace-analysis/tests/fixtures/switchtable_i386 \
       --filter 'switch case alpha reached' --json
       "address_hex": "0x101010",
       "text": "switch case alpha reached",
@@ -55,10 +55,10 @@ tests cover the admission rules directly, and
 Swept 76 crackme and decbench images before/after: 3 changed, 20 references
 gained, **zero lost**. On `Cube.exe` three strings also moved off an address
 inside `inflate`'s own extent onto `inflate` itself, which the walk could not
-reach past the `state->mode` switch. `kuna strings` on a 7 MB PE is unchanged
+reach past the `state->mode` switch. `unlace strings` on a 7 MB PE is unchanged
 (22.9 s → 23.1 s, median of 3).
 
 `make test` 675/675 PARITY OK · `make test-stages` PARITY OK · `make rust-test`
-green · `make check-spec` OK · `make test-cli` 53/53 · `kuna catalog --check` OK.
+green · `make check-spec` OK · `make test-cli` 53/53 · `unlace catalog --check` OK.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

@@ -3,7 +3,7 @@
   "probe_id": "a-012676c784fc",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x140001000",

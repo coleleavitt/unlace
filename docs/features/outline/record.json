@@ -10,7 +10,7 @@
   "tier": "transform",
   "destructive": true,
   "report_only": false,
-  "depends_on": "almostregion (shares kuna_check_region and build_scratch)",
+  "depends_on": "almostregion (shares unlace_check_region and build_scratch)",
 
   "witness": {
     "stage_test": "tests/stages/outline.xml",

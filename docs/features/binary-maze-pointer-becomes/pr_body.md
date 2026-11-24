@@ -13,7 +13,7 @@ unsigned long probe(void) { return strlen((const char *)maze) + strlen(merged); 
 int main(void) { return (int)probe(); }
 C
 $ gcc -O0 -no-pie -fno-builtin -o blob blob.c && strip blob
-$ kuna decompile ./blob 0x401136 --addr
+$ unlace decompile ./blob 0x401136 --addr
 long sub_401136(void)
 {
   ...
@@ -27,7 +27,7 @@ bytes of packed data whose first row happens to be zeroes, `merged` is a real
 empty string. The blob's address is gone.
 
 The witness is crackmes.one `60be2ad433c5d410b8842c95` (`Sabloom Text 6.exe`),
-where `sub_402020` walks a 585-byte packed maze at `0x403550`: kuna emitted
+where `sub_402020` walks a 585-byte packed maze at `0x403550`: unlace emitted
 `v16 = ""; v21 = "";` and then indexed past the terminator, and `0x403550`
 appeared nowhere in the function while `0x403511` and `0x403799` around it
 survived.

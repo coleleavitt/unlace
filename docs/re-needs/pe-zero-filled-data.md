@@ -44,7 +44,7 @@ Read the initial global state at 0x140008740.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "read",
     "{{BIN}}",
     "0x140008740",
@@ -79,7 +79,7 @@ Read the initial global state at 0x140008740.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "read",
     "{{BIN}}",
     "0x140002740",

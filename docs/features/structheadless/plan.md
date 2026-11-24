@@ -37,10 +37,10 @@ structure-recovery`, tier `transform`, default `off`. Registered in
 
 ## Tests
 
-* Unit: `kuna_structheadless::tests` (option surface; the headless offset
-  shape; what gives a pointee; a minted word), `kuna_calleevote::tests`
+* Unit: `unlace_structheadless::tests` (option surface; the headless offset
+  shape; what gives a pointee; a minted word), `unlace_calleevote::tests`
   (`a_callers_argument_vector_replaces_a_headless_record_only_under_the_rule`,
-  `a_callers_synthesized_record_does_not_replace_a_headless_record`) and `kuna_structsynth::tests::a_record_read_only_past_its_start_needs_the_headless_rule`
+  `a_callers_synthesized_record_does_not_replace_a_headless_record`) and `unlace_structsynth::tests::a_record_read_only_past_its_start_needs_the_headless_rule`
   (`accepts_record` admits `ls`'s `sub_53e7` layout only under the rule, and
   still declines an index, a uniform run and one narrow field).
 * Stage: `tests/stages/structheadless-closed-only.toml`, a negative control -- the
@@ -48,7 +48,7 @@ structure-recovery`, tier `transform`, default `off`. Registered in
   passes (`off`, `closed`) read through the untyped pointer and mint no record, as the
   `calleevote` stage does.
 * CLI, the two-pass coverage over the whole binary-to-decompile path, on the
-  fixture `kuna-analysis/tests/fixtures/structheadless_x86_64` (source beside
+  fixture `unlace-analysis/tests/fixtures/structheadless_x86_64` (source beside
   it): `structheadless-off-leaves-a-headless-record-untyped.json` (off: every read
   through a cast `void *`) and `structheadless-closed-reads-a-record-past-its-start.json`
   (closed: `mode_of(struct_N *a0)` reads fields; the qsort callback `by_link`

@@ -6,20 +6,20 @@ same badness-scanner counts the in-tree ghidra-sim harness pins.
 This is the manual/dev complement to `cargo test --release -p unlace-ghidra -- --include-ignored` (which needs no Ghidra
 at all): it validates the pieces the sim cannot — the extension/exepath spawn,
 Java's real query answers, and Java-side rendering (`getC()` runs the token
-stream through IllegalCharCppTransformer, which is where kuna's over-wide type
+stream through IllegalCharCppTransformer, which is where unlace's over-wide type
 tokens become `unsigned_long__a1`).
 
 Environment:
   GHIDRA_INSTALL_DIR    Ghidra release root (required; pyghidra needs it)
-  KUNA_GHIDRA_EXE       path to the unlace_ghidra binary
+  UNLACE_GHIDRA_EXE       path to the unlace_ghidra binary
                         (default: <repo>/target/release/unlace_ghidra)
-  KUNA_SMOKE_BINARY     the program to analyze (required)
-  KUNA_SMOKE_FUNCTIONS  comma-separated function names (default: main plus the
+  UNLACE_SMOKE_BINARY     the program to analyze (required)
+  UNLACE_SMOKE_FUNCTIONS  comma-separated function names (default: main plus the
                         two largest non-thunk functions)
-  KUNA_SMOKE_OUT        output directory (default: ./live-smoke-out)
+  UNLACE_SMOKE_OUT        output directory (default: ./live-smoke-out)
 
 Run it inside a venv with pyghidra installed (see README.md):
-  python3 kuna_vs_stock.py
+  python3 unlace_vs_stock.py
 """
 
 import os
@@ -29,13 +29,13 @@ import difflib
 import traceback
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-KUNA_GHIDRA = os.environ.get(
-    "KUNA_GHIDRA_EXE",
+UNLACE_GHIDRA = os.environ.get(
+    "UNLACE_GHIDRA_EXE",
     os.path.join(REPO, "target", "release", "unlace_ghidra"),
 )
-BINARY = os.environ.get("KUNA_SMOKE_BINARY")
-FUNCTIONS = [f for f in os.environ.get("KUNA_SMOKE_FUNCTIONS", "").split(",") if f]
-OUT = os.path.abspath(os.environ.get("KUNA_SMOKE_OUT", "live-smoke-out"))
+BINARY = os.environ.get("UNLACE_SMOKE_BINARY")
+FUNCTIONS = [f for f in os.environ.get("UNLACE_SMOKE_FUNCTIONS", "").split(",") if f]
+OUT = os.path.abspath(os.environ.get("UNLACE_SMOKE_OUT", "live-smoke-out"))
 
 # ---------------------------------------------------------------------------
 # Badness scanners — a small python re-implementation of the rust harness's
@@ -116,7 +116,7 @@ def scan(text):
 
 
 # ---------------------------------------------------------------------------
-# The exepath reflection swap (the same seam the KunaDecompiler extension uses)
+# The exepath reflection swap (the same seam the UnlaceDecompiler extension uses)
 # ---------------------------------------------------------------------------
 
 
@@ -155,11 +155,11 @@ def decompile_one(ifc, func, out_path, timeout=120):
 
 def main():
     if not BINARY:
-        print("usage: KUNA_SMOKE_BINARY=/path/to/prog [KUNA_SMOKE_FUNCTIONS=a,b] "
-              "python3 kuna_vs_stock.py")
+        print("usage: UNLACE_SMOKE_BINARY=/path/to/prog [UNLACE_SMOKE_FUNCTIONS=a,b] "
+              "python3 unlace_vs_stock.py")
         sys.exit(1)
-    if not os.path.exists(KUNA_GHIDRA):
-        print(f"FATAL: unlace_ghidra not built at {KUNA_GHIDRA} "
+    if not os.path.exists(UNLACE_GHIDRA):
+        print(f"FATAL: unlace_ghidra not built at {UNLACE_GHIDRA} "
               "(cargo build --release -p unlace-ghidra)")
         sys.exit(1)
     os.makedirs(OUT, exist_ok=True)
@@ -174,7 +174,7 @@ def main():
     with pyghidra.open_program(
         BINARY,
         project_location=os.path.join(OUT, "ghidra_project"),
-        project_name="kuna_live_smoke",
+        project_name="unlace_live_smoke",
         analyze=True,
     ) as flat:
         program = flat.getCurrentProgram()
@@ -208,7 +208,7 @@ def main():
             print("FATAL: no target functions")
             sys.exit(1)
 
-        for core, exe in (("stock", None), ("kuna", KUNA_GHIDRA)):
+        for core, exe in (("stock", None), ("unlace", UNLACE_GHIDRA)):
             field.set(None, exe)
             print(f"[+] {core} pass (exepath override: {field.get(None)})")
             ifc = DecompInterface()
@@ -231,7 +231,7 @@ def main():
         if name not in names:
             names.append(name)
     for name in names:
-        stock_c = kuna_c = ""
+        stock_c = unlace_c = ""
         for core, n, diag, counts in report:
             if n != name:
                 continue
@@ -244,10 +244,10 @@ def main():
             if core == "stock":
                 stock_c = text
             else:
-                kuna_c = text
-        if stock_c and kuna_c:
+                unlace_c = text
+        if stock_c and unlace_c:
             lines.append(f"## diff_ratio({name}) = "
-                         f"{diff_ratio(kuna_c, stock_c):.3f} (kuna vs stock)")
+                         f"{diff_ratio(unlace_c, stock_c):.3f} (unlace vs stock)")
         lines.append("")
     report_path = os.path.join(OUT, "REPORT.md")
     with open(report_path, "w") as fh:

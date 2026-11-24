@@ -26,7 +26,7 @@ ZSt9terminatev
 ZN10__cxxabiv111__terminateEPFvvE
 pthread_exit
 #
-# (kuna divergence, DIV-21) Genuinely-UNCONDITIONAL no-return libc/BSD functions that
+# (unlace divergence, DIV-21) Genuinely-UNCONDITIONAL no-return libc/BSD functions that
 # upstream Ghidra's ELF list omits (it catches them only via its default-on discovered
 # >=3-evidence analyzer). Each ALWAYS exits/aborts — safe to mark unconditionally
 # (unlike error()/error_at_line(), which RETURN for status 0 and are handled per-call-
@@ -44,7 +44,7 @@ assert_perror_fail
 chk_fail
 libc_fatal
 #
-# (kuna divergence, DIV-78) The libstdc++ std::__throw_* exception-throw helpers
+# (unlace divergence, DIV-78) The libstdc++ std::__throw_* exception-throw helpers
 # (<bits/functexcept.h>, plus __throw_regex_error from <bits/regex_error.h>).
 # Every one is declared __attribute__((__noreturn__)) upstream and every body ends
 # in _GLIBCXX_THROW_OR_ABORT -- a throw, or abort() when built -fno-exceptions -- so
@@ -103,7 +103,7 @@ throw_out_of_range_fmt
 throw_bad_function_call
 throw_bad_array_new_length
 
-# (kuna) Declared no-return in the host's public headers and missing above.
+# (unlace) Declared no-return in the host's public headers and missing above.
 # glibc 2.43 /usr/include: stdlib.h `_Exit`, threads.h `thrd_exit`, pthread.h
 # `__pthread_unwind_next` (all `__attribute__ ((__noreturn__))`). assert.h's
 # `__assert` is left out: stripped to `assert` it would also name a program's
@@ -164,7 +164,7 @@ ZNSt3__120__throw_bad_weak_ptr*
 ZNSt3__119__throw_regex_error*
 ZNSt3__122__libcpp_verbose_abort*
 
-# (kuna, #28) More names a public declaration or a body that cannot return marks
+# (unlace, #28) More names a public declaration or a body that cannot return marks
 # no-return, each checked against its source:
 # libsupc++ unwind-cxx.h: `__cxa_call_terminate` and `__cxxabiv1::__unexpected`
 # are `__attribute__((__noreturn__))` (`__terminate` is above).

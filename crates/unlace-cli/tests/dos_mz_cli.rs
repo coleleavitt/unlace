@@ -173,7 +173,7 @@ fn unlace(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
-        .expect("run kuna")
+        .expect("run unlace")
 }
 
 fn written(stem: &str, bytes: &[u8]) -> std::path::PathBuf {

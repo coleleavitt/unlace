@@ -1,7 +1,7 @@
 """Count folds that drop a narrowing, and uncast `f(..) == -1` compares, between two decompile-all dumps.
 
 Usage: narrowcount.py <dir>...   where each <dir> holds <tag>-off.json / <tag>-on.json pairs
-(`kuna decompile-all <bin> --json`, with and without `--option foldcallretphi off`).
+(`unlace decompile-all <bin> --json`, with and without `--option foldcallretphi off`).
 
 A site counts when, in a changed function, a callee's `vN = f(` assignment count drops, the callee is
 printed with an 8-byte return, the spilled local was declared 1-4 bytes, and no remaining call text

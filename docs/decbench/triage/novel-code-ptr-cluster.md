@@ -5,7 +5,7 @@ group_id: crazyflie::dwHandleInterrupt (cluster record — 8 cases, 5 projects, 
 status: feature-candidate
 tier: N
 margin: 0
-fresh_verdict: the `(code *)` wart is THREE unrelated causes, not one. 80% of kuna's excess over ghidra is ARM/Thumb only and comes from ONE dead accessor — `RuleFuncPtrEncoding` reads a hard-coded `funcptr_align() = 0` stub, so the SLEIGH `BXWritePC` mask `& 0xfffffffe` survives to the C and blocks the `code *` back-propagation; kuna emits 4,673 masks corpus-wide vs ghidra's 579 and ZERO `(code **)` on any ARM binary. A second, smaller cause is the default-ON `inferfuncentry` mis-firing on integer constants that collide with a function entry (wrong code, closed by an existing flag). The third and largest by raw COUNT is ghidra-identical untyped-callback rendering and is not a kuna defect at all.
+fresh_verdict: the `(code *)` wart is THREE unrelated causes, not one. 80% of unlace's excess over ghidra is ARM/Thumb only and comes from ONE dead accessor — `RuleFuncPtrEncoding` reads a hard-coded `funcptr_align() = 0` stub, so the SLEIGH `BXWritePC` mask `& 0xfffffffe` survives to the C and blocks the `code *` back-propagation; unlace emits 4,673 masks corpus-wide vs ghidra's 579 and ZERO `(code **)` on any ARM binary. A second, smaller cause is the default-ON `inferfuncentry` mis-firing on integer constants that collide with a function entry (wrong code, closed by an existing flag). The third and largest by raw COUNT is ghidra-identical untyped-callback rendering and is not a unlace defect at all.
 option_closing: inferfuncentry off (for the second cause only; nothing closes the ARM cause — all 84 non-default option settings swept)
 feature_slug: funcptralign
 scope: small
@@ -15,11 +15,11 @@ confidence: high
 ## What was actually verified
 
 Eight NOVEL rows whose `defects` column is driven by `code_ptr`, re-decompiled today
-(`decompiler/target/release/unlace`, `SLEIGHHOME=/home/mahaloz/github/kuna/specs`), each
+(`decompiler/target/release/unlace`, `SLEIGHHOME=/home/mahaloz/github/unlace/specs`), each
 against the stripped binary at the case address, plus the ghidra/ida panes and the original
 `.i` source.
 
-| case | arch | kuna `(code *)` | ghidra `(code *)` | cause | verdict |
+| case | arch | unlace `(code *)` | ghidra `(code *)` | cause | verdict |
 |---|---|---|---|---|---|
 | `O2-noinline-crazyflie-cf2-dwHandleInterrupt` | ARM Cortex-M4 | 6 | 3 | **thumb-mask** | feature-candidate |
 | `O2-noinline-libopencm3-msc-msc_data_rx_cb` | ARM Cortex-M | 6 | 3 | **thumb-mask** | feature-candidate |
@@ -30,9 +30,9 @@ against the stripped binary at the case address, plus the ghidra/ida panes and t
 | `O2-noinline-libacl-libacl.so.1.1-set_acl_fd` | x86-64 | 12 | 19 | untyped callback | not-a-defect (already recorded) |
 | `O2-noinline-tar-tar-verify_volume` | x86-64 | **0** | 5 | — | already-fixed (DIV-34/36) |
 
-Four of the eight top-ranked `code_ptr` rows are rows where kuna emits **fewer or equal**
+Four of the eight top-ranked `code_ptr` rows are rows where unlace emits **fewer or equal**
 `(code *)` than the co-best rival. The wart counter is measuring an inherited Ghidra
-rendering convention, not a kuna defect (see *Metric note*).
+rendering convention, not a unlace defect (see *Metric note*).
 
 ---
 
@@ -75,14 +75,14 @@ void dwHandleInterrupt(dwDevice_t *dev) {
 ```
 
 The fields are `dwHandler_t` function pointers. The source performs **no** bit-clear. So
-kuna's C asserts the program computes `handler & ~1` before every callback — bookkeeping the
+unlace's C asserts the program computes `handler & ~1` before every callback — bookkeeping the
 machine does for ISA mode, not program semantics — and, because the mask is in the way, the
 field never acquires a function-pointer type, so the load stays `*(uint4 *)` and every call
 site needs an extra `(code *)` cast that ghidra does not need.
 
 `libopencm3::msc_data_rx_cb` and `nuttx::med3` are the same shape.  `med3` is the sharpest
 version: the source parameter is genuinely `int (*cmp)(...)`, ida prints
-`int (*a4)(void)`, ghidra prints `code *param_4`, kuna prints `uint4 a3` and then
+`int (*a4)(void)`, ghidra prints `code *param_4`, unlace prints `uint4 a3` and then
 `(*(code *)(a3 & 0xfffffffe))(a0,a2)` five times.
 
 ### Root cause, by instrumentation
@@ -163,10 +163,10 @@ So the architecture-side plumbing is complete and only the rule's own accessor i
 
 **Step 5 — the consequence on the type, measured.** With the AND out of the way, upstream's
 `TypeOpCallind` types `in(0)` as pointer-to-code and `TypeOpLoad` back-propagates it onto
-the LOAD pointer, giving ghidra's `*(code **)(p)`. Corpus evidence that kuna's machinery
+the LOAD pointer, giving ghidra's `*(code **)(p)`. Corpus evidence that unlace's machinery
 does exactly this whenever no mask intervenes:
 
-| | kuna `(code **)` | note |
+| | unlace `(code **)` | note |
 |---|---|---|
 | x86 / x86-64 projects | 2,914 (openssh 902, x0r-usb 663, zlib 369, bash 230, coreutils 181, …) | no mask on the target → type propagates |
 | **every ARM project** (crazyflie, betaflight, cleanflight, libopencm3, nuttx, chibios, riot-os, freertos, u-boot) | **0** | mask on every target |
@@ -185,16 +185,16 @@ recall issue, not a fix). `condfold on|wide` swept explicitly: 6.
 
 ### Breadth
 
-Stored kuna artifacts (regenerated 2026-08-01 23:35, verified identical to today's build on
+Stored unlace artifacts (regenerated 2026-08-01 23:35, verified identical to today's build on
 all four cases re-run here):
 
-- `& 0xfffffffe` in emitted C: **kuna 4,673 vs ghidra 579** corpus-wide. The excess is
+- `& 0xfffffffe` in emitted C: **unlace 4,673 vs ghidra 579** corpus-wide. The excess is
   entirely ARM: crazyflie 1808/38, betaflight 927/0, libopencm3 637/131, cleanflight 564/24,
   nuttx 288/0, chibios 64/…; the x86 projects are at parity (openssh 121/131, bash 74/72,
   iproute2 79/73, coreutils 23/25 — those are real source-level `& ~1`).
 - Thumb-masked indirect calls: **4,027 occurrences in 2,496 function-instances across 97
   binary-instances** in 9 projects.
-- Of the 3,804 `(code *)` occurrences where kuna exceeds ghidra on the same function,
+- Of the 3,804 `(code *)` occurrences where unlace exceeds ghidra on the same function,
   **3,033 (80%) carry the Thumb mask**.
 
 ### Owning phase & mechanism
@@ -212,7 +212,7 @@ all four cases re-run here):
   the natural companion to #231's paragraph.
 
 **Gating.** This is a strict bug fix in the same sense as #231: the *processor cspec*, not
-kuna, declares `<funcptr align="2"/>`, upstream Ghidra honours it, and the emitted C
+unlace, declares `<funcptr align="2"/>`, upstream Ghidra honours it, and the emitted C
 currently states an operation the program does not perform. No new option, no DIV row (it
 removes a divergence). Blast radius is bounded by the cspec: x86/x86-64 declare no
 `<funcptr>` (`funcptr_align == 0`), so the rule stays inert there and the whole datatest
@@ -256,7 +256,7 @@ unsigned long copy_fd(unsigned int a0,code *a1) // return-dupe
 ```
 
 Source is `copy_fd (int src_fd, uintmax_t n_bytes)` with `BUFSIZ`-style chunking; ida prints
-`size_t nbytes`, ghidra `ulong param_2` and the plain literal `0x2000`. kuna types a
+`size_t nbytes`, ghidra `ulong param_2` and the plain literal `0x2000`. unlace types a
 `size_t` as `code *` and prints the loop chunk size as a **function name**.
 
 Closed by an existing flag:
@@ -288,11 +288,11 @@ constants *is* 0x8000. One accidental collision retypes the whole return HighVar
 returns a bit flag. `--option inferfuncentry off` restores `unsigned long` and every
 literal.
 
-**Mechanism.** `inferfuncentry` (P5 / `const-pointer`, default **on**, kuna's own, GH-6930,
+**Mechanism.** `inferfuncentry` (P5 / `const-pointer`, default **on**, unlace's own, GH-6930,
 `p5_types/inferfuncentry.rs`) exists to skip `ActionConstantPtr::isPointer`'s
 `bit_transitions < 3` rejection when the constant resolves exactly to a function entry —
 written for a real function at a power-of-two *image base* (`0x100000`). In a stripped PIE
-ELF the image base is 0, kuna's analysis tier synthesises `_DT_INIT`/`_DT_FINI` function
+ELF the image base is 0, unlace's analysis tier synthesises `_DT_INIT`/`_DT_FINI` function
 symbols from the dynamic tags, and ordinary `.text` entries sit at low addresses — so
 0x2000, 0x8000, 0x1000 are all "exact function entries" and every buffer size and bit flag
 in the binary is a candidate.
@@ -335,15 +335,15 @@ Two independent problems with `scripts/decbench/novel.py:50`
 (`"code_ptr": (re.compile(r"\(code\s*\*\)"), 8)`):
 
 1. **It is absolute, not relative.** `(code *)` is inherited Ghidra rendering; four of the
-   eight top `code_ptr` rows are rows where kuna emits **fewer** than the co-best rival.
+   eight top `code_ptr` rows are rows where unlace emits **fewer** than the co-best rival.
    The pool's #1 entry — `libacl::set_acl_fd`, defect score 152, entirely `code_ptrx19` —
-   is a pane where ghidra emits 19 and kuna 12. Weight 8 (the second-highest after
-   `halt_baddata`) then dominates the ranking. Scoring `max(0, kuna − best_rival)`, or
+   is a pane where ghidra emits 19 and unlace 12. Weight 8 (the second-highest after
+   `halt_baddata`) then dominates the ranking. Scoring `max(0, unlace − best_rival)`, or
    restricting the pattern to the ARM-masked form
    `\(code \*\)\([^;\n]*&\s*0xfffffffe`, would surface the 2,496 genuinely-defective ARM
    functions instead.
 2. **The published counts are stale.** `docs/decbench/novel.json` was mined 2026-08-01
-   17:28; the tree's kuna artifacts were regenerated 23:35–23:55 the same day. Recomputing
+   17:28; the tree's unlace artifacts were regenerated 23:35–23:55 the same day. Recomputing
    `defect_profile` over the current artifacts: 212 `code_ptr` cases, **408 → 303**
    occurrences, 47 of them now zero (`tar::verify_volume` 5→0,
    `coreutils::copy_fd` 4→1, `bash::edit_and_execute_command` 2→0). Re-run `novel` before
@@ -355,7 +355,7 @@ Two independent problems with `scripts/decbench/novel.py:50`
 
 One PR, `feat/decbench-funcptralign`, P3, strict bug fix, no flag: make
 `RuleFuncPtrEncoding` read the live `funcptr_align`. It is the single largest
-kuna-specific correctness/readability defect in the NOVEL pool by breadth (2,496 function
+unlace-specific correctness/readability defect in the NOVEL pool by breadth (2,496 function
 instances, 9 projects, 3 of the 4 cases triaged here), it has zero GED value, and it is a
 one-function change whose plumbing already exists and is already proven live by an existing
 stage test. File the `inferfuncentry` collision narrowing as a separate, smaller case.

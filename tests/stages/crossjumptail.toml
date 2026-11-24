@@ -1,4 +1,4 @@
-# kuna `crossjumprevert`, past one block (`ActionCrossJumpTail`, P8
+# unlace `crossjumprevert`, past one block (`ActionCrossJumpTail`, P8
 # "goto-quality"): after `gotosink`, a goto to a shared run of statements is
 # rewritten when flow after the run is known.  The run is copied after the
 # jump when both paths reach the same place, the code after the jumping
@@ -137,12 +137,12 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-CROSSJUMPTAIL #1: the jump to the shared call prints only with the option off'
+name = 'UNLACE-CROSSJUMPTAIL #1: the jump to the shared call prints only with the option off'
 count = 1
 literal = 'goto label_8d40;'
 
 [[match]]
-name = 'KUNA-CROSSJUMPTAIL #2: by default the arm that jumped ends in its own copy of the call'
+name = 'UNLACE-CROSSJUMPTAIL #2: by default the arm that jumped ends in its own copy of the call'
 count = 1
 regex = [
     '^        v4 = 0x2cb44;$',
@@ -152,7 +152,7 @@ regex = [
 ]
 
 [[match]]
-name = 'KUNA-CROSSJUMPTAIL #3: by default the arm into the store run gets its own copy of the store'
+name = 'UNLACE-CROSSJUMPTAIL #3: by default the arm into the store run gets its own copy of the store'
 count = 1
 regex = [
     "^        if \\(\\*\\(char \\*\\)\\(v4 \\+ v3 \\+ 1\\) != '\\\\n'\\) \\{$",
@@ -161,7 +161,7 @@ regex = [
 ]
 
 [[match]]
-name = 'KUNA-CROSSJUMPTAIL #4: the jump to the call ending the loop body is a copy and continue by default'
+name = 'UNLACE-CROSSJUMPTAIL #4: the jump to the call ending the loop body is a copy and continue by default'
 count = 1
 regex = [
     '^          v4 = sub_dc08\(v3\);$',
@@ -169,7 +169,7 @@ regex = [
 ]
 
 [[match]]
-name = "KUNA-CROSSJUMPTAIL #5: a switch case that jumped into a later case's call ends in its own call and break by default"
+name = "UNLACE-CROSSJUMPTAIL #5: a switch case that jumped into a later case's call ends in its own call and break by default"
 count = 1
 regex = [
     '^      v9 = 0;$',
@@ -178,16 +178,16 @@ regex = [
 ]
 
 [[match]]
-name = 'KUNA-CROSSJUMPTAIL #6: the jumps between switch cases print only with the option off'
+name = 'UNLACE-CROSSJUMPTAIL #6: the jumps between switch cases print only with the option off'
 count = 2
 literal = 'goto label_aba4;'
 
 [[match]]
-name = 'KUNA-CROSSJUMPTAIL #7: three gotos by default and eleven with the option off'
+name = 'UNLACE-CROSSJUMPTAIL #7: three gotos by default and eleven with the option off'
 count = 14
 literal = 'goto label_'
 
 [[match]]
-name = 'KUNA-CROSSJUMPTAIL #8: three labels by default and ten with the option off'
+name = 'UNLACE-CROSSJUMPTAIL #8: three labels by default and ten with the option off'
 count = 13
 regex = '^label_'

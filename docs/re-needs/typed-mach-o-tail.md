@@ -52,7 +52,7 @@ Before the repair, even the stronger two-parameter declaration below rendered
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x100003ede",
@@ -84,7 +84,7 @@ Before the repair, even the stronger two-parameter declaration below rendered
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "printf",
@@ -135,7 +135,7 @@ form.
 
 - IDA, Ghidra, and angr backends were attempted through the repository's
   decompiler workflow. Each server exited before registering, so no external
-  reference pseudocode was available. The machine instruction and Kuna raw
+  reference pseudocode was available. The machine instruction and Unlace raw
   p-code above are the available ground truth.
 
 ## Instances

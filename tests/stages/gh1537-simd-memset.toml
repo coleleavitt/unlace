@@ -14,7 +14,7 @@
 # (constant-fill run recovery), exercised here on a GLOBAL destination and
 # RIP-relative SIMD stores rather than GH-9230's stack buffer.  No new
 # code: the fix is pure ROUTING through the existing P0 assertion
-# `option memsetrecover on` (kuna_memsetsequence, GH-9230) - direct
+# `option memsetrecover on` (unlace_memsetsequence, GH-9230) - direct
 # evidence that an exposed sub-stage generalizes across issues.
 #
 # Pass 1 (default): assertion #1 reproduces the bug (element stores).

@@ -1,6 +1,6 @@
 # dallparity -- `decompile-all` and `decompile` do not decompile the same way
 
-Filed against every whole-binary surface: `kuna decompile-all`, `kuna
+Filed against every whole-binary surface: `unlace decompile-all`, `unlace
 decompile-project`, the WASM/browser front-end, and therefore decbench and every
 agent-facing whole-binary workflow. The witness suite is the vendored
 `fmt_{x86_64,aarch64,arm,riscv64}` fixtures plus 13 real decbench binaries (C and
@@ -13,17 +13,17 @@ For the same binary, the same address and the same mode, the two surfaces
 produce different C -- and the whole-binary one is the weaker:
 
 ```
-$ kuna decompile      O0/zlib/stripped/minigzip --addr 0x14c9
+$ unlace decompile      O0/zlib/stripped/minigzip --addr 0x14c9
 void error(char *a0)                       # correct
-$ kuna decompile-all  O0/zlib/stripped/minigzip --addr 0x14c9
+$ unlace decompile-all  O0/zlib/stripped/minigzip --addr 0x14c9
 void error(unsigned long a0)               # weaker
-$ kuna decompile-all  ... --mode aggressive
+$ unlace decompile-all  ... --mode aggressive
 void error(unsigned long a0)               # unchanged: the mode is ignored
-$ kuna decompile-all  ... --option formatstring on
+$ unlace decompile-all  ... --option formatstring on
 void error(unsigned long a0)               # unchanged: the option is a NO-OP
 ```
 
-`kuna decompile --option formatstring off` reproduces the weak form exactly, so
+`unlace decompile --option formatstring off` reproduces the weak form exactly, so
 the missing ingredient is the `formatstring` feature and `decompile-all` silently
 ignores it -- including when a **mode** turns it on. `--mode aggressive` names
 `formatstring on` (`p0_knowledge/modes.rs (AGGRESSIVE_OVERRIDES)`), and `auto`
@@ -37,7 +37,7 @@ The two surfaces each called the engine drive themselves:
 
 | surface | entry point |
 |---|---|
-| console `decompile` (what `kuna decompile` drives in its `decomp_dbg` subprocess) | `console/src/ifacedecomp.rs`, `IfcDecompile` |
+| console `decompile` (what `unlace decompile` drives in its `decomp_dbg` subprocess) | `console/src/ifacedecomp.rs`, `IfcDecompile` |
 | whole-binary loop (`decompile-all` / `decompile-project` / wasm) | `console/src/project.rs (decompile_targets)` |
 
 `IfcDecompile` wrapped `decompile_func_full_with_override_dyn` in Ghidra's
@@ -73,7 +73,7 @@ was therefore measured on the weaker rendering.
 
 Both surfaces were diffed by code and by output. The output diff is 182
 `(binary, mode, address)` records over 13 binaries, comparing
-`kuna decompile --addr X --mode M` against `kuna decompile-all --addr X --mode M`
+`unlace decompile --addr X --mode M` against `unlace decompile-all --addr X --mode M`
 and normalizing only the function name.
 
 | # | Class | Stronger side | Verdict |
@@ -85,7 +85,7 @@ and normalizing only the function name.
 | 5 | flow-extent bound: the console re-drives with `fd.get_size()` from the prior unbounded follow, the loop passes `0` (unbounded) | -- | equivalent; 0 residual differences in 182 records |
 | 6 | function naming under `--addr` (`function_display_name_across_scopes` vs the canonical `find_entry_at` record) | -- | 0 name differences in 182 records |
 | 7 | console-seeded facts (`map addr`, `parse line extern`, `map hash`, `type varnode`, `override flow`/`prototype`, `map param`) | `decompile` | not reachable from either CLI; not a divergence for the same input |
-| 8 | `print raw` / `--regions` exist only on `kuna decompile` | -- | output-format surface, not a decompile difference |
+| 8 | `print raw` / `--regions` exist only on `unlace decompile` | -- | output-format surface, not a decompile difference |
 
 Classes 1 and 2 are one root cause and one fix. Classes 3 and 4 are deliberate
 whole-binary policy and are left alone -- both are already recorded (DIV-20 and
@@ -126,7 +126,7 @@ console persists them into its own `pending_proto_overrides` so a later
 re-decompile of the same function keeps the typing; the whole-binary loop drops
 them, because each function is decompiled exactly once and persisting them across
 functions would make a whole-binary run order-dependent and, again, different
-from `kuna decompile`.
+from `unlace decompile`.
 
 ## What it costs, and why the feature is now an opt-in
 
@@ -149,7 +149,7 @@ applies: **`formatstring` is removed from `AGGRESSIVE_OVERRIDES`** and joins
 `modes.rs`'s own invariant test enforces. Its shipped option default was already
 `off`; only the preset made it effectively on, and (before this PR) only on the
 one surface that ran the loop. So the net effect is that **no surface pays unless
-asked, and both deliver when asked** -- which also stops `kuna decompile` being
+asked, and both deliver when asked** -- which also stops `unlace decompile` being
 charged for a feature `decompile-all` never delivered.
 
 The default path is free, measured rather than assumed -- default vs an explicit
@@ -193,12 +193,12 @@ source CFGs, three O0 C projects: `type_match` perfects **80 -> 88** of 1,133 sc
 with cronie's GED mean 9.8844 -> 7.8241. The ten `type_match` regressions are the
 `formatstring` feature's own known cost -- a `%c` argument typed `uint1` where the C variadic
 promotion makes the parameter an `int`, and a format-derived width narrowing a recovered
-`uLong` -- which `kuna decompile` has always produced; this PR only makes the whole-binary
+`uLong` -- which `unlace decompile` has always produced; this PR only makes the whole-binary
 surface see them too.
 
 ## Not fixed here, and why
 
-**`kuna decompile-all` cannot load an unstripped C++ binary that uses an
+**`unlace decompile-all` cannot load an unstripped C++ binary that uses an
 anonymous namespace.** A separate, pre-existing, load-tier root cause, reported
 in full in the PR body: the loader's name-only demangler reduces
 `leveldb::(anonymous namespace)::HandleDumpCommand` to

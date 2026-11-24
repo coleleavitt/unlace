@@ -44,7 +44,7 @@ Navigate from the Correct string to main.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "strings",
     "{{BIN}}",
     "--filter",
@@ -79,7 +79,7 @@ Navigate from the Correct string to main.
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "strings",
     "{{BIN}}",
     "--filter",

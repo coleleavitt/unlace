@@ -12,7 +12,7 @@
 # third-party iOS app).
 #
 # Stage / sub-stage: P1 external-refinement, the Swift metadata pass
-# (`unlace-analysis/src/analyzers/swift/kuna_swiftcall.rs`), with the model
+# (`unlace-analysis/src/analyzers/swift/unlace_swiftcall.rs`), with the model
 # binding read in P4 (`ActionDefaultParams`, the decompile drive) and the
 # `self` hint in P5 type inference.
 #

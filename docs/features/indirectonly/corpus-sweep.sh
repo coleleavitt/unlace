@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -u
 WT=/home/mahaloz/kwt/indirectonly
-K=$WT/decompiler/target/release/kuna
+K=$WT/decompiler/target/release/unlace
 R=/home/mahaloz/github/decbench/results/full_run_address_2026-09-11
 OUT=$WT/.scratch/sweep3
 export SLEIGHHOME=$WT/specs
-export KUNA_SPECS=$WT/specs
+export UNLACE_SPECS=$WT/specs
 one() {
   local f=$1 tag=$2
   [ -f "$f" ] || { echo "MISSING $f"; return; }

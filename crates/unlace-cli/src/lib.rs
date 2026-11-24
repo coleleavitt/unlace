@@ -145,7 +145,7 @@ pub fn main() -> ExitCode {
             output::emit_with_status(
                 &format!(
                     "unlace {}\n",
-                    option_env!("KUNA_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
+                    option_env!("UNLACE_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
                 ),
                 0,
             )

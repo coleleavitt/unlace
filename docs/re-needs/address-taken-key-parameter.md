@@ -38,7 +38,7 @@ Recover how the runtime transformation uses its incoming four-byte key.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x401571"
@@ -68,7 +68,7 @@ Recover how the runtime transformation uses its incoming four-byte key.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x401571"
@@ -111,7 +111,7 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 5 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK (captain, round 5) on the filed binary .kuna-repipe/arena/5/64f1f7fad931496abf909535/target/illusion.exe with the release kuna at 38c461d1.
+- round 5 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK (captain, round 5) on the filed binary .unlace-repipe/arena/5/64f1f7fad931496abf909535/target/illusion.exe with the release unlace at 38c461d1.
 
 VERDICT: UPHELD, AND THE FILED SEVERITY IS TOO LOW. The hypothesis ("address-taken parameter storage may be emitted again as a local symbol") is exactly right, and I pinned it to one storage location by address. THE OUTPUT IS NOT MERELY UGLY, IT IS INVALID C: a parameter and a local with THE SAME NAME in THE SAME SCOPE and TWO DIFFERENT TYPES.
 
@@ -125,7 +125,7 @@ REPRO, one command, no options, no assertions:
   }
 A C compiler rejects that outright, so `decompile-project` output for this function cannot recompile.
 
-THE PROOF THAT IT IS ONE STORAGE LOCATION, FROM kuna's OWN LINE MAPPING — do not re-derive this:
+THE PROOF THAT IT IS ONE STORAGE LOCATION, FROM unlace's OWN LINE MAPPING — do not re-derive this:
   the `&a0` line maps to 0x401641, and 0x401641 disassembles to `LEA ECX,[EBP + 0x8]`.
   [EBP+0x8] on this i386 cdecl frame IS the first incoming parameter (return address at EBP+4; the body reads the other two at [EBP+0xc] and [EBP+0x10], which is where `v6 = a2 - a1` comes from at 0x401577-0x40157d).
 So `&a0` genuinely takes the address of the parameter's own slot. There is no second object anywhere on the frame. The tester's LEA observation is correct and I confirmed it independently.
@@ -144,7 +144,7 @@ NOT COVERED BY ANY EXISTING OPTION: nothing in docs/options.md addresses an addr
 SCOPE: leave at `small` only if the merge turns out to be one mapping decision; if the fix has to reach into how input parameters are entered into the local scope, it is `medium`. Have the builder answer that in design before it writes code.
 round 5 TRIAGE (captain): SEVERITY major -> blocker, TOUCHES -> p6_variables. The refuter proved the output is INVALID C -- a parameter and a local with the same name in the same scope and two different types -- so decompile-project output for this function cannot recompile; that is a blocker by the same standard every other invalid-C need in this backlog was filed under. SCOPE STAYS small BUT IS CONDITIONAL: small only if the address-taken use can be resolved onto the existing parameter symbol as one mapping decision. If the fix has to change how input parameters are entered into the local scope, the builder must STOP and escalate to a [PROPOSAL] rather than widen in place -- answer that in design, before code. And the acceptance is rename-passable: a stage test must demand the MERGED form (the parameter used, no shadow declaration, and the JSON variable carrying the use), not merely the absence of a duplicate line.
 - round 10 CAPTAIN (18:45Z tick, B_DRAIN off-critical-path repair): REPRODUCTION ARM TARGET BOUND. This need's `## Acceptance` arm was already bound but its `## Reproduction` arm carried no `target` block, so the arm that is supposed to assert the bug EXISTS TODAY could not run (`ProbeError: {{BIN}} used but the context supplies no bin`). That never blocked B_DONE -- closure is gated on the ACCEPTANCE arm alone, measured -- but it blinded the refuter and the builder's reproduction step. Repaired by COPYING this need's own acceptance target verbatim, which is a copy and not a guess: the need has exactly one `challenges:` entry, so both arms necessarily address the same binary, and verify.resolve_binary treats a binary_sha256 mismatch as a hard stop. Measured after the write: the reproduction arm runs (unrunnable=false) and PASSES -- a passing reproduction arm means the defect still reproduces on main at b23e01ec, so this doubles as a re-confirmation that the symptom is live. Probe ids did NOT move (probe_id_of is keyed on cmd+expect only, needs.py:269; all 32 arms across the 16 repaired needs re-hashed byte-identically). PROMOTION CAVEAT unchanged: binary_source is `dataset` and `verify --promote` refuses that verbatim -- vendor an in-repo fixture in the SAME PR or B_DONE closes the need but cannot promote its probe.
-- round 10 BUILDER: the SYMPTOM stands exactly as filed and refuted; the LOCATION does not. Instrumented `PrintC::emit_local_var_decls` on the witness: the declared high named `a0` carries `kuna_ref_symbol = Some(SymbolId(10v5))`, whose ScopeLocal category is 0 = FUNCTION_PARAMETER -- there is ONE symbol at the parameter's storage and the `&a0` reference is already bound to it, so P6 mapped it correctly. (The `unsigned int` vs `int4` disagreement is the FuncProto parameter's type against the reference high's own data type, not two symbols.) The defect is in P9: kuna's printer walks HighVariables and recognises a parameter by asking whether a `function_parameter` Symbol contains the STORAGE of one of the high's Varnodes, and an `&parameter` reference's only Varnode is the PTRSUB offset CONSTANT. Closed by option `paramrefdecl` (P9, default on, DIV-143), which makes the same decision on symbol IDENTITY and so removes the declaration rather than renaming it -- the merged form the refuter demanded. The `--json` half was a second, separate query (`variable_storage_varrefs` matches a parameter's own storage, and the name fallback misses because the JSON spells it `param_1` while the high is `a0`); added as a third fallback consulted only when the other two find nothing, so `param_1` now carries the `&a0` line. Regression probe promoted to `tests/cli/address-taken-key-parameter.json` over a newly vendored 4,532-byte i386 ELF (`paramrefdecl_i386`), since the acceptance target is a dataset binary.
+- round 10 BUILDER: the SYMPTOM stands exactly as filed and refuted; the LOCATION does not. Instrumented `PrintC::emit_local_var_decls` on the witness: the declared high named `a0` carries `unlace_ref_symbol = Some(SymbolId(10v5))`, whose ScopeLocal category is 0 = FUNCTION_PARAMETER -- there is ONE symbol at the parameter's storage and the `&a0` reference is already bound to it, so P6 mapped it correctly. (The `unsigned int` vs `int4` disagreement is the FuncProto parameter's type against the reference high's own data type, not two symbols.) The defect is in P9: unlace's printer walks HighVariables and recognises a parameter by asking whether a `function_parameter` Symbol contains the STORAGE of one of the high's Varnodes, and an `&parameter` reference's only Varnode is the PTRSUB offset CONSTANT. Closed by option `paramrefdecl` (P9, default on, DIV-143), which makes the same decision on symbol IDENTITY and so removes the declaration rather than renaming it -- the merged form the refuter demanded. The `--json` half was a second, separate query (`variable_storage_varrefs` matches a parameter's own storage, and the name fallback misses because the JSON spells it `param_1` while the high is `a0`); added as a third fallback consulted only when the other two find nothing, so `param_1` now carries the `&a0` line. Regression probe promoted to `tests/cli/address-taken-key-parameter.json` over a newly vendored 4,532-byte i386 ELF (`paramrefdecl_i386`), since the acceptance target is a dataset binary.
 
 ## Round 10 — salvage brief (captain, 21:52Z)
 

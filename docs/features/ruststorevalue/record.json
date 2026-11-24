@@ -64,9 +64,9 @@
         "rustc",
         "--edition=2021",
         "--error-format=json",
-        "/tmp/kuna-rust-store-conversions/parent-array.rs",
+        "/tmp/unlace-rust-store-conversions/parent-array.rs",
         "-o",
-        "/tmp/kuna-rust-store-conversions/parent-array"
+        "/tmp/unlace-rust-store-conversions/parent-array"
       ],
       "compile_exit": 1,
       "errors": [
@@ -83,9 +83,9 @@
         "rustc",
         "--edition=2021",
         "--error-format=json",
-        "/tmp/kuna-rust-store-conversions/candidate-array.rs",
+        "/tmp/unlace-rust-store-conversions/candidate-array.rs",
         "-o",
-        "/tmp/kuna-rust-store-conversions/candidate-array"
+        "/tmp/unlace-rust-store-conversions/candidate-array"
       ],
       "compile_exit": 1,
       "errors": [

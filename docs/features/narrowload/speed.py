@@ -6,7 +6,7 @@ BINS = [(n, p) for n, p in [("fmt", f"{R}/coreutils/stripped/fmt"), ("ls", f"{R}
 N, OUT, KMAIN, KFIX = int(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
 ARMS = {"main": KMAIN, "fix": KFIX}
 SP = os.environ.get("SLEIGHHOME", "specs")
-env = dict(os.environ, SLEIGHHOME=SP, KUNA_SPECS=SP)
+env = dict(os.environ, SLEIGHHOME=SP, UNLACE_SPECS=SP)
 out = {}
 for name, b in BINS:
     t = {a: [] for a in ARMS}

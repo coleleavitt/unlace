@@ -1,4 +1,4 @@
-# Kuna `iokitclasses` option (P1 external refinement): IOKit class and vtable
+# Unlace `iokitclasses` option (P1 external refinement): IOKit class and vtable
 # recovery on an XNU kext.
 #
 # The fixture (gen_iokit.py) is a stripped arm64 MH_KEXT_BUNDLE whose one

@@ -5,7 +5,7 @@ Issue: [#428](https://github.com/Noelo-Lab/kuna/issues/428)
 ## Failure
 
 The V850 SLEIGH specification represents `jmp [reg]` as `CALLIND`. With
-`v850indirectbranch` enabled, Kuna examines indirect control-flow ops and uses
+`v850indirectbranch` enabled, Unlace examines indirect control-flow ops and uses
 the input register name to distinguish a jump through a general register from a
 call through `PC`.
 
@@ -22,7 +22,7 @@ v850 indirect-branch predicate: standalone Sleigh engine
 The option currently defaults off and has no element in Ghidra's upstream
 `<optionslist>` vocabulary. That makes the fault latent in the stock GUI, but it
 is still an invalid dependency in a per-op predicate. A future way to transmit
-Kuna options would make the crash user-reachable immediately.
+Unlace options would make the crash user-reachable immediately.
 
 ## Translator boundary
 
@@ -60,7 +60,7 @@ in-tree `ghidra_sim` oracle:
 
 1. Register the ARM fixture through the normal four-document wire handshake.
 2. Enable `v850indirectbranch` after registration through a test-only process
-   seam. This is necessary because Kuna-owned options have no upstream wire id.
+   seam. This is necessary because Unlace-owned options have no upstream wire id.
 3. Decompile `fmt_arm/main` through `decompileAt`.
 4. Require at least one `getRegisterName` callback and a non-empty function
    response with no warning.
@@ -92,7 +92,7 @@ simulation test is the executable coverage for the exact option-gated path.
 The focused regression was run before and after the implementation change. On
 the old code it reproduced the `as_sleigh()` panic quoted above; on the fixed
 code it passed and observed the `getRegisterName` callback. The complete
-`kuna-ghidra` release suite also passed, including the normally ignored
+`unlace-ghidra` release suite also passed, including the normally ignored
 sort/grep breadth test invoked by `make test-ghidra`.
 
 The repository parity and specification gates passed:

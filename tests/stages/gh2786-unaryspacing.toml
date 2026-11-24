@@ -9,7 +9,7 @@
 # Stage model: S9 surface rendering; the parentheses() unary_prefix case
 # (printlanguage.cc) allowed two identical sign tokens to abut.
 #
-# This is a kuna DEFAULT-FLIP (docs/divergences.md DIV-1): emitting an
+# This is a unlace DEFAULT-FLIP (docs/divergences.md DIV-1): emitting an
 # operator that re-parses as a different operator is an unambiguous bug, so
 # the fix is unconditional, not behind an option.  Assertion #1 proves the
 # fixed form; assertion #2 proves the buggy token is gone.  (The

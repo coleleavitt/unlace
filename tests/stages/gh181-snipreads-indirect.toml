@@ -1,4 +1,4 @@
-# kuna GH-181: an out-parameter copy hoisted ABOVE the call that fills it.
+# unlace GH-181: an out-parameter copy hoisted ABOVE the call that fills it.
 #
 # The function is libselinux lsetfilecon_raw (x86-64 gcc -O2, stripped;
 # tests/bug-repro/libselinux.so.1 at 0x17370).  The source idiom:
@@ -9,7 +9,7 @@
 #     freecon(ccontext);
 #
 # The binary loads the stack slot ONCE, after the call returns, and both
-# strcmp and freecon consume that post-call value.  kuna instead emitted
+# strcmp and freecon consume that post-call value.  unlace instead emitted
 #
 #     v4 = NULL;
 #     v1 = v4;                                  (copy BEFORE the call)
@@ -26,10 +26,10 @@
 #    carve-out: when the trimmed Varnode is defined by a CPUI_INDIRECT, the
 #    trim COPY is inserted after the op CAUSING the effect (the iop encoding
 #    in the INDIRECT's input 1), not at the INDIRECT itself, which precedes
-#    the call in block order.  The kuna port lacked the INDIRECT arm, so the
+#    the call in block order.  The unlace port lacked the INDIRECT arm, so the
 #    COPY feeding freecon landed before the CALL in the p-code.
 #
-# 2. The kuna-only foldcallret fold (p6_variables/kuna_callretfold.rs,
+# 2. The unlace-only foldcallret fold (p6_variables/unlace_callretfold.rs,
 #    default-on per DIV-14) sank the call expression into the if condition
 #    across that COPY: an op reading a value the call indirectly writes (an
 #    input defined by a CPUI_INDIRECT attached to the call) is now a fold

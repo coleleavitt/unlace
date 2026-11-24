@@ -20,7 +20,7 @@ created with an empty name (`database.cc:2854`). It is supposed to be invisible:
 (`coreaction.cc:3075-3079`), and `PrintC` reads `sym->getDisplayName()` **live at emit
 time**, so it can never print a stale name.
 
-kuna binds the name **per HighVariable** (`HighVariable::kuna_name`, a cached `String`) and
+unlace binds the name **per HighVariable** (`HighVariable::unlace_name`, a cached `String`) and
 the printer reads that cache. Two consequences, both live today:
 
 * **(A) stale cache — 264 of 283 affected functions.** One ScopeLocal Symbol, two
@@ -30,7 +30,7 @@ the printer reads that cache. Two consequences, both live today:
   identifiers**, and the body uses both.
 * **(B) never renamed — 19 functions in the sample, 101 Symbols across 72 functions.**
   No high reaches the whole-cover rename gate at all, so the Symbol keeps `$$undefNN` in
-  the database. kuna's port of the upstream catch-all,
+  the database. unlace's port of the upstream catch-all,
   `Database::assign_default_names` (`p0_knowledge/database.rs:4031`), **has zero call
   sites in the entire tree** — the `coreaction.cc:3079` line was never wired.
 
@@ -43,7 +43,7 @@ stack-frame comments), where consumers read it as a variable *name*.
 ### The filed case still reproduces
 
 ```
-$ export SLEIGHHOME=/home/mahaloz/github/kuna/specs
+$ export SLEIGHHOME=/home/mahaloz/github/unlace/specs
 $ unlace decompile-all ~/github/decbench/results/full_run/O2-noinline/iproute2/stripped/ip --json
   -> 1912 functions, 95 occurrences of `$$undef[0-9a-f]{8}` across 33 functions
 ```
@@ -191,7 +191,7 @@ static int set_qlen(const char *dev, int qlen)
 }
 ```
 
-One `struct ifreq ifr`. kuna splits it into `char v2[16]` (the name field, `stack - 0x48`)
+One `struct ifreq ifr`. unlace splits it into `char v2[16]` (the name field, `stack - 0x48`)
 plus a 4-byte slot at `stack - 0x38` (the `ifru_ivalue` union member) that never gets a
 name — the frame layout is a separate, known issue (the "one 16-byte buffer split across
 three symbols" loose thread); what this record is about is that the un-named piece is
@@ -225,7 +225,7 @@ x86-64 and ARM Cortex-M, all three optimisation levels.
 decompilers):
 
 ```
-kuna:    152 of 803 stored panes contain $$undef
+unlace:    152 of 803 stored panes contain $$undef
 angr:      0 / ida: 0 / ghidra: 0 / binja: 0 / phoenix: 0 / dewolf: 0 / r2dec: 0
 ```
 
@@ -233,7 +233,7 @@ GED value: **zero** — an identifier rename never changes the CFG. This is a Ti
 correctness item in the `features.md` sense, mined out of the pool that does not rank by
 margin.
 
-Regression risk today: **none measured.** Full `KUNA_DUMP=1` renders of both test corpora
+Regression risk today: **none measured.** Full `UNLACE_DUMP=1` renders of both test corpora
 grep clean for `$$undef` — datatests 675/675 assertions, 0 occurrences; stages 356/356,
 0 occurrences. (The `verify_w10_spacebase_render.rs` comment claiming "the whole corpus
 carries exactly ONE pre-existing `&$$undef` in `forloop_thruspecial`" is stale — that stem
@@ -245,13 +245,13 @@ Owning phase: **P6** (variable & storage model — `ActionNameVars` lives in
 `p6_variables/`). The symptom appears at P9, but P9 only reads a cache P6 wrote; per
 `docs/phases.md`, "a symptom's phase is not always its decision's phase".
 
-The divergence from upstream is already documented in kuna's own source, one paragraph
+The divergence from upstream is already documented in unlace's own source, one paragraph
 short of the bug (`p6_variables/coreaction_cleanup.rs:2777-2790`):
 
 > ORDER (the load-bearing detail): in C++ a single shared `Symbol` object is attached to
 > BOTH the offset-constant high and the stack-slot high, and the undefined ones are
 > renamed ONCE at the end of `apply` … The render reads `getSymbol()->getDisplayName()` at
-> print time, so it always sees the FINAL name. **The kuna model binds the name PER-HIGH
+> print time, so it always sees the FINAL name. **The unlace model binds the name PER-HIGH
 > off the database Symbol**, so the spacebase pass must run AFTER the main naming loop …
 
 The port fixed that ordering hazard for the *spacebase* pass. The same hazard **inside**
@@ -262,10 +262,10 @@ the main loop, between two highs of the same Symbol, was not fixed:
    the faithful port of the C++ `namerec` gate (`sym->isNameUndefined() &&
    high->getSymbolOffset() < 0`, `coreaction.cc:3046`). On a miss it returns
    `symbol.get_display_name()` **as-is**, i.e. `$$undefNN`.
-2. `p6_variables/coreaction_cleanup.rs:2637` `h.set_kuna_name(sym_name)` caches whatever
+2. `p6_variables/coreaction_cleanup.rs:2637` `h.set_unlace_name(sym_name)` caches whatever
    that returned onto the HighVariable, permanently.
 3. `p9_emit/printc.rs:2394` (`emit_local_var_decls`) and `printc.rs:6728` (the body
-   render) read `h.kuna_name()`. Upstream `PrintC::emitVarDecl`/`pushSymbol` read
+   render) read `h.unlace_name()`. Upstream `PrintC::emitVarDecl`/`pushSymbol` read
    `sym->getDisplayName()`. The deferral that is harmless in C++ is not harmless here.
 4. `p0_knowledge/database.rs:4031` `Database::assign_default_names` — a complete,
    tested port of `ScopeInternal::assignDefaultNames` — is **never called**. Upstream calls
@@ -291,11 +291,11 @@ of ordering hazard:
    `extract_variables` and the project `.asm` annotations for free, because those read the
    Symbol table.
 2. **Repair the stale caches (mechanism A).** Re-walk the highs; for any whose
-   `kuna_name()` matches the placeholder shape (`len == 15 && starts_with("$$undef")`,
+   `unlace_name()` matches the placeholder shape (`len == 15 && starts_with("$$undef")`,
    i.e. `Symbol::is_name_undefined`), re-resolve the covering Symbol through the **existing**
    `ScopeLocal::query_container_for_link(addr, usepoint)` (`p6_variables/varmap.rs:1638`,
    which already returns `display_name`) on the high's name representative, and
-   `set_kuna_name` to the now-final name. This is exactly upstream's "read the Symbol name
+   `set_unlace_name` to the now-final name. This is exactly upstream's "read the Symbol name
    at print time", applied once at the end of the pass.
 
 **Why this ordering is the zero-churn form.** Neither step can renumber an existing local:
@@ -322,10 +322,10 @@ testcase and a DIV row.
 
 Risks:
 
-* `assign_default_names` walks `nametree` by the `$$undef` name prefix; kuna's `NameKey`
+* `assign_default_names` walks `nametree` by the `$$undef` name prefix; unlace's `NameKey`
   ordering must place every placeholder in one contiguous run (it does —
   `database.rs:4044-4048` already relies on this and is unit-tested at `database.rs:4286`).
-* Step 2 must skip highs bound through the **global** scope (`kuna_global`) and
+* Step 2 must skip highs bound through the **global** scope (`unlace_global`) and
   proto-partial pieces, which take their name from a different query; the existing
   `query_container_for_link` local-first / global-fallback split already handles that.
 * A Symbol renamed in step 1 gets a `vN` number higher than every other local in the

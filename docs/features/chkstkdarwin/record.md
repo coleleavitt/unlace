@@ -38,7 +38,7 @@ assertions. Main does not know the option, so the test errors there; with the
 option line removed main passes 1 of 8 (the `__stubs` entry check). The branch
 passes 8 of 8. The datatest corpus is unchanged (675/675).
 
-Sweep: `kuna decompile-all` of every function, main build against this branch,
+Sweep: `unlace decompile-all` of every function, main build against this branch,
 with `--option chkstkdarwin off` and at the default.
 
 | Corpus | Functions | Off vs main | Default vs main |

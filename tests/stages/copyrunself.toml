@@ -9,7 +9,7 @@
 # copy).
 #
 # Stage / sub-stage: P3, `ActionCopyRun`
-# (`unlace-decomp/src/p3_dataflow/kuna_copyrun.rs`): each chain is folded to
+# (`unlace-decomp/src/p3_dataflow/unlace_copyrun.rs`): each chain is folded to
 # one INDIRECT on the builtin, reading the chain's first input; a run whose
 # chain has another reader is left as it is.
 #

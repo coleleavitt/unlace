@@ -52,7 +52,7 @@ pub(super) fn records_for_archive(
 
 fn stage_object(data: &[u8]) -> std::io::Result<tempfile::TempPath> {
     let mut file = tempfile::Builder::new()
-        .prefix("kuna_fid_")
+        .prefix("unlace_fid_")
         .suffix(".o")
         .tempfile()?;
     file.write_all(data)?;

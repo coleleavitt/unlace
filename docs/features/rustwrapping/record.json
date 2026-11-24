@@ -74,7 +74,7 @@
       "<language>"
     ],
     "authored_binary_sha256": "aaee9480111ad7c0249f6d097955e5b10aabed834fc31cce1b4b4653c5120028",
-    "rust_fixture": "decompiler/crates/kuna-analysis/tests/fixtures/rust_fmt_flags_real_x86_64",
+    "rust_fixture": "decompiler/crates/unlace-analysis/tests/fixtures/rust_fmt_flags_real_x86_64",
     "rust_fixture_sha256": "8fc4bd9225151ce8b081866e7de08593cad56795a7c684781a9e9922ad951af0",
     "rust_fixture_extra_flags": [
       "--max-size",

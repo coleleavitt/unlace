@@ -1,4 +1,4 @@
-# The Go stack-growth prologue (docs/multilang.md W2/W5), ported as kuna
+# The Go stack-growth prologue (docs/multilang.md W2/W5), ported as unlace
 # `option gomorestack` (P2 flow-classification, default AUTO).
 #
 # Every non-leaf function the Go compiler emits opens with a guard: compare

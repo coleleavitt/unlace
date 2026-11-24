@@ -1,4 +1,4 @@
-# MSVC __ftol-family call-fixup (kuna_msvcftol).
+# MSVC __ftol-family call-fixup (unlace_msvcftol).
 #
 # MSVC compiles an x86-32 float-to-integer conversion as `fld <src>; call
 # __ftol`: the value arrives in the x87 stack top ST0 and the __int64 result

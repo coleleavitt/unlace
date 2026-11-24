@@ -1,8 +1,8 @@
-# kuna: a register the function sets for a system register is not the
+# unlace: a register the function sets for a system register is not the
 # high word of its return.
 #
 # Stage / sub-stage: P4 return recovery, the output trials of the
-# function's own RETURN (ActionReturnRecovery, p4_calls/kuna_retsysreg.rs).
+# function's own RETURN (ActionReturnRecovery, p4_calls/unlace_retsysreg.rs).
 # The rule is always on.
 #
 # Source (clang -target armv7a-linux-gnueabihf -marm -O2 -fno-inline at

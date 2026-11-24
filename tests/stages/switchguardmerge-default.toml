@@ -65,16 +65,16 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-SWITCHGUARDMERGE-DEFAULT #1: the outlier is a case (default)'
+name = 'UNLACE-SWITCHGUARDMERGE-DEFAULT #1: the outlier is a case (default)'
 count = 1
 literal = 'case 1000:'
 
 [[match]]
-name = 'KUNA-SWITCHGUARDMERGE-DEFAULT #2: the last miss is the default (default)'
+name = 'UNLACE-SWITCHGUARDMERGE-DEFAULT #2: the last miss is the default (default)'
 count = 1
 literal = 'default:'
 
 [[match]]
-name = 'KUNA-SWITCHGUARDMERGE-DEFAULT #3: switchguardmerge off tests the outlier after the switch'
+name = 'UNLACE-SWITCHGUARDMERGE-DEFAULT #3: switchguardmerge off tests the outlier after the switch'
 count = 1
 literal = 'if (a0 != 1000)'

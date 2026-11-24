@@ -31,7 +31,7 @@ See which decoded buffer the hint printer consumes.
 > Emits a zero-argument call after decoding the buffer. Disassembly sets RDI to the buffer at 0x400f58 and preserves it through the call at 0x401007. Both recovery options leave the argument absent; disabling calleedeadarg also changes nothing. An explicit prototype restores it. Probe passed and acceptance failed.
 
 > **Memcpy loses its third argument with both recovery options enabled** (major, `6a09581717539b5175d122b9`)
-> Emits two-argument memcpy. Enabling calleearity and varargstackargs leaves checker C identical. Kuna disassembly shows R8, RDX and RCX initialized immediately before the call to the memcpy import thunk.
+> Emits two-argument memcpy. Enabling calleearity and varargstackargs leaves checker C identical. Unlace disassembly shows R8, RDX and RCX initialized immediately before the call to the memcpy import thunk.
 
 > **VM state initializer loses key, length and seed arguments** (major, `6a148dd62b3df128c1df5c9e`)
 > Emits init_state(v47). Assembly loads R9D with the seed, R8D with 0x20 and RDX with the key address immediately before the call. Independently decompiling the callee recovers four used parameters. Both recovery options leave the call unchanged. Their catalog descriptions cover narrower sibling-call and variadic cases, so this is not claimed as a regression.
@@ -44,7 +44,7 @@ See which decoded buffer the hint printer consumes.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x400f30",
@@ -80,7 +80,7 @@ See which decoded buffer the hint printer consumes.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x400f30",
@@ -136,7 +136,7 @@ REPRODUCED. On 8df2a52e, `unlace decompile <arena>/cr4ckm3_0x 0x400f30` emits `s
 
 THE TESTER'S ABLATIONS ARE ALL VACUOUS AND I RE-RAN THEM. calleearity, calleearityfwd, calleearitylive, calleearitybody, calleearitycut, varargstackargs and calleedeadarg are EVERY ONE default ON, so 'I enabled it and nothing changed' proves nothing. I ran the real A/B (each OFF, plus spillargtrial reload/spill): all seven leave line 47 byte-identical. Do not re-derive this.
 
-WHY THE HYPOTHESIS IS OVERTURNED. It says 'single-site callee analysis does not establish its arity'. kuna HAS single-site callee-body arity recovery, shipped and default-on: p4_calls/calleearitybody.rs (run is the leading argument-register run the callee proves_input, bounded by a register it proves_dead) widened by calleearitycut.rs (when the callee decode is CUT at a nested call, the register the run stops at may itself be the bound). Both fire on exactly this shape and both establish the run correctly here: the callee reads RDI at 0x417f84 (`MOV R12,RDI`) so RDI proves_input, and the decode is cut 3 instructions later at `CALL 0x4004c8` (0x417f8d) before RSI is touched, so RSI proves neither. The run {RDI} is contiguous and stops short. The rule then REFUSES on its third condition.
+WHY THE HYPOTHESIS IS OVERTURNED. It says 'single-site callee analysis does not establish its arity'. unlace HAS single-site callee-body arity recovery, shipped and default-on: p4_calls/calleearitybody.rs (run is the leading argument-register run the callee proves_input, bounded by a register it proves_dead) widened by calleearitycut.rs (when the callee decode is CUT at a nested call, the register the run stops at may itself be the bound). Both fire on exactly this shape and both establish the run correctly here: the callee reads RDI at 0x417f84 (`MOV R12,RDI`) so RDI proves_input, and the decode is cut 3 instructions later at `CALL 0x4004c8` (0x417f8d) before RSI is touched, so RSI proves neither. The run {RDI} is contiguous and stops short. The rule then REFUSES on its third condition.
 
 THE LINE: calleearitycut.rs:125, `if !is_register(&bound.addr) || !bound.caller_quiet { return false }`. caller_quiet (calleearitybody.rs:178) is 'the Varnode at this trial's slot is neither written nor constant'. The caller writes ESI at 0x400fc9 (`MOVZX ESI,byte ptr [RBP-0x1a]`) inside the unrolled XOR loop, purely as the byte-XOR key for `XOR byte ptr [R8+0x6],SIL` at 0x400fcd. RSI is the boundary register, the caller wrote it, caller_quiet is false, accepts_cut_run returns false, and the whole one-argument list is dropped.
 

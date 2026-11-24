@@ -46,7 +46,7 @@
 # already complete on reducible loops, so the region structurer MATCHES it (active
 # + correct recovery) rather than beating it there.  The goto-reduction the
 # roadmap targets lives in the IRREDUCIBLE / head-in-body family (the PR #44
-# Windows-PE shape kuna cannot yet load, and the inlined-getc interlocks like
+# Windows-PE shape unlace cannot yet load, and the inlined-getc interlocks like
 # fmt's `get_space`), where BOTH Ghidra and the region structurer emit the minimal
 # goto and the structurer falls back parity-safely.  See
 # docs/region-structurer-roadmap.md (Inc 3 row + findings).

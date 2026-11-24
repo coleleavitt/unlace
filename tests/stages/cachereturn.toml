@@ -8,7 +8,7 @@
 # `void` and its callers read a result it does not have. Swift's lazy
 # witness-table accessors and its mangled-name type cache are this shape.
 #
-# Stage / sub-stage: P4 output-prototype. p4_calls/kuna_cachereturn.rs takes
+# Stage / sub-stage: P4 output-prototype. p4_calls/unlace_cachereturn.rs takes
 # a return trial in an output register of the model when every value
 # reaching each live RETURN is a load of one cell or a call's result stored
 # into it, at least one of each, and the image's source language is Swift.

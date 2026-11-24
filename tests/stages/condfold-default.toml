@@ -1,4 +1,4 @@
-# kuna `condfold`, now on by default: Ghidra's ruleBlockOr folds `A || B` only
+# unlace `condfold`, now on by default: Ghidra's ruleBlockOr folds `A || B` only
 # when the block holding B prints at most a bare test; condfold also takes a
 # sibling that prints a short statement prefix, rendered as a comma operand,
 # within condstmts' budget.  Default on, a block that branches back to a block

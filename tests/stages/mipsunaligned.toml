@@ -1,4 +1,4 @@
-# kuna mipsunaligned, GH-904: a MIPS unaligned word load or store pair
+# unlace mipsunaligned, GH-904: a MIPS unaligned word load or store pair
 # lifts as the one whole access it makes.
 #
 # MIPS reads an unaligned word with two instructions (lwl $3,1($16);
@@ -16,7 +16,7 @@
 # of every pair before the first decode, as Ghidra's MipsPreAnalyzer
 # does.
 #
-# Stage: P2 lift and flow (decode-context), kuna_mipsunaligned.
+# Stage: P2 lift and flow (decode-context), unlace_mipsunaligned.
 #
 # Images: crates/unlace-analysis/tests/fixtures/bejoin_mipsunal
 # (bejoin_mipsunal.S; see bejoin_mipspic.provenance) and mipsunaligned_eb.o

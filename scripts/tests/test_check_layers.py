@@ -48,13 +48,13 @@ class CheckLayersTests(unittest.TestCase):
                 self.assertEqual(self.edges_of(code + "\n"), ["funcdata -> p9_emit"])
 
     def test_super_and_self_paths_resolve_from_the_file(self):
-        self.write("p4_calls/kuna_late.rs", "pub fn f() {}\n")
-        self.write("p4_calls/mod.rs", "pub mod fspec;\npub mod kuna_late;\n")
+        self.write("p4_calls/unlace_late.rs", "pub fn f() {}\n")
+        self.write("p4_calls/mod.rs", "pub mod fspec;\npub mod unlace_late;\n")
         self.assertEqual(self.edges_of("use super::super::super::p9_emit::printc;\n", "substrate/funcdata/child.rs"),
                          ["funcdata -> printc"])
         self.write("substrate/funcdata/child.rs", "")
-        self.assertEqual(self.edges_of("use super::kuna_late::f;\nuse self::inner::g;\n", "p4_calls/kuna_early.rs"), [])
-        self.assertEqual(self.edges_of("use super::kuna_late::f;\n", "p4_calls/fspec.rs"), ["fspec -> kuna_late"])
+        self.assertEqual(self.edges_of("use super::unlace_late::f;\nuse self::inner::g;\n", "p4_calls/unlace_early.rs"), [])
+        self.assertEqual(self.edges_of("use super::unlace_late::f;\n", "p4_calls/fspec.rs"), ["fspec -> unlace_late"])
 
     def test_folder_mod_rs_is_scanned_as_its_folder(self):
         self.assertEqual(self.edges_of("pub use crate::printc::emit;\n", "substrate/mod.rs"),

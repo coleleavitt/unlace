@@ -1,4 +1,4 @@
-# (kuna) Option `funcchunks`. Two functions share one error tail that sits
+# (unlace) Option `funcchunks`. Two functions share one error tail that sits
 # after a third function: `f` and `g` both jump to `shared`, which lies past
 # `h`. The [entry, next) clip gives `shared` to `h`; the chunk model gives it
 # to `f` and `g` as a shared tail and keeps `h` to its own two instructions.

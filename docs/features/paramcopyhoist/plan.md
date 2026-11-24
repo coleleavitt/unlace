@@ -5,14 +5,14 @@
 One new module + one new Action; the ported merge core is untouched apart from a
 single visibility widening:
 
-* `decompiler/crates/kuna-decomp/src/p6_variables/paramcopyhoist.rs`
+* `decompiler/crates/unlace-decomp/src/p6_variables/paramcopyhoist.rs`
   (`ELEM_PARAMCOPYHOIST` = 4120, `OptionParamCopyHoist`, `ActionParamCopyHoist`).
 * Registered in `infra/universalaction.rs` as the **last** action before
   `ActionPrototypeWarnings`.
 * `Architecture::param_copy_hoist` + `ArchContext::param_copy_hoist` + the
   `"paramcopyhoist"` arm of `Architecture::set_option`, the name in
   `p0_knowledge/options.rs`, the `settableTable` row in `phases.toml`.
-* One `// (kuna)` widening in the ported core: `FuncdataCoverCtx` in
+* One `// (unlace)` widening in the ported core: `FuncdataCoverCtx` in
   `substrate/funcdata.rs` becomes `pub(crate)` so the pass can build the
   hypothetical Cover off the same read view `buildDominantCopy` uses.
 

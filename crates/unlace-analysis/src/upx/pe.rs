@@ -509,7 +509,7 @@ pub(super) fn unpack(img: &Image<'_>, info: &PackInfo) -> Result<(Vec<u8>, Vec<B
 
     let records = trailer_records(trailer_end - extra).ok_or_else(|| {
         unsupported(format!(
-            "trailer has {} bytes, which no set of UPX's import, relocation and resource records adds up to -- the image uses a PE feature UPX rebuilds and kuna does not",
+            "trailer has {} bytes, which no set of UPX's import, relocation and resource records adds up to -- the image uses a PE feature UPX rebuilds and unlace does not",
             trailer_end - extra
         ))
     })?;

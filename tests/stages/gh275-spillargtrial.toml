@@ -1,4 +1,4 @@
-# GH-275 (kuna): "packed-double producers plus more than one atan2 call drop
+# GH-275 (unlace): "packed-double producers plus more than one atan2 call drop
 # the call arguments"
 # https://github.com/Noelo-Lab/kuna/issues/275
 #

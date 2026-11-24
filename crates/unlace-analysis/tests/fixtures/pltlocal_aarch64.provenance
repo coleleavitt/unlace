@@ -1,6 +1,6 @@
 pltlocal_aarch64.so -- the GH-1342 fixture for a call through a PLT stub that
 the image's own relocation binds to a function it defines
-(crates/unlace-cli/tests/pltlocal_cli.rs, tests/stages/kuna-pltlocal.toml).
+(crates/unlace-cli/tests/pltlocal_cli.rs, tests/stages/unlace-pltlocal.toml).
 
 What it is
   A 2,528-byte AArch64 ELF shared object assembled from pltlocal_aarch64.s,

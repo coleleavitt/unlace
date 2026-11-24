@@ -1,7 +1,7 @@
 # calltrampoline: flow a `call` through a callee that discards the pushed
 # return address and jumps back into the instruction stream.
 #
-# CALL is a fall-through op, so kuna decodes the return address as the next
+# CALL is a fall-through op, so unlace decodes the return address as the next
 # instruction.  A protector fragment of the form `lea esp,[esp+4]; jmp <back
 # into the caller>` makes the return address unreachable, and the byte sitting
 # there is then free to be junk: it decodes into the emitted C and leaves

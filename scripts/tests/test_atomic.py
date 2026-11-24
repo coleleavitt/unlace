@@ -12,7 +12,7 @@ from scripts.repipe.webui import Cache
 
 class AtomicWriterTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="kuna-atomic-test-")
+        temporary = tempfile.TemporaryDirectory(prefix="unlace-atomic-test-")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
         self.path = self.directory / "record.json"
@@ -63,7 +63,7 @@ class AtomicWriterTests(unittest.TestCase):
         self.assert_no_scratch()
 
     def test_existing_temporary_file_is_neither_overwritten_nor_removed(self):
-        collision = self.directory / ".kuna-fixed.tmp"
+        collision = self.directory / ".unlace-fixed.tmp"
         collision.write_text("belongs to someone else")
         with mock.patch("scripts.atomic.uuid.uuid4", return_value=mock.Mock(hex="fixed")):
             with self.assertRaises(FileExistsError):

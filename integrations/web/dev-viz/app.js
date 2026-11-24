@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const title = (slug) => slug.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const sourceKey = (source) => source.toLowerCase() === 'ghidra-upstream' ? 'ghidra' : source.toLowerCase();
-const sourceLabel = (source) => ({'ghidra':'Ghidra','angr':'angr','ida':'IDA','binja':'Binary Ninja','kuna':'Kuna','oxidizer':'Oxidizer'}[sourceKey(source)] || title(source));
+const sourceLabel = (source) => ({'ghidra':'Ghidra','angr':'angr','ida':'IDA','binja':'Binary Ninja','unlace':'Unlace','oxidizer':'Oxidizer'}[sourceKey(source)] || title(source));
 const kilo = (lines) => lines < 1000 ? String(lines) : `${(lines / 1000).toFixed(lines < 10000 ? 1 : 0)}k`;
 const iso = (date) => new Date(`${date}T00:00:00Z`);
 const repoLink = (path, line = '') => `${REPO}/blob/main/${path}${line ? `#L${line}` : ''}`;
@@ -37,7 +37,7 @@ function summarize(data) {
   $('stat-options').textContent = number.format(data.options.length);
   $('stat-tests').textContent = number.format(upstream[1] + stages[1]);
   $('snapshot').innerHTML = `Repository snapshot <a href="${REPO}/commit/${data.meta.sha}">${data.meta.sha.slice(0, 8)}</a> · ${longDate.format(iso(data.meta.end))} UTC`;
-  $('data-note').innerHTML = `Generated from Kuna commit <a href="${REPO}/commit/${data.meta.sha}">${data.meta.sha.slice(0, 8)}</a>. Commit attribution counts explicit <code>[AUTOMATED]</code> markers or agent co-author trailers; source churn is added plus removed Rust/C/C++ lines in non-merge commits.`;
+  $('data-note').innerHTML = `Generated from Unlace commit <a href="${REPO}/commit/${data.meta.sha}">${data.meta.sha.slice(0, 8)}</a>. Commit attribution counts explicit <code>[AUTOMATED]</code> markers or agent co-author trailers; source churn is added plus removed Rust/C/C++ lines in non-merge commits.`;
   $('decbench-options').textContent = number.format(data.options.filter((o) => o.decbench).length);
   $('novel-cases').textContent = data.novelPool.cases == null ? '—' : number.format(data.novelPool.cases);
   $('novel-features').textContent = number.format(data.records.filter((r) => r.novel).length);
@@ -229,17 +229,17 @@ function renderArchitecture(data) {
     ...arch.shared.map((f) => ({...f, id: '', name: f.folder === 'substrate' ? 'Shared IR' : 'Framework', shared: true})),
   ];
   const max = Math.max(...rows.map((r) => r.loc));
-  const module = (m) => `<li><a href="${repoLink(`crates/unlace-decomp/src/${m.folder}/${m.file}`)}">${esc(m.file)}</a> <span>${number.format(m.loc)}</span>${m.kuna ? ' <em>Kuna</em>' : ''}</li>`;
-  $('arch-table').innerHTML = `<div class="arch-head" aria-hidden="true"><span>phase</span><span>lines of Rust</span><span>in kuna_*</span><span>options</span><span>passes</span></div>` + rows.map((r) => {
-    const kunaShare = r.kunaLoc != null ? Math.round(r.kunaLoc / r.loc * 100) : null;
+  const module = (m) => `<li><a href="${repoLink(`crates/unlace-decomp/src/${m.folder}/${m.file}`)}">${esc(m.file)}</a> <span>${number.format(m.loc)}</span>${m.unlace ? ' <em>Unlace</em>' : ''}</li>`;
+  $('arch-table').innerHTML = `<div class="arch-head" aria-hidden="true"><span>phase</span><span>lines of Rust</span><span>in unlace_*</span><span>options</span><span>passes</span></div>` + rows.map((r) => {
+    const unlaceShare = r.unlaceLoc != null ? Math.round(r.unlaceLoc / r.loc * 100) : null;
     const facts = r.shared ? '<span>—</span><span>—</span><span>—</span>'
-      : `<span>${kunaShare}%</span><span>${r.options}</span><span>${r.passes}</span>`;
+      : `<span>${unlaceShare}%</span><span>${r.options}</span><span>${r.passes}</span>`;
     const body = r.shared ? `<p>${esc(r.role)}. ${r.files} files in <code>${esc(r.folder)}/</code>.</p>`
       : `<p>${esc(r.role)}. ${r.files} files in <code>${esc(r.folder)}/</code>, ${r.subphases} named decision points.</p>
         <ul>${r.modules.map((m) => module({...m, folder: r.folder})).join('')}</ul>`;
     return `<details class="arch-row${r.shared ? ' shared' : ''}"><summary>
       <span class="arch-name"><b>${r.id}</b>${esc(r.name)}</span>
-      <span class="arch-bar" title="${number.format(r.loc)} lines${kunaShare != null ? `; ${number.format(r.kunaLoc)} in kuna_* modules` : ''}"><i style="width:${r.loc / max * 100}%">${r.kunaLoc != null ? `<i style="width:${r.kunaLoc / r.loc * 100}%"></i>` : ''}</i></span>
+      <span class="arch-bar" title="${number.format(r.loc)} lines${unlaceShare != null ? `; ${number.format(r.unlaceLoc)} in unlace_* modules` : ''}"><i style="width:${r.loc / max * 100}%">${r.unlaceLoc != null ? `<i style="width:${r.unlaceLoc / r.loc * 100}%"></i>` : ''}</i></span>
       <span class="arch-loc">${kilo(r.loc)}</span>${facts}</summary>
       <div class="arch-body">${body}<a href="${repoLink(r.spec)}">Read the specification: ${esc(r.spec.split('/').pop())}</a></div></details>`;
   }).join('');

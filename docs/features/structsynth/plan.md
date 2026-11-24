@@ -34,10 +34,10 @@ not counted as a data-flow change — so nothing in the schedule can observe tha
 propagation has stopped moving, and `has_type_recovery_started` is armed at the end
 of the *first* `fullloop`. An action gated on it reads the first of up to seven
 passes. `run_infer_types` returning "no change" therefore sets a plateau flag on the
-`Funcdata` (`funcdata.rs (kuna_infertypes_settled)`) and the synthesizer fires only
+`Funcdata` (`funcdata.rs (unlace_infertypes_settled)`) and the synthesizer fires only
 then, once per function, and never on a function that hit the 7-pass ceiling.
 
-Measured on `fmt` O2 with `KUNA_ACTION_PROF`: `put_word` @0x3000 settles after 3 of
+Measured on `fmt` O2 with `UNLACE_ACTION_PROF`: `put_word` @0x3000 settles after 3 of
 its 6 `infertypes` passes; installing the type costs one more `mainloop` and one more
 `fullloop` (6/6/3 → 8/8/4). `main` @0x26a0, which has no accepted candidate, is
 9/9/3 in both arms.
@@ -102,7 +102,7 @@ otherwise; names are program-wide `struct_N` probed with `find_by_name` and
 reused on an exact layout-signature match.
 
 The layout is then pruned to one a C compiler reproduces byte for byte, because
-`kuna decompile-project` exports the declaration as source: a width the exported
+`unlace decompile-project` exports the declaration as source: a width the exported
 prelude respells (`undefined3` is a 4-byte `unsigned int` there), an offset its
 own alignment does not divide, and an access inside a wider access's bytes are
 each dropped. What survives is naturally aligned and 1/2/4/8 wide, and two such

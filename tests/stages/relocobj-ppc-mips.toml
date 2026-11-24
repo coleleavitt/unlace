@@ -1,4 +1,4 @@
-# kuna relocatable-object loader, GH-904: the calls and addresses of a
+# unlace relocatable-object loader, GH-904: the calls and addresses of a
 # PowerPC or MIPS object file (.o) are relocations the loader did not
 # apply.  Every `bl`/`jal` kept the placeholder the compiler wrote (a branch
 # to itself, or to 0), so calls printed as sub_<self> or sub_0, globals as

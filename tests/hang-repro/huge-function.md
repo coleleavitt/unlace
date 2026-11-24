@@ -10,50 +10,50 @@ distinct stack structs are passed to callbacks, multiplying heritage's guarded
 stack ranges by calls. It uses unoptimized C with stack reuse disabled.
 
 ```sh
-python3 scripts/huge_function_bench.py --out /tmp/kuna-escaped \
+python3 scripts/huge_function_bench.py --out /tmp/unlace-escaped \
   --shape escaped-locals --blocks 100 350 700 \
-  --kuna target/release/unlace --seconds 10 --memory-mib 512
+  --unlace target/release/unlace --seconds 10 --memory-mib 512
 ```
 
 From the repository root:
 
 ```sh
-python3 scripts/huge_function_bench.py --out /tmp/kuna-huge --blocks 100 1000 10000
+python3 scripts/huge_function_bench.py --out /tmp/unlace-huge --blocks 100 1000 10000
 ```
 
 Requirements: Python 3, an x86-64 GNU assembler/linker exposed through `gcc`, and
 `nm`. Run on x86-64 Linux or supply an appropriate cross compiler with `--cc`.
 The script never executes the generated fixture.
 
-With built Kuna binaries and processor specs available:
+With built Unlace binaries and processor specs available:
 
 ```sh
-python3 scripts/huge_function_bench.py --out /tmp/kuna-huge \
+python3 scripts/huge_function_bench.py --out /tmp/unlace-huge \
   --blocks 100 1000 10000 \
-  --kuna target/release/unlace --seconds 30 --memory-mib 1024
+  --unlace target/release/unlace --seconds 30 --memory-mib 1024
 ```
 
 Measurement uses Linux `wait4` without additional utilities. Each fresh
 process records elapsed and CPU seconds, peak resident KiB, exit status, function byte
 size, timeout status, and its command in `results.json`. Compiler/platform identity
-and the Kuna executable hash are stored in `metadata.json`; each result includes
+and the Unlace executable hash are stored in `metadata.json`; each result includes
 the ELF hash and build command. Decompilation JSON and diagnostics are retained
 beside each ELF. Peak RSS measures the process tree's maximum child usage,
 not the sum of simultaneously resident processes. Failed or truncated runs are
 not successful full decompilations; inspect the diagnostics and emitted warnings.
-An external wall deadline kills the process group ten seconds after Kuna's budget.
+An external wall deadline kills the process group ten seconds after Unlace's budget.
 Use repeated `--option NAME VALUE` arguments to compare phase decisions, for
 example `--option listing off`.
 
 Repeat runs in separate output directories before drawing performance conclusions.
 Increase block counts gradually while watching machine memory. The cooperative
-Kuna memory limit is not a hard operating-system cap. This workload probes scaling;
+Unlace memory limit is not a hard operating-system cap. This workload probes scaling;
 it does not establish that the private PE failure in issue #1034 has the same cause.
 
 ## Initial observations
 
 On repository revision `fe01d629` (release build, GCC 16.2.1, x86-64 Linux), with
-a 10-second Kuna budget and 512 MiB memory limit:
+a 10-second Unlace budget and 512 MiB memory limit:
 
 | Shape | Blocks | Function bytes | Peak RSS MiB | Outcome |
 |---|---:|---:|---:|---|
@@ -77,8 +77,8 @@ completed in about 5.2 seconds with `--option regionstructure off`, at 224 MiB
 peak RSS. Reproduce the comparison with:
 
 ```sh
-python3 scripts/huge_function_bench.py --out /tmp/kuna-region-off \
-  --blocks 1000 --kuna target/release/unlace \
+python3 scripts/huge_function_bench.py --out /tmp/unlace-region-off \
+  --blocks 1000 --unlace target/release/unlace \
   --seconds 10 --memory-mib 512 --option regionstructure off
 ```
 

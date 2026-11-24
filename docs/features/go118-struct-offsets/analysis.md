@@ -17,7 +17,7 @@ output-style decision.
 The pinned angr tests are `TestGoTypeDescriptors118.test_offset_anon_fields` and
 `TestGoTypeDescriptorsPackedFieldOffsets.test_go118_field_offsets` at revision
 `6afa0c79a83d9f677a46b0275cdb63bf16c1979e`. This change addresses their packed-offset
-behavior on Kuna's existing 64-bit little-endian provider. The reference also
+behavior on Unlace's existing 64-bit little-endian provider. The reference also
 covers 32-bit targets, which remain separate work; no full test parity is claimed.
 
 ## Coverage

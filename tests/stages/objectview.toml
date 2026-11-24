@@ -4,7 +4,7 @@
 # no UEFI prototype, and the deferred Listing tier never ran.
 #
 # Stage model: P1 program-prep, code-data-partition
-# (loader/kuna_objectview.rs rebuilds a PE view of the TE and an ELF view of
+# (loader/unlace_objectview.rs rebuilds a PE view of the TE and an ELF view of
 # the raw image; engine.rs run_object_view_passes runs the pass list over it
 # at the commit).
 #

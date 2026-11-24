@@ -16,7 +16,7 @@ fn fixture(name: &str) -> String {
 
 fn unlace(args: &[&str]) -> String {
     let (stdout, stderr, code) = run_unlace(args);
-    assert_eq!(code, 0, "kuna {args:?}: {stderr}");
+    assert_eq!(code, 0, "unlace {args:?}: {stderr}");
     stdout
 }
 

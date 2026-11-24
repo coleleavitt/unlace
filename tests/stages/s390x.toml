@@ -1,4 +1,4 @@
-# Kuna #1635: IBM z/Architecture (s390x) processor support, first slice.
+# Unlace #1635: IBM z/Architecture (s390x) processor support, first slice.
 # Stage: P1 load (EM_S390 -> s390x:BE:64:default, PLT stub naming),
 # P2 p-code lift (specs/Ghidra/Processors/s390x), P4 prototypes (s390x.cspec).
 # No option: a processor module is inert on every other target.

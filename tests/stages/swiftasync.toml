@@ -6,7 +6,7 @@
 # unnamed register read, `long v3; // r14`.
 #
 # Stage / sub-stage: P4 prototype models, the callee rule in the decompile
-# drive (`kuna_swiftcall::callee_evidence`): a body that calls the task
+# drive (`unlace_swiftcall::callee_evidence`): a body that calls the task
 # runtime's suspension entry points (`swift_task_alloc`,
 # `swift_task_dealloc`, `swift_task_switch`, ...) is `async`; one that calls
 # `swift_willThrow` throws.

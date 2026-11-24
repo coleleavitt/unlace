@@ -3,7 +3,7 @@
   "kind": "strict Rust keyword machine-operation correction",
   "selection": "outlang rust",
   "baseline_commit": "1689dc9e01c23d50c96a15b4ff2d4cb4a08f895c",
-  "kuna_sha256": "434f27d4342211af65dd534e01a409ab1511354a1a3da74beea5cac5ab8d6ae6",
+  "unlace_sha256": "434f27d4342211af65dd534e01a409ab1511354a1a3da74beea5cac5ab8d6ae6",
   "breadth": {
     "images": 18,
     "distinct_functions": 25339,

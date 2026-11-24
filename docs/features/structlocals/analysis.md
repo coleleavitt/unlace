@@ -114,7 +114,7 @@ not see, because `canon.py` drops declarations and strips casts:
   old rule matched return storage by exact size on the first `RETURN` only.
 * `dash` O2 0x12750 and a two-path `either()`: a record returned on one path,
   another call's result on the other, both typed by the one return type
-  (`v2 = (struct_6 *)sub_12010();`). Kuna duplicates the return block, so there
+  (`v2 = (struct_6 *)sub_12010();`). Unlace duplicates the return block, so there
   was no phi to decline on.
 * `cp` O2 0xbe10: a `mempcpy` tail filled by loads from `"CuXXXXXX"` in
   `.rodata`; the text rule looked at constant stores only.

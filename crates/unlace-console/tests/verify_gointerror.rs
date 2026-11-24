@@ -8,7 +8,7 @@ use unlace_console::ifacedecomp::{
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::langfacet::LangFacet;
 
-const CARRIER: &str = "__kuna_go_int_error_result";
+const CARRIER: &str = "__unlace_go_int_error_result";
 
 fn program(image: &str, enabled: bool) -> ConsoleProgram {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -84,7 +84,7 @@ fn int_error_contract_binds_three_words_through_forwarding() {
             on[0]
         );
         assert!(
-            on[0].contains("return (__kuna_go_int_error_result)ZEXT824(n + 1ULL);"),
+            on[0].contains("return (__unlace_go_int_error_result)ZEXT824(n + 1ULL);"),
             "nil: {}",
             on[0]
         );

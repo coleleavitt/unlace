@@ -6,8 +6,8 @@ functions did the change move to perfect, and which did it move off perfect?* A
 feature that flips 400 losses into wins and 400 wins into losses moves the
 scoreboard by zero, and nothing else in the pipeline shows that.
 
-Both arms are the SAME kuna binary over the SAME slices, one invocation per
-(slice, arm) exactly as decbench's `kuna_raw` backend runs it::
+Both arms are the SAME unlace binary over the SAME slices, one invocation per
+(slice, arm) exactly as decbench's `unlace_raw` backend runs it::
 
     unlace decompile-all <stripped> --json --max-fn-seconds 120 [--option N V ...]
 
@@ -27,7 +27,7 @@ non-zero *control* line means the numbers are wrong, not interesting:
   identically (comments carry no CFG);
 * the baseline arm is compared function-by-function against the tree's published
   ``ged_new.json`` verdict, and the agreement rate is reported (it is < 100% only
-  by kuna-build drift since the tree was scored).
+  by unlace-build drift since the tree was scored).
 
 Usage (scoring needs the decbench venv python)::
 
@@ -67,7 +67,7 @@ from . import config
 MARKER = re.compile(r"^// Function: (\S+) @ (0x[0-9a-fA-F]+)\s*$", re.M)
 COMMENT = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 ARMS = ("base", "var")
-DEFAULT_CACHE = Path.home() / ".cache" / "kuna-optsweep"
+DEFAULT_CACHE = Path.home() / ".cache" / "unlace-optsweep"
 
 EM = {0x03: "x86", 0x3E: "x86-64", 0x28: "arm", 0xB7: "aarch64", 0x08: "mips",
       0x14: "ppc", 0x15: "ppc64", 0xF3: "riscv", 0x02: "sparc", 0x2B: "sparcv9"}
@@ -93,20 +93,20 @@ def arch_of(path: Path) -> str:
 
 
 def build_plan(opts: list[str], projects: set[str] | None) -> list[dict]:
-    """One entry per (opt, project, binary) kuna slice the tree has scores for."""
+    """One entry per (opt, project, binary) unlace slice the tree has scores for."""
     root = config.results_root()
     ged = json.loads((root / "ged_new.json").read_text())
     scored: dict[tuple[str, str, str], set[str]] = collections.defaultdict(set)
     for key, _v in ged.items():
         p = key.split("::")
-        if len(p) < 5 or p[0] not in opts or p[3] != "kuna":
+        if len(p) < 5 or p[0] not in opts or p[3] != "unlace":
             continue
         scored[(p[0], p[1], p[2])].add("::".join(p[4:]))
     plan = []
     for (opt, proj, stem), fns in sorted(scored.items()):
         if projects and proj not in projects:
             continue
-        art = root / opt / proj / "decompiled" / f"kuna_{stem}.c"
+        art = root / opt / proj / "decompiled" / f"unlace_{stem}.c"
         cands = [p for p in (root / opt / proj / "stripped").iterdir()
                  if p.is_file() and p.stem == stem]
         if not art.exists() or len(cands) != 1:
@@ -126,14 +126,14 @@ def build_plan(opts: list[str], projects: set[str] | None) -> list[dict]:
 
 
 def _decompile(job) -> dict:
-    slice_, arm, options, cache, kuna_bin, max_fn, timeout = job
+    slice_, arm, options, cache, unlace_bin, max_fn, timeout = job
     out = cache / "artifacts" / slice_["opt"] / arm / slice_["project"]
-    dst = out / f"kuna_{slice_['stem']}.c"
-    meta = out / f"kuna_{slice_['stem']}.meta.json"
+    dst = out / f"unlace_{slice_['stem']}.c"
+    meta = out / f"unlace_{slice_['stem']}.meta.json"
     if meta.exists():
         return json.loads(meta.read_text())
     out.mkdir(parents=True, exist_ok=True)
-    cmd = [kuna_bin, "decompile-all", slice_["binary"], "--json",
+    cmd = [unlace_bin, "decompile-all", slice_["binary"], "--json",
            "--max-fn-seconds", str(max_fn)]
     if arm == "var":
         for name, value in options:
@@ -183,8 +183,8 @@ def _decompile(job) -> dict:
     return m
 
 
-def decompile_all(plan, options, cache, workers, kuna_bin, max_fn, timeout) -> list[dict]:
-    jobs = [(s, arm, options, cache, kuna_bin, max_fn, timeout)
+def decompile_all(plan, options, cache, workers, unlace_bin, max_fn, timeout) -> list[dict]:
+    jobs = [(s, arm, options, cache, unlace_bin, max_fn, timeout)
             for arm in ARMS for s in sorted(plan, key=lambda s: -len(s["markers"]))]
     metas, done = [], 0
     with ProcessPoolExecutor(max_workers=workers) as ex:
@@ -225,7 +225,7 @@ def _score(job):
     metric = GEDMetric()
     out: dict[str, dict] = {}
     for arm in ARMS:
-        c = Path(cache) / "artifacts" / opt / arm / proj / f"kuna_{stem}.c"
+        c = Path(cache) / "artifacts" / opt / arm / proj / f"unlace_{stem}.c"
         try:
             dec = extract_cfgs_from_source(c, sanitize_decompiled=True) or {}
         except Exception:  # noqa: BLE001 -- a Joern failure is a dropped slice, not a crash
@@ -285,7 +285,7 @@ def collect_rows(plan, cache) -> list[dict]:
         if not sc.exists():
             continue
         scores = json.loads(sc.read_text())
-        arms = {a: blocks_of(Path(cache) / "artifacts" / opt / a / proj / f"kuna_{stem}.c")
+        arms = {a: blocks_of(Path(cache) / "artifacts" / opt / a / proj / f"unlace_{stem}.c")
                 for a in ARMS}
         for fn, v in scores.items():
             if "base" not in v or "var" not in v:
@@ -315,7 +315,7 @@ def _bucket(rows, keyfn):
 def report(rows, plan, options, cache, out_dir: Path) -> str:
     flip = ", ".join(f"{n} {v}" for n, v in options)
     L = [f"# optsweep: `--option {flip}`", ""]
-    L.append(f"kuna `{_git_head()}` -- baseline arm = shipped defaults, variant arm = the flip. "
+    L.append(f"unlace `{_git_head()}` -- baseline arm = shipped defaults, variant arm = the flip. "
              f"{len(plan)} slices, {len(rows)} functions scored in both arms.")
     L.append("")
 
@@ -403,7 +403,7 @@ def _published_agreement(rows) -> tuple[int, int]:
     ged = json.loads((config.results_root() / "ged_new.json").read_text())
     ok = tot = 0
     for r in rows:
-        v = ged.get(f"{r['opt']}::{r['project']}::{r['binary']}::kuna::{r['function']}")
+        v = ged.get(f"{r['opt']}::{r['project']}::{r['binary']}::unlace::{r['function']}")
         if v is None:
             continue
         tot += 1
@@ -426,7 +426,7 @@ def main(argv=None) -> None:
     ap.add_argument("--opt", action="append", default=None,
                     help="optimisation level (repeatable; default all three)")
     ap.add_argument("--project", action="append", default=None)
-    ap.add_argument("--workers", type=int, default=12, help="parallel kuna decompiles")
+    ap.add_argument("--workers", type=int, default=12, help="parallel unlace decompiles")
     ap.add_argument("--joern-workers", type=int, default=8,
                     help="parallel Joern parses -- JVM-heavy, keep near 8")
     ap.add_argument("--max-fn-seconds", type=int, default=120)
@@ -446,7 +446,7 @@ def main(argv=None) -> None:
 
     if not args.report_only:
         metas = decompile_all(plan, args.option, cache, args.workers,
-                              config.kuna_bin(), args.max_fn_seconds, args.binary_timeout)
+                              config.unlace_bin(), args.max_fn_seconds, args.binary_timeout)
         bad = [m for m in metas if m["status"] != "ok"]
         print(f"[decompile] done; {len(bad)} non-ok, "
               f"{sum(m['missing'] for m in metas)} markers unmatched", flush=True)

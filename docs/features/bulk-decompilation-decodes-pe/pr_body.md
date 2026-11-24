@@ -1,12 +1,12 @@
 ## The problem
 
 A PE may keep its Import Address Table inside its code section, and a packed one
-usually does. `kuna decompile-all` then invents a function body for every import
+usually does. `unlace decompile-all` then invents a function body for every import
 pointer word — 50 of the 56 entries on the reported image, each one four bytes of
 pointer read as instructions:
 
 ```
-$ kuna decompile-all bm3.exe --json --filter '^VirtualAlloc$' --no-vars
+$ unlace decompile-all bm3.exe --json --filter '^VirtualAlloc$' --no-vars
   "count": 1,
   "total": 56,
       "name": "VirtualAlloc",
@@ -21,7 +21,7 @@ holds the whole import directory. The same binary's real function inventory is
 six entries. Reproduce on the vendored twin added here:
 
 ```
-kuna decompile-all decompiler/crates/kuna-analysis/tests/fixtures/pe_iatincode_i386.exe \
+unlace decompile-all decompiler/crates/unlace-analysis/tests/fixtures/pe_iatincode_i386.exe \
      --json --filter '^VirtualAlloc$' --no-vars
 ```
 
@@ -43,7 +43,7 @@ kuna decompile-all decompiler/crates/kuna-analysis/tests/fixtures/pe_iatincode_i
 - A `--define-function` declaration outranks the new test as it already outranks
   the section-flag one, so an address the import directory claims can still be
   decompiled on request.
-- Nothing leaves the inventory. `kuna functions` still lists all 56 entries,
+- Nothing leaves the inventory. `unlace functions` still lists all 56 entries,
   `--addr`/`--functions VirtualAlloc` still decompiles the slot, and the call
   naming the slot symbol exists for is untouched — the surviving body on the
   reported image still renders `ExitProcess(0)`.
@@ -65,6 +65,6 @@ the 20th drops one more, a discovered `sub_4010ae` sitting unaligned inside the
 IAT whose body is the same phantom shape. No image lost a real function.
 
 Gates: `make test` 675/675, `make test-stages` 687/687, `make test-cli` 89/89,
-`make check-spec` OK, `kuna catalog --check` OK, `make rust-test` green.
+`make check-spec` OK, `unlace catalog --check` OK, `make rust-test` green.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

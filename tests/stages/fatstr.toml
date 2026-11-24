@@ -1,5 +1,5 @@
 # Length-carried (ptr, len) string literals (docs/multilang.md W3/W4), ported
-# as kuna `option fatstr` (P5 const-pointer, default AUTO).
+# as unlace `option fatstr` (P5 const-pointer, default AUTO).
 #
 # Rust (&str, &[u8]) and Go (string) carry a string's length beside its
 # pointer and never NUL-terminate the bytes, so the classic literal path -

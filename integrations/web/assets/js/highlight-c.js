@@ -31,7 +31,7 @@ const RUST = {
     'Option Result Vec String Box').split(' ')),
 };
 
-// kuna's Rust output always opens with the `#[allow(...)]` attribute and always
+// unlace's Rust output always opens with the `#[allow(...)]` attribute and always
 // declares with `let mut`; either is decisive, and neither can appear in C.
 function dialectFor(code) {
   return /^#\[allow\(|^\s*unsafe (extern "C" )?fn |\blet mut \b/m.test(code) ? RUST : C;

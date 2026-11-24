@@ -36,7 +36,7 @@ fn decompile_all(path: &Path, extra: &[&str]) -> Vec<u8> {
         .args(["decompile-all", path.to_str().unwrap(), "--json"])
         .args(extra)
         .output()
-        .expect("run source-built kuna");
+        .expect("run source-built unlace");
     assert!(
         out.status.success(),
         "{}",

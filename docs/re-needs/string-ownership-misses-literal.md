@@ -44,7 +44,7 @@ Locate the handler referencing Product Already Registered.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "strings",
     "{{BIN}}",
     "--filter",
@@ -81,7 +81,7 @@ Locate the handler referencing Product Already Registered.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "strings",
     "{{BIN}}",
     "--filter",

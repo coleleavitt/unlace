@@ -3,7 +3,7 @@
  *   audit_recorded = audit_decoy; if (audit_choice) return audit_fast; return audit_safe;
  * audit_retry is gcc 11 -O0 -fPIC of
  *   if (a) { audit_count = 1; if (b) return 1; audit_tick(); return 2; } return 3;
- * with audit_choice, audit_recorded and audit_count volatile (kuna #1355).
+ * with audit_choice, audit_recorded and audit_count volatile (unlace #1355).
  */
 	.text
 	.globl	audit_fast

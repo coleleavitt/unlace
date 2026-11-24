@@ -1,6 +1,6 @@
 // castarith C++ enum fixture: `enum class` elements with an 8- and a 16-bit
 // underlying type, read through a pointer plus whole elements.  Built with
-// g++ -g -O2.  kuna prints each as a plain `enum`, which C sizes as an `int`,
+// g++ -g -O2.  unlace prints each as a plain `enum`, which C sizes as an `int`,
 // so the subscript form would scale by 4 and the integer form must stay.
 #include <cstdio>
 #include <cstdint>

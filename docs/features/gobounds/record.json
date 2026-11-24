@@ -1,6 +1,6 @@
 {
   "option": "gobounds",
-  "binary": "/tmp/kuna-angr-reference/binaries/builtins-go122",
+  "binary": "/tmp/unlace-angr-reference/binaries/builtins-go122",
   "selector": "main.third",
   "angr_commit": "6afa0c79a83d9f677a46b0275cdb63bf16c1979e",
   "reference_test": "tests/analyses/decompiler/test_go_builtins.py::TestBuiltinsGo122",
@@ -108,7 +108,7 @@
   "speed_method": "CLI wall clock including image load; 21 interleaved alternating pairs, two warmups",
   "stage": "tests/stages/gobounds.xml",
   "source_files": [
-    "decompiler/crates/kuna-decomp/src/p7_regions/gobounds.rs"
+    "decompiler/crates/unlace-decomp/src/p7_regions/gobounds.rs"
   ],
   "fixture_urls": {
     "builtins-go122": "https://raw.githubusercontent.com/angr/binaries/76ad9e296dde8f82b8ede93ce06a578cd1933639/tests/x86_64/go/go1.22.5/builtins",

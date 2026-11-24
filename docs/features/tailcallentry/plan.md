@@ -33,7 +33,7 @@ what makes reading it afterwards both legal and strictly better-informed.
   forward closure, with no length floor.
 * `restores_frame` — the `POP` / `VPOP` / `LDM SP!` / `ADD SP` epilogue shape.
 
-Nothing in `listing/mod.rs` changes except one `pub mod kuna_tailcallentry;` —
+Nothing in `listing/mod.rs` changes except one `pub mod unlace_tailcallentry;` —
 the module reads only the public `Listing` facade.
 
 **Rejected, with measurements in `analysis.md` §4.1:** the stack-discipline model
@@ -63,12 +63,12 @@ effect when it runs.
 ## 3. Registration
 
 * `Architecture::analysis_tailcallentry` (field, `reset_defaults` = false,
-  `set_kuna_option` arm).
+  `set_unlace_option` arm).
 * `engine.rs::analysis_pass_enabled` `"tailcallentry"` arm (the defensive commit
   gate; the pre-invocation check in `passes.rs` is the live one).
-* `p0_knowledge/options.rs` `KUNA_OPTION_NAMES`.
+* `p0_knowledge/options.rs` `UNLACE_OPTION_NAMES`.
 * `phases.toml` `[[settable]]` row, every field populated, `source_decompiler =
-  "kuna"` (this came from kuna's own recall measurement), `inspiration` prefixed
+  "unlace"` (this came from unlace's own recall measurement), `inspiration` prefixed
   `decbench:`.
 * Hard-coded catalog counts, all re-derived from a green build rather than by
   arithmetic after the rebase onto merged `ptrentry`: `phases/tests.rs`
@@ -100,12 +100,12 @@ never constructs one, so the recursive-descent walk — and therefore this optio
 is unobservable there, the same reason every sibling analysis-tier discovery flag
 (`funcstart_patterns`, `aif`, `eh_frame_full`, `cortexmvectors`, `ptrentry`,
 `i386_pie_plt`) ships with a cross-crate `verify_*` gate instead.
-`kuna-base/src/xml.rs`' corpus file count and `docs/baseline-stages.json` are
+`unlace-base/src/xml.rs`' corpus file count and `docs/baseline-stages.json` are
 therefore untouched.
 
 ## 5. Fixture
 
-`decompiler/crates/kuna-analysis/tests/fixtures/cortexm_tailcall_le32` (437
+`decompiler/crates/unlace-analysis/tests/fixtures/cortexm_tailcall_le32` (437
 bytes) plus its generator `cortexm_tailcall_le32.py` and a fixtures-README row.
 Hand-assembled because no cross toolchain on this host emits a bare-metal STM32
 link layout. Its vector table is deliberately the *shipped*-signature shape, so

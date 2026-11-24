@@ -25,20 +25,20 @@ Seconds. Errors fail the run:
   unless a commit carries `Assertion-change: <test>: <why the new expectation is
   right>` (`catalog`'s are exempt; its counts are computed now).
 
-A new `kuna_*.rs` with no `phases.toml` change prints a warning: that is right
+A new `unlace_*.rs` with no `phases.toml` change prints a warning: that is right
 only for a strict correctness fix (`docs/agents.md`, "Adding features").
 
 ## `aritydiff`: call arities over real binaries
 
 ```
-python -m scripts.prepr.aritydiff BASE_KUNA HEAD_KUNA --corpus msvc32 [BINARY ...] [-v]
-python -m scripts.prepr.aritydiff BASE_KUNA HEAD_KUNA --corpus msvc32 --option NAME on
+python -m scripts.prepr.aritydiff BASE_UNLACE HEAD_UNLACE --corpus msvc32 [BINARY ...] [-v]
+python -m scripts.prepr.aritydiff BASE_UNLACE HEAD_UNLACE --corpus msvc32 --option NAME on
 ```
 
 Both builds run `decompile-all` over every binary; each call whose argument
-count changed is reported per binary, with `-v` listing them. Build `BASE_KUNA`
+count changed is reported per binary, with `-v` listing them. Build `BASE_UNLACE`
 from the merge base (`git worktree add`, a separate `CARGO_TARGET_DIR`).
-Each build reads the specs it finds itself; export `KUNA_SPECS` to give both
+Each build reads the specs it finds itself; export `UNLACE_SPECS` to give both
 the same tree. `--option` applies to the head only, so a default-off option can
 be measured.
 
@@ -54,14 +54,14 @@ use and pinned by SHA-256 (`scripts/prepr/corpus.py`): setuptools 59.6.0
 `cli-32.exe`/`gui-32.exe`, pip 21.3.1's distlib `t32.exe`/`w32.exe`, and
 Ghidra's `WinHelloCPP.exe`. They carry the MSVC CRT shapes the repo's fixtures
 lack: `/GS` checks, SEH prologs, `_chkstk`. About 30 seconds per pair of
-builds. Nothing is committed; the cache is `$KUNA_PREPR_CACHE` (default
-`~/.cache/kuna-prepr`). Pass other binaries as arguments: decbench's i386
+builds. Nothing is committed; the cache is `$UNLACE_PREPR_CACHE` (default
+`~/.cache/unlace-prepr`). Pass other binaries as arguments: decbench's i386
 PEs are MinGW only (`docs/decbench-loop.md`), so they complement the corpus
 rather than replace it, and its ELF slices are the off-target check.
 
 Binaries that cannot be shared (a game you are reconstructing, a customer
-image) go in `--corpus local`: one path per line in `$KUNA_PREPR_LOCAL`
-(default `~/.config/kuna-prepr/local.txt`). They stay on your machine; quote at
+image) go in `--corpus local`: one path per line in `$UNLACE_PREPR_LOCAL`
+(default `~/.config/unlace-prepr/local.txt`). They stay on your machine; quote at
 most short excerpts of their output in a PR.
 
 What it would have shown on recent x86-32 changes, base to head:

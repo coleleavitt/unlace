@@ -1,6 +1,6 @@
 bejoin_mipspic_O2.so, bejoin_mipsunal -- MIPS32 big-endian images for the
 caller evidence of option bejoin callers through PIC calls and past
-unaligned loads (GH-904; tests/stages/kuna-bejoin-mipspic.toml).
+unaligned loads (GH-904; tests/stages/unlace-bejoin-mipspic.toml).
 
 What they are
   bejoin_mipspic_O2.so  o32 PIC shared object from bejoin_mipspic.c: every

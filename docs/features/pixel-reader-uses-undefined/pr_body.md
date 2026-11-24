@@ -3,10 +3,10 @@
 On an x86 Windows PE, every stack slot after the first API call is at the wrong
 offset, and the error grows with each call. In this bitmap decoder the buffer
 handed to `ReadFile` and the buffer read back afterwards are the *same* four
-bytes, but kuna models them as two independent variables:
+bytes, but unlace models them as two independent variables:
 
 ```
-$ kuna decompile ./Imagination.exe sub_401290 \
+$ unlace decompile ./Imagination.exe sub_401290 \
     --assert 'prototype LocalAlloc void *LocalAlloc(unsigned int flags,unsigned int size)'
 unsigned int sub_401290(void)
 {

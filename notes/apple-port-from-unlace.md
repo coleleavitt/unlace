@@ -1,28 +1,28 @@
-# Porting Apple support from unlace into kuna
+# Porting Apple support from unlace into unlace
 
 Status: plan, 2026-10-29. Owner: Cole. Source project: unlace
 (`~/RustProjects/active/unlace`, github.com/coleleavitt/unlace), now a research
-project. kuna takes precedence; each item below lands as its own kuna PR that
+project. unlace takes precedence; each item below lands as its own unlace PR that
 follows `AGENTS.md` (owning phase folder, a named `phases.toml` option for anything
 that changes emitted C, a `tests/stages/` two-pass testcase, `docs/spec/` prose, the
 four gates, and a measured speed delta). Multi-part items start as a draft
 `[PROPOSAL]` PR.
 
-## Why kuna, measured
+## Why unlace, measured
 
-Head-to-head on 2026-10-29 (unlace master e7a0cc10d6, kuna 03ef2e6b release):
+Head-to-head on 2026-10-29 (unlace master e7a0cc10d6, unlace 03ef2e6b release):
 
 - **Correctness**, 65 scalar fixture functions recompiled and run on every input
-  tuple against the source: kuna 62 correct / 1 wrong / 2 do not compile; unlace
+  tuple against the source: unlace 62 correct / 1 wrong / 2 do not compile; unlace
   43 correct / 22 wrong.
 - **Toyota iOS app** (`Toyota.app/Toyota`, 84 MB arm64 Mach-O, Swift + ObjC),
-  500 random functions: kuna 11,588 lines vs unlace 22,257; casts 2,260 vs 8,220;
+  500 random functions: unlace 11,588 lines vs unlace 22,257; casts 2,260 vs 8,220;
   unlace leaks prologue register saves, NZCV flag words and LR constants, drops
-  call arguments and prints imported Swift calls as `_unnamed(...)`. kuna's output
+  call arguments and prints imported Swift calls as `_unnamed(...)`. unlace's output
   is clean and keeps the data flow.
 - Where unlace is still ahead is Apple metadata breadth, listed below.
 
-## What kuna already has (do not re-port)
+## What unlace already has (do not re-port)
 
 - Mach-O loading through `object` (`unlace-analysis/src/loader/format/macho.rs`,
   281 lines), arm64e detection, `--slice` for fat files.
@@ -38,9 +38,9 @@ Head-to-head on 2026-10-29 (unlace master e7a0cc10d6, kuna 03ef2e6b release):
 
 ## Port list, in order
 
-Each item: what unlace has, kuna's gap with evidence, where it goes in kuna.
+Each item: what unlace has, unlace's gap with evidence, where it goes in unlace.
 
-1. **ObjC selector, class and super references.** kuna leaves selector refs as
+1. **ObjC selector, class and super references.** unlace leaves selector refs as
    data symbols: `objc_msgSendSuper2(&Stack..., dat_1045b76f0)` on Toyota even with
    `objc on`. unlace `crates/unlace-loader/src/objc.rs` (1,820 lines) parses
    `__objc_selrefs`, `__objc_classrefs`, `__objc_superrefs`. Target: extend
@@ -48,11 +48,11 @@ Each item: what unlace has, kuna's gap with evidence, where it goes in kuna.
    a P9 emit option that renders the selector argument of `objc_msgSend*` as the
    selector name. Stage test: an arm64 ObjC fixture calling two selectors.
 2. **ObjC breadth: categories, protocols, ivars, properties.** unlace `objc.rs`
-   reads categories, protocol lists, ivar lists; kuna reads classes and methods
+   reads categories, protocol lists, ivar lists; unlace reads classes and methods
    only. Ivars give `self` a struct layout (field names instead of `+ 0x18`).
-   Target: `analyzers/objc/` + a P5 types hook for the ivar layout. Verify what kuna
+   Target: `analyzers/objc/` + a P5 types hook for the ivar layout. Verify what unlace
    does with `self` fields first.
-3. **Swift name demangling.** kuna prints `$sSo9OS_os_logC0B0E9subsystem8...` and
+3. **Swift name demangling.** unlace prints `$sSo9OS_os_logC0B0E9subsystem8...` and
    ObjC class names like `_TtC6Toyota24AddMileageViewController` mangled. unlace
    demangles fully through the `symbolic-demangle` crate, which builds Apple's
    C++ demangler. **Decision needed:** a C++ build dependency (breaks or
@@ -61,34 +61,34 @@ Each item: what unlace has, kuna's gap with evidence, where it goes in kuna.
    Rust, small).
 4. **Swift metadata.** unlace `swift_metadata.rs` (559 lines) scans
    `__swift5_types`, `__swift5_protos`, `__swift5_proto` (type context descriptors,
-   protocol descriptors, conformances, async function pointers). kuna has none.
+   protocol descriptors, conformances, async function pointers). unlace has none.
    Target: a new `analyzers/swift/` metadata pass (gated, Mach-O only) that names
    type descriptors and metadata accessors.
 5. **dyld shared cache.** unlace `dyld_cache.rs` (3,445 lines) + `dyld_mmap.rs`:
    header, sub-caches, mappings, slide info v2/v3/v5 (incl. arm64e auth chains),
-   per-image extraction. kuna cannot open a cache. Target: a loader format plus a
+   per-image extraction. unlace cannot open a cache. Target: a loader format plus a
    CLI path to pick one image (`--image <install-name>`). Big item, so open a
    `[PROPOSAL]` PR first.
-6. **Mach-O loader audit.** unlace `macho.rs` is 4,694 lines against kuna's 281.
+6. **Mach-O loader audit.** unlace `macho.rs` is 4,694 lines against unlace's 281.
    Compare feature by feature (`__cfstring` literals, `LC_FUNCTION_STARTS`, stub and
    lazy-pointer naming, `__got`/`__auth_got`, exports trie, two-level namespace,
    thread-local variables, init/term funcs). Port only what a stage test shows
-   kuna is missing.
+   unlace is missing.
 7. **arm64e pointer authentication.** unlace decodes auth rebase/bind entries
-   (`ArmAuthMeta`, key + diversity). Check that kuna strips PAC bits in its
+   (`ArmAuthMeta`, key + diversity). Check that unlace strips PAC bits in its
    fixup resolver; port the decoder if not.
 8. **Firmware containers (lower priority).** `ios_img4.rs` (IMG4/IM4P),
    `apple_kernelcache.rs` (compression detection, prelink info), MH_FILESET
    kernel caches. New loader formats; only if kernel/firmware RE matters.
-9. **Compact unwind** (`compact_unwind.rs`, `__unwind_info`). Low value: kuna's
+9. **Compact unwind** (`compact_unwind.rs`, `__unwind_info`). Low value: unlace's
    function discovery already finds Toyota's functions. Keep as a discovery
    cross-check only.
 
 ## Not porting
 
-- unlace's decompiler core (passes, structurer, C printer, lifters). kuna's IR is
-  Ghidra p-code; the head-to-head showed kuna's core is better.
-- The Hex-Rays-style printer. If wanted later, it would be a kuna emit option and
+- unlace's decompiler core (passes, structurer, C printer, lifters). unlace's IR is
+  Ghidra p-code; the head-to-head showed unlace's core is better.
+- The Hex-Rays-style printer. If wanted later, it would be a unlace emit option and
   needs a maintainer conversation first.
 - Anything derived from the Hex-Rays dumps in unlace's `research/`. Port only
   unlace code written from Apple's public formats or Ghidra.
@@ -123,7 +123,7 @@ Review PRs in the fork (github.com/coleleavitt/kuna):
 | #13 | apple/objc-types | apple/objc-sdk-signatures | follow-up: properties/ivars/messages typed by declared class |
 | #14 | apple/swift-types | apple/swift-metadata | follow-up: Swift struct/class layouts (option `swifttypes`) |
 
-All nine items have review PRs. The Mach-O audit found kuna already covers function starts, stubs/GOT naming, exports trie, LC_MAIN and fat slices; classic bind opcodes landed in #3.
+All nine items have review PRs. The Mach-O audit found unlace already covers function starts, stubs/GOT naming, exports trie, LC_MAIN and fat slices; classic bind opcodes landed in #3.
 
 Open decisions: #1 applies chained rebases under the default-on `dynrelocs` option; `[AUTOMATED]` tag on commits; `CFSTR(...)` vs plain literal (#8); AArch64 `brk` as no-return (#6).
 

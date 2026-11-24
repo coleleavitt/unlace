@@ -1,4 +1,4 @@
-# kuna golden lift fixture (per-instruction raw p-code from the C++ oracle)
+# unlace golden lift fixture (per-instruction raw p-code from the C++ oracle)
 # corpus: tests/stages/gh8844-avr-rjmpwrap.toml
 # sla: Ghidra/Processors/Atmel/data/languages/avr8.sla (relative to specs/)
 # cap: 80 instructions per lift point

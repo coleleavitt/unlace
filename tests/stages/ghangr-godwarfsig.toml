@@ -277,7 +277,7 @@ regex = [
 [[match]]
 name = 'Go result formals never become generic inputs'
 count = 0
-literal = '_kuna_ident_7e7230'
+literal = '_unlace_ident_7e7230'
 
 [[match]]
 name = 'Go record type in its own package is unqualified'

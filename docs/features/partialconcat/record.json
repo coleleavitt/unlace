@@ -7,7 +7,7 @@
   "option": "partialconcat",
   "flag": "partial_concat",
   "change_kind": "presentation-default",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "inspiration": "pwn.college module 5 game client/server port conversion helper",
   "default_on": true,
   "ablation_changed": 0,

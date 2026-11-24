@@ -1,5 +1,5 @@
 # decbench campaign case O0-cleanflight-cleanflight_DALRCF405-serialUART (8a):
-# kuna emitted SEMANTICALLY WRONG C - a statement escaped an `else` arm and
+# unlace emitted SEMANTICALLY WRONG C - a statement escaped an `else` arm and
 # executed on the then-path too.
 #
 # The source shape (cleanflight serial_uart_stm32f4xx.c:240, and again in
@@ -18,7 +18,7 @@
 # `else if` collapse path.
 #
 # The collapse is a lazy brace: emit_block_if registers a pending brace and
-# cancels it only if the clause's condition emitted nothing.  kuna's port
+# cancels it only if the clause's condition emitted nothing.  unlace's port
 # asked the emitter "is ANY brace pending" where C++ asks
 # `emit->hasPendingPrint(&amp;pendingBrace)` - pointer identity against the
 # frame's own brace (decompiler/cpp/printc.cc, emitBlockIf).  So the FIRST

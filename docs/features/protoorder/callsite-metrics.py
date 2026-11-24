@@ -4,7 +4,7 @@
 `typesweep`/`type_match` scores a function's own `variables[]`, so it cannot see
 an argument that a call site gained or lost.  This is the metric that can.
 
-Reads `<dir>/<binary>.{off,on}.json` (`kuna decompile-all --json`) and reports,
+Reads `<dir>/<binary>.{off,on}.json` (`unlace decompile-all --json`) and reports,
 over every function whose emitted C differs between the arms:
 
   deleted     arguments the OFF arm renders and the ON arm does not (must be 0)

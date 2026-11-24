@@ -28,7 +28,7 @@ reject_reason: null
 Recover context, buffer, length, and flags passed at 0x9d9d8.
 
 > **Bytecode-reader call site omits all four arguments with recovery options on** (major, `673da52e9b533b4c22bd2eeb`)
-> Both recovery options leave a zero-argument call. Kuna disassembly shows incoming RDI/RSI/RDX and ECX=1; decompiling the callee recovers four parameters.
+> Both recovery options leave a zero-argument call. Unlace disassembly shows incoming RDI/RSI/RDX and ECX=1; decompiling the callee recovers four parameters.
 
 ## Reproduction
 
@@ -38,7 +38,7 @@ Recover context, buffer, length, and flags passed at 0x9d9d8.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_9d9c0",
@@ -74,7 +74,7 @@ Recover context, buffer, length, and flags passed at 0x9d9d8.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_9d9c0",

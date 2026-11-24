@@ -107,6 +107,6 @@ pub(super) fn notes_when(
         return Vec::new();
     }
     vec![format!(
-        "PowerPC APU note is malformed or names an APU kuna does not classify; using {language}; use --target to specify another language"
+        "PowerPC APU note is malformed or names an APU unlace does not classify; using {language}; use --target to specify another language"
     )]
 }

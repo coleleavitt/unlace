@@ -1,6 +1,6 @@
 # Where the missing functions actually went (2026-08-01)
 
-The recall pool — functions kuna produced **no output for** while a rival did — is the largest
+The recall pool — functions unlace produced **no output for** while a rival did — is the largest
 single item in the campaign, so it got a measurement rather than an estimate. This file records
 what that measurement found, including the parts that contradict what the campaign believed.
 
@@ -8,7 +8,7 @@ what that measurement found, including the parts that contradict what the campai
 
 A function counts as *measured* if at least one non-LLM rival (angr / binja / dewolf / ghidra /
 ida / phoenix / r2dec) has `decompiled: true` in the run's `function_results.json`, and *missing*
-if kuna does not. Matching is by **address**, Thumb-bit tolerant — never by name, because
+if unlace does not. Matching is by **address**, Thumb-bit tolerant — never by name, because
 decbench relabels each function's own `sub_<addr>` placeholder to its DWARF name post-hoc.
 
 `unlace decompile-all --json --mode reliable --max-fn-seconds 120` over **191 binaries** (all 126
@@ -16,11 +16,11 @@ carrying a recorded miss, plus 65 controls). Every run exited 0; the longest was
 
 Two methodological points that changed the answer:
 
-- **The stored `kuna_*.c` artifacts are 12-16 days older than the fixes being measured**
+- **The stored `unlace_*.c` artifacts are 12-16 days older than the fixes being measured**
   (2026-07-15/16, betaflight O2-noinline 07-23). A raw before/after therefore conflates the fix
   wave with two weeks of unrelated main drift. The sweep was re-run against a **pre-wave build**
   to separate them, and against the individual PR branches to attribute per-PR.
-- **PE targets record RVAs in the rival artifacts while kuna reports ImageBase+RVA**
+- **PE targets record RVAs in the rival artifacts while unlace reports ImageBase+RVA**
   (mydoom / minipig / x0r-usb `+0x400000`, dexter `+0x69940000`). Uncorrected, this fabricates
   **181 fake gaps**.
 
@@ -37,8 +37,8 @@ the number to use.**
 |---|---|---|
 | Genuinely recovered by the 2026-08-01 fix wave | **63** | 0.9% |
 | Already fixed before the wave — the stored artifact was simply stale | 1,994 | 27.1% |
-| decbench-side `.text`-filter artifact — never kuna's fault | 3,233 | 44.0% |
-| **Still missing, real kuna gap** | **2,061** | 28.0% |
+| decbench-side `.text`-filter artifact — never unlace's fault | 3,233 | 44.0% |
+| **Still missing, real unlace gap** | **2,061** | 28.0% |
 | name unresolvable to an address | 3 | — |
 
 So the wave's *benchmark-visible* recall gain is small, and the campaign should say so. Two
@@ -50,7 +50,7 @@ honest caveats in the other direction:
 - Both fix PRs **under-claimed**. #227 reported 19 recovered, measured **50**; #234 reported 6,
   measured **13**.
 
-## The 44% that was never kuna's fault
+## The 44% that was never unlace's fault
 
 u-boot's `.text` is 936 bytes — the real code lives in `.text_rest` (0x76b40). freertos is built
 `-ffunction-sections` with 183 sections, `.text` covering only `0x78`-`0xbef`. decbench's raw
@@ -59,17 +59,17 @@ rows; only dewolf and r2dec, which skip the filter, supplied their measured sets
 
 decbench PR #58 fixes this. When it lands, **2,094 of the 3,233 flip to covered instantly** — and
 **1,135 u-boot functions become a newly visible real gap** (954 of them sit inside a function
-kuna already enumerates, 179 nearby, 2 absent). That is a gap the artifact is currently hiding,
+unlace already enumerates, 179 nearby, 2 absent). That is a gap the artifact is currently hiding,
 not one the fix creates.
 
-Separately measured, past the filter: kuna covers **261 of freertos's 265** measured functions
+Separately measured, past the filter: unlace covers **261 of freertos's 265** measured functions
 and **1,833 of u-boot's 2,968**.
 
 ## The largest remaining real gap is entry granularity, not decompilation
 
-**2,026 of the 2,061 live misses (98.3%) are function-entry granularity on embedded ARM.** kuna
+**2,026 of the 2,061 live misses (98.3%) are function-entry granularity on embedded ARM.** unlace
 produces a body for code *containing* the DWARF `low_pc` but does not start a function *at* it.
-Median distance to the containing kuna entry is **24 bytes** (p25 10 B, p75 58 B; 74% within
+Median distance to the containing unlace entry is **24 bytes** (p25 10 B, p75 58 B; 74% within
 64 B). Distribution: betaflight 761, crazyflie 522, cleanflight 352, libopencm3 136, chibios 115,
 nuttx 87, riot-os 33, x0r-usb 15, mydoom 9, u-boot 4.
 
@@ -88,7 +88,7 @@ The remaining 35: 24 error records, 8 nearby-but-not-contained, 3 absent.
 > claim do not:
 >
 > - It is **not absorption**. Of 2,941 missed addresses, **1,896 sit past the end of the
->   nearest kuna function and exactly 3 are strictly inside a kuna body**. The 24-byte median
+>   nearest unlace function and exactly 3 are strictly inside a unlace body**. The 24-byte median
 >   measures proximity, not containment. `devnull_read`/`devnull_write` and
 >   `_usbd_standard_request_device` are not merged into a neighbour — their bytes produce **no
 >   output at all**. This was missing decompilation, not a naming/boundary problem.

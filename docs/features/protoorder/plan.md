@@ -12,15 +12,15 @@ One option, `protoorder off|types|lock`, default `types`, P4, subphase
 
 | Piece | Where |
 |---|---|
-| The mode, the recovered-types record, the converter (recovered `FuncProto` → `PrototypePieces`) and the whole acceptance policy | `decompiler/crates/kuna-decomp/src/p4_calls/protoorder.rs` |
-| The per-image table of stated types, and the per-function copy of it | `infra/architecture.rs` (`kuna_protoorder_types`), `substrate/funcdata.rs`, `infra/decompile_drive.rs` (`seed_protoorder_types`) |
-| The vote and every refusal (`call_argument_vote`) | `decompiler/crates/kuna-decomp/src/p4_calls/protoorder.rs` |
-| The consumption: the recovered arm of `TypeOpCall::getInputLocal`, and `declared_input_type_local` for the cast path | `decompiler/crates/kuna-decomp/src/p5_types/coreaction_infertypes.rs`, `p9_emit/coreaction_casts.rs` |
+| The mode, the recovered-types record, the converter (recovered `FuncProto` → `PrototypePieces`) and the whole acceptance policy | `decompiler/crates/unlace-decomp/src/p4_calls/protoorder.rs` |
+| The per-image table of stated types, and the per-function copy of it | `infra/architecture.rs` (`unlace_protoorder_types`), `substrate/funcdata.rs`, `infra/decompile_drive.rs` (`seed_protoorder_types`) |
+| The vote and every refusal (`call_argument_vote`) | `decompiler/crates/unlace-decomp/src/p4_calls/protoorder.rs` |
+| The consumption: the recovered arm of `TypeOpCall::getInputLocal`, and `declared_input_type_local` for the cast path | `decompiler/crates/unlace-decomp/src/p5_types/coreaction_infertypes.rs`, `p9_emit/coreaction_casts.rs` |
 | The statement hook (per target, after the function's own decompile) | `decompiler/crates/console/src/project.rs` (`DecompileOptions::park_recovered_proto`) |
-| The order (call graph → Tarjan SCC → reverse-topological), the buffered address-order emission, the narrowed-run skip, the `--jobs` exclusion and note, and the inert-surface warning | `decompiler/crates/kuna-cli/src/decompile_all.rs` (used from `decompile_project.rs`, `decompile_graph.rs`) |
+| The order (call graph → Tarjan SCC → reverse-topological), the buffered address-order emission, the narrowed-run skip, the `--jobs` exclusion and note, and the inert-surface warning | `decompiler/crates/unlace-cli/src/decompile_all.rs` (used from `decompile_project.rs`, `decompile_graph.rs`) |
 | The option row / arch field / live value | `phases.toml`, `infra/architecture.rs`, `p0_knowledge/options.rs`, `console/src/console.rs` |
-| Spec prose | `docs/spec/04-calls-and-prototypes.md` — *(kuna) `protoorder` — callee-first prototypes* |
-| Tests | 23 unit tests in `p4_calls/protoorder/tests.rs`; seven `tests/cli` probes over four in-repo fixtures: the off arm, the default arm, the arity pin and the `lock` register-save decline (`protoorder_x86_64`), a stack array and a `struct stat` that a vote used to split (`protoorder_stack{array,struct}_x86_64`, gcc -O0), and a Thumb function address a pointer vote would print as `&sub_8130[1]` (`protoorder_codeptr_thumb_le32`); `kuna-cli` tests for the `--jobs` contract, the `--jobs` note, the narrowed-run skip and the raw-image order |
+| Spec prose | `docs/spec/04-calls-and-prototypes.md` — *(unlace) `protoorder` — callee-first prototypes* |
+| Tests | 23 unit tests in `p4_calls/protoorder/tests.rs`; seven `tests/cli` probes over four in-repo fixtures: the off arm, the default arm, the arity pin and the `lock` register-save decline (`protoorder_x86_64`), a stack array and a `struct stat` that a vote used to split (`protoorder_stack{array,struct}_x86_64`, gcc -O0), and a Thumb function address a pointer vote would print as `&sub_8130[1]` (`protoorder_codeptr_thumb_le32`); `unlace-cli` tests for the `--jobs` contract, the `--jobs` note, the narrowed-run skip and the raw-image order |
 | Corpus tools | `corpus-diff.py` (every changed function classified, frame layout and use-before-def checked), `label-review.py` + `hand-labels.json` (the residue labelled), `callsite-metrics.py`, `invariants.py`, `underarity.py` |
 
 ## Steps taken

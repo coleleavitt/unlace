@@ -5,7 +5,7 @@ pointer. The word at offset 0 comes out right; the ones that need an offset do
 not.
 
 ```sh
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/neonimm_arm_le32 \
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/neonimm_arm_le32 \
       0x10004 --addr --option constspaceload off
 ```
 

@@ -217,7 +217,7 @@ await test('#6 a session joined from someone else is saved apart from the studen
   const mem = new Map();
   const storage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) };
   const own = new P.SessionStore(storage);
-  const shared = new P.SessionStore(storage, { prefix: 'kuna.d2.shared.', indexKey: 'kuna.d2.shared.index' });
+  const shared = new P.SessionStore(storage, { prefix: 'unlace.d2.shared.', indexKey: 'unlace.d2.shared.index' });
   own.save('sha256:ab', 'a.elf', 'mine');
   shared.save('sha256:ab', 'a.elf', 'theirs');
   assert.equal(own.load('sha256:ab'), 'mine');
@@ -587,7 +587,7 @@ await test('#29 a knock the guest gave up on is not a link: the WebRTC reply sti
   globalThis.RTCPeerConnection = FakePC;
   const L = await import('../decompile/collab/link.js');
   const offer = await L.makeOffer({ me: 'aaaaaaaa' });
-  const ch = new BroadcastChannel(`kuna.d2.link.${offer.id}`);
+  const ch = new BroadcastChannel(`unlace.d2.link.${offer.id}`);
   const acks = [];
   ch.onmessage = ({ data }) => { if (data?.k === 'ack') acks.push(data); };
   ch.postMessage({ k: 'knock', from: 'bbbbbbbb' });
@@ -601,7 +601,7 @@ await test('#29 a guest that gets an ack too late says so, and goes on with WebR
   globalThis.RTCPeerConnection = FakePC;
   const L = await import('../decompile/collab/link.js');
   const id = W.randomId(10);
-  const ch = new BroadcastChannel(`kuna.d2.link.${id}`);
+  const ch = new BroadcastChannel(`unlace.d2.link.${id}`);
   const said = [];
   ch.onmessage = ({ data }) => {
     if (data?.k === 'knock') setTimeout(() => ch.postMessage({ k: 'ack', from: 'aaaaaaaa', to: data.from }), 800);
@@ -630,7 +630,7 @@ await test('fourth review #8 a connection that cannot be set up is closed, on ei
   await assert.rejects(offer.answer({ u: 'abcd', p: 'x'.repeat(24), f: 'A'.repeat(64), c: ['127.0.0.1 40001 hu 2113937151'] }));
   assert.equal(pc.closed, true, 'the inviter closes its connection');
   await assert.rejects(offer.ready, 'and the offer is over');
-  const ch = new BroadcastChannel(`kuna.d2.link.${offer.id}`);
+  const ch = new BroadcastChannel(`unlace.d2.link.${offer.id}`);
   const heard = [];
   ch.onmessage = ({ data }) => { if (data?.k !== 'knock') heard.push(data?.k); };
   ch.postMessage({ k: 'knock', from: 'cccccccc' });

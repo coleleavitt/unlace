@@ -8,7 +8,7 @@ subroutine checks can also revisit thousands of cached instructions per candidat
 ## Reproduce
 
 This input is generated entirely from the source below. It needs Python 3 and GNU
-ARM binutils. Run from a checkout with built kuna binaries and processor specs;
+ARM binutils. Run from a checkout with built unlace binaries and processor specs;
 the output directory is outside the checkout.
 
 ```sh

@@ -1,5 +1,5 @@
 """Replay the armfloatreturn corpus: option off vs on over every ARM ELF fixture
-in kuna-analysis/tests/fixtures plus fixtures/*.c built with clang as hard-float
+in unlace-analysis/tests/fixtures plus fixtures/*.c built with clang as hard-float
 ARM, hard-float Thumb, softfp and soft-float objects. Run after `make binaries`."""
 from pathlib import Path
 import argparse, difflib, json, os, re, subprocess
@@ -14,8 +14,8 @@ built = out / "built"
 built.mkdir(parents=True, exist_ok=True)
 bins = root / "decompiler/target/release"
 env = dict(os.environ)
-env.setdefault("KUNA_SPECS", str(root / "specs"))
-env.setdefault("SLEIGHHOME", env["KUNA_SPECS"])
+env.setdefault("UNLACE_SPECS", str(root / "specs"))
+env.setdefault("SLEIGHHOME", env["UNLACE_SPECS"])
 
 abis = {
     "hard-arm": ["--target=armv7a-linux-gnueabihf", "-marm", "-mfloat-abi=hard", "-mfpu=vfpv3-d16"],
@@ -30,7 +30,7 @@ for source in sorted((here / "fixtures").glob("*.c")):
         subprocess.run(["clang", *flags, "-O2", "-fno-optimize-sibling-calls", "-c", str(source), "-o", str(obj)],
                        check=True, timeout=60)
         files.append(obj)
-fixtures = root / "decompiler/crates/kuna-analysis/tests/fixtures"
+fixtures = root / "decompiler/crates/unlace-analysis/tests/fixtures"
 for path in sorted(fixtures.iterdir()):
     head = path.read_bytes()[:20] if path.is_file() else b""
     if head[:4] == b"\x7fELF" and head[5] == 1 and int.from_bytes(head[18:20], "little") == 40:
@@ -40,7 +40,7 @@ summary, diffs = [], []
 for path in files:
     text = {}
     for setting in ("off", "on"):
-        result = subprocess.run([str(bins / "kuna"), "decompile-all", str(path), "--mode", "aggressive",
+        result = subprocess.run([str(bins / "unlace"), "decompile-all", str(path), "--mode", "aggressive",
                                  "--option", "armfloatreturn", setting],
                                 env=env, capture_output=True, timeout=600)
         if result.returncode:

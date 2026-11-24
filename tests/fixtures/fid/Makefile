@@ -4,7 +4,7 @@
 # Requires gcc and the built `unlace` binary + x86-64 .sla
 # (`make binaries specs` from the repo root).
 
-KUNA    ?= ../../../target/release/unlace
+UNLACE    ?= ../../../target/release/unlace
 SPECS   ?= ../../../specs
 ANALYSIS_FIXTURES ?= ../../../crates/unlace-analysis/tests/fixtures
 
@@ -20,9 +20,9 @@ all: lib.fid mirror
 lib.o: lib.c
 	gcc $(CFLAGS) -c $< -o $@
 
-# 2. fingerprint it with kuna's own generator → the vendored .fid.
+# 2. fingerprint it with unlace's own generator → the vendored .fid.
 lib.fid: lib.o
-	SLEIGHHOME="$(SPECS)" $(KUNA) fid build $< -o $@ --lang $(LANG) --cspec $(CSPEC)
+	SLEIGHHOME="$(SPECS)" $(UNLACE) fid build $< -o $@ --lang $(LANG) --cspec $(CSPEC)
 
 # 3. mirror into the cargo-test fixtures dir (verify_fid_build.rs reads these).
 mirror: lib.o lib.c lib.fid

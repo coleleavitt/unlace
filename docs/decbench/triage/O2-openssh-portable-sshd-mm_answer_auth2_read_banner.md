@@ -42,7 +42,7 @@ free(v4);
 return 0;
 ```
 
-kuna (fresh, today's default; identical under `--mode reliable`, GED 12):
+unlace (fresh, today's default; identical under `--mode reliable`, GED 12):
 
 ```c
 sub_4d700(a2);
@@ -61,7 +61,7 @@ sub_75240("monitor.c","mm_answer_auth2_read_banner",0x333,1,1,sub_4c530(v1)); //
 
 IDA (stored, GED 8) has the same CMOV-as-`if` expansion but keeps the fatal call as a
 guarded `if (v9) { ... }` with the normal path as the shared tail. Ghidra (GED 12) is
-byte-for-byte the same structure as kuna.
+byte-for-byte the same structure as unlace.
 
 ## Source
 
@@ -89,10 +89,10 @@ recorded score exactly, which validates the model:
 
 | variant | nodes/edges | GED |
 |---|---|---|
-| kuna fresh (CMOV as `if`, no-return arm as fall-out tail) | 5 / 5 | **12.0** (matches recorded) |
+| unlace fresh (CMOV as `if`, no-return arm as fall-out tail) | 5 / 5 | **12.0** (matches recorded) |
 | IDA shape (CMOV as `if`, fatal kept inside a guarded `if`) | 5 / 6 | **8.0** (matches recorded) |
-| kuna + CMOV folded to a `?:` ternary | 5 / 5 | 12.0 (no change) |
-| kuna + ternary + fatal kept inside the guard | 5 / 6 | 8.0 |
+| unlace + CMOV folded to a `?:` ternary | 5 / 5 | 12.0 (no change) |
+| unlace + ternary + fatal kept inside the guard | 5 / 6 | 8.0 |
 | **the source's own shape, transliterated into decompiler C** | 5 / 6 | **8.0** |
 | angr shape (null check absent entirely) | 3 / 3 | 0.0 |
 
@@ -100,7 +100,7 @@ Two conclusions:
 
 1. **GED 0 requires deleting the null check.** angr scores 0 because it lost the
    `cmovne` completely: its `sub_45dcc0()` takes no arguments and its
-   `sub_423b80(v1, v2, v3)` reads three never-assigned locals. kuna, Ghidra, IDA and
+   `sub_423b80(v1, v2, v3)` reads three never-assigned locals. unlace, Ghidra, IDA and
    binja all recover the check and all of them are penalized for it. `phoenix` also
    scores 0, and its 3-node CFG can only come from the same omission.
 2. **The floor is 8, not 0**, for anything that keeps the check. Writing the source
@@ -111,7 +111,7 @@ Two conclusions:
    decompiled body always splits into two extra blocks. No decompiler output can close
    that gap.
 
-The one genuine structural divergence from source is worth **4 of the 12 points**: kuna
+The one genuine structural divergence from source is worth **4 of the 12 points**: unlace
 nests the *hot* path inside the guard and lets the cold no-return call become the
 function's fall-out tail -
 
@@ -122,10 +122,10 @@ sub_75240(...); // no-return
 
 - where source, IDA and angr nest the *cold* arm and keep the normal path at top level
 (`if (v1) { fatal(...); } tail; return 0;`). Owning phase would be **P8 (structure)**.
-But this is a deliberate, already-shipped kuna preference, not a defect: `branchflip`
+But this is a deliberate, already-shipped unlace preference, not a defect: `branchflip`
 (P8, default on) exists precisely to put "the common path top-to-bottom (angr-style
 positive-first)", and `ifelseflatten` (P8, default on) exists to drop the `else` after a
-terminating arm. Both fire in the direction kuna emits. Flipping the polarity here would
+terminating arm. Both fire in the direction unlace emits. Flipping the polarity here would
 contradict two shipped default-on options for 4 GED points on a shape that is
 semantically identical to the source. Not worth a feature.
 
@@ -136,7 +136,7 @@ Verified today, all on the stripped binary at `0x36130`:
 - No option changes it: `ifelseflatten off`, `branchflip off`, `condfold wide`,
   `iteexpr on`, `gotoreduce off taildup off` are all byte-identical to the default.
 - Turning the whole `noreturn_*` family off does **not** restore the guard shape; it
-  makes kuna swallow `mm_answer_authpassword` and emit ~90 lines of garbage. kuna's
+  makes unlace swallow `mm_answer_authpassword` and emit ~90 lines of garbage. unlace's
   no-return recovery here is correct and load-bearing; `sshfatal` really is
   `__attribute__((noreturn))` and the block at `0x36209` has no fall-through.
 
@@ -144,12 +144,12 @@ Verified today, all on the stripped binary at `0x36130`:
 
 1. **Stack-passed arguments at the `sshfatal` call are dropped.** The call site pushes
    two stack arguments (`push %rax` at `0x36223` = `ssh_err(r)`, `push %rax` at `0x36232`
-   = `"assemble"` at `0xcbae3`) on top of the six register arguments. kuna emits six
+   = `"assemble"` at `0xcbae3`) on top of the six register arguments. unlace emits six
    arguments; Ghidra emits eight and IDA nine. This is a **P4 (calls)** parameter-recovery
    gap on a variadic callee, and it is a divergence from upstream Ghidra on the same
    binary. It does not move GED and is out of scope for this case, but it is a real
    defect worth mining separately.
-2. **The empty-string literal renders as a raw address**: kuna prints
+2. **The empty-string literal renders as a raw address**: unlace prints
    `v3 = (void *)0xcf952;` where IDA prints `""` and Ghidra prints `&DAT_001cf952`.
    `0xcf952` is a lone NUL in `.rodata`. Cosmetic, P0/P9 string markup.
 
@@ -160,7 +160,7 @@ order of size:
 
 - 8 points: an inherent floor from the pyjoern source/decompiled asymmetry on a ternary
   that gcc compiled into a `cmovne`. Unreachable by any faithful output.
-- 4 points: a guard-polarity preference kuna implements on purpose via `branchflip` /
+- 4 points: a guard-polarity preference unlace implements on purpose via `branchflip` /
   `ifelseflatten`.
 - 0 points: the reference's advantage, which is entirely that angr dropped the null
   check and 40 instructions it could not lift.

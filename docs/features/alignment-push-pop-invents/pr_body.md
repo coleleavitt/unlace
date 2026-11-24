@@ -5,7 +5,7 @@ with a fifth argument and a 128-bit return, and the fifth argument's only
 appearance is as the high half of that return.
 
 ```
-$ kuna decompile ./WeeperVM--Level_1 0x10e27 --addr
+$ unlace decompile ./WeeperVM--Level_1 0x10e27 --addr
 undefined16 sub_10e27(long a0,int a1,long a2,int a3,unsigned long a4)
 {
   char v1 [16];
@@ -31,7 +31,7 @@ ret
 `RDX` at the `ret` holds `R8` as it arrived from the caller, so the return-half
 rule reads it as an argument the function *placed* in the return register --
 which is what gives `R8` a reader, which is what makes `R8` a parameter. The
-loop closes on itself. Assemble those bytes as `f` and `kuna decompile ./f f`
+loop closes on itself. Assemble those bytes as `f` and `unlace decompile ./f f`
 recovers five arguments for a function that takes one.
 
 ## The fix

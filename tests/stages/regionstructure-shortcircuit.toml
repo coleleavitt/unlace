@@ -3,7 +3,7 @@
 #
 # Inc 5 ports Ghidra `CollapseStructure::ruleBlockOr` (the `collapseConditions`
 # pre-pass) into the region structurer as
-# `match_acyclic_short_circuit_conditions` (the kuna analog of angr
+# `match_acyclic_short_circuit_conditions` (the unlace analog of angr
 # `phoenix._match_acyclic_short_circuit_conditions`, types a-d): a cascading
 # `if (A) { if (B) { body } }` with no else on the inner clause folds to a single
 # `BlockCondition` carrying a compound `A && B` (or `A || B`) condition, built via
@@ -97,7 +97,7 @@ hex = '''
 
 [script]
 commands = [
-    # kuna: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
+    # unlace: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
     'option gotoreduce off',
     'option crossjumprevert off',
     'option dedupitetail off',

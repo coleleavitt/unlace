@@ -1,4 +1,4 @@
-# kuna varargsave: a System V variadic function's register save area.
+# unlace varargsave: a System V variadic function's register save area.
 #
 # Source (gcc -O2):
 #

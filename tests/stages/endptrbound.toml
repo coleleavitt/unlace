@@ -1,4 +1,4 @@
-# (kuna) `option endptrbound` (P6 stack-frame-layout, default ON).  GH-468
+# (unlace) `option endptrbound` (P6 stack-frame-layout, default ON).  GH-468
 # finding 7: a pointer-walk loop's one-past-the-end bound is not derivable
 # from the C.
 #

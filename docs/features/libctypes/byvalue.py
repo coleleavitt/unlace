@@ -4,7 +4,7 @@ dump, and show which of them are read through a piece accessor.
     python3 docs/features/libctypes/byvalue.py <dir>
 
 `<dir>` holds one `<tag>.off.c` / `<tag>.on.c` pair per binary, each the output
-of `kuna decompile-all <bin> --option libctypes off` and of the default arm.
+of `unlace decompile-all <bin> --option libctypes off` and of the default arm.
 Prints, per binary, the by-value local DECLARATIONS of a shell name in each arm,
 then every such declaration that is read as `vN._<off>_<size>_`.
 """

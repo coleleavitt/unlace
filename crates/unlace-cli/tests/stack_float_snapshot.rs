@@ -175,9 +175,9 @@ fn emitted_translation_unit(first: &str, second: &str, conversion: &str) -> Stri
     .join("\n");
     let driver = include_str!("fixtures/stack_float_snapshot_driver.c");
     driver
-        .replace("/* KUNA_EMITTED_TYPES */", &declarations)
+        .replace("/* UNLACE_EMITTED_TYPES */", &declarations)
         .replace(
-            "/* KUNA_EMITTED_CODE */",
+            "/* UNLACE_EMITTED_CODE */",
             &format!(
                 "static const uint4 dat_402000 = UINT32_C(0x80000000);\nstatic const uint4 dat_402010 = UINT32_C(0x40e00000);\n{functions}"
             ),
@@ -245,7 +245,7 @@ fn stack_float_snapshots_keep_bits_at_both_point_lanes() {
     let native = common::scratch_file("stack-float-native", "bin");
     required(
         Command::new(compilers[0])
-            .args(["-std=c11", "-O0", "-fstrict-aliasing", "-DKUNA_NATIVE"])
+            .args(["-std=c11", "-O0", "-fstrict-aliasing", "-DUNLACE_NATIVE"])
             .arg(fixture("stack_float_snapshot_driver.c"))
             .arg(fixture("stack_float_snapshot.S"))
             .arg("-o")

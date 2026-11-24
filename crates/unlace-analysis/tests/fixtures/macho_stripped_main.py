@@ -39,7 +39,7 @@ def strip(data: bytes) -> bytes:
         cmds.setdefault(cmd, off)
         off += cmdsize
 
-    # 1. Empty the export trie (a stripped executable exports nothing kuna can
+    # 1. Empty the export trie (a stripped executable exports nothing unlace can
     #    read a defined-function name out of).
     for c in (LC_DYLD_INFO_ONLY, LC_DYLD_INFO):
         if c in cmds:

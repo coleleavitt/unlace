@@ -16,7 +16,7 @@
 # Root cause (P9, naming policy).  Upstream declares a body's locals by walking
 # the ScopeLocal Symbol table for `no_category` Symbols only
 # (PrintC::emitScopeVarDecls, printc.cc:2667), so a `function_parameter`
-# Symbol renders in the signature and nowhere else.  kuna's printer walks
+# Symbol renders in the signature and nowhere else.  unlace's printer walks
 # HighVariables instead and asks whether a `function_parameter` Symbol
 # CONTAINS THE STORAGE of one of the high's member Varnodes.  An address-taken
 # parameter has no such member: ActionNameVars::linkSpacebaseSymbol
@@ -27,9 +27,9 @@
 # "not a parameter", and the high is declared in the body under the name it
 # took from the parameter Symbol it is bound to.
 #
-# Stage / sub-stage: P9 "naming-policy".  kuna_paramrefdecl.rs (always on)
+# Stage / sub-stage: P9 "naming-policy".  unlace_paramrefdecl.rs (always on)
 # lets the printer use the Symbol IDENTITY the reference already carries
-# (HighVariable::kuna_ref_symbol, the port of Varnode::setSymbolReference)
+# (HighVariable::unlace_ref_symbol, the port of Varnode::setSymbolReference)
 # beside the storage containment test.  A reference to a `no_category` local
 # is a different category and is untouched.
 #

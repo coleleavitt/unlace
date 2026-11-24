@@ -10,7 +10,7 @@
 ;   {
 ;       HKEY key; DWORD size = MAX_PATH;
 ;       memset(path, 0, MAX_PATH);
-;       if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\Kuna", 0, KEY_QUERY_VALUE, &key))
+;       if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\Unlace", 0, KEY_QUERY_VALUE, &key))
 ;           return 0;
 ;       if (RegQueryValueExA(key, folder, NULL, NULL, (BYTE *)path, &size)) {
 ;           RegCloseKey(key);
@@ -92,7 +92,7 @@ entry:
     ret
 
 section .rdata
-subkey: db 'Software\Kuna', 0
+subkey: db 'Software\Unlace', 0
 folder: db 'Desktop', 0
     align 4, db 0
 import_dir:

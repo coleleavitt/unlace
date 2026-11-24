@@ -25,7 +25,7 @@
 # buf[i] with `cmp byte [rsp+rax+0x20],0`.
 #
 # In all three the loop variable is MULTIEQUAL(buf[0], LOAD) at the loop
-# head.  Stage: P6 forced merge (Merge::mergeOp), kuna_tiedphitrim.rs
+# head.  Stage: P6 forced merge (Merge::mergeOp), unlace_tiedphitrim.rs
 # (always on).  Upstream puts the buf[0] read and the LOAD into one
 # HighVariable, which is the frame slot, so every byte the loop fetches
 # prints as a store into buf[0]; the loop-head input is instead trimmed into

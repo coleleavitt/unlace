@@ -5,12 +5,12 @@ floor of this box at the moment of measurement.
 """
 import subprocess, sys, time, os
 WT="/home/mahaloz/kwt/indirectonly"; MAIN="/home/mahaloz/kwt/_rev-lcg-main"
-ARMS={"mainA":(MAIN+"/decompiler/target/release/kuna", MAIN+"/specs"),
-      "mainB":(MAIN+"/decompiler/target/release/kuna", MAIN+"/specs"),
-      "branch":(WT+"/decompiler/target/release/kuna", WT+"/specs")}
+ARMS={"mainA":(MAIN+"/decompiler/target/release/unlace", MAIN+"/specs"),
+      "mainB":(MAIN+"/decompiler/target/release/unlace", MAIN+"/specs"),
+      "branch":(WT+"/decompiler/target/release/unlace", WT+"/specs")}
 def one(which,b):
     k,sp=ARMS[which]
-    env=dict(os.environ, SLEIGHHOME=sp, KUNA_SPECS=sp)
+    env=dict(os.environ, SLEIGHHOME=sp, UNLACE_SPECS=sp)
     t0=time.perf_counter()
     r=subprocess.run([k,"decompile-all",b],capture_output=True,env=env)
     dt=(time.perf_counter()-t0)*1000.0

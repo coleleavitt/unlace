@@ -30,7 +30,7 @@ use super::{DyldCache, u32_at, u64_at};
 use crate::loader::format::macho::exports::{ExportTarget, parse_export_trie};
 
 /// The `LC_NOTE` `data_owner` of the cross-image reference table.
-pub const NOTE_OWNER: &[u8; 16] = b"kuna.dyld.xrefs\0";
+pub const NOTE_OWNER: &[u8; 16] = b"unlace.dyld.xrf\0";
 
 /// What an [`Xref`] address is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

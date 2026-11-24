@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Interleaved (alternating order) min-of-N wall clock of `kuna decompile-all <bin> --json`, main build vs fix build (paths are this lane's worktree; edit W/BASE/FIX to rerun)."""
+"""Interleaved (alternating order) min-of-N wall clock of `unlace decompile-all <bin> --json`, main build vs fix build (paths are this lane's worktree; edit W/BASE/FIX to rerun)."""
 import subprocess, sys, time, os, json, statistics
 N = int(os.environ.get("ROUNDS", "15"))
 W = "/home/mahaloz/kwt/foldcallret-sc"
-BASE, FIX = f"{W}/.scratch/base-bin/kuna", f"{W}/.scratch/fix-bin/kuna"
-env = dict(os.environ, SLEIGHHOME=f"{W}/specs", KUNA_SPECS=f"{W}/specs")
+BASE, FIX = f"{W}/.scratch/base-bin/unlace", f"{W}/.scratch/fix-bin/unlace"
+env = dict(os.environ, SLEIGHHOME=f"{W}/specs", UNLACE_SPECS=f"{W}/specs")
 R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"
 cases = [("O2/coreutils/fmt", f"{R}/O2/coreutils/stripped/fmt"),
          ("O2/coreutils/ls", f"{R}/O2/coreutils/stripped/ls"),

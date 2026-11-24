@@ -29,7 +29,7 @@
 #
 # Stage / sub-stage: P4 "trial-finalization".  buildInputFromTrials
 # reconciles a call's argument list with an already-final sibling call to the
-# same entry address (kuna_calleearity.rs, always on).
+# same entry address (unlace_calleearity.rs, always on).
 #
 # The fixture is the same construct on SysV x86-64 (rdi rather than rcx),
 # assembled from:

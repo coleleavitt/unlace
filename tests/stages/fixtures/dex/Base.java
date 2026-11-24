@@ -1,5 +1,5 @@
 // Source of tries.dex (with Base.java), the DEX fixture of
-// tests/stages/kuna-dex-javatry.xml and kuna-dex-javactor.xml.
+// tests/stages/unlace-dex-javatry.xml and unlace-dex-javactor.xml.
 //
 //   javac --release 8 -d classes Tries.java Base.java
 //   java -cp r8-8.5.35.jar com.android.tools.r8.D8 --release --min-api 21 \

@@ -4506,7 +4506,7 @@ pub trait TypeFactory {
         _facet: crate::langfacet::LangFacet,
     ) -> UnlaceResult<()> {
         Err(UnlaceError::lowlevel(
-            "kuna_register_lang_facet unsupported".to_string(),
+            "unlace_register_lang_facet unsupported".to_string(),
         ))
     }
 

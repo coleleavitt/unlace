@@ -1,4 +1,4 @@
-# GH-876 (kuna): "x86-64: a declared int passed to a variadic call in its
+# GH-876 (unlace): "x86-64: a declared int passed to a variadic call in its
 # own register prints as CONCAT44 of an uninitialized upper half"
 # https://github.com/Noelo-Lab/kuna/issues/876
 #
@@ -30,7 +30,7 @@
 # undeclared upper half of the register.  It is active, or, where the same
 # value has a second reader in the call (u5, u8, c5), inactive and later
 # gap-filled at 8 bytes; either way the call printed CONCAT44(v1,a) with v1
-# never set.  kuna_varargforward.rs (always on) narrows such a trial to the int width
+# never set.  unlace_varargforward.rs (always on) narrows such a trial to the int width
 # when the upper bytes are only that undeclared register half.  dl passes a
 # computed long, which stays 8 bytes.
 #

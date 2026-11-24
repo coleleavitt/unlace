@@ -8,7 +8,7 @@ fn complete_rust_array_decay_matches_native_pointer_consumers() {
     if process::optional_output(Command::new("cc").arg("--version")).is_none() {
         return;
     }
-    let declarations = std::fs::read_to_string(common::fixture("array_decay.kuna")).unwrap();
+    let declarations = std::fs::read_to_string(common::fixture("array_decay.unlace")).unwrap();
     let names: Vec<_> = declarations
         .lines()
         .map(|line| line.split_whitespace().nth(1).unwrap())
@@ -53,7 +53,7 @@ fn complete_rust_array_decay_matches_native_pointer_consumers() {
         "--language",
         "rust",
         "--assert",
-        &format!("@{}", common::fixture("array_decay.kuna")),
+        &format!("@{}", common::fixture("array_decay.unlace")),
         "--option",
         "ctypes",
         "off",

@@ -1,12 +1,12 @@
 from common import *
 import datetime
-f=r/'decompiler/crates/kuna-analysis/tests/fixtures';out=w/'enabled-proof';out.mkdir(exist_ok=False)
-build=json.loads((w/'build.json').read_text());cli=r/'decompiler/target/release/kuna';assert hashlib.sha256(cli.read_bytes()).hexdigest()==build['new_cli_sha256']
+f=r/'decompiler/crates/unlace-analysis/tests/fixtures';out=w/'enabled-proof';out.mkdir(exist_ok=False)
+build=json.loads((w/'build.json').read_text());cli=r/'decompiler/target/release/unlace';assert hashlib.sha256(cli.read_bytes()).hexdigest()==build['new_cli_sha256']
 names=json.loads((w/'fixture-names.json').read_text())['positive'];inputs=[0,1,7,12345,2147483647,2147483648,4294967288,4294967295]
 records=[]
 for label,fixture,selected in [('values','rust_probestack',names),('buffer','rust_probestack_buffer',['probe_buffer'])]:
- cmd=[str(cli),'decompile-all',str(f/(fixture+'_x86_64')),'--language','c','--option','rustprobestack','auto','--json','--functions',','.join(selected),'--assert','@'+str(f/(fixture+'.kuna'))]
- p=subprocess.run(cmd,cwd=r,env=env|{'KUNA_SPECS':str(r/'specs')},capture_output=True,text=True);assert p.returncode==0;(out/f'{label}.json').write_text(p.stdout);(out/f'{label}.log').write_text(p.stderr)
+ cmd=[str(cli),'decompile-all',str(f/(fixture+'_x86_64')),'--language','c','--option','rustprobestack','auto','--json','--functions',','.join(selected),'--assert','@'+str(f/(fixture+'.unlace'))]
+ p=subprocess.run(cmd,cwd=r,env=env|{'UNLACE_SPECS':str(r/'specs')},capture_output=True,text=True);assert p.returncode==0;(out/f'{label}.json').write_text(p.stdout);(out/f'{label}.log').write_text(p.stderr)
  doc=json.loads(p.stdout);fs={v['name']:v for v in doc['functions']};assert set(fs)==set(selected)and all(not v.get('error')for v in fs.values())
  bodies='\n'.join(fs[n]['code']for n in selected);assert '__rust_probestack'not in bodies
  if label=='buffer':assert '[4096]'in bodies;helper=(f/'rust_probestack_buffer.c').read_text()
@@ -27,8 +27,8 @@ for label,fixture,selected in [('values','rust_probestack',names),('buffer','rus
    records.append({'fixture':fixture,'compiler':compiler,'optimization':opt,'command':cmd,'asan':label=='buffer','complete_emitted_bodies_unchanged':True,'helper_source_unchanged':True,'checks':checked})
 # The pinned general test is C output; source Rust output has a separate literal limitation.
 for language in ['c','rust']:
- cmd=[str(cli),'decompile','/tmp/kuna-angr-reference/general/probestack','0xb720','--json','--language',language,'--option','rustprobestack','auto']
- p=subprocess.run(cmd,cwd=r,env=env|{'KUNA_SPECS':str(r/'specs')},capture_output=True,text=True);assert p.returncode==0;(out/f'upstream-{language}.json').write_text(p.stdout);(out/f'upstream-{language}.log').write_text(p.stderr);code=json.loads(p.stdout)['functions'][0]['code'];checks={'name':'linux_encryptor::files::create_note'in code,'literal':'Luna.ini.exe.dll.lnk'in code,'probe_stack_absent':'probe_stack'not in code,'register_placeholders_absent':'{reg 'not in code,'rust_probestack_absent':'__rust_probestack'not in code}
+ cmd=[str(cli),'decompile','/tmp/unlace-angr-reference/general/probestack','0xb720','--json','--language',language,'--option','rustprobestack','auto']
+ p=subprocess.run(cmd,cwd=r,env=env|{'UNLACE_SPECS':str(r/'specs')},capture_output=True,text=True);assert p.returncode==0;(out/f'upstream-{language}.json').write_text(p.stdout);(out/f'upstream-{language}.log').write_text(p.stderr);code=json.loads(p.stdout)['functions'][0]['code'];checks={'name':'linux_encryptor::files::create_note'in code,'literal':'Luna.ini.exe.dll.lnk'in code,'probe_stack_absent':'probe_stack'not in code,'register_placeholders_absent':'{reg 'not in code,'rust_probestack_absent':'__rust_probestack'not in code}
  if language=='c':assert all(checks.values())
  (out/f'upstream-{language}-assertions.json').write_text(json.dumps(checks,indent=2)+'\n')
 assert hashlib.sha256(cli.read_bytes()).hexdigest()==build['new_cli_sha256']

@@ -6,8 +6,8 @@
 > one-screen map; the original 2026-06 derivation study (Ghidra/angr/Reko) is summarized
 > in `docs/history.md` (full text in git history).
 
-The kuna phase model: **ordered phases + explicit typed feedback edges**, with one
-orthogonal plane and one fixed-point band. This is the model kuna is organized around —
+The unlace phase model: **ordered phases + explicit typed feedback edges**, with one
+orthogonal plane and one fixed-point band. This is the model unlace is organized around —
 the runtime registry (queryable via the `phase list`/`phase map`/`phase catalog` console
 commands; `stage ...` still works as a deprecated alias), the option catalog
 (`docs/options.md`), and the issue testcases (`tests/stages/`) all speak it.
@@ -69,7 +69,7 @@ A **sub-phase** is a named decision point inside a phase where a different choic
 heuristic, human, or LLM agent — changes the phase's artifact and everything downstream.
 Every sub-phase names the **assertion** that overrides it, with strength **HARD** (blocks
 inference, e.g. typelock) or **HINT** (biases it), a **re-run scope**, and a **LATENT**
-flag when the decision is hardcoded with no override today (the LATENT set is the kuna
+flag when the decision is hardcoded with no override today (the LATENT set is the unlace
 roadmap). The machine-readable,
 flippable subset is `docs/options.md` (`unlace catalog --json`).
 
@@ -81,14 +81,14 @@ surviving state:
 - **(a)** local fixed-point (rule pools, simplifier loops)
 - **(b)** staged re-entry (later edit re-runs an earlier analysis in the same run)
 - **(c)** global restart with persisted hints (`setRestartPending` + Override; budgeted, gated)
-  — *observable in kuna via the `restarts` console command*
+  — *observable in unlace via the `restarts` console command*
 - **(c′)** reduced-pipeline sub-query (`stageJumpTable`: a recursive sub-decompilation with
-  the `jumptable` group set on a cloned function) — *drivable in kuna via the `pipeline`
+  the `jumptable` group set on a cloned function) — *drivable in unlace via the `pipeline`
   console command*
 - **(d)** knowledge-store re-decompilation (the outer human/agent loop; parameterized by
   scope — full clear-and-replay vs scoped reflow)
 - **(e)** speculate-validate-rollback (SAILR: edit → re-structure → measure gotos → accept
-  or roll back; absent in Ghidra/Reko — kuna's `quality` command is the measurement half)
+  or roll back; absent in Ghidra/Reko — unlace's `quality` command is the measurement half)
 - **(h)** automatic fallback re-run (error → retry the whole function under a degraded
   pipeline variant; angr's preset fallback)
 - **(f)** worklist re-enqueue (address-grain) and **(g)** lazy-dirty recompute
@@ -103,13 +103,13 @@ For symptom→sub-phase navigation use `docs/options.md`'s symptom index (caveat
 symptom's phase is not always its decision's phase — wrong-looking constants in the
 rendered C are usually destroyed in Band B, not mis-rendered at P9).
 
-In kuna this is concrete: `kassert <phase> <substage> <args> [hard|hint]` at the console
+In unlace this is concrete: `kassert <phase> <substage> <args> [hard|hint]` at the console
 (reports the computed minimal rewind scope), `--option NAME VALUE` / `--kassert "<args>"`
 on `unlace decompile`, and discovery via `unlace catalog`.
 
 ## Implementation state
 
-The model is physical in kuna:
+The model is physical in unlace:
 
 - **Registry & console**: every action/rule group, console surface, and settable
   assertion is phase-addressed in `phases.rs`; `phase list/map/status/catalog`,
@@ -119,5 +119,5 @@ The model is physical in kuna:
 - **Issues fixed through the model** (each pinned by a `tests/stages/` testcase
   asserting both directions of the decision): GH-558, 2786, 8471, 6930, 6990, 1282,
   7190, 8817, 8913, 9230, 1537.
-- **Defaults**: eight sub-phase fixes are kuna defaults (DIV-2); the destructive ones
+- **Defaults**: eight sub-phase fixes are unlace defaults (DIV-2); the destructive ones
   stay opt-in per the ablation evidence. Record: `docs/history.md`.

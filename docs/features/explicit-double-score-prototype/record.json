@@ -11,7 +11,7 @@
   "option": "calleeretpreserves",
   "default_on": true,
   "change_kind": "correctness-fix",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "scope": "existing-option-extension",
   "parity": "675/675",
   "stage_parity": "816/816",
@@ -70,7 +70,7 @@
     "mergecheck": "OK (0 rejects)"
   },
   "fixture": {
-    "path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_explicit_double_score_return_x86_64.exe",
+    "path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_explicit_double_score_return_x86_64.exe",
     "sha256": "9454da07fedd100366e7a5955a29d218eb7f05bbb5bf5c3aa96f7d50f1c7deb9",
     "size": 3584
   },

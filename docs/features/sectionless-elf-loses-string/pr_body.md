@@ -2,7 +2,7 @@
 
 An ELF with no section header table — `sstrip`, a packer, or a CTF author's
 `e_shoff = 0` — loses every data cross-reference, so no string has an owning
-function and `kuna xrefs --to <string>` answers zero. The same bytes with the
+function and `unlace xrefs --to <string>` answers zero. The same bytes with the
 section table intact answer correctly. Two builds of one program, differing only
 in whether the section header table is present:
 
@@ -11,16 +11,16 @@ $ printf '#include <stdio.h>\nint main(void){ puts("\\n[+] Correct!"); return 0;
 $ gcc -O0 -o sec c.c && cp sec nosec
 $ python3 -c 'import struct;b=bytearray(open("nosec","rb").read());struct.pack_into("<Q",b,0x28,0);struct.pack_into("<H",b,0x3c,0);struct.pack_into("<H",b,0x3e,0);open("nosec","wb").write(bytes(b))'
 
-$ kuna strings ./sec   --filter Correct --json | grep -E '"xrefs_count"|"name"'
+$ unlace strings ./sec   --filter Correct --json | grep -E '"xrefs_count"|"name"'
       "xrefs_count": 1,
           "name": "main",
 
-$ kuna strings ./nosec --filter Correct --json | grep -E '"xrefs_count"|"name"'
+$ unlace strings ./nosec --filter Correct --json | grep -E '"xrefs_count"|"name"'
       "xrefs_count": 0,
 ```
 
-Control flow survives — `kuna disassemble` prints the `LEA RDI,[<string>]` and
-`kuna xrefs --from` returns the function's CALL edges — so the disassembly shows
+Control flow survives — `unlace disassemble` prints the `LEA RDI,[<string>]` and
+`unlace xrefs --from` returns the function's CALL edges — so the disassembly shows
 the reference the index denies.
 
 ## The fix

@@ -5,7 +5,7 @@ decbench campaign, NOVEL pool (`loose-undefname-leak`). Filed on
 
 ## The symptom
 
-kuna emitted identifiers of the shape `$$undefNNNNNNNN`. Three things are wrong with
+unlace emitted identifiers of the shape `$$undefNNNNNNNN`. Three things are wrong with
 that at once:
 
 1. `$$` is not a legal C identifier character, so the function does not compile.
@@ -16,7 +16,7 @@ that at once:
    in the original sample contain such an uninitialised read.
 
 Nobody else does this: across the stored 803-binary x 11-decompiler decbench run,
-kuna's panes contained `$$undef` and angr / ghidra / ida / binja / phoenix / dewolf /
+unlace's panes contained `$$undef` and angr / ghidra / ida / binja / phoenix / dewolf /
 r2dec never did.
 
 ### Witness 1 -- `tar` `xstrcat` (`O2`, `0x611a0`)
@@ -55,7 +55,7 @@ and `decompile-project`'s `.asm` stack-frame comments carried
 
 `Scope::buildUndefinedName` (`database.cc:2854`) names a Symbol created with an empty
 name `$$undef` plus 8 hex digits. Upstream that string is unobservable for two
-reasons, and kuna inherits neither:
+reasons, and unlace inherits neither:
 
 * upstream `ActionNameVars::apply` renames **every** still-undefined Symbol before it
   returns -- its final statement is `localmap->assignDefaultNames(base)`
@@ -63,7 +63,7 @@ reasons, and kuna inherits neither:
 * upstream `PrintC` reads `sym->getDisplayName()` **live** at emit time, so the render
   can never see a stale name.
 
-kuna binds the name **per HighVariable** (`HighVariable::kuna_name`, a cached `String`)
+unlace binds the name **per HighVariable** (`HighVariable::unlace_name`, a cached `String`)
 and the printer reads that cache; and `Database::assign_default_names`, a complete port
 of `ScopeInternal::assignDefaultNames`, had **zero call sites in the tree**
 (`grep -rn assign_default_names decompiler/` returned only its own definition).
@@ -76,7 +76,7 @@ JSON `variables` array -- which `extract_variables` reads straight off the Scope
 Symbol table -- contradicts the filing's "two Symbols" reading:
 
 ```
-$ kuna decompile-all .../O2/tar/stripped/tar --json --addr 0x611a0
+$ unlace decompile-all .../O2/tar/stripped/tar --json --addr 0x611a0
 {'name': 'v12', 'type': 'uint8', 'kind': 'stack', 'stack_offset': -88, 'size': 8}
 {'name': 'v13', 'type': 'unsigned long *', 'kind': 'stack', 'stack_offset': -80, 'size': 8}
 ```
@@ -86,14 +86,14 @@ placeholder corresponds to no live Symbol; it is a stale `String` cached on a si
 HighVariable.
 
 A temporary `eprintln!` in the naming loop plus a backtrace-capturing
-`HighVariable::set_kuna_name` pinned it exactly (note: `kuna decompile` shells out to
+`HighVariable::set_unlace_name` pinned it exactly (note: `unlace decompile` shells out to
 `decomp_dbg` with **stderr piped**, so the in-process `decompile-all` path is the one to
 instrument):
 
 ```
 [undef] high=HighVariableId(103) addr=-88 size=4 entry_size=8 sym_off=0 -> $$undef00000000
 [undef-set] $$undef00000000
-Backtrace [ HighVariable::set_kuna_name, name_local_highs_angr, Action::perform, ... ]
+Backtrace [ HighVariable::set_unlace_name, name_local_highs_angr, Action::perform, ... ]
 [undef] high=HighVariableId(104) addr=-88 size=8 entry_size=8 sym_off=0 -> v12
 ```
 
@@ -102,7 +102,7 @@ Read that as the whole bug:
 * high **103** is the 4-byte partial cover of the slot. `sym_off == 0` but
   `size (4) != entry_size (8)`, so `ScopeLocal::resolve_default_name_override`
   (`varmap.rs:1538`) fails its whole-symbol gate and returns the Symbol's *current*
-  display name -- the placeholder -- which `set_kuna_name` freezes onto the high.
+  display name -- the placeholder -- which `set_unlace_name` freezes onto the high.
 * high **104** is the 8-byte whole cover, visited later in location order. Its gate
   passes, so the shared Symbol is renamed to `v12`.
 * Nothing back-fills 103's cache.
@@ -110,7 +110,7 @@ Read that as the whole bug:
 The gate itself is **not** the defect: `!(sym_off == 0 && size == entry_size)` is a
 faithful port of C++'s `sym->isNameUndefined() && high->getSymbolOffset() < 0` namerec
 condition. Upstream is safe with the identical gate purely because its printer re-reads
-the Symbol. The divergence is kuna's cache, and the port already knew about this class
+the Symbol. The divergence is unlace's cache, and the port already knew about this class
 of hazard -- `coreaction_cleanup.rs:2778-2790` documents having moved the *spacebase*
 pass after the main naming loop for exactly this reason. The same hazard **inside** the
 loop, between two highs of one Symbol, was not addressed.
@@ -129,11 +129,11 @@ the same place the port already resolves this class of hazard.
    `coreaction.cc:3079`. Every remaining `$$undef` Symbol gets its `buildDefaultName`.
    This also cleans `extract_variables` and the project `.asm` annotations for free,
    because those read the Symbol table.
-2. **`refresh_placeholder_high_names`** re-walks the highs; any whose `kuna_name()` has
+2. **`refresh_placeholder_high_names`** re-walks the highs; any whose `unlace_name()` has
    the placeholder shape (`len == 15 && starts_with("$$undef")`, i.e.
    `Symbol::is_name_undefined`) is re-resolved through the **same**
    `ScopeLocal::query_container_for_link(addr, usepoint)` containment query that bound
-   the stale name, and re-bound to the now-final name. This is kuna's stand-in for
+   the stale name, and re-bound to the now-final name. This is unlace's stand-in for
    upstream's live `getDisplayName()` read, applied once at the end of the pass.
 
 Only the name is rewritten. The in-symbol offset and symbol type the naming pass bound
@@ -161,7 +161,7 @@ form is the zero-churn one, and it keeps the C++-faithful gate.
 
 `AGENTS.md`: "a strict bug fix that only corrects wrong output needs no flag." An
 identifier containing `$$` is not valid C under any naming policy, and the split made
-the body read a name nothing writes. The ablation confirms it: `kuna test --all
+the body read a name nothing writes. The ablation confirms it: `unlace test --all
 --baseline docs/baseline.json` stays **PARITY OK 675/675** with the fix unconditionally
 on and no re-pin.
 

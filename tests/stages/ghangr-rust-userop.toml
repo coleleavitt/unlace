@@ -67,6 +67,6 @@ regex = [
     '^#\[allow\(',
     '^unsafe fn packed_abs\(',
     '^\{$',
-    '^  return __kuna_userop_3e_ABSQ_S_PH\(lanes\);$',
+    '^  return __unlace_userop_3e_ABSQ_S_PH\(lanes\);$',
     '^\}$',
 ]

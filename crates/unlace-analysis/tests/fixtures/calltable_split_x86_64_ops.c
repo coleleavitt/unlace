@@ -1,4 +1,4 @@
-/* (kuna) Fixture calltable_split_x86_64, file 1 of 3: an unchecked indexed
+/* (unlace) Fixture calltable_split_x86_64, file 1 of 3: an unchecked indexed
  * call through `ops`, whose table is followed in .rodata by bsw's (file 2).
  * Recipe: unlace-analysis/tests/fixtures/README.md. */
 volatile int sink;

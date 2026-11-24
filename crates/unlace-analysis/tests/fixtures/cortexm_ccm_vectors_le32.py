@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate `cortexm_ccm_vectors_le32` — a stripped bare-metal ARM Cortex-M
-firmware image that reproduces, in one file, all three reasons kuna's shipped
+firmware image that reproduces, in one file, all three reasons unlace's shipped
 vector-table signature rejects real STM32 firmware.
 
 No cross toolchain is needed (and none of the ones on this host emits a

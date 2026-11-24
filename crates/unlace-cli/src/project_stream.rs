@@ -146,7 +146,7 @@ impl Layout {
             None => binary_path
                 .parent()
                 .unwrap_or_else(|| Path::new("."))
-                .join(format!("{file_name}.kuna")),
+                .join(format!("{file_name}.unlace")),
         };
         Ok(Self {
             path_label: binary_path.display().to_string(),
@@ -397,7 +397,7 @@ fn warn_once(warned: &AtomicBool, published: Result<(), String>) {
         Ok(()) => warned.store(false, Ordering::SeqCst),
         Err(e) => {
             if !warned.swap(true, Ordering::SeqCst) {
-                eprintln!("[kuna --stream] warning: {e}; retrying on the next tick");
+                eprintln!("[unlace --stream] warning: {e}; retrying on the next tick");
             }
         }
     }
@@ -410,7 +410,7 @@ fn temp_path(path: &Path) -> PathBuf {
     let name = path
         .file_name()
         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-    path.with_file_name(format!("{name}.kuna-tmp.{}", std::process::id()))
+    path.with_file_name(format!("{name}.unlace-tmp.{}", std::process::id()))
 }
 
 /// Replace `path` in one step: a reader polling the status file or the README
@@ -952,14 +952,14 @@ fn export(
     });
     let specs = flatten_targets(&targets);
     if args.jobs <= 1 && targets.len() > SERIAL_HINT_MIN {
-        eprintln!("[kuna --stream] serial run; --jobs auto uses every core");
+        eprintln!("[unlace --stream] serial run; --jobs auto uses every core");
     }
 
     let scheduler = Scheduler::new(&specs, args.jobs, args.jobs_chunk, Arc::clone(&run.abort));
     let seeds = seed_indices(&prog, args, &scheduler);
     if seeds.is_empty() {
         eprintln!(
-            "[kuna --stream] warning: neither the image entry point nor `main` is in this \
+            "[unlace --stream] warning: neither the image entry point nor `main` is in this \
              export's target set, so functions are written in address order."
         );
     }
@@ -1472,7 +1472,7 @@ mod tests {
         for shadowed in [false, true] {
             for reverse in [false, true] {
                 let dir = std::env::temp_dir().join(format!(
-                    "kuna_stream_string_aliases_{}_{shadowed}_{reverse}",
+                    "unlace_stream_string_aliases_{}_{shadowed}_{reverse}",
                     std::process::id(),
                 ));
                 std::fs::create_dir_all(&dir).unwrap();
@@ -1522,7 +1522,8 @@ mod tests {
 
     #[test]
     fn conflicting_wide_contract_refuses_before_publishing_a_streamed_chunk() {
-        let dir = std::env::temp_dir().join(format!("kuna_stream_callwide_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("unlace_stream_callwide_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let layout = Layout {
             binary_path: dir.join("image"),
@@ -1593,7 +1594,7 @@ mod tests {
     fn selected_producer_resolves_held_word_conflicts_without_reordering() {
         for order in [[0, 1, 2], [2, 0, 1]] {
             let dir = std::env::temp_dir().join(format!(
-                "kuna_stream_callwide_order_{}_{order:?}",
+                "unlace_stream_callwide_order_{}_{order:?}",
                 std::process::id()
             ));
             std::fs::create_dir_all(&dir).unwrap();
@@ -1654,7 +1655,7 @@ mod tests {
     fn missing_or_incompatible_selected_producer_never_publishes_held_records() {
         for change in 0..5 {
             let dir = std::env::temp_dir().join(format!(
-                "kuna_stream_callwide_missing_{}_{change}",
+                "unlace_stream_callwide_missing_{}_{change}",
                 std::process::id()
             ));
             std::fs::create_dir_all(&dir).unwrap();
@@ -1774,7 +1775,7 @@ mod tests {
         let dir = keep.as_ref().map_or_else(
             || {
                 std::env::temp_dir().join(format!(
-                    "kuna_stream_actual_callwide_{}",
+                    "unlace_stream_actual_callwide_{}",
                     std::process::id()
                 ))
             },
@@ -1983,7 +1984,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn a_second_export_refuses_a_folder_a_live_one_is_writing() {
-        let dir = std::env::temp_dir().join(format!("kuna_stream_live_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("unlace_stream_live_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         assert!(
             refuse_a_live_export(&dir).is_ok(),
@@ -2055,7 +2056,7 @@ mod tests {
     /// neither may leave one behind in a folder an agent is reading.
     #[test]
     fn an_atomic_write_names_its_temp_after_the_process() {
-        let dir = std::env::temp_dir().join(format!("kuna_stream_atomic_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("unlace_stream_atomic_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("x.h");
         let temp = temp_path(&path);
@@ -2066,7 +2067,7 @@ mod tests {
         );
         let name = temp.file_name().unwrap().to_string_lossy().into_owned();
         assert!(
-            name.ends_with(&format!(".kuna-tmp.{}", std::process::id())),
+            name.ends_with(&format!(".unlace-tmp.{}", std::process::id())),
             "the temp name has to carry this process's pid, or two exports collide: {name}"
         );
 
@@ -2101,7 +2102,7 @@ mod tests {
         std::fs::read_dir(dir)
             .unwrap()
             .filter_map(|e| Some(e.ok()?.file_name().to_string_lossy().into_owned()))
-            .filter(|n| n.contains("kuna-tmp"))
+            .filter(|n| n.contains("unlace-tmp"))
             .collect()
     }
 

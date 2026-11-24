@@ -1,7 +1,7 @@
 /* clang --target=thumbv7em-none-eabi -mcpu=cortex-m4 -O2 -c callerargs_selfrel_thumb.c
    ld.lld -o callerargs_selfrel_thumb callerargs_selfrel_thumb.o --nmagic -Ttext=0x20000 -e f0000 --strip-debug
    cb is called with bytes and also through a table of self-relative words (target - &word) indexed by a
-   value kuna cannot bound, with a whole word: the table word plus its own address is cb, so cb keeps its width. */
+   value unlace cannot bound, with a whole word: the table word plus its own address is cb, so cb keeps its width. */
 typedef unsigned char UC; typedef unsigned U;
 #define NI __attribute__((noinline, used))
 typedef U (*fp_t)(U, U);

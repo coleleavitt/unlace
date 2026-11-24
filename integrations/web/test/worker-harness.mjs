@@ -7,7 +7,7 @@ import { createServer } from 'node:http';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker as NodeWorker } from 'node:worker_threads';
-import { KunaWorkerClient } from '../kuna-worker-client.js';
+import { UnlaceWorkerClient } from '../unlace-worker-client.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const dist = resolve(here, '../dist');
@@ -45,7 +45,7 @@ const MIME = {
 };
 
 export function requireDist() {
-  if (!existsSync(join(dist, 'unlace_wasm.wasm')) || !existsSync(join(dist, 'kuna-worker.js'))) {
+  if (!existsSync(join(dist, 'unlace_wasm.wasm')) || !existsSync(join(dist, 'unlace-worker.js'))) {
     throw new Error('dist/ not built — run integrations/web/build.sh first');
   }
 }
@@ -105,8 +105,8 @@ export class BrowserWorker {
 
 /** A client on the built Worker, served from `base`. */
 export function workerClient(base) {
-  return new KunaWorkerClient({
-    workerUrl: pathToFileURL(join(dist, 'kuna-worker.js')),
+  return new UnlaceWorkerClient({
+    workerUrl: pathToFileURL(join(dist, 'unlace-worker.js')),
     wasmUrl: `${base}/unlace_wasm.wasm`,
     specRoot: `${base}/specs`,
     workerFactory: (url) => new BrowserWorker(url),

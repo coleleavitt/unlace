@@ -1,4 +1,4 @@
-# kuna castwiden (P9, sub-stage cast-policy; option castwiden off|on|literal).
+# unlace castwiden (P9, sub-stage cast-policy; option castwiden off|on|literal).
 #
 # A 64-bit widening that C's own conversions perform keeps no cast.  The
 # ported CastStrategyC::isExtensionCastImplied hides an INT_SEXT/INT_ZEXT only

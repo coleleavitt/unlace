@@ -6,8 +6,8 @@
 # sites "have no valid fall-through". One of the three arms implementing that
 # test is `!is_instruction_start(fall)` - and the Listing walk pushes every
 # call's fall-through onto its worklist unconditionally, so a call's successor
-# is ALWAYS attempted. That arm therefore fires exactly when kuna's own decoder
-# failed at the successor, which is a fact about kuna, not about the callee.
+# is ALWAYS attempted. That arm therefore fires exactly when unlace's own decoder
+# failed at the successor, which is a fact about unlace, not about the callee.
 # Three undecodable bytes are enough to forge the verdict for a function whose
 # body is `mov $7,%eax ; ret`, and the engine then DELETES the live tail of
 # every caller. The tally keeps the terminal arm (a call with no fall-through
@@ -68,6 +68,6 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-NORETURN-DISCSTRICT #1: option noreturn_disc off/on parses and round-trips, and is inert on the XML path (no Listing built): the source form x <= 8 renders identically in all three passes (default-on + flag-off + flag-on parity)'
+name = 'UNLACE-NORETURN-DISCSTRICT #1: option noreturn_disc off/on parses and round-trips, and is inert on the XML path (no Listing built): the source form x <= 8 renders identically in all three passes (default-on + flag-off + flag-on parity)'
 count = 3
 literal = 'if (x <= 8)'

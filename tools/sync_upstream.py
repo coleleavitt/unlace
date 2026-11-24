@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Port upstream Ghidra changes into kuna.
+"""Port upstream Ghidra changes into unlace.
 
-kuna no longer vendors Ghidra's C++ decompiler source (it was ported to Rust and
+unlace no longer vendors Ghidra's C++ decompiler source (it was ported to Rust and
 removed); what remains vendored from upstream is the SLEIGH processor specs and the
 XML decompiler datatest corpus (see docs/history.md). This script diffs a Ghidra
 checkout between the recorded ``GHIDRA_REV`` and a target revision, restricted to
-those vendored paths, rewrites the path prefixes to kuna's layout, and applies the
+those vendored paths, rewrites the path prefixes to unlace's layout, and applies the
 patch with ``git apply`` (plain apply first, ``--3way`` fallback). On success it
 rewrites ``GHIDRA_REV`` in docs/history.md.
 
@@ -26,7 +26,7 @@ import re
 import subprocess
 import sys
 
-# Vendored path map: upstream prefix -> kuna prefix. Order matters (longest first).
+# Vendored path map: upstream prefix -> unlace prefix. Order matters (longest first).
 # (The C++ decompiler source and its unittests are no longer vendored -- ported to
 # Rust and removed -- so only the datatest corpus and processor specs are synced.)
 PATH_MAP = [
@@ -76,7 +76,7 @@ def write_ghidra_rev(upstream_md, newrev):
 
 
 def map_path(up):
-    """Map an upstream repo path to its kuna path, or None if not vendored/excluded."""
+    """Map an upstream repo path to its unlace path, or None if not vendored/excluded."""
     for ex in EXCLUDE:
         if up.startswith(ex):
             return None
@@ -106,7 +106,7 @@ _OLDNEW_PATTERNS = [
     re.compile(r"^(\+\+\+ )b/(?P<p>.+)$"),
 ]
 # Lines that must never appear in a --no-renames, text-only diff. If one shows up,
-# rewriting it blindly could plant files outside the kuna layout -- hard-fail instead.
+# rewriting it blindly could plant files outside the unlace layout -- hard-fail instead.
 _FORBIDDEN_MARKERS = (
     "rename from ", "rename to ", "copy from ", "copy to ",
     "similarity index ", "Binary files ", "GIT binary patch",
@@ -114,7 +114,7 @@ _FORBIDDEN_MARKERS = (
 
 
 def rewrite_patch(diff_text):
-    """Rewrite a/b paths from upstream layout to kuna layout.
+    """Rewrite a/b paths from upstream layout to unlace layout.
 
     Returns (rewritten_text, skipped_paths). File sections whose path is not
     vendored are dropped wholesale (the diff is split into per-file sections on
@@ -188,7 +188,7 @@ def rewrite_patch(diff_text):
 def analyze(diff_text):
     """Report added/deleted VENDORED files and risky changes for the maintainer.
 
-    Paths in the result are kuna paths; non-vendored files (which rewrite_patch
+    Paths in the result are unlace paths; non-vendored files (which rewrite_patch
     drops) are excluded so the report matches what will actually be applied.
     """
     added, deleted = [], []
@@ -228,7 +228,7 @@ def main(argv=None):
     p.add_argument("--to", default="origin/master", help="target revision (default origin/master)")
     p.add_argument("--from", dest="from_rev", default=None,
                    help="base revision (default: GHIDRA_REV from docs/history.md)")
-    p.add_argument("--root", default=".", help="kuna repo root (default: cwd)")
+    p.add_argument("--root", default=".", help="unlace repo root (default: cwd)")
     p.add_argument("--dry-run", action="store_true", help="report and `git apply --check` only")
     args = p.parse_args(argv)
 
@@ -313,7 +313,7 @@ def main(argv=None):
     if info["new_datatests"] and vendored:
         print("    (vendored processor modules: %s)" % ", ".join(sorted(vendored)))
 
-    patch_path = os.path.join(root, ".kuna_sync.patch")
+    patch_path = os.path.join(root, ".unlace_sync.patch")
     with open(patch_path, "w") as fh:
         fh.write(rewritten)
 
@@ -329,7 +329,7 @@ def main(argv=None):
         return 0
 
     # Primary: plain apply to the working tree (the patch already passed --check).
-    # This is the expected path on a clean kuna checkout (vendored files unmodified).
+    # This is the expected path on a clean unlace checkout (vendored files unmodified).
     apply = sh(["git", "-C", root, "apply", "-p1", patch_path], check=False)
     if apply.returncode != 0:
         # Fallback: 3-way content merge against the recorded base (needs the file to

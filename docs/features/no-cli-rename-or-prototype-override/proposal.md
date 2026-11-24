@@ -9,11 +9,11 @@
 Three backlog records say the same thing about three different subjects:
 
 > `rename`, `retype`, `map param`, `map return`, `override prototype` and `parse line extern ...`
-> are all functional in the console and none is reachable from `kuna`.
+> are all functional in the console and none is reachable from `unlace`.
 > — `no-cli-rename-or-prototype-override` (severity major, instances 1, rounds [2])
 
 > `map address <addr> <typedeclaration>`, `parse line`, `type varnode`, `readonly <addr+size>`
-> and `volatile <addr+size>` all work in the console and none is reachable from `kuna`.
+> and `volatile <addr+size>` all work in the console and none is reachable from `unlace`.
 > — `no-cli-data-code-override` (severity major, instances 1, rounds [2])
 
 > Of the four structuring overrides `phases.toml` advertises in its own `exposure` fields,
@@ -23,14 +23,14 @@ Three backlog records say the same thing about three different subjects:
 
 All three were captain-seeded from a source survey and each has picked up an independent
 tester witness since: `keyboard-callback-uses-undefined` (an agent that could state a
-callback's prototype would not need kuna to infer R9D/R8D), the three-sighting "kuna will
+callback's prototype would not need unlace to infer R9D/R8D), the three-sighting "unlace will
 not tell me about data" family (653d8860 x2 + 69a3822f), and round 1's `switch(0)`.
 
 The delivery vehicle now exists. `no-cli-function-boundary-override` closed via #374, which
-shipped `kuna decompile --define-function <start[-end][=name] | @file>`: an agent-supplied
-fact, injected from the `kuna` binary, carried in a plain-text file the agent owns, honored
+shipped `unlace decompile --define-function <start[-end][=name] | @file>`: an agent-supplied
+fact, injected from the `unlace` binary, carried in a plain-text file the agent owns, honored
 by both the script surface and the in-process surface. This proposal is that shape,
-generalised once, for everything else an agent needs to tell kuna.
+generalised once, for everything else an agent needs to tell unlace.
 
 ## 2. The cheap/expensive question, answered by measurement
 
@@ -39,7 +39,7 @@ The captain asked for this as a table. Every row was measured at `e3db5512` by d
 source. "Reaches C?" means *the emitted C actually changed*, which is a strictly harder
 question than "the command returned Ok".
 
-### Already works in the console — the job is a path from `kuna`
+### Already works in the console — the job is a path from `unlace`
 
 | Console command | Named by | Reaches C? | Measured evidence |
 |---|---|---|---|
@@ -68,7 +68,7 @@ question than "the command returned Ok".
 
 The records' shared Hypothesis says *"The expensive half is the stubs."* **That is overturned,
 exactly as it was on the boundary need.** Every engine entry point the stubs name is already
-ported in `kuna-decomp`:
+ported in `unlace-decomp`:
 
 | Stub command | Engine entry it names | Ported? |
 |---|---|---|
@@ -90,7 +90,7 @@ that work. These are **inert plumbing**, the same finding #374 recorded, not eng
 ### The `kassert` plane, which was meant to carry all of this
 
 `P9 external-refinement`'s own `exposure` in `phases.toml` reads *"the console itself; kassert
-(kuna) is the uniform writer"*. Today:
+(unlace) is the uniform writer"*. Today:
 
 | `kassert` sub-phase | Dispatch arm | State at `e3db5512` |
 |---|---|---|
@@ -107,12 +107,12 @@ that work. These are **inert plumbing**, the same finding #374 recorded, not eng
 
 Two CLI-level facts make `--kassert` unusable as it stands, both measured:
 
-- `kuna decompile <bin> authenticate --kassert "p9 naming-policy v2 buf"` **exits 0 and changes
+- `unlace decompile <bin> authenticate --kassert "p9 naming-policy v2 buf"` **exits 0 and changes
   nothing.** `build_script` emits `kassert` between `load function` and the *first* `decompile`,
   and a local like `v2` does not exist until a decompile has run, so the arm throws
   `No symbol named: v2` into a transcript the CLI discards. The one working assertion arm is
   dead on the one surface that can reach it.
-- `kuna decompile ... --json --kassert ...` → `error: --kassert is not supported with --json`.
+- `unlace decompile ... --json --kassert ...` → `error: --kassert is not supported with --json`.
   The override surface and the machine-readable surface are mutually exclusive, which for an
   agent means the override surface does not exist.
 
@@ -128,17 +128,17 @@ assertion arm inert.
 
 One flag, one line-oriented vocabulary, on every surface that loads a program. Each directive
 is one line; `@FILE` holds many, with `#` comments — the `--define-function` file contract
-verbatim, because that is what makes an override durable across invocations. kuna does not
+verbatim, because that is what makes an override durable across invocations. unlace does not
 write assertions back into the image; the file is the artifact, and it is text an agent can
 generate, diff and version.
 
 ```text
-kuna decompile ./a.out authenticate --json \
+unlace decompile ./a.out authenticate --json \
   --assert 'prototype authenticate int4 authenticate(char *user,char *pass)' \
   --assert 'type v2 char[16]' \
   --assert 'name v2 credbuf'
 
-kuna decompile-all ./packed.bin --json --assert @notes/overrides.kuna
+unlace decompile-all ./packed.bin --json --assert @notes/overrides.unlace
 ```
 
 The vocabulary is **intent-keyed, not phase-keyed**. An agent should not have to know that
@@ -196,7 +196,7 @@ into the same array, so `kassert list` and the JSON agree.
 The ordering is not cosmetic — it was measured, and getting it wrong is how this design fails
 silently.
 
-Script surface (`kuna decompile`, which forks `decomp_dbg` with a generated script):
+Script surface (`unlace decompile`, which forks `decomp_dbg` with a generated script):
 
 ```text
 load file BIN
@@ -218,7 +218,7 @@ The two-pass shape is forced: `rename v2 buf` before the first `decompile` retur
 symbol-scoped directive is present, so every existing invocation keeps its current cost.
 
 In-process surface (`decompile-all`, `decompile-project`, WASM): the plumbing is already
-built. `kuna_console::decompile_step::DecompileSeed` is the shared "console-only facts"
+built. `unlace_console::decompile_step::DecompileSeed` is the shared "console-only facts"
 carrier and the whole-binary loop passes empty slices for every field this plane needs —
 `mapped_symbols` (`data`), `usepoint_symbols` (`type varnode`), `dynamic_symbols`,
 `pending_proto` (`prototype`), `flow_overrides` (`flow`), `mapped_params` (`param`). Stage A
@@ -226,7 +226,7 @@ fills them from the parsed directives. `decompile_step::decompile_one` **already
 decompile → adjust → re-decompile loop (the `formatstring` half-B override loop), so the
 symbol-scoped second pass has precedent in the exact function that needs it.
 
-### Why not a `kuna console` passthrough
+### Why not a `unlace console` passthrough
 
 The captain's caution stands and the measurements support it. A passthrough would ship
 `map return`'s panic and `override prototype`'s silent no-op straight to agents, would expose
@@ -239,7 +239,7 @@ unstructured console diagnostic into a discarded transcript.
 Each stage is one PR, each closes one need, each is independently shippable.
 
 **Stage A — `no-cli-rename-or-prototype-override` (the dispatched need).**
-1. `kuna-cli/src/assertdecl.rs`: the directive parser + `@FILE`, modelled line-for-line on
+1. `unlace-cli/src/assertdecl.rs`: the directive parser + `@FILE`, modelled line-for-line on
    `funcdecl.rs`. Unit tests per directive, per malformation.
 2. Fix `map return`'s `outtype null` panic; add a `console` regression test.
 3. Diagnose `override prototype`'s no-op — the store side or the `queryCall` consume — and fix
@@ -293,7 +293,7 @@ are structurally unaffected.
    must ship with a test that asserts the emitted C **changed**, not that the command returned
    Ok. Reviewing on "did it return Ok" is how `override prototype` got here.
 4. *Symbol names are unstable across runs.* `name v2 credbuf` binds to a generated name that a
-   later kuna version may number differently ([[kuna-entry-name-rank-length]] is the same
+   later unlace version may number differently ([[unlace-entry-name-rank-length]] is the same
    hazard one layer over). Mitigation: `name`/`type` also accept a storage form
    (`name [stack,-0x18,8] credbuf`), which is stable; the generated-name form stays as the
    convenient one.
@@ -307,7 +307,7 @@ Filed on the need at `a-a58fc408288b`, and runnable: `verify --acceptance-suite`
 (`exit_code` 2, `error: unknown option --assert`).
 
 ```
-kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/fauxware authenticate --json \
+unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/fauxware authenticate --json \
   --assert 'prototype authenticate int4 authenticate(char *user,char *pass)' \
   --assert 'type v2 char[16]' \
   --assert 'name v2 credbuf'

@@ -1,4 +1,4 @@
-# Kuna #1674: a 16-byte zeroed stack slot whose high quadword is also written
+# Unlace #1674: a 16-byte zeroed stack slot whose high quadword is also written
 # from a register that is 0 on one path.
 #
 #   f: push rbp; mov rbp,rsp; sub rsp,0x20

@@ -1,8 +1,8 @@
-use kuna_console::engine::bootstrap_from_object;
-use kuna_console::ifacedecomp::{execute,register_decomp_commands,IfaceDecompData,DECOMPILE_MODULE};
-use kuna_console::ifaceterm::ConsoleCommands;
-use kuna_decomp::{context::VarnodeId,funcdata::Funcdata};
-use kuna_num::opcodes::OpCode;
+use unlace_console::engine::bootstrap_from_object;
+use unlace_console::ifacedecomp::{execute,register_decomp_commands,IfaceDecompData,DECOMPILE_MODULE};
+use unlace_console::ifaceterm::ConsoleCommands;
+use unlace_decomp::{context::VarnodeId,funcdata::Funcdata};
+use unlace_num::opcodes::OpCode;
 
 fn constant(fd:&Funcdata,mut id:VarnodeId)->Option<u64>{
     for _ in 0..8 {

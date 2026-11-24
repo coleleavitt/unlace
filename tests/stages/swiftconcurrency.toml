@@ -11,8 +11,8 @@
 # function, did not pass the context.
 #
 # Stage / sub-stage: P1 `swiftruntime` (the generated concurrency table,
-# `kuna_swiftconcurrency.rs`) and P4 prototype models
-# (`kuna_swiftinfer.rs`: `seed` on the swiftasync register,
+# `unlace_swiftconcurrency.rs`) and P4 prototype models
+# (`unlace_swiftinfer.rs`: `seed` on the swiftasync register,
 # `async_callee_model`, `async_tail_call`, `passes_context`).
 #
 # P0 assertion: `option swiftcall on|off` (default on).

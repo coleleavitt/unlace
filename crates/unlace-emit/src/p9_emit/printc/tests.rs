@@ -555,7 +555,7 @@ mod stack_pointer_high_leaf {
                     .unwrap()
                     .as_nanos();
                 let path = std::env::temp_dir().join(format!(
-                    "kuna-rust-array-init-{}-{nonce}.rs",
+                    "unlace-rust-array-init-{}-{nonce}.rs",
                     std::process::id(),
                 ));
                 let executable = path.with_extension("exe");
@@ -3232,7 +3232,7 @@ mod w10_printc_cast_render {
     fn execute_float_slice_expressions(cases: &[(type_metatype, u64, &str, String)]) {
         use std::process::Command;
         let stem = std::env::temp_dir().join(format!(
-            "kuna-float-slices-{}-{}",
+            "unlace-float-slices-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -3499,8 +3499,10 @@ mod w10_printc_cast_render {
                                 .duration_since(std::time::UNIX_EPOCH)
                                 .unwrap()
                                 .as_nanos();
-                            let file = std::env::temp_dir()
-                                .join(format!("kuna-float-trunc-{}-{nonce}.c", std::process::id()));
+                            let file = std::env::temp_dir().join(format!(
+                                "unlace-float-trunc-{}-{nonce}.c",
+                                std::process::id()
+                            ));
                             let executable = file.with_extension("exe");
                             std::fs::write(&file, &program).unwrap();
                             let built = std::process::Command::new(compiler)

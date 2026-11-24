@@ -56,7 +56,7 @@ use crate::regiongraph::{
 fn budget() -> UnlaceResult<()> {
     if crate::budget::deadline_passed_in("region identification") {
         return Err(UnlaceError::lowlevel(
-            "kuna regionid: stopped at the function's budget",
+            "unlace regionid: stopped at the function's budget",
         ));
     }
     Ok(())
@@ -344,13 +344,13 @@ impl UnlaceRegionIdentifier {
 
         if self.work_graph.num_nodes() != 0 {
             return Err(UnlaceError::lowlevel(
-                "kuna regionid: build_from_block_graph on a non-empty working graph",
+                "unlace regionid: build_from_block_graph on a non-empty working graph",
             ));
         }
         let size = fd.bblocks_get_size();
         if size == 0 {
             return Err(UnlaceError::lowlevel(
-                "kuna regionid: build_from_block_graph on a function with no basic blocks",
+                "unlace regionid: build_from_block_graph on a function with no basic blocks",
             ));
         }
 
@@ -415,11 +415,11 @@ impl UnlaceRegionIdentifier {
         if self.computed {
             return self
                 .top_region
-                .ok_or_else(|| UnlaceError::lowlevel("kuna regionid: top region missing"));
+                .ok_or_else(|| UnlaceError::lowlevel("unlace regionid: top region missing"));
         }
         self.computed = true;
         if self.work_graph.num_nodes() == 0 {
-            return Err(UnlaceError::lowlevel("kuna regionid: empty input graph"));
+            return Err(UnlaceError::lowlevel("unlace regionid: empty input graph"));
         }
         // Move the working graph out so the algorithm can mutate it while still
         // borrowing `self` for the node pool / region pool (the C++ keeps both
@@ -577,7 +577,7 @@ impl UnlaceRegionIdentifier {
                 members.push(src);
             } else {
                 return Err(UnlaceError::lowlevel(
-                    "kuna regionid: cannot merge non-block node",
+                    "unlace regionid: cannot merge non-block node",
                 )); // angr raises TypeError
             }
         }
@@ -668,7 +668,7 @@ impl UnlaceRegionIdentifier {
             }
         }
         Err(UnlaceError::lowlevel(
-            "kuna regionid: cannot find the start node from the graph",
+            "unlace regionid: cannot find the start node from the graph",
         ))
     }
 
@@ -693,7 +693,7 @@ impl UnlaceRegionIdentifier {
             }
         }
         Err(UnlaceError::lowlevel(
-            "kuna regionid: no node with the requested address",
+            "unlace regionid: no node with the requested address",
         ))
     }
 
@@ -713,7 +713,7 @@ impl UnlaceRegionIdentifier {
         self.node_order
             .get(&n)
             .copied()
-            .ok_or_else(|| UnlaceError::lowlevel("kuna regionid: node missing from node order"))
+            .ok_or_else(|| UnlaceError::lowlevel("unlace regionid: node missing from node order"))
     }
 
     /// Sort by `node_order` (stable) (C++ `sortByNodeOrder`).
@@ -763,7 +763,7 @@ impl UnlaceRegionIdentifier {
     ) -> UnlaceResult<()> {
         let start = self
             .start_node
-            .ok_or_else(|| UnlaceError::lowlevel("kuna regionid: no start node"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("unlace regionid: no start node"))?;
         self.back_edges.clear();
         unlace_dfs_back_edges(&self.pool, g, start, &mut self.back_edges)?;
         let mut head_set: UnlaceNodeSet = UnlaceNodeSet::new();
@@ -818,7 +818,7 @@ impl UnlaceRegionIdentifier {
             guard += 1;
             if guard > guard_max {
                 return Err(UnlaceError::lowlevel(
-                    "kuna regionid: initial loop nodes did not converge",
+                    "unlace regionid: initial loop nodes did not converge",
                 ));
             }
             let mut updated = false;
@@ -899,7 +899,7 @@ impl UnlaceRegionIdentifier {
             guard += 1;
             if guard > guard_max {
                 return Err(UnlaceError::lowlevel(
-                    "kuna regionid: loop refinement (stage 1) did not converge",
+                    "unlace regionid: loop refinement (stage 1) did not converge",
                 ));
             }
             let mut added_any = false;
@@ -939,7 +939,7 @@ impl UnlaceRegionIdentifier {
             guard += 1;
             if guard > guard_max {
                 return Err(UnlaceError::lowlevel(
-                    "kuna regionid: loop refinement (stage 2) did not converge",
+                    "unlace regionid: loop refinement (stage 2) did not converge",
                 ));
             }
             // Candidates, in sorted_exits order.
@@ -1196,7 +1196,7 @@ impl UnlaceRegionIdentifier {
             let mut keyed: Vec<(int4, UnlaceNodeId)> = Vec::new();
             for ek in refined_exit_nodes.iter() {
                 let pi = po_idx.get(&ek.id).copied().ok_or_else(|| {
-                    UnlaceError::lowlevel("kuna regionid: exit node not reachable from loop head")
+                    UnlaceError::lowlevel("unlace regionid: exit node not reachable from loop head")
                 })?;
                 keyed.push((pi, ek.id));
             }
@@ -1288,7 +1288,7 @@ impl UnlaceRegionIdentifier {
                     delayed_edges.push((src, wrapper));
                 } else {
                     return Err(UnlaceError::lowlevel(
-                        "kuna regionid: inconsistent cyclic region in-edge",
+                        "unlace regionid: inconsistent cyclic region in-edge",
                     )); // RI assert 0
                 }
             }
@@ -1306,7 +1306,7 @@ impl UnlaceRegionIdentifier {
                     delayed_edges.push((wrapper, dst));
                 } else {
                     return Err(UnlaceError::lowlevel(
-                        "kuna regionid: inconsistent cyclic region out-edge",
+                        "unlace regionid: inconsistent cyclic region out-edge",
                     )); // RI assert 0
                 }
             }
@@ -1354,7 +1354,7 @@ impl UnlaceRegionIdentifier {
         }
 
         let order = self.order_of(head).map_err(|_| {
-            UnlaceError::lowlevel("kuna regionid: loop head missing from node order")
+            UnlaceError::lowlevel("unlace regionid: loop head missing from node order")
         })?;
         self.node_order.insert(wrapper, order); // RI l.1099
         Ok(region_id)
@@ -1373,7 +1373,7 @@ impl UnlaceRegionIdentifier {
             guard += 1;
             if guard > guard_max {
                 return Err(UnlaceError::lowlevel(
-                    "kuna regionid: cyclic phase did not converge",
+                    "unlace regionid: cyclic phase did not converge",
                 ));
             }
             let mut headers = std::mem::take(&mut self.loop_headers);
@@ -1387,7 +1387,7 @@ impl UnlaceRegionIdentifier {
                 guard += 1;
                 if guard > guard_max {
                     return Err(UnlaceError::lowlevel(
-                        "kuna regionid: cyclic phase did not converge",
+                        "unlace regionid: cyclic phase did not converge",
                     ));
                 }
                 let mut restart = false;
@@ -1471,7 +1471,7 @@ impl UnlaceRegionIdentifier {
             } else {
                 self.region_pool[region_id.unwrap().0 as usize]
                     .head
-                    .ok_or_else(|| UnlaceError::lowlevel("kuna regionid: region has no head"))?
+                    .ok_or_else(|| UnlaceError::lowlevel("unlace regionid: region has no head"))?
             };
 
             let mut failed_region_attempts: BTreeSet<(UnlaceNodeId, UnlaceNodeId)> =
@@ -1492,7 +1492,7 @@ impl UnlaceRegionIdentifier {
                 inner_guard += 1;
                 if inner_guard > guard_max {
                     return Err(UnlaceError::lowlevel(
-                        "kuna regionid: acyclic phase did not converge",
+                        "unlace regionid: acyclic phase did not converge",
                     ));
                 }
                 if !sub.contains_node(head) {
@@ -1663,7 +1663,7 @@ impl UnlaceRegionIdentifier {
     ) -> UnlaceResult<()> {
         let head = self.region_pool[region_id.0 as usize]
             .head
-            .ok_or_else(|| UnlaceError::lowlevel("kuna regionid: region has no head"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("unlace regionid: region has no head"))?;
         if g.contains_node(head) {
             g.in_edges(head, res)?;
         }
@@ -1680,7 +1680,7 @@ impl UnlaceRegionIdentifier {
     ) -> UnlaceResult<()> {
         let wrapper = self.region_pool[region_id.0 as usize]
             .wrapper
-            .ok_or_else(|| UnlaceError::lowlevel("kuna regionid: region has no wrapper"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("unlace regionid: region has no wrapper"))?;
         let member_keys: Vec<UnlaceNodeKey> = self.region_pool[region_id.0 as usize]
             .graph
             .node_keys()
@@ -1717,7 +1717,7 @@ impl UnlaceRegionIdentifier {
         if self.region_pool[region_id.0 as usize].wrapper.is_none() {
             let head = self.region_pool[region_id.0 as usize]
                 .head
-                .ok_or_else(|| UnlaceError::lowlevel("kuna regionid: region has no head"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("unlace regionid: region has no head"))?;
             let addr = self.pool.get(head).get_addr();
             let w = self.new_node(NodeKind::Region, addr);
             self.pool.get_mut(w).set_region(region_id);
@@ -1753,7 +1753,7 @@ impl UnlaceRegionIdentifier {
         let mut mn: (int4, int4) = (0, 0);
         for nk in nodes_set.iter() {
             let o = self.order_of(nk.id).map_err(|_| {
-                UnlaceError::lowlevel("kuna regionid: region member missing from node order")
+                UnlaceError::lowlevel("unlace regionid: region member missing from node order")
             })?;
             if first || o < mn {
                 mn = o;
@@ -1794,7 +1794,7 @@ impl UnlaceRegionIdentifier {
     ) -> UnlaceResult<()> {
         let wrapper = self.region_pool[region_id.0 as usize]
             .wrapper
-            .ok_or_else(|| UnlaceError::lowlevel("kuna regionid: region has no wrapper"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("unlace regionid: region has no wrapper"))?;
         let mut in_e: Vec<(UnlaceNodeId, UnlaceNodeId)> = Vec::new();
         self.region_in_edges(g, region_id, &mut in_e)?;
         let mut out_e: Vec<(UnlaceNodeId, UnlaceNodeId)> = Vec::new();
@@ -1879,7 +1879,7 @@ impl UnlaceRegionIdentifier {
         if add_dummy {
             let d = self.new_node(NodeKind::Dummy, !0u64);
             let gc = gc_copy.as_mut().ok_or_else(|| {
-                UnlaceError::lowlevel("kuna regionid: dummy end node without a copy")
+                UnlaceError::lowlevel("unlace regionid: dummy end node without a copy")
             })?;
             for &en in endnodes.iter() {
                 gc.add_edge(&self.pool, en, d);
@@ -2139,7 +2139,7 @@ impl UnlaceRegionIdentifier {
     pub fn walk_blocks<V: UnlaceRegionVisitor>(&self, visitor: &mut V) -> UnlaceResult<()> {
         let top = self
             .top_region
-            .ok_or_else(|| UnlaceError::lowlevel("kuna regionid: compute() has not run"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("unlace regionid: compute() has not run"))?;
         self.walk_region_blocks(top, visitor);
         Ok(())
     }

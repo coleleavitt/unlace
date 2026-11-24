@@ -1,9 +1,9 @@
-# kuna re-bytecode-reader-return-discarded: a call whose cspec output rule
+# unlace re-bytecode-reader-return-discarded: a call whose cspec output rule
 # asked for a register PAIR got no output at all, and both halves rendered
 # as locals the function never assigns.
 #
 # FuncCallSpecs::buildOutputFromTrials (fspec.cc:5777) moves the single used
-# output trial to the CALL; upstream also handles two, and kuna shipped that
+# output trial to the CALL; upstream also handles two, and unlace shipped that
 # arm as a stub.  The x86-64 System V cspec returns any 16-byte aggregate in
 # RAX:RDX and says so with its join_dual_class output rule, so a caller that
 # reads both registers puts two active trials on the call.  With the arm
@@ -24,7 +24,7 @@
 # read_tag_clobber is the control: no_payload provably never writes rdx, so
 # the bounded callee decode refuses the pair and the call keeps no output.
 #
-# Phase: P4 output prototype (kuna_callretpair.rs, always on).  The join
+# Phase: P4 output prototype (unlace_callretpair.rs, always on).  The join
 # output and both halves are pinned; the control keeps its bare call.
 
 [image]

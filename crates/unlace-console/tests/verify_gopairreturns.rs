@@ -183,7 +183,7 @@ fn pair_metadata_never_overwrites_an_existing_type_or_stale_facet() {
     for collision in 0..3 {
         let program = program(&binary, true);
         let types = program.arch().types();
-        let name = "__kuna_go_pair_i64_i64";
+        let name = "__unlace_go_pair_i64_i64";
         if collision != 1 {
             types.get_type_struct(name).unwrap();
         }
@@ -325,10 +325,10 @@ func main() {
             "indirectNarrow",
         ],
         &[
-            "map prototype main.apply struct __kuna_go_pair_i64_i64 apply(struct __kuna_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
-            "map prototype main.indirectFirst int8 indirectFirst(struct __kuna_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
-            "map prototype main.indirectSecond int8 indirectSecond(struct __kuna_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
-            "map prototype main.indirectNarrow int4 indirectNarrow(struct __kuna_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
+            "map prototype main.apply struct __unlace_go_pair_i64_i64 apply(struct __unlace_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
+            "map prototype main.indirectFirst int8 indirectFirst(struct __unlace_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
+            "map prototype main.indirectSecond int8 indirectSecond(struct __unlace_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
+            "map prototype main.indirectNarrow int4 indirectNarrow(struct __unlace_go_pair_i64_i64 (*fn)(int8,int8),int8 r0,int8 r1);",
         ],
     );
     assert!(

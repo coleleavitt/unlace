@@ -1,9 +1,9 @@
 /* The fifth counterexample: a pure forwarding thunk.
 
    `fwd` (ce-forward-thunk.s) is `mov (%rdi),%rax; jmp *%rax` -- it never names
-   rsi or rdx, so kuna recovers ONE parameter for it while the function it tail
+   rsi or rdx, so unlace recovers ONE parameter for it while the function it tail
    calls consumes three.  protoorder states that short list in both its modes
-   (`KUNA_PROTOORDER_TRACE=1` prints `state sub_11cd params=1`), so the
+   (`UNLACE_PROTOORDER_TRACE=1` prints `state sub_11cd params=1`), so the
    free-bytes half of the callee clause admits a drop here and the forwarded
    rdx argument is deleted.  What declines it is the surviving-argument half:
    one recovered parameter cannot account for the two arguments that would
@@ -11,7 +11,7 @@
 
    Build: gcc -O2 -o ce-forward-thunk ce-forward-thunk.c ce-forward-thunk.s
           strip ce-forward-thunk
-   Check: kuna decompile-all ce-forward-thunk --option argclobber off|on
+   Check: unlace decompile-all ce-forward-thunk --option argclobber off|on
           must be byte-identical. */
 #include <stdio.h>
 struct pair { long a; long b; };

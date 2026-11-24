@@ -1,4 +1,4 @@
-// Self-contained Mach-O fixture for block recovery (tests/stages/kuna-objcblocks2.xml):
+// Self-contained Mach-O fixture for block recovery (tests/stages/unlace-objcblocks2.xml):
 // `-[Chain build:]` builds three stack blocks in a row, each sent before the next
 // is built, so the shared flags word stays in a callee-saved `d` register across
 // the calls; `sum` (a C function) builds one whose invoke builds a nested block;

@@ -58,46 +58,46 @@ commands = [
 ]
 
 [[match]]
-name = "KUNA-LIBCWIDEN #1: the faccessat wrapper's path is never a width-only integer"
+name = "UNLACE-LIBCWIDEN #1: the faccessat wrapper's path is never a width-only integer"
 count = 0
 literal = 'can_write(unsigned int a0,unsigned long a1)'
 
 [[match]]
-name = "KUNA-LIBCWIDEN #2: faccessat's declaration types it"
+name = "UNLACE-LIBCWIDEN #2: faccessat's declaration types it"
 count = 1
 literal = 'can_write(int4 a0,char *a1)'
 
 [[match]]
-name = "KUNA-LIBCWIDEN #3: neither of renameat's names stays an integer"
+name = "UNLACE-LIBCWIDEN #3: neither of renameat's names stays an integer"
 count = 0
 literal = 'move_entry(unsigned int a0,unsigned long a1,unsigned int a2,unsigned long a3)'
 
 [[match]]
-name = 'KUNA-LIBCWIDEN #4: both are char \*'
+name = 'UNLACE-LIBCWIDEN #4: both are char \*'
 count = 1
 literal = 'move_entry(int4 a0,char *a1,int4 a2,char *a3)'
 
 [[match]]
-name = "KUNA-LIBCWIDEN #5: the mkdirat wrapper's name is never an integer"
+name = "UNLACE-LIBCWIDEN #5: the mkdirat wrapper's name is never an integer"
 count = 0
 literal = 'make_dir(unsigned int a0,unsigned long a1)'
 
 [[match]]
-name = 'KUNA-LIBCWIDEN #6: it is char \*'
+name = 'UNLACE-LIBCWIDEN #6: it is char \*'
 count = 1
 literal = 'make_dir(int4 a0,char *a1)'
 
 [[match]]
-name = "KUNA-LIBCWIDEN #7: chroot's one argument is never an integer"
+name = "UNLACE-LIBCWIDEN #7: chroot's one argument is never an integer"
 count = 0
 literal = 'jail(unsigned long a0)'
 
 [[match]]
-name = 'KUNA-LIBCWIDEN #8: it is char \*'
+name = 'UNLACE-LIBCWIDEN #8: it is char \*'
 count = 1
 literal = 'jail(char *a0)'
 
 [[match]]
-name = 'KUNA-LIBCWIDEN #9: every wrapper is named'
+name = 'UNLACE-LIBCWIDEN #9: every wrapper is named'
 count = 0
 literal = 'sub_11'

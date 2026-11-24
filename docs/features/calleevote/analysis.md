@@ -3,13 +3,13 @@
 ## 1. The measured symptom
 
 Round E's O2 census (`docs/decbench/typecampaign/final-e/o2census/`) ranked the
-O2 blockers. The largest O2-noinline bucket is a program struct pointer that kuna
+O2 blockers. The largest O2-noinline bucket is a program struct pointer that unlace
 declares `void *` in a function that is otherwise right: 143 functions at
 O2-noinline and 20 at O2 where fixing that one variable makes the function
 perfect under decbench#93 crediting, 66 of them gnulib `Hash_table` getters.
 
 ```
-$ kuna decompile-all O2-noinline/coreutils/stripped/chcon --addr 0x68f0
+$ unlace decompile-all O2-noinline/coreutils/stripped/chcon --addr 0x68f0
 unsigned long sub_68f0(void *a0)
 {
   return *(unsigned long *)((long)a0 + 0x10);
@@ -47,7 +47,7 @@ literals), 41 more under #93 crediting, and 18 where the callers' type is wrong.
 wants two distinct offsets including 0 (`structsynth.rs` `accepts_record`).
 Relaxing that alone did nothing, and the reason is a second blocker the census
 did not name. `ActionStructSynth` fires only once `ActionInferTypes` reports a
-pass that changed nothing (`kuna_infertypes_settled`). A short function's main
+pass that changed nothing (`unlace_infertypes_settled`). A short function's main
 loop ends on the pass that first typed it (nothing after it changes an op, so no
 second pass runs) and the synthesizer is never offered the function at all.
 With both the relaxation and one forced settle pass, over the 296 O2/O2-noinline
@@ -144,7 +144,7 @@ Two readability shapes the review found are fixed as well:
   `*(unsigned int *)((int)a0 + 0x34) = 0xffffffff;` as four `a0[0x34] = '\xff';`
   stores and `sub_8016760` lost its `unsigned short *`. The vote is now refused
   when the callee stores a constant wider than a byte through the value
-  (`kuna_protoorder::input_refuses`); both functions print as `off` again, and
+  (`unlace_protoorder::input_refuses`); both functions print as `off` again, and
   over 21 whole binaries no new run of byte stores appears.
 * **An array walked from a constant index.** dash O2-noinline `sub_7460`
   (`char **argv`) read `argv[1]` and then stepped `argv + 2` through a loop; the
@@ -353,7 +353,7 @@ The redo pass is a phase of its own, though — one call, after the first pass a
 before the convergence sweep — so what it costs can be read off a single run
 instead of inferred from two. Timing `callee_vote_rounds` and dividing by the
 run's own wall clock gives a number with no second arm in it, and the pass's
-line spend (`KUNA_CALLEEVOTE_TRACE=1`, `redo pass: N decompiles, S of B budget
+line spend (`UNLACE_CALLEEVOTE_TRACE=1`, `redo pass: N decompiles, S of B budget
 lines spent`) is deterministic.
 
 At the shipped flat 32-line bound the redo pass is:

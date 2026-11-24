@@ -1,4 +1,4 @@
-# Kuna user report: local declarations lost their machine-storage comments
+# Unlace user report: local declarations lost their machine-storage comments
 # after COPY elimination, phi merging, or paired-register return recovery.
 # P6 variables / P9 declaration emission. This is a correctness fix under
 # the existing P0 presentation policy: namestyle angr includes sources;

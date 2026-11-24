@@ -4,7 +4,7 @@
 # global store before the arithmetic in every C form of it.
 #
 #   gcc -O2 -no-pie -o /tmp/travel travel.s && /tmp/travel; echo $?   # 66
-#   kuna decompile /tmp/travel main
+#   unlace decompile /tmp/travel main
 #
 # Before: `k = 0x2a; return f(7) * 3 + 0x2a;`  (66 in the binary, 189 in that C)
 # After:  `v1 = f(7); k = 0x2a; return v1 * 3 + 0x2a;`

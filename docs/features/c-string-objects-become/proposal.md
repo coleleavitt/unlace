@@ -49,7 +49,7 @@ Upstream already has the rule. `TypeFactory::getTypePointerNoDepth`
 (`type.cc:1509`) refuses to build a pointer whose target is a pointer-to-pointer
 and returns `ptr(undefined<N>)` instead, and it returns an existing
 `ptr(undefined<N>)` unchanged — i.e. it is a fixed point. Ghidra calls it from
-`TypeOpLoad`/`TypeOpStore::propagateType` only, and kuna's port of that
+`TypeOpLoad`/`TypeOpStore::propagateType` only, and unlace's port of that
 (`propagate_to_pointer`) is faithful. The escalation here does not go through
 LOAD/STORE, so the rule never runs.
 

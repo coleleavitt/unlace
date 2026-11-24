@@ -1,7 +1,7 @@
 """Cast residue by shape against IDA, signedness merged, on ONE shared set (every arm ∩ IDA).
 
   shapes9.py LABEL=DIR ... [--top N]
-castbench.py shapes, with i/u of one width merged (IDA's _QWORD and __int64 and kuna's unsigned long
+castbench.py shapes, with i/u of one width merged (IDA's _QWORD and __int64 and unlace's unsigned long
 and long are one cast), `unsigned char`/`_BYTE`/`signed char` merged as `b8` (plain `char` is kept),
 and every arm counted on the same functions. Never writes into the decbench tree."""
 import collections, json, re, sys

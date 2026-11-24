@@ -1,7 +1,7 @@
 # An arm64_32 Mach-O (ILP32 AArch64, the watchOS ABI).
 #
 # Issue: a Mach-O with cputype CPU_TYPE_ARM64_32 was refused at load with
-# "unsupported machine Aarch64_Ilp32 (no kuna SLEIGH language)", and a
+# "unsupported machine Aarch64_Ilp32 (no unlace SLEIGH language)", and a
 # watchOS dyld shared cache, whose images are all arm64_32, with "image at
 # 0x1a094000 is not a 64-bit Mach-O". The AARCH64:LE:32:ilp32 language has
 # been in the specs all along; nothing selected it.

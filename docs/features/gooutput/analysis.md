@@ -20,7 +20,7 @@ register fallback, precedence and field-gap fallback. The reference fixture
 fauxware is 8,776 bytes, SHA256
 c2d90645a45e99221593547e55c601a901b80f807ae96f94c60a7661df0b3e0b.
 
-Kuna already centralizes language profiles and several statement-form dispatch
+Unlace already centralizes language profiles and several statement-form dispatch
 points. The new backend can reuse those without inventing a second IR or C
 printer. Important gaps to audit include Rust-specific fallback assumptions
 behind false language capabilities, such as rendering a non-ternary selection
@@ -35,7 +35,7 @@ The reference Go 1.22.5 basics class also passes locally (eight functions,
 including its prototype, multi-result, runtime-cleanup and ownership checks).
 Its binary is 1,471,746 bytes, SHA256
 b0c5144b05517c764da886a30b5eeca5709b6b655e93b55ae4967042943db50f.
-Kuna's current C output for the same eight functions is captured separately;
+Unlace's current C output for the same eight functions is captured separately;
 this syntax feature alone will not satisfy all of those semantic expectations.
 
 ## Implemented output surface
@@ -71,7 +71,7 @@ in console's integration suite:
 
 ```sh
 cargo test --manifest-path decompiler/Cargo.toml -p console --test integration verify_outlang_go::
-cargo test --manifest-path decompiler/Cargo.toml -p kuna-decomp --lib kuna_langgo::tests::
+cargo test --manifest-path decompiler/Cargo.toml -p unlace-decomp --lib unlace_langgo::tests::
 ```
 
 `tests/fixtures/go-output/check.go` supplies imports, a test driver and expected

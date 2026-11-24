@@ -90,4 +90,4 @@ regex = '^func Apply\(raw unsafe\.Pointer, count uint64\) uint64 \{$'
 [[match]]
 name = 'Go method display leaves an explicit per-call prototype in authority'
 count = 1
-regex = '^  return _kuna_ident_282a4d6574657229\.Apply\(unsafe\.Pointer\(m\)\)$'
+regex = '^  return _unlace_ident_282a4d6574657229\.Apply\(unsafe\.Pointer\(m\)\)$'

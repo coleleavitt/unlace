@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the Espressif mask-ROM symbol tables kuna's `esprom` option reads.
+"""Generate the Espressif mask-ROM symbol tables unlace's `esprom` option reads.
 
 Sources (both Apache-2.0):
   ESP-IDF            components/esp_rom/<chip>/ld/*.ld        (esp32, esp32s2,

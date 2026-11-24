@@ -1,4 +1,4 @@
-# kuna protoorder, single-function drive: the callees a function tail-calls.
+# unlace protoorder, single-function drive: the callees a function tail-calls.
 #
 # gcc 15.3 -O2 -fno-pic -no-pie -nostartfiles -static (x86-64) of
 #

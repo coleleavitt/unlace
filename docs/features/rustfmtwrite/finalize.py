@@ -6,8 +6,8 @@ import re
 import shutil
 import subprocess
 
-w = Path('/tmp/kuna-rust-fmt-write-optin')
-old = Path('/tmp/kuna-rust-fmt-write')
+w = Path('/tmp/unlace-rust-fmt-write-optin')
+old = Path('/tmp/unlace-rust-fmt-write')
 r = Path('/home/mahaloz/kwt/angr-rust-fmt-write')
 base = Path('/home/mahaloz/kwt/angr-rust-fmt-str')
 out = r / 'docs/features/rustfmtwrite'
@@ -34,20 +34,20 @@ assert read(r, 'docs/baseline-stages.json')['data_footer'] == [3541, 3541]
 subprocess.run(['git', 'diff', '--exit-code', '--', 'docs/baseline.json'], cwd=r, check=True)
 source = read(w, 'production-source-before-validation.json')
 assert all(sha(r / p) == h for p, h in source.items())
-digest = sha(r / 'decompiler/target/release/kuna')
+digest = sha(r / 'decompiler/target/release/unlace')
 assert digest == gates['release_sha256'] == read(w, 'build.json')['cli_sha256']
 parent = read(old, 'parent-source-before-commit.json')
 parent_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=base, text=True).strip()
 assert not subprocess.check_output(['git', 'status', '--porcelain'], cwd=base)
 assert all(sha(base / p) == h for p, h in parent['files'].items())
-assert sha(base / 'decompiler/target/release/kuna') == parent['binary_sha256']
+assert sha(base / 'decompiler/target/release/unlace') == parent['binary_sha256']
 reanchor = read(old, 'reanchor-proof.json')
 assert reanchor['new_baseline_commit'] == parent_head == (old / 'baseline-commit.txt').read_text().strip()
 assert reanchor['release_binary_unchanged'] and reanchor['release_binary_sha256'] == digest
 
 equivalence = read(w, 'breadth/record.json')
 assert equivalence['images'] == 27 and equivalence['all_complete_function_records_identical']
-assert equivalence['new_kuna_sha256'] == digest
+assert equivalence['new_unlace_sha256'] == digest
 assert equivalence['baseline_commit'] == parent_head and not equivalence['baseline_has_pending_feature']
 for fixture in equivalence['fixtures']:
     for capture in fixture['captures']:
@@ -60,7 +60,7 @@ summary = read(old, 'breadth-summary.json')
 macros = read(old, 'all-macros.json')
 native = read(old, 'native-execution.json')
 context = read(old, 'reference-context-review.json')
-assert equivalence['previous_enabled_kuna_sha256'] == breadth['patched_kuna_sha256']
+assert equivalence['previous_enabled_unlace_sha256'] == breadth['patched_unlace_sha256']
 assert not breadth['semantic_evidence_pending'] and not breadth['baseline_has_pending_feature']
 assert breadth['baseline_commit'] == parent_head
 assert summary['images'] == 27 and summary['changed_functions'] == macros['changed_functions'] == macros['recovered_calls'] == 8
@@ -77,7 +77,7 @@ failed = [name for name, result in enabled_monitor['results'].items() if not res
 assert failed == ['scalar-c'] and len(enabled_monitor['results']) == 10
 for name in enabled_monitor['results']:
     row = read(attempt, f'timing-{name}.json')
-    assert row['binaries_sha256'] == {'baseline': parent['binary_sha256'], 'patched': breadth['patched_kuna_sha256']}
+    assert row['binaries_sha256'] == {'baseline': parent['binary_sha256'], 'patched': breadth['patched_unlace_sha256']}
     assert row['samples'] == 768 and row['warmups'] == 3 and row['plan']['maximum_looks'] == 1
 timing = read(w, 'timing-default-result.json')
 assert timing['all_default_comparisons_passed'] and not timing['enabled_default_on_accepted']
@@ -90,7 +90,7 @@ maxima = {metric: max(row['median_delta_pct'][metric] for row in timing['records
 out.mkdir(parents=True, exist_ok=True)
 record = {'option': 'rustfmtwrite', 'default': 'off', 'enabled_in_any_preset': False,
           'baseline_commit': parent_head, 'integrated_main_commit': '69fad3ce4cbdbb3232680938252bd75c2bec5a68',
-          'kuna_sha256': digest, 'previous_enabled_kuna_sha256': breadth['patched_kuna_sha256'],
+          'unlace_sha256': digest, 'previous_enabled_unlace_sha256': breadth['patched_unlace_sha256'],
           'reference_angr_commit': '6afa0c79a83d9f677a46b0275cdb63bf16c1979e',
           'reference_binaries_commit': '76ad9e296dde8f82b8ede93ce06a578cd1933639',
           'datatests': {'passed': 675, 'total': 675, 'baseline_unchanged': True},

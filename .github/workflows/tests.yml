@@ -215,7 +215,7 @@ jobs:
 
       # The ghidra-mode differential harness (docs/ghidra-integration.md §11):
       # drives the full decompile-process wire protocol in-process against real
-      # vendored ELFs, with the mock-Java end answered from kuna's own analysis,
+      # vendored ELFs, with the mock-Java end answered from unlace's own analysis,
       # and pins the GUI-path quality numbers (placeholder rate, register/Unique
       # leaks, ghidra-vs-CLI diff ratio, query traffic). Lives in the workspace
       # suite too, but that job is skipped on internal PRs -- and a regression in
@@ -351,8 +351,8 @@ jobs:
     # The archive's binaries run from outside the checkout, so they cannot find the
     # repository root (fixtures, tests/datatests) or the specs from their own path.
     env:
-      KUNA_ROOT: ${{ github.workspace }}
-      KUNA_SPECS: ${{ github.workspace }}/specs
+      UNLACE_ROOT: ${{ github.workspace }}
+      UNLACE_SPECS: ${{ github.workspace }}/specs
       SLEIGHHOME: ${{ github.workspace }}/specs
     steps:
       - uses: actions/checkout@v4

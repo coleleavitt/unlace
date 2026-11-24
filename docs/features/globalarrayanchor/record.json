@@ -4,7 +4,7 @@
   "option": "globalarrayanchor",
   "flag": "global_array_anchor",
   "change_kind": "opt-in-tool",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "inspiration": "Independent synthetic indexed-array assembly",
   "default_on": false,
   "presets": [

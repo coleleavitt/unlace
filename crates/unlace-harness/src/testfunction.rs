@@ -752,11 +752,11 @@ impl FunctionTestCollection {
         // UNLACE_DUMP triage hook (the C++ (unlace) addition), even on error.
         let mut results = String::new();
         if unlace_base::env::var_os("UNLACE_DUMP").is_some() {
-            results.push_str(&format!("===KUNA_DUMP_BEGIN {}===\n", self.file_name));
+            results.push_str(&format!("===UNLACE_DUMP_BEGIN {}===\n", self.file_name));
             results.push_str(&bulkout);
-            results.push_str("\n===KUNA_DUMP_MID===\n");
+            results.push_str("\n===UNLACE_DUMP_MID===\n");
             results.push_str(&mid_buffer);
-            results.push_str("===KUNA_DUMP_END===\n");
+            results.push_str("===UNLACE_DUMP_END===\n");
         }
 
         if self.console.is_in_error() {
@@ -915,7 +915,7 @@ pub fn run_test_files_each(test_files: &[String], spec_roots: &[String]) -> Vec<
 /// (`option sourcelang c` sets `UNLACE_SOURCELANG`, `option goabi` sets `UNLACE_GOABI`, ...).
 fn is_option_env(name: &std::ffi::OsStr) -> bool {
     let name = name.to_string_lossy().to_ascii_lowercase();
-    name.starts_with("kuna_") || name.starts_with("unlace_")
+    name.starts_with("unlace_") || name.starts_with("unlace_")
 }
 
 /// The option-carrying environment variables as the run found them.

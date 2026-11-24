@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Classify every changed line of a structsynth `decompile-all` before/after pair.
 
-    kuna decompile-all <bin> --option structsynth param > before.c   # main build
-    kuna decompile-all <bin> --option structsynth param > after.c    # branch build
+    unlace decompile-all <bin> --option structsynth param > before.c   # main build
+    unlace decompile-all <bin> --option structsynth param > after.c    # branch build
     python3 docs/features/structsynth/dedup_hunks.py before.c after.c
 
 Buckets:

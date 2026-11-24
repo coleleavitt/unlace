@@ -9,7 +9,7 @@
 # most of their Swift stdlib and runtime calls. The indirect-symbol walk then
 # leaves the stub `sub_<addr>` and every bl to it is an anonymous call.
 #
-# Stage / sub-stage: P1 environment-binding. loader/kuna_stubbinds.rs
+# Stage / sub-stage: P1 environment-binding. loader/unlace_stubbinds.rs
 # decodes each unnamed stub (adrp; ldr; br) to its slot, reads the slot's
 # addend-free chained bind and names the stub after the import.
 #

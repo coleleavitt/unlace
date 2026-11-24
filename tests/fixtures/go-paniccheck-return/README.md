@@ -3,9 +3,9 @@
 Build the stripped AMD64 ELF with GNU as and ld.
 
 ```sh
-as --64 paniccheck.S -o /tmp/kuna-go-paniccheck-stage.o
+as --64 paniccheck.S -o /tmp/unlace-go-paniccheck-stage.o
 ld -s -m elf_x86_64 --build-id=none -e _start -Ttext=0x401000 \
-  /tmp/kuna-go-paniccheck-stage.o -o paniccheck-elf
+  /tmp/unlace-go-paniccheck-stage.o -o paniccheck-elf
 chmod a-x paniccheck-elf
 ```
 

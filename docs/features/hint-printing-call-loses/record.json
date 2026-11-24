@@ -4,10 +4,10 @@
   "scope": "small",
   "option": "calleearityscratch",
   "default": "on",
-  "module": "decompiler/crates/kuna-decomp/src/p4_calls/calleearityscratch.rs",
-  "witness": "cr4ckm3_0x (ELF x86-64, statically linked, stripped; challenge 5e51836e33c5d4439bb2dc24) 0x400f30 -> sub_417f80 @0x401007, reduced and vendored as decompiler/crates/kuna-analysis/tests/fixtures/calleearityscratch_x86_64",
+  "module": "decompiler/crates/unlace-decomp/src/p4_calls/calleearityscratch.rs",
+  "witness": "cr4ckm3_0x (ELF x86-64, statically linked, stripped; challenge 5e51836e33c5d4439bb2dc24) 0x400f30 -> sub_417f80 @0x401007, reduced and vendored as decompiler/crates/unlace-analysis/tests/fixtures/calleearityscratch_x86_64",
   "decisions": [
-    "THE FILED HYPOTHESIS WAS ALREADY OVERTURNED IN THE NEED and the refuter's diagnosis held under my own instrumentation. It said `single-site callee analysis does not establish its arity`; kuna has exactly that (`calleearitybody`, default-on) and it establishes the run {rdi} correctly here. The loss is one line further on, in `calleearitycut`'s boundary test.",
+    "THE FILED HYPOTHESIS WAS ALREADY OVERTURNED IN THE NEED and the refuter's diagnosis held under my own instrumentation. It said `single-site callee analysis does not establish its arity`; unlace has exactly that (`calleearitybody`, default-on) and it establishes the run {rdi} correctly here. The loss is one line further on, in `calleearitycut`'s boundary test.",
     "REPRODUCED AND INSTRUMENTED. Printing every BodyTrial at the captured call shows all six SysV register trials scoring inactive and the run picked as {rdi}; the boundary trial is rsi, whose Varnode at the CALL slot is written (a loop MULTIEQUAL over the unrolled XOR body) and so fails `caller_quiet`. `accepts_cut_run` returns false and the whole one-argument list is dropped.",
     "THE DISCRIMINATOR IS UPSTREAM'S OWN, ALREADY COMPUTED. Argument setup is a value used for nothing but the call -- `Funcdata::onlyOpUse` -- and `FuncCallSpecs::checkInputTrialUse` runs `ancestor_op_use` over every trial and marks it ACTIVE only when that is true. rsi's trial is INACTIVE here because the caller reads sil in the XOR. So the widening reads `trial.is_checked() && !trial.is_active()` rather than inventing a second walk; no new analysis, no new decode.",
     "THE WITNESS'S SIL USE IS NOT VISIBLE ON THE 8-BYTE rsi VARNODE. Instrumented: that Varnode's only descendant is the CALL, because the byte read hangs off the 4-byte esi in the def chain. A naive `has a descendant other than the CALL` test would have MISSED the witness; `ancestor_op_use`, which walks the def chain, does not. This is why the recorded trial verdict is the right thing to read and a locally-computed one is not.",
@@ -17,7 +17,7 @@
     "THE NEED'S OTHER TWO INSTANCES ARE A DIFFERENT DEFECT and the T_DEDUP note said so before I started: the witness is a TOTAL loss (zero arguments) and goes through `calleearitybody`/`calleearitycut`, which are eligible only for a call that recovered nothing at all; 6a095817 (memcpy keeps 2 of 3) and 6a148dd6 (init_state keeps 1 of 4) are PARTIAL and are `calleearitylive`'s territory. Closing this need does not close them and their return in a later round is not a regression."
   ],
   "sweep": {
-    "corpus": "90 binaries -- 60 decbench (O0 / O2 / O2-noinline, x86-64 and ARM) plus 30 crackmes.one arena images (PE and ELF) -- kuna decompile-all --json, option on vs off; 3 of the 90 discover no function in EITHER arm and are excluded",
+    "corpus": "90 binaries -- 60 decbench (O0 / O2 / O2-noinline, x86-64 and ARM) plus 30 crackmes.one arena images (PE and ELF) -- unlace decompile-all --json, option on vs off; 3 of the 90 discover no function in EITHER arm and are excluded",
     "functions": 27417,
     "changed_functions": 38,
     "changed_binaries": 9,
@@ -39,7 +39,7 @@
       "delta_pct": -5.13
     },
     "whole_binary": {
-      "command": "kuna decompile-all phantomgate.exe --json, interleaved off/on",
+      "command": "unlace decompile-all phantomgate.exe --json, interleaved off/on",
       "pairs": 4,
       "median_s_off": 31.445,
       "median_s_on": 31.435,
@@ -50,9 +50,9 @@
   "gates": {
     "make test": "PARITY OK 675/675",
     "make test-stages": "PARITY OK 692/692 (687 -> 692, purely additive)",
-    "make rust-test": "green (6,076 passed, 0 failed) with `env -u KUNA_DECOMP_TEST`; the repipe launcher points that variable at kuna's own decomp_test_dbg, which makes verify_w10_* oracle assertions unsatisfiable for any kuna build",
+    "make rust-test": "green (6,076 passed, 0 failed) with `env -u UNLACE_DECOMP_TEST`; the repipe launcher points that variable at unlace's own decomp_test_dbg, which makes verify_w10_* oracle assertions unsatisfiable for any unlace build",
     "make check-spec": "OK (strict)",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "make test-cli": "85/85",
     "acceptance": "PASS"
   },

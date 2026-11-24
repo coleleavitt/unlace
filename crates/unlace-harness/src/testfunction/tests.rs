@@ -684,6 +684,6 @@ fn restore_option_env_drops_and_resets_option_variables() {
     assert_eq!(std::env::var_os(ADDED), None);
     assert_eq!(std::env::var(CHANGED).as_deref(), Ok("before"));
     unsafe { std::env::remove_var(CHANGED) };
-    assert!(is_option_env(std::ffi::OsStr::new("kuna_pdb_path")));
+    assert!(is_option_env(std::ffi::OsStr::new("unlace_pdb_path")));
     assert!(!is_option_env(std::ffi::OsStr::new("PATH")));
 }

@@ -1,5 +1,5 @@
 # GH-890 (follow-up to GH-888). Stage P5, type propagation
-# (kuna_floatbits.rs, always on).
+# (unlace_floatbits.rs, always on).
 #
 # A float helper that only works on the bits of its float-register input is
 # a float on both sides. newlib's fabsf is GET_FLOAT_WORD / SET_FLOAT_WORD:

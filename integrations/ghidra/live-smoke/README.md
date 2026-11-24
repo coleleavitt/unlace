@@ -7,10 +7,10 @@ same functions twice — once with the stock native core, once with
 `unlace_ghidra` swapped in — and writes a side-by-side report carrying the same
 badness-scanner counts the sim pins (raw-register leaks, `Unique<hex>` tokens,
 `sub_`/`dat_` placeholder rate, the `unsigned_long__`-style `getC()` mangling
-signature, and a kuna-vs-stock line-diff ratio).
+signature, and a unlace-vs-stock line-diff ratio).
 
-The core swap uses the same seam as the `KunaDecompiler` extension
-(`integrations/ghidra/KunaDecompiler/`): a reflection write of
+The core swap uses the same seam as the `UnlaceDecompiler` extension
+(`integrations/ghidra/UnlaceDecompiler/`): a reflection write of
 `DecompileProcessFactory.exepath`, which the factory consults before spawning
 the native process. No extension install is needed for the smoke.
 
@@ -40,23 +40,23 @@ the native process. No extension install is needed for the smoke.
 ```bash
 source ~/.virtualenvs/unlace-ghidra/bin/activate
 export GHIDRA_INSTALL_DIR=~/tools/ghidra_12.1.2_PUBLIC
-export KUNA_SMOKE_BINARY=$PWD/tests/bug-repro/faillog   # any program
+export UNLACE_SMOKE_BINARY=$PWD/tests/bug-repro/faillog   # any program
 # optional:
-#   export KUNA_GHIDRA_EXE=…/target/release/unlace_ghidra  (default)
-#   export KUNA_SMOKE_FUNCTIONS=main,usage    (default: main + 2 largest)
-#   export KUNA_SMOKE_OUT=./live-smoke-out    (default)
-python3 integrations/ghidra/live-smoke/kuna_vs_stock.py
+#   export UNLACE_GHIDRA_EXE=…/target/release/unlace_ghidra  (default)
+#   export UNLACE_SMOKE_FUNCTIONS=main,usage    (default: main + 2 largest)
+#   export UNLACE_SMOKE_OUT=./live-smoke-out    (default)
+python3 integrations/ghidra/live-smoke/unlace_vs_stock.py
 ```
 
-Outputs, under `KUNA_SMOKE_OUT`:
+Outputs, under `UNLACE_SMOKE_OUT`:
 
-- `stock_<fn>.c` / `kuna_<fn>.c` — the `getC()` text per core, per function;
+- `stock_<fn>.c` / `unlace_<fn>.c` — the `getC()` text per core, per function;
 - `REPORT.md` — completion status, per-function scanner counts, and the
-  kuna-vs-stock diff ratio.
+  unlace-vs-stock diff ratio.
 
 A working local example (the machine this rig was built on):
 `GHIDRA_INSTALL_DIR=/home/mahaloz/ctf/tools/ghidra_12.1.2_PUBLIC` with the venv
-`/home/mahaloz/.virtualenvs/kuna-ghidra`.
+`/home/mahaloz/.virtualenvs/unlace-ghidra`.
 
 ## Notes / learnings baked in
 
@@ -65,7 +65,7 @@ A working local example (the machine this rig was built on):
   makes both cores look artificially bad.
 - **`getC()` is not the GUI panel**: `DecompileResults.getDecompiledFunction()`
   runs every funcname/variable/type/field/label token through Java's
-  `IllegalCharCppTransformer`, so a token kuna emits with spaces/stars inside
+  `IllegalCharCppTransformer`, so a token unlace emits with spaces/stars inside
   (`"unsigned long *"` as ONE `<type>` token) reads back as
   `unsigned_long__…`. The GUI panel renders token text verbatim. The sim
   harness replicates the `getC()` behavior, so its numbers and this rig's line
@@ -74,5 +74,5 @@ A working local example (the machine this rig was built on):
   (`crates/unlace-ghidra/tests/ghidra_sim/mod.rs`) with a fixed
   x86-64 register set; the rust harness (which harvests the register list from
   the live Sleigh) is authoritative for pinned numbers.
-- Decompile timeouts are process murder (Java disposes the child); if the kuna
+- Decompile timeouts are process murder (Java disposes the child); if the unlace
   pass hangs, look for the spawned `unlace_ghidra` PID and its stderr.

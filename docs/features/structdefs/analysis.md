@@ -2,8 +2,8 @@
 
 ## The gap
 
-kuna recovers composite layouts and then does not show them on the surface a
-caller reads. `kuna decompile ./fmt get_prefix` prints
+unlace recovers composite layouts and then does not show them on the surface a
+caller reads. `unlace decompile ./fmt get_prefix` prints
 
 ```
 int get_prefix(_IO_FILE *f)
@@ -14,14 +14,14 @@ int get_prefix(_IO_FILE *f)
 
 and nothing in the output says what an `_IO_FILE` is. The layout the field
 accesses are printed *against* is real — it is in the type factory, and
-`kuna decompile-project` writes it into the export's `.h` — but reaching it
+`unlace decompile-project` writes it into the export's `.h` — but reaching it
 means exporting a whole project folder for one function. On a stripped binary
 the same thing happens one level down: `libctypes` gives the argument the named
 opaque shell `FILE *`, which is strictly better than `long`, and the caller
 still has nothing that says `FILE` is a struct at all.
 
 angr prints the typedefs a function references above it, which is a large part
-of why its output reads struct-aware. kuna had the renderer
+of why its output reads struct-aware. unlace had the renderer
 (`PrintC::doc_type_definitions`, the `docTypeDefinitions` port) and only a
 whole-project caller for it.
 
@@ -32,7 +32,7 @@ composite, enum and typedef types the function's own C names, above the
 function, in definition-before-use order.
 
 ```
-$ kuna decompile ./fmt get_prefix --option structdefs on
+$ unlace decompile ./fmt get_prefix --option structdefs on
 typedef struct _IO_marker _IO_marker; /* opaque */
 typedef struct _IO_FILE _IO_FILE;
 typedef struct _IO_codecvt _IO_codecvt; /* opaque */
@@ -51,10 +51,10 @@ int get_prefix(_IO_FILE *f)
 ## The in-repo witness
 
 `dwarfstructs_x86_64` carries a self-referential `struct Node`, which is the case
-kuna's forward-declaration-first rendering exists for:
+unlace's forward-declaration-first rendering exists for:
 
 ```
-$ kuna decompile .../fixtures/dwarfstructs_x86_64 walk_list --option structdefs on
+$ unlace decompile .../fixtures/dwarfstructs_x86_64 walk_list --option structdefs on
 typedef struct Node Node;
 
 struct Node {
@@ -102,7 +102,7 @@ The suppression is keyed on a batch option that states that reason —
 `DecompileOptions::header_carries_types`, set by the export surfaces and by a
 `--jobs` worker serving one (the worker `--jobs-types` asks for the `.h` type
 block). The first cut keyed it on `want_proto` instead, which looked like the
-export surface and is not: `kuna decompile-graph` asks for prototypes too, and
+export surface and is not: `unlace decompile-graph` asks for prototypes too, and
 its document is per-function C with **no** header artifact, so the option was a
 silent no-op there — 0 of 216 minigzip functions carried a definition, exit 0,
 no diagnostic. It now carries 13, the same 13 `decompile-all` prints, which is
@@ -153,7 +153,7 @@ eight preamble lines shifted both together.
 `render_type_definitions` builds the project export's `.h`, so what it produces
 is C whatever `--language` is active: under `--language rust` the preamble came
 out as a C `struct Node { … };` block carrying Rust-spelled field types, which is
-neither valid Rust nor readable C. `kuna decompile-project` already refuses a
+neither valid Rust nor readable C. `unlace decompile-project` already refuses a
 non-C output language outright for that exact reason, so the preamble takes the
 same decision one step smaller — it declines (and so does the `types` array),
 and the Rust body is emitted unchanged. Probe:

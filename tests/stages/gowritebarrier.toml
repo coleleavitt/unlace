@@ -1,4 +1,4 @@
-# The Go GC write-barrier diamond (docs/multilang.md W2/W5), ported as kuna
+# The Go GC write-barrier diamond (docs/multilang.md W2/W5), ported as unlace
 # `option gowritebarrier` (P2 flow-classification, default AUTO).
 #
 # Every pointer store the garbage collector must see compiles to a flag

@@ -304,8 +304,8 @@ fn assert_structure(run: &SessionRun) {
         // decompiled function (the user-visible "unlace is the active core"
         // marker; ghidra-mode only, so the CLI differential strips it).
         assert!(
-            parsed.c_text.contains("Kuna v"),
-            "target #{i}: the ghidra-mode `Kuna v…` banner comment is missing\n{}",
+            parsed.c_text.contains("Unlace v"),
+            "target #{i}: the ghidra-mode `Unlace v…` banner comment is missing\n{}",
             parsed.c_text
         );
         // ---- Phase 4: the full-response children + the Java hard-throw traps.
@@ -402,7 +402,7 @@ fn placeholder_total(c: &str) -> usize {
 /// the CLI ground truth has no banner).
 fn strip_banner(c: &str) -> String {
     c.lines()
-        .filter(|l| !l.contains("Kuna v"))
+        .filter(|l| !l.contains("Unlace v"))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -1015,7 +1015,7 @@ fn ghidra_sim_faillog_rename_persistence() {
                 && sim_symbol_size(s).is_some()
                 && parsed.c_text.contains(s.name.as_str())
         })
-        .expect("a non-unique-storage local kuna named");
+        .expect("a non-unique-storage local unlace named");
     let (spc, off) = cand.entry_storage.clone().expect("mapped storage");
     let size = sim_symbol_size(cand).expect("sized type");
     let first_use = cand.first_use;

@@ -30,7 +30,7 @@ meaning is read from its pseudocode (microcode opcodes: 4 mov, 42 jcnd, 43-52 co
 | `REMOVED SECURITY COOKIE` | `sub_18E880` | drop the cookie check before return | yes: `msvcstackguard`, `stackguard` |
 | `SDIV_POWER2`, `SDIVMOD_POWER2`, `SDIV2A`/`2B`, `SMOD2` | `sub_18E9B0`, `sub_18AE70`, `sub_18B8D0`.. | signed division/remainder by 2^k | yes: `pow2select` |
 | **`UMOD`, `UMOD-30BIT`** | `sub_12DD80` | an unsigned remainder by an odd constant n written as a fold of 30- or 32-bit chunks: it computes the multiplicative order of 2 mod n (up to 64) and requires it to divide 30 or 32 | **probably none** (Ghidra's `RuleDivOpt` handles magic multiplies, not chunk folding); verify with `x % 3`, `x % 5` at -O2 on a 32-bit target |
-| `CMP64-JMP2`, `CMP64-VALRANGES-JMP2`, `JNZ64`, `UNSIGNED-CMP64`, `SAR64`, `SAR2-64`, `DEMOTE64` | `sub_129AD0`, `sub_E1990` | 64-bit compares/shifts on 32-bit targets; DEMOTE64 narrows 64-bit ops whose high half is zero | partial: `kuna_borrowcompare`, `pairparam` (#239), `armpairparam` (#272), `double.rs`; ordered split compares left (gap 8) |
+| `CMP64-JMP2`, `CMP64-VALRANGES-JMP2`, `JNZ64`, `UNSIGNED-CMP64`, `SAR64`, `SAR2-64`, `DEMOTE64` | `sub_129AD0`, `sub_E1990` | 64-bit compares/shifts on 32-bit targets; DEMOTE64 narrows 64-bit ops whose high half is zero | partial: `unlace_borrowcompare`, `pairparam` (#239), `armpairparam` (#272), `double.rs`; ordered split compares left (gap 8) |
 | `BACKPROP_CC %d` | `sub_18F960` | a conditional jump whose condition has several known values from different predecessors (value ranges) is decided per predecessor and those edges are redirected (jump threading) | partial: Ghidra's `ActionConditionalExe` covers the boolean case; yes, opt-in: `phithread` (default off) threads a join whose branch is decided per predecessor by constant MULTIEQUAL inputs (#286); `phithread ranges` also by the value's range from a branch above the edge |
 | `MERGE_SWITCH_TREES`, `MERGE_GUARDED_SWITCHES`, `ABSORB_EQ_GUARD` | `sub_2F5E60`, `sub_2F6EB0` | join switch trees and guarded tables into one switch | yes: `switchmerge`, `switchguardmerge`, `loweredswitch` |
 | `RESOLVE_TABLE_JUMP`, `RESOLVE_INSN_TABLE_JUMP` | `sub_1E21E0` | jump tables | yes |
@@ -74,7 +74,7 @@ number, 35/36 and 48 appear in SIMPLE-1/CAST-1; a rule returns 1 when it changed
 
 Ctree maturity levels in the same binary (`sub_46C7E0`): `CMAT_ZERO`, `CMAT_BUILT`, `CMAT_TRANS1`-`3`,
 `CMAT_NICE`, `CMAT_CPA`, `CMAT_CASTED`, `CMAT_FINAL`; microcode levels `MMAT_ZERO` .. `MMAT_LVARS`
-(unlace has its own, `kuna_maturity`, #189).
+(unlace has its own, `unlace_maturity`, #189).
 
 ## 4. New gaps, ranked
 

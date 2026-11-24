@@ -763,7 +763,7 @@ impl SubvariableFlow {
         // FuncCallSpecs *fc = fd->getCallSpecs(op); if (0) ...; isOutputLocked/Active
         let _ = op;
         Err(UnlaceError::lowlevel(
-            "kuna rust port: SubvariableFlow::tryCallReturnPush needs FuncCallSpecs \
+            "unlace rust port: SubvariableFlow::tryCallReturnPush needs FuncCallSpecs \
              (isOutputLocked / isOutputActive) — STUB(W4)",
         ))
     }
@@ -814,7 +814,7 @@ impl SubvariableFlow {
         // The pullModification refinement reads TypeOpFloatInt2Float::preferredZextSize.
         let _ = op;
         Err(UnlaceError::lowlevel(
-            "kuna rust port: SubvariableFlow::tryInt2FloatPull needs \
+            "unlace rust port: SubvariableFlow::tryInt2FloatPull needs \
              TypeOpFloatInt2Float::preferredZextSize — STUB(W6)",
         ))
     }
@@ -3201,7 +3201,7 @@ impl SubvariableFlow {
     /// for whole-byte divides; until the accessor lands this stub-gates them.
     fn is_zero_extended(_data: &Funcdata, _vn: VarnodeId, _flowsize: int4) -> UnlaceResult<bool> {
         Err(UnlaceError::lowlevel(
-            "kuna rust port: Varnode::isZeroExtended not on the W3 varnode surface — STUB(W3-varnode)",
+            "unlace rust port: Varnode::isZeroExtended not on the W3 varnode surface — STUB(W3-varnode)",
         ))
     }
 }

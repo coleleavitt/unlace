@@ -1,7 +1,7 @@
 /* clang --target=thumbv7em-none-eabi -mcpu=cortex-m4 -O2 -c callerargs_reltab_thumb.c
    ld.lld -o callerargs_reltab_thumb callerargs_reltab_thumb.o --nmagic -Ttext=0x20000 -e f0000 --strip-debug
    cb is called with bytes and also through offsets relative to a table and to another function, with a
-   whole word: kuna resolves the indirect call to cb, so cb keeps its width. */
+   whole word: unlace resolves the indirect call to cb, so cb keeps its width. */
 typedef unsigned char UC; typedef unsigned U;
 #define NI __attribute__((noinline, used))
 typedef U (*fp_t)(U, U);

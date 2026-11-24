@@ -10,7 +10,7 @@ A value option `signedness upstream|auto|prefer-signed|prefer-unsigned` that
 decides a declared integer local's signedness at the P9 declaration seam from
 the operations the body applies to it, instead of from whichever type-inference
 vote happened to be most specific. This is TRex's *type rounding* (USENIX
-Security 2025, §3.3.5 / §5.1) reduced to the one decision kuna can make without
+Security 2025, §3.3.5 / §5.1) reduced to the one decision unlace can make without
 touching its type lattice. `auto` — flip only on unanimous evidence — is the
 default; `upstream` restores what type inference produced, byte for byte.
 
@@ -43,11 +43,11 @@ are **379 `size_t`** locals declared `int`, against `prefer-signed`'s 12. The
 unsigned demands the walk collects — an unsigned compare, a `>>`, a `/`, a
 `ZEXT` — are exactly what holds `size_t` unsigned, and they are the whole
 difference between 98.4% and 92.8%. (Built from the same source through a
-measurement-only escape hatch that exists in `.scratch/measbin/kuna` and in no
+measurement-only escape hatch that exists in `.scratch/measbin/unlace` and in no
 committed file.)
 
 **The last three columns are the measurement; the first three are context.** The
-oracle can only score a declaration kuna names the way DWARF does in the same
+oracle can only score a declaration unlace names the way DWARF does in the same
 function, and those are overwhelmingly stack locals: of the 6,259 comparable
 rows, **5,308 are `-O0` and 951 are `-O2`**. The defect this option exists for is
 an `-O2` register local, which the oracle usually cannot see at all.
@@ -81,7 +81,7 @@ outright. What the rule rests on is the *neutral* half of that split: `+ - * & |
 stored value, a truncation and a concatenation all produce the same bits under
 either declaration at a fixed width.
 
-kuna's own cast strategy draws the same line, which corroborates the split but
+unlace's own cast strategy draws the same line, which corroborates the split but
 does not prove it, and the earlier drafts of this section overstated the
 relationship. The ordered comparisons, `/ %`, `>>` and the two extensions pass
 `care_uint_int = true` to `CastStrategyC::cast_standard`; the whitelist is a
@@ -203,13 +203,13 @@ removes 443 cast tokens, adds none, and produces **0 hunks of any other kind**.
 ## Witnesses (coreutils `fmt` `-O2`, CLI vocabulary)
 
 ```
-$ kuna decompile-all fmt --addr 0x3060                      # today
+$ unlace decompile-all fmt --addr 0x3060                      # today
   unsigned int v1;
   unsigned int v3;
     if (0 <= (int)v1)
   while (v4 < (int)v1) {
 
-$ kuna decompile-all fmt --addr 0x3060 --option signedness auto
+$ unlace decompile-all fmt --addr 0x3060 --option signedness auto
   int v1;
   int v3;
     if (0 <= v1)
@@ -295,7 +295,7 @@ The user's answer, and what this PR ships:
    prove the width guard is declining rather than inert.
 4. **`upstream` restores the declaration type inference produced**, byte for
    byte, which is what to select when diffing against upstream Ghidra or against
-   kuna before this option existed.
+   unlace before this option existed.
 
 What was never in question is whether the rounding itself earns the slot.
 Dropping the walk and keeping only the tie-break scores **92.8%** overall and

@@ -1,11 +1,11 @@
-# kuna issue testcase: no AIF gap entry starts on a literal-pool word
+# unlace issue testcase: no AIF gap entry starts on a literal-pool word
 # (`option aifpoolslide on|off`, default-ON).
 #
-# Issue:      kuna GH-299 - aif plants mid-function entries; the largest
+# Issue:      unlace GH-299 - aif plants mid-function entries; the largest
 #             class left sits one literal-pool word before a real function,
 #             whose start it hides.
 # Stage:      P1 code/data partition - the AIF gap-walk accept
-#             (`analyzers/aif/kuna_aifpoolslide.rs`).
+#             (`analyzers/aif/unlace_aifpoolslide.rs`).
 # P0 assert:  `option aifpoolslide on|off`.
 #
 # The XML wrapper only provides the harness architecture.  Every pass clears
@@ -63,41 +63,41 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-AIFPOOLSLIDE #1: the reset handler is a function in both passes'
+name = 'UNLACE-AIFPOOLSLIDE #1: the reset handler is a function in both passes'
 count = 2
 literal = '0x8110 sub_8110'
 
 [[match]]
-name = 'KUNA-AIFPOOLSLIDE #2: the entry on the pool word is listed only with the option off'
+name = 'UNLACE-AIFPOOLSLIDE #2: the entry on the pool word is listed only with the option off'
 count = 1
 literal = '0x8202 sub_8202'
 
 [[match]]
-name = 'KUNA-AIFPOOLSLIDE #3: lone is listed at its own address only with the option on'
+name = 'UNLACE-AIFPOOLSLIDE #3: lone is listed at its own address only with the option on'
 count = 1
 literal = '0x8204 sub_8204'
 
 [[match]]
-name = 'KUNA-AIFPOOLSLIDE #4: the catalog documents it as a default-on P1 code/data-partition option'
+name = 'UNLACE-AIFPOOLSLIDE #4: the catalog documents it as a default-on P1 code/data-partition option'
 count = 1
 literal = '"option": "aifpoolslide", "values": ["on", "off"], "default": "on", "current": "on", "destructive_as_default": false, "phase": "P1"'
 
 [[match]]
-name = 'KUNA-AIFPOOLSLIDE #5: a function whose address adr takes stays at its own address'
+name = 'UNLACE-AIFPOOLSLIDE #5: a function whose address adr takes stays at its own address'
 count = 2
 literal = '0x8214 sub_8214'
 
 [[match]]
-name = 'KUNA-AIFPOOLSLIDE #6: and is never moved past its first word'
+name = 'UNLACE-AIFPOOLSLIDE #6: and is never moved past its first word'
 count = 0
 literal = '0x8218 sub_8218'
 
 [[match]]
-name = 'KUNA-AIFPOOLSLIDE #7: the entry on the pool word in front of the string is listed only with the option off'
+name = 'UNLACE-AIFPOOLSLIDE #7: the entry on the pool word in front of the string is listed only with the option off'
 count = 1
 literal = '0x822a sub_822a'
 
 [[match]]
-name = 'KUNA-AIFPOOLSLIDE #8: the string the code loads is never a function'
+name = 'UNLACE-AIFPOOLSLIDE #8: the string the code loads is never a function'
 count = 0
 literal = '0x822c sub_822c'

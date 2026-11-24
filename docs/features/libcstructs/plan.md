@@ -27,7 +27,7 @@ new option and without a wrong name anywhere.
    and pinned metric; the `ptr_struct` class rate; arity and variable-count counters
    beside it (the new slots supply arity where there was none); whole-corpus
    `decompile-all` hunk classification over 14 binaries; interleaved min-of-15 speed.
-6. **Gates.** All four plus `make test-cli`, `kuna catalog --check` and
+6. **Gates.** All four plus `make test-cli`, `unlace catalog --check` and
    `counters --check`.
 
 ## Decisions

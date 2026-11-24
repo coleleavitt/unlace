@@ -9,7 +9,7 @@
 # &size) and RegCloseKey(key) on both paths.
 #
 # Stage / sub-stage: P6 stack-pointer-flow (`StackSolver::build`'s guessed
-# equation for an unknown extrapop, `p6_variables/kuna_calleepopframe.rs`),
+# equation for an unknown extrapop, `p6_variables/unlace_calleepopframe.rs`),
 # with the C runtime import declared `__cdecl` at the analysis commit
 # (`loader/pe_iat.rs (c_runtime_import_names)`).
 #

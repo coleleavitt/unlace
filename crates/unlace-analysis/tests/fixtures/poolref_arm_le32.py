@@ -121,9 +121,9 @@ def build_text():
 
 def build_rodata():
     r = bytearray(0x60)
-    r[0x00:] = b'kuna poolref prompt\0'.ljust(0x20, b'\0')
-    r[0x20:] = b'kuna poolref narrow\0'.ljust(0x20, b'\0')
-    r[0x40:] = b'kuna poolref hidden\0'.ljust(0x20, b'\0')
+    r[0x00:] = b'unlace poolref prompt\0'.ljust(0x20, b'\0')
+    r[0x20:] = b'unlace poolref narrow\0'.ljust(0x20, b'\0')
+    r[0x40:] = b'unlace poolref hidden\0'.ljust(0x20, b'\0')
     return bytes(r[:0x60])
 
 

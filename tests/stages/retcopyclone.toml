@@ -1,4 +1,4 @@
-# A cloned return block wrote a global a second time (kuna #1355).  The
+# A cloned return block wrote a global a second time (unlace #1355).  The
 # bytes are crates/unlace-cli/tests/fixtures/return_copy_clone.S
 # linked at 0x1000.  audit_select is clang 14 -O1 -fPIC:
 #
@@ -36,7 +36,7 @@
 # propagation folds the stored register into the RET block's phis and the
 # two stores die, so the split prints them from the clone's copies of the
 # phis, in the order the phis are cloned, which the binary does not record.
-# kuna_clonephiorder.rs clones the phis on globals in address order, which
+# unlace_clonephiorder.rs clones the phis on globals in address order, which
 # is the binary's order here (#8); heritage's order, the reverse, never
 # prints (#9).
 #

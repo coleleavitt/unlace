@@ -44,7 +44,7 @@ Follow the short-string copy without inventing a null write.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140002240"
@@ -74,7 +74,7 @@ Follow the short-string copy without inventing a null write.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140002240"

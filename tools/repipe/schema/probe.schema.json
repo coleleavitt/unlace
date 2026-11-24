@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "probe.schema.json",
   "title": "RE-friction probe",
-  "description": "An executable assertion about kuna's behaviour. Two of these define a need: the PROBE asserts the current bad behaviour and must PASS at filing time; the ACCEPTANCE asserts the desired behaviour and must FAIL at filing time. A builder is done when the acceptance flips to PASS. An acceptance probe is promoted verbatim into tests/cli/ as a permanent regression test.",
+  "description": "An executable assertion about unlace's behaviour. Two of these define a need: the PROBE asserts the current bad behaviour and must PASS at filing time; the ACCEPTANCE asserts the desired behaviour and must FAIL at filing time. A builder is done when the acceptance flips to PASS. An acceptance probe is promoted verbatim into tests/cli/ as a permanent regression test.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "kind", "cmd", "timeout_s", "expect"],
@@ -19,7 +19,7 @@
     },
     "cmd": {
       "type": "array", "items": {"type": "string"}, "minItems": 1,
-      "description": "argv. Substitution tokens: {{KUNA}} {{BIN}} {{SPECS}} {{WORK}} {{TMP}}"
+      "description": "argv. Substitution tokens: {{UNLACE}} {{BIN}} {{SPECS}} {{WORK}} {{TMP}}"
     },
     "cwd": {"type": "string", "default": "{{WORK}}"},
     "env": {"type": "object", "additionalProperties": {"type": "string"}},

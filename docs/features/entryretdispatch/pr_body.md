@@ -1,7 +1,7 @@
 ## The problem
 
 The i386 `bm3.exe` entry point is a 105-byte dispatcher made from repeated
-`push <continuation>; push <callee>; ret` links. Kuna classified the first RET
+`push <continuation>; push <callee>; ret` links. Unlace classified the first RET
 as an ordinary function return and emitted an empty body, losing the complete
 dispatcher including `LoadLibraryA` and `GetProcAddress`.
 
@@ -43,7 +43,7 @@ behavior.
 - `cargo test -p console`: green, including 7 focused chain tests and the
   architecture-generic provenance controls.
 - `make check-spec` and strict spec validation: green.
-- `kuna catalog --check`: catalog OK; counters have no drift.
+- `unlace catalog --check`: catalog OK; counters have no drift.
 - Need acceptance: **1/1 pass**; mergecheck against exact base
   `b612f48b705c2fe7be08c76f4588b9e08af33320`: zero rejects.
 - Exact-base unchanged-function control: +0.48%, inside the 5% budget; the

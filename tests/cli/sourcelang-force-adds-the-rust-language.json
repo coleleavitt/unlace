@@ -2,7 +2,7 @@
  "schema": "re-probe/1",
  "kind": "cli",
  "cmd": [
-  "{{KUNA}}",
+  "{{UNLACE}}",
   "decompile",
   "{{BIN}}",
   "_main",
@@ -38,6 +38,6 @@
    "c-language"
   ]
  },
- "notes": "The two-pass pair of the `_Runtime` false-positive probe: this C Mach-O detects as C (that probe pins it), and `--option sourcelang rust` forces the verdict, so the whole run takes the Rust path - the output-language auto policy picks rust-language in the parent and KUNA_SOURCELANG carries the force into the engine subprocess.",
+ "notes": "The two-pass pair of the `_Runtime` false-positive probe: this C Mach-O detects as C (that probe pins it), and `--option sourcelang rust` forces the verdict, so the whole run takes the Rust path - the output-language auto policy picks rust-language in the parent and UNLACE_SOURCELANG carries the force into the engine subprocess.",
  "probe_id": "p-b96791766d0c"
 }

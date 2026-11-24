@@ -9,7 +9,7 @@ a line to draw the others' attention, and see each other's pointers — with no
 server of ours? This file records what was measured; `proposal.md` is the
 design built on it. The spikes are in `spike/`; each runs in seconds to a few
 minutes against a built `integrations/web/dist/` (and `survey.py` against the
-native `kuna` from `make binaries`):
+native `unlace` from `make binaries`):
 
 | Spike | Shows |
 |---|---|
@@ -52,7 +52,7 @@ So syncing the *set* is enough, as long as each peer sends it in one canonical
 order anyway (cheap insurance against directives that do interact, e.g. two raw
 ones). The same must hold across peers' copies of the page: a peer on an older
 deploy of the wasm can print different C, so peers must compare a build id. The
-SHA-256 of the `kuna_wasm.wasm` bytes the page already fetches, plus the page's
+SHA-256 of the `unlace_wasm.wasm` bytes the page already fetches, plus the page's
 own collaboration protocol version, is enough; no engine change.
 
 *Correction, after the build's review.* Order-blind holds for independent
@@ -249,7 +249,7 @@ action when the pinged thing is not on screen.
   ```
 
   A newline in a remote value is the same threat one step later: the page's
-  `.kuna` export joins directives with newlines, so a note ending in
+  `.unlace` export joins directives with newlines, so a note ending in
   `\nbytes 0x401000 @/home/you/.ssh/id_rsa` would become its own line, and the
   native CLI, which does see your files, would read it on replay. So every op
   from a peer passes a schema check before it touches the session: a known key

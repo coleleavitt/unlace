@@ -101,7 +101,7 @@ fn updated_out_parameter_snapshots_round_trip_without_disabling_safe_folds() {
     let native = common::scratch_file("call-outparam-native", "bin");
     required(
         Command::new(compiler)
-            .args(["-std=c11", "-O2", "-DKUNA_NATIVE"])
+            .args(["-std=c11", "-O2", "-DUNLACE_NATIVE"])
             .arg(fixture("call_outparam_snapshot_driver.c"))
             .arg(fixture("call_outparam_snapshot.S"))
             .arg("-o")
@@ -126,7 +126,7 @@ fn updated_out_parameter_snapshots_round_trip_without_disabling_safe_folds() {
         let driver = std::fs::read_to_string(fixture("call_outparam_snapshot_driver.c")).unwrap();
         std::fs::write(
             &emitted,
-            driver.replace("/* KUNA_EMITTED_CODE */", &(snapshot + "\n" + &safe)),
+            driver.replace("/* UNLACE_EMITTED_CODE */", &(snapshot + "\n" + &safe)),
         )
         .unwrap();
         for compiler in &compilers {

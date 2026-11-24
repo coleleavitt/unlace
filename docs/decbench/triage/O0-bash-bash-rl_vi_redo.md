@@ -4,7 +4,7 @@ pool: angr
 status: covered-by-option
 tier: M
 margin: 40
-fresh_verdict: not fixed — today's build still scores GED 40 (43 nodes/65 edges vs the source's 33/50), identical in `--mode auto` and `--mode reliable`; `--option branchflip off` makes kuna's CFG *isomorphic* to the source (GED 0, angr parity)
+fresh_verdict: not fixed — today's build still scores GED 40 (43 nodes/65 edges vs the source's 33/50), identical in `--mode auto` and `--mode reliable`; `--option branchflip off` makes unlace's CFG *isomorphic* to the source (GED 0, angr parity)
 option_closing: branchflip (set to `off`)
 feature_slug: branchflip-leaf-only
 scope: small
@@ -13,7 +13,7 @@ confidence: high
 
 ## Side-by-side
 
-All three panes below are the same 6-arm dispatch cascade. angr and kuna have
+All three panes below are the same 6-arm dispatch cascade. angr and unlace have
 **identical** structural metrics (0 gotos, 0 labels, 12 `if`s) — the difference
 is entirely the *guard form*.
 
@@ -37,7 +37,7 @@ is entirely the *guard form*.
     }
 ```
 
-**kuna (fresh, today's default `--mode auto`; `--mode reliable` is byte-identical) — GED 40**
+**unlace (fresh, today's default `--mode auto`; `--mode reliable` is byte-identical) — GED 40**
 
 ```c
   if (((_rl_vi_last_command != 0x69) || (!dat_17bd80)) || (!*dat_17bd80)) {
@@ -58,7 +58,7 @@ Every source arm `X == K && p && *p` has been De Morgan'd into
 `X != K || !p || !*p` **and the arms swapped**, so the cascade continues in the
 *then* branch and nests six deep instead of chaining as `else if`.
 
-**kuna, same build, `--option branchflip off` — GED 0, isomorphic**
+**unlace, same build, `--option branchflip off` — GED 0, isomorphic**
 
 ```c
   if (((_rl_vi_last_command == 0x69) && (dat_17bd80)) && (*dat_17bd80)) {
@@ -81,9 +81,9 @@ Every source arm `X == K && p && *p` has been De Morgan'd into
   }
 ```
 
-For reference IDA scores 20, worse than angr and better than kuna, and it gets
+For reference IDA scores 20, worse than angr and better than unlace, and it gets
 there by planting `LABEL_27` + 4 `goto`s into the shared `_rl_vi_backup()` tail —
-a genuinely worse shape than either. With `branchflip off` kuna beats both.
+a genuinely worse shape than either. With `branchflip off` unlace beats both.
 
 ## Source
 
@@ -119,7 +119,7 @@ an exact edit distance and the metric is telling the truth here.
 **Verification method.** decbench's GED was replicated locally
 (`decbench.utils.cfg.extract_cfgs_from_source` + `decbench.metrics.ged._is_isomorphic`
 + `decbench.metrics.vj_ged`, run under `~/.virtualenvs/decbench`). It reproduces
-all three recorded values exactly — angr 0 (isomorphic), ida 20, kuna 40 — so
+all three recorded values exactly — angr 0 (isomorphic), ida 20, unlace 40 — so
 every number below is the real metric, not an estimate.
 
 | pane | decompiled CFG | GED |
@@ -127,10 +127,10 @@ every number below is the real metric, not an estimate.
 | source | 33n / 50e | — |
 | angr (stored) | 33n / 50e | 0 (isomorphic) |
 | ida (stored) | 29n / 46e | 20 |
-| kuna (stored, 2026-07-27) | 43n / 65e | 40 |
-| **kuna (fresh, today, `--mode auto`)** | **43n / 65e** | **40** |
-| kuna (fresh, `--mode reliable`) | identical text | 40 |
-| **kuna (fresh, `--option branchflip off`)** | **33n / 50e** | **0 (isomorphic)** |
+| unlace (stored, 2026-07-27) | 43n / 65e | 40 |
+| **unlace (fresh, today, `--mode auto`)** | **43n / 65e** | **40** |
+| unlace (fresh, `--mode reliable`) | identical text | 40 |
+| **unlace (fresh, `--option branchflip off`)** | **33n / 50e** | **0 (isomorphic)** |
 
 **The one structural symptom.** Every arm of a 6-way `else if` cascade whose
 guard is a conjunction led by an equality (`_rl_vi_last_command == 'i' &&
@@ -140,7 +140,7 @@ cascade* in the then-arm — turning the source's flat 7-arm chain into a
 six-deep right-nested if/else ladder.
 
 The nesting itself is metric-neutral; the *condition form* is the whole 40.
-Two hand-built controls settle it: rewriting kuna's output with positive `&&`
+Two hand-built controls settle it: rewriting unlace's output with positive `&&`
 guards and swapped arms scores **0** whether it is written as a flat `else if`
 chain **or** kept as literal nested `else { if ... }` blocks
 (both 33n/50e, isomorphic). The cost is per-operand: joern gives a bare truthy
@@ -149,7 +149,7 @@ is an operation and gets one — and losing that node also loses an edge merge.
 That is +2 nodes / +3 edges per arm × the 5 pointer arms = the exact +10 nodes /
 +15 edges observed.
 
-**Root cause: kuna's own `branchflip` option over-fires on short-circuit guards.**
+**Root cause: unlace's own `branchflip` option over-fires on short-circuit guards.**
 `--option branchflip off` on the same binary, same build, restores the positive
 conjunction and takes the case to GED 0. The mechanism, read in
 `decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs`:
@@ -196,13 +196,13 @@ int w(int a) { int r = 0; if (a == 3 && buf) { f1(a); r = 1; } else { r = 7; } f
 int y(int a) { int r = 0; if (a != 3 && buf) { f1(a); r = 1; } else { r = 7; } f3(); return r; }
 ```
 
-* `y` (leading `!=`, leaf class `0`): kuna emits `if ((a0 != 3) && (*dat_3ff0)) {...} else {...}` — correct.
-* `w` (leading `==`, leaf class `1`): kuna emits `if ((a0 != 3) || (!*dat_3ff0)) { v1 = 7; } else { f1(3); v1 = 1; }` — De Morgan'd, arms swapped, **no** `// branch-flip` marker.
+* `y` (leading `!=`, leaf class `0`): unlace emits `if ((a0 != 3) && (*dat_3ff0)) {...} else {...}` — correct.
+* `w` (leading `==`, leaf class `1`): unlace emits `if ((a0 != 3) || (!*dat_3ff0)) { v1 = 7; } else { f1(3); v1 = 1; }` — De Morgan'd, arms swapped, **no** `// branch-flip` marker.
 * `w` with `--option branchflip off`: `if ((a0 == 3) && (*dat_3ff0)) { f1(3); v1 = 1; } else { v1 = 7; }` — the source's form.
 
 **Why the reference wins.** angr's SAILR structurer does no such polarity
 rewrite on a compound short-circuit condition; it keeps the conjunction and
-orders the cascade positively, which is exactly the source. kuna without
+orders the cascade positively, which is exactly the source. unlace without
 `branchflip` matches it node-for-node.
 
 **Breadth (measured, `man2html` O0, 78 functions, on vs off):** 18 functions
@@ -242,5 +242,5 @@ Narrow `branchflip` to leaf guards — decline `SplitPoint::Condition`.
   risk is expected beyond the files DIV-14 already pinned with per-test opt-outs,
   but `make test` / `make test-stages` must confirm.
 * **Scope: small.** One guard clause plus the standing docs/test obligations —
-  not a proposal-sized feature. It is a scope bug in an existing kuna option, not
+  not a proposal-sized feature. It is a scope bug in an existing unlace option, not
   a missing capability.

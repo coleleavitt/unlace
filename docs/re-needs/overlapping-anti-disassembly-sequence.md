@@ -28,7 +28,7 @@ reject_reason: null
 A decompilation of the recursive password checker at 0x804881c that follows the real instruction stream beginning at 0x8048838 and preserves its two ordinary arguments.
 
 > **Overlapping anti-disassembly sequence produces bogus out-of-image code and corrupted checker dataflow** (blocker, `5ab77f6333c5d40ad448ca52`)
-> Kuna treated the intentionally overlapping bytes at 0x8048837 as a CALL, emitted a call to out-of-image sub_b10cdc7, writes through uninitialized pointers, a bogus dat_d98ddd00 global, malformed split arguments, and an unreadable comparison. The related enclosing routine also hit the already-filed no-cli-function-boundary-override problem: `unlace decompile ... 0x80489e6 --addr` exited 1 at internal target 0x8048c49.
+> Unlace treated the intentionally overlapping bytes at 0x8048837 as a CALL, emitted a call to out-of-image sub_b10cdc7, writes through uninitialized pointers, a bogus dat_d98ddd00 global, malformed split arguments, and an unreadable comparison. The related enclosing routine also hit the already-filed no-cli-function-boundary-override problem: `unlace decompile ... 0x80489e6 --addr` exited 1 at internal target 0x8048c49.
 
 ## Reproduction
 
@@ -38,7 +38,7 @@ A decompilation of the recursive password checker at 0x804881c that follows the 
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x804881c",
@@ -70,7 +70,7 @@ A decompilation of the recursive password checker at 0x804881c that follows the 
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x804881c",
@@ -104,7 +104,7 @@ A decompilation of the recursive password checker at 0x804881c that follows the 
 
 **UPHELD (captain, round 2 T_REFUTE)** — confirmed by direct disassembly, with the real risk sitting one step past the diagnosis.
 
-- `unlace disassemble --addr 0x804881c` reports `sub_804881c` spanning 0x804881c..0x804883d and decodes `0x8048835 JNZ 0x8048838` immediately followed by `0x8048837 CALL 0xb10cdc7` — a target **outside the image**. Decoding from 0x8048838 instead yields the real stream (`MOV EAX,[EBP + 0xc]; ADD EAX,[EBP + 0x8]; MOVSX EDX,[EAX]`). kuna does commit to the byte at 0x8048837 and never reconsiders the conditional-branch target that lies *inside* that instruction's encoding.
+- `unlace disassemble --addr 0x804881c` reports `sub_804881c` spanning 0x804881c..0x804883d and decodes `0x8048835 JNZ 0x8048838` immediately followed by `0x8048837 CALL 0xb10cdc7` — a target **outside the image**. Decoding from 0x8048838 instead yields the real stream (`MOV EAX,[EBP + 0xc]; ADD EAX,[EBP + 0x8]; MOVSX EDX,[EAX]`). unlace does commit to the byte at 0x8048837 and never reconsiders the conditional-branch target that lies *inside* that instruction's encoding.
 - **Detection is low-risk**: a conditional-branch target that falls strictly inside an already-decoded instruction cannot occur in well-formed code, and here there is a second conservative signal — the overlapping CALL's target is unmapped.
 - **Where wrong output would come from is the policy, not the detection**: which stream owns the overlapped bytes, and what happens to flow and dataflow already built from the discarded one. A builder must answer that explicitly (and gate it), or the fix trades bogus out-of-image code for a silently truncated function.
 

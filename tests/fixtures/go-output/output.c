@@ -34,8 +34,8 @@ KEEP int64_t condition_loop(int64_t n,int64_t *p) {int64_t s=0;while(n>0 && prob
 KEEP int64_t fallthroughs(int64_t n,int64_t a,int64_t *p) {switch(n){case 0:record(p,1);__attribute__((fallthrough));case 1:record(p,2);return a+1;case 2:record(p,3);__attribute__((fallthrough));case 3:record(p,4);return a+2;case 4:return a-1;case 5:return a-2;default:return a;}}
 KEEP int64_t condition_value(int64_t n,int64_t *p) {int64_t v;if(n>0 && (v=probe(p,n))>2)return v*2;return 3;}
 KEEP int64_t condition_for(int64_t n,int64_t *p) {int64_t s=0,v;for(int64_t i=0;(v=probe(p,n-i))>2;i++){if(i&1)continue;s+=v;}return s;}
-KEEP int64_t name_collision(int64_t _kuna_first_1) {int64_t v=0;do{v+=_kuna_first_1;_kuna_first_1--;}while(_kuna_first_1>0);return v;}
-KEEP int64_t go(int64_t range,int64_t _kuna_ident_72616e6765) {return range+_kuna_ident_72616e6765;}
+KEEP int64_t name_collision(int64_t _unlace_first_1) {int64_t v=0;do{v+=_unlace_first_1;_unlace_first_1--;}while(_unlace_first_1>0);return v;}
+KEEP int64_t go(int64_t range,int64_t _unlace_ident_72616e6765) {return range+_unlace_ident_72616e6765;}
 KEEP int64_t callback(int64_t x) {return x*3;}
 KEEP int64_t call_callback(int64_t (*fn)(int64_t),int64_t x) {return fn(x)+1;}
 KEEP int32_t shadow(int32_t *unsafe,int64_t uint64) {return unsafe[uint64];}

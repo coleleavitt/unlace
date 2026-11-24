@@ -315,10 +315,10 @@ fn cpp_print_c(stem: &str) -> Option<String> {
 /// Slice the first `===UNLACE_DUMP_BEGIN <file>===\n .. \n===UNLACE_DUMP_MID===`
 /// block's body (the captured bulk `print C` output).
 fn slice_unlace_dump(text: &str) -> Option<String> {
-    let begin = text.find("===KUNA_DUMP_BEGIN")?;
+    let begin = text.find("===UNLACE_DUMP_BEGIN")?;
     // Skip to the end of the BEGIN marker line.
     let after_begin = text[begin..].find('\n')? + begin + 1;
-    let mid = text[after_begin..].find("===KUNA_DUMP_MID===")? + after_begin;
+    let mid = text[after_begin..].find("===UNLACE_DUMP_MID===")? + after_begin;
     Some(text[after_begin..mid].to_string())
 }
 

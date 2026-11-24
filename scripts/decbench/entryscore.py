@@ -1,10 +1,10 @@
 """Function-entry precision/recall scorer -- the *discovery-tier* measurement instrument.
 
-The GED loop (`optsweep`) measures the shape of the C kuna emits for a function
+The GED loop (`optsweep`) measures the shape of the C unlace emits for a function
 it already found. Nothing there measures **which functions it finds**, so a P1
 discovery change (`aif` and its `strict`/`precise` values, `ptrentry`, `poolentry`,
 `tailcallentry`, `funcstart_patterns`, ...) is invisible to it. This scores that
-directly: kuna's function-entry set for a STRIPPED image against ground truth
+directly: unlace's function-entry set for a STRIPPED image against ground truth
 recovered from the same image's UNSTRIPPED twin.
 
 The decbench corpus carries a `compiled/` twin for every `stripped/` binary, so
@@ -22,10 +22,10 @@ Ground truth sources (`--gt-kind`, auto-detected by default):
 
 Metrics for one (image, arm) pair::
 
-    entries        function entries kuna reports
+    entries        function entries unlace reports
     exact          entries that ARE a ground-truth start
     midbody        entries strictly inside a ground-truth body (start < a < end)
-    midbody_known  the subset of `midbody` whose ENCLOSING function kuna also
+    midbody_known  the subset of `midbody` whose ENCLOSING function unlace also
                    has an entry for -- the "two overlapping functions decompile
                    the same instructions twice" population
     unknown        neither: a PLT/thunk, a real function the twin has no symbol
@@ -43,7 +43,7 @@ Usage (from the repo root)::
         [--mode aggressive] [--option NAME VALUE]...
     python3 -m scripts.decbench.entryscore --gt <ground-truth>   # dump GT as JSON
 
-Knobs: `KUNA_BIN`, `KUNA_SPECS` (exported to the child as `SLEIGHHOME` too).
+Knobs: `UNLACE_BIN`, `UNLACE_SPECS` (exported to the child as `SLEIGHHOME` too).
 """
 import argparse
 import bisect
@@ -57,10 +57,10 @@ import time
 from . import config
 
 
-def _kuna_env() -> dict:
+def _unlace_env() -> dict:
     specs = str(config.repo_root() / "specs")
-    specs = os.environ.get("KUNA_SPECS", specs)
-    return dict(os.environ, KUNA_SPECS=specs, SLEIGHHOME=specs)
+    specs = os.environ.get("UNLACE_SPECS", specs)
+    return dict(os.environ, UNLACE_SPECS=specs, SLEIGHHOME=specs)
 
 
 # ---------------------------------------------------------------- ground truth
@@ -157,25 +157,25 @@ def ground_truth(path, kind="auto"):
     return g
 
 
-# ---------------------------------------------------------------------- kuna
-def kuna_entries(binary, options=(), mode="aggressive", timeout=1800):
+# ---------------------------------------------------------------------- unlace
+def unlace_entries(binary, options=(), mode="aggressive", timeout=1800):
     """-> (set of entry addresses, seconds). Raises on a failed/empty run."""
-    cmd = [config.kuna_bin(), "functions", binary, "--json"]
+    cmd = [config.unlace_bin(), "functions", binary, "--json"]
     if mode:
         cmd += ["--mode", mode]
     for name, val in options:
         cmd += ["--option", name, val]
     t = time.time()
-    r = subprocess.run(cmd, capture_output=True, text=True, env=_kuna_env(), timeout=timeout)
+    r = subprocess.run(cmd, capture_output=True, text=True, env=_unlace_env(), timeout=timeout)
     dt = time.time() - t
     if r.returncode != 0 or not r.stdout.strip():
-        raise RuntimeError(f"kuna failed rc={r.returncode}: {r.stderr[-400:]}")
+        raise RuntimeError(f"unlace failed rc={r.returncode}: {r.stderr[-400:]}")
     return {f["address"] for f in json.loads(r.stdout)["functions"]}, dt
 
 
 # --------------------------------------------------------------------- scoring
 def score(entries, gt, other_entries=None):
-    """`entries`: kuna addresses. `gt`: a `ground_truth()` dict.
+    """`entries`: unlace addresses. `gt`: a `ground_truth()` dict.
 
     `other_entries` answers "is the ENCLOSING function known?" for `midbody_known`;
     it defaults to `entries` itself, and in a marginal scoring is the reference
@@ -213,7 +213,7 @@ def score(entries, gt, other_entries=None):
 
 def run_one(stripped, gt_path, options=(), mode="aggressive", gt_kind="auto"):
     gt = ground_truth(gt_path, gt_kind)
-    ents, dt = kuna_entries(stripped, options, mode)
+    ents, dt = unlace_entries(stripped, options, mode)
     row = score(ents, gt)
     row["seconds"] = round(dt, 2)
     return row, ents, gt

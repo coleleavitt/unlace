@@ -5,7 +5,7 @@
 # This is the angr CTF binary 1after909 'doit' (x86-64, GCC, PIE): the
 # command-processing `while (v12 <= 0x38e)` loop has nine error/`quit` paths
 # that exit to the shared cleanup block at 0x239f (fflush / free-loop / fclose /
-# puts("Bye!") / return).  kuna's port left scopeBreak an explicit SEAM stub, so
+# puts("Bye!") / return).  unlace's port left scopeBreak an explicit SEAM stub, so
 # every such loop-exit edge rendered as a raw `goto label_239f;` plus a
 # synthesized `label_239f:`.  angr recovers the structured `break;`.
 #

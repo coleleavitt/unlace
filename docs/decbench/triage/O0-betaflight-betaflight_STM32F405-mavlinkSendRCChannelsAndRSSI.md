@@ -5,7 +5,7 @@ group_id: betaflight::mavlinkSendRCChannelsAndRSSI
 status: feature-candidate
 tier: M
 margin: 66
-fresh_verdict: half the margin is already paid — today's build recovers all 13 call arguments and the 8 assignment diamonds the run-era output had deleted (GED 66 -> 24, measured). The whole residual 24 is that the source's EIGHT identical `?:` ternaries render as `if/else`: kuna's own `iteregion`/`iteexpr` matcher re-rolls only 2 of the 8, and which 2 depends on the *neighbouring* structure, not on the diamond.
+fresh_verdict: half the margin is already paid — today's build recovers all 13 call arguments and the 8 assignment diamonds the run-era output had deleted (GED 66 -> 24, measured). The whole residual 24 is that the source's EIGHT identical `?:` ternaries render as `if/else`: unlace's own `iteregion`/`iteexpr` matcher re-rolls only 2 of the 8, and which 2 depends on the *neighbouring* structure, not on the diamond.
 option_closing: null
 feature_slug: itecondlist
 scope: small
@@ -18,12 +18,12 @@ confidence: high
 $ ~/.virtualenvs/decbench/bin/python -m scripts.decbench.rescore \
       --case O0-betaflight-betaflight_STM32F405-mavlinkSendRCChannelsAndRSSI --siblings
  "ged_recorded": 66.0, "ged_before": 66.0, "ged_after": 24.0, "ged_delta": -42.0,
- "ged_kuna_commit": "9623dc27"
+ "ged_unlace_commit": "9623dc27"
  siblings: O2-noinline-...-mavlinkSendRCChannelsAndRSSI  before 24.0  after 24.0
 ```
 
 `before` reproduces `recorded` exactly, so there is **no metric drift on this case** — the
-42-point move is a kuna code change (the round-1 `callsitestackargs` fix; the run-era pane
+42-point move is a unlace code change (the round-1 `callsitestackargs` fix; the run-era pane
 below had every stack-passed argument deleted).
 
 `betaflight_STM32F405.elf` is 533,396 B, i.e. just over the 500 KiB `auto` threshold, so a
@@ -57,7 +57,7 @@ angr (stored, GED 0) — all eight as ternaries, inline in the call:
         (g_2000fbd2 <= 2 ? 0 : g_2000fc40 & 0xffff), ... , v3);
 ```
 
-kuna (stored, run-time, GED 66) — the arguments and every diamond are **gone**:
+unlace (stored, run-time, GED 66) — the arguments and every diamond are **gone**:
 
 ```c
 void mavlinkSendRCChannelsAndRSSI(void)
@@ -71,7 +71,7 @@ void mavlinkSendRCChannelsAndRSSI(void)
 }
 ```
 
-kuna (fresh, `--mode aggressive`, GED 24) — arguments recovered; 2 of 8 diamonds re-rolled:
+unlace (fresh, `--mode aggressive`, GED 24) — arguments recovered; 2 of 8 diamonds re-rolled:
 
 ```c
   v2 = sub_8023ef8();
@@ -207,7 +207,7 @@ spirit (`cond_terminal_cbranch` descends a `BlockType::Condition` tree to its te
 Owning phase: **P8** (structured AST & goto quality), module
 `decompiler/crates/unlace-decomp/src/p8_structure/iteregion.rs`.
 
-**Instrumentation gap found on the way**: kuna cannot dump its own P8 structured tree —
+**Instrumentation gap found on the way**: unlace cannot dump its own P8 structured tree —
 `print tree block`, `print C xml` and `structure blocks` are all
 `Err(engine_unavailable(...))` stubs (`unlace-console/src/ifacedecomp.rs:2416, 2134, 3576`).
 The list shape above is therefore established by elimination + the printer's own handling
@@ -217,7 +217,7 @@ before writing the fix** — and un-stubbing `print tree block` is worth its own
 
 ## Breadth
 
-`if (c) V = A; else { V = B; }` with the same `V` — a diamond kuna already knows how to
+`if (c) V = A; else { V = B; }` with the same `V` — a diamond unlace already knows how to
 render as a ternary and declined — counted over whole-binary `decompile-all` on each
 binary's shipped default mode (the regex only catches the braceelided shape, so these are
 lower bounds):
@@ -231,7 +231,7 @@ lower bounds):
 | `coreutils sort` | x86-64 / aggressive | 506 | **31** | 26 | 22 |
 | **total** | | 11670 | **952** | **648** | 699 |
 
-kuna declines ~58% of the diamonds it already knows how to render, in **648 functions
+unlace declines ~58% of the diamonds it already knows how to render, in **648 functions
 across five binaries and two architectures**. The defect is on the **default-ON `iteregion`
 path** (the 8-diamond repro above uses plain constant `COPY` arms with `iteexpr` off), so
 the fix improves shipped default output in every mode, and it hits `iteboolean` too —

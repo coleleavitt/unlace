@@ -70,7 +70,7 @@ void dwHandleInterrupt(int param_1)
 
 The source performs **no** bit-clear — `libdw1000.i`, `dwHandleInterrupt`:
 `if(dwIsClockProblem(dev) && dev->handleError != 0) { (*dev->handleError)(dev); }`.
-The fields are `dwHandler_t` function pointers. kuna was asserting an operation the
+The fields are `dwHandler_t` function pointers. unlace was asserting an operation the
 program does not perform, and the mask also blocked the pointer-to-code type from
 back-propagating onto the LOAD, which is why every call site needed the extra `(code *)`.
 
@@ -83,8 +83,8 @@ seam strips a **2-bit address-alignment** mask rather than a mode bit. Probe bui
 
 | | `handle` (no mask) | `handle_masked` (`& ~3`) |
 |---|---|---|
-| kuna **before** | `(**(code **)&a0[2])()` | `(*(code *)(*(uint8 *)&a0[2] & 0xfffffffffffffffc))(*a0)` |
-| kuna **after** | `(**(code **)&a0[2])()` | `(**(code **)&a0[2])(*a0)` |
+| unlace **before** | `(**(code **)&a0[2])()` | `(*(code *)(*(uint8 *)&a0[2] & 0xfffffffffffffffc))(*a0)` |
+| unlace **after** | `(**(code **)&a0[2])()` | `(**(code **)&a0[2])(*a0)` |
 | **Ghidra 12.1 headless** | `(**(code **)(param_1 + 2))()` | `(**(code **)(param_1 + 2))(*param_1)` |
 
 Three reasons this is right and not just convenient:
@@ -92,7 +92,7 @@ Three reasons this is right and not just convenient:
 1. Upstream `RuleFuncPtrEncoding::applyOp` (`ruleaction.cc:9928`) is **one code path** —
    `slide = ~0 << align; if ((testmask & slide) == val) { opRemoveInput; opSetOpcode(COPY); }`.
    There is no `align == 1` branch, and the comparison is exact: on AARCH64 a `& ~3`
-   matches and a `& ~1` does **not**. kuna's port is the same arithmetic.
+   matches and a `& ~1` does **not**. unlace's port is the same arithmetic.
 2. AArch64's own lifting emits no mask at all — `AARCH64base.sinc:887`,
    `:blr Rn_GPR64 { pc = Rn_GPR64; x30 = inst_start + 4; call [pc]; }` — so the rule is
    inert on ordinary AArch64 code and only ever fires on a mask the *program* wrote.
@@ -108,7 +108,7 @@ MIPS is the ARM shape: `mips.sinc:925 JXWritePC` under `ISA_VARIANT` (every
 
 ## Breadth
 
-`kuna decompile-all`, whole binary, occurrences of `& 0xfffffffe` / `(code *)` / `(code **)`:
+`unlace decompile-all`, whole binary, occurrences of `& 0xfffffffe` / `(code *)` / `(code **)`:
 
 | binary | masks | `(code *)` | `(code **)` |
 |---|---|---|---|
@@ -137,7 +137,7 @@ nuttx 144, chibios 48, riot-os 13, freertos 4, u-boot 2).
 
 ## Ablation
 
-`kuna test --all --baseline docs/baseline.json` → **PARITY OK, 675/675**, with the fix
+`unlace test --all --baseline docs/baseline.json` → **PARITY OK, 675/675**, with the fix
 live and **no re-pin, no per-test opt-out**. The corpus's two `ARM:LE:32:v8` and six
 `MIPS:*:32:default` datatests contain no masked indirect call.
 
@@ -145,11 +145,11 @@ live and **no re-pin, no per-test opt-out**. The corpus's two `ARM:LE:32:v8` and
 two new keys.
 
 That clean ablation, plus the fact that the alignment width is declared by the *processor
-cspec* rather than by kuna and that upstream honours it unconditionally, is why this ships
+cspec* rather than by unlace and that upstream honours it unconditionally, is why this ships
 **without an option**: `CLAUDE.md` — *"a strict bug fix that only corrects wrong output
 needs no flag"*. It is recorded in `docs/history.md` under **Convergences (upstream
 behavior restored — not divergences)**, which is exactly where the registry puts a port
-defect whose fix moves kuna back onto upstream's default.
+defect whose fix moves unlace back onto upstream's default.
 
 ## Speed
 
@@ -190,7 +190,7 @@ The headline witness `O2-noinline-crazyflie-*-dwHandleInterrupt` is **not scorea
 `inf`. That is the degenerate-source-CFG artifact `docs/decbench-loop.md` warns about, not
 a result — `record.json` stores it as `null` with the explanation.
 
-The win here is correctness and readability, and it is measured directly instead: kuna's
+The win here is correctness and readability, and it is measured directly instead: unlace's
 post-fix C is byte-for-byte Ghidra's on both the ARM witness and the AArch64 probe, the
 invented bit-clear is gone, and the callee type is finally recovered.
 
@@ -228,8 +228,8 @@ check-spec OK (lenient mode)
 $ python3 tools/check_spec.py --strict
 check-spec OK (strict mode)
 
-$ kuna catalog --check
-catalog OK: documents exactly the registered kuna options
+$ unlace catalog --check
+catalog OK: documents exactly the registered unlace options
 ```
 
 `docs/baseline.json` is **untouched**. `docs/baseline-stages.json` gains exactly the two
@@ -242,7 +242,7 @@ new keys and the 356 → 358 count — no existing assertion moved:
 +    "data:FUNCPTRALIGN #2: the callee field recovers as code ** and the call needs no cast",
 ```
 
-Note: the first `make rust-test` run reported `1 target failed: -p kuna-cli --test
+Note: the first `make rust-test` run reported `1 target failed: -p unlace-cli --test
 decompile_all_cli` while five concurrent cargo workspaces and two Joern runs shared the
 box. That target passes in isolation (18/18) and the clean full re-run above is green —
 it was a load flake in the wall-clock-sensitive watchdog tests, not this change (which

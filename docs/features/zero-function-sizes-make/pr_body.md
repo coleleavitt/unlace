@@ -1,6 +1,6 @@
 ## The problem
 
-On a binary with no ELF section table, every function kuna finds reports a size
+On a binary with no ELF section table, every function unlace finds reports a size
 of `0`, so size-based triage throws the whole binary away. Take any ELF and zero
 its three section-header fields — nothing else changes, every mapped byte is
 identical:
@@ -11,10 +11,10 @@ import struct; b=bytearray(open('noshdr','rb').read())
 struct.pack_into('<Q',b,0x28,0); struct.pack_into('<H',b,0x3c,0); struct.pack_into('<H',b,0x3e,0)
 open('noshdr','wb').write(bytes(b))"
 
-$ kuna functions ./noshdr --json | jq '[.functions[].size]'
+$ unlace functions ./noshdr --json | jq '[.functions[].size]'
 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-$ kuna functions ./noshdr --min-size 1 --json | jq '{count, total, error}'
+$ unlace functions ./noshdr --min-size 1 --json | jq '{count, total, error}'
 { "count": 0, "total": 11, "error": null }
 ```
 
@@ -46,8 +46,8 @@ one" question a stripped binary is opened with cannot be asked at all.
 functions report `0` and `0` before the change and `16` and `6` after — the
 neighbour clip and the segment-end clip. Two loader unit tests cover the
 permission-to-flag translation. Sweeping 135 fixture images and 29 system
-binaries through `kuna functions --json`, exactly two change, both sectionless,
-both from `0` to a real extent; `kuna functions /bin/bash` stays at a 0.32 s
+binaries through `unlace functions --json`, exactly two change, both sectionless,
+both from `0` to a real extent; `unlace functions /bin/bash` stays at a 0.32 s
 median.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

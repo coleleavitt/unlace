@@ -548,7 +548,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                         self.print_message(
                             cmd.slot,
                             &format!(
-                                "kuna ghidra-mode: could not build the decompiler engine from \
+                                "unlace ghidra-mode: could not build the decompiler engine from \
                                  the registerProgram specs ({}); this program will not decompile",
                                 e.explain()
                             ),
@@ -611,7 +611,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                         write_burst(self.client.borrow_mut().sout_mut(), BURST_STRING_CLOSE)?;
                         self.print_message(
                             cmd.slot,
-                            "kuna ghidra-mode: engine unavailable; \
+                            "unlace ghidra-mode: engine unavailable; \
                              function at (address not decoded) not decompiled",
                         );
                         return Ok(());
@@ -946,7 +946,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                         self.print_message(
                             cmd.slot,
                             &format!(
-                                "kuna ghidra-mode: could not decompile the function at {at} \
+                                "unlace ghidra-mode: could not decompile the function at {at} \
                                  ({}); returning an incomplete function",
                                 e.explain()
                             ),
@@ -1194,8 +1194,8 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
 /// builds.
 pub fn unlace_banner_text() -> String {
     format!(
-        "Kuna v{}",
-        option_env!("KUNA_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
+        "Unlace v{}",
+        option_env!("UNLACE_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
     )
 }
 

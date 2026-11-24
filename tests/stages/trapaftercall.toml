@@ -1,4 +1,4 @@
-# kuna trapaftercall: a trap the compiler emits after a no-return call.
+# unlace trapaftercall: a trap the compiler emits after a no-return call.
 #
 # clang with trap-unreachable (the Darwin and rustc default) puts `ud2` after
 # every call it knows cannot return. In a stripped image the callee has no

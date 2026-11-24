@@ -43,7 +43,7 @@ lying at or above the table base.
 nothing, so an image that already resolved a table resolves the same section with the same
 harvest. The option can add entries; it cannot remove one.
 
-New module `decompiler/crates/kuna-analysis/src/analyzers/entry/cortexmvectors.rs`,
+New module `decompiler/crates/unlace-analysis/src/analyzers/entry/cortexmvectors.rs`,
 carrying a standalone `CortexMVectorsPass` (`id() == "cortexmvectors"`) stashed at load and
 gated at commit by `engine.rs::analysis_pass_enabled` — the `eh_frame_full` /
 `funcstart_patterns` shape.
@@ -56,7 +56,7 @@ truth from the matching `compiled/` binary's DWARF. 16 binaries x 3 optimisation
 [`analysis.md` section 5](docs/features/cortexmvectors/analysis.md), raw diff in
 [`measurements.txt`](docs/features/cortexmvectors/measurements.txt).
 
-### Default decbench surface (`kuna functions`, Listing on)
+### Default decbench surface (`unlace functions`, Listing on)
 
 | binary | entries before -> after | recall before -> after | new | ground truth | splits a real body | outside any body | lost |
 |---|---|---|---|---|---|---|---|
@@ -78,7 +78,7 @@ The 22 "outside any DWARF body" are vector slots pointing at debug-info-free
 compiler-runtime/startup code (crazyflie's shared `Default_Handler` at `0x801a890`) — real
 code the hardware enters, not error.
 
-### Without the Listing tier (`--option listing off`: `--mode fast`, the WASM and Ghidra front-ends, single-function `kuna decompile`)
+### Without the Listing tier (`--option listing off`: `--mode fast`, the WASM and Ghidra front-ends, single-function `unlace decompile`)
 
 | binary | entries before -> after | recall before -> after |
 |---|---|---|
@@ -93,7 +93,7 @@ the whole-image Thumb region paint, which only a confirmed table unlocks, is loa
 
 ### Strict no-op elsewhere
 
-Whole-binary `kuna decompile-all --json` is **byte-identical** (sha256) off vs on for x86-64
+Whole-binary `unlace decompile-all --json` is **byte-identical** (sha256) off vs on for x86-64
 (`gzip`), ARM Linux (`u-boot`), and the four Cortex-M images the shipped signature already
 detects (libopencm3 `msc.elf`, chibios `ch.elf`, freertos `RTOSDemo.out`, riot-os
 `hello-world.elf`).
@@ -136,15 +136,15 @@ fixtures-README row) that fails all three shipped predicates at once:
   (`sub_8008004` -> `return 7;`). An A32 read of those bytes does not produce that, so the
   arithmetic is the Thumb-paint proof.
 
-Consequently `kuna-base/src/xml.rs`' corpus file count and `docs/baseline-stages.json` are
+Consequently `unlace-base/src/xml.rs`' corpus file count and `docs/baseline-stages.json` are
 untouched. Seven unit tests in the new module cover each real-world shape, the `.data`
 false-positive floor, the two-vs-three-handler threshold, the non-ARM no-op, and
 shipped-match monotonicity.
 
 ## Speed
 
-Median of 3 whole-binary runs, off vs on: `kuna functions` cleanflight −3.33%, nuttx +2.88%,
-msc.elf −1.81%; `kuna decompile-all` cleanflight −6.91%, nuttx +0.79%, msc.elf +8.87%. The
+Median of 3 whole-binary runs, off vs on: `unlace functions` cleanflight −3.33%, nuttx +2.88%,
+msc.elf −1.81%; `unlace decompile-all` cleanflight −6.91%, nuttx +0.79%, msc.elf +8.87%. The
 scan is O(sections x <=1024 slots) and unmeasurable; the deltas are the extra decompile work
 for the extra functions against run-to-run noise — msc.elf is the byte-identical no-op case,
 so its +8.87% on a 0.7-second run bounds the measurement error.
@@ -167,7 +167,7 @@ GATE1  make test         datatests: 675/675 assertions passed   ->  PARITY OK
 GATE2  make test-stages  datatests: 356/356 assertions passed   ->  PARITY OK
 GATE3  make rust-test    full cargo workspace suite             ->  green
 GATE4  make check-spec   check-spec OK (lenient mode) / OK (strict mode)
-       kuna catalog --check   catalog OK: documents exactly the registered kuna options
+       unlace catalog --check   catalog OK: documents exactly the registered unlace options
 ```
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

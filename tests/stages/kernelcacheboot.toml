@@ -1,4 +1,4 @@
-# Kuna `kernelcache-boot` option (P1 code-data partition): resolve the
+# Unlace `kernelcache-boot` option (P1 code-data partition): resolve the
 # pointers an Auxiliary kernel collection holds into the boot collection it
 # was linked against.
 #

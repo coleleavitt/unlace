@@ -18,7 +18,7 @@ for name in which:
         per = {}
         for lab in order:
             k = BEFORE if lab == "before" else AFTER
-            env = dict(os.environ, SLEIGHHOME=SP, KUNA_SPECS=SP)
+            env = dict(os.environ, SLEIGHHOME=SP, UNLACE_SPECS=SP)
             t0 = time.perf_counter()
             p = subprocess.run([k, "decompile-all", b, "--json", "--max-fn-seconds", "120"],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)

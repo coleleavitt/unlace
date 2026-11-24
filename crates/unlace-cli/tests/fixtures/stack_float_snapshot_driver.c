@@ -10,14 +10,14 @@ typedef uint8_t uint1;
 typedef uint16_t uint2;
 typedef uint32_t uint4;
 typedef uint64_t uint8;
-#ifdef KUNA_NATIVE
+#ifdef UNLACE_NATIVE
 typedef struct FloatPair { float x; float y; } FloatPair;
 #else
 typedef uint8_t undefined1;
-/* KUNA_EMITTED_TYPES */
+/* UNLACE_EMITTED_TYPES */
 #endif
 
-#ifdef KUNA_NATIVE
+#ifdef UNLACE_NATIVE
 float4 flip_first_and_add(FloatPair *source, float4 bias, int4 flip);
 float4 flip_second_and_add(FloatPair *source, float4 bias, int4 flip);
 float4 integer_to_float(int4 value);
@@ -25,11 +25,11 @@ float4 integer_to_float(int4 value);
 void copy_point(FloatPair *destination, const FloatPair *source);
 uint4 observe_word(const uint4 *source);
 
-#ifndef KUNA_NATIVE
-/* KUNA_EMITTED_CODE */
+#ifndef UNLACE_NATIVE
+/* UNLACE_EMITTED_CODE */
 #endif
 
-#ifndef KUNA_NATIVE
+#ifndef UNLACE_NATIVE
 void copy_point(FloatPair *destination, const FloatPair *source) {
     *destination = *source;
 }

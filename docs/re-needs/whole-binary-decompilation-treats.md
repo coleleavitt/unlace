@@ -44,7 +44,7 @@ Decompile actual code while keeping known import address table slots as data.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile-all",
     "{{BIN}}",
     "--json"
@@ -81,7 +81,7 @@ Decompile actual code while keeping known import address table slots as data.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile-all",
     "{{BIN}}",
     "--json",

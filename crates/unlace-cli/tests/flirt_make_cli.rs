@@ -107,7 +107,7 @@ fn usage_errors_and_mixed_architectures_write_nothing() {
             .args(["flirt", "make"])
             .args(args)
             .output()
-            .expect("run kuna")
+            .expect("run unlace")
     };
     let no_output = run(&[dir.join("flirt/make/libthree.a").as_os_str()]);
     assert_eq!(no_output.status.code(), Some(2));

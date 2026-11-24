@@ -144,7 +144,7 @@ def rename(word: str) -> str:
 
 
 def norm(text: str) -> str:
-    """IDA's C spelling of a type or declaration, as the kuna grammar reads it."""
+    """IDA's C spelling of a type or declaration, as the unlace grammar reads it."""
     for pat, rep in SPELL:
         text = pat.sub(rep, text)
     text = IDENT.sub(lambda m: rename(m.group(0)), text)

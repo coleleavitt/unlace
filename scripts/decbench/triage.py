@@ -4,11 +4,11 @@
     python3 -m scripts.decbench.triage --case <id> --option loweredswitch off
 
 Prints, for the one case: the recorded scores and paths, angr's stored
-decompilation block, kuna's stored (run-time) block, a FRESH kuna decompilation
+decompilation block, unlace's stored (run-time) block, a FRESH unlace decompilation
 of the same function off the stripped binary (self-relabeled exactly like the
 benchmark run), and structural metrics for all three side by side.
 
-The fresh run is the verify-first step: the benchmark ran kuna 0.1.0 (Jun 29);
+The fresh run is the verify-first step: the benchmark ran unlace 0.1.0 (Jun 29);
 if the fresh output already matches angr structurally, the case is likely
 `already-fixed` and needs a rescore, not a feature.
 """
@@ -66,8 +66,8 @@ def load_case(case_id: str, metric: str | None = None) -> dict:
 
 
 def case_addr(case: dict) -> str | None:
-    """The address a mined case is decompiled at, in kuna's ``--addr`` (VA) form."""
-    return config.kuna_addr(case.get("stripped_path"),
+    """The address a mined case is decompiled at, in unlace's ``--addr`` (VA) form."""
+    return config.unlace_addr(case.get("stripped_path"),
                             case.get("address_hex") or case.get("address"))
 
 
@@ -90,20 +90,20 @@ def stored_block(case: dict, dec: str) -> str:
     return split_blocks(c_path).get(case["function"], f"(no {dec} block for {case['function']})\n")
 
 
-def fresh_kuna(case: dict, options: list[list[str]]) -> tuple[str, str | None]:
+def fresh_unlace(case: dict, options: list[list[str]]) -> tuple[str, str | None]:
     """Fresh decompile of the case function; returns (relabeled block, error)."""
     addr = case_addr(case)
-    cmd = [config.kuna_bin(), "decompile-all", case["stripped_path"], "--json",
+    cmd = [config.unlace_bin(), "decompile-all", case["stripped_path"], "--json",
            "--addr", addr]
     for name, value in options:
         cmd += ["--option", name, value]
     out = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     if out.returncode != 0:
-        return "", f"kuna exited {out.returncode}: {out.stderr[:500]}"
+        return "", f"unlace exited {out.returncode}: {out.stderr[:500]}"
     doc = json.loads(out.stdout)
     fns = doc.get("functions", [])
     if not fns:
-        return "", "kuna returned no function for that address"
+        return "", "unlace returned no function for that address"
     rec = fns[0]
     if rec.get("error"):
         return "", f"per-function error: {rec['error']}"
@@ -129,8 +129,8 @@ def main(argv=None) -> None:
     ap.add_argument("--metric", choices=("ged", "type_match"),
                     help="which pool to read the case from (default: ged)")
     ap.add_argument("--option", nargs=2, action="append", default=[],
-                    metavar=("NAME", "VALUE"), help="kuna --option for the fresh run")
-    ap.add_argument("--no-fresh", action="store_true", help="skip the fresh kuna run")
+                    metavar=("NAME", "VALUE"), help="unlace --option for the fresh run")
+    ap.add_argument("--no-fresh", action="store_true", help="skip the fresh unlace run")
     ap.add_argument("--also", default="", metavar="D1,D2",
                     help="extra stored decompilers to print (e.g. ida,ghidra)")
     args = ap.parse_args(argv)
@@ -143,11 +143,11 @@ def main(argv=None) -> None:
     print()
     print(f"- group: {case['group_id']}  siblings: {case.get('siblings', [])}")
     if case.get("novel"):
-        print(f"- NOVEL pool: kuna {label}={case['target_value']:g} is best of all; "
+        print(f"- NOVEL pool: unlace {label}={case['target_value']:g} is best of all; "
               f"next best {base}={case['base_value']:g} (lead {case.get('lead', 0):g})")
     else:
         print(f"- recorded: {base} {label}={case['base_value']:g}*  "
-              f"kuna {label}={case['target_value']:g}  margin Δ{case['margin']:g}")
+              f"unlace {label}={case['target_value']:g}  margin Δ{case['margin']:g}")
     others = case.get(f"others_{metric}") or case.get("others_ged") or {}
     print(f"- others: {others}  bucket: {case.get('bucket')}"
           f"{'  ARTIFACT-SUSPECT' if case.get('artifact_suspect') else ''}")
@@ -165,31 +165,31 @@ def main(argv=None) -> None:
     print(f"- stripped: {case['stripped_path']}")
     va = case_addr(case)
     shown = case.get("address_hex") or va
-    rebased = "" if va == shown else f" (PE RVA; kuna --addr {va})"
+    rebased = "" if va == shown else f" (PE RVA; unlace --addr {va})"
     print(f"- function: {case['function']} @ {shown}{rebased}  "
           f"labels: {case.get('labels')}")
     print()
 
     extra = [d for d in args.also.split(",") if d.strip()]
     stored = {d: stored_block(case, d) for d in dict.fromkeys([base] + extra)}
-    kuna_b = stored_block(case, "kuna")
+    unlace_b = stored_block(case, "unlace")
     rows = {f"{d}(stored)": metrics(b) for d, b in stored.items()}
-    rows["kuna(stored)"] = metrics(kuna_b)
+    rows["unlace(stored)"] = metrics(unlace_b)
 
-    fresh_b, fresh_err = ("", "skipped") if args.no_fresh else fresh_kuna(case, args.option)
+    fresh_b, fresh_err = ("", "skipped") if args.no_fresh else fresh_unlace(case, args.option)
     if fresh_b:
-        rows["kuna(fresh)"] = metrics(fresh_b)
+        rows["unlace(fresh)"] = metrics(fresh_b)
 
     print("## structural metrics\n")
     print(fmt_metrics(rows))
     print()
     for d, b in stored.items():
         print(f"## {d} (stored)\n\n```c\n" + b + "```\n")
-    print("## kuna (stored, run-time)\n\n```c\n" + kuna_b + "```\n")
+    print("## unlace (stored, run-time)\n\n```c\n" + unlace_b + "```\n")
     if fresh_b:
-        print("## kuna (fresh, current build)\n\n```c\n" + fresh_b + "```\n")
+        print("## unlace (fresh, current build)\n\n```c\n" + fresh_b + "```\n")
     else:
-        print(f"## kuna (fresh): UNAVAILABLE — {fresh_err}\n")
+        print(f"## unlace (fresh): UNAVAILABLE — {fresh_err}\n")
 
 
 if __name__ == "__main__":

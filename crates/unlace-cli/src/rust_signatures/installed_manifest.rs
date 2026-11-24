@@ -8,7 +8,7 @@ use serde::Serialize;
 use super::{Corpus, load};
 
 const USAGE: &str = "usage: unlace rust-signatures check [--manifest PATH] [--json]\n";
-const INSTALLED_MANIFEST: &str = "kuna/rust-signatures/x86_64/linux/manifest.json";
+const INSTALLED_MANIFEST: &str = "unlace/rust-signatures/x86_64/linux/manifest.json";
 
 #[derive(Serialize)]
 struct Inventory {

@@ -1,9 +1,9 @@
-# kuna issue testcase: Thumb-1 switches through libgcc's case helpers in a
+# unlace issue testcase: Thumb-1 switches through libgcc's case helpers in a
 # stripped image.
 #
 # Stage:      P0 knowledge - the call-fixup installer recognizes the helpers
 #             by their instructions
-#             (`analyzers/callfixup/kuna_thumb1casesig.rs`), so the
+#             (`analyzers/callfixup/unlace_thumb1casesig.rs`), so the
 #             `switch*_r0` call-fixups apply at P2 flow.
 #
 # The XML wrapper only provides the harness architecture.  The script loads
@@ -49,36 +49,36 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-THUMB1CASE #1: each dispatcher is a switch'
+name = 'UNLACE-THUMB1CASE #1: each dispatcher is a switch'
 count = 5
 literal = 'switch(a0)'
 
 [[match]]
-name = 'KUNA-THUMB1CASE #2: no helper call survives'
+name = 'UNLACE-THUMB1CASE #2: no helper call survives'
 count = 0
 regex = 'sub_20(198|1aa|1bc|1d0|1e4)\('
 
 [[match]]
-name = 'KUNA-THUMB1CASE #3: the unsigned byte table reads its last case'
+name = 'UNLACE-THUMB1CASE #3: the unsigned byte table reads its last case'
 count = 1
 literal = 'return 0xe;'
 
 [[match]]
-name = 'KUNA-THUMB1CASE #4: the signed byte table reaches the case before it'
+name = 'UNLACE-THUMB1CASE #4: the signed byte table reaches the case before it'
 count = 1
 literal = 'return 0x14;'
 
 [[match]]
-name = 'KUNA-THUMB1CASE #5: the unsigned halfword table reads its last case'
+name = 'UNLACE-THUMB1CASE #5: the unsigned halfword table reads its last case'
 count = 1
 literal = 'return 0x21;'
 
 [[match]]
-name = 'KUNA-THUMB1CASE #6: the signed halfword table reaches the case before it'
+name = 'UNLACE-THUMB1CASE #6: the signed halfword table reaches the case before it'
 count = 1
 literal = 'return 0x28;'
 
 [[match]]
-name = 'KUNA-THUMB1CASE #7: the word table reads its later cases'
+name = 'UNLACE-THUMB1CASE #7: the word table reads its later cases'
 count = 2
 regex = 'return 0x3[34];'

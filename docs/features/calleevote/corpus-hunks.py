@@ -1,6 +1,6 @@
 """Whole-corpus before/after decompile-all diff for calleevote: classify every changed function.
 
-usage: hunks.py <kuna> <outdir> <bin>...   (off = --option calleevote off, on = default)
+usage: hunks.py <unlace> <outdir> <bin>...   (off = --option calleevote off, on = default)
 """
 import json, os, re, subprocess, sys, collections
 from concurrent.futures import ThreadPoolExecutor

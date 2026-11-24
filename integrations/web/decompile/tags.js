@@ -1,7 +1,7 @@
-// tags.js — the short notes kuna puts at the end of a line (`// no-return`,
+// tags.js — the short notes unlace puts at the end of a line (`// no-return`,
 // `// branch-flip`, `// early-return x10`): taken out of the code the page
 // shows and kept per line, in plain words, for the Explain panel and the hover
-// card. A comment that is not one of kuna's notes stays in the code. DOM-free.
+// card. A comment that is not one of unlace's notes stays in the code. DOM-free.
 
 const TAGS = {
   'no-return': () => 'The function called here never comes back (it ends the program or loops forever), so nothing after the call runs.',
@@ -50,7 +50,7 @@ export function trailingComment(text) {
   return at < 0 ? null : text.slice(at + 2).trim();
 }
 
-/** One note in words: `{tag, words}`, or null for a note that is not kuna's (a register name, a user note). */
+/** One note in words: `{tag, words}`, or null for a note that is not unlace's (a register name, a user note). */
 export function explainTag(raw) {
   let slug = raw.trim();
   let prefix = '';
@@ -67,7 +67,7 @@ export function explainTag(raw) {
   return { tag: raw, words: prefix ? prefix + words[0].toLowerCase() + words.slice(1) : words };
 }
 
-/** A comment's parts: kuna's notes, explained (`found`), and the rest as written (`kept`). */
+/** A comment's parts: unlace's notes, explained (`found`), and the rest as written (`kept`). */
 function readComment(comment) {
   const found = [];
   const kept = [];
@@ -79,14 +79,14 @@ function readComment(comment) {
   return { found, kept };
 }
 
-/** The notes kuna left on `text`, explained; empty when there are none. */
+/** The notes unlace left on `text`, explained; empty when there are none. */
 export function lineTags(text) {
   const comment = trailingComment(text || '');
   return comment ? readComment(comment).found : [];
 }
 
 /**
- * The code without kuna's end-of-line notes: `{code, tokens, notes}`, where
+ * The code without unlace's end-of-line notes: `{code, tokens, notes}`, where
  * `notes` maps a 1-based line to its notes in words (`lineTags`). Only a
  * comment after code on its line is read, and any part of it that is not a
  * note (a register name, a user note) stays. Line numbers and the columns of

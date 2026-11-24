@@ -2,7 +2,7 @@
   "opportunity": "foldcallret (default-on) moves a single-use call's evaluation to where its result is printed. Its order-safety predicate stated the barrier set in opcodes (CALL/LOAD/STORE/CALLOTHER), but heritage promotes a write to a fixed address into a plain CPUI_COPY, so a call sank past a write to a global it reads and the emitted C computed a different value than the binary.",
   "issue": "Noelo-Lab/kuna#657",
   "test_name": "tests/stages/foldcallret-barrier.xml (single pass, defaults: target = the issue verbatim, target2 = the write after the use so the expression travels to the return) + tests/cli/foldcallret-sinks-call-past.json",
-  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/gh657_x86_64 (hand-assembled, 5000 bytes) and a synthetic bytechunk of the same bytes in the stage test",
+  "binary": "decompiler/crates/unlace-analysis/tests/fixtures/gh657_x86_64 (hand-assembled, 5000 bytes) and a synthetic bytechunk of the same bytes in the stage test",
   "selector": "target",
   "func_addr": "0x4000b0",
   "option": null,
@@ -21,18 +21,18 @@
     "exemption_self_copy": "op_is_self_copy: a CPUI_COPY back into the storage its input already occupies (what RuleIndirectCollapse leaves behind) writes the value already there. Volatile excluded. Without it gh275-spillargtrial #3 and LIBCTYPES #9 each lose a fold to an artifact. Eight unit tests in callretfold/tests.rs pin the predicate directly on hand-built IR (constant-into-global and arithmetic-into-global are barriers; glob = COPY glob is not; a copy between two globals, at a different width, or of a volatile location is; an untied temporary is not; LOAD is a barrier on the first span only).",
     "exemption_chain": "the ops the expression travels through are exempt from the second span test: each consumes the previous one's value, so the call is evaluated before them in the folded text exactly as in the binary. With the narrowed (writes-only) set this is no longer load-bearing: dropping it changes 0 of the 23,851 functions on the sweep. Kept for the shape it is written for -- a chain op that is itself a call with an implied output, where the folded expression is that call's own argument.",
     "not_widened": "the INDIRECT test keeps the call-to-use span for the DEFAULT fold. Asking it past the use changes 31 functions across grep O0, tar O0 and ssh O2 and de-folds 27 of them, correcting none; the dominant shape is `dat_33798 = *__errno_location()` (grep O0 sub_6c53), whose binary is call/mov/mov in exactly that order. Exempting the self-copy from it as well makes elfmain's sub_1357(a1[1]) fold where it did not before -- a NEW fold, which this fix has no business adding.",
-    "phi_left_alone": "the span past the use is also foldcallretphi's, and an earlier revision of this branch moved that option's guard into callretfold.rs and shared it, which silently RELAXED it (the implied-chain exemption and op_is_self_copy, neither of which #654 had): with `--option foldcallretphi on`, ssh O2 0xcdd0 and dpkg O2 0x2e170 each GAINED a fold origin/main declines. foldcallretphi.rs now composes its guard exactly as it shipped -- every opcode, the storage test unsoftened, no chain exemption, the INDIRECT question over the whole distance including the landing statement -- and only print_point and the raw storage test delegate to kuna_callretfold. That guard is strictly wider than the second foldcallret span, so a phi-discounted fold is decided exactly as on origin/main. See phi_arm for the per-function content comparison that replaces the set metric."
+    "phi_left_alone": "the span past the use is also foldcallretphi's, and an earlier revision of this branch moved that option's guard into callretfold.rs and shared it, which silently RELAXED it (the implied-chain exemption and op_is_self_copy, neither of which #654 had): with `--option foldcallretphi on`, ssh O2 0xcdd0 and dpkg O2 0x2e170 each GAINED a fold origin/main declines. foldcallretphi.rs now composes its guard exactly as it shipped -- every opcode, the storage test unsoftened, no chain exemption, the INDIRECT question over the whole distance including the landing statement -- and only print_point and the raw storage test delegate to unlace_callretfold. That guard is strictly wider than the second foldcallret span, so a phi-discounted fold is decided exactly as on origin/main. See phi_arm for the per-function content comparison that replaces the set metric."
   },
   "witnesses": {
     "repro.c": "the issue verbatim; gcc -O2; binary returns 50, pre-fix C reads 91. Fixed by clause 1.",
     "repro.c + `int u = t * 3;`": "same, because gcc schedules the global store before the arithmetic. Fixed by clause 1.",
     "travel.s": "hand-written asm where the write lands between the use and the return; needs clause 2 (clause-1-only build still folds it).",
-    "libselinux.so.1 sub_16170": "real binary: strdup at 0x162d0, the two stack writes at 0x162d5/0x162dd. Pre-fix kuna emits `v23 = 1; v22 = 0x6666666; *(char **)(a0 + 0x50) = strdup(v12);`, now `v9 = strdup(v14);` first."
+    "libselinux.so.1 sub_16170": "real binary: strdup at 0x162d0, the two stack writes at 0x162d5/0x162dd. Pre-fix unlace emits `v23 = 1; v22 = 0x6666666; *(char **)(a0 + 0x50) = strdup(v12);`, now `v9 = strdup(v14);` first."
   },
   "corpus_sweep": {
     "corpus": "37 binaries: decbench full_run_address_2026-09-11 O0 and O2 of coreutils fmt and ls, grep, gzip, diffutils diff, bzip2, findutils find, tar, dash, shadow/su, e2fsprogs/e2fsck, kmod, iproute2/ip, libedit.so.0.0.70, openssh/ssh; plus libz.so.1.2.13 O0, libselinux.so.1 O2, libacl.so.1.1.2301 O2 and the four in-tree ELFs tests/bug-repro/{faillog,sort,grep,libselinux.so.1}",
     "before": "origin/main 520443d7, built fresh. The branch was later rebased twice (#661 structdefs, #663 indirectonly, both default-off); the re-rebased build's decompile-all output is byte-identical to the swept one on grep O0, find O2 and libselinux.so.1, so the sweep still describes this branch.",
-    "method": "kuna decompile-all before/after, split per function on the `// Function:` banner, classified by docs/features/gh657/foldclassify.py",
+    "method": "unlace decompile-all before/after, split per function on the `// Function:` banner, classified by docs/features/gh657/foldclassify.py",
     "functions": 23851,
     "functions_changed": 126,
     "defold": 88,
@@ -63,7 +63,7 @@
     "per_function": "0 of 10748 functions differ in type_match value and 0 in decomp_vars count"
   },
   "speed": {
-    "method": "interleaved A/B of `kuna decompile-all`, wall clock, min and median; the A binary is origin/main 520443d7, the B binary this branch. No option to flip, so timeit's on/off harness does not apply. The box carried a rust-test lane throughout, so the per-sample spread is wider than the delta.",
+    "method": "interleaved A/B of `unlace decompile-all`, wall clock, min and median; the A binary is origin/main 520443d7, the B binary this branch. No option to flip, so timeit's on/off harness does not apply. The box carried a rust-test lane throughout, so the per-sample spread is wider than the delta.",
     "fmt_O2": {
       "samples": 15,
       "min_main_s": 4.089,
@@ -98,10 +98,10 @@
     "make test-stages": "1078/1078 PARITY OK (baseline re-recorded for the six NEW assertions only; 1072 pre-existing keys untouched)",
     "make check-spec": "OK lenient + OK strict",
     "make test-cli": "184/184 passed",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "counters --check": "no drift; docs/options.md byte-fresh",
     "make rust-test": "RUST_TEST_RC=0 -- 415 test binaries, 7130 passed / 0 failed",
-    "stage_test_two_arm": "tests/stages/foldcallret-barrier.xml run against a build of origin/main via KUNA_DECOMP_TEST: 1/6 assertions pass (#1, #3, #4, #5, #6 fail). Against this branch: 6/6."
+    "stage_test_two_arm": "tests/stages/foldcallret-barrier.xml run against a build of origin/main via UNLACE_DECOMP_TEST: 1/6 assertions pass (#1, #3, #4, #5, #6 fail). Against this branch: 6/6."
   },
   "stage_assertions_examined": {
     "note": "four stage assertions moved on the first version of the fix and NONE was absorbed: each pointed at a real over-decline, and the final version leaves all 1059 pre-existing assertions untouched (the baseline gains only the six new GH657 rows).",
@@ -111,28 +111,28 @@
     "ELFMAIN #2": "the opposite direction: exempting the self-copy from the INDIRECT test too ADDS a fold (`sub_1357(a1[1])`), which is why that exemption is held back"
   },
   "hidden_count_sites": [
-    "kuna-base/src/xml.rs corpus file count 305 -> 306 after the #661 and #663 rebases (one new tests/stages file on top of theirs)",
+    "unlace-base/src/xml.rs corpus file count 305 -> 306 after the #661 and #663 rebases (one new tests/stages file on top of theirs)",
     "docs/baseline-stages.json re-recorded on the rebased tree (1072 -> 1078 keys, all six new)",
-    "decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json recaptured (215 settables) -- the foldcallret/foldcallretphi row text moved, which only the workspace suite's catalog_bytecompat sees",
+    "decompiler/crates/unlace-decomp/tests/fixtures/phase_catalog.json recaptured (215 settables) -- the foldcallret/foldcallretphi row text moved, which only the workspace suite's catalog_bytecompat sees",
     "no option added, so no settable/tier/catalog.xml count moves (counters --check green)"
   ],
   "files": [
-    "decompiler/crates/kuna-decomp/src/p6_variables/callretfold.rs",
-    "decompiler/crates/kuna-decomp/src/p6_variables/callretfold/tests.rs",
-    "decompiler/crates/kuna-decomp/src/p6_variables/foldcallretphi.rs",
-    "decompiler/crates/kuna-decomp/src/p6_variables/coreaction_cleanup.rs",
-    "decompiler/crates/kuna-base/src/xml.rs",
-    "decompiler/crates/kuna-decomp/phases.toml",
-    "decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json",
+    "decompiler/crates/unlace-decomp/src/p6_variables/callretfold.rs",
+    "decompiler/crates/unlace-decomp/src/p6_variables/callretfold/tests.rs",
+    "decompiler/crates/unlace-decomp/src/p6_variables/foldcallretphi.rs",
+    "decompiler/crates/unlace-decomp/src/p6_variables/coreaction_cleanup.rs",
+    "decompiler/crates/unlace-base/src/xml.rs",
+    "decompiler/crates/unlace-decomp/phases.toml",
+    "decompiler/crates/unlace-decomp/tests/fixtures/phase_catalog.json",
     "tests/stages/foldcallret-barrier.xml (new)",
     "tests/cli/foldcallret-sinks-call-past.json (new)",
-    "decompiler/crates/kuna-analysis/tests/fixtures/gh657_x86_64{,.s} (new) + fixtures/README.md",
+    "decompiler/crates/unlace-analysis/tests/fixtures/gh657_x86_64{,.s} (new) + fixtures/README.md",
     "docs/spec/06-variables-and-merge.md",
     "docs/options.md",
     "docs/baseline-stages.json",
     "docs/features/gh657/{analysis.md,plan.md,record.json,foldclassify.py,cause.py,phicmp.py,sweep.sh,repro.c,travel.s}"
   ],
-  "option_off_identity": "`kuna decompile-all --option foldcallret off` is byte-identical (md5) between origin/main 520443d7 and this branch on grep O0, dash O2 and libselinux.so.1: every new test is behind Architecture::fold_call_returns.",
+  "option_off_identity": "`unlace decompile-all --option foldcallret off` is byte-identical (md5) between origin/main 520443d7 and this branch on grep O0, dash O2 and libselinux.so.1: every new test is behind Architecture::fold_call_returns.",
   "rust_test": "run through /home/mahaloz/kwt/rust-test-lane.sh on the worktree at the final rebased SHA (log .scratch/rust-test-r5.log, 2026-09-17T16:50-17:05Z); target/debug deleted afterwards.",
   "phi_arm": {
     "acceptance_metric": "per-function CONTENT equality of the `--option foldcallretphi on` dumps, main build against this branch, split on the `// Function:` banner. The round-1 metric (equality of the phi-delta SET) could not see a content change inside the delta and is retired.",

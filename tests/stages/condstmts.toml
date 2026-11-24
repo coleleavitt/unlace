@@ -1,4 +1,4 @@
-# kuna issue `condstmts` (P8, sub-stage goto-quality).
+# unlace issue `condstmts` (P8, sub-stage goto-quality).
 #
 # ruleBlockOr folds a condition block into a `&&`/`||` operand when
 # BlockBasic::isComplex calls it simple.  That verdict is taken before

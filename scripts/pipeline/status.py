@@ -31,8 +31,8 @@ from . import config, state
 # a request per redraw; a failed fetch is cached as None with a stale marker rather than
 # retried in a hot loop.
 
-WORKTREE_TTL = float(os.environ.get("KUNA_PIPELINE_WORKTREE_TTL", "20"))
-PR_TTL = float(os.environ.get("KUNA_PIPELINE_PR_TTL", "60"))
+WORKTREE_TTL = float(os.environ.get("UNLACE_PIPELINE_WORKTREE_TTL", "20"))
+PR_TTL = float(os.environ.get("UNLACE_PIPELINE_PR_TTL", "60"))
 
 _CACHE = {}
 
@@ -82,8 +82,8 @@ def _git_worktrees():
     if cur:
         trees.append(cur)
     # only THIS pipeline's worktrees (seams so a second pipeline reuses this module)
-    wt_match = os.environ.get("KUNA_PIPELINE_WORKTREE_MATCH", ".kuna-pipeline")
-    br_match = os.environ.get("KUNA_PIPELINE_BRANCH_MATCH", "feat/angr-")
+    wt_match = os.environ.get("UNLACE_PIPELINE_WORKTREE_MATCH", ".unlace-pipeline")
+    br_match = os.environ.get("UNLACE_PIPELINE_BRANCH_MATCH", "feat/angr-")
     return [t for t in trees if wt_match in t["path"] or "/kuna-wt-" in t["path"]
             or (t.get("branch", "").startswith(br_match))]
 
@@ -161,7 +161,7 @@ def _fmt_elapsed(s):
 
 def render(snap):
     lines = []
-    lines.append("kuna pipeline — %d worker(s) active, %d done, %d claimed"
+    lines.append("unlace pipeline — %d worker(s) active, %d done, %d claimed"
                  % (snap["active"], len(snap["done"]), len(snap["claims"])))
     lines.append("-" * 92)
     if not snap["workers"]:

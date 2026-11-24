@@ -3,7 +3,7 @@
 ## 1. The measured symptom
 
 A full cross-decompiler run on google/leveldb (stripped x86-64 shared library, decbench
-`projects/cpp/leveldb.toml`) put kuna at or near the top on every metric **except**
+`projects/cpp/leveldb.toml`) put unlace at or near the top on every metric **except**
 `type_match`, where it was last:
 
 | leveldb O0, `type_match` perfects (n=525) | before |
@@ -11,14 +11,14 @@ A full cross-decompiler run on google/leveldb (stripped x86-64 shared library, d
 | ghidra | 44 |
 | ida | 35 |
 | binja | 11 |
-| **kuna** | **9** |
+| **unlace** | **9** |
 | angr | 8 |
 
-kuna is 1st on `byte_match` and ties for 1st on the union metric at O2, so the deficit was
+unlace is 1st on `byte_match` and ties for 1st on the union metric at O2, so the deficit was
 never structural recovery. It was one construct:
 
 ```c
-/* kuna */   void WriteBlock(int8 *a0,unsigned long a1,unsigned long a2)
+/* unlace */   void WriteBlock(int8 *a0,unsigned long a1,unsigned long a2)
 /* ghidra */ void __thiscall leveldb::TableBuilder::WriteBlock
                  (TableBuilder *this,BlockBuilder *param_1,BlockHandle *param_2)
 ```
@@ -34,13 +34,13 @@ demangled signature (parameter / return types) ... a deferred follow-up."*
 That the mechanism is the **demangler** and not type inference was measured, not assumed:
 
 - named-pointer first parameter across 527 functions: ghidra 188, ida 150, binja 60,
-  angr 0, **kuna 0**.
+  angr 0, **unlace 0**.
 - where ghidra wins, **37 of 42 are `.dynsym`-exported**; on the 112 non-exported
   `this`-shaped functions ghidra recovers **1**.
-- on the C control corpus kuna's type recovery is ordinary, so the gap is C++-specific.
+- on the C control corpus unlace's type recovery is ordinary, so the gap is C++-specific.
 
 leveldb is a shared library, so `.dynsym` survives `strip` with 1397 defined mangled
-`FUNC` symbols. That is the channel every rival types C++ from, and the one kuna ignored.
+`FUNC` symbols. That is the channel every rival types C++ from, and the one unlace ignored.
 
 ## 3. The hard part — deciding which functions take `this`
 
@@ -79,7 +79,7 @@ Three defects, all invisible to the witness function and all fixed before shippi
 ## 5. Results
 
 `9 -> 35` perfects at the default, **+26 gained, 0 lost**; mean 0.1277 -> 0.1784; 28
-functions improved, 0 worse. kuna moves from last to second, tied with ida. The 26 gained
+functions improved, 0 worse. unlace moves from last to second, tied with ida. The 26 gained
 are precisely decbench's own mined margin-1.0 set (17 destructors + 9 accessors/ctors).
 
 Reference parameters render as pointers (`const Slice&` -> `Slice *`), which is what the
@@ -91,7 +91,7 @@ that headroom is captured rather than left on the table.
 ## 6. The honest cost
 
 The wrongness axis is a **new read-before-write of an argument register**, not raw arity
-change (an arity *decrease* is often kuna over-recovering, not the signature being wrong).
+change (an arity *decrease* is often unlace over-recovering, not the signature being wrong).
 On leveldb -O0 stripped, 3,962 functions: `proven` damages **2 (0.05%)**, `inferred` 29.
 
 Both `proven` cases are the SysV **hidden return pointer** — a class returned by value

@@ -7,10 +7,10 @@ the numbers behind it.
 
 | file | change |
 |---|---|
-| `decompiler/crates/kuna-decomp/src/infra/architecture.rs` | `decode_default_proto` split into a thin `<default_proto>` locator plus a reusable `decode_proto_model(<prototype>, root)` (which also gains the `hasthis`/`constructor` attribute reads and the `__thiscall` name rule); **new** `decode_named_protos` (the `<prototype>`/`<resolveprototype>`/`<modelalias>` dispatch plus the guaranteed-`__thiscall` tail) and `decode_resolve_proto` (the `ProtoModelMerged` fold-in); **new** free fns `decode_bool_attr` and `create_model_alias`; `build_default_proto` registers the named models after the default one |
-| `decompiler/crates/kuna-decomp/tests/verify_cspecprotos.rs` | **new** - 5 registry assertions over four real vendored cspecs |
+| `decompiler/crates/unlace-decomp/src/infra/architecture.rs` | `decode_default_proto` split into a thin `<default_proto>` locator plus a reusable `decode_proto_model(<prototype>, root)` (which also gains the `hasthis`/`constructor` attribute reads and the `__thiscall` name rule); **new** `decode_named_protos` (the `<prototype>`/`<resolveprototype>`/`<modelalias>` dispatch plus the guaranteed-`__thiscall` tail) and `decode_resolve_proto` (the `ProtoModelMerged` fold-in); **new** free fns `decode_bool_attr` and `create_model_alias`; `build_default_proto` registers the named models after the default one |
+| `decompiler/crates/unlace-decomp/tests/verify_cspecprotos.rs` | **new** - 5 registry assertions over four real vendored cspecs |
 | `tests/stages/ghdec-cspecprotos.toml` | **new** - two-pass end-to-end witness, 6 assertions |
-| `decompiler/crates/kuna-base/src/xml.rs` | corpus file count 191 to 192 (read off a live failing run on the rebased tree, not arithmetic) |
+| `decompiler/crates/unlace-base/src/xml.rs` | corpus file count 191 to 192 (read off a live failing run on the rebased tree, not arithmetic) |
 | `docs/baseline-stages.json` | re-recorded from a live run on the rebased tree: 394 to 400 keys, purely the 6 new ones |
 | `docs/spec/04-calls-and-prototypes.md` | 4.1 rewritten: the named-model registration, the deliberate non-selection, and the merged-model producer |
 | `docs/history.md` | Convergences row (no DIV: no default changes, no corpus output shift) |
@@ -28,13 +28,13 @@ what gives them more than one legal value.
    point in `fspec.rs` has neither. Reusing `decode_proto_model` for *both* the default
    and the named models is what guarantees a named model has identical storage/effect
    fidelity - including the top-level `<returnaddress>` fallback and the
-   `kuna_dfunaffected` DF assertion - rather than a second, weaker parser.
+   `unlace_dfunaffected` DF assertion - rather than a second, weaker parser.
 2. **`set_name` last.** Upstream reads all attributes, then applies
-   `if (name == "__thiscall") hasThis = true`. kuna's `ProtoModel::set_name` already
+   `if (name == "__thiscall") hasThis = true`. unlace's `ProtoModel::set_name` already
    carries that rule, so the attribute reads are ordered *before* it; an explicit
    `hasthis="false"` on a model named `__thiscall` therefore loses, exactly as upstream.
 3. **Skip a bad named model, do not abort the spec.** Upstream throws
-   `LowlevelError` and loses the architecture. kuna's cspec corpus spans every vendored
+   `LowlevelError` and loses the architecture. unlace's cspec corpus spans every vendored
    processor and the loader path already degrades gracefully on a failed default decode;
    an unknown `strategy` or a `<pentry>` naming a register some language lacks now costs
    that one model, not the program.
@@ -72,9 +72,9 @@ what gives them more than one legal value.
 | `make test-stages` | PARITY OK, 400/400 (394 + the 6 new keys) |
 | `make rust-test` | green |
 | `make check-spec` | check-spec OK |
-| `kuna catalog --check` | catalog OK (no option added) |
+| `unlace catalog --check` | catalog OK (no option added) |
 
-### Byte-identical sweep (`kuna decompile-all`, before vs after)
+### Byte-identical sweep (`unlace decompile-all`, before vs after)
 
 Both arms captured on the SAME rebased tree (`f2c15037`, i.e. after #262/#263/#264, which
 themselves move C++ output). Twelve binaries across four compiler specs, 73,173 lines:
@@ -98,7 +98,7 @@ stderr is byte-identical too. Byte-identical is the *expected* result here and t
 is the proof, not a sanity check: any diff at all would mean registration is selecting
 something.
 
-### Registry census (every language kuna ships)
+### Registry census (every language unlace ships)
 
 Bootstrapping every `language:compiler` pair in the vendored `.ldefs` and counting
 `Architecture::proto_models` after `init_post_engine`:
@@ -117,7 +117,7 @@ models, 6 `<resolveprototype>` and 3 `<modelalias>` were dead spec text.
 
 ### Registry contents (the point of the change)
 
-`decompiler/crates/kuna-decomp/tests/verify_cspecprotos.rs` asserts, against the real
+`decompiler/crates/unlace-decomp/tests/verify_cspecprotos.rs` asserts, against the real
 vendored specs:
 
 | spec | default | additionally registered |
@@ -165,7 +165,7 @@ Same effect on the real MSVC PE fixture `msvc_rtti_x86.exe`:
 ### Speed
 
 Parsing the extra cspec elements happens once per program load, so **load** time is the
-metric that matters, not per-function decompile time. `kuna functions --json` is a full
+metric that matters, not per-function decompile time. `unlace functions --json` is a full
 load + analysis with no decompilation; interleaved before/after on the same tree, n=31,
 minimum of the run (medians in `record.json`):
 

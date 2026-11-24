@@ -2,7 +2,7 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile-all",
     "{{BIN}}",
     "--option",
@@ -36,6 +36,6 @@
       "cb\\(unsigned char a0"
     ]
   },
-  "notes": "cb is called with bytes and also through a table of self-relative words (target minus the word's own address) indexed by a value kuna cannot bound, with a whole word; the word plus its address is cb, so its callers cannot all be listed and the parameter keeps its width.",
+  "notes": "cb is called with bytes and also through a table of self-relative words (target minus the word's own address) indexed by a value unlace cannot bound, with a whole word; the word plus its address is cb, so its callers cannot all be listed and the parameter keeps its width.",
   "probe_id": "p-e954fcfd4b3e"
 }

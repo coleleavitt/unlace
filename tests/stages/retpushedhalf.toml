@@ -1,8 +1,8 @@
-# kuna: an alignment PUSH in the prologue and a POP into another register in
+# unlace: an alignment PUSH in the prologue and a POP into another register in
 # the epilogue invent an extra argument and a 128-bit return.
 #
 # Stage / sub-stage: P4 call and prototype model, output-prototype.
-# The rule (kuna_retpushedhalf.rs) is always on.
+# The rule (unlace_retpushedhalf.rs) is always on.
 #
 # Source (gas, x86-64 SysV, bytes verbatim below):
 #
@@ -15,7 +15,7 @@
 #
 # The bug: in cross_reg_restore the popped slot holds R8,
 # which the function pushed only to move the stack pointer. RDX at the RETURN
-# therefore traces back to R8 at entry, and kuna_retinputhalf reads that as
+# therefore traces back to R8 at entry, and unlace_retinputhalf reads that as
 # "an input parameter the function PLACED in the return register" and keeps the
 # half. Keeping the half is what gives R8 a reader, and R8 having a reader is
 # what makes R8 a parameter, so a one-argument function recovers FIVE

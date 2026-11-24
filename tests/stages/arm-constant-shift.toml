@@ -1,4 +1,4 @@
-# Authored ARM fixed-count LSL, adjacent to Kuna #849's register-count case.
+# Authored ARM fixed-count LSL, adjacent to Unlace #849's register-count case.
 # A locked signed parameter shifted before an unsigned return conversion
 # has C11 UB for negative inputs and positive overflow. Pass 1 (default,
 # option armconstshift off) prints the shift as written (the bug). Pass 2

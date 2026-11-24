@@ -11,7 +11,7 @@ to be a gain or a loss:
 - value: the sign test on the functions whose value improved / worsened.
 
 The four p-values are Holm-adjusted together. A function decbench can measure that
-kuna produced no value for counts as the worst value (GED inf, type_match below 0).
+unlace produced no value for counts as the worst value (GED inf, type_match below 0).
 
 Speed is the sample's total decompile CPU time. When tonight's run also timed last
 night's build on the same runner (`baseline_time`), the comparison is that A/B;
@@ -269,7 +269,7 @@ def history_entry(cur: dict, ev: dict) -> dict:
     entry = {
         "date": meta.get("started"),
         "label": meta.get("label"),
-        "kuna_version": meta.get("kuna_version"),
+        "unlace_version": meta.get("unlace_version"),
         "sample_digest": meta.get("sample_digest"),
         "cpu_model": meta.get("cpu_model"),
         "cpu_total": round(sum(b["time"]["cpu"] for b in cur["binaries"].values()), 2),
@@ -288,7 +288,7 @@ def history_entry(cur: dict, ev: dict) -> dict:
 def render(cur: dict, prev: dict | None, ev: dict, history: list[dict], alpha: float,
            speed_threshold: float, run_url: str | None) -> str:
     meta = cur["meta"]
-    lines = [f"## Nightly decbench: {meta.get('label') or meta.get('kuna_version')}", ""]
+    lines = [f"## Nightly decbench: {meta.get('label') or meta.get('unlace_version')}", ""]
     nfun = len(cur["functions"])
     lines.append(
         f"Sample `{meta['sample_digest']}`: {len(cur['binaries'])} binaries, {nfun} scored "
@@ -296,7 +296,7 @@ def render(cur: dict, prev: dict | None, ev: dict, history: list[dict], alpha: f
         f"decbench `{(meta.get('decbench_commit') or '?')[:10]}`). Runner: {meta['cpu_model']}, "
         f"{meta['nproc']} CPUs.")
     if prev:
-        lines.append(f"Compared with: {prev['meta'].get('label') or prev['meta'].get('kuna_version')} "
+        lines.append(f"Compared with: {prev['meta'].get('label') or prev['meta'].get('unlace_version')} "
                      f"({prev['meta'].get('started')}).")
     lines.append("")
     if ev["regressions"]:
@@ -391,7 +391,7 @@ def render(cur: dict, prev: dict | None, ev: dict, history: list[dict], alpha: f
     lines.append("")
 
     if ev["failed"]:
-        lines.append("### Binaries kuna failed on")
+        lines.append("### Binaries unlace failed on")
         lines.append("")
         for key, why in sorted(ev["failed"].items()):
             new = " **(new tonight)**" if key in ev["new_failures"] else ""
@@ -407,7 +407,7 @@ def render(cur: dict, prev: dict | None, ev: dict, history: list[dict], alpha: f
             g, t = h.get("ged", {}), h.get("type_match", {})
             ratio = h.get("speed_ratio")
             sr = "" if ratio is None else f"{(ratio - 1) * 100:+.1f}%"
-            lines.append(f"| {(h.get('date') or '')[:10]} | {h.get('label') or h.get('kuna_version')} | "
+            lines.append(f"| {(h.get('date') or '')[:10]} | {h.get('label') or h.get('unlace_version')} | "
                          f"{pct(g.get('perfect', 0), g.get('measured', 0))} | "
                          f"{pct(t.get('perfect', 0), t.get('measured', 0))} | "
                          f"{h.get('cpu_total', 0):.0f} | {sr} |")

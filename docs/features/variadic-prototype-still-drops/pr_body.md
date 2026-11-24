@@ -6,7 +6,7 @@ variadic renders with one value after `"%s%s"`, though the disassembly stores
 the second pointer to `[RSP+0x20]` immediately before the call:
 
 ```
-$ kuna decompile ObfuscationFiesta.exe sub_140002530 \
+$ unlace decompile ObfuscationFiesta.exe sub_140002530 \
     --assert 'prototype sub_140001180 int format(char *out,unsigned long long size,char *fmt,...)'
     sub_140001180(v85,v103,"%s%s",v38);
 ```
@@ -15,7 +15,7 @@ It is not about varargs. The same binary loses the `va_list` of an ordinary
 non-variadic call for the same reason:
 
 ```
-$ kuna decompile ObfuscationFiesta.exe sub_140001030
+$ unlace decompile ObfuscationFiesta.exe sub_140001030
     v8 = __stdio_common_vfprintf(*v1,v11,v10,0);      /* the 5th argument is gone */
 ```
 
@@ -33,7 +33,7 @@ caller: sub $0x38,%rsp; movabs $0x123456789abcdef0,%rax; xor %rsp,%rax
         call callee
         mov 0x28(%rsp),%rcx; xor %rsp,%rcx; add %rcx,%rax; add $0x38,%rsp; ret
 EOF
-$ gcc -nostdlib -no-pie -o gs gs.s -Wl,-e,caller && kuna decompile ./gs caller
+$ gcc -nostdlib -no-pie -o gs gs.s -Wl,-e,caller && unlace decompile ./gs caller
   v2 = a0;                       /* argument 7, stored and then dropped */
   v3 = a1;                       /* argument 8 */
   v1 = callee(1,2,3,4,5,6);
@@ -68,7 +68,7 @@ recovers `callee(1,2,3,4,5,6,a0,a1)`. Promoted probe
 `gscookie_x86_64` fixture (the variadic form of the same shape) fails without
 the fix. `make test` 675/675 byte-identical, `make test-stages` 657/657 (+3, no
 pre-existing assertion moved), `make test-cli` 58/58, `make check-spec` OK,
-`kuna catalog --check` OK. Sweep over 3111 functions: 17 changed, every one an
+`unlace catalog --check` OK. Sweep over 3111 functions: 17 changed, every one an
 argument added at a call; none lost.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

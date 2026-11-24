@@ -54,7 +54,7 @@ pub(crate) fn bootstrap_retro_bytes(
 ) -> UnlaceResult<ConsoleProgram> {
     let image = retroimage::parse(path, bytes)?;
     for note in &image.notes {
-        unlace_base::notes::say_once(path, &format!("[kuna {}] {path}: {note}", image.format));
+        unlace_base::notes::say_once(path, &format!("[unlace {}] {path}: {note}", image.format));
     }
     let target = unlace_analysis::loadimage_object::explicit_language_target(target)
         .unwrap_or(image.language);

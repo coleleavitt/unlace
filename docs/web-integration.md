@@ -1,8 +1,8 @@
-# Running kuna in the browser (WebAssembly)
+# Running unlace in the browser (WebAssembly)
 
-How kuna decompiles **entirely client-side in a web browser** — the target choice, the
+How unlace decompiles **entirely client-side in a web browser** — the target choice, the
 one seam that makes it work, the virtual-filesystem mapping, the build, and the tests.
-Audience: kuna developers extending or maintaining the web front-end. The practical
+Audience: unlace developers extending or maintaining the web front-end. The practical
 "build and serve it" guide is `integrations/web/README.md`.
 
 This is a genuine in-browser decompiler: the engine runs in a module Worker as
@@ -39,7 +39,7 @@ The rejected alternative — `wasm32-unknown-unknown` + `wasm-bindgen` — gives
 JS-native API but has no filesystem, so it would require refactoring the engine's
 spec-load and image-load reads to take byte buffers. That is real engine surgery for a
 cosmetic API gain; WASI keeps the engine untouched, which is the whole point ("don't break
-kuna"). A `wasm-bindgen` reactor front-end can be added *later* as an optimization (see §7)
+unlace"). A `wasm-bindgen` reactor front-end can be added *later* as an optimization (see §7)
 without disturbing the WASI path.
 
 ## 2. Shape: a front-end crate + a browser harness
@@ -93,7 +93,7 @@ metadata.
 commands apply the same `decompile-all` driver injections (`listing`, plus
 `funcstart_patterns` and `aif` on a non-x86-64 target, each skipped when the selected mode
 names that option), so the browser inventory is exactly the target set the `project`
-export decompiles. This is where the wasm front-end deliberately diverges from `kuna
+export decompiles. This is where the wasm front-end deliberately diverges from `unlace
 functions`, which keeps enumeration cheap: in the browser the sidebar is the *only* way to
 reach a function, so an entry the inventory omits is a function the UI cannot open at all
 — not a saved analysis. The window that matters is `reliable` (500 KiB–<2 MiB), the one
@@ -103,7 +103,7 @@ mode with no discovery overrides of its own; `aggressive` already turns all thre
 **Output language.** The **Language** control alongside **Mode** carries the same three
 choices the CLI does: `auto` (the default), `C`, and `Rust`. `auto` follows the binary —
 a Rust binary renders as Rust (DIV-80) — and, exactly like `auto` mode, it is resolved by
-the ENGINE rather than by JavaScript: `kuna-web.js` passes the literal `auto` through as
+the ENGINE rather than by JavaScript: `unlace-web.js` passes the literal `auto` through as
 `--language auto` and `unlace_wasm::resolve_language` decides. Nothing sniffs the binary in
 the browser, so the browser and the CLI cannot drift apart on the policy. `project` is
 excluded on both sides (its `.c`/`.h`/`.asm` export is C-shaped end to end), and the
@@ -112,7 +112,7 @@ syntax highlighter picks its dialect from the returned text, since the caller as
 
 That makes the mode a *product* decision in the browser, not just a speed dial, so the
 page exposes it: a **Mode** control beside the file picker (`auto` — the default — plus
-`fast` / `reliable` / `aggressive`), whose value is passed to `kuna.load` and carried by
+`fast` / `reliable` / `aggressive`), whose value is passed to `unlace.load` and carried by
 the Worker session to `list`, `decompile` and `project` alike. Changing it re-indexes the
 binary already loaded, because the mode changes the inventory itself and a sidebar that
 disagrees with the bodies below it would be worse than either. Without the control a
@@ -260,7 +260,7 @@ argument set-up that was folded away maps to nothing.
 `frame` says where the function's prologue leaves its frame pointer and its stack pointer,
 each as `{register, offset}`: the register as the listing names it, lower case, and its
 value minus the stack pointer at entry, which is where every `// stack - 0x58` comment
-counts from (`unlace_console::kuna_framebase`). It is read off the raw p-code from the
+counts from (`unlace_console::unlace_framebase`). It is read off the raw p-code from the
 entry. Until the stack pointer first moves, the walk follows jumps and both ways of a
 conditional one into code it has not passed, and goes on past a conditional return or
 call, since a shrink-wrapped prologue tests its argument before it saves anything. A
@@ -354,7 +354,7 @@ it; the whole-binary `decompile` carries the fields empty (`inspect` always has 
 
 ## 3. The virtual filesystem (the whole trick)
 
-`integrations/web/kuna-worker.js` calls `integrations/web/kuna-web.js`, which drives
+`integrations/web/unlace-worker.js` calls `integrations/web/unlace-web.js`, which drives
 [`@bjorn3/browser_wasi_shim`](https://github.com/bjorn3/browser_wasi_shim)
 (vendored under `integrations/web/vendor/`, pinned in `VERSION`), a pure-JS WASI
 **preview1** implementation. For each decompile it builds a fresh instance with two
@@ -371,7 +371,7 @@ same preopen model Node's `node:wasi` uses — the parity test (`test/parity.mjs
 the identical wasm through `node:wasi`, and the glue test (`test/glue.mjs`) drives it
 through the real browser shim; both must agree with native.
 
-The page and Worker communicate through `kuna-worker-client.js`:
+The page and Worker communicate through `unlace-worker-client.js`:
 
 ```
 upload bytes → Worker `list` → address-only rows
@@ -401,7 +401,7 @@ open function after each edit (§4.2).
 Termination is intentional. WASI execution is synchronous after `wasi.start()` enters
 WebAssembly, so an ordinary cancel message cannot be handled until that call returns.
 `Worker.terminate()` is the browser primitive that can stop it while leaving the UI
-responsive. The client rejects every in-flight RPC with `KunaWorkerCancelledError`,
+responsive. The client rejects every in-flight RPC with `UnlaceWorkerCancelledError`,
 creates a clean Worker, and keeps the uploaded bytes on the page side solely to restore
 the session for the next request.
 
@@ -419,16 +419,16 @@ worker that cannot answer.
 - The decompiler reads only the **runtime** spec files — `.ldefs` + `.pspec` +
   `.cspec` + `.dwarf` (not the `.sinc`/`.slaspec` SLEIGH *source*). Those total
   just **~1.7 MB (~180 KB gzipped)** across the whole tree, so `build.sh` bundles
-  them into `specs-small.json`, which `kuna-web.js` preloads once. With them
+  them into `specs-small.json`, which `unlace-web.js` preloads once. With them
   present, `scan_language_database` can resolve **any** binary.
 - The one heavy per-language file — the **`.sla`** (~475 KB) — is the only thing
   fetched per binary. When it's absent the engine fails with
-  `Could not find .sla file for <language-id>`; `kuna-web.js` maps that id → its
+  `Could not find .sla file for <language-id>`; `unlace-web.js` maps that id → its
   `.sla` (via the `slafile=` in the ldefs it already holds), fetches it from the
   server, and retries. Fetched `.sla` are cached across decompiles.
 
 So the browser downloads the ~180 KB bundle once, then ~475 KB per distinct
-language — and supports every format/architecture kuna has a `.sla` for, with the
+language — and supports every format/architecture unlace has a `.sla` for, with the
 engine as the single source of truth (no `e_machine` parsing, no arch manifest).
 Verified end to end here: ELF (x86-64, AArch64) and Mach-O `native == wasm ==
 browser`, and a real PE executable (152 functions) through the browser lazy path.
@@ -452,12 +452,12 @@ the `specs-small.json` preload bundle. Serve `dist/` with any static file server
 /compare-samples.js   the compare section's data (samples + rival outputs)
 /CNAME                kuna.noelo.org — the custom domain, copied into the bundle
                       (decompile.run gets its own; see *Hosting on GitHub Pages*)
-/kuna-web.js /kuna-worker.js /kuna-worker-client.js /zip.js
+/unlace-web.js /unlace-worker.js /unlace-worker-client.js /zip.js
 /unlace_wasm.wasm /specs/ /specs-small.json /vendor/
 ```
 
 The engine-facing files stay at the **root** — `/decompile/` reaches them with `../`, so
-the Worker is a sibling of `kuna-web.js`/`zip.js`, the existing tests can import the glue
+the Worker is a sibling of `unlace-web.js`/`zip.js`, the existing tests can import the glue
 directly, and a project subpath still works. `app.js` resolves the wasm/spec URLs against
 its own module URL, so they stay right when the page itself moves to the root of
 decompile.run; the RPC client then sends absolute URLs to the Worker, whose own `../`
@@ -488,18 +488,18 @@ adding a comparison is a data edit (its header documents the schema; every pane 
 verbatim tool output).
 
 The samples are **mined, not chosen by hand**: `python3 -m scripts.decbench.showcase` reads
-the DecBench results tree for optimized, medium-sized functions where kuna out-scores IDA
-and no rival out-scores kuna, dumps all five panes plus the original source per candidate,
+the DecBench results tree for optimized, medium-sized functions where unlace out-scores IDA
+and no rival out-scores unlace, dumps all five panes plus the original source per candidate,
 and re-decompiles each one with the current build (`--verify`) so a shipped pane is still
-byte-for-byte what kuna prints today. Every sample carries the measured GED for the pair on
+byte-for-byte what unlace prints today. Every sample carries the measured GED for the pair on
 screen (`ged:` in the sample, rendered under the dropdowns). A mined candidate is never
 shipped unread — the selection procedure, including what disqualifies a sample, is
-`docs/decbench-loop.md` → *Finding good kuna examples*.
+`docs/decbench-loop.md` → *Finding good unlace examples*.
 
 The section shows **provenance and the measured score, and nothing else** — no captions,
 and a neutral dropdown label (`fn() — project binary, arch`); the reader draws their own
 conclusion from the two panes. The right pane defaults to IDA. The one display-only
-normalization is in `index.html`'s `tightenHeader`: kuna and Ghidra both print a blank line
+normalization is in `index.html`'s `tightenHeader`: unlace and Ghidra both print a blank line
 between a function's signature and its opening brace, and it is collapsed so the panes
 start level. It is whitespace, and only before a column-0 `{` — the committed data stays
 byte-verbatim, which is what `--verify` checks against.
@@ -513,7 +513,7 @@ domain:
 - **`decompile.run`** serves the decompiler at its root. The split moves `decompile/`, the
   glue, the Worker, the shim, the wasm and the specs into `dist-run/`, copies `assets/`,
   and derives `/index.html` from `decompile/index.html` by rewriting its relative
-  references (and pointing its *Kuna home* links at `https://kuna.noelo.org/`); it fails
+  references (and pointing its *Unlace home* links at `https://kuna.noelo.org/`); it fails
   if any other `../` reference appears. The modules stay in `/decompile/`, so their own
   `../` imports are unchanged. The workflow force-pushes `dist-run/` as one commit to
   `Noelo-Lab/decompile.run` with the `DECOMPILE_RUN_DEPLOY_KEY` deploy key, and that
@@ -544,7 +544,7 @@ The site's decompiler page: one function as **its code, assembly, bytes and stac
 linked**, with renames, retypes, prototypes, comments and byte patches that the engine
 applies, and live sessions with other people. It began as a second page for students at
 `/decompile2/` and replaced the first `/decompile/` page; the old address is gone. The
-`kuna.d2.*` storage keys and the BroadcastChannel names are unchanged, so saved sessions
+`unlace.d2.*` storage keys and the BroadcastChannel names are unchanged, so saved sessions
 carry over. The landing page and `/dev-viz/` link to it from their nav;
 it asks search engines not to index it (`<meta name="robots" content="noindex">`).
 
@@ -560,7 +560,7 @@ WCAG AA 4.5:1 on each background it sits on. Labels are plain sentence-case word
 need at first sight is off by default or one click away.
 
 ```
-| Kuna › sample.elf  13 functions  ☐ Show hints  [Open file] [Collaborate]  ⋯  ?  ☾    |
+| Unlace › sample.elf  13 functions  ☐ Show hints  [Open file] [Collaborate]  ⋯  ?  ☾    |
 |--------------------|-----------------------------------------------|------------------|
 | Search functions   | main                        Rename  Signature | Explain       ›  |
 | ▾ Your program (3) |                                               | This function    |
@@ -627,7 +627,7 @@ than `[RBP + -0x14]`, for x86, AArch64 and A32; `<symbol>` targets, strings and
 `.byte`/`.word` data are left as they are. Each row's tooltip is the engine's text,
 and every lookup (notes, idioms, stack operands, links) reads the engine's text, so
 *Exactly as decoded* changes the letters and nothing else. The first function shows a
-one-time tip (*Got it*). Settings are `kuna.d2.prefs` version 3; a version-1 record keeps
+one-time tip (*Got it*). Settings are `unlace.d2.prefs` version 3; a version-1 record keeps
 its view and its choices and takes the new defaults for the settings whose default
 changed, and a version-2 record keeps everything but its `hints` (see below).
 
@@ -652,7 +652,7 @@ draws, so nothing flashes.
 **The Explain panel.** Three parts. *What is selected*: a variable (its kind, type,
 which input it is, where it lives in words — "the stack, 80 bytes below RBP" —, the lines that use it, *Rename* and *Change type*), an instruction ("5 bytes
 at 11b5, 29 bytes into main", what the mnemonic does, its C line, *Replace with NOP*,
-*Edit bytes*, *Add a note*), a C line (its instructions, and each note kuna left at its
+*Edit bytes*, *Add a note*), a C line (its instructions, and each note unlace left at its
 end — `// branch-flip`, `// no-return`, `// early-return x10` — in words, which the hover
 card shows too) or a stack slot. The page keeps those notes out of the code it shows
 (and so out of what is copied from it, the Assembly headings and the `x` rows): it takes
@@ -687,10 +687,10 @@ source tree):
 | `groups.js` | the function list's three groups and the function to open first |
 | `bytes-view.js` / `arch.js` | the hex dump and the patched file; no-op fills |
 | `mnemonics.js` / `stack-frame.js` / `xrefs-view.js` / `help.js` | instruction notes and idioms; the frame diagram; calls and callers in words and the `x` cross-references dialog; the help dialog |
-| `wrap-c.js` / `tags.js` | where a long C line splits (the Hex-Rays rules); kuna's end-of-line notes (`// branch-flip`, `// early-return x10`) taken out of the shown code and kept by line, in words, for the Explain panel and the hover card |
+| `wrap-c.js` / `tags.js` | where a long C line splits (the Hex-Rays rules); unlace's end-of-line notes (`// branch-flip`, `// early-return x10`) taken out of the shown code and kept by line, in words, for the Explain panel and the hover card |
 | `strings-view.js` | the sidebar's Strings list: its three groups, the users of each string, the search and the row cap |
 | `data-view.js` | the Data tab's rows: the items and unlabelled bytes of a window, values decoded by type, the page's own declarations as layouts, who uses an item |
-| `prefs.js` / `addr.js` | view settings (`kuna.d2.prefs`, v3 with the v1 and v2 migrations) and `hintsOn`; addresses as hex strings and BigInt |
+| `prefs.js` / `addr.js` | view settings (`unlace.d2.prefs`, v3 with the v1 and v2 migrations) and `hintsOn`; addresses as hex strings and BigInt |
 | `collab/` | *Working together* (below), loaded with a dynamic `import()` only when a session starts or an invite or reply link is opened: `collab.js` (dialogs, the roster, following), `sync.js` (the page's side: the Session ⇄ register sync, joining and leaving, where a session is stored), `group.js` (the protocol: hello, snapshots, relayed introductions, file transfer, digests, limits), `link.js` (WebRTC and BroadcastChannel links), `replica.js` (registers, `validOp`, digests, the register-based undo), `wire.js` (messages and their checks, invite and reply codes), `sdp.js`, `presence.js` (pointers and pings), `collab.css`; all but `collab.js`, `link.js` and `presence.js` are DOM-free (SHA-256 is `../sha256.js`, shared with the page) |
 
 **Linking.** Every pane shares one index: a C line's instructions are the union of the
@@ -826,16 +826,16 @@ show, so they say they need the C view (⋯ → *Show code as* → C) instead of
 dialog. The Explain panel reads the parameters from the Rust signature.
 
 **Export and persistence.** *Export changes* (the ⋯ under *Your changes*) downloads
-`<binary>.kuna`: a `#` header (binary,
+`<binary>.unlace`: a `#` header (binary,
 hash, time, and the replay command `unlace decompile <binary> <function> --assert
-@<binary>.kuna`) then one directive per line, which the native CLI replays verbatim.
+@<binary>.unlace`) then one directive per line, which the native CLI replays verbatim.
 Import reads the same format; an unqualified function-scoped line binds to the open
 function, and a directive the page does not model is kept verbatim. The session is also
-saved in `localStorage` per binary — `kuna.d2.session.<hash>`, the SHA-256 of the bytes
+saved in `localStorage` per binary — `unlace.d2.session.<hash>`, the SHA-256 of the bytes
 (computed in JS outside a secure context, where WebCrypto is missing; what an earlier
 version stored there under its FNV-1a key is found and moved to the SHA-256 key, and that
 key, two passes over the whole program, is worked out only when such an entry exists), at
-most 20 binaries (`kuna.d2.index`, least recently used evicted; a full or throwing store
+most 20 binaries (`unlace.d2.index`, least recently used evicted; a full or throwing store
 never breaks the page; when storage is full, copies of live sessions kept apart are
 evicted before any of the student's own) — and loading the same file again restores it: a
 toast, and a "Restored N changes from last time. Discard them" banner in *Your changes*.
@@ -978,7 +978,7 @@ starts the session decides it for all its links, and a guest's page answers an i
 that carries an internet address (`crossesNetworks` in `sdp.js`) with STUN too, so the
 guest has no box and the join dialog says that joining shares their address. Introductions
 inside the session follow the same choice. The box is remembered in the `localStorage` key
-`kuna.d2.collab` (`"stun": true`, or a `"stun:host:port"` URL for another server), which
+`unlace.d2.collab` (`"stun": true`, or a `"stun:host:port"` URL for another server), which
 also keeps the name last used. If STUN finds no internet address, the invite says the link
 may work only on that network. Pairs that STUN cannot connect (symmetric NATs, networks
 that block UDP) need a TURN relay, a server that carries the encrypted traffic and the
@@ -1032,7 +1032,7 @@ renames it, it is gone on every page, rather than half kept on some.
 
 *Joining.* On every link the pages exchange a hello (protocol version, build id,
 program SHA-256, name, colour); a different protocol or build is refused with "Ben's page
-is a different version of Kuna; reload both". The build id is the SHA-256 of the exact
+is a different version of Unlace; reload both". The build id is the SHA-256 of the exact
 wasm bytes this page's engine compiled, hashed while they compile (about 40 ms for the
 12 MB engine with WebCrypto; about half a second on a page served over plain HTTP, which
 has none), so it always describes the engine that runs, whatever the server holds by
@@ -1078,12 +1078,12 @@ session, since the page no longer has the program. A page that goes into the bro
 back/forward cache leaves the session, and says so when it comes back.
 
 *Where a session is stored.* The inviter, and a newcomer who had the program open, keep
-the session as their own (`kuna.d2.session.<hash>`). A newcomer who receives the program
+the session as their own (`unlace.d2.session.<hash>`). A newcomer who receives the program
 while having changes of their own stored for it, which the session does not already hold
-all of, keeps the two apart. The session is saved under `kuna.d2.shared.<hash>` (at most
-5 programs, least recently used evicted, indexed in `kuna.d2.shared.index`) and never
+all of, keeps the two apart. The session is saved under `unlace.d2.shared.<hash>` (at most
+5 programs, least recently used evicted, indexed in `unlace.d2.shared.index`) and never
 over the newcomer's own, as soon as the join completes. The session dialog offers *Save
-them as a file* (a `.kuna` qualified with their own function names). On leaving, their
+them as a file* (a `.unlace` qualified with their own function names). On leaving, their
 own changes come back, and a toast offers to keep the session's changes instead; that
 offer does nothing once another program is open, or while the page is in a session
 again. The session's copy stays saved: opening the program again later offers it once
@@ -1153,7 +1153,7 @@ far more than any edits do; ops that go faster could otherwise bring every count
 a page that goes faster, does not link to it again in that session, and says so ("Cy's
 page sent changes this page cannot accept"). The value rules are the page's own dialogs' rules, from one function in
 `session.js`: a length cap per kind, no control characters (a newline or a line
-separator would start a second directive in an exported `.kuna` file), no `#` that
+separator would start a second directive in an exported `.unlace` file), no `#` that
 starts a comment, and never a form that makes the engine read a file (`@FILE`, `bytes
 ADDR @FILE`, an `@` in a type). A page's own change that others would refuse stays on
 that page, and it says so; each later value is checked again. The same holds for what a
@@ -1215,7 +1215,7 @@ skips it as too costly):
    `--language rust` so the second output language is proven to cross the boundary too),
    plus `strings` on `crackme.elf` and `inspect make_item` (its type definitions) on
    `structs.elf`. This proves the port is faithful, not degraded.
-2. **`test/glue.mjs`** — imports the shipped `kuna-web.js` (which drives the vendored
+2. **`test/glue.mjs`** — imports the shipped `unlace-web.js` (which drives the vendored
    `@bjorn3` shim) and decompiles over HTTP against `dist/`, exercising the exact browser
    code path minus the DOM — and specifically the **robust lazy-spec mechanism**: it
    preloads only `specs-small.json`, then decompiles an ELF (x86-64), an ELF (AArch64), and
@@ -1248,13 +1248,13 @@ skips it as too costly):
    spelling and the exact one, branch arrows, hover placement, the settings and their
    version-1 migration, the type definitions above a function), **`test/decompile-wrap.mjs`**
    (where long C lines split under the Hex-Rays rules, that only spaces and redundant
-   brackets go, the rows' hanging blocks, kuna's end-of-line notes in
+   brackets go, the rows' hanging blocks, unlace's end-of-line notes in
    words and taken out of the code, the `x` dialog's helpers, instruction grouping by basic block from `flow`),
    **`test/decompile-groups.mjs`** (which group a function lands
    in, `main` first, the function opened first),
    **`test/decompile-session.mjs`** (directive merging and pinning, unqualified vs
    qualified output after a function rename, parameters via `prototype`, byte runs, the
-   `.kuna` and JSON round trips, the CLI's `#`-comment rule, outcomes, undo/redo, the
+   `.unlace` and JSON round trips, the CLI's `#`-comment rule, outcomes, undo/redo, the
    store's LRU and quota handling (a session's copies evicted before the student's own), the hash vectors, the old FNV key worked out only when one is stored), **`test/decompile-bytes.mjs`**
    (every instruction's file offset and bytes against `sample.elf`, the patched file, the
    `.data`/`.bss` boundary, every no-op fill) and **`test/decompile-learn.mjs`** (a note
@@ -1434,7 +1434,7 @@ Thumb prologues behind a conditional call or return). **PE** executables were
 verified separately against a real PE (152 functions) through the browser lazy path; no
 benign PE is committed because this environment has no PE linker.
 
-## 6. Guarantees (why this doesn't break kuna)
+## 6. Guarantees (why this doesn't break unlace)
 
 - No decompiler-core changes: the wasm target reuses the native code paths verbatim. The
   console tier hosts the **shared** decompile-project core (`unlace_console::project`, moved
@@ -1485,7 +1485,7 @@ benign PE is committed because this environment has no PE linker.
   no longer monopolizes the UI thread.
 
 - **Supports whatever the CLI supports** — every format (ELF/PE/Mach-O/COFF) and every
-  architecture kuna ships a `.sla` for, resolved by the engine with no per-format JS (§3).
+  architecture unlace ships a `.sla` for, resolved by the engine with no per-format JS (§3).
   Object files (`.o`/Mach-O `MH_OBJECT`) decompile to thin bodies — an engine-level
   relocation limit, not a demo one; linked executables are unaffected.
 - **Re-bootstraps per request** — a WASI *command* module runs `_start` and exits. The UI
@@ -1504,7 +1504,7 @@ benign PE is committed because this environment has no PE linker.
 ## 8. Pointers
 
 - Harness & commands: `integrations/web/README.md`
-- Browser worker boundary: `integrations/web/{kuna-worker.js,kuna-worker-client.js}`
+- Browser worker boundary: `integrations/web/{unlace-worker.js,unlace-worker-client.js}`
 - The decompiler page: `integrations/web/decompile/` (module table in §4.2); its tests
   `integrations/web/test/decompile-*.mjs`, the CDP
   driver `test/cdp-client.mjs`, the

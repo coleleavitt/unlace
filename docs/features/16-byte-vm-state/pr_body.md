@@ -1,11 +1,11 @@
 ## The problem
 
 A VM interpreter keeps two four-word register banks in 16 bytes of stack each
-and swaps them with a `movdqa`/`movaps` quartet. kuna declares both banks as
+and swaps them with a `movdqa`/`movaps` quartet. unlace declares both banks as
 `char [16]` and then prints the swap one byte wide.
 
 ```
-$ kuna decompile KataVM_L1 0x12d0 --addr
+$ unlace decompile KataVM_L1 0x12d0 --addr
 unsigned long sub_12d0(void)
 {
   ...
@@ -31,7 +31,7 @@ variable is spelled two ways for accesses four times apart in width.
 To see it without the crackme, on the fixture this PR vendors:
 
 ```
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/arraycoverwidth_x86_64 vm \
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/arraycoverwidth_x86_64 vm \
       --option arraycoverwidth off
   v2[0] = 0;
   v3[0] = 0;
@@ -43,7 +43,7 @@ $ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/arraycoverwidth_
 
 - `PrintC::pushSymbolDetail` sends a symbol-mapped access into
   `pushPartialSymbol`, whose walk breaks out at the top on a whole-symbol cover
-  and leaves the caller to render. kuna's caller has a whole-array
+  and leaves the caller to render. unlace's caller has a whole-array
   `name[index]` branch computing `index = symboloff / elementAlignSize` that
   never reads the access size, so every full-width cover printed element zero.
 - `option arraycoverwidth` (default on) suppresses that top-of-walk break for a
@@ -70,7 +70,7 @@ Seven existing stage assertions moved and all seven are the same defect —
 `v1[0] = (char[8])msg._0_8_` and `CONCAT124(v3[0],a1)` (a twelve-byte read) are
 the clearest. `make test` PARITY OK 675/675 (0 changed), `make test-stages`
 PARITY OK 640/640, `make check-spec` OK lenient + strict, `make test-cli` 42/42,
-`kuna catalog --check` OK. `decompile-all` over 40 images changed 1,979 lines
+`unlace catalog --check` OK. `decompile-all` over 40 images changed 1,979 lines
 and every one is a 1:1 token substitution: after erasing the `._N_M_` suffix and
 the `[0]` subscript the removed and added line multisets are identical on every
 file, so no statement was added, deleted or re-anchored.

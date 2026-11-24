@@ -3,10 +3,10 @@
 # Source: angr testcase test_decompiling_x8664_cvs :: main (binary
 # binaries/tests/x86_64/cvs, x86-64, gcc).  angr's variable recovery yields
 # exactly one variable per storage location, so its declaration block lists
-# each local once.  kuna's C printer instead walks HighVariables (the W4
+# each local once.  unlace's C printer instead walks HighVariables (the W4
 # ScopeLocal Symbol walk is the missing surface), so when the angr-style
 # naming maps many distinct scalar HighVariables that share one stack slot to
-# the SAME name + type + storage, kuna emits one declaration line PER HIGH: a
+# the SAME name + type + storage, unlace emits one declaration line PER HIGH: a
 # wall of textually identical declarations.  The function body refers to all of
 # them by the one shared name, so the duplicate declaration LINES are pure noise
 # (and, strictly, invalid C re-declarations).
@@ -18,7 +18,7 @@
 # milder but identical in kind: slot 'stack - 0x58' is declared 4 times.
 #
 # Stage model: S9 (Surface Rendering), PrintC::emit_local_var_decls, the
-# local-declaration symbol-vs-high walk (naming-policy sub-stage).  kuna already
+# local-declaration symbol-vs-high walk (naming-policy sub-stage).  unlace already
 # collapses this for COMPOSITE (array/struct/union) mapped symbols; this is the
 # scalar analogue, gated so default output is byte-identical.
 #
@@ -33,10 +33,10 @@
 #   Pass 2 (option dedupvardecls on): each slot declared exactly 1x - the fix.
 # So slot 0x58 totals 4 + 1 = 5 and slot 0x3c totals 1 + 1 = 2.  A broken fix
 # (no collapse: 8 / >=3) or an over-eager collapse (under 5 / under 2) fails.
-# (kuna: since the addr-tied merge coalescing fix (VariablePiece grouping no longer
+# (unlace: since the addr-tied merge coalescing fix (VariablePiece grouping no longer
 # aborts on a reused stack slot), the OFF pass already coalesces 0x3c to 1x, so its
 # total dropped from 3 to 2; dedupvardecls is still exercised by the 0x58 case.)
-# (kuna GH-181: the snipReads INDIRECT carve-out places cover-trim COPYs after
+# (unlace GH-181: the snipReads INDIRECT carve-out places cover-trim COPYs after
 # the effect-causing call, so the S6 merge now coalesces the reused 0x58 slot
 # too: both slots are 1x in the OFF pass and each totals 1 + 1 = 2.  The
 # collapse feature itself is exercised by ghdec-symbol-keyed-local-decls,
@@ -68,9 +68,9 @@ hex = '7aa1f6ff6ea1f6ffb096f6ffb197f6ff45a1f6ff7aa1f6ff7aa1f6ff7aa1f6ff7aa1f6ff7
 
 [script]
 commands = [
-    # kuna: stackguard is now default-on (DIV-14) and strips the -fstack-protector canary epilogue in this cvs main, changing the 0x3c decl count. It is not the flag under test here, so keep it off for both passes (the off-baseline these dedupvardecls assertions were pinned against).
+    # unlace: stackguard is now default-on (DIV-14) and strips the -fstack-protector canary epilogue in this cvs main, changing the 0x3c decl count. It is not the flag under test here, so keep it off for both passes (the off-baseline these dedupvardecls assertions were pinned against).
     'option stackguard off',
-    # kuna: repstring (default-on) prints this main's inlined `repz cmpsb` compares as builtin_memcmp, which retypes and renumbers the locals counted below. It is not the flag under test here either, so it is off for both passes.
+    # unlace: repstring (default-on) prints this main's inlined `repz cmpsb` compares as builtin_memcmp, which retypes and renumbers the locals counted below. It is not the flag under test here either, so it is off for both passes.
     'option repstring off',
     'option dedupvardecls off',
     'lo fu main',

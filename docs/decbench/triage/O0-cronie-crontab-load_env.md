@@ -52,7 +52,7 @@ Table at `.rodata:0xd2bc`, 7 valid entries (`d2bc + sext(int32)`):
   }
 ```
 
-### kuna (stored, benchmark run) — GED 177
+### unlace (stored, benchmark run) — GED 177
 
 ```c
   if (*a0 == '\0') { ... tail ... }
@@ -61,7 +61,7 @@ Table at `.rodata:0xd2bc`, 7 valid entries (`d2bc + sext(int32)`):
   return (*(code *)(v2 + 0xd2bc))();
 ```
 
-### kuna (fresh, today's build)
+### unlace (fresh, today's build)
 
 `unlace decompile-all <stripped> --addr 0x983d` (the exact call decbench scores, `--mode auto` = `aggressive`) — **unchanged**, and note the constant-folded `state` leaking into the printf:
 
@@ -122,7 +122,7 @@ story of this case.
 ## Analysis
 
 **Structural symptom (one).** The 7-case `switch (state)` dispatch at `0x9910` is not
-recovered: kuna emits either `return (*(code *)(v2 + 0xd2bc))(); // jump-as-call` or a
+recovered: unlace emits either `return (*(code *)(v2 + 0xd2bc))(); // jump-as-call` or a
 degenerate one-entry `switch(state) { case 0x9913: goto label_9913; }` whose case label is
 the folded *target address*. The consequence is a whole-function structural loss — the
 `while` loop and 3 of the 4 distinct case bodies (~100 lines, `0x993f`/`0x99ed`/`0x9a54`)
@@ -140,7 +140,7 @@ target itself: `JumpTable::recoverAddresses` yields 0 entries (→ `Err` →
 `FlowInfo::truncateIndirectJump` → `CALLIND` + `"Treating indirect jump as call"`) or 1
 entry labelled with the target address.
 
-kuna's escape hatch for exactly this situation — upstream's multistage recovery — is
+unlace's escape hatch for exactly this situation — upstream's multistage recovery — is
 stubbed out:
 
 - `p2_lift/jumptable.rs:5196` `JumpTable::check_for_multistage` returns
@@ -172,8 +172,8 @@ value set* (`{0,3}` → indices 0..3), not the guard bound (7).
 
 **Why the reference wins.** IDA (and angr/binja/phoenix, GED 15/13/5) bound the table from
 the CFG guard `cmp state,6; ja` before any value analysis, so the undecoded case bodies do
-not matter. Ghidra loses the same way kuna does (GED 170, `"Could not recover jumptable at
-0x00109910. Too many branches"`), so this is an inherited upstream limitation, not a kuna
+not matter. Ghidra loses the same way unlace does (GED 170, `"Could not recover jumptable at
+0x00109910. Too many branches"`), so this is an inherited upstream limitation, not a unlace
 regression — but it is the entire 177-point margin, and it is *not* a metric artifact:
 source CFG is 56 nodes / 82 edges, `approximated: false`, and IDA's 126-line pane is a
 faithful rendering of the source state machine.
@@ -192,7 +192,7 @@ incidental dataflow side effect, not a fix.)
 
 ## Proposed fix
 
-New P2 option, suggested slug **`switchstagedindex`** (`p2_lift/kuna_switchstagedindex.rs`,
+New P2 option, suggested slug **`switchstagedindex`** (`p2_lift/unlace_switchstagedindex.rs`,
 canonical `loweredswitch.rs` template). Two candidate mechanisms:
 
 **(a) Un-fold the index in the recovery partial (smaller, provably sufficient here).**

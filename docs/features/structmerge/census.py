@@ -5,8 +5,8 @@ Joins three views of the same eight builds:
 
   * DWARF ground truth for every pointer-to-struct PARAMETER (structscore's own
     `dwarf_functions`, the layout instrument's denominator);
-  * kuna's `decompile-all --json` + `decompile-project` header, which says which
-    of those parameters kuna typed as a record and with which fields
+  * unlace's `decompile-all --json` + `decompile-project` header, which says which
+    of those parameters unlace typed as a record and with which fields
     (structscore's `measure_layout`, field for field);
   * an `SSCENSUS` stderr line per candidate base from a census build of the
     pass, which says what the function actually dereferenced (pre-prune), what
@@ -14,7 +14,7 @@ Joins three views of the same eight builds:
 
 Usage (from the worktree root, with DECBENCH_PIN set):
 
-    KUNA_CENSUS_BIN=<census build of kuna> CENSUS_OUT=/tmp/census.json \
+    UNLACE_CENSUS_BIN=<census build of unlace> CENSUS_OUT=/tmp/census.json \
         ~/.virtualenvs/decbench/bin/python docs/features/structmerge/census.py
 """
 import json, os, re, subprocess, sys, tempfile, shutil
@@ -31,7 +31,7 @@ from scripts.decbench import structscore as SS
 RES = Path("/home/mahaloz/github/decbench/results/full_run_address_2026-09-11")
 BINS = [("fmt", "O0"), ("fmt", "O2"), ("ls", "O0"), ("ls", "O2"),
         ("sort", "O0"), ("sort", "O2"), ("du", "O0"), ("du", "O2")]
-CENSUS_BIN = os.environ["KUNA_CENSUS_BIN"]   # a build with census.patch applied
+CENSUS_BIN = os.environ["UNLACE_CENSUS_BIN"]   # a build with census.patch applied
 OPTS = ["--option", "structsynth", os.environ.get("CENSUS_MODE", "param")]
 
 # x86-64 SLEIGH register-space offsets of the SysV integer argument registers,
@@ -58,7 +58,7 @@ def slots(text):
 def run(binary):
     """(json payload, header text, census lines by function address)."""
     cmd = [CENSUS_BIN, "decompile-all", str(binary), "--json", "--max-fn-seconds", "120"] + OPTS
-    env = dict(os.environ, KUNA_SS_CENSUS="1")
+    env = dict(os.environ, UNLACE_SS_CENSUS="1")
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=3600, env=env)
     payload = json.loads(p.stdout)
     census = {}
@@ -90,9 +90,9 @@ def run(binary):
 
 
 def arg_of_base(base, fnvars):
-    """The kuna argument index of a census base, or None.
+    """The unlace argument index of a census base, or None.
 
-    kuna's own parameter list says how many register-class integer arguments the
+    unlace's own parameter list says how many register-class integer arguments the
     function has and in which source positions; the census base's register
     offset says which of those it is.
     """
@@ -167,13 +167,13 @@ def measure(binary, twin):
             row = {"binary": binary.name, "fn": low, "arg": param["index"],
                    "gt_name": gtl.get("name"), "gt_keys": gt_keys_l,
                    "gt_fields": len(gt_real), "gt_size": gtl.get("size"),
-                   "kuna_saw_fn": fn is not None, "reached_pass": low in census}
+                   "unlace_saw_fn": fn is not None, "reached_pass": low in census}
             predicted = None
             if fn:
                 for v in fnvars:
                     if v.get("arg_index") == param["index"]:
                         rec = SS.parse_type(v.get("type"))
-                        row["kuna_type"] = v.get("type")
+                        row["unlace_type"] = v.get("type")
                         if rec["kind"] == "struct":
                             predicted = layouts.get(rec["base"])
                         break
@@ -207,7 +207,7 @@ def measure(binary, twin):
                 row["claimed_fields_only"] = len(fo)
                 row["tp_fields_only"] = sum(
                     1 for f in fo if (f["offset"], f["size"]) in gt_keys)
-                row["struct_name"] = SS.parse_type(row.get("kuna_type") or "")["base"]
+                row["struct_name"] = SS.parse_type(row.get("unlace_type") or "")["base"]
                 row["tp"] = sum(1 for f in claimed if (f["offset"], f["size"]) in gt_keys)
                 # a GT field the reader touched, kept through the prune, yet the
                 # installed record does not claim at its (offset,size)

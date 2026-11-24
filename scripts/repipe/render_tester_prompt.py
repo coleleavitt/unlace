@@ -5,7 +5,7 @@ the newly-closed needs the tester is asked to re-exercise, the already-filed nee
 NOT write up again, and the per-challenge time budget derived from the binary's size.
 
 The KNOWN_NEEDS block is the cheapest duplicate-suppression the pipeline has. Without it,
-round 4's three testers each write a fresh essay about kuna having no xrefs; with it they
+round 4's three testers each write a fresh essay about unlace having no xrefs; with it they
 note the hit and move on, and the need's `instances` count does the talking.
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ import sys
 from . import config
 from ..atomic import atomic_text_writer
 
-TOKENS_DOC = "{{KUNA}} and {{BIN}}"
+TOKENS_DOC = "{{UNLACE}} and {{BIN}}"
 
 
 def _meta(hexid):
@@ -28,7 +28,7 @@ def _meta(hexid):
 
 
 def _time_budget_minutes(meta):
-    """Sized from the binary, because kuna's cost is dominated by whole-binary work.
+    """Sized from the binary, because unlace's cost is dominated by whole-binary work.
 
     The `auto` mode cutovers are 512,000 and 2,097,152 bytes; the worst measured case on
     this machine is 445 s at 1,476 MiB RSS for a 3.4 MB PE, so a big target needs a bigger
@@ -74,7 +74,7 @@ def _recently_shipped(rounds_back=1):
     if shipped:
         lines += ["## Newly available capabilities — exercise them",
                   "",
-                  "These are things kuna could not do last round. Try them. If one does not behave",
+                  "These are things unlace could not do last round. Try them. If one does not behave",
                   "as described that is a **regression**: file it with `regression_of: <need_id>`,",
                   "the highest-priority class we accept.",
                   ""]
@@ -127,7 +127,7 @@ def _known_needs(limit=12):
         pass
     lines = ["## Already filed — do NOT write these up again",
              "",
-             "If you hit one of these, say so in one line in `what_kuna_did` and move on.",
+             "If you hit one of these, say so in one line in `what_unlace_did` and move on.",
              "Re-filing it does not help; the pipeline counts your hit either way.",
              ""]
     for n in open_needs[:limit]:
@@ -151,11 +151,11 @@ def _obfuscation_line(meta):
 
 def _ida_line():
     if not config.ENABLE_IDA:
-        return "- IDA is **not** available this round. kuna and the binutils are all you have."
+        return "- IDA is **not** available this round. unlace and the binutils are all you have."
     return (
         "- `ida-decompile` is IDA Pro 9.2 via declib, and it is a **last resort**, not a\n"
         "  parallel track. Every call is logged. When you use it, you must record what you\n"
-        "  wanted from kuna and why kuna could not give it to you — that comparison is the\n"
+        "  wanted from unlace and why unlace could not give it to you — that comparison is the\n"
         "  single most useful thing you can produce."
     )
 

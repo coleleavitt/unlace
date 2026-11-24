@@ -1,7 +1,7 @@
 ## The problem
 
 A PE may place its Import Address Table in an executable/read-only section. In
-that shape kuna marked each slot both `readonly` and `externref`, but P3 folded
+that shape unlace marked each slot both `readonly` and `externref`, but P3 folded
 the read to the bytes stored in the file before `ActionDeindirect` could use the
 import identity. Those bytes are a hint/name RVA, not the function address the
 loader writes at run time, so `GetDlgItemTextA(...)` became a call through raw

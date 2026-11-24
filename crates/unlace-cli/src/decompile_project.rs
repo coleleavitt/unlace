@@ -177,7 +177,7 @@ fn usage() {
          \x20                   [--raw-image --target T --base VMA (--entry|--addr VMA)..]\n\
          \n\
          Decompile a whole binary in one in-process load and write a project folder\n\
-         (default `<binary-filename>.kuna/` next to the binary; -o DIR overrides):\n\
+         (default `<binary-filename>.unlace/` next to the binary; -o DIR overrides):\n\
          \x20 <name>.c    every selected executable function (#include \"<name>.h\")\n\
          \x20 <name>.h    recompile prelude + type definitions + globals named by\n\
          \x20             address + prototypes\n\
@@ -253,7 +253,7 @@ pub(crate) fn decompile_project(
         None => binary_path
             .parent()
             .ok_or_else(|| format!("binary has no parent directory: {}", binary_path.display()))?
-            .join(format!("{file_name}.kuna")),
+            .join(format!("{file_name}.unlace")),
     };
 
     let load_started = std::time::Instant::now();

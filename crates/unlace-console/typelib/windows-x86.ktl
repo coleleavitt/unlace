@@ -1,4 +1,4 @@
-kuna-typelib 1
+unlace-typelib 1
 target windows x86
 source til mssdk_win10.til + ntapi_win10.til, exports of wine-10.0
 T ABC *	struct _ABC

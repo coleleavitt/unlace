@@ -1,5 +1,5 @@
-// kuna-web.js — run the kuna decompiler entirely in the browser, for WHATEVER
-// binary the CLI supports (ELF / PE / Mach-O / COFF, every architecture kuna
+// unlace-web.js — run the unlace decompiler entirely in the browser, for WHATEVER
+// binary the CLI supports (ELF / PE / Mach-O / COFF, every architecture unlace
 // ships a `.sla` for). Exposes `list` (enumerate functions), `decompile` (one
 // function or all of them), `project` (whole-binary .c/.h/.asm/README
 // export — the "Download Binary Source" zip), and the study-view commands
@@ -136,7 +136,7 @@ function parseLdefs(text, dir, map) {
  * @param {string} [opts.smallBundleUrl]  URL of specs-small.json (default:
  *                                         `${specRoot}-small.json`)
  */
-export async function loadKuna({ wasmUrl, specRoot, smallBundleUrl, engine = null, onSpec = null }) {
+export async function loadUnlace({ wasmUrl, specRoot, smallBundleUrl, engine = null, onSpec = null }) {
   const base = specRoot.replace(/\/$/, '');
   const bundleUrl = smallBundleUrl || `${base}-small.json`;
 

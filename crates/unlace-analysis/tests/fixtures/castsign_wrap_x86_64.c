@@ -1,4 +1,4 @@
-/* (kuna castsign) Values the program compares signed, read with strtoul so a
+/* (unlace castsign) Values the program compares signed, read with strtoul so a
  * test can pass the edges of the range.  The first five do unsigned arithmetic
  * on the value (a decrement, an increment, a difference, a self-update) whose
  * result the program compares signed.  That arithmetic wraps at 2^63 (2^31 for
@@ -7,7 +7,7 @@
  * unsigned.  sign_of and sign_of32 only compare, assign and mask the value, so
  * `castsign` declares it signed; peek also indexes a string with it, which at
  * -O1 is a register local only `castsign` re-declares.  The round-trip test in
- * unlace-cli/tests/decompile_all_cli.rs compiles the functions as kuna prints
+ * unlace-cli/tests/decompile_all_cli.rs compiles the functions as unlace prints
  * them with gcc and clang at -O0 and -O2, and checks that each build prints
  * what this program prints:
  *

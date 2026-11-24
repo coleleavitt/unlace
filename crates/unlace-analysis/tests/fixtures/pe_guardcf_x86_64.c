@@ -1,4 +1,4 @@
-/* Control Flow Guard and delay-load fixture for kuna. Built without a C runtime:
+/* Control Flow Guard and delay-load fixture for unlace. Built without a C runtime:
    this file supplies the load configuration, the guard stubs and the delay-load helper. */
 typedef unsigned long long u64;
 

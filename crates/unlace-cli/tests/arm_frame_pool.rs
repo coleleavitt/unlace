@@ -28,7 +28,7 @@ fn decompile(path: &Path, frames: &str, pools: &str) -> Value {
             pools,
         ])
         .output()
-        .expect("run source-built kuna");
+        .expect("run source-built unlace");
     assert!(
         out.status.success(),
         "{}",

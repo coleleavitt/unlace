@@ -12,15 +12,15 @@
     "The second tightening came from the same measurement: restricting the rule to a callee that writes NO part of the return storage. Without it, a SysV callee that writes RAX and not RDX had RDX narrowed too, which moved the rustabi negative control.",
     "The acceptance probe was re-cut onto a fixture the repo owns. `pe_cookiecheck_x86_64.exe` (1.5 KB, generator `pe_cookiecheck_x86_64.py`, built on `crtmain_x86_64.py`'s CRT startup so entrymainproto gives main a prototype) reproduces the witness symptom verbatim: `return sub_140001080(v1);` with the option off, `sub_140001080(...); return 0;` by default.",
     "Instance 2 (69d6e9ba, the void wipe helper) was not separately confirmed: its binary `almost` is in the sweep and 3 of its 398 functions change, but the tester named the helper themselves and the address is not recorded in the need.",
-    "The workspace suite was the last gate to clear and it was red for two unrelated reasons, only one of which was real. (1) verify_w10_proto_unlock's oracle assertion compares kuna against a C++ decomp_test_dbg resolved from KUNA_DECOMP_TEST; the RE-pipeline worker points that variable at the worktree's OWN kuna binary, so kuna is graded against itself and can never print the C++ spelling `xunknown4` (kuna prints `unsigned int` by DIV-6 realtypes, patched or not). CI leaves the variable unset, the C++ tree no longer exists, and the oracle block is skipped -- the suite is therefore run here as `env -u KUNA_DECOMP_TEST make rust-test`. This is environmental and not attributable to this branch. (2) The one REAL failure was `options_md_matches_the_generator_byte_for_byte`: the `calleepreserves` summary was amended in this branch to hand the call's return storage to `calleeretpreserves`, but docs/options.md was never regenerated (417,299 generated vs 417,250 committed, a single line). Regenerated; the suite is now 5,989 passed / 0 failed across 371 targets."
+    "The workspace suite was the last gate to clear and it was red for two unrelated reasons, only one of which was real. (1) verify_w10_proto_unlock's oracle assertion compares unlace against a C++ decomp_test_dbg resolved from UNLACE_DECOMP_TEST; the RE-pipeline worker points that variable at the worktree's OWN unlace binary, so unlace is graded against itself and can never print the C++ spelling `xunknown4` (unlace prints `unsigned int` by DIV-6 realtypes, patched or not). CI leaves the variable unset, the C++ tree no longer exists, and the oracle block is skipped -- the suite is therefore run here as `env -u UNLACE_DECOMP_TEST make rust-test`. This is environmental and not attributable to this branch. (2) The one REAL failure was `options_md_matches_the_generator_byte_for_byte`: the `calleepreserves` summary was amended in this branch to hand the call's return storage to `calleeretpreserves`, but docs/options.md was never regenerated (417,299 generated vs 417,250 committed, a single line). Regenerated; the suite is now 5,989 passed / 0 failed across 371 targets."
   ],
   "gates": {
     "make test": "PARITY OK 675/675",
     "make test-stages": "PARITY OK 683/683 (677 -> 683, additive)",
     "make test-cli": "74/74",
     "make check-spec": "green",
-    "kuna catalog --check": "catalog OK",
-    "make rust-test": "5,989 passed / 0 failed across 371 targets (run as `env -u KUNA_DECOMP_TEST make rust-test`; see decisions)"
+    "unlace catalog --check": "catalog OK",
+    "make rust-test": "5,989 passed / 0 failed across 371 targets (run as `env -u UNLACE_DECOMP_TEST make rust-test`; see decisions)"
   },
   "sweep": {
     "binaries": 28,

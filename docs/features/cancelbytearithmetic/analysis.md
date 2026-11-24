@@ -3,7 +3,7 @@
 ## Symptom
 
 `crackme_shroud.exe` constructs `"Usage: %s <password>\n"` in a declared
-`char usage[22]`, but kuna splits the initializer around byte `usage[0xf]`:
+`char usage[22]`, but unlace splits the initializer around byte `usage[0xf]`:
 
 ```c
 builtin_strncpy(usage,"Usage: %s <pass",0xf);

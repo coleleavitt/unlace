@@ -1,4 +1,4 @@
-# kuna #1180: rejoining split conditions left an exit phi with three inputs
+# unlace #1180: rejoining split conditions left an exit phi with three inputs
 # after its CFG lost one predecessor, then calc_nz_mask indexed a third edge.
 # P8 conditional joining must discover and repair every exit phi even when
 # stack analysis has rewritten an earlier phi into arithmetic in place.

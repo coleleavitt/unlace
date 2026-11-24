@@ -89,7 +89,7 @@ rare outside a vectorised byte loop, which is what makes it inert rather than ri
 | `make test-stages` | **PARITY OK 628/628** (620 + this feature's 8) — no per-test opt-out, no baseline re-pin |
 | `make rust-test` | green |
 | `make check-spec` | OK |
-| `kuna catalog --check` | catalog OK |
+| `unlace catalog --check` | catalog OK |
 | `make test-cli` | 29/29 |
 | acceptance probe | **PASS** |
 
@@ -98,7 +98,7 @@ Speed on the witness, interleaved min/median of 11 alternating runs (measured wh
 ## In-repo cover
 
 `binary_source` is `dataset`, so `verify --promote` refuses. A new fixture
-`decompiler/crates/kuna-analysis/tests/fixtures/simdlane_x86_64` (gcc -O3 -mssse3, source
+`decompiler/crates/unlace-analysis/tests/fixtures/simdlane_x86_64` (gcc -O3 -mssse3, source
 beside it) reproduces the `simdlane` arm exactly — 32 `SUB161` with the option off, none with
 it on — and `tests/cli/simd-constant-string-initializer.json` is pinned to it. The
 `retsplitglobal` arm needs the witness's three-predecessor CFG, so **both** options are pinned

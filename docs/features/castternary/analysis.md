@@ -70,7 +70,7 @@ assignment, with no cast on the byte:
 // cleanflight O0 0x803533c mavlinkSendSystemStatus
 if ( sub_8015ED4() ) v2 = (short)sub_8015EE4(); else v2 = -1;
 if ( sub_8015E88() ) v1 = (char)sub_8015D60(); else v1 = 100;
-// kuna, option off -> on
+// unlace, option off -> on
 v4 = (sub_8015ed4()) ? (int)(short)sub_8015ee4() : -1;   ->   (short)sub_8015ee4() : -1
 v1 = (sub_8015e88()) ? (int)(char)sub_8015d60() : 100;   ->   (char)sub_8015d60() : 100
 
@@ -83,7 +83,7 @@ if ( v17 ) v1 = tolower(v14); else v1 = v14;
 v11 = (v8) ? (unsigned long)tolower((unsigned int)v1) : (unsigned long)v1;   ->   ... : v1
 ```
 
-kuna keeps the conditional; with the option it keeps exactly IDA's casts there
+unlace keeps the conditional; with the option it keeps exactly IDA's casts there
 (the truncations `(short)`/`(char)` stay, they change the value) and drops the
 widening IDA never prints.
 

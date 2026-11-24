@@ -1,4 +1,4 @@
-# kuna: a constant returned from a function whose declared return type is
+# unlace: a constant returned from a function whose declared return type is
 # an enum is not inferred as a pointer.  On MSP430 an enum is as wide as
 # a pointer, and 296 (0x128) is the address of the flash control register
 # FCTL1, so f1 printed return (State)&FCTL1 instead of the enumerator.

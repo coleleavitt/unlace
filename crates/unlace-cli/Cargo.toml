@@ -1,7 +1,7 @@
 [package]
 autotests = false
 name = "unlace-cli"
-description = "kuna Rust port: the user-facing `unlace` CLI (decompile / test / catalog / specs)"
+description = "unlace Rust port: the user-facing `unlace` CLI (decompile / test / catalog / specs)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

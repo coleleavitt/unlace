@@ -1,6 +1,6 @@
 # structsynth — whole-corpus `decompile-all` sweep
 
-`kuna decompile-all <binary>` with `structsynth` off vs `param`, every changed
+`unlace decompile-all <binary>` with `structsynth` off vs `param`, every changed
 function classified (`docs/features/structsynth/hunks.py`), plus the two things a
 body-line taxonomy cannot see: whether a statement moved anywhere
 (`skeleton.py`), and whether the exported project **compiles with the layouts it
@@ -160,7 +160,7 @@ target pointer `T *` and a 64-bit host compiler gives it 8 bytes. That is the
 instrument, not the layout — and it is why the generated prelude now states the
 target pointer width.
 
-**Bodies** (`kuna decompile-project` + `gcc -fsyntax-only`, counting every
+**Bodies** (`unlace decompile-project` + `gcc -fsyntax-only`, counting every
 error): the exported project does not compile today for reasons that have
 nothing to do with this option (undeclared `dat_` globals, `NULL`, jump-as-call
 spellings), so the number that matters is the *delta*, and in particular

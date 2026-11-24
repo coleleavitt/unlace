@@ -1,7 +1,7 @@
 [package]
 autotests = false
 name = "unlace-harness"
-description = "kuna Rust port: dev-only differential-testing helpers (Rust engine vs C++ oracle)"
+description = "unlace Rust port: dev-only differential-testing helpers (Rust engine vs C++ oracle)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -33,7 +33,7 @@ workspace = true
 # lives here — not in `unlace-console` — because it drives the datatest runner
 # (`unlace_harness::testfunction`), and `unlace-harness` depends on `unlace-console`
 # (the reverse would be a dependency cycle).  Built to `target/<profile>/
-# decomp_test_dbg`, the path `kuna/run_tests.py` resolves.
+# decomp_test_dbg`, the path `unlace/run_tests.py` resolves.
 [[bin]]
 name = "decomp_test_dbg"
 path = "src/bin/decomp_test_dbg.rs"

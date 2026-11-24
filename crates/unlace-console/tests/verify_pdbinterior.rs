@@ -275,7 +275,8 @@ fn a_public_inside_a_procedure_blocks_its_extent() {
 /// changes nothing: the default commits exactly the `pdb off` inventory.
 #[test]
 fn a_fingerprint_mismatched_pdb_changes_nothing() {
-    let dir = std::env::temp_dir().join(format!("kuna-verify-pdbinterior-{}", std::process::id()));
+    let dir =
+        std::env::temp_dir().join(format!("unlace-verify-pdbinterior-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("scratch dir");
     let exe = dir.join("pe_pdbinterior_x86_64.exe");

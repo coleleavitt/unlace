@@ -38,7 +38,7 @@ Unpack this executable to inventory and decompile application functions.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "unpack",
     "{{BIN}}",
     "-o",
@@ -70,7 +70,7 @@ Unpack this executable to inventory and decompile application functions.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "unpack",
     "{{BIN}}",
     "-o",

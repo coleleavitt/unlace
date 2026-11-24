@@ -10,10 +10,10 @@ pool. The whole change is the ~45-line tail of one `apply_op`.
 ## The change
 
 Complete the port of
-`decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_6.rs
+`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_6.rs
 (RuleSubRight::apply_op)` from upstream `ruleaction.cc:7291-7340`
 (`GHIDRA_REV=cef869af`), faithfully and completely — including every guard
-upstream applies, because each one exists to protect a rendering kuna already
+upstream applies, because each one exists to protect a rendering unlace already
 gets right:
 
 1. `c == 0` — the SUBPIECE is already least-significant; it renders as a cast.
@@ -30,7 +30,7 @@ combined amount would evaluate to zero and clamping `INT_SRIGHT` to the sign
 bit), synthesize the shift op before the SUBPIECE typed `TYPE_UINT`/`TYPE_INT` at
 the input width, and rewrite the SUBPIECE's offset input to 0.
 
-One kuna-side deviation, marked in the code: the type-factory availability check
+One unlace-side deviation, marked in the code: the type-factory availability check
 is hoisted above the first mutation. Upstream reads `glb->types` only after it
 has already rewired the graph; a hand-built `Funcdata` with no type factory (the
 rule-level unit-test fixtures) would otherwise leave a half-applied transform
@@ -44,7 +44,7 @@ better") and exempts "a strict bug fix that only corrects wrong output". This is
 the exempt case, for four independent reasons:
 
 1. **The old output is not C.** `SUB41`/`SUB81`/`SUB84` are undeclared
-   identifiers; kuna emits no header defining them. There is no user who wants
+   identifiers; unlace emits no header defining them. There is no user who wants
    the non-compiling spelling, so there is no honest `use_when` prose to write
    for a `subright` option.
 2. **It restores upstream, it does not diverge from it.** This is finishing a
@@ -69,7 +69,7 @@ prose, and a `ghdec-*` stage test.
 ## Where it is recorded
 
 `docs/history.md` **Convergences** table, not a DIV row: the registry's own rule
-is that "a port defect whose fix moves kuna *back onto* upstream's default earns
+is that "a port defect whose fix moves unlace *back onto* upstream's default earns
 no DIV row, but a corpus-wide output shift still needs a record for anyone
 bisecting."
 

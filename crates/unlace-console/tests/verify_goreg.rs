@@ -106,7 +106,7 @@ fn goroutine_state_renders_through_the_named_g_global() {
         eprintln!("verify_goreg: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_goreg_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_goreg_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_stripped");
     if !build_go(&dir, &out_bin) {

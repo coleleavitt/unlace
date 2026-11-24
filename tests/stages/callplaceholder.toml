@@ -50,16 +50,16 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-CALLPLACEHOLDER #1: strncpy takes its three declared arguments'
+name = 'UNLACE-CALLPLACEHOLDER #1: strncpy takes its three declared arguments'
 count = 1
 regex = 'strncpy\([^;]*,a0,a1 \+ -1\);'
 
 [[match]]
-name = 'KUNA-CALLPLACEHOLDER #2: strlen takes its one declared argument'
+name = 'UNLACE-CALLPLACEHOLDER #2: strlen takes its one declared argument'
 count = 1
 literal = 'strlen(v7);'
 
 [[match]]
-name = 'KUNA-CALLPLACEHOLDER #3: no call reads the return-address slot as an argument'
+name = 'UNLACE-CALLPLACEHOLDER #3: no call reads the return-address slot as an argument'
 count = 0
 literal = ',v4[v1 + -8]);'

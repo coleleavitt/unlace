@@ -1,4 +1,4 @@
-# (kuna outlang) Rust output: the SAME recovered function rendered through the
+# (unlace outlang) Rust output: the SAME recovered function rendered through the
 # rust-language profile.
 #
 # Fixture: the coreutils fmt `main` bytes this corpus already carries for the
@@ -7,7 +7,7 @@
 # binary to the tree.
 #
 # Stage model: S9 "output-language". `option setlanguage` is the upstream
-# selector (options.cc OptionSetLanguage), registered in kuna but wired to
+# selector (options.cc OptionSetLanguage), registered in unlace but wired to
 # nothing but a name field until the output-language plane landed. Type
 # RECOVERY is identical in both passes; only the spelling and the statement
 # shapes differ, which is the whole claim being pinned here.

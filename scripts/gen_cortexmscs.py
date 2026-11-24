@@ -9,7 +9,7 @@ The Flash Patch and Breakpoint unit has no CMSIS structure; its three register
 kinds are stated here from the ARMv7-M Architecture Reference Manual (DDI 0403,
 C1.11) and the ARMv8-M one (DDI 0553, D1.2 FP_CTRL / FP_REMAP / FP_COMPn).
 
-Usage: gen_cortexmscs.py DIR_WITH_HEADERS > kuna_cortexmscs_tables.rs
+Usage: gen_cortexmscs.py DIR_WITH_HEADERS > unlace_cortexmscs_tables.rs
 
 Every `#define NAME ((NAME_Type *) NAME_BASE)` block below 0xE0100000 is laid
 out with natural alignment and checked against the header's `Offset:` comments.

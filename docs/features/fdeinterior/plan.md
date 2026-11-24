@@ -30,7 +30,7 @@ widening any API.
 
 ## 2. Wiring
 
-* `analyzers/entry/mod.rs`: `pub mod kuna_fdeinterior;`.
+* `analyzers/entry/mod.rs`: `pub mod unlace_fdeinterior;`.
 * `pass.rs`: new `AnalysisOutput::fde_bodies` field + its `merge` arm.
 * `passes.rs`: register `FdeInteriorPass` after the other entry passes.
 * `console/src/engine.rs`: the `"fdeinterior" => arch.analysis_fdeinterior`

@@ -36,8 +36,8 @@ change, 54 of them record-name-only, 2 with a respelled body, one of those with 
 declaration-count delta:
 
 ```
-$ kuna decompile-all .../O2/e2fsprogs/stripped/e2fsck --option structmerge off > off.c
-$ kuna decompile-all .../O2/e2fsprogs/stripped/e2fsck --option structmerge siblings > on.c
+$ unlace decompile-all .../O2/e2fsprogs/stripped/e2fsck --option structmerge off > off.c
+$ unlace decompile-all .../O2/e2fsprogs/stripped/e2fsck --option structmerge siblings > on.c
 $ python3 docs/features/structmerge/hunks.py e2fsck-O2
 | e2fsck-O2 | 1421 | 56 | 54 | 1 | 1 |
 all classes: {'record name only': 54, 'declaration-count delta': 1, 'field accesses only': 1}
@@ -97,8 +97,8 @@ One function's variable SET moves as well -- `ext2fs_extent_get`, the
 declaration-count delta at 0x6e770, declares `v11` where it declared `v7`.
 
 ```
-$ kuna decompile-all .../O0/e2fsprogs/stripped/e2fsck --option structmerge off --json
-$ kuna decompile-all .../O0/e2fsprogs/stripped/e2fsck --option structmerge siblings --json
+$ unlace decompile-all .../O0/e2fsprogs/stripped/e2fsck --option structmerge off --json
+$ unlace decompile-all .../O0/e2fsprogs/stripped/e2fsck --option structmerge siblings --json
 
 sub_724c2  void *a0                              -> struct_81 *a0          (gained: 5 claims)
 sub_73069  struct_87 *a0                         -> void *a0               (lost)
@@ -126,14 +126,14 @@ all that is left is one function whose filler is respelled at the same address
 both 0x20). That localizes the class exactly:
 
 ```
-$ for m in off siblings; do kuna decompile-all .../O0/e2fsprogs/stripped/e2fsck \
+$ for m in off siblings; do unlace decompile-all .../O0/e2fsprogs/stripped/e2fsck \
     --option structmerge $m --option protoorder lock --json > lock-$m.json; done
 $ # sub_73069, sub_2390b, sub_4618d, sub_724c2 identical in both
 ```
 
 A union the factory declines to complete is not this class: `lookup_or_mint`
 falls through to the reader's own claims, exactly as `off` mints them
-(`KUNA_STRUCTMERGE_TRACE=1` prints the fall-through). That path does not fire
+(`UNLACE_STRUCTMERGE_TRACE=1` prints the fall-through). That path does not fire
 here -- 27,282 traced candidates on this binary, 41 merged, 0 mint failures --
 so it is not the explanation for the three lost records. Nor does it fire
 anywhere else measured: the same trace over twelve campaign binaries

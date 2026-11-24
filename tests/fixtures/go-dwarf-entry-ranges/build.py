@@ -57,7 +57,7 @@ emit('type_u64:', '.byte 5', string('u64'), '.byte 7,8,11',
      'type_i32:', '.byte 5', string('i32'), '.byte 5,4,5',
      'type_ptr:', '.byte 6', string('*i32'), '.long type_i32-debug_info', '.byte 22',
      '.byte 0', 'info_end:', '.section .note.GNU-stack,"",@progbits')
-with tempfile.TemporaryDirectory(prefix='kuna-go-entry-') as directory:
+with tempfile.TemporaryDirectory(prefix='unlace-go-entry-') as directory:
     directory = Path(directory)
     source, obj = directory/'fixture.S', directory/'fixture.o'
     source.write_text('\n'.join(lines)+'\n')

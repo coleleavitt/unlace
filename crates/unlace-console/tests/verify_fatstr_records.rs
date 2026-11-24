@@ -25,7 +25,7 @@ use unlace_base::address::Address;
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// The first entry of the fixture's runtime-indexed table — 21 bytes, no NUL.
-const WITNESS: &[u8] = b"kuna fatstr witness, ";
+const WITNESS: &[u8] = b"unlace fatstr witness, ";
 
 /// A RUNTIME-INDEXED `&str` table, not a `println!` piece: rustc 1.99 lowered
 /// the format machinery so a literal piece no longer materializes a
@@ -35,7 +35,7 @@ const WITNESS: &[u8] = b"kuna fatstr witness, ";
 /// three records in `.data.rel.ro` under every rustc this test has met — which
 /// is also the real-world shape the record pass most often feeds on.
 const MAIN_RS: &str = r#"static TABLE: [&str; 3] =
-    ["kuna fatstr witness, ", "kuna second piece", "kuna third piece"];
+    ["unlace fatstr witness, ", "unlace second piece", "unlace third piece"];
 fn main() {
     let i = std::env::args().len() % 3;
     println!("{}!", TABLE[i]);
@@ -89,7 +89,7 @@ import (
 	"os"
 )
 
-var table = [3]string{"kuna fatstr witness, ", "kuna second piece", "kuna third piece"}
+var table = [3]string{"unlace fatstr witness, ", "unlace second piece", "unlace third piece"}
 
 func main() {
 	i := len(os.Args) % 3
@@ -187,7 +187,7 @@ fn rust_str_records_segment_the_glued_nul_run() {
         eprintln!("verify_fatstr_records: skipping (`rustc` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_fatstr_records_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_fatstr_records_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("rust_fatstr");
     if !build_rust(&dir, &out_bin) {
@@ -229,7 +229,7 @@ fn go_string_records_bound_the_blob_literal() {
         eprintln!("verify_fatstr_records: skipping Go arm (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_fatstr_go_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_fatstr_go_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_fatstr");
     if !build_go(&dir, &out_bin) {

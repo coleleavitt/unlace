@@ -1,4 +1,4 @@
-# kuna re-quadratic-transform-loses-four: a stack buffer initialised by a run
+# unlace re-quadratic-transform-loses-four: a stack buffer initialised by a run
 # of direct frame stores and then walked by a pointer loop prints with its
 # declaration and all of its reads, but with none of its initialisation.
 #
@@ -8,7 +8,7 @@
 # puts an addrforce CPUI_COPY read of the range in front of every
 # indexed-stack LOAD whose discovered guard range covers it, so a slot that is
 # only ever READ through a computed pointer still has a reader where the
-# pointer is dereferenced.  kuna shipped that arm behind a hard-coded
+# pointer is dereferenced.  unlace shipped that arm behind a hard-coded
 # highPtrPossible == false, so the slot had no reader at all and
 # ActionDeadCode deleted the store.
 #

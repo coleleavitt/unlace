@@ -3,7 +3,7 @@
   "default": "on",
   "baseline_commit": "e93a39adc493ef5b8773a3f4b86c779e3c6e79df",
   "integrated_main_commit": "69fad3ce4cbdbb3232680938252bd75c2bec5a68",
-  "kuna_sha256": "3c02df83c668a800f017b8e382f6d9d82776e65caa90fdbfdcb3a956db473436",
+  "unlace_sha256": "3c02df83c668a800f017b8e382f6d9d82776e65caa90fdbfdcb3a956db473436",
   "reference_angr_commit": "6afa0c79a83d9f677a46b0275cdb63bf16c1979e",
   "reference_binaries_commit": "76ad9e296dde8f82b8ede93ce06a578cd1933639",
   "datatests": {
@@ -105607,7 +105607,7 @@
     "monitor": {
       "method": "balanced_randomized_block_bootstrap",
       "execution": "Shared independent case workers on disjoint physical CPU pairs; no owned builds/tests/corpus during sampling.",
-      "attempt": "/tmp/kuna-rust-fmt-str/timing-randomized-attempts/20261102-005536",
+      "attempt": "/tmp/unlace-rust-fmt-str/timing-randomized-attempts/20261102-005536",
       "cpu_assignments": {
         "0:scalar-c": {
           "target_cpu": 61,

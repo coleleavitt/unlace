@@ -12,7 +12,7 @@
 # for the whole ELF; only main is decompiled.)
 #
 # Stage model: S2 "switch-model" sub-stage.  angr edits the structured region
-# graph (S7); Ghidra has no region-graph edit hook, so the kuna port
+# graph (S7); Ghidra has no region-graph edit hook, so the unlace port
 # SYNTHESIZES the S2 artifact (a BRANCHIND plus a hand-built, pre-labelled
 # JumpTable) from the control-flow pattern, inverting the usual S1 to S2
 # dependency, via a restart (the multistage-jump idiom): detect late on the

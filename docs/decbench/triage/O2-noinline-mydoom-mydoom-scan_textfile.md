@@ -35,7 +35,7 @@ IDA recovers the actual buffer and the call, so the stores disappear entirely:
   FileA = (char *)CreateFileA(dwFlagsAndAttributes, 0x80000000, 3u, 0, 3u, 0x80u, 0);
 ```
 
-kuna (stored 2026-07-27) and kuna (fresh, today, identical in structure under both
+unlace (stored 2026-07-27) and unlace (fresh, today, identical in structure under both
 `--mode auto` and `--mode reliable`):
 
 ```c
@@ -61,7 +61,7 @@ unsigned int scan_textfile(void)
 `// esp` on `v4`..`v7` is a storage annotation, not a declaration). `PTRSUB` is likewise
 undeclared. The body is not C.
 
-Structural metrics are otherwise a tie — kuna fresh: 0 gotos, 0 labels, 2 ifs, 1 loop,
+Structural metrics are otherwise a tie — unlace fresh: 0 gotos, 0 labels, 2 ifs, 1 loop,
 0 ternaries, 0 casts, same shape as ghidra and ida.
 
 ## Source
@@ -94,7 +94,7 @@ frame. Ghidra flags exactly this with `WARNING: Unable to track spacebase fully 
 **Structural symptom (one).** The internal p-code operator `PTRSUB` and the raw register
 name `ESP` leak verbatim into the emitted C — 8 occurrences in this function — producing a
 body that references two identifiers it never declares. Ghidra emits a stack-location leaf
-(`&stack0x00000008`) for the identical references; kuna emits the pre-render IR form.
+(`&stack0x00000008`) for the identical references; unlace emits the pre-render IR form.
 
 **The miner hint is wrong and is disproven here.** The hint attributed the raw register
 names to "register<->global copy-shadow merges rendering members by their own address"
@@ -110,7 +110,7 @@ no Symbol is bound to the offset constant —
 
 ```rust
             // NOT the C++ `pushUnnamedLocation` `&stackNN` leaf — which would expose
-            // an offset the kuna namerec layer has not yet resolved to a name.
+            // an offset the unlace namerec layer has not yet resolved to a name.
             let name = match &sym_name {
                 Some(n) => n.clone(),
                 None => {
@@ -124,7 +124,7 @@ no Symbol is bound to the offset constant —
 *both* inputs as arguments — input 0 is the `ESP` register varnode, which falls through
 `push_vn_explicit_ir` to `get_register_name(...)` and renders `ESP`. Upstream Ghidra's
 `PrintC::opPtrsub` handles the `symbol == 0` case with `pushUnnamedLocation(addr, ...)`
-instead, which is why Ghidra never shows the operator or the register. kuna has the
+instead, which is why Ghidra never shows the operator or the register. unlace has the
 `Space<hex>` unnamed-location formatter already (`printc.rs:6690-6700`, cited to
 printc.cc:1964-1970) but no call site ever reaches it from a spacebase PTRSUB: a
 whole-binary decompile of mydoom.exe renders `Stack<hex>` **0** times.
@@ -148,13 +148,13 @@ large-stack-buffer / stack-probe pattern. No datatest or stage assertion contain
 `PTRSUB(` expected-output string (the single corpus hit,
 `tests/stages/gh8471-thumbfuncptr.toml:9`, is prose in a comment).
 
-**Why the reference wins — and how much.** Nothing here moves the GED: kuna is already
+**Why the reference wins — and how much.** Nothing here moves the GED: unlace is already
 best-of-all at 16, tied with ghidra and ida, ahead of angr/binja/phoenix at 18. IDA wins on
 *readability* for a reason outside this symptom (it recovers `char v9[65547]` and the
 `CreateFileA` prototype, collapsing all seven argument stores). This is a validity /
 readability defect, not a scoring gap — worth fixing on its own merit, not for the metric.
 
-**Secondary observation, not this case's symptom.** kuna renders all 418 PE IAT calls in
+**Secondary observation, not this case's symptom.** unlace renders all 418 PE IAT calls in
 this binary as `(*dat_4112a0)()` with zero arguments, where both ghidra and ida resolve the
 import name and arguments (`CreateFileA(...)`). That is a separate P1/analysis-tier gap
 (PE import-thunk symbol markup, which then unblocks P4 prototype/argument recovery) and
@@ -182,7 +182,7 @@ is ever pushed.
 **Risks.**
 - Low corpus risk: no test asserts `PTRSUB(` in expected output, and the arm is only
   reachable when *no* Symbol binds, which today already produces non-C.
-- The one judgment call is the leaf's spelling. kuna's existing formatter capitalizes the
+- The one judgment call is the leaf's spelling. unlace's existing formatter capitalizes the
   space name (`Stack00000008`); upstream prints `stack0x00000008`. Matching upstream is
   better for diffability but is a second, cosmetic decision — pick one and state it.
 - Scope is a strict output-correctness fix (undeclared identifiers today), so per

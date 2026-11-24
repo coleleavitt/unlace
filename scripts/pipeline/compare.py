@@ -1,12 +1,12 @@
-"""Compare a reference decompiler against kuna on the same (binary, function).
+"""Compare a reference decompiler against unlace on the same (binary, function).
 
-Given a target, this fetches the reference decompilation (angr by default) and kuna's
+Given a target, this fetches the reference decompilation (angr by default) and unlace's
 decompilation of the SAME function, computes structural readability metrics on both, and
 emits a set of machine signals describing where the reference looks better. The final
-"is the reference actually better, and what kuna feature would close the gap" judgment is
+"is the reference actually better, and what unlace feature would close the gap" judgment is
 made by an LLM in ``rank.py`` / the worker -- this module only produces the evidence.
 
-Because kuna renders address-mode functions as ``sub_<addr>`` and uses different variable
+Because unlace renders address-mode functions as ``sub_<addr>`` and uses different variable
 names than angr, we compare by *structure* (gotos, labels, switch recovery, loop/branch
 shape, line count), never by raw text equality.
 
@@ -53,33 +53,33 @@ def metrics(text: str) -> dict:
     }
 
 
-def signals(ref_m: dict, kuna_m: dict, ref_text: str, kuna_text: str) -> list:
+def signals(ref_m: dict, unlace_m: dict, ref_text: str, unlace_text: str) -> list:
     """Heuristic, machine-readable hints about where the reference looks better.
 
     These are *candidates* for an LLM to confirm -- deliberately conservative and
     structural. Each is a short tag plus a magnitude.
     """
     out = []
-    if kuna_m["gotos"] > ref_m["gotos"]:
-        out.append("ref has fewer gotos (%d vs %d)" % (ref_m["gotos"], kuna_m["gotos"]))
-    if kuna_m["labels"] > ref_m["labels"]:
-        out.append("ref has fewer labels (%d vs %d)" % (ref_m["labels"], kuna_m["labels"]))
-    if ref_m["switches"] > kuna_m["switches"]:
-        out.append("ref recovered a switch kuna did not (%d vs %d)"
-                   % (ref_m["switches"], kuna_m["switches"]))
-    if ref_m["loops"] > kuna_m["loops"]:
-        out.append("ref recovered more loops (%d vs %d)" % (ref_m["loops"], kuna_m["loops"]))
+    if unlace_m["gotos"] > ref_m["gotos"]:
+        out.append("ref has fewer gotos (%d vs %d)" % (ref_m["gotos"], unlace_m["gotos"]))
+    if unlace_m["labels"] > ref_m["labels"]:
+        out.append("ref has fewer labels (%d vs %d)" % (ref_m["labels"], unlace_m["labels"]))
+    if ref_m["switches"] > unlace_m["switches"]:
+        out.append("ref recovered a switch unlace did not (%d vs %d)"
+                   % (ref_m["switches"], unlace_m["switches"]))
+    if ref_m["loops"] > unlace_m["loops"]:
+        out.append("ref recovered more loops (%d vs %d)" % (ref_m["loops"], unlace_m["loops"]))
     # meaningfully shorter (>15%) usually means better structuring, not lost code
-    if kuna_m["loc"] and ref_m["loc"] and ref_m["loc"] < 0.85 * kuna_m["loc"]:
+    if unlace_m["loc"] and ref_m["loc"] and ref_m["loc"] < 0.85 * unlace_m["loc"]:
         out.append("ref is %d%% shorter (%d vs %d loc)"
-                   % (round(100 * (1 - ref_m["loc"] / kuna_m["loc"])), ref_m["loc"], kuna_m["loc"]))
-    if kuna_m["casts"] > ref_m["casts"] + 2:
-        out.append("kuna has more undefined/cast noise (%d vs %d)"
-                   % (kuna_m["casts"], ref_m["casts"]))
+                   % (round(100 * (1 - ref_m["loc"] / unlace_m["loc"])), ref_m["loc"], unlace_m["loc"]))
+    if unlace_m["casts"] > ref_m["casts"] + 2:
+        out.append("unlace has more undefined/cast noise (%d vs %d)"
+                   % (unlace_m["casts"], ref_m["casts"]))
     # Ghidra control-flow-failure markers
-    if kuna_text and ("Could not" in kuna_text or "WARNING:" in kuna_text
-                      or "halt_baddata" in kuna_text):
-        out.append("kuna emitted a recovery-failure marker")
+    if unlace_text and ("Could not" in unlace_text or "WARNING:" in unlace_text
+                      or "halt_baddata" in unlace_text):
+        out.append("unlace emitted a recovery-failure marker")
     return out
 
 
@@ -94,23 +94,23 @@ class ComparisonResult:
     ref_version: Optional[str] = None
     ref_text: Optional[str] = None
     ref_error: Optional[str] = None
-    kuna_text: Optional[str] = None
-    kuna_error: Optional[str] = None
-    kuna_mode: str = ""               # "name" | "addr"
+    unlace_text: Optional[str] = None
+    unlace_error: Optional[str] = None
+    unlace_mode: str = ""               # "name" | "addr"
     ref_metrics: dict = field(default_factory=dict)
-    kuna_metrics: dict = field(default_factory=dict)
+    unlace_metrics: dict = field(default_factory=dict)
     signals: list = field(default_factory=list)
 
     @property
     def comparable(self) -> bool:
-        return bool(self.ref_text) and bool(self.kuna_text)
+        return bool(self.ref_text) and bool(self.unlace_text)
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
-def _kuna_decompile(binary, selector, ref_addr):
-    """Decompile in kuna by name when the selector is a name, else by address.
+def _unlace_decompile(binary, selector, ref_addr):
+    """Decompile in unlace by name when the selector is a name, else by address.
 
     Returns (text, error, mode). Falls back name->addr when a name lookup fails.
     """
@@ -118,7 +118,7 @@ def _kuna_decompile(binary, selector, ref_addr):
     if name_sel:
         try:
             return kdecompile.decompile(binary, selector,
-                                        timeout=config.KUNA_TIMEOUT), None, "name"
+                                        timeout=config.UNLACE_TIMEOUT), None, "name"
         except kdecompile.DecompileError as e:
             # fall through to address mode using the reference's resolved entry
             name_err = str(e)
@@ -127,16 +127,16 @@ def _kuna_decompile(binary, selector, ref_addr):
     if ref_addr:
         try:
             txt = kdecompile.decompile(binary, ref_addr, by_address=True,
-                                       timeout=config.KUNA_TIMEOUT)
+                                       timeout=config.UNLACE_TIMEOUT)
             return txt, None, "addr"
         except kdecompile.DecompileError as e:
             return None, "addr-mode: %s%s" % (e, (" (name-mode: %s)" % name_err) if name_err else ""), "addr"
-    return None, name_err or "no address available for kuna", "name"
+    return None, name_err or "no address available for unlace", "name"
 
 
 def compare(binary, selector, *, reference="angr", arch=None, load_debug=False,
             structurer=None, test_name="") -> ComparisonResult:
-    """Compare ``reference`` against kuna on one function.
+    """Compare ``reference`` against unlace on one function.
 
     ``reference`` is any registered adapter -- ``angr`` (default), or ``unlace`` itself.
     """
@@ -151,13 +151,13 @@ def compare(binary, selector, *, reference="angr", arch=None, load_debug=False,
     if not rr.ok:
         return res
 
-    kuna_text, kuna_err, mode = _kuna_decompile(binary, selector, rr.func_addr)
-    res.kuna_text, res.kuna_error, res.kuna_mode = kuna_text, kuna_err, mode
+    unlace_text, unlace_err, mode = _unlace_decompile(binary, selector, rr.func_addr)
+    res.unlace_text, res.unlace_error, res.unlace_mode = unlace_text, unlace_err, mode
 
     res.ref_metrics = metrics(rr.text)
-    res.kuna_metrics = metrics(kuna_text) if kuna_text else {}
+    res.unlace_metrics = metrics(unlace_text) if unlace_text else {}
     if res.comparable:
-        res.signals = signals(res.ref_metrics, res.kuna_metrics, rr.text, kuna_text)
+        res.signals = signals(res.ref_metrics, res.unlace_metrics, rr.text, unlace_text)
     return res
 
 
@@ -172,15 +172,15 @@ def _print_human(res: ComparisonResult):
         print(res.ref_text)
     else:
         print("  (no output: %s)" % res.ref_error)
-    print("\n--- kuna (%s mode) ---" % res.kuna_mode)
-    if res.kuna_text:
-        print(res.kuna_text)
+    print("\n--- unlace (%s mode) ---" % res.unlace_mode)
+    if res.unlace_text:
+        print(res.unlace_text)
     else:
-        print("  (no output: %s)" % res.kuna_error)
+        print("  (no output: %s)" % res.unlace_error)
     if res.comparable:
-        print("\n--- metrics (reference | kuna) ---")
+        print("\n--- metrics (reference | unlace) ---")
         for k in res.ref_metrics:
-            print("  %-12s %4s | %-4s" % (k, res.ref_metrics[k], res.kuna_metrics.get(k, "-")))
+            print("  %-12s %4s | %-4s" % (k, res.ref_metrics[k], res.unlace_metrics.get(k, "-")))
         print("\n--- signals (candidate 'reference is better' hints) ---")
         if res.signals:
             for s in res.signals:
@@ -191,12 +191,12 @@ def _print_human(res: ComparisonResult):
 
 def main(argv=None):
     p = argparse.ArgumentParser(prog="python -m scripts.pipeline.compare",
-                                description="Compare a reference decompiler vs kuna on one function.")
+                                description="Compare a reference decompiler vs unlace on one function.")
     p.add_argument("binary", nargs="?", help="binary path")
     p.add_argument("selector", nargs="?", help="function name / 0xaddr / @entry")
     p.add_argument("--entry", default=None, help="look the target up in the worklist by test name")
     p.add_argument("--reference", default="angr",
-                   help="reference decompiler: angr (default), or kuna itself")
+                   help="reference decompiler: angr (default), or unlace itself")
     p.add_argument("--arch", default=None)
     p.add_argument("--load-debug", action="store_true")
     p.add_argument("--structurer", default=None)

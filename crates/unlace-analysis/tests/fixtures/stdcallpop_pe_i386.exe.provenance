@@ -1,12 +1,12 @@
 stdcallpop_pe_i386.exe -- the x86 Windows witness for `calleepop`
-(`unlace_decomp::p6_variables::kuna_calleepop`).
+(`unlace_decomp::p6_variables::unlace_calleepop`).
 
 What it is
   A 40,960-byte 32-bit MSVC Windows GUI crackme. It matters because it is an
   ordinary `x86:LE:32:default:windows` image whose logic calls Win32 APIs
   through the Import Address Table in the usual `__stdcall` way, with one
   `__cdecl` varargs import (`wsprintfA`) mixed in and internal `__cdecl` helpers
-  around it -- the three conventions kuna has to tell apart with no type
+  around it -- the three conventions unlace has to tell apart with no type
   information at all.
 
   The function at 0x401290 is the one the regression probe reads. It calls
@@ -23,7 +23,7 @@ Why it is vendored rather than built
 
 Where it came from
   The RE-friction loop's round-6 witness: challenge 5ab77f5d33c5d40ad448c6f6 in
-  the kuna-re-dataset crackme corpus ("imagination by kratorius",
+  the unlace-re-dataset crackme corpus ("imagination by kratorius",
   https://crackmes.one/crackme/5ab77f5d33c5d40ad448c6f6),
   `bin/Imagination.zip.__x/Imagination.exe`, byte-identical. That is the binary
   on which a tester found the pixel reader using undeclared stack objects and

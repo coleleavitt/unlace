@@ -9,7 +9,7 @@
 #         xor    %esi,%esi          ; arg2 = NULL
 #         jmp    setlocale@plt       ; tail jump (direct BRANCH) to the thunk
 #
-# kuna's flow follower runs with the whole address space in-bounds, so it
+# unlace's flow follower runs with the whole address space in-bounds, so it
 # treats the direct `jmp setlocale@plt` as ordinary intraprocedural flow and
 # follows it INTO the PLT thunk.  The thunk's body is `jmp qword [rip+GOT]`
 # (an indirect jump); jump-table recovery fails on it, so it is rewritten to a

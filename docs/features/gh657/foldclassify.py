@@ -3,7 +3,7 @@
 Usage: CA=<before-dir> CB=<after-dir> python3 foldclassify.py
 
 Both directories hold one `<name>.c` per binary, produced by
-`kuna decompile-all <binary> > <name>.c`.  Functions are split on the
+`unlace decompile-all <binary> > <name>.c`.  Functions are split on the
 `// Function: <name> @ <addr>` banner and compared one by one, and each changed
 function lands in exactly one bucket:
 

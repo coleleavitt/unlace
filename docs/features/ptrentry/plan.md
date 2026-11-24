@@ -26,7 +26,7 @@ Listing tier (`docs/spec/01-program-prep.md` §1.6). Option: `ptrentry`, tier
 * `pointer_entry_seeds(...)` — ARM gate, then the ascending-target loop with the
   body-claim dedup, returning the accepted entries address-sorted.
 
-Nothing in `aif/mod.rs` changes except one `pub mod kuna_ptrentry;`: a child module
+Nothing in `aif/mod.rs` changes except one `pub mod unlace_ptrentry;`: a child module
 can read its parent's private items, so `GapDecoder`, `ProbedInsn` and
 `MAX_FOLLOW_INSNS` are reachable without widening any visibility.
 
@@ -54,12 +54,12 @@ corroboration. It cannot separate switch tables (a switch table is a run) and co
 ## 3. Registration
 
 * `Architecture::analysis_ptrentry` (field, `reset_defaults` = false,
-  `set_kuna_option` arm).
+  `set_unlace_option` arm).
 * `engine.rs::analysis_pass_enabled` `"ptrentry"` arm (the defensive commit gate;
   the pre-invocation check in `passes.rs` is the live one).
-* `p0_knowledge/options.rs` `KUNA_OPTION_NAMES`.
+* `p0_knowledge/options.rs` `UNLACE_OPTION_NAMES`.
 * `phases.toml` `[[settable]]` row, every field populated, `source_decompiler =
-  "kuna"` (this came from kuna's own recall measurement), `inspiration` prefixed
+  "unlace"` (this came from unlace's own recall measurement), `inspiration` prefixed
   `decbench:`.
 * Hard-coded catalog counts, every one **derived from a fresh `phase catalog`
   capture on the rebased tree rather than by arithmetic**: `phases/tests.rs`
@@ -70,7 +70,7 @@ corroboration. It cannot separate switch tables (a switch table is a run) and co
   `tests/stages/catalog.toml` needs no edit: its exact-count asserts key on
   `source_decompiler = "angr"` and the `structure-recovery` / `opt-in-tool`
   change_kinds, none of which this row joins. No stages XML is added, so the
-  `kuna-base/src/xml.rs` corpus count (verified by counting the files: 83
+  `unlace-base/src/xml.rs` corpus count (verified by counting the files: 83
   datatests + 107 stages = 190) and `docs/baseline-stages.json` are untouched.
 
 ## 4. Tests
@@ -90,12 +90,12 @@ tier, which is built only from an `ObjectLoadImage`. The datatest harness embeds
 raw `<bytechunk>`s and never constructs one, so the option is unobservable there —
 the same reason every sibling analysis-tier discovery flag (`funcstart_patterns`,
 `aif`, `eh_frame_full`, `cortexmvectors`, `i386_pie_plt`) ships with a cross-crate
-`verify_*` gate instead. `kuna-base/src/xml.rs`' corpus file count and
+`verify_*` gate instead. `unlace-base/src/xml.rs`' corpus file count and
 `docs/baseline-stages.json` are therefore untouched.
 
 ## 5. Fixture
 
-`decompiler/crates/kuna-analysis/tests/fixtures/cortexm_ptrentry_le32` (405 bytes)
+`decompiler/crates/unlace-analysis/tests/fixtures/cortexm_ptrentry_le32` (405 bytes)
 plus its generator `cortexm_ptrentry_le32.py` and a fixtures-README row.
 Hand-assembled because no cross toolchain on this host emits a bare-metal STM32
 link layout. Its vector table is deliberately the *shipped*-signature shape, so

@@ -69,7 +69,7 @@
 #                 evidence in either pass
 #
 # `prefixcmp` is the same byte-at-a-time compare written out by hand, and it
-# is here as a tenth control: kuna already types it `char *` without the
+# is here as a tenth control: unlace already types it `char *` without the
 # option, through the PTRADD the pointer-arithmetic pool builds, and it must
 # not move either way.
 #

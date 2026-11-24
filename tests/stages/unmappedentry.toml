@@ -1,4 +1,4 @@
-# kuna issue testcase: the Listing walk's unmapped-CALL-target entry
+# unlace issue testcase: the Listing walk's unmapped-CALL-target entry
 # suppression.
 #
 # Issue:      unlace-analysis-unmappedentry - `unlace functions` on
@@ -50,6 +50,6 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-UNMAPPEDENTRY #1: the XML path renders the source form x <= 8'
+name = 'UNLACE-UNMAPPEDENTRY #1: the XML path renders the source form x <= 8'
 count = 1
 literal = 'if (x <= 8)'

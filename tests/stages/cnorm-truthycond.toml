@@ -1,9 +1,9 @@
-# kuna C-surface normalization: a boolean-context comparison against zero
+# unlace C-surface normalization: a boolean-context comparison against zero
 # renders in truthy form - `if (x != 0)` as `if (x)` and `if (p == 0)` as
 # `if (!p)` (user-reported readability issue on the angr fmt corpus binary:
 # `if (v8 != (char *)0x0)`; no upstream GH issue).
 #
-# Upstream Ghidra always renders the explicit comparison.  kuna adds the
+# Upstream Ghidra always renders the explicit comparison.  unlace adds the
 # settable option `truthycond` (DIV-36, docs/history.md), default-on:
 # the printer marks boolean contexts (if/while/for/ternary conditions,
 # &&/||/! operands) with a CONDITION_CONTEXT mod and elides the eligible

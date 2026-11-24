@@ -5,7 +5,7 @@ A native pair(x) returning two int64 values already decompiles to an executable
 producer call and recovered storage ABI while rendering each extraction as a
 typed memory read.
 
-Implement the eligibility and offset planner in P9's kuna_gobyteextract module.
+Implement the eligibility and offset planner in P9's unlace_gobyteextract module.
 Require a whole explicit nonvolatile local byte array whose actual declaration
 and value type agree with the input size. Reuse local_byte_array_name for the
 real declaration and complete symbol extent. Never address an implied call,

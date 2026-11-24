@@ -22,7 +22,7 @@ decompiled under it.
 
 **The region is re-derived, never trusted.** The value names only a head and an
 exit; the member set is recomputed from the live `bblocks` with the same
-single-entry predicate stage 1 uses (`kuna_check_region`), so both stages agree
+single-entry predicate stage 1 uses (`unlace_check_region`), so both stages agree
 on what a region is and a stale or hand-written pair cannot excise something that
 is not a region. This follows from stage 1's finding that a region is a block
 *set* — an inlined callee is laid out in several disjoint pieces, so an address

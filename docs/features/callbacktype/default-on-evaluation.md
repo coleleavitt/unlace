@@ -130,7 +130,7 @@ count differs from the declaration refuses the park.
 | `sort-O2` | 14956.8 | 14500.1 | -3.05% | -1.28% |
 | `bash-O2` | 94212.7 | 93627.8 | -0.62% | +4.61% |
 
-Same build (419b1b6a2, whose engine code be75f8cc8 shares), both arms, `kuna decompile-all --json
+Same build (419b1b6a2, whose engine code be75f8cc8 shares), both arms, `unlace decompile-all --json
 --max-fn-seconds 120`, the arms alternated per iteration and the minimum of 15 taken (`speed.py`,
 raw samples in `record.json`), while other campaign lanes ran. **Worst delta +0.55% (`ls-O2`), inside
 the +5% budget.** `libselinux` is the binary the round-6 review measured at +12.67% (-O0) and

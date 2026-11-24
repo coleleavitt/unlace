@@ -7,7 +7,7 @@
 # call printed with no argument: `swift_release_x20();`.
 #
 # Stage / sub-stage: P1 external-refinement, `SwiftRuntimePass`
-# (`unlace-analysis/src/analyzers/swift/kuna_swiftruntime.rs`). No option: the
+# (`unlace-analysis/src/analyzers/swift/unlace_swiftruntime.rs`). No option: the
 # entry points are the runtime's ABI, like the rest of the table.
 #
 # The fixture `swift_rr_regs_macho` (arm64 Mach-O, assembled from

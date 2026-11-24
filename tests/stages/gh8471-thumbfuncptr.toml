@@ -9,7 +9,7 @@
 # RulePtrsubUndo refactor; cf. upstream PR #8990).
 #
 # Stage model: S5 "const-pointer" sub-stage.  The symptom surfaces at S9 but
-# the symbolic data is already destroyed in Band B; kuna_thumbfuncptr.rs
+# the symbolic data is already destroyed in Band B; unlace_thumbfuncptr.rs
 # (always on) guards the S5 rule.
 #
 # Layout (reduced from the reporter's short_reproducer.so):

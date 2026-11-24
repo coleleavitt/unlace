@@ -2,19 +2,19 @@
 
 Every executable format states a section's RAM footprint separately from the
 bytes the file supplies for it, and the excess is zero-filled at load: ELF
-`p_memsz` over `p_filesz`, PE `VirtualSize` over `SizeOfRawData`. kuna copied
+`p_memsz` over `p_filesz`, PE `VirtualSize` over `SizeOfRawData`. unlace copied
 only the file extent, so reading a zero-initialized global was refused as an
 address no segment covers — with advice to unpack an image that was never
 packed.
 
 ```
-$ python3 decompiler/crates/kuna-analysis/tests/fixtures/pe_bsstail_x86_64.py
+$ python3 decompiler/crates/unlace-analysis/tests/fixtures/pe_bsstail_x86_64.py
 wrote .../pe_bsstail_x86_64.exe (1536 bytes)
 
-$ kuna read decompiler/crates/kuna-analysis/tests/fixtures/pe_bsstail_x86_64.exe \
+$ unlace read decompiler/crates/unlace-analysis/tests/fixtures/pe_bsstail_x86_64.exe \
       0x140002740 --addr --bytes 64
 error: no bytes mapped at 0x140002740 in ...: no loaded segment covers it
-       (a packed image maps none of its original addresses -- `kuna unpack` first)
+       (a packed image maps none of its original addresses -- `unlace unpack` first)
 $ echo $?
 1
 ```
@@ -39,7 +39,7 @@ unreadable to every surface that asks for bytes.
   (`VirtualSize` `0x9000` over `SizeOfRawData` `0`) turned the packed entry's
   one-line `Unable to load 512 bytes` into 16,883 lines of `add [eax],al` in
   19.6 s. Executable segments keep exactly today's behaviour: 182 ms, and
-  `kuna unpack` still the answer.
+  `unlace unpack` still the answer.
 - The footprint is trimmed at the next segment's vma, so a declared size can
   never shadow real content. The trim only shortens the *tail*: an image that
   stacks several segments at one address (a COFF `.obj` read through the linked
@@ -47,7 +47,7 @@ unreadable to every surface that asks for bytes.
 - Purely additive on an image that loads today. `decompile-all` is
   byte-identical before and after across the 144 in-repo ELF/PE/Mach-O/COFF
   fixtures and 9 larger binaries (the reported PE, 4 crackmes, 4 fixtures);
-  `kuna unpack` output is byte-identical on all three UPX images. The only new
+  `unlace unpack` output is byte-identical on all three UPX images. The only new
   answers are byte reads at addresses that previously had none.
 
 ## The tests
@@ -60,7 +60,7 @@ the trim stops at the next segment without ever shortening a file extent. Plus t
 error above.
 
 Gates: `make test` PARITY OK 675/675 · `make test-stages` PARITY OK 687/687 ·
-`make test-cli` 82/82 · `make check-spec` OK · `kuna catalog --check` OK ·
+`make test-cli` 82/82 · `make check-spec` OK · `unlace catalog --check` OK ·
 `make rust-test` 374 test binaries, 6052 passed, 0 failed.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

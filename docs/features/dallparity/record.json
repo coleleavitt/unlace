@@ -1,8 +1,8 @@
 {
  "slug": "dallparity",
- "opportunity": "`kuna decompile-all` and `kuna decompile` must produce the same C for the same binary, address and mode -- decompile-all was the weaker path, and it is the one decbench, the web front-end, decompile-project and every agent-facing whole-binary workflow use",
- "test_name": "kuna decompile vs kuna decompile-all, same --addr and --mode, over 13 real binaries x 4 modes (182 records) + the 4 vendored fmt_<arch> fixtures",
- "binary": "decompiler/crates/kuna-analysis/tests/fixtures/fmt_x86_64",
+ "opportunity": "`unlace decompile-all` and `unlace decompile` must produce the same C for the same binary, address and mode -- decompile-all was the weaker path, and it is the one decbench, the web front-end, decompile-project and every agent-facing whole-binary workflow use",
+ "test_name": "unlace decompile vs unlace decompile-all, same --addr and --mode, over 13 real binaries x 4 modes (182 records) + the 4 vendored fmt_<arch> fixtures",
+ "binary": "decompiler/crates/unlace-analysis/tests/fixtures/fmt_x86_64",
  "selector": "main",
  "second_witness_binary": "decbench full_run/O0/zlib/stripped/minigzip",
  "second_witness_selector": "error @ 0x14c9",
@@ -11,12 +11,12 @@
  "element_id": null,
  "change_kind": "correctness-fix (surface parity) + mode-preset change (`formatstring` leaves AGGRESSIVE_OVERRIDES on the speed gate)",
  "tier": "driver (console)",
- "module": "decompiler/crates/console/src/decompile_step.rs (new), decompiler/crates/console/src/ifacedecomp.rs (IfcDecompile), decompiler/crates/console/src/project.rs (decompile_targets), decompiler/crates/kuna-decomp/src/p0_knowledge/modes.rs (AGGRESSIVE_OVERRIDES / EXCLUDED_ON_PURPOSE)",
+ "module": "decompiler/crates/console/src/decompile_step.rs (new), decompiler/crates/console/src/ifacedecomp.rs (IfcDecompile), decompiler/crates/console/src/project.rs (decompile_targets), decompiler/crates/unlace-decomp/src/p0_knowledge/modes.rs (AGGRESSIVE_OVERRIDES / EXCLUDED_ON_PURPOSE)",
  "phase": "driver seam (P0 knowledge / per-function policy)",
  "spec_chapter": "docs/spec/00-overview.md (+ docs/spec/01-program-prep.md 1.4)",
  "div": "DIV-66",
  "source_decompiler": "ida",
- "inspiration": "IDA Pro 9.2 renders `void error(const char *a1)` where kuna decompile-all rendered `void error(unsigned long a0)` and kuna decompile rendered `void error(char *a0)` -- the same binary, the same address, the same mode",
+ "inspiration": "IDA Pro 9.2 renders `void error(const char *a1)` where unlace decompile-all rendered `void error(unsigned long a0)` and unlace decompile rendered `void error(char *a0)` -- the same binary, the same address, the same mode",
  "default_on": false,
  "upstream_anchor": "Ghidra FormatStringAnalyzer (DecompilerDependent) -- one analyzer, applied by whatever drives the decompiler, not by one front-end",
  "upstream_fidelity": "restores the analyzer's surface-independence; upstream has no notion of an analyzer that applies to one front-end only",
@@ -74,13 +74,13 @@
   },
   {
    "n": 8,
-   "class": "print raw / --regions exist only on kuna decompile",
+   "class": "print raw / --regions exist only on unlace decompile",
    "stronger": "-",
    "verdict": "output-format surface, not a decompile difference"
   }
  ],
  "parity_sweep": {
-  "surface": "kuna decompile --addr X --mode M vs kuna decompile-all --addr X --mode M, function name normalized",
+  "surface": "unlace decompile --addr X --mode M vs unlace decompile-all --addr X --mode M, function name normalized",
   "records": 182,
   "base_commit": "d4a3fd2c (#268)",
   "divergent_before": 13,
@@ -106,7 +106,7 @@
   "make test-stages": "PARITY OK 400/400, no re-pin",
   "make rust-test": "green (4,535 passed / 0 failed / 37 ignored)",
   "make check-spec": "OK (lenient + strict)",
-  "kuna catalog --check": "catalog OK"
+  "unlace catalog --check": "catalog OK"
  },
  "baseline_repin": false,
  "stage_test": null,
@@ -117,7 +117,7 @@
   "console/tests/verify_decompile_all_parity.rs::whole_binary_matches_console_in_both_option_states"
  ],
  "sweep": {
-  "surface": "kuna decompile-all --json --no-vars, `--option formatstring off` (= the pre-fix behaviour) vs the shipped default, both from this build",
+  "surface": "unlace decompile-all --json --no-vars, `--option formatstring off` (= the pre-fix behaviour) vs the shipped default, both from this build",
   "refactor_inertness_check": {
    "note": "measured BEFORE the rebase onto d4a3fd2c against the GENUINE pre-fix binary (main tree @4d111cf5), three arms A/B/C: A (pre-fix binary) vs B (this build, formatstring off) was byte-identical, which is what proves the refactor inert and licenses the two-arm form above.",
    "cases": 33,
@@ -177,7 +177,7 @@
   "shipped_default_output_change": "NONE -- with `formatstring` out of the preset no surface runs the loop unless asked; the pre-rebase 3-arm sweep already measured the `formatstring off` arm byte-identical to the genuine pre-fix binary over 15,990 functions / 33 cases (0 differences)"
  },
  "speed": {
-  "metric": "whole-binary `kuna decompile-all --json --no-vars`, interleaved, MINIMUM of 13 pairs",
+  "metric": "whole-binary `unlace decompile-all --json --no-vars`, interleaved, MINIMUM of 13 pairs",
   "budget_pct": 5.0,
   "shipped_default": {
    "arms": "explicit `--option formatstring off` vs the shipped default (both disable the loop, so this measures that the gate really is off)",
@@ -454,9 +454,9 @@
  },
  "follow_ups": [
   "formatstring: make the second decompile cheap (100% of the measured cost). The naive redundant-override skip was built and rejected -- see speed.optimization_attempted_and_rejected. This is the precondition for putting the option back into AGGRESSIVE_OVERRIDES, which is where the decbench type_match win lives",
-  "SEPARATE ROOT CAUSE, filed in the PR body: kuna cannot LOAD an unstripped C++ binary containing an anonymous namespace. strip_bracket_groups (kuna-analysis analyzers/demangle/mod.rs) deletes `(anonymous namespace)` whole, leaving an empty `::` component, and Database::find_create_scope_from_symbol_name rejects it with \"Non-global scope has empty name\" -- aborting `load file` for the entire binary. Both surfaces fail identically (it is NOT a divergence). Reproduces on leveldb libleveldb.so.1.23.0 and leveldbutil; 8 of leveldbutil's FUNC symbols reduce to an empty component. Pre-existing (the demangler predates #262-#266); invisible until now because decbench scores the STRIPPED binaries.",
+  "SEPARATE ROOT CAUSE, filed in the PR body: unlace cannot LOAD an unstripped C++ binary containing an anonymous namespace. strip_bracket_groups (unlace-analysis analyzers/demangle/mod.rs) deletes `(anonymous namespace)` whole, leaving an empty `::` component, and Database::find_create_scope_from_symbol_name rejects it with \"Non-global scope has empty name\" -- aborting `load file` for the entire binary. Both surfaces fail identically (it is NOT a divergence). Reproduces on leveldb libleveldb.so.1.23.0 and leveldbutil; 8 of leveldbutil's FUNC symbols reduce to an empty component. Pre-existing (the demangler predates #262-#266); invisible until now because decbench scores the STRIPPED binaries.",
   "the shared step is the natural home for any further per-function driver policy (the watchdog budget is still armed by the CLI on the architecture rather than passed in)",
-  "formatstring: a %c argument is typed uint1 where the C variadic promotion makes the parameter an int (sysvinit Write_Runlevel_Log); a format-derived width can narrow a recovered uLong (zlib test_sync). Both pre-exist on `kuna decompile`; they are the 10 type_match regressions in this PR's benchmark"
+  "formatstring: a %c argument is typed uint1 where the C variadic promotion makes the parameter an int (sysvinit Write_Runlevel_Log); a format-derived width can narrow a recovered uLong (zlib test_sync). Both pre-exist on `unlace decompile`; they are the 10 type_match regressions in this PR's benchmark"
  ],
  "speed_budget_pct": 5.0,
  "speed_within_budget": true,
@@ -466,9 +466,9 @@
  "base_commit": "b96cc531 (#269)",
  "shared_counters_rederived_from_build": {
   "method": "read off the BUILT artifact and the tree, never by arithmetic",
-  "live_kuna_catalog_json": 95,
+  "live_unlace_catalog_json": 95,
   "catalog_bytecompat_rs": 95,
-  "kuna_phases_tests_rs": 95,
+  "unlace_phases_tests_rs": 95,
   "phase_catalog_json": 95,
   "docs_options_md_sections": 95,
   "options_md_byte_current_vs_regeneration": true,

@@ -1,7 +1,7 @@
 [package]
 autotests = false
 name = "unlace-base"
-description = "kuna Rust port: foundation layer (addresses, spaces, marshaling, raw p-code)"
+description = "unlace Rust port: foundation layer (addresses, spaces, marshaling, raw p-code)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

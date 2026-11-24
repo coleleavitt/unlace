@@ -15,7 +15,7 @@ prototype — not a sample.
   source idiom; B exists because a rule measured only on A is measured on that
   idiom, and the first version of this rule was.
 
-Method: `kuna decompile-all <stripped> --json` twice per slice (`--option
+Method: `unlace decompile-all <stripped> --json` twice per slice (`--option
 passthrough off` and the shipped default), the recovered argument list read from
 `variables[]` `kind == "arg"`, joined by `low_pc` to the twin's
 `DW_TAG_subprogram` (following `DW_AT_abstract_origin` for gcc's concrete
@@ -59,7 +59,7 @@ Three refusals were added, and one detection bug fixed:
    prototype past its named parameters — is recorded with the statement and never
    claimed. The ABI lets a caller leave that register unset, so the callee's read
    of it says nothing about what its callers put there.
-2. **no hole** (`kuna_passthrough::no_hole_before`). Parameters are positional: a
+2. **no hole** (`unlace_passthrough::no_hole_before`). Parameters are positional: a
    claim at the third stated register gives the function three parameters. Every
    earlier stated register must be one this function could be carrying — claimed
    here too, or one its own entry walk does not prove it WRITES before reading.
@@ -126,8 +126,8 @@ The tightening costs 55 confirmed parameters on corpus A (2,783 → 2,728) and 1
 on corpus B (1,532 → 1,379) — 5% of the gain, to remove every contradicted row.
 
 Of the 4,107 confirmed parameters, 3,782 also agree with DWARF on the type's
-*class*; the 325 that do not are almost all a real pointer parameter kuna types
-`long`/`unsigned long` (`chroot` `0x6d10` takes DWARF `char *`, kuna says
+*class*; the 325 that do not are almost all a real pointer parameter unlace types
+`long`/`unsigned long` (`chroot` `0x6d10` takes DWARF `char *`, unlace says
 `long`). That is the `ptr_char` gap the campaign already tracks, not a
 fabrication: the parameter exists, and with the option off it was missing
 entirely.
@@ -146,11 +146,11 @@ the selinux, `*_safer` and zlib-compat wrapper families.
 
 The first pass of this sweep measured **212 contradicted returns of 4,267** on
 corpus A — one shape, replicated: gnulib `version_etc_ar` is DWARF `void`, and
-kuna recovers its callee `version_etc_arn` (also `void`) as returning `long`,
+unlace recovers its callee `version_etc_arn` (also `void`) as returning `long`,
 because that function's fallthrough path ends in `__fprintf_chk` and keeps the
 call's `RAX` clobber. `recovered_output` now refuses to state a return the callee
 did not compute: every live RETURN must hand back a value produced in **every
-byte and on every path** (`kuna_returnuncomputed::every_return_computes`).
+byte and on every path** (`unlace_returnuncomputed::every_return_computes`).
 
 | | rows | confirmed | contradicted | no twin |
 |---|---:|---:|---:|---:|

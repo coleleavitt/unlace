@@ -1,17 +1,17 @@
 ## The problem
 
-`kuna unpack` handled exactly one packer, so a NEOLite-packed PE — a `.NEOpack`
+`unlace unpack` handled exactly one packer, so a NEOLite-packed PE — a `.NEOpack`
 loader section, the entry point inside it, and every original section compressed
-in place — came back as a file kuna does not know anything about, and every other
+in place — came back as a file unlace does not know anything about, and every other
 surface stayed useless on it:
 
 ```console
-$ kuna unpack ./CryptoME.exe --json
+$ unlace unpack ./CryptoME.exe --json
 error: ./CryptoME.exe: no UPX PackHeader found
-note: kuna unpack handles UPX-packed executables; this file is not one
+note: unlace unpack handles UPX-packed executables; this file is not one
 $ echo $?
 1
-$ kuna functions ./CryptoME.exe | wc -l
+$ unlace functions ./CryptoME.exe | wc -l
 64      # all imports; not one function of the program
 ```
 
@@ -20,7 +20,7 @@ decompressor under Unicorn.
 
 ## The fix
 
-- `kuna-analysis/src/neolite.rs` decodes the format statically. It is an LZX
+- `unlace-analysis/src/neolite.rs` decodes the format statically. It is an LZX
   derivative: 58 position slots, three repeated offsets, main symbols that merge
   match length and position slot as `256 + slot * 8 + len_slot`, DEFLATE's length
   base/extra tables behind a separate 28-symbol tree, and DEFLATE-style
@@ -45,7 +45,7 @@ decompressor under Unicorn.
   verbatim. Completeness is the only thing separating plaintext from a stream, so
   it is enforced exactly rather than approximately.
 
-On the witness: 3 sections and 139,776 → 447,488 bytes, and `kuna functions` goes
+On the witness: 3 sections and 139,776 → 447,488 bytes, and `unlace functions` goes
 from 0 to 387 with import names, with the recovered entry decompiling to the MSVC
 CRT startup.
 

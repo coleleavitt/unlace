@@ -5,7 +5,7 @@ returns the zero it placed in EAX *before* that call (RE-need
 `main-returns-invented-cookie`, round-6 challenge 69b7492049fa49a2a260218f).
 
 `x86-64-win.cspec` lists RAX in `<killedbycall>`, so without
-`option calleeretpreserves` the zero is dead and kuna emits
+`option calleeretpreserves` the zero is dead and unlace emits
 `return sub_140001080(v2);` -- a return value the machine never computes.  The
 checker body here is `__security_check_cookie` verbatim, including the direct JMP
 its failure path takes into a `__fastfail` stub, because that `int 0x29` is what

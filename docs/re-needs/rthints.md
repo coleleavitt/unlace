@@ -48,7 +48,7 @@ decompiling the wrapper before it realises which tool it needed.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--summary",
@@ -82,7 +82,7 @@ decompiling the wrapper before it realises which tool it needed.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--summary",

@@ -1,6 +1,6 @@
-# Kuna DEX loader, container formats: P1 environment binding. The fixtures
+# Unlace DEX loader, container formats: P1 environment binding. The fixtures
 # come from tests/stages/fixtures/dex/containers.py (hello.dex and
-# tries.dex rewrapped). Before, none of these loaded: kuna knew only DEX
+# tries.dex rewrapped). Before, none of these loaded: unlace knew only DEX
 # files and APKs.
 #
 # #1: an ODEX (dey\n, DexOptHeader) loads its embedded DEX, decoded with

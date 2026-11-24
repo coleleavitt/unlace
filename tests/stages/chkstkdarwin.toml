@@ -8,7 +8,7 @@
 # register nothing assigns, and the functions lost their parameters.
 #
 # Stage / sub-stage: P2 flow classification. The action in
-# p2_lift/kuna_chkstkdarwin.rs removes the probe call from the raw p-code
+# p2_lift/unlace_chkstkdarwin.rs removes the probe call from the raw p-code
 # before FuncLink and SSA.
 #
 # The XML wrapper only supplies the harness architecture. Both passes clear it

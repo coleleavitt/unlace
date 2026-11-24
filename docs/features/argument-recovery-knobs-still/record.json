@@ -26,7 +26,7 @@
     },
     {
       "id": "default-on-vs-triage-constraint",
-      "claim": "Shipped as a NEW option (never an edit to calleearity's rule) but DEFAULT-ON, which departs from T_TRIAGE's 'new default-off option' wording because the replaced acceptance probe runs `kuna decompile ... --addr` with NO options and can only pass on default output.",
+      "claim": "Shipped as a NEW option (never an edit to calleearity's rule) but DEFAULT-ON, which departs from T_TRIAGE's 'new default-off option' wording because the replaced acceptance probe runs `unlace decompile ... --addr` with NO options and can only pass on default output.",
       "evidence": "The agents.md default-ON bar is met on its own terms: 0/675 datatest assertions change (docs/baseline.json unmoved), 0 stage assertions regress, and the corpus sweep classifies every hunk. The ablation is preserved: `--option calleearityfwd off` restores the previous output exactly, and `--option calleearity off` still disables both directions."
     },
     {
@@ -39,7 +39,7 @@
     "make test": "675/675 PARITY OK",
     "make test-stages": "597/597 PARITY OK",
     "make check-spec": "OK",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "acceptance": "PASS (a-a94fa26848a4)"
   }
 }

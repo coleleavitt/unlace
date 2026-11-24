@@ -9,7 +9,7 @@ win; absent, conflicting, custom and soft-float metadata stay conservative.
 
 `corpus.py` builds every `fixtures/*.c` with clang as hard-float ARM, hard-float
 Thumb, `softfp` and soft-float objects, adds every ARM ELF fixture in
-`decompiler/crates/kuna-analysis/tests/fixtures`, and diffs `decompile-all --mode
+`decompiler/crates/unlace-analysis/tests/fixtures`, and diffs `decompile-all --mode
 aggressive` with the option off and on (run after `make binaries`):
 
 ```sh
@@ -100,7 +100,7 @@ The synthetic compiler reproducer is included in `fixtures/narrow.c`:
 mkdir -p ../tmp/arm-float-narrow
 clang --target=armv7a-linux-gnueabihf -marm -mfloat-abi=hard -mfpu=vfpv3-d16 -O2 -c \
   docs/features/armfloatreturn/fixtures/narrow.c -o ../tmp/arm-float-narrow/narrow.o
-decompiler/target/release/kuna decompile ../tmp/arm-float-narrow/narrow.o narrow \
+decompiler/target/release/unlace decompile ../tmp/arm-float-narrow/narrow.o narrow \
   --mode aggressive --option armfloatreturn on
 ```
 
@@ -144,7 +144,7 @@ constant, load, copy, arithmetic and conversion results retain their width.
   option is inert), the relocatable `armfloatreturn_armhf.o`
   (`Tag_ABI_VFP_args=1`) and the linked `fmtlf_armhf` (hard-float header flag)
   with the option off, which reproduces the truncation, and on.
-- `decompiler/crates/kuna-cli/tests/arm_float_returns.rs` builds ELF objects from
+- `decompiler/crates/unlace-cli/tests/arm_float_returns.rs` builds ELF objects from
   fixed instruction words for the metadata controls, narrowing, widening, mixed
   paths and explicit contracts, and runs the fixture's `twocalls`/`twocallsf`: a
   parameter passed to a first call must leave the second call the value computed

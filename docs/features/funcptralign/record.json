@@ -19,19 +19,19 @@
  "upstream_anchor": "Ghidra/Features/Decompiler/src/decompile/cpp/ruleaction.cc RuleFuncPtrEncoding::applyOp:9928-9949",
  "default_on": true,
  "gated": false,
- "gate_rationale": "Strict bug fix, no flag. The alignment width is declared by the processor cspec (<funcptr align=\"N\"/>), not by kuna; upstream Ghidra honours it unconditionally; the rule body was already a line-for-line port whose only input was a hard-coded 0 stub; and the pre-fix C stated a bit-clear the program never performs. Both parity gates stay green with the fix live, with no re-pin and no per-test opt-out. Recorded in docs/history.md under Convergences (upstream behavior restored), which is where the registry puts a port defect whose fix moves kuna back onto upstream's default.",
+ "gate_rationale": "Strict bug fix, no flag. The alignment width is declared by the processor cspec (<funcptr align=\"N\"/>), not by unlace; upstream Ghidra honours it unconditionally; the rule body was already a line-for-line port whose only input was a hard-coded 0 stub; and the pre-fix C stated a bit-clear the program never performs. Both parity gates stay green with the fix live, with no re-pin and no per-test opt-out. Recorded in docs/history.md under Convergences (upstream behavior restored), which is where the registry puts a port defect whose fix moves unlace back onto upstream's default.",
  "div": null,
  "convergence_row": "funcptrencoding (P3 rule pool)",
  "ablation_changed": 0,
  "parity": "OK",
  "decisions": [
-  "No option gate. CLAUDE.md carves out 'a strict bug fix that only corrects wrong output needs no flag'; this finishes a stubbed port (funcptr_align() returned a hard-coded 0), the width comes from the vendored cspec rather than from kuna, and the ablation is 0/675 with no re-pin.",
-  "Honour align=4 on AARCH64 exactly as align=2 on ARM. Upstream RuleFuncPtrEncoding::applyOp has a single code path (slide = ~0 << align) with no align special-case, and the comparison is exact, so a `& ~3` matches on AARCH64 and a `& ~1` does not. Confirmed empirically against stock Ghidra 12.1 headless on a purpose-built AArch64 probe: Ghidra strips the program's own `and x8, x8, #0xfffffffffffffffc` before `blr x8` and prints (**(code **)(param_1 + 2))(*param_1), byte-for-byte what kuna now prints.",
+  "No option gate. CLAUDE.md carves out 'a strict bug fix that only corrects wrong output needs no flag'; this finishes a stubbed port (funcptr_align() returned a hard-coded 0), the width comes from the vendored cspec rather than from unlace, and the ablation is 0/675 with no re-pin.",
+  "Honour align=4 on AARCH64 exactly as align=2 on ARM. Upstream RuleFuncPtrEncoding::applyOp has a single code path (slide = ~0 << align) with no align special-case, and the comparison is exact, so a `& ~3` matches on AARCH64 and a `& ~1` does not. Confirmed empirically against stock Ghidra 12.1 headless on a purpose-built AArch64 probe: Ghidra strips the program's own `and x8, x8, #0xfffffffffffffffc` before `blr x8` and prints (**(code **)(param_1 + 2))(*param_1), byte-for-byte what unlace now prints.",
   "AArch64's own lifting emits no mask (AARCH64base.sinc:887 `:blr Rn_GPR64 { pc = Rn_GPR64; ... call [pc]; }`), so the rule is inert on ordinary AArch64 code and only fires on a mask the program itself wrote.",
   "No interaction with thumbfuncptr (GH-8471 / DIV-2), the other live funcptr_align reader: this rule only removes an INT_AND that a CALLIND consumes, and rewrites it to a transparent COPY, so any other reader keeps the value. Pinned by pass 2 of the stage test and by the unchanged gh8471-thumbfuncptr.xml."
  ],
  "breadth": {
-  "metric": "kuna decompile-all, whole binary, occurrences of `& 0xfffffffe` / `(code *)` / `(code **)`",
+  "metric": "unlace decompile-all, whole binary, occurrences of `& 0xfffffffe` / `(code *)` / `(code **)`",
   "arm": {
    "crazyflie/cf2.elf": {
     "masks": [
@@ -109,17 +109,17 @@
    "handle": "(**(code **)(param_1 + 2))()",
    "handle_masked": "(**(code **)(param_1 + 2))(*param_1)"
   },
-  "kuna_before": {
+  "unlace_before": {
    "handle": "(**(code **)&a0[2])()",
    "handle_masked": "(*(code *)(*(uint8 *)&a0[2] & 0xfffffffffffffffc))(*a0)"
   },
-  "kuna_after": {
+  "unlace_after": {
    "handle": "(**(code **)&a0[2])()",
    "handle_masked": "(**(code **)&a0[2])(*a0)"
   },
-  "verdict": "kuna matches stock Ghidra 12.1 on both arms; the align=4 seam is upstream's declared contract, not a kuna choice, and is inert on ordinary AArch64 code"
+  "verdict": "unlace matches stock Ghidra 12.1 on both arms; the align=4 seam is upstream's declared contract, not a unlace choice, and is inert on ordinary AArch64 code"
  },
- "speed_metric": "kuna decompile-all, interleaved medians across two builds of this tree (pre-fix funcptr_align stub vs live read); box running three concurrent sibling agents",
+ "speed_metric": "unlace decompile-all, interleaved medians across two builds of this tree (pre-fix funcptr_align stub vs live read); box running three concurrent sibling agents",
  "speed_libopencm3_msc_before_ms": 592,
  "speed_libopencm3_msc_after_ms": 597,
  "speed_libopencm3_msc_pct": 0.84,
@@ -146,7 +146,7 @@
   "make test-stages": "PARITY OK 358/358",
   "make rust-test": "green",
   "make check-spec": "OK (lenient + strict)",
-  "kuna catalog --check": "catalog OK: documents exactly the registered kuna options"
+  "unlace catalog --check": "catalog OK: documents exactly the registered unlace options"
  },
  "ged_case": "O2-noinline-libopencm3-msc-msc_data_rx_cb",
  "ged_recorded": 13.0,
@@ -156,7 +156,7 @@
  "ged_perfect_after": false,
  "ged_approximated": false,
  "ged_options": [],
- "ged_kuna_commit": "9623dc27",
+ "ged_unlace_commit": "9623dc27",
  "ged_results_root": "/home/mahaloz/github/decbench/results/full_run",
  "ged_verdict": "ZERO GED value, as the cluster record predicted. GED is a CFG edit distance; this fix removes an INT_AND from an expression and retypes a LOAD, changing no basic block and no edge, so the metric cannot see it. Measured, not assumed.",
  "ged_runs": {
@@ -182,5 +182,5 @@
    "note": "the headline witness; its case_id exists only in the triage branch's pool, so `rescore` on main cannot resolve it (`--siblings` aborts on it). The firmware instance above is the same function in the same project."
   }
  },
- "why_ship_without_a_ged_win": "The win is correctness and readability, and it is measured directly instead: kuna's post-fix C is byte-for-byte Ghidra's on both the ARM witness and the AArch64 probe, the invented bit-clear is gone (masks 264 -> 15 on cf2.elf, 459 -> 40 on nuttx), and the callee type is finally recovered (`(code **)` 0 -> 205 and 0 -> 397 on those two, where every ARM project in the corpus previously had zero)."
+ "why_ship_without_a_ged_win": "The win is correctness and readability, and it is measured directly instead: unlace's post-fix C is byte-for-byte Ghidra's on both the ARM witness and the AArch64 probe, the invented bit-clear is gone (masks 264 -> 15 on cf2.elf, 459 -> 40 on nuttx), and the callee type is finally recovered (`(code **)` 0 -> 205 and 0 -> 397 on those two, where every ARM project in the corpus previously had zero)."
 }

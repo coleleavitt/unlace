@@ -1,4 +1,4 @@
-# kuna x87depth: a discarded x87 call result makes a void function return
+# unlace x87depth: a discarded x87 call result makes a void function return
 # `long double`.
 #
 # Source (gcc -m32 -O2 -fomit-frame-pointer):

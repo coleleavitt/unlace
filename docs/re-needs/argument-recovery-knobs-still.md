@@ -41,7 +41,7 @@ Recover the allocation size passed to sub_140002c90 in the checker.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x1400011c0",
@@ -79,7 +79,7 @@ Recover the allocation size passed to sub_140002c90 in the checker.
   "kind": "cli",
   "timeout_s": 120,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x1400011c0",

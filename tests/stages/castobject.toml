@@ -1,4 +1,4 @@
-# kuna castobject (P6, sub-stage stack-frame-layout; option castobject on|off).
+# unlace castobject (P6, sub-stage stack-frame-layout; option castobject on|off).
 #
 # Source: the 2026-09-27 address-of cast census.  The frame layout types a
 # stack slot from its own loads and stores and, where two readings of the

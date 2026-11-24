@@ -390,7 +390,7 @@ impl UnlaceRegionGraph {
     /// In-degree (C++ `sizeIn`).
     pub fn size_in(&self, n: UnlaceNodeId) -> UnlaceResult<int4> {
         let adj = self.node(n).ok_or_else(|| {
-            UnlaceError::lowlevel("kuna regiongraph: sizeIn of node not in graph")
+            UnlaceError::lowlevel("unlace regiongraph: sizeIn of node not in graph")
         })?;
         Ok(adj.preds.len() as int4)
     }
@@ -398,7 +398,7 @@ impl UnlaceRegionGraph {
     /// Out-degree (C++ `sizeOut`).
     pub fn size_out(&self, n: UnlaceNodeId) -> UnlaceResult<int4> {
         let adj = self.node(n).ok_or_else(|| {
-            UnlaceError::lowlevel("kuna regiongraph: sizeOut of node not in graph")
+            UnlaceError::lowlevel("unlace regiongraph: sizeOut of node not in graph")
         })?;
         Ok(adj.succs.len() as int4)
     }
@@ -406,7 +406,7 @@ impl UnlaceRegionGraph {
     /// In-neighbors in insertion order (C++ `getPreds`).
     pub fn get_preds(&self, n: UnlaceNodeId) -> UnlaceResult<&[UnlaceNodeId]> {
         let adj = self.node(n).ok_or_else(|| {
-            UnlaceError::lowlevel("kuna regiongraph: getPreds of node not in graph")
+            UnlaceError::lowlevel("unlace regiongraph: getPreds of node not in graph")
         })?;
         Ok(&adj.preds)
     }
@@ -414,7 +414,7 @@ impl UnlaceRegionGraph {
     /// Out-neighbors in insertion order (C++ `getSuccs`).
     pub fn get_succs(&self, n: UnlaceNodeId) -> UnlaceResult<&[UnlaceNodeId]> {
         let adj = self.node(n).ok_or_else(|| {
-            UnlaceError::lowlevel("kuna regiongraph: getSuccs of node not in graph")
+            UnlaceError::lowlevel("unlace regiongraph: getSuccs of node not in graph")
         })?;
         Ok(&adj.succs)
     }
@@ -987,7 +987,7 @@ pub fn unlace_quasi_topo_sort(
         head = heads[0];
     } else {
         return Err(UnlaceError::lowlevel(
-            "kuna regiongraph: collapsed graph has no head",
+            "unlace regiongraph: collapsed graph has no head",
         ));
     }
 
@@ -1092,7 +1092,7 @@ fn unlace_append_scc(
                     let d = unlace_shortest_path_length(g, j, k)?;
                     if d < 0 {
                         return Err(UnlaceError::lowlevel(
-                            "kuna regiongraph: SCC members not mutually reachable",
+                            "unlace regiongraph: SCC members not mutually reachable",
                         ));
                     }
                     total += d;
@@ -1154,13 +1154,13 @@ fn check_slice_ends(
 ) -> UnlaceResult<()> {
     if !g.contains_node(source) {
         return Err(UnlaceError::lowlevel(
-            "kuna regiongraph: slice source not in graph",
+            "unlace regiongraph: slice source not in graph",
         ));
     }
     for fk in frontier.iter() {
         if !g.contains_node(fk.id) {
             return Err(UnlaceError::lowlevel(
-                "kuna regiongraph: slice frontier node not in graph",
+                "unlace regiongraph: slice frontier node not in graph",
             ));
         }
     }
@@ -1547,7 +1547,7 @@ impl UnlaceIncrementalDominators {
                         Some(&nx) => v = nx,
                         None => {
                             return Err(UnlaceError::lowlevel(
-                                "kuna regiongraph: broken dom chain in initDfs",
+                                "unlace regiongraph: broken dom chain in initDfs",
                             ));
                         }
                     }
@@ -1628,11 +1628,11 @@ impl UnlaceIncrementalDominators {
 
         // Climb out of the replaced set to find the new node's dominator.
         let mut new_dom = *self.doms.get(&replaced_head).ok_or_else(|| {
-            UnlaceError::lowlevel("kuna regiongraph: replaced head has no dominator")
+            UnlaceError::lowlevel("unlace regiongraph: replaced head has no dominator")
         })?;
         while replaced_nodes.contains(&pool.key(new_dom)) && new_dom != self.start {
             new_dom = *self.doms.get(&new_dom).ok_or_else(|| {
-                UnlaceError::lowlevel("kuna regiongraph: broken dom chain in graphUpdated")
+                UnlaceError::lowlevel("unlace regiongraph: broken dom chain in graphUpdated")
             })?;
         }
         if replaced_nodes.contains(&pool.key(self.start)) {
@@ -1690,7 +1690,7 @@ impl UnlaceIncrementalDominators {
                 }
                 if !found {
                     return Err(UnlaceError::lowlevel(
-                        "kuna regiongraph: inverted dom tree inconsistent",
+                        "unlace regiongraph: inverted dom tree inconsistent",
                     ));
                 }
             }
@@ -1705,7 +1705,7 @@ impl UnlaceIncrementalDominators {
         let true_doms = self.compute_doms(pool, graph)?;
         if true_doms.len() != self.doms.len() {
             return Err(UnlaceError::lowlevel(
-                "kuna regiongraph: incremental dominators diverged (size)",
+                "unlace regiongraph: incremental dominators diverged (size)",
             ));
         }
         for (k, v) in true_doms.iter() {
@@ -1713,7 +1713,7 @@ impl UnlaceIncrementalDominators {
                 Some(dv) if dv == v => {}
                 _ => {
                     return Err(UnlaceError::lowlevel(
-                        "kuna regiongraph: incremental dominators diverged",
+                        "unlace regiongraph: incremental dominators diverged",
                     ));
                 }
             }
@@ -1722,7 +1722,7 @@ impl UnlaceIncrementalDominators {
             let true_dfs = self.compute_dfs(pool, graph)?;
             if true_dfs.len() != self.dfs.len() {
                 return Err(UnlaceError::lowlevel(
-                    "kuna regiongraph: incremental frontiers diverged (size)",
+                    "unlace regiongraph: incremental frontiers diverged (size)",
                 ));
             }
             for (k, v) in true_dfs.iter() {
@@ -1730,7 +1730,7 @@ impl UnlaceIncrementalDominators {
                     Some(dv) if dv == v => {}
                     _ => {
                         return Err(UnlaceError::lowlevel(
-                            "kuna regiongraph: incremental frontiers diverged",
+                            "unlace regiongraph: incremental frontiers diverged",
                         ));
                     }
                 }

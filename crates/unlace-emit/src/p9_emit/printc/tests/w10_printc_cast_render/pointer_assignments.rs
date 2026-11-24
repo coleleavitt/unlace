@@ -96,7 +96,7 @@ fn integer_carriers_and_cast_results_assign_to_pointer_members() {
                 .unwrap()
                 .as_nanos();
             let source = std::env::temp_dir().join(format!(
-                "kuna-pointer-member-{}-{nonce}.c",
+                "unlace-pointer-member-{}-{nonce}.c",
                 std::process::id()
             ));
             std::fs::write(&source, program).unwrap();

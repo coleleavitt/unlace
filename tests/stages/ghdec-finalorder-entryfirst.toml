@@ -1,4 +1,4 @@
-# decbench campaign case O0-libopencm3-sdram-main (NOVEL pool: kuna already
+# decbench campaign case O0-libopencm3-sdram-main (NOVEL pool: unlace already
 # scored best of all decompilers on that pane and still emitted the function
 # entry as unreachable dead code, so no other decompiler surfaced this fix).
 # The witness carried here is the second one the triage recorded, diffutils
@@ -12,7 +12,7 @@
 # ActionFinalStructure::apply, blockaction.cc:2192), keying on
 # FlowBlock::compareFinalOrder (block.cc:709): the entry component first,
 # RETURN-terminated components last, otherwise by ascending block index.
-# kuna had ported the producer of that key (BlockGraph::add_block keeps a
+# unlace had ported the producer of that key (BlockGraph::add_block keeps a
 # composite index at the minimum over its members) but not the sort, so the
 # list stayed in collapse order - whichever component the collapse happened
 # to append first printed first:

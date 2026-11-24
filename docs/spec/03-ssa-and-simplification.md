@@ -24,7 +24,7 @@ This phase owns the **definition web**: the SSA linkage over the op-graph
 (heritage — phi placement, renaming, call/return/load/store guards, the
 dead-definition gate) and the **simplification fixpoint** that runs over it (the
 rule pools, sub-variable flow, conditional-execution collapse, conditional
-constants, and the kuna peephole rewrites). Nothing here runs as a standalone
+constants, and the unlace peephole rewrites). Nothing here runs as a standalone
 stage: every pass in this chapter is a member of `mainloop`/`stackstall` or the
 post-fullloop cleanup, scheduled and repeated exactly as §0.6 describes — SSA is
 rebuilt incrementally each mainloop iteration and the pools re-fire between
@@ -69,7 +69,7 @@ call's stack offset be read out of the data flow before the stack is in SSA
 will be, and leaving it on the op would put a spurious stack read in the CALL's
 argument list.
 
-**Join-space varnodes (kuna: split at the first piece's pass).** A varnode whose
+**Join-space varnodes (unlace: split at the first piece's pass).** A varnode whose
 storage is several pieces lives in the join space and is split into its pieces
 before the ranges are collected (`heritage.rs (Heritage::process_joins)`): a free
 join read becomes a PIECE of its pieces, and a written or input join defines each
@@ -80,7 +80,7 @@ split waited for the stack's pass, after the registers were already heritaged:
 every read of the register pieces had become a bare input register that no
 parameter accounts for. A copy of those pieces to memory was then dead to
 `ActionDeadCode`, and `use3(&s)` printed as `use3(&v1)` with only `v1.z = s.z`
-stored. kuna splits the join on the first pass that heritages any of its pieces.
+stored. unlace splits the join on the first pass that heritages any of its pieces.
 
 An ABI join can contain zero constant pieces for logical padding that has no
 physical storage. Reading the join supplies those zeros; splitting a written
@@ -176,7 +176,7 @@ successor once per CFG edge per pass.
 **Heritage's own reads.** Upstream gives each input slot of a new MULTIEQUAL,
 the input of each call or store guard INDIRECT, and the input of each persist
 RETURN COPY a free placeholder Varnode at the op's own storage, which renaming
-replaces with the top of that storage's stack and deletes. kuna builds none of
+replaces with the top of that storage's stack and deletes. unlace builds none of
 them (`renamereads.rs`): the slot is left empty and the op marked, and
 renaming reads the marked op's output storage where upstream reads the
 placeholder's, which is the same address and size, so the slot is linked to the
@@ -197,7 +197,7 @@ the 26.5 million of libpython3.11 0x3b72c0's.
 **Shared guard annotations.** Upstream's `newIndirectOp` gives every guard
 INDIRECT its own iop-space annotation Varnode naming the call or store it
 guards, so a call guarded on N ranges carries N identical annotations. Within a
-heritage pass kuna's guards of one call or store share one
+heritage pass unlace's guards of one call or store share one
 (`renamereads.rs (new_indirect)`): readers only decode the guarded op from
 the annotation's offset, and annotations get no cover or HighVariable. An iop
 annotation is the one free Varnode that may have several descendants
@@ -280,7 +280,7 @@ than `&Stack00000000`. Annotating the raw stack pointer on a phi's *incoming
 edge* would recover the frame-relative spelling, but upstream does not do it and
 it would be a new decision point, not part of this invariant.
 
-**Materializing an input over existing pieces (kuna, DIV-50).** The input a
+**Materializing an input over existing pieces (unlace, DIV-50).** The input a
 stack-empty read materializes may land on storage that already holds input
 varnodes. Upstream refuses that outright — `Funcdata::set_input_varnode` raises
 `Overlapping input varnodes` and the function is abandoned with no body at all.
@@ -317,7 +317,7 @@ smaller size, the stale MULTIEQUAL/INDIRECT/return-COPY markers from the earlier
 pass are deleted and the old outputs re-derived as SUBPIECEs of the new full
 range (`heritage.rs (Heritage::remove_revisited_markers)`).
 
-**Refining a revisited range (kuna, #1034).** The two meet when a later pass's
+**Refining a revisited range (unlace, #1034).** The two meet when a later pass's
 access joins ranges an earlier pass heritaged apart: an 8-byte read at
 `rsp+0x13`, seen only once a spilled pointer resolves, joins the slots at
 `rsp+0x10` and `rsp+0x18`. `collect` sets the earlier MULTIEQUAL/INDIRECT
@@ -342,7 +342,7 @@ the store of those bytes would die. A marker that one partition holds is left
 to that partition's own revisit, as before, so a refinement that cuts no marker
 is unchanged.
 
-**Accesses that wrap past the top of a space (kuna, #1034).** Address arithmetic
+**Accesses that wrap past the top of a space (unlace, #1034).** Address arithmetic
 is modular in the size of the space, so an access can name bytes at both ends
 of it: an 8-byte load from ram `0xfffffffffffffffb` reads five bytes below the
 top and three from offset 0, and a stack access that starts below the entry
@@ -444,7 +444,7 @@ call has on the (callee-translated) range (`crates/unlace-middle/src/p4_calls/fs
 
 A persistent RAM range needs no
 call guard when the callee's complete memory-effect summary proves every read
-and write disjoint from it. The bounded `kuna_calleememory` walker and its cache
+and write disjoint from it. The bounded `unlace_calleememory` walker and its cache
 are shared with frame analysis, but the global proof excludes absolute memory
 accesses, direct memory input or output varnodes in any processor space,
 nonreturn frame accesses and any opaque or incomplete path. Exact self-XOR zeroing and constant zero extension preserve
@@ -543,7 +543,7 @@ into it. With every guard built the input is the value just before the call,
 so the copy stores what the global already holds; across a skipped call it
 stores the value from before that call and undoes it (`sg = v1;` printed
 after `f2();`). The kept guards whose input crosses a skipped call are marked
-`kuna_persist_stale` (`persistcalls.rs (stale_inputs)`), and a merge copy
+`unlace_persist_stale` (`persistcalls.rs (stale_inputs)`), and a merge copy
 of such a guard's input or its collapse restarts the function, below. Read-only ranges are
 `readonlycalls`' (above), volatile ones keep every guard, and so does a range
 an earlier pass already heritaged in part (a revisit), whose old markers are
@@ -570,9 +570,9 @@ value from the skipped calls' inputs. Once every guard is built, the joins
 are checked again with every definition the range got, its STORE and syscall
 guards included, and one taking a stale value restarts too. And
 `RuleIndirectCollapse` can remove a guard whose call died or became a COPY;
-for a guard kept for a read on such a range (marked `kuna_persist_guard`), the
+for a guard kept for a read on such a range (marked `unlace_persist_guard`), the
 same check runs from the guard before it is removed; a guard marked
-`kuna_persist_stale` restarts whenever it collapses or merging copies its
+`unlace_persist_stale` restarts whenever it collapses or merging copies its
 input (`funcdata_merge.rs (persist_trim)`, from `Merge::allocateCopyTrim`). A
 restart from merging leaves merge state behind, so `Funcdata::clear` clears
 it, as upstream's `covermerge.clear()` does. The pass a function runs once its
@@ -602,7 +602,7 @@ INDIRECT is needed. The skip also drops the input trial, which loses an
 argument the call reads from the register it returns in. A declared
 `double vr(int n, ...)` called as `vr(k, k + 1, 0.5)` gets its `0.5` in `xmm0`
 on x86-64 (`d0` on AArch64, `f1` on 32-bit PowerPC), and the call printed as
-`vr(k,k + 1)`. kuna still registers the input trial for such a range when the
+`vr(k,k + 1)`. unlace still registers the input trial for such a range when the
 call is variadic and its model passes a variadic argument there (chapter 04,
 `crates/unlace-bandb-base/src/p4_calls/varargretreg.rs
 (argument_in_own_output)`); the range still gets no INDIRECT.
@@ -924,7 +924,7 @@ off a value that already existed before the call.
 
 The level selects how much of that runs: at `off` both branches are inert and a
 partial-range slice of an argument or return register at a call gets no guard,
-which is what kuna shipped before the option — the observable symptom is a call
+which is what unlace shipped before the option — the observable symptom is a call
 rendered with missing arguments and a return value read from a stale pre-call
 definition. At `in` only the input guard runs, which recovers the argument but
 leaves the return value stale; at `full` both run, which is upstream Ghidra's
@@ -988,7 +988,7 @@ the stack-pointer input's descendant tree — accumulating constant `INT_ADD`
 offsets, passing through COPY/INDIRECT/SEGMENTOP, and flagging any traversal of
 a *non-constant* add or a MULTIEQUAL — and records a guard
 (`heritage.rs (LoadGuard)`) for every LOAD/STORE reached on a flagged path,
-marking the op `spacebase_ptr`. **OR-masked pointers** (always on, kuna): an
+marking the op `spacebase_ptr`. **OR-masked pointers** (always on, unlace): an
 `INT_OR` of the path with a constant below `0x1000` (the window an unrefined
 guard covers) is flagged the same way. GCC reads a spilled `int`'s low byte
 through `(fp+0x7fb)|3` on SPARC64; which byte depends on the pointer's
@@ -1032,7 +1032,7 @@ below, the merge tier's untied-call intersection test (chapter 06), and
 only where a pointer can reach the range being heritaged — upstream's
 `Architecture::highPtrPossible`, which is every space but the internal *unique*
 one save for the ranges a compiler spec names in `<nohighptr>` (only the PIC
-families do, and kuna does not read that element). `option indexaliasguard`
+families do, and unlace does not read that element). `option indexaliasguard`
 selects how much of that arm runs.
 
 At `load`, `heritage.rs (Heritage::guard_loads)` walks the guard
@@ -1213,11 +1213,11 @@ whose space is the range's space, or is the range's container while the STORE
 is marked `spacebase_ptr`, gets an `indirect_store` `CPUI_INDIRECT` of the
 range in front of it, frame slots included, with no budget and with
 `RulePropagateCopy` free to move a stored value into the `INDIRECT`. That is
-what upstream always does; it is not kuna's default because on a frame slot the
+what upstream always does; it is not unlace's default because on a frame slot the
 INDIRECT chain survives into the emitted C as write-backs of values a slot
 already holds. The global LOAD guard runs at `full` too.
 
-At `off` none of them runs, which is what kuna shipped before the option.
+At `off` none of them runs, which is what unlace shipped before the option.
 
 The stack store guard (always on) also enables STORE guards at
 `indexaliasguard load` and `global` for constant-initialized stack slots. Before normalizing
@@ -1491,11 +1491,11 @@ all functions when no function is loaded; the per-function form is refused
 because the console rebuilds the Funcdata (and its Override) on `decompile`, so
 the only live writer of the Override is `Heritage::bump_deadcode_delay`.
 
-(kuna early restart) Upstream finishes the pass that asked for
+(unlace early restart) Upstream finishes the pass that asked for
 the restart: every later mainloop iteration, the merges and the structuring of
 IR known to be missing data flow, all of which the restart throws away. A bump
 also marks the function (`crates/unlace-middle/src/substrate/funcdata.rs
-(Funcdata::kuna_set_restart_now)`, cleared by `Funcdata::clear`), and when the
+(Funcdata::unlace_set_restart_now)`, cleared by `Funcdata::clear`), and when the
 outer drive will re-follow flow (fewer than its eight re-flows so far) the
 action group that ran the bumping heritage stops right after it
 (`crates/unlace-middle/src/infra/action.rs (ActionGroup::apply)`): the
@@ -1503,7 +1503,7 @@ context abandons the pass as on an expired deadline and requests the re-flow,
 and the drive skips the stack-store-guard layout check for the stopped pass
 (`crates/unlace-decomp/src/infra/decompile_drive.rs (run_pipeline)`).
 The restarted run is the one that is printed in both orders, but it is not
-independent of the first. Like upstream's `Funcdata::clear`, kuna's
+independent of the first. Like upstream's `Funcdata::clear`, unlace's
 (`crates/unlace-middle/src/substrate/funcdata.rs (Funcdata::clear)`)
 drops the local scope's unlocked symbols (`Database::clear_unlocked`), resets
 the local window and clears the prototype's unlocked output and inputs. The
@@ -1526,7 +1526,7 @@ jump-table sub-decompilation never restarts.
 **Free-varnode failure mode.** After `remove_revisited_markers`, a free read
 being guarded must have exactly one reader; a free varnode with multiple reads
 is an IR invariant violation and `heritage.rs (Heritage::guard)` deliberately
-panics carrying the upstream error text ("kuna heritage: Free varnode with
+panics carrying the upstream error text ("unlace heritage: Free varnode with
 multiple reads") — the
 drive catches it at the per-function boundary and degrades to that function's
 error record, exactly the route the C++ `LowlevelError` takes. (The port
@@ -1534,7 +1534,7 @@ history briefly downgraded this throw to a skip; with call-argument def-chains
 kept alive by dead-code marking it fires zero times across the corpus, and the
 faithful throw is restored.)
 
-Two kuna extensions ride on the pass boundary: the per-function watchdog
+Two unlace extensions ride on the pass boundary: the per-function watchdog
 deadline is probed at each address-space iteration and before each range
 guard placement visits, and a pass whose deadline passed during placement
 returns before renaming (§0.6 — a stripped-binary non-convergence spends its
@@ -1543,7 +1543,7 @@ stack locals to thousands of calls gets one INDIRECT per range per call, so
 the pass bails here rather than at the next action boundary; the abandoned
 partial pass is never rendered), and after every pass `ActionHeritage` runs the lowered-switch input
 repair (`crates/unlace-middle/src/substrate/funcdata_block.rs
-(Funcdata::kuna_repair_lowered_switch_inputs)`), which re-points a synthetic
+(Funcdata::unlace_repair_lowered_switch_inputs)`), which re-points a synthetic
 lowered-switch BRANCHIND whose input heritage normalized away (chapter 02). The
 repair accepts written, input, *or heritage-known* varnodes as healthy — the
 last category is what ended the condconst-vs-repair tug-of-war that once kept
@@ -1589,12 +1589,12 @@ scheduler, not the pool: every pool node carries the repeat flag, so
 `action.rs (Action::perform)` re-sweeps the whole function until a sweep makes
 no change. There is no bound on the number of sweeps — quiescence is the
 contract, and the only backstop against a rule pair that feeds itself forever
-is the (kuna) cooperative deadline probed every 1024 op-visits
+is the (unlace) cooperative deadline probed every 1024 op-visits
 (`action.rs (POOL_DEADLINE_STRIDE)`, §0.6); exactly one such oscillation has
-occurred in kuna's history (the lowered-switch repair, §3.1), and it presented
+occurred in unlace's history (the lowered-switch repair, §3.1), and it presented
 as mainloop reporting one change per iteration for good.
 
-(kuna dead-removal waves) Dead-op removal (`RuleEarlyRemoval`, first in
+(unlace dead-removal waves) Dead-op removal (`RuleEarlyRemoval`, first in
 every opcode's list) takes out an op only when the cursor reaches it, and the
 op that defined what it read usually sits earlier in sequence order, so a chain
 of values nothing reads dies one link per sweep: the call-guard `INDIRECT` and
@@ -1619,7 +1619,7 @@ breakpoint set always sweeps. A rule whose test reads two or more ops away from
 the op it fires on without walking a web can see a removal the wave does not
 offer it; that rule then fires at the next full sweep instead.
 
-(kuna copy-propagation waves) `RulePropagateCopy` replaces one input of an op
+(unlace copy-propagation waves) `RulePropagateCopy` replaces one input of an op
 with the input of the COPY defining it and stops (upstream's "propagate just a
 single copy"), and a rule applies at most once per op per pass, so a join with
 hundreds of copied inputs takes hundreds of passes. serde-hkx's hkxc.exe
@@ -1641,7 +1641,7 @@ next to the op and the previous pass changed nothing there; once a rule
 applies to it the rest of its rules are tested as usual. The same limit as
 for dead-removal waves applies: a rule reading two or more ops away without walking a web
 can see a change the wave does not offer it, and `RulePropagateCopy`'s own
-`kuna_globalstorekeep` refusal is one, since it reads the readers of the COPY's
+`unlace_globalstorekeep` refusal is one, since it reads the readers of the COPY's
 input and walks the blocks after the store
 (`crates/unlace-bandb-base/src/p3_dataflow/globalstorekeep.rs
 (declines)`). Neither mechanism ends a pool run with a full sweep: the run stops
@@ -1652,7 +1652,7 @@ changed anything, and the first pass of every pool run is a full sweep (a wave
 needs an earlier change in the same run), so the rule fires one stackstall
 iteration later.
 
-(kuna `deadcascade`, default 32) A wave is cheaper than a sweep but still
+(unlace `deadcascade`, default 32) A wave is cheaper than a sweep but still
 walks the whole function, and the far-walking rules still run on every op of
 their opcodes, so a chain of a thousand links still costs a thousand passes.
 Once one run of a pool has made N passes (`action.rs (ActionPool::apply)`
@@ -1696,7 +1696,7 @@ takes `extra_pool_rules`); the engine currently always passes an empty list
 (`crates/unlace-middle/src/infra/architecture.rs
 (Architecture::build_action)`).
 
-**Binary64 sign-word operations.** (kuna) Before its commute logic,
+**Binary64 sign-word operations.** (unlace) Before its commute logic,
 `RuleConcatCommute` recognizes the exact binary64 sign-word idioms in
 `crates/unlace-bandb-base/src/p3_dataflow/floatnegpiece.rs`.
 `PIECE(FLOAT_NEG(SUBPIECE(x,4)), SUBPIECE(x,0))` becomes `FLOAT_NEG(x)`;
@@ -1717,7 +1717,7 @@ is emitted. A header warning (`Switch with 1 destination removed at <addr>`,
 plus `: N cases all go to same destination` when every entry matches) is
 added unless the table has one entry and the switch value is a constant
 (`tests/stages/switchsingle.toml`). Unlike upstream, a one-entry table
-over a computed value is left alone: kuna's table recovery can keep only the
+over a computed value is left alone: unlace's table recovery can keep only the
 entries its guards prove reachable, so a single kept entry is not proof that
 the dispatch has one destination. This is a strict fix with no option: a
 `switch` with one `default:` arm states a selection the code does not make.
@@ -1787,7 +1787,7 @@ still apply to it once those combinations are normalized. A root packed into a s
 only reassembled into a condition after the guards are gone, so x87
 status-word compares keep the upstream approximation.
 
-Every comparison these folds issue or rewrite carries the `kuna_exactfloat`
+Every comparison these folds issue or rewrite carries the `unlace_exactfloat`
 addlflag (`crates/unlace-middle/src/substrate/op.rs`). It already
 decides the unordered case, so `RuleIgnoreNan`'s
 `ignorenan_check_back_for_compare` refuses to treat it as a comparison that
@@ -1856,7 +1856,7 @@ witness and 223 thousand walk. The collapses are the same 15,113.
 (`crates/unlace-bandb-core/src/p3_dataflow/ruleaction_1.rs (RulePullsubIndirect)`)
 narrows an INDIRECT whose readers are all SUBPIECEs to the bytes they use, from
 the lowest used byte to the highest. The new output piece starts at the lowest
-used byte, and kuna slices the piece of the INDIRECT's input at that same byte,
+used byte, and unlace slices the piece of the INDIRECT's input at that same byte,
 as `RulePullsubMulti` does. Upstream slices the input at the offset of whichever
 SUBPIECE triggered the rule, so when another reader uses a lower byte the input
 piece holds the wrong bytes; on a big-endian space it also sits below the
@@ -1929,7 +1929,7 @@ when the caller's object ends at `+10` at the end of a page. The same held for a
 (`(int)a0[a1]`), and for a masked byte of an 8-byte element (`(q[1] & 0x30) !=
 0x10`).
 
-kuna never takes the truncation form: the read prints at its own width and
+unlace never takes the truncation form: the read prints at its own width and
 offset, `*(unsigned short *)&a0->field_0x8`, with the one cast the truncation
 had. The AND form is taken only when the widened pointer is a field of a record
 or union that a declaration laid out -- DWARF, a parsed header, a libc layout --
@@ -1997,7 +1997,7 @@ computed-value reload control preserves the call-before-write order even
 without the refusal.
 Ordinary or shared readers and non-LOAD inputs retain their existing handling.
 A kept COPY prints its single-use LOAD inline at the store unless
-`kuna_loadorder` keeps the load's own variable because it is live across a
+`unlace_loadorder` keeps the load's own variable because it is live across a
 store to a global it may read, and that check runs only at
 `option indexaliasguard global`. The refusal therefore applies only at that
 level (the default); at `off`, `load` or `full` it would print
@@ -2043,7 +2043,7 @@ covers intersect — nothing repairs it, and the local's last printed assignment
 is whatever preceded the store, typically its initialiser. Upstream already
 refuses the propagation when the `COPY` output is `addrforce` ("don't propagate
 if we are keeping the `COPY` anyway"), but `addrforce` is set only on heritage's
-own guard outputs (§3.1), never on an ordinary frame store. kuna widens that
+own guard outputs (§3.1), never on an ordinary frame store. unlace widens that
 refusal by one case: the marker is about to take the **last** reader of a
 non-`persist` address-tied `COPY` whose input is not itself address-tied and
 whose value comes from a call — a `CALL`/`CALLIND`/`CALLOTHER` output, or the
@@ -2085,7 +2085,7 @@ store's `COPY` as the input of the global's marker (a call's `INDIRECT`, a join'
 `MULTIEQUAL`) and of a `COPY` into the same global. Without that the `COPY`
 dies, chapter 06's forced marker merge joins the value with the global, and
 `gc = q; x = q[1] + q[2]; touch();` printed `gc = &a0[a1]; v1 = gc[2];`: a
-dereference in the pointee type of a global kuna never declares. The walk runs
+dereference in the pointee type of a global unlace never declares. The walk runs
 before types exist, when `q + 1` is still an integer add, so every add on the way
 to an address counts; after 256 varnodes it answers yes. Two stores keep
 upstream's propagation. A value that is only the global read back through
@@ -2154,7 +2154,7 @@ otherwise costs time linear in the global's values, the earlier values' readers
 and those joins' inputs; but the rule pool still asks it once per reader, so the
 total grows faster than the function. The answers are
 the ones the per-value walk gave, and `RulePropagateCopy` still asks this
-question before `kuna_globalstorekeep`'s below, for every op, so a marker this
+question before `unlace_globalstorekeep`'s below, for every op, so a marker this
 one keeps never reaches that walk or its marking. Before this a function
 storing one pointer to a global 600 times, with a pointer store between, took
 about 38 s to decompile where it had taken 16 s before the store was kept.
@@ -2165,7 +2165,7 @@ through a `COPY` or an add leading to one, keeps reading the global, so the
 dereference prints through the global the binary reads rather than through the
 register it stored: `*--line_num_start = '1'` still prints as
 `line_num_start = &line_num_start[-1]; *line_num_start = '1';` at `-O0`, and
-`gi = &a0[a1]; *a2 = a0; return gi[1];` keeps its load where kuna printed
+`gi = &a0[a1]; *a2 = a0; return gi[1];` keeps its load where unlace printed
 `return (&a0[a1])[1];`. Other loads of such a value, and the stores of a
 parameter, a frame variable or a constant, are left to the STORE guard above:
 at `indexaliasguard load` a load after a pointer store still prints the stored
@@ -2184,7 +2184,7 @@ names the slot; it can only orphan the `COPY`, which then dies as dead. What
 prints instead is the register's own definition under the register's
 HighVariable, so the emitted loop initialises and tests one variable and assigns
 its increment to another — `for (v55 = 0; v55 <= 4; v7 = v55 + 1)`, an induction
-variable that is never updated and a loop that cannot terminate. kuna refuses
+variable that is never updated and a loop that cannot terminate. unlace refuses
 the propagation when all of the following hold: the marker is a `MULTIEQUAL`
 whose address-tied output has exactly the storage — address and size — of the
 `COPY`'s output; the `COPY`'s input is a **register**, not a `unique`; the
@@ -2306,7 +2306,7 @@ the store stay, is not done.
 
 A load is any other reader of the store's `COPY`: an operation that writes
 something other than the global itself (a `PIECE` that joins the stored part
-into the whole of a wider global is left to upstream). kuna's heritage puts no
+into the whole of a wider global is left to upstream). unlace's heritage puts no
 `INDIRECT` on a global at a pointer `STORE`, so after `gi = u; *p = k;` the
 binary's load of `gi` is still the store's `COPY`, and propagating `u` into it
 would stand the value in for memory that `*p` may have changed. While the
@@ -2357,7 +2357,7 @@ op-code's *property word* (`unary`/`binary`/`booloutput`/`commutative`/`marker`/
 … ) into the op's flags, and every later guard — `is_bool_output`,
 `is_commutative`, the pool's eval-type dispatch — reads it back off the op. The
 upstream `Funcdata::opSetOpcode` therefore takes a bare op-code and looks up the
-architecture's singleton property record (`glb->inst[opc]`); kuna's
+architecture's singleton property record (`glb->inst[opc]`); unlace's
 `Funcdata::op_set_opcode` takes the already-resolved record, so each rule file
 resolves it at the call site. Every one of those call sites goes through the
 single canonical port of that table,
@@ -2422,7 +2422,7 @@ the sign bit instead, since that is a sign extraction.
 
 Rules registered in the pools but implemented elsewhere: the sub-variable
 triggers and split rules (§3.3, `subflow.rs`), `RuleOrPredicate` (§3.4,
-`condexe.rs`), the kuna gated rules (§3.5), the double-precision family
+`condexe.rs`), the unlace gated rules (§3.5), the double-precision family
 (`crates/unlace-bandb-base/src/p5_types/double.rs`, chapter 05), the
 constant-sequence and bit-field cleanup rules
 (`crates/unlace-bandb-base/src/p5_types/constseq.rs`,
@@ -2448,7 +2448,7 @@ that fetched the callee. A masked call renders as
 `(*(code *)(*(uint4 *)(p + 0x44) & 0xfffffffe))(p)` where the un-masked form is
 `(**(code **)(p + 0x44))(p)`.
 
-`RuleFuncPtrEncoding` erases it. The width of the encoding is **not** a kuna
+`RuleFuncPtrEncoding` erases it. The width of the encoding is **not** a unlace
 policy: it is declared per compiler spec by `<funcptr align="N"/>`, decoded into
 `Architecture::funcptr_align` as the bit position of `N`'s first set bit
 (chapter 00, the P0 knowledge plane), and read live by the rule. The rule fires
@@ -2561,7 +2561,7 @@ and other consumers reached through arithmetic, copies or merges. In N32,
 this works with the entry stack-register reconstruction (chapter 04) to recover
 stack arguments and locals without truncating their 64-bit contents. Narrow
 operands are never widened. Upstream sets sub-variable flow's aggressive mode
-for a pointer-flow value; kuna does not, since the mark says nothing about the
+for a pointer-flow value; unlace does not, since the mark says nothing about the
 upper bits of the full register.
 
 Octeon memory user operations identify only their first payload input as an
@@ -2569,7 +2569,7 @@ address. On N32, `RulePtrFlow` applies the same narrowing to that input; atomic
 values, returned old values and other consumers of the original GPR retain
 their full width. Ordering operations have no pointer input.
 
-**(kuna) Octeon memory effects — `option octeoneffects`, default `atomic`,
+**(unlace) Octeon memory effects — `option octeoneffects`, default `atomic`,
 `crates/unlace-bandb-base/src/p3_dataflow/octeoneffects.rs`.** It
 resolves the atomic, reservation and ordering operations an Octeon language
 declares, unless a compiler spec injects its own p-code for one. A
@@ -2720,12 +2720,12 @@ not refuse but *patch*: the trace records a pull/push patch at the boundary
 (`try_call_pull`/`try_return_pull`/`try_switch_pull`/`try_call_return_push`),
 and `do_trace` additionally refuses to commit when **zero pull points** were
 found — a rewrite whose small value never actually escapes the shadow graph
-would churn the IR for no output gain. (kuna) A call pull whose dropped bits
+would churn the IR for no output gain. (unlace) A call pull whose dropped bits
 are known zero, because the wide input's non-zero mask lies inside the logical
 mask, is recorded on the call's spec when the rewrite commits
 (`crates/unlace-emit/src/p9_emit/truncarg.rs (note_trimmed_arg)`),
 so emission can print the zero-extension C's promotion would otherwise lose
-(chapter [09](09-emission.md)). (kuna) A RETURN pull is recorded on the RETURN
+(chapter [09](09-emission.md)). (unlace) A RETURN pull is recorded on the RETURN
 op the same way when its dropped bits are known zero and the calling convention
 extends a value of the trimmed width by the sign of its type
 (`crates/unlace-bandb-core/src/p5_types/zextreturn.rs (unsigned_trim)`,
@@ -2733,7 +2733,7 @@ extends a value of the trimmed width by the sign of its type
 to be zero clears the record. Type inference reads it to type the returned value
 unsigned (chapter [05](05-types.md)).
 
-(kuna) The RETURN pull refuses to trim a 64-bit integer a 32-bit convention
+(unlace) The RETURN pull refuses to trim a 64-bit integer a 32-bit convention
 returns in two registers
 (`crates/unlace-bandb-core/src/p3_dataflow/subflow.rs (returns_integer_pair)`):
 a value no wider than eight bytes, wider than every single integer register of
@@ -2762,11 +2762,11 @@ copies the high word down and clears `EDX`, and compiler-rt's `rep_clz`.
 `--option returnpair single` returns the first register alone for the run, which
 restores the word for them.
 
-(kuna) The RETURN pull also refuses to trim a zero-extended word where the
+(unlace) The RETURN pull also refuses to trim a zero-extended word where the
 convention sign-extends every 32-bit return value whatever its sign
 (`crates/unlace-bandb-core/src/p5_types/zextreturn.rs (zero_extended_word)`):
 the RISC-V and LoongArch LP64 rule of chapter [04](04-calls-and-prototypes.md)
-(`kuna_narrowext::sign_extends_any`), and MIPS64 under `narrowext compiler`.
+(`unlace_narrowext::sign_extends_any`), and MIPS64 under `narrowext compiler`.
 The trim must drop only known-zero bits, and the word's sign bit must be
 possibly set; the check applies to the RETURN being pulled and to each constant
 RETURN the pull patches directly. There no 32-bit C type is extended the way the
@@ -2779,14 +2779,14 @@ constant returned zero-extended, such as `0xfffffff0` beside such a value, no
 longer reads as `-0x10`. A word whose sign bit is known clear keeps the trim,
 since its zero and sign extensions agree, as do a word the function sign-extends
 (`addw`) and a narrower value, which the rule extends by its type's sign
-(`kuna_zextreturn`, chapter [05](05-types.md)). Under `narrowext off`, and on
+(`unlace_zextreturn`, chapter [05](05-types.md)). Under `narrowext off`, and on
 x86 (32- and 64-bit) and AArch64, the function alone keeps the trim: those
 conventions leave the bits above a narrow return unspecified, so the printed
 `int` callee compiles to the same instructions. Its callers settle it. A caller that computes with the
 whole register (`add $1,%rax` after the call) relies on the zero-extension the
 callee performs, and its printed C sign-extended the `int` result. In
 `decompile-all` such a function is decompiled again with the width its callers
-compute with (`Funcdata::kuna_wide_return`, `voidret` in chapter
+compute with (`Funcdata::unlace_wide_return`, `voidret` in chapter
 [04](04-calls-and-prototypes.md)). Where a caller computes with all eight bytes
 the pull refuses the trim the same way (`zero_extended_word`); where callers
 compute with at most four, a narrower value keeps its trim and is unsigned
@@ -2794,7 +2794,7 @@ instead (chapter [05](05-types.md)).
 A convention that extends the value by its type's sign (`inttype`) leaves the
 trim alone, since there a caller may read the whole register of an `unsigned
 int`. Each trim the pull makes of a zero-extended value is noted on the
-function, with whether its sign bit may be set (`Funcdata::kuna_note_zext_word`),
+function, with whether its sign bit may be set (`Funcdata::unlace_note_zext_word`),
 which is what `voidret` asks its callers about.
 
 Three sibling engines share the file. `subflow.rs (SplitFlow)` (trigger
@@ -2825,9 +2825,9 @@ result below the narrowed width, since the lowered conversion would bypass
 that rounding. Widening-then-narrowing round trips still collapse under the
 default NaN policy. This is a value-correctness repair with no option.
 
-(kuna) A widening-then-narrowing round trip can also quiet a signaling NaN:
+(unlace) A widening-then-narrowing round trip can also quiet a signaling NaN:
 an x87 `fld`/`fstp` pair or `cvtss2sd; cvtsd2ss` returns `0x7fc00001` for the
-input `0x7f800001`. Kuna keeps that effect only under `option nanignore none`,
+input `0x7f800001`. Unlace keeps that effect only under `option nanignore none`,
 the policy that keeps every NaN behaviour. The shipped `nanignore compare`
 default and `all` drop it as upstream does, since the source most likely held
 a plain copy (`*d = *s` compiles to `fldl; fstpl` on i386) and C does not
@@ -2949,7 +2949,7 @@ still decline the extended-constant rewrite.
 (SplitDatatype::test_copy_constraints)`). Upstream refuses a COPY whose input is
 a function input, whose input and output are address-tied at the *same* address
 (the identity copy a heritage guard leaves behind), or whose input is the lone
-output of a LOAD (handled by the LOAD split instead). kuna adds one more (DIV-55):
+output of a LOAD (handled by the LOAD split instead). unlace adds one more (DIV-55):
 a COPY whose **output Varnode is read-only** — an address the load image reported
 inside a non-writable section — is never split. A store into a read-only range is
 not something the program performs, and the split is what makes such a copy
@@ -2974,7 +2974,7 @@ the COPY and writes the fields straight into the COPY's output. The COPY can sit
 after a STORE or a call, though. A 4-byte read at `s+7` that spans four `char`
 fields, then a byte store to `s->c9`, then the COPY into the return register
 printed the four field reads after the store, so the function returned the new
-byte. kuna declines the split when a STORE or a call lies between the LOAD and
+byte. unlace declines the split when a STORE or a call lies between the LOAD and
 its COPY, or when the two sit in different blocks
 (`subflow.rs (SplitDatatype::store_or_call_between)`). The LOAD then stays whole
 and prints as its own statement ahead of the store (`v1 = *(uint4 *)&s->c7;`).
@@ -2984,7 +2984,7 @@ into the global stops printing, which drops the global's store. With nothing bet
 two, the split still happens at the COPY, as upstream does. This is a strict fix
 with no option (`tests/stages/aliasoverlap.toml` #5 to #8).
 
-### (kuna) `regnarrow` — a register local at the width its values fit
+### (unlace) `regnarrow` — a register local at the width its values fit
 
 A `uint8_t` loop counter on ARM lives in a whole register and the compiler
 truncates it after every increment (`adds r5, #1; uxtb r5, r5`); a byte read with
@@ -3023,7 +3023,7 @@ reader whose result is consumed only in the low bytes (`v + 1` feeding the
 and so is a call argument the callee consumes only in those bytes
 (`try_call_pull`) when the call's parameter is no wider than the narrow value
 (`narrow_param`). Below `int` such an argument reads the zero extension, which
-the argument trimming may drop again and `kuna_truncarg` restores as a cast; a
+the argument trimming may drop again and `unlace_truncarg` restores as a cast; a
 web of `int` width read at a wider parameter is not narrowed at all, because
 C would convert the trimmed `int` argument to the parameter by its declared sign
 where the binary zero-extended it. A wider extension, a shift, a compare, a load or store
@@ -3042,15 +3042,15 @@ The pass runs in `fullloop`'s `ActionDeadCode` after `narrowargs`, once `mainloo
 has settled, so the nonzero and consume masks it reads are current; a rewrite
 makes `fullloop` repeat, and `mainloop` folds the narrow arithmetic
 (`v2 = v1 + 1 & 0xff` becomes `v2 = v1 + 1`). A function is rewritten at most
-twice (`Funcdata::kuna_regnarrow_runs`). The p-code computes the same values
+twice (`Funcdata::unlace_regnarrow_runs`). The p-code computes the same values
 as before. The printed C does not automatically: C promotes a narrow operand to
 `int` before it computes, so a narrowed `v + 1` is 256 in C where the byte
 register holds 0, and a promoted sum is a signed `int`. The emission rules for
 promoted operands make up the difference where a read depends on it: the
 upstream integer-promotion casts at an extension, a comparison, a division or a
-right shift, and the kuna unsigned-read and narrow-switch-selector rules of
-chapter 9 (`kuna_unsignedread`, `kuna_narrowselector`). The narrow values the
-pass creates are recorded (`Funcdata::kuna_regnarrow_values`), and type
+right shift, and the unlace unsigned-read and narrow-switch-selector rules of
+chapter 9 (`unlace_unsignedread`, `unlace_narrowselector`). The narrow values the
+pass creates are recorded (`Funcdata::unlace_regnarrow_values`), and type
 inference gives one that nothing else types the unsigned integer of its width
 (`unsigned_vote`): the value is the zero-extended low part of a register. The
 local is therefore usually declared `unsigned char`, `unsigned short` or
@@ -3062,7 +3062,7 @@ x86-64 `int` matches `int`; a local the source declares `int` or an enum but
 only ever loads from a byte field narrows too, and the binary cannot tell the
 two apart (`tests/stages/regnarrow.toml`, `regnarrow-x86.xml`).
 
-### (kuna) `regsigned` — a register local at the width its values are sign extended from
+### (unlace) `regsigned` — a register local at the width its values are sign extended from
 
 The signed counterpart of `regnarrow`. A `signed char` read with `ldrsb` or
 `movsx`, a `short` counter the compiler re-extends with `sxth` after every
@@ -3115,7 +3115,7 @@ computes the same values. In the C, the integer promotions make a narrowed
 `short` or `signed char` operand an `int` again, which is what the sign
 extension computed.
 
-The narrow values are recorded (`Funcdata::kuna_regsigned_values`), and type
+The narrow values are recorded (`Funcdata::unlace_regsigned_values`), and type
 inference gives one the signed integer of its width when nothing else types it,
 or when the only vote is the `uint` a bitwise op gives its output
 (`unsigned_vote`): the program sign-extends the value, so it is signed. A
@@ -3244,7 +3244,7 @@ known for rdx then replaced the rax slot: a function with a second RETURN
 reached only when `rdx == 0` printed `return 0;` there instead of the entry
 value. That happens whenever the output container outlives the first mainloop
 iteration (a model with a delayed heritage space, or the `condexeret.rs` extra
-pass, 04 §4.4). kuna stores the COPY in the slot that actually reads the
+pass, 04 §4.4). unlace stores the COPY in the slot that actually reads the
 varnode (`condconst.rs (propagate_constant)`); on a trimmed RETURN that is slot
 1, as upstream.
 
@@ -3255,7 +3255,7 @@ produce one; the guard keeps a malformed graph from killing the process before t
 pass that malformed it can be identified, but it does not by itself make the emitted
 C right.
 
-(kuna) **Loop-block COPY placement** — GH-9203: that materialized COPY could
+(unlace) **Loop-block COPY placement** — GH-9203: that materialized COPY could
 land inside a *loop* predecessor block, re-executing a supposedly
 loop-invariant `= 0` every iteration and malforming the do/while.
 `condconst.rs (handle_phi_nodes)` declines the placement when the predecessor
@@ -3297,10 +3297,10 @@ repeated null checks. Folding a test the compiler duplicated into two
 predecessors can decide one copy only, which can leave a goto where the
 copies used to merge.
 
-## 3.5 kuna peephole rewrites
+## 3.5 unlace peephole rewrites
 
-Kuna-added transforms live beside the upstream rules, each resolving an
-open upstream issue (the sanctioned `(kuna)`-tag exception: their
+Unlace-added transforms live beside the upstream rules, each resolving an
+open upstream issue (the sanctioned `(unlace)`-tag exception: their
 `phases.toml` rows record `ghidra-upstream` as lineage because an upstream
 *issue*, not upstream code, specified them — the GH number is the row's
 `issue`). The ones that are still options share one wiring pattern: the rule
@@ -3487,7 +3487,7 @@ for it (TriCore `sha d2,d4,-3` builds its count as `(c6 << 26) s>> 26`). Rewrite
 giving 0 or all-ones), which the surrounding compare rules then clean to a
 plain boolean test. Always on.
 
-**bitidioms** (kuna) —
+**bitidioms** (unlace) —
 `crates/unlace-bandb-base/src/p3_dataflow/bitidioms.rs (RuleBitIdioms)`,
 `(RuleIntAbs)` and `(ActionBitScanLoop)`, live gate `bit_idioms`
 (`option bitidioms`, default on). On an `INT_OR` the rule follows where each bit
@@ -3518,7 +3518,7 @@ loop, replaces the counter's uses after the loop with `ctz(x)` (or
 `BUILTIN_BSWAP`, `BUILTIN_ROTL`, `BUILTIN_BITREV`, `BUILTIN_CTZ` (unspecialised)
 and `BUILTIN_ABS`/`BUILTIN_LABS` (typed `int`/`long`).
 
-**satmul** (kuna) —
+**satmul** (unlace) —
 `crates/unlace-bandb-base/src/p3_dataflow/satmul.rs (RuleSaturatedMul)`,
 group `analysis` (`option satmul`, default off). MSVC, clang and AArch64
 compilers size `new T[n]` with a full-width multiply and replace the product by
@@ -3549,7 +3549,7 @@ outcome reaches. A `CALLOTHER` is inserted after the merge block's
 no-overflow outcome, a threshold that is not `(2^W - 1) / c`, or a guard over
 other factors is left alone.
 
-**alloca** (kuna) — `crates/unlace-bandb-base/src/p3_dataflow/alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word the same instruction just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). A load and a store from two instructions are not a probe: another store can change the slot between them, so the second store restores an earlier value. CPython's `r = []; ...; return r` lost its return value this way, because `STORE_FAST r` pops the slot that `LOAD_FAST r` later pushes back into. It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/alloca.toml`.
+**alloca** (unlace) — `crates/unlace-bandb-base/src/p3_dataflow/alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word the same instruction just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). A load and a store from two instructions are not a probe: another store can change the slot between them, so the second store restores an earlier value. CPython's `r = []; ...; return r` lost its return value this way, because `STORE_FAST r` pops the slot that `LOAD_FAST r` later pushes back into. It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/alloca.toml`.
 
 **cancelbytearithmetic** (repipe `cancelling-byte-arithmetic-splits`) —
 `crates/unlace-bandb-base/src/p3_dataflow/cancelbytearithmetic.rs`
@@ -3794,7 +3794,7 @@ removed, so `B` is what runs when the blocks differ.
 
 The builtins keep the call flag, so they stay ordered against the loads, stores
 and calls around them, as `strlen` does. `p5_types/coreaction_infertypes.rs
-(input_type_local)` asks `kuna_repstring::input_type` for their pointer
+(input_type_local)` asks `unlace_repstring::input_type` for their pointer
 operands: `void *` for a copy or fill, a pointer to the element for
 `builtin_memset16`/`32`/`64`, and `char *` for a compare, so that a constant
 operand prints as the string it points at (`builtin_memcmp(a0,"-",2) == 0` for
@@ -4061,8 +4061,8 @@ when the analysis tier reports that nothing may write those bytes
 scan is the whole-program walk `floatglobals` takes: every function from its
 entry, registers and stack slots followed as constants. It marks as written
 every byte a store with a known address covers; every slot the image's loader
-reports as filled at run time (`LoadImage::kuna_runtime_written`: an import's
-bind, a `COPY` relocation's object, any relocation kuna does not apply); and
+reports as filled at run time (`LoadImage::unlace_runtime_written`: an import's
+bind, a `COPY` relocation's object, any relocation unlace does not apply); and
 the surroundings of every data address the program *holds* instead of
 dereferencing on the spot (moved to a register or stack slot, stored, used in
 arithmetic with an unknown result, or found in a pointer-sized word of loaded
@@ -4144,7 +4144,7 @@ by `INT_MULT(cnt, STRIDE)`, re-exposing `cnt` as the array index so the
 pointer rules and the emitter can render `arr[i]` instead of
 `iVar += 0x414`. Settable `arraystride`, shipped default **on** (DIV-3).
 
-**mulblob** (kuna) —
+**mulblob** (unlace) —
 `crates/unlace-bandb-base/src/p3_dataflow/mulblob.rs
 (declines_zext)`, consulted by `RulePieceStructure` rather than registered as a
 rule of its own. It answers one question: whether a widened operand of a wide
@@ -4161,7 +4161,7 @@ and §6 then gives that root a declaration of its own. Every unsigned wide
 multiply therefore costs two extra locals whose entire content is the operand
 (`v8._8_8_ = 0; v8._0_8_ = v29;`) before a single `SUB168` reads the product
 back. The signed sibling never had this: `IMUL` lowers through `sext`, and
-`INT_SEXT` is not in `RulePieceStructure`'s op list, so kuna has always printed
+`INT_SEXT` is not in `RulePieceStructure`'s op list, so unlace has always printed
 `SUB168(SEXT816(x) * SEXT816(y),8)` for it.
 
 With the gate on, `declines_zext` makes the unsigned form behave like the
@@ -4204,7 +4204,7 @@ setup and maintenance actions the schedule interleaves around heritage and the
 pools (§0.6 places them; this section says what each computes).
 
 **Setup one-shots** (in the restart group's prologue or at phase switches):
-`ActionStart`/`ActionStop` are no-ops in kuna — the start/stop bookkeeping the
+`ActionStart`/`ActionStop` are no-ops in unlace — the start/stop bookkeeping the
 C++ did there happens in the drive, which follows flow before the tree runs
 (§0.6) — and exist so the tree's listing stays oracle-identical.
 `ActionConstbase` injects a `COPY #val` at the entry block for every *tracked
@@ -4498,7 +4498,7 @@ numeric value. Mapping that name does not disable the widened-operand guard when
 the datatype is the fallback array and every reader satisfies the existing
 arithmetic/SUBPIECE checks. Explicit locked array types keep their structuring.
 
-## (kuna) MBA simplification — `option mba`, default off
+## (unlace) MBA simplification — `option mba`, default off
 
 **`crates/unlace-bandb-base/src/p3_dataflow/mba.rs (RuleMbaSimplify)`,
 in oppool1 after `boolsignshift`.** Obfuscators hide `x + y` as
@@ -4676,7 +4676,7 @@ precomputed oracle of simplest forms indexed by I/O fingerprint), products of
 two non-constant terms in a nonlinear tree, and more than three leaves there.
 
 
-## (kuna) Equality saturation over MBA trees — `option egraph`, default off
+## (unlace) Equality saturation over MBA trees — `option egraph`, default off
 
 **`crates/unlace-bandb-base/src/p3_dataflow/egraph.rs (RuleEgraphSimplify)`,
 in oppool1 after `mba`.** The `mba` option solves classes of MBA in closed
@@ -4767,7 +4767,7 @@ necessary condition. Equality itself follows from the rules being identities;
 the checks guard the lowering into and out of the e-graph. A unit test
 (`every_rule_is_an_identity`) evaluates both sides of every rule at random
 64-bit inputs and at every 5-bit input of three variables. The replacement is
-emitted the way `mba` emits its own (`kuna_mba::replace`): new ops before the
+emitted the way `mba` emits its own (`unlace_mba::replace`): new ops before the
 root, the root a `COPY` of the result, and a subterm the old tree already
 computes reused.
 
@@ -4825,7 +4825,7 @@ matches with `t` that class. Not done: rules that need a side condition (a
 constant that is a power of two, a shift amount), `INT_RIGHT` and the
 extensions, trees wider than 8 bytes, and more than six leaves.
 
-## (kuna) Register-pair locals — `option pairlocal`, default off
+## (unlace) Register-pair locals — `option pairlocal`, default off
 
 **`crates/unlace-bandb-base/src/p3_dataflow/pairphi.rs (RulePairPhi)`, in
 oppool1 after `egraph`.** A 32-bit target keeps a `long long` local in two

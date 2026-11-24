@@ -57,7 +57,7 @@ fn names_with(flirt: &str, fid: &str, fid_db: Option<PathBuf>) -> Vec<String> {
     unsafe { std::env::set_var("UNLACE_FLIRT_SIGS", dir.join("flirt/callees.sig")) };
     if let Some(db) = fid_db {
         // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var("kuna_fid_db", db) };
+        unsafe { std::env::set_var("unlace_fid_db", db) };
     }
     let bin = dir.join("fid/callees/prog");
     let mut prog = bootstrap_from_object(
@@ -110,7 +110,7 @@ fn sites_name_prefix_modules_and_fid_disagreement_names_nothing() {
         .find(|r| r.name == "alt_scale")
         .unwrap()
         .specific_hash ^= 1;
-    let held = std::env::temp_dir().join(format!("kuna-fid-held-{}.fid", std::process::id()));
+    let held = std::env::temp_dir().join(format!("unlace-fid-held-{}.fid", std::process::id()));
     std::fs::write(
         &held,
         FidDb::from_records("x86:LE:64:default", "gcc", records).serialize(),

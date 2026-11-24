@@ -3,13 +3,13 @@
 `--assert 'prototype <func> …'` documents `<func>` as "which function this
 signature describes", but it was only ever looked up as a **name**. An address
 is not a name, so an assertion written at an address was parsed, reported
-`applied`, and then discarded — the call site kept whatever kuna had recovered.
+`applied`, and then discarded — the call site kept whatever unlace had recovered.
 
 Against the vendored fixture, `accepted` at `0x4006ed` takes no arguments and
 the directive says it takes one:
 
 ```
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/fauxware main \
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/fauxware main \
     --json --assert 'prototype 0x4006ed int4 accepted(int4 status)'
 ```
 
@@ -26,7 +26,7 @@ Same shape on the reported image (crackmes.one `640a526833c5d447bc761899`), wher
 nothing assigns:
 
 ```
-$ kuna decompile KeyCheker.exe sub_140001890 --option calloverlap full \
+$ unlace decompile KeyCheker.exe sub_140001890 --option calloverlap full \
     --assert 'prototype 0x140003ddf float8 sqrt(float8 x)'
       v26 = (double)sqrt();
 ```
@@ -34,7 +34,7 @@ $ kuna decompile KeyCheker.exe sub_140001890 --option calloverlap full \
 ## The fix
 
 - `<func>` is resolved as a name first and an **entry address** second, by one
-  shared resolver both surfaces call — `kuna decompile`'s generated `map
+  shared resolver both surfaces call — `unlace decompile`'s generated `map
   prototype` script line and the in-process `--json` / `decompile-all` path had
   already drifted apart once on this directive.
 - An address park goes through `set_function_prototype_pieces_at`, which is the
@@ -62,7 +62,7 @@ address, and a `param` qualifier by address; the CLI ones assert the text and
 `--json` surfaces agree. All six fail on the unpatched tree.
 
 `make test` 675/675 PARITY OK · `make test-stages` PARITY OK · `make rust-test`
-5,779 passed · `make check-spec` OK · `make test-cli` 54/54 · `kuna catalog
+5,779 passed · `make check-spec` OK · `make test-cli` 54/54 · `unlace catalog
 --check` OK. No option, no baseline moved.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

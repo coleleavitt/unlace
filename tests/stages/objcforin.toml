@@ -11,7 +11,7 @@
 # the state printed as eight unrelated locals and the loop read
 # `*(unsigned long *)(v6 + v5 * 8)` for `state.itemsPtr[i]`.
 #
-# Stage / sub-stage: P1 external-refinement. `analyzers/objc/kuna_objcsdk.rs`
+# Stage / sub-stage: P1 external-refinement. `analyzers/objc/unlace_objcsdk.rs`
 # records the body of each `typedef struct { ... } Name;` and encodes a
 # pointer to it with its layout and member names
 # (`^{NSFastEnumerationState="state"Q"itemsPtr"^@"mutationsPtr"^Q"extra"[5Q]}`),

@@ -1,4 +1,4 @@
-# kuna `vaarg` stage test (gcc loop): va_arg in a loop, on a va_list local
+# unlace `vaarg` stage test (gcc loop): va_arg in a loop, on a va_list local
 # to the function (heritage promotes it: gp_offset and overflow_arg_area are
 # loop phis) and on a va_list parameter. gcc moves the code after the read into each arm, and runs the overflow reads in a loop of their own.
 # With vaarg off the offset tests and the register save area reads print.

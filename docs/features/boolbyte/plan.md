@@ -3,7 +3,7 @@
 **Option.** `boolbyte on|off`, default `on` (shipped `off` in #664; flipped on
 the measurement in `record.json` `default_on_flip`). P5, subphase `type-propagation`,
 tier `core`, `change_kind = type-inference`, `live_field = bool_byte`.
-Module `decompiler/crates/kuna-decomp/src/p5_types/boolbyte.rs`, consulted
+Module `decompiler/crates/unlace-decomp/src/p5_types/boolbyte.rs`, consulted
 from `build_localtypes` in `coreaction_infertypes.rs` exactly where
 `ptrfromuse`'s candidate is folded.
 

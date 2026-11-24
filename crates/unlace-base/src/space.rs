@@ -283,7 +283,7 @@ pub trait RegisterLookup {
 /// The error for register access before a [`RegisterLookup`] is installed.
 pub fn no_register_lookup_err() -> UnlaceError {
     UnlaceError::lowlevel(
-        "kuna rust port: no Translate/register lookup installed in the AddrSpaceManager",
+        "unlace rust port: no Translate/register lookup installed in the AddrSpaceManager",
     )
 }
 
@@ -1605,7 +1605,7 @@ impl AddrSpace {
                 )),
             },
             AddrSpaceKind::Iop => Err(UnlaceError::lowlevel(
-                "kuna rust port: IopSpace::printRaw requires PcodeOp (op wave)",
+                "unlace rust port: IopSpace::printRaw requires PcodeOp (op wave)",
             )),
             _ => {
                 let mut sz = self.get_addr_size() as i32;
@@ -2989,7 +2989,7 @@ impl AddrSpaceManager {
             .and_then(|spc| spc.join_state())
             .ok_or_else(|| {
                 UnlaceError::lowlevel(
-                    "kuna rust port: join-record request without a registered join space",
+                    "unlace rust port: join-record request without a registered join space",
                 )
             })
     }

@@ -1,4 +1,4 @@
-# (kuna) Option `aifdataveto`: `table` sits in .text, looks like a function
+# (unlace) Option `aifdataveto`: `table` sits in .text, looks like a function
 # (push rbp; mov rbp,rsp; ...; pop rbp; ret) and is only ever READ as data.
 # Build: as aifdataveto_x86_64.s -o t.o && ld -o aifdataveto_x86_64 t.o && strip -s aifdataveto_x86_64
     .text

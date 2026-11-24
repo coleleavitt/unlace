@@ -1,4 +1,4 @@
-# kuna armshiftguard: a register-controlled ARM LSL uses the low eight
+# unlace armshiftguard: a register-controlled ARM LSL uses the low eight
 # count bits, so the C printer guards it with `count < 32u ? ... : 0u`
 # (arm-register-shift.xml). P9 emission / cast-policy.
 # ShiftMasked (`and r1,r1,#0x1f; mov r0,r0,lsl r1; bx lr`) and ShiftField

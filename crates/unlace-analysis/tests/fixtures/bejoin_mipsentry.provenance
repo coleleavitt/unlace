@@ -1,6 +1,6 @@
 bejoin_mipsentry.elf -- MIPS32 big-endian hand-assembled image for option
 bejoin callers with a proven pair whose second register one path leaves as it
-came in (GH-904; tests/stages/kuna-bejoin-mipsclang.toml).
+came in (GH-904; tests/stages/unlace-bejoin-mipsclang.toml).
 
 What it is
   Static executable from bejoin_mipsentry.s. sum_both computes $3 on both

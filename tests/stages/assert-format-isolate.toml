@@ -1,4 +1,4 @@
-# kuna issue #1642 (P9 emission, literal-format; P6 variables,
+# unlace issue #1642 (P9 emission, literal-format; P6 variables,
 # merge-aggressiveness).  The assertion directives `format` and `isolate`
 # lower to the console commands `force constant <addr> <format> [<value>]`
 # and `isolate <name>`.  `force constant` names a constant by the address

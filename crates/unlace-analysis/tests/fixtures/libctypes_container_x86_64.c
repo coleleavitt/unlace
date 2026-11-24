@@ -1,5 +1,5 @@
 /* Fixture for the libc-aggregate fit rule of `option libctypes`
- * (tests/stages/kuna-libctypes.toml, `kuna_libcfit`).
+ * (tests/stages/unlace-libctypes.toml, `unlace_libcfit`).
  *
  * Built: gcc -g0 -O1 -o libctypes_container_x86_64 libctypes_container_x86_64.c
  *

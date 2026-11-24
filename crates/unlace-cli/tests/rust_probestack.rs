@@ -31,7 +31,7 @@ const INPUTS: &[u32] = &[
 fn records(mode: &str, language: &str) -> serde_json::Value {
     let binary = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
-    let facts = common::fixture("rust_probestack.kuna");
+    let facts = common::fixture("rust_probestack.unlace");
     let selector = POSITIVE
         .iter()
         .chain(CONTROLS)
@@ -161,7 +161,7 @@ fn complete_emitted_bodies_preserve_values_and_probe_stack_writes() {
 fn helper_spill_does_not_truncate_the_callers_reused_page() {
     let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
-    let facts = common::fixture("rust_probestack_buffer.kuna");
+    let facts = common::fixture("rust_probestack_buffer.unlace");
     let result = process::required_output(Command::new(unlace).args([
         "decompile",
         &common::fixture("rust_probestack_buffer_x86_64"),
@@ -234,7 +234,7 @@ fn helper_spill_does_not_truncate_the_callers_reused_page() {
 fn optional_stack_memory_policies_retain_the_probe_and_whole_page() {
     let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
-    let facts = common::fixture("rust_probestack_buffer.kuna");
+    let facts = common::fixture("rust_probestack_buffer.unlace");
     for policy in ["stackviews", "stackalias"] {
         let mut previous = None;
         for mode in ["off", "auto", "always"] {

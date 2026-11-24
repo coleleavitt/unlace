@@ -9,7 +9,7 @@ RE-friction need `direct-address-keyboard-handler` (major, 1 instance, challenge
 > 0x4610 at 0x66e2; it should remain a call/tail-call boundary rather than duplicating
 > thousands of lines into the callback.
 
-`kuna decompile lugosiii 0x6500 --addr` emitted **1,555 lines** for a ~500-byte callback,
+`unlace decompile lugosiii 0x6500 --addr` emitted **1,555 lines** for a ~500-byte callback,
 with the renderer's `LUGOSI'S II` title twice and 12 calls to its helper `sub_5e30` inside
 the keyboard handler — while the *same* function already rendered `sub_4610(a0)` correctly
 a few blocks later, where the compiler used a real `call` instead of a tail `jmp`.
@@ -24,7 +24,7 @@ in `decomp_dbg`, with `0x6500` mapped exactly as before, alone takes the output
 
 `tailcalljump` (DIV-13, default on) resolves its callee through
 `query_call(dest).is_some()`, so it only fires on a target some discovery oracle already
-found. Every kuna oracle reaches a function from a symbol, an unwind record, or a direct
+found. Every unlace oracle reaches a function from a symbol, an unwind record, or a direct
 `call` the recursive-descent walk arrived at. `0x6500` is only a `wl_keyboard_listener`
 code pointer in `.data.rel.ro`, so the walk never enters it, never sees its own
 `call 0x4610`, and neither address becomes a function — under `auto`, `reliable`,
@@ -60,7 +60,7 @@ has already decoded.
 `a-f13adb91d5d4`, unchanged and with no `--option` or `--assert` on its command line:
 
 ```
-kuna decompile lugosiii 0x6500 --addr
+unlace decompile lugosiii 0x6500 --addr
 ```
 
 1,555 → **427** lines; both `LUGOSI'S II` occurrences and all 12 `sub_5e30(` calls gone;
@@ -87,14 +87,14 @@ direct-address-keyboard-handler` reports `pass 1 / fail 0 / closed 1`.
 
 - `tests/stages/tailcallframe.toml` — two-pass on a hand-built bytechunk, 4 assertions
   (605 → 609 stage assertions, baseline re-recorded).
-- `decompiler/crates/kuna-decomp/src/p2_lift/tailcallframe/tests.rs` — 10 unit tests
+- `decompiler/crates/unlace-decomp/src/p2_lift/tailcallframe/tests.rs` — 10 unit tests
   over hand-built IR (partial teardown, frameless leaf, `leave`, self-recursion,
   already-decoded target, indirect branch, address gap).
 - `decompiler/crates/console/tests/verify_tailcallframe.rs` — 3 tests on a real ELF.
   Neither parity corpus can carry the *discovery* half: both are symbol-less bytechunks
   with no function map for `query_call` to miss.
 - `tests/cli/direct-address-keyboard-handler.json` + vendored fixture
-  `decompiler/crates/kuna-analysis/tests/fixtures/tailcallframe_x86_64` (14,488 bytes,
+  `decompiler/crates/unlace-analysis/tests/fixtures/tailcallframe_x86_64` (14,488 bytes,
   source beside it). `verify --promote` refuses the acceptance itself because its target is
   `binary_source: dataset` and CI has no dataset, so the probe points at an in-repo twin
   built from the same shape.
@@ -106,7 +106,7 @@ committed by an earlier attempt that ran out of budget before it could open a PR
 claims were taken on trust.
 
 **The wrongness question was asked, and it has an answer.** The rule's evidence is the *frame*,
-not the function bound — and a kuna `FunctionSymbol` has no extent, so nothing at this seam can
+not the function bound — and a unlace `FunctionSymbol` has no extent, so nothing at this seam can
 ask whether `dest` is still inside the caller. A function that tears its frame down
 **completely** and then jumps to a shared `ret` in its own body is therefore recovered as a tail
 call. Built as a 27-byte x86-64 ELF, the default arm fabricates `return sub_401021();` — a call
@@ -165,7 +165,7 @@ and the emitted function count is identical on both arms.**
 | `make test-stages` | **PARITY OK — 609/609** (605 → 609, baseline re-recorded) |
 | `make rust-test` | green |
 | `make check-spec` | OK |
-| `kuna catalog --check` | catalog OK |
+| `unlace catalog --check` | catalog OK |
 | `scripts.repipe.verify --need direct-address-keyboard-handler` | **PASS** |
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

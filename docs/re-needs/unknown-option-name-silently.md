@@ -56,7 +56,7 @@ Measured matrix at `68d27c99`, same binary and address, sha256 of stdout:
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x12d0",
@@ -86,7 +86,7 @@ Measured matrix at `68d27c99`, same binary and address, sha256 of stdout:
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "main",
@@ -130,17 +130,17 @@ Measured matrix at `68d27c99`, same binary and address, sha256 of stdout:
 **Advisory - the builder is not bound by this.** In the sibling campaign 3 of 8 filed
 diagnoses were overturned while the symptom stood in all 8.
 
-- The engine already rejects the name; the CLI loses the rejection. `kuna` lowers each
+- The engine already rejects the name; the CLI loses the rejection. `unlace` lowers each
   `--option NAME VALUE` into an `option NAME VALUE` script line for `decomp_dbg`
   (`decompile.rs:161`), and the console's handler raises `IfaceError::execution("Unknown
-  option")` when the name is in neither `KUNA_OPTION_NAMES` nor the ElementId registry
+  option")` when the name is in neither `UNLACE_OPTION_NAMES` nor the ElementId registry
   (`ifacedecomp.rs:873`). But `decomp_dbg` prints that class of failure to **stdout** as
   `Execution error: ...` and still exits 0 - directly observed on an unrelated bad command:
   a script of `restore-file <path>` + `option zzzznotanoption off` printed `ERROR: Invalid
   command` and `Execution error: No load image present` on stdout with rc=0. So the CLI has
   no failing exit status to notice and no stderr to forward.
 - Therefore the fix is most likely on the CLI side of that seam - either validate the name
-  against the catalog `kuna` already ships (`catalog.rs` knows every settable name) before
+  against the catalog `unlace` already ships (`catalog.rs` knows every settable name) before
   spawning, or make the driver treat a console `Execution error:` line as fatal. The first is
   cheaper and gives a better message; the second also catches every other silently swallowed
   script error, which may be a larger blast radius than this need needs.
@@ -156,7 +156,7 @@ _not yet refuted_
 
 ## Reference
 
-- `ida-decompile` — not applicable; this is a kuna-only CLI contract.
+- `ida-decompile` — not applicable; this is a unlace-only CLI contract.
 
 ## Instances
 
@@ -173,4 +173,4 @@ _not yet refuted_
   `unlace catalog` spells it, and one such sentence is already in the round-4 record
   (`unsigned-byte-vm-selector`). This makes every future ablation honest.
 - The CLI-tier change recipe applies: no new option, no stage XML, no catalog counts.
-- round 4 REFUTER: hypothesis **inconclusive**. Captain-run, not a spawned refuter. SYMPTOM PROVEN, exactly: at 68d27c99 on KataVM_L1 0x12d0 --addr, the four spellings loweredswitch / LOWEREDSWITCH / lowered_switch / zzzznotanoption all exit 0 with EMPTY stderr, and only the exact spelling changes stdout (sha c4a4013bf5b4 vs af7dfc7999d9 for the other three AND for the no-option default). MECHANISM HALF-PROVEN. Verified by reading: kuna lowers each --option into an 'option NAME VALUE' script line for decomp_dbg (decompile.rs:161), and the console handler raises IfaceError::execution Unknown option when the name is in neither KUNA_OPTION_NAMES nor the ElementId registry (ifacedecomp.rs:869-874). Verified by running: decomp_dbg fed 'restore-file <path>' + 'option zzzznotanoption off' printed ERROR: Invalid command and Execution error: No load image present on STDOUT and exited 0. NOT verified: that the Unknown-option error specifically behaves the same once an image IS loaded, because the no-load-image error preempted it in that script. So the causal chain is one observation short, and a builder should confirm it before choosing between the two candidate fixes. Either fix closes the acceptance regardless -- validating the name against the catalog kuna already ships does not depend on the swallow being the cause.
+- round 4 REFUTER: hypothesis **inconclusive**. Captain-run, not a spawned refuter. SYMPTOM PROVEN, exactly: at 68d27c99 on KataVM_L1 0x12d0 --addr, the four spellings loweredswitch / LOWEREDSWITCH / lowered_switch / zzzznotanoption all exit 0 with EMPTY stderr, and only the exact spelling changes stdout (sha c4a4013bf5b4 vs af7dfc7999d9 for the other three AND for the no-option default). MECHANISM HALF-PROVEN. Verified by reading: unlace lowers each --option into an 'option NAME VALUE' script line for decomp_dbg (decompile.rs:161), and the console handler raises IfaceError::execution Unknown option when the name is in neither UNLACE_OPTION_NAMES nor the ElementId registry (ifacedecomp.rs:869-874). Verified by running: decomp_dbg fed 'restore-file <path>' + 'option zzzznotanoption off' printed ERROR: Invalid command and Execution error: No load image present on STDOUT and exited 0. NOT verified: that the Unknown-option error specifically behaves the same once an image IS loaded, because the no-load-image error preempted it in that script. So the causal chain is one observation short, and a builder should confirm it before choosing between the two candidate fixes. Either fix closes the acceptance regardless -- validating the name against the catalog unlace already ships does not depend on the swallow being the cause.

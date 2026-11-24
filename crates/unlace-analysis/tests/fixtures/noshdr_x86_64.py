@@ -38,7 +38,7 @@ CODE = bytes([
     0xb8, 0x2a, 0x00, 0x00, 0x00,        # mov  eax,0x2a
     0xc3,                                # ret
 ])
-DATA = b"kuna sectionles"
+DATA = b"unlace sectionles"
 EHSIZE, PHENTSIZE, PHNUM = 64, 56, 3
 
 

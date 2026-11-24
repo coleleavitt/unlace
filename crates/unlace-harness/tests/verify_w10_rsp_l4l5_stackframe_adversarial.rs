@@ -69,8 +69,8 @@ fn render_datatest(stem: &str) -> Option<String> {
 
 /// Extract just the rendered C body (between the UNLACE_DUMP markers).
 fn body_of(out: &str) -> String {
-    let begin = out.find("===KUNA_DUMP_BEGIN").unwrap_or(0);
-    let mid = out.find("===KUNA_DUMP_MID===").unwrap_or(out.len());
+    let begin = out.find("===UNLACE_DUMP_BEGIN").unwrap_or(0);
+    let mid = out.find("===UNLACE_DUMP_MID===").unwrap_or(out.len());
     out[begin..mid].to_string()
 }
 

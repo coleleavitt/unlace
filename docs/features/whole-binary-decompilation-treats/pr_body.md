@@ -1,13 +1,13 @@
 ## The problem
 
-`kuna decompile-all` reports zero functions on a PE that declares its entry
+`unlace decompile-all` reports zero functions on a PE that declares its entry
 point inside its own header page — the `SizeOfHeaders` bytes Windows maps before
 the first section, where a packer is free to lay its stub. Naming the same
 address decompiles it in full.
 
 ```console
-$ F=decompiler/crates/kuna-analysis/tests/fixtures/pe_headerentry_i386.exe
-$ kuna decompile-all $F --json
+$ F=decompiler/crates/unlace-analysis/tests/fixtures/pe_headerentry_i386.exe
+$ unlace decompile-all $F --json
 error: no functions discovered in .../pe_headerentry_i386.exe
 {
   "count": 0,
@@ -15,7 +15,7 @@ error: no functions discovered in .../pe_headerentry_i386.exe
   "functions": [],
   "assertions": []
 }
-$ kuna decompile $F 0x400154 --addr
+$ unlace decompile $F 0x400154 --addr
 int sub_400154(int a0)
 {
   return a0 + 7;
@@ -41,7 +41,7 @@ Once those were correctly withheld from the batch set, `decompile-all` answered
   making a function of the `MZ` signature.
 - Only the entry is exempt, never a `.pdata`, TLS or export candidate. An entry
   inside a section the image flags *non*-executable is deliberately still not
-  exempt: there the flag is a statement about those bytes, and kuna answers it by
+  exempt: there the flag is a statement about those bytes, and unlace answers it by
   naming the cause and the `--define-function` that overrides it.
 
 ## The tests

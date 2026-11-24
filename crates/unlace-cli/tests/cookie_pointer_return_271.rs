@@ -86,7 +86,7 @@ fn decompile(image: &Path, options: &[(&str, &str)]) -> String {
         String::from_utf8_lossy(&output.stderr),
         String::from_utf8_lossy(&output.stdout)
     );
-    let document: Value = serde_json::from_slice(&output.stdout).expect("Kuna JSON output");
+    let document: Value = serde_json::from_slice(&output.stdout).expect("Unlace JSON output");
     assert_eq!(
         document["assertions"].as_array().unwrap().len(),
         contracts.len(),

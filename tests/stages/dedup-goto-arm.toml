@@ -1,4 +1,4 @@
-# kuna: hoisting a shared if/else suffix must not free a block a goto still
+# unlace: hoisting a shared if/else suffix must not free a block a goto still
 # names.  dedupitetail moves the statement both arms end with to after the
 # if.  When that leaves an arm with one component, the arm's list is
 # unwrapped and freed.  Here a goto from the else arm targets the whole true
@@ -10,7 +10,7 @@
 # that counts a call's return-address push, not the condcallpush fold.
 #
 # Stage / sub-stage: P8 structure, goto-quality
-# (p8_structure/kuna_dedupitetail.rs, BlockGraph::kuna_hoist_ite_suffix).
+# (p8_structure/unlace_dedupitetail.rs, BlockGraph::unlace_hoist_ite_suffix).
 # Two passes: option dedupitetail off keeps one shared(y) per arm, and the
 # default hoists it to one copy after the if.  No option gates the fix; before
 # it the second pass panicked.

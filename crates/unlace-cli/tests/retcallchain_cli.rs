@@ -44,7 +44,7 @@ fn decompile(assertion: Option<&str>) -> String {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(&args)
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     if !out.status.success() {

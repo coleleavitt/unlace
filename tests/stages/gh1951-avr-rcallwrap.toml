@@ -15,7 +15,7 @@
 #   masked & 0x0FFF       -> word 0x807, byte 0x100e (CORRECT)
 #
 # Stage: 02 P-code lift (SLEIGH semantic constructor) / surfaces in 03
-# disassembly.  Fix (kuna GH-1951, GH-8844): mask the rel12 target with
+# disassembly.  Fix (unlace GH-1951, GH-8844): mask the rel12 target with
 # & 0x0FFF on the 16-bit (PCBYTESIZE==2) AVR8 variant.
 #
 # A RET (0x9508 -> bytes 08 95) is mapped at word 0x807 (byte 0x100e) so the

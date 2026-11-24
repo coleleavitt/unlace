@@ -2,7 +2,7 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile-all",
     "{{BIN}}",
     "--addr",
@@ -44,7 +44,7 @@
       {
         "path": "functions[0].code",
         "op": "contains",
-        "value": "__printf_chk(2,\"kuna armlibcmain prompt\",envp,0)"
+        "value": "__printf_chk(2,\"unlace armlibcmain prompt\",envp,0)"
       },
       {
         "path": "functions[0].code",

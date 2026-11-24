@@ -10,7 +10,7 @@
 # "bit_transitions(off,sz) less-than 3" bit-flag/mask heuristic.  0x100000 (one set bit,
 # 1 shifted left by 20) has a single bit transition, so the constant is never turned
 # into a symbol reference and prints as the raw literal.  Stage model: S5 sub-stage
-# const-pointer ("is this constant an address?"); kuna_inferfuncentry.rs (always on)
+# const-pointer ("is this constant an address?"); unlace_inferfuncentry.rs (always on)
 # skips the rejection for a constant that resolves exactly to a function entry.
 
 [image]

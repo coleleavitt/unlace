@@ -31,14 +31,14 @@ export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="${CARGO_TARGET_X86_64_UN
 unset RUSTFLAGS
 # Join the machine-wide jobserver (unlace-jobserver) so concurrent agents share one pool of build slots.
 JS_FIFO="${UNLACE_JOBSERVER_FIFO:-/run/user/$(id -u)/unlace-jobserver.fifo}"
-# A machine that still runs the kuna fork's jobserver shares that pool instead.
+# A machine that still runs the unlace fork's jobserver shares that pool instead.
 [ -p "$JS_FIFO" ] || JS_FIFO="/run/user/$(id -u)/kuna-jobserver.fifo"
 # CARGO_BUILD_JOBS (or -j) makes cargo create its own jobserver and ignore the shared one, so drop it.
 [ -p "$JS_FIFO" ] && { export MAKEFLAGS="-j --jobserver-auth=fifo:$JS_FIFO"; unset CARGO_BUILD_JOBS; }
 # Heavy test runs take one of UNLACE_SLOTS machine-wide slots (unlace-slot).
 SLOT=("$ROOT/tools/hooks/unlace-slot")
 BIN="$CARGO_TARGET_DIR/debug"
-export KUNA_SPECS="$ROOT/specs" SLEIGHHOME="$ROOT/specs" REPIPE_KUNA="$BIN/unlace"
+export UNLACE_SPECS="$ROOT/specs" SLEIGHHOME="$ROOT/specs" REPIPE_UNLACE="$BIN/unlace"
 FAILED=(); PASSED=()
 skip() { [[ " ${UNLACE_GATES_SKIP:-} " == *" $1 "* ]]; }
 step() { local name="$1"; shift
@@ -59,7 +59,7 @@ fmt() { (cargo fmt --all --check >/dev/null) || { echo "run: cargo fmt --all"; r
 build() { (cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli); }
 lint() { (cargo clippy -p unlace-cli -p unlace-base -p unlace-num --no-deps -- -D warnings -A unfulfilled-lint-expectations); }
 options_md() { "$BIN/unlace" catalog --markdown | diff -u docs/options.md - ; }
-counters() { PYTHONPATH="$ROOT" python3 -m scripts.repipe.counters --check --kuna "$BIN/unlace"; }
+counters() { PYTHONPATH="$ROOT" python3 -m scripts.repipe.counters --check --unlace "$BIN/unlace"; }
 ghidra() { (cargo test -p unlace-ghidra -- --nocapture); }
 web() {
   local t ok=0

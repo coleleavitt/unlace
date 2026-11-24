@@ -7,7 +7,7 @@ levels** -- 795 slices, **85,195 scored functions**, and in particular the **32,
 O0 slice** that was never scored.
 
 It exists because O0 is the campaign's current target: it is the one level where the published
-columns put IDA ahead of kuna on raw count (14,983 of 32,401 against 14,709 of 32,339), and --
+columns put IDA ahead of unlace on raw count (14,983 of 32,401 against 14,709 of 32,339), and --
 as section 1 shows -- the one level where a single option decides the sign of the head-to-head.
 And because four independent round-4 triage records
 found `returndup` over-firing there (`triage/O0-zlib-example-updatewindow.md`,
@@ -35,14 +35,14 @@ Constructed exactly like #246's ablation, extended to O0 and re-run on all three
 the numbers are one build and one harness throughout.
 
 - **Two arms, one binary.** `unlace decompile-all <stripped> --json --max-fn-seconds 120`,
-  once as shipped and once with `--option returndup off`, kuna at HEAD `82dd39a7`. No
-  `--mode` flag, so `auto` applies -- which is what the benchmark's `kuna_raw` backend does
-  (`decbench/decompilers/raw/kuna_raw.py`), and it resolves to `aggressive` on nearly every
+  once as shipped and once with `--option returndup off`, unlace at HEAD `82dd39a7`. No
+  `--mode` flag, so `auto` applies -- which is what the benchmark's `unlace_raw` backend does
+  (`decbench/decompilers/raw/unlace_raw.py`), and it resolves to `aggressive` on nearly every
   binary here. That the `--option` still wins over the preset on the same command line was
   verified directly on the `zlib example` witness before anything else was run.
 - **decbench's population, decbench's names.** Each arm's JSON is rebuilt into a
   decbench-format artifact: for every `// Function: <name> @ <addr>` marker of the stored
-  `<opt>/<project>/decompiled/kuna_<stem>.c`, the fresh record at that address, with its own
+  `<opt>/<project>/decompiled/unlace_<stem>.c`, the fresh record at that address, with its own
   `sub_<addr>` placeholder renamed to the marker name -- `run_benchmark._relabel_to_dwarf`'s
   convention. **All 89,135 markers over all 795 slices matched a fresh record carrying code,
   in both arms**: zero misses, zero decompile failures, zero timeouts.
@@ -62,7 +62,7 @@ Four controls, all of which had to pass before any number here was written down:
 | functions scored in one arm but not the other | **0** | **0** | **0** |
 
 The published-column disagreements are HEAD-vs-pinned-`9623dc27` build drift, and they run
-in kuna's favour (+76 / +44 / +70 perfect on HEAD).
+in unlace's favour (+76 / +44 / +70 perfect on HEAD).
 
 Two definitions used throughout. **"Fires"** means the *body* differs between the arms, not
 the text: 14.7% of O0 text diffs are the banner comment alone and are excluded (they are
@@ -101,24 +101,24 @@ The aggregate-GED column disagrees with the perfect column **at O0 only**: the p
 lot of functions closer to the source shape (4,934 improved against 3,059 worsened, mean 4.50
 removed where it wins against 4.30 added where it loses) while knocking a net 192 off exact
 zero. Which statistic decides is a campaign question, not a measurement question -- the
-scoreboard, the standings and every "kuna vs IDA" claim are perfect-count claims.
+scoreboard, the standings and every "unlace vs IDA" claim are perfect-count claims.
 
 ### Against IDA, which is why the question was asked
 
 Head-to-head on the functions both tools have a score for, in the same frame
 `features-round4.md` uses (its `[V]` figure for the pinned build is 3,067 ida-only against
-2,938 kuna-only, a net -129):
+2,938 unlace-only, a net -129):
 
-| O0, 32,077 functions both scored | ida-only wins | kuna-only wins | net |
+| O0, 32,077 functions both scored | ida-only wins | unlace-only wins | net |
 |---|---:|---:|---:|
-| kuna published (pinned `9623dc27`) | 3,067 | 2,938 | **-129** |
-| kuna ON, fresh HEAD (shipped) | 3,066 | 3,013 | **-53** |
-| kuna OFF, fresh HEAD | 2,977 | 3,119 | **+142** |
+| unlace published (pinned `9623dc27`) | 3,067 | 2,938 | **-129** |
+| unlace ON, fresh HEAD (shipped) | 3,066 | 3,013 | **-53** |
+| unlace OFF, fresh HEAD | 2,977 | 3,119 | **+142** |
 
 At O0, turning this one option off is by itself the difference between trailing IDA and
 leading it. At the other two levels it is the reverse, and by more:
 
-| head-to-head | n | ida | kuna ON | kuna OFF |
+| head-to-head | n | ida | unlace ON | unlace OFF |
 |---|---:|---:|---:|---:|
 | O2 | 21,046 | 6,848 | 6,590 (-258) | 6,239 (-609) |
 | O2-noinline | 28,239 | 10,126 | 9,925 (-201) | 9,471 (-655) |
@@ -174,7 +174,7 @@ the harm at O0 and costs almost nothing where the pass pays.
 
 `iproute2 ip::sci_complete` is the archetype. With `returndup off` the whole function
 re-rolls to the source's single boolean expression and scores 0; the split removes the 0/1
-select diamond before `iteboolean` and `rule_block_or` can see it, and kuna emits a
+select diamond before `iteboolean` and `rule_block_or` can see it, and unlace emits a
 five-return cascade for GED 21:
 
 ```c
@@ -266,7 +266,7 @@ Turning the pass off is not free of shape damage, and two of its harms are invis
    partitions has a net-negative cell**, and the discriminator it could not find is a
    partition it did not test. `docs/decbench-loop.md` also still says the benchmark injected
    `option listing on` and ran the equivalent of `--mode reliable`; the backend appends
-   `--mode` only when `DECBENCH_KUNA_MODE` is set, so the scored column is `auto`.
+   `--mode` only when `DECBENCH_UNLACE_MODE` is set, so the scored column is `auto`.
 
 **What would falsify this.** The recommendation rests on one claim the measurement cannot
 make: that a *pre-split* CFG predicate can recognise the or-chain shape with roughly the
@@ -301,19 +301,19 @@ against the ad-hoc harness that produced this file: on `O0 zlib example` the two
 The per-function tables behind every number in this file, the partition/gate/search scripts
 (`analyze.py`, `gate.py`, `search.py`, `combined.py`) and both arms' artifacts are in this
 session's scratch directory
-(`/tmp/claude-1000/-home-mahaloz-github-kuna/d756055a-8e91-4631-b6ae-5e5a69c3ffc2/scratchpad/`,
+(`/tmp/claude-1000/-home-mahaloz-github-unlace/d756055a-8e91-4631-b6ae-5e5a69c3ffc2/scratchpad/`,
 `returndup-o0/` and `returndup-opt2/`).
 
 ### What this measurement does not cover
 
 - **Only the GED metric.** `byte_match` and `type_match` were not re-scored in either arm.
-- **Only functions decbench already scores for kuna.** The 261 O0 functions IDA scores and
-  kuna produces nothing scoreable for belong to the recall workstream and cannot move here.
+- **Only functions decbench already scores for unlace.** The 261 O0 functions IDA scores and
+  unlace produces nothing scoreable for belong to the recall workstream and cannot move here.
 - **The or-chain predicate is measured as an outcome, not as an implementable precondition**
   (see above). The uniform-return predicate is the only top candidate that is decidable
   in-pass as measured.
 - **No speed measurement.** A gate that adds a CFG probe to `returndup_apply` needs its own
   interleaved timing against the 5% budget.
-- **The rivals' columns are frozen.** IDA's numbers are the tree's stored scores; only kuna
+- **The rivals' columns are frozen.** IDA's numbers are the tree's stored scores; only unlace
   was re-decompiled. That is the same footing every campaign comparison stands on, and it is
   why the head-to-head is stated on the both-scored subset rather than as a standings claim.

@@ -5,9 +5,9 @@
 # the loop, and because a tick is stateless the cost of killing one is a tick, not a round.
 set -uo pipefail
 
-REPO="${KUNA_REPO:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel)}"
-KUNA_PY="${KUNA_PY:-$HOME/.virtualenvs/kuna/bin/python}"
-STATE_DIR="${KUNA_PIPELINE_STATE_DIR:-$REPO/.kuna-repipe}"
+REPO="${UNLACE_REPO:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel)}"
+UNLACE_PY="${UNLACE_PY:-$HOME/.virtualenvs/unlace/bin/python}"
+STATE_DIR="${UNLACE_PIPELINE_STATE_DIR:-$REPO/.unlace-repipe}"
 TIMEOUT="${REPIPE_CAPTAIN_TIMEOUT:-3600}"
 BACKEND="${REPIPE_CAPTAIN_BACKEND:-claude}"
 if [ "$BACKEND" = codex ]; then
@@ -19,16 +19,16 @@ REASONING="${REPIPE_CAPTAIN_REASONING:-low}"
 BUDGET="${REPIPE_CAPTAIN_USD:-5}"
 
 export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
-export KUNA_PIPELINE_STATE_DIR="$STATE_DIR"
+export UNLACE_PIPELINE_STATE_DIR="$STATE_DIR"
 mkdir -p "$STATE_DIR/logs"
 LOG="$STATE_DIR/logs/captain-session.log"
 TICK_ID="cap-$(date +%s)"
 
-"$KUNA_PY" -m scripts.pipeline.state slot-acquire --pool captain --id "$TICK_ID" --pid $$ --kind captain >/dev/null 2>&1 || {
+"$UNLACE_PY" -m scripts.pipeline.state slot-acquire --pool captain --id "$TICK_ID" --pid $$ --kind captain >/dev/null 2>&1 || {
   echo "another captain tick holds the slot; skipping" | tee -a "$LOG"; exit 0; }
-trap '"$KUNA_PY" -m scripts.pipeline.state slot-release --pool captain --id "$TICK_ID" >/dev/null 2>&1' EXIT
+trap '"$UNLACE_PY" -m scripts.pipeline.state slot-release --pool captain --id "$TICK_ID" >/dev/null 2>&1' EXIT
 
-STATUS="$("$KUNA_PY" -m scripts.repipe.captain --status 2>&1)"
+STATUS="$("$UNLACE_PY" -m scripts.repipe.captain --status 2>&1)"
 PROMPT="$(cat "$REPO/tools/repipe/captain_prompt.md")
 
 ## Current state (read at $(date -Iseconds))

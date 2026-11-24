@@ -2,7 +2,7 @@
 
 Sections 1-7 are the original research (no code changed, no builds run); section 8 records what
 landed. Upstream tree: `kuna-wt-up` at `2b96e74e8`.
-LSP checks ran on the main checkout (branch `all`), which has the same module layout. All kuna line numbers
+LSP checks ran on the main checkout (branch `all`), which has the same module layout. All unlace line numbers
 below are upstream (`kuna-wt-up`) lines unless marked `[all]`.
 
 ## 1. What the cycle really is (measured)
@@ -20,20 +20,20 @@ rust-analyzer call hierarchy (quoted below).
 - Cutting every upward edge out of `substrate/` still leaves a 300k-line SCC. So the cycle is not only "the IR
   points up". There are three hubs, plus pass-to-pass edges:
   1. **`Funcdata` is a side-table store.** `substrate/funcdata.rs:159` has **149 fields** (lsp document_symbols,
-     lines 160-702). About 100 of them are `kuna_*` per-pass state whose types live in phase folders. Examples:
-     `kuna_elemptr_*` (p5, 9 fields), `kuna_callee_entry_dead`/`kuna_callee_forward` (p4 `kuna_calleedeadarg`),
-     `stack_records: RefCell<Vec<crate::p6_variables::kuna_stackstruct::StackRecord>>` (line 252),
-     `kuna_atomic_xadds: Vec<crate::p2_lift::kuna_atomicxadd::Instruction>` (line 702).
+     lines 160-702). About 100 of them are `unlace_*` per-pass state whose types live in phase folders. Examples:
+     `unlace_elemptr_*` (p5, 9 fields), `unlace_callee_entry_dead`/`unlace_callee_forward` (p4 `unlace_calleedeadarg`),
+     `stack_records: RefCell<Vec<crate::p6_variables::unlace_stackstruct::StackRecord>>` (line 252),
+     `unlace_atomic_xadds: Vec<crate::p2_lift::unlace_atomicxadd::Instruction>` (line 702).
   2. **`Architecture` and `ArchContext` store every option.** `infra/architecture.rs:240` has **385 fields**.
      `substrate/context.rs:666` (`ArchContext`, the per-function snapshot behind `ArchHandle = Rc<ArchContext>`,
      context.rs:2656) has **210 fields**. Most are option mode enums and cross-function ledgers defined in pass
-     modules, e.g. `be_join: crate::kuna_bejoin::BeJoinMode` (context.rs:764) and
-     `goto_reduce: crate::p8_structure::kuna_gotoreduce::GotoReduceMode` (context.rs:1255). The option dispatch
+     modules, e.g. `be_join: crate::unlace_bejoin::BeJoinMode` (context.rs:764) and
+     `goto_reduce: crate::p8_structure::unlace_gotoreduce::GotoReduceMode` (context.rs:1255). The option dispatch
      is an `impl Architecture` block generated in p0 (`p0_knowledge/option_dispatch.rs:12-30`). It names
-     every pass's option parser (e.g. `crate::p9_emit::kuna_armconstantshift::OptionArmConstShift.apply`).
+     every pass's option parser (e.g. `crate::p9_emit::unlace_armconstantshift::OptionArmConstShift.apply`).
      `build.rs:232` generates `OptionValues` from `phases.toml` into the same crate
      (`p0_knowledge/phases.rs:296`).
-  3. **IR algorithms call kuna pass predicates directly.** Ghidra-core code in the IR calls `kuna_*` functions
+  3. **IR algorithms call unlace pass predicates directly.** Ghidra-core code in the IR calls `unlace_*` functions
      inline: 146 call sites to 115 distinct functions. lsp confirms, for example:
      - `p4_calls/exclusivecallret.rs:32 applies` <- `substrate/funcdata_varnode.rs only_op_use_walk` [all 2237, call 2263]
      - `p4_calls/spillargtrial.rs store_is_caller_save_spill` <- the same `only_op_use_walk` [all 2341]
@@ -49,8 +49,8 @@ rust-analyzer call hierarchy (quoted below).
   infra 14. Your earlier counts (substrate->p4 219 etc.) included the doc links.
 - Only 10 inherent `impl` blocks on core types sit outside the IR: `impl Funcdata` in `funcdata_facing`,
   `funcdata_merge`, `funcdata_spacebase`, `funcdata_union` (p3-p6), `funcdata_resolveflow` (p2), `coreaction_casts`
-  and `kuna_calltransport` (p9); `impl Datatype` in `kuna_typequal`; `impl Architecture` in
-  `kuna_option_dispatch`. Rust forbids inherent impls outside the defining crate, so these are the only items that
+  and `unlace_calltransport` (p9); `impl Datatype` in `unlace_typequal`; `impl Architecture` in
+  `unlace_option_dispatch`. Rust forbids inherent impls outside the defining crate, so these are the only items that
   must change shape (into extension traits) for a split.
 - `pub(crate)` items: about 1170, of which 208 are in the proposed IR crate. Those 208 become `pub`.
 
@@ -88,24 +88,24 @@ p3-only 26, p6-only 21, and so on.
   query magic". `declare_hooks!` (hooks.rs:18-57) generates an `#[inline(always)]` method on `TyCtxt` that calls
   through `self.hooks.$name`, and a default that panics (hooks.rs:136-139). Example filled from above:
   `rustc_mir_transform/src/lib.rs` `providers.hooks.find_noop_landing_pads_for_instance = ...`. **This is exactly
-  kuna's case 3** (IR code that needs a kuna predicate).
+  unlace's case 3** (IR code that needs a unlace predicate).
 - **Extension traits instead of foreign inherent impls.** `rustc_trait_selection/src/infer.rs:21`
   `#[extension(pub trait InferCtxtExt<'tcx>)]` adds methods to a `rustc_middle`/`rustc_infer` type from a
   downstream crate.
 - **Pass framework.** `MirPass` (`rustc_mir_transform/src/pass_manager.rs:112`, `run_pass(&self, tcx, body:
-  &mut Body)` at :124) is a trait object list, as kuna's `Action`/`Rule` already are
+  &mut Body)` at :124) is a trait object list, as unlace's `Action`/`Rule` already are
   (`infra/action.rs:357`, `apply(&mut self, data: &mut Funcdata, ctx)` at :369; `Rule` at :996;
   `SchedNode` at `infra/universalaction.rs:62`). Pass-private state stays local to the pass. `mir::Body`
   (`rustc_middle/src/mir/mod.rs:205`) carries IR plus a few data types defined in middle, not per-pass ledgers.
 - **Options live in a crate below middle and are plain data.** `rustc_session/src/options.rs:2416` `options! {
   UnstableOptions, ... }`. All `-Z` options sit in one table, so adding one rebuilds the world. rustc accepts
-  that because options change rarely. kuna adds or changes options in 24% of commits (192/800), so it cannot
+  that because options change rarely. unlace adds or changes options in 24% of commits (192/800), so it cannot
   copy this part.
 - **Dylib facade for parallelism.** `rustc_driver/Cargo.toml:7` `crate-type = ["dylib"]`. `rustc_driver/src/lib.rs:1-2`:
   "This crate is intentionally empty and a re-export of `rustc_driver_impl` to allow the code in
   `rustc_driver_impl` to be compiled in parallel with other crates." `src/bootstrap/src/core/builder/cargo.rs:1451-1456`
   passes `-Cprefer-dynamic` for std.
-- **Codegen facts that matter for a kuna split at opt-level 1, incremental on:**
+- **Codegen facts that matter for a unlace split at opt-level 1, incremental on:**
   - Within one crate, opt-level >= 1 with more than one CGU gets local ThinLTO (`rustc_session/src/session.rs:1062-1066`).
     So inlining across CGUs works today inside unlace-decomp.
   - Across crates, automatic inlining inference is **off when incremental is on**
@@ -121,7 +121,7 @@ p3-only 26, p6-only 21, and so on.
   `init_resource` :485, `add_plugins` :642). Core types never name feature types. Feature state is stored
   type-erased in the `World`: `World::resource::<R>()` (bevy_ecs/src/world/mod.rs:2280, `get_resource` :2343). It
   is looked up through a dense `ComponentId(usize)` index (bevy_ecs/src/component/info.rs:179), not a hash of
-  `TypeId` on every access. **This is the model for kuna's `Funcdata` side tables and option storage.**
+  `TypeId` on every access. **This is the model for unlace's `Funcdata` side tables and option storage.**
 - **Facade crate.** `crates/bevy_internal/src/lib.rs` re-exports every crate (`pub use bevy_ecs as ecs;` ...), and
   the top `bevy` crate is `pub use bevy_internal::*;` (src/lib.rs:52).
 - **`dynamic_linking`.** Cargo.toml:288 `dynamic_linking = ["dep:bevy_dylib", "bevy_internal/dynamic_linking"]`.
@@ -137,15 +137,15 @@ p3-only 26, p6-only 21, and so on.
 - Bevy's `config_fast_builds.toml` (mold, `-Zshare-generics`, `-Zthreads=0`, cache-proc-macros) is already what
   `~/.cargo/config.toml` uses.
 
-## 4. Target layering for kuna
+## 4. Target layering for unlace
 
 ```
 unlace-base, unlace-num, unlace-sleigh                      (unchanged)
-└─ kuna-middle  (~105k)   IR + types + call model + symbols + session; no pass crate below it
-   ├─ kuna-lift      (~30k)  P1 + P2           (flow, jump-table recovery, injection, loaders' arch binding)
-   ├─ kuna-structure (~22k)  P7 + P8           (regions, blockaction, structuring)
-   └─ kuna-bandb     (~170k) P3 + P4 + P5 + P6 (rules, heritage users, protos, types, variables)
-      └─ kuna-emit   (~52k)  P9
+└─ unlace-middle  (~105k)   IR + types + call model + symbols + session; no pass crate below it
+   ├─ unlace-lift      (~30k)  P1 + P2           (flow, jump-table recovery, injection, loaders' arch binding)
+   ├─ unlace-structure (~22k)  P7 + P8           (regions, blockaction, structuring)
+   └─ unlace-bandb     (~170k) P3 + P4 + P5 + P6 (rules, heritage users, protos, types, variables)
+      └─ unlace-emit   (~52k)  P9
 unlace-decomp (driver, ~20k + facade): universal_sched, decompile_drive, option dispatch + catalog (phases.toml,
             build.rs), the providers/hooks wiring, and `pub use` of every crate (bevy_internal-style) so
             unlace-console/cli/harness/analysis/ghidra/wasm compile unchanged
@@ -157,16 +157,16 @@ module-pair edges: middle < P1/P2 < P7/P8 < P4 < P5 < P3 < P6 < P9 < driver (390
 other in both directions; this matches the Band B mutual fixpoint (`universal_sched`'s `mainloop`). So they stay in
 one crate at first. With P3-P6 merged, the order middle < lift < structure < bandb < emit < driver leaves only
 these upward edges between passes:
-- lift -> bandb: 16 module pairs (e.g. `flow -> kuna_calleepurge`, `funcdata_resolveflow -> unionresolve`)
-- bandb -> emit: 18 (`kuna_slotptr -> printc`, `kuna_elemptr -> kuna_globalref`)
-- lift/bandb/structure/emit -> driver: 29, almost all the budget clock, `kuna_sourcelang`, `idiom`, `capability`
+- lift -> bandb: 16 module pairs (e.g. `flow -> unlace_calleepurge`, `funcdata_resolveflow -> unionresolve`)
+- bandb -> emit: 18 (`unlace_slotptr -> printc`, `unlace_elemptr -> unlace_globalref`)
+- lift/bandb/structure/emit -> driver: 29, almost all the budget clock, `unlace_sourcelang`, `idiom`, `capability`
 - structure -> lift: 2; bandb -> structure: 2 (both small name predicates; move them down)
 
-**kuna-middle contents.** `substrate/*` (varnode, op, block, funcdata*, dtype, context, transform, expression,
+**unlace-middle contents.** `substrate/*` (varnode, op, block, funcdata*, dtype, context, transform, expression,
 addtreestate, checkedarena), `typeop`, `fspec` (FuncProto/ProtoModel/ParamTrial; rustc keeps signatures and ABIs
 in middle/rustc_target), `database`, `overrides`, `options`/`modes` (the generic part), `variable`, `cover`,
 `varmap`, `dynamic`, `infra/action.rs` (the Action/Rule framework), `architecture.rs` (the `TyCtxt`/`Session`
-analogue: `printc` alone names `Architecture` 148 times), the budget clock, and `kuna_fasthash`.
+analogue: `printc` alone names `Architecture` 148 times), the budget clock, and `unlace_fasthash`.
 
 `heritage`, `merge` and `jumptable` are Ghidra DECCORE. They are stored on `Funcdata` (`heritage`, `covermerge`,
 `jumpvec` fields) and carry 73 hook calls into passes. Keep them in middle at first, behind hooks. Lifting their
@@ -177,14 +177,14 @@ algorithms into bandb/lift is a later option (it would shrink middle to ~86k, bu
 
 | Edge (today) | Count | Inversion | Pattern |
 |---|---|---|---|
-| `Architecture`/`ArchContext` option fields typed by pass modules | 263 type refs to 94 modules | Typed **option registry**: `trait KunaOption: Any + Clone + Default { const NAME: &str; fn parse(&str) -> KunaResult<(Self, String)> }` in middle. Values live in a dense `OptionSet` (`Vec<Box<dyn Any>>` indexed by an `OptionId` assigned at registration). Each option type stays in its pass module; the driver registers it (one row) and owns dispatch and the generated `OptionValues`. Passes read `data.glb().opt::<BeJoinMode>()`. | Bevy resources + `ComponentId`; rustc `Providers` registration |
-| `Architecture` cross-function ledgers/caches (`kuna_calleevote`, `kuna_voidret`, `kuna_elemptr` ledgers, ...) | part of the above | Same registry, second kind (`trait ArchState`) | Bevy resources |
-| `Funcdata` `kuna_*` side tables | 150 type refs to 39 modules | Per-function **typed slots** (`FuncState` trait with `Default` and a `KEEP_ACROSS_CLEAR` flag, since several fields survive `clear()`), with the same dense-index storage. Ghidra-core fields (`funcp`, `heritage`, `jumpvec`, `high_bank`, `localmap`, `covermerge`) stay as fields. | Bevy components/resources; rustc stores pass results outside `Body` |
-| IR algorithms -> kuna predicates (`only_op_use_walk`, `returndup_apply`, heritage, merge, jumptable, fspec) | 146 sites / 115 fns | **Hooks table** `KunaHooks { exclusive_call_ret_applies: fn(&Funcdata, OpId, &ParamTrial) -> bool, ... }` in middle, held in `ArchContext` like `tcx.hooks`. Each pass crate has `provide(&mut KunaHooks)`; the driver composes them. The default is the Ghidra behaviour (most of these are "kuna veto" predicates, so the default is "no veto"), not a panic: middle alone stays faithful to Ghidra. | `rustc_middle/src/hooks.rs` |
+| `Architecture`/`ArchContext` option fields typed by pass modules | 263 type refs to 94 modules | Typed **option registry**: `trait UnlaceOption: Any + Clone + Default { const NAME: &str; fn parse(&str) -> UnlaceResult<(Self, String)> }` in middle. Values live in a dense `OptionSet` (`Vec<Box<dyn Any>>` indexed by an `OptionId` assigned at registration). Each option type stays in its pass module; the driver registers it (one row) and owns dispatch and the generated `OptionValues`. Passes read `data.glb().opt::<BeJoinMode>()`. | Bevy resources + `ComponentId`; rustc `Providers` registration |
+| `Architecture` cross-function ledgers/caches (`unlace_calleevote`, `unlace_voidret`, `unlace_elemptr` ledgers, ...) | part of the above | Same registry, second kind (`trait ArchState`) | Bevy resources |
+| `Funcdata` `unlace_*` side tables | 150 type refs to 39 modules | Per-function **typed slots** (`FuncState` trait with `Default` and a `KEEP_ACROSS_CLEAR` flag, since several fields survive `clear()`), with the same dense-index storage. Ghidra-core fields (`funcp`, `heritage`, `jumpvec`, `high_bank`, `localmap`, `covermerge`) stay as fields. | Bevy components/resources; rustc stores pass results outside `Body` |
+| IR algorithms -> unlace predicates (`only_op_use_walk`, `returndup_apply`, heritage, merge, jumptable, fspec) | 146 sites / 115 fns | **Hooks table** `UnlaceHooks { exclusive_call_ret_applies: fn(&Funcdata, OpId, &ParamTrial) -> bool, ... }` in middle, held in `ArchContext` like `tcx.hooks`. Each pass crate has `provide(&mut UnlaceHooks)`; the driver composes them. The default is the Ghidra behaviour (most of these are "unlace veto" predicates, so the default is "no veto"), not a panic: middle alone stays faithful to Ghidra. | `rustc_middle/src/hooks.rs` |
 | Pass -> pass upward (lift->bandb 16, bandb->emit 18) | 34 pairs | Move a shared type or helper down to middle when it is data; use a hook when it is behaviour | `TypeckResults` in middle |
 | Anything -> `decompile_drive` budget clock | ~25 sites | Move the thread-local deadline and `budget_*` functions into middle (`budget.rs`); the driver arms it | rustc keeps limits in `Session` |
 | 10 foreign `impl Funcdata`/`impl Datatype`/`impl Architecture` blocks | 10 | Extension traits (`FuncdataMergeExt`, ...) or move them into middle | `InferCtxtExt` |
-| `crate::<module>` paths across the new boundary | 7332 paths | **No edit needed.** Each new crate's root does `pub(crate) use kuna_middle::*;` (and the band below), so `crate::funcdata::Funcdata` keeps resolving. This is the trick lib.rs already uses (`pub use substrate::*;`). Only the inverted edges need source changes. | — |
+| `crate::<module>` paths across the new boundary | 7332 paths | **No edit needed.** Each new crate's root does `pub(crate) use unlace_middle::*;` (and the band below), so `crate::funcdata::Funcdata` keeps resolving. This is the trick lib.rs already uses (`pub use substrate::*;`). Only the inverted edges need source changes. | — |
 
 ## 5. Expected build effect
 
@@ -213,7 +213,7 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
   benefit is **less work per edit**, not more parallel work.
 - **Many concurrent worktrees:** sccache does not cache incremental compilations, and
   `isolate-workspace-units = true` keeps workspace crates per worktree. So agents will not share a built
-  `kuna-middle`. A later cargo-patch could share unchanged workspace units across worktrees; with a split, that
+  `unlace-middle`. A later cargo-patch could share unchanged workspace units across worktrees; with a split, that
   would let most agents skip middle and bandb entirely. Not available now.
 
 **Dylib (Bevy-style `unlace-decomp-dylib`, a dev-only feature):**
@@ -281,20 +281,20 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
 4. **Extension traits (10 small PRs or one, ~10 files).** Turn the foreign inherent impls (section 1) into
    `...Ext` traits. No behaviour change.
 5. **Option registry (the unlock; about 10 PRs of 300-600 diff lines each).**
-   - PR 5a adds `KunaOption`/`OptionSet` to substrate, plus driver registration next to
+   - PR 5a adds `UnlaceOption`/`OptionSet` to substrate, plus driver registration next to
      `option_dispatch.rs`. The old fields keep working.
    - PRs 5b..5k migrate options one phase at a time (P9 first: it has the most single-band commits). Each PR
      deletes the `Architecture` field, the `ArchContext` mirror and the dispatch arm for its options.
    - `unlace catalog --check` and the 675/675 parity gate prove each step changes nothing.
    - Rule for open PRs: new options after 5a use the registry. This needs a one-line note in `docs/agents.md`
      and a check in step 1's script.
-6. **Funcdata typed slots (about 8 PRs, by pass family).** The same mechanism for the ~100 `kuna_*` fields.
+6. **Funcdata typed slots (about 8 PRs, by pass family).** The same mechanism for the ~100 `unlace_*` fields.
    `clear()` resets the slots whose `KEEP_ACROSS_CLEAR` is false. Fields like `stack_store_guard_withdrawn`
    ("Survives clear()") set it to true.
 7. **Hooks table (about 6 PRs, ~115 functions).**
-   - `KunaHooks` in substrate, held by `ArchContext`. Each phase folder gets a `provide(&mut KunaHooks)`, and the
+   - `UnlaceHooks` in substrate, held by `ArchContext`. Each phase folder gets a `provide(&mut UnlaceHooks)`, and the
      driver composes them (the rustc `DEFAULT_QUERY_PROVIDERS` shape).
-   - Done first: `substrate/passhooks.rs` (`KunaHooks`, `KunaHookSlots::finish`), `ArchContext::pass_hooks`,
+   - Done first: `substrate/passhooks.rs` (`UnlaceHooks`, `UnlaceHookSlots::finish`), `ArchContext::pass_hooks`,
      `Funcdata::hooks()`, composed in `universalaction::PASS_HOOKS`; the 11 IR edges into spacebase, union,
      facing, calltransport and casts go through it. A slot no `provide` fills stops the first run, naming it.
    - Batches: funcdata_varnode/funcdata_block (25 fns), heritage (21 modules), merge (7), jumptable (7),
@@ -305,19 +305,19 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
 8. **`#[inline]` pass + runtime A/B (1-2 PRs).** Mark the small accessors in varnode/op/block/funcdata*/dtype.
    Record `make test` wall time before and after.
 9. **Physical split, one crate per PR, bottom-up.** Each PR is a `git mv` of a set of files into
-   `crates/kuna-<x>/src/<same folders>`, a Cargo.toml, `pub(crate) use kuna_middle::*;` at the new crate root,
-   `pub use kuna_<x>::*;` in unlace-decomp's lib.rs, and `pub(crate)` -> `pub` where needed. Open PRs that edit
+   `crates/unlace-<x>/src/<same folders>`, a Cargo.toml, `pub(crate) use unlace_middle::*;` at the new crate root,
+   `pub use unlace_<x>::*;` in unlace-decomp's lib.rs, and `pub(crate)` -> `pub` where needed. Open PRs that edit
    moved files usually still merge, because git's rename detection follows the move when the content barely
    changes. Order and size:
-   - 9a `kuna-middle` (~105k moved, about 200 visibility edits)
-   - 9b `kuna-lift` (~30k)
-   - 9c `kuna-structure` (~22k)
-   - 9d `kuna-bandb` (~170k)
-   - 9e `kuna-emit` (~52k); unlace-decomp is left as the driver and facade.
+   - 9a `unlace-middle` (~105k moved, about 200 visibility edits)
+   - 9b `unlace-lift` (~30k)
+   - 9c `unlace-structure` (~22k)
+   - 9d `unlace-bandb` (~170k)
+   - 9e `unlace-emit` (~52k); unlace-decomp is left as the driver and facade.
    - Each new crate's unit tests move with it. `phases.toml` and `build.rs` stay in the driver, so
      `make check-spec`, the catalog counts and `docs/options.md` keep their paths.
    - Every PR runs the parity gate plus a runtime A/B.
-10. **Later, only if measurements justify it:** split bandb into kuna-calls (P4), kuna-types (P5) and
+10. **Later, only if measurements justify it:** split bandb into unlace-calls (P4), unlace-types (P5) and
     kuna-dataflow/vars (P3+P6) through hooks. Lift heritage/merge/jumptable algorithms out of middle.
 
 **Cheap and valuable now:** steps 0, 1, 2, 4. Step 3 if relinks dominate. Step 5 also helps today without any
@@ -327,7 +327,7 @@ split: an option PR no longer edits the three most conflicted files.
 
 **Risks:**
 - Runtime regression from lost inlining. Mitigation: step 8 plus A/B per move.
-- Hook defaults that silently disable a kuna behaviour if the driver forgets a `provide`. Mitigation: a test
+- Hook defaults that silently disable a unlace behaviour if the driver forgets a `provide`. Mitigation: a test
   that every hook slot is filled in the default driver.
 - Determinism: slots and registries are index-ordered, never iterated for output.
 - Sustained churn on architecture.rs/context.rs while step 5 is in flight.
@@ -349,7 +349,7 @@ harness build scripts (`docs/dev-setup.md`). Whether to turn it on for dev build
 
 | crate | lines | holds |
 |---|---|---|
-| `unlace-middle` | 168k | IR (`substrate/`), `Architecture`/`ArchContext`, types, fspec, heritage, merge, jumptable, option registry, state slots, `KunaHooks` |
+| `unlace-middle` | 168k | IR (`substrate/`), `Architecture`/`ArchContext`, types, fspec, heritage, merge, jumptable, option registry, state slots, `UnlaceHooks` |
 | `unlace-lift` | 43k | P1-P2 |
 | `unlace-structure` | 29k | P7-P8 |
 | `unlace-bandb` | 249k | P3-P6, one fixpoint |
@@ -362,7 +362,7 @@ harness build scripts (`docs/dev-setup.md`). Whether to turn it on for dev build
 - Step 2, budget clock: `substrate/budget.rs` (#37).
 - Step 4, extension traits: #38, then the pass methods on `Funcdata` (#149) and `OutLang`'s emit methods as
   `OutLangExt` (#165).
-- Step 5, option registry: `KunaOption`/`OptionSet` in `substrate/optionset.rs` (5a, #99), then options
+- Step 5, option registry: `UnlaceOption`/`OptionSet` in `substrate/optionset.rs` (5a, #99), then options
   moved off `Architecture`/`ArchContext` phase by phase (5b-5p: #101-#103, #107, #109, #114, #117, #121, #126,
   #133, #135, #137).
   Left as fields on purpose: `jumptablemax`, `impliedrefs` and `termdup` stay the upstream
@@ -382,21 +382,21 @@ harness build scripts (`docs/dev-setup.md`). Whether to turn it on for dev build
     #163).
   - Each type gets a dense index from `state_index(TypeId)` (a global map with a thread-local cache), so a pass
     crate can store a type alias or a std type it does not own, and lookups are a vector index.
-- Step 7, hooks: `KunaHooks` (`substrate/passhooks.rs`), filled by each band's `provide` and installed by
+- Step 7, hooks: `UnlaceHooks` (`substrate/passhooks.rs`), filled by each band's `provide` and installed by
   the driver (#100, #104-#113, #115, #118, #120, #128, #129, #153). An unfilled hook panics with its name.
-  The table is found at link time: `kuna_passhooks::default_pass_hooks()` calls the `extern "Rust"` symbol
+  The table is found at link time: `unlace_passhooks::default_pass_hooks()` calls the `extern "Rust"` symbol
   `__unlace_default_pass_hooks`, which the driver defines `#[unsafe(no_mangle)]`, so unit tests and embedders
   need no setup call. Each band crate has `provide_all` (its own pass modules' `provide`), and its
   `#[cfg(test)]` definition of the symbol composes its own and the lower crates' `provide_all`, filling the
-  rest with `KunaHookSlots::finish_with_stubs` (each stub panics naming its hook);
+  rest with `UnlaceHookSlots::finish_with_stubs` (each stub panics naming its hook);
   `unlace_decomp::PASS_HOOKS` composes all of them. Unit tests that reach a hook only a higher crate provides
   live in the driver (`infra/{middle,lift,bandb}_tests/*_hooks.rs`).
 - Layer checks read paths, not method calls: `scripts/check_layers.py` cannot see an inherent method a pass
   module adds to a lower type and a lower module calls. Those must move down or go through a hook, and the
   crate boundary (E0116/E0117) is the final check.
 - Reclassified into the middle band instead of moved or hooked, because their own dependencies were already
-  middle-only: `engine_translate`, `inject_sleigh`, `kuna_emulatefunction`, `kuna_decodekit`,
-  `remote_provider`, `stringmanage` (#146); `modelrules`, `prefersplit` (#142); `kuna_phases` (#128);
+  middle-only: `engine_translate`, `inject_sleigh`, `unlace_emulatefunction`, `unlace_decodekit`,
+  `remote_provider`, `stringmanage` (#146); `modelrules`, `prefersplit` (#142); `unlace_phases` (#128);
   `cpool`, `capability`, `idiom`, `comment`, `rangeutil` (#112); `userop`, `pcodeinject`, `actionprof`
   (#118); shared pass helpers and pass-owned types (#116, #119, #120, #148, #155, #160).
 - Step 8, `#[inline]` on the small middle accessors (#141).
@@ -411,7 +411,7 @@ boundaries. Fixed with a per-spec stamp file (size + mtime of each source, the k
 total 10.39 -> 10.28 s, output still byte-identical.
 
 **Maturity levels (2026-11-23).** The Hex-Rays idea from the landscape doc landed as a record of the
-scheduler's progress, with no behaviour change: `unlace-middle`'s `kuna_maturity` (levels raw ...
+scheduler's progress, with no behaviour change: `unlace-middle`'s `unlace_maturity` (levels raw ...
 complete, facts, `is_settled`, `debug_assert_settled!`), marked on ten schedule nodes by the
 driver, reset by a restart, reported by `phase status` (spec §0.10).
 
@@ -421,9 +421,9 @@ structured block tree. It depends on `unlace-middle` only; nothing calls it yet.
 
 **Middle layout (2026-11-23).** The modules reclassified into middle left the phase folders that
 did not describe them: the IR-level `typeop`, `variable`, `cover`, `dynamic` went to `substrate/`, `stringmanage`
-to `p0_knowledge/`, the SLEIGH engine seam (`engine_translate`, `kuna_decodekit`, `inject_sleigh`,
-`kuna_emulatefunction`) to a new `engine/`, and the spec-declared models (`modelrules`, `kuna_aggregateabi`,
-`prefersplit`, `kuna_segmentize`) to a new `spec/`. Middle's phase folders keep only the phase machinery
+to `p0_knowledge/`, the SLEIGH engine seam (`engine_translate`, `unlace_decodekit`, `inject_sleigh`,
+`unlace_emulatefunction`) to a new `engine/`, and the spec-declared models (`modelrules`, `unlace_aggregateabi`,
+`prefersplit`, `unlace_segmentize`) to a new `spec/`. Middle's phase folders keep only the phase machinery
 every band shares (`jumptable`, `heritage` and its three guard helpers, `fspec`, `merge`, `varmap`); `p5_types/`
 and `p9_emit/` are gone from middle.
 
@@ -532,7 +532,7 @@ above middle means inverting every edge into it:
 | varmap | 5.6k | 3 (funcdata 4, passhooks 4, heritage) | `Funcdata::localmap` (`ScopeLocal`, the function's local scope, read all over), 4 types in hook signatures |
 
 None of them can move without splitting it in two. The types (`Heritage`, `JumpTable`, `Merge`/`MergeContext`,
-`ScopeLocal`, and the 19 types in `KunaHooks` signatures) are fields of `Funcdata` or parameters of the hook
+`ScopeLocal`, and the 19 types in `UnlaceHooks` signatures) are fields of `Funcdata` or parameters of the hook
 table, both in middle, so they stay. Only their method bodies could move, as extension traits (an inherent impl
 cannot live in another crate). The fields would become `FuncState` slots or stay typed in middle. fspec cannot
 move at all: `Architecture`, `ArchContext` and `Datatype` depend on it directly.

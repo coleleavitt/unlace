@@ -1013,7 +1013,7 @@ fn release6_fpxx_and_mips32_fp64_images_keep_loading() {
             assert!(text.contains("return a0 >> 0x1f;"), "{target}: {text}");
             let stderr = String::from_utf8(actual.stderr).unwrap();
             assert_eq!(
-                stderr.contains("[kuna target]")
+                stderr.contains("[unlace target]")
                     && stderr.contains("64-bit floating-point registers"),
                 note,
                 "{target}: {stderr}"

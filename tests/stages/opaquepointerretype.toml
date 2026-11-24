@@ -3,7 +3,7 @@
 # copy holding the address was propagated away, and the retype was refused with `int4 *v3` printed
 # instead. P6 frame layout under the stable-names replay (`p6_variables/funcdata_spacebase.rs`
 # `gather_open`): a value carrying a replayed retype's lock whose pointee has no size lays its
-# range out by the pointee it was printed with (`kuna_stablenames.rs` `printed_pointee`) always on
+# range out by the pointee it was printed with (`unlace_stablenames.rs` `printed_pointee`) always on
 # (`retype` directive)
 
 [image]

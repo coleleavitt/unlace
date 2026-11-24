@@ -8,7 +8,7 @@ too. `ProtoOrderMode::states_types_only` (`types` | `cycles`) routes the park to
 `state_recovered_types`; `states_in_cycles` is read by the driver only. `lock` is
 untouched and keeps refusing components.
 
-## 2. The order (`kuna-cli/src/decompile_all.rs`)
+## 2. The order (`unlace-cli/src/decompile_all.rs`)
 
 `callee_first_plan` builds the direct-call edges as before and hands them to
 `plan_from_components(edges, self_recursive, cycles)`:
@@ -38,7 +38,7 @@ evaluation is `default-on-evaluation.md`.
 - unit: `callee_first_plan_tests` (5) in `decompile_all.rs`; value parsing and the
   mode predicates in `protoorder/tests.rs`;
 - integration: `recursive_callees_state_their_types_under_cycles`
-  (`kuna-cli/tests/decompile_all_cli.rs`) over the new fixture
+  (`unlace-cli/tests/decompile_all_cli.rs`) over the new fixture
   `protoorder_cycles_x86_64` (`as && ld`, symbols kept), and
   `a_redone_recursive_function_reads_no_statement_of_its_own` over
   `protoorder_cyclestruct_x86_64` (`gcc -O2 -fno-inline`), which fails without the

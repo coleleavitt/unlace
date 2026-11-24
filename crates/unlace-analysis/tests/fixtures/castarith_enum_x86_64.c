@@ -1,7 +1,7 @@
 /* castarith enum round-trip fixture: a pointer plus whole elements of an enum
- * whose width in the binary is not C's sizeof of the plain `enum` kuna prints.
+ * whose width in the binary is not C's sizeof of the plain `enum` unlace prints.
  * Built with -std=gnu11 -g at gcc -O0 and gcc -O2.  The round trip compiles
- * kuna's own enum typedefs, the prelude with KUNA_RT defined, kuna's printing
+ * unlace's own enum typedefs, the prelude with UNLACE_RT defined, unlace's printing
  * of every function between the markers, and the original main, and compares
  * its output with this binary's.  The callees read the width the binary
  * passes, as the binary's own callees do. */
@@ -9,7 +9,7 @@
 
 /* prelude */
 #define KEEP __attribute__((noipa))
-#ifndef KUNA_RT
+#ifndef UNLACE_RT
 typedef enum __attribute__((packed)) color { RED = 1, GREEN = 200 } color;
 typedef enum __attribute__((packed)) mark { M0 = 1, M1 = 0x1234 } mark;
 typedef enum level { L0 = 0, L1 = 7 } level;

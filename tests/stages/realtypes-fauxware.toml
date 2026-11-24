@@ -1,4 +1,4 @@
-# kuna realtypes (DIV-6): render residual TYPE_UNKNOWN (xunknownN) values as real
+# unlace realtypes (DIV-6): render residual TYPE_UNKNOWN (xunknownN) values as real
 # C types by size instead of the xunknownN / undefinedN placeholder.
 #
 # Binary: the `authenticate` function from the `fauxware` test binary

@@ -11,7 +11,7 @@ This step gives each stream slot its own typed data symbol, keyed on the dynamic
 relocation that binds it.
 
 ```
-$ kuna decompile-all <O2/coreutils/stripped/libstdbuf.so> --addr 0x1280     # before
+$ unlace decompile-all <O2/coreutils/stripped/libstdbuf.so> --addr 0x1280     # before
     __fprintf_chk((FILE *)*dat_3ff8,1,v2,v5,a1);
     sub_1160(*dat_3ff8,v1);   sub_1160(*dat_3fd8,v2);   sub_1160(*dat_3fd0,v3);
                                                                             # after
@@ -20,7 +20,7 @@ $ kuna decompile-all <O2/coreutils/stripped/libstdbuf.so> --addr 0x1280     # be
 ```
 
 ```
-$ kuna decompile-all <O0/coreutils/stripped/join> --addr 0x2bb1             # before
+$ unlace decompile-all <O0/coreutils/stripped/join> --addr 0x2bb1             # before
   long v22; // stack - 0x40                 long v23; // stack - 0x38
   v22 = sub_53b9(dat_10140,"r");            v22 = stdin;
                                                                             # after
@@ -56,7 +56,7 @@ static long stdout_ptr = 7;
 long *keep = &stdout_ptr;
 long pending(void){ return stdout_ptr + (long)(stdout->_IO_write_ptr - stdout->_IO_write_base); }
 EOF
-$ gcc -O1 -shared -fPIC -o coll.so coll.c && kuna decompile-all ./coll.so
+$ gcc -O1 -shared -fPIC -o coll.so coll.c && unlace decompile-all ./coll.so
   return (*(long *)(*dat_3fe0 + 0x28) - *(long *)(*dat_3fe0 + 0x20)) + stdout_ptr;
 ```
 
@@ -119,7 +119,7 @@ says the same thing on this feature's fixture.
 
 ## What it moves in emitted C
 
-`kuna decompile-all` over twelve stripped binaries, this branch against a
+`unlace decompile-all` over twelve stripped binaries, this branch against a
 release build of the then-current `origin/main` (`39fdc804`). Full
 classification, with the residue printed in full, in
 `corpus-hunk-classification-stdio.txt`. Re-run in full against a build of
@@ -176,7 +176,7 @@ normalisation.
 ## Type recovery
 
 `scripts.decbench.typesweep`, decbench main's `TypeMatchMetric`,
-`DECBENCH_NO_CACHE=1`, `--baseline-only` run twice with `KUNA_BIN` pinned first to
+`DECBENCH_NO_CACHE=1`, `--baseline-only` run twice with `UNLACE_BIN` pinned first to
 a release build of `origin/main` (`39fdc804`, its own worktree) and then to this
 branch's. 8 projects × `O0` / `O2` / `O2 -fno-inline` = **444 slices, 10,748
 scored functions**.
@@ -245,7 +245,7 @@ Seven unit tests in `protos/libctypes/tests.rs`: the two shapes' addresses,
 names and indirection depth; that neither borrows the other's naming; that the
 slots share the table's own interned `FILE`; that `glibc` reaches them; that a
 relocatable object and a PE yield nothing; and that a third build of the same
-fixture source — `-DKUNA_STREAM_NAME_COLLISION`, which adds a `static long
+fixture source — `-DUNLACE_STREAM_NAME_COLLISION`, which adds a `static long
 stdout_ptr` — yields `stdin_ptr` alone, so the decline is per name rather than a
 bail, and a `.dynsym`-only lookup would have missed it.
 

@@ -1,4 +1,4 @@
-// decompile-replay.mjs — the study view's exported .kuna file, replayed by the
+// decompile-replay.mjs — the study view's exported .unlace file, replayed by the
 // native CLI (`unlace decompile <binary> <function> --assert @<file>`), in the
 // cases where the order of directives decides the outcome: a struct defined
 // before the struct and the global that use it; the later of two raw
@@ -19,24 +19,24 @@ import { Session } from '../decompile/session.js';
 import * as R from '../decompile/collab/replica.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../..');
-const kuna = join(root, 'target/release/unlace');
-if (!existsSync(kuna)) {
+const unlace = join(root, 'target/release/unlace');
+if (!existsSync(unlace)) {
   console.log('DECOMPILE REPLAY SKIPPED — no target/release/unlace (cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli)');
   process.exit(0);
 }
 const sample = join(root, 'integrations/web/test/fixtures/sample.elf');
 const long = join(root, 'integrations/web/test/fixtures/long.elf');
 const env = { ...process.env, SLEIGHHOME: process.env.SLEIGHHOME || join(root, 'specs') };
-const dir = mkdtempSync(join(tmpdir(), 'kuna-replay-'));
+const dir = mkdtempSync(join(tmpdir(), 'unlace-replay-'));
 const SUM = '0x1161';
 const LONG_MAIN = '0x1288';
 const names = new Map([['0x1198', 'main'], [SUM, 'sum_to'], [LONG_MAIN, 'main']]);
 
 function replay(session, target, binary = sample) {
-  const file = join(dir, 'sample.elf.kuna');
+  const file = join(dir, 'sample.elf.unlace');
   writeFileSync(file, session.toFileText({ binary: 'sample.elf', target, nameOf: (a) => session.functionName(a) || names.get(a) || a }));
   // dwarfscopes (fork, default on) names sum_to's counter `i` from DWARF; the cases rename the generic names.
-  const res = spawnSync(kuna, ['decompile', binary, target, '--option', 'dwarfscopes', 'off', '--assert', `@${file}`], { env, encoding: 'utf8' });
+  const res = spawnSync(unlace, ['decompile', binary, target, '--option', 'dwarfscopes', 'off', '--assert', `@${file}`], { env, encoding: 'utf8' });
   assert.equal(res.status, 0, res.stderr);
   return { code: res.stdout, rejected: res.stderr.split('\n').filter((l) => /rejected/.test(l)) };
 }
@@ -89,4 +89,4 @@ try {
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
-console.log(`DECOMPILE REPLAY OK — the exported .kuna replays in the native CLI, alone and in a live session: ${done.join('; ')}`);
+console.log(`DECOMPILE REPLAY OK — the exported .unlace replays in the native CLI, alone and in a live session: ${done.join('; ')}`);

@@ -1,8 +1,8 @@
-# kuna C-surface normalization: a void function's trailing bare `return;` is
+# unlace C-surface normalization: a void function's trailing bare `return;` is
 # elided, because the C source it was compiled from does not have one - it
 # simply falls off the end of the body.
 #
-# Upstream Ghidra always prints the function's final CPUI_RETURN.  kuna adds
+# Upstream Ghidra always prints the function's final CPUI_RETURN.  unlace adds
 # the settable option `voidtailreturn` (P9/brace-form), default-ON (DIV-98):
 # emit_function_body computes at most one
 # elidable op per function via elidable_void_tail_return, and

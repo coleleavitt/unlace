@@ -208,7 +208,7 @@ fn empty_log_message() {
     assert!(log.is_empty());
     assert_eq!(
         log.render_list(),
-        "No kuna assertions recorded this session\n"
+        "No unlace assertions recorded this session\n"
     );
 }
 

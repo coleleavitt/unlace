@@ -17,13 +17,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class BacklogTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="kuna-backlog-test-")
+        temporary = tempfile.TemporaryDirectory(prefix="unlace-backlog-test-")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
         self.path = self.directory / "opportunities.json"
         environment = mock.patch.dict(os.environ, {
-            "KUNA_PIPELINE_DOCS_DIR": temporary.name,
-            "KUNA_PIPELINE_STATE_DIR": str(self.directory / "state"),
+            "UNLACE_PIPELINE_DOCS_DIR": temporary.name,
+            "UNLACE_PIPELINE_STATE_DIR": str(self.directory / "state"),
         })
         environment.start()
         self.addCleanup(environment.stop)

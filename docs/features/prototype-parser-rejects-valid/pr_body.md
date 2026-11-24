@@ -5,7 +5,7 @@ compiler spec registers, so a declaration that names a parameter after it is
 rejected with the caret on the parameter's own name:
 
 ```bash
-kuna decompile ./fauxware authenticate --json \
+unlace decompile ./fauxware authenticate --json \
   --assert 'prototype authenticate unsigned long vm(unsigned char *code,unsigned int index,void *ctx)' \
   --assert 'prototype read int read(unsigned char code)'
 ```
@@ -62,6 +62,6 @@ declared name reaches the emitted C; and the promoted probe
 
 Gates: `make test` PARITY OK 675/675 · `make test-stages` PARITY OK ·
 `make rust-test` green · `make check-spec` green · `make test-cli` 91/91 (including the promoted probe) ·
-`kuna catalog --check` OK.
+`unlace catalog --check` OK.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

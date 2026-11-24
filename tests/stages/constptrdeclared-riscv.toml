@@ -1,4 +1,4 @@
-# kuna: a constant returned from a function whose declared return type is
+# unlace: a constant returned from a function whose declared return type is
 # not a pointer is not inferred as a pointer.  RISC-V lists the 2-byte
 # csreg space among the spaces a constant may point into, so a short
 # return of 1000 matched the CSR pmpaddr56 (csreg 0x3e8) and printed as

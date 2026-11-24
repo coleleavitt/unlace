@@ -1,6 +1,6 @@
 """The predicate evaluator: run one probe and decide whether its assertion holds.
 
-A *probe* is an executable assertion about kuna's behaviour
+A *probe* is an executable assertion about unlace's behaviour
 (``tools/repipe/schema/probe.schema.json``). Two of them define a need: the **probe** asserts
 the CURRENT BAD behaviour and must PASS at filing time; the **acceptance** asserts the DESIRED
 behaviour and must FAIL. This module is the atom the rest of the loop rests on -- ``verify.py``'s
@@ -21,7 +21,7 @@ Three rules the rest of the pipeline depends on:
   "the behaviour is not there".
 * **An observation is always produced.** A timeout, or a failure to even exec the command, is
   recorded as a run rather than raised: it lands as a failing synthetic ``run`` clause, so
-  "kuna hung for 300 s" is data the captain can read instead of a crashed gate. The one thing
+  "unlace hung for 300 s" is data the captain can read instead of a crashed gate. The one thing
   that does raise is a *pre-flight* problem -- a malformed probe, or a ``{{BIN}}`` whose sha256
   is not the binary the probe was written against -- because that is "unrunnable", not "not
   reproducible", and the two must never be confused.
@@ -35,7 +35,7 @@ cargo. ``/usr/bin/time -v -o FILE`` measures one child in isolation and writes i
 instead of into the probe's captured stderr; its ``Exit status:`` / ``Command terminated by
 signal`` lines are parsed back so a killed child reports ``-SIGNAL`` the way ``subprocess`` would
 (time(1) itself would report 128+N). Wall time comes from ``time.monotonic()`` around the whole
-spawn, not from time(1)'s centisecond field, which is too coarse for a sub-100 ms kuna call. When
+spawn, not from time(1)'s centisecond field, which is too coarse for a sub-100 ms unlace call. When
 ``/usr/bin/time`` is absent, ``max_rss_kb`` is None and ``rusage_source`` says so, rather than a
 silently wrong getrusage delta.
 
@@ -74,7 +74,7 @@ TIME_BIN = "/usr/bin/time"
 HEAD_CHARS = 2000
 TERM_GRACE_S = 2.0
 
-TOKENS = ("KUNA", "BIN", "SPECS", "WORK", "TMP")
+TOKENS = ("UNLACE", "BIN", "SPECS", "WORK", "TMP")
 
 _KINDS = ("cli", "cli-pair", "timing", "memory", "absence")
 _BINARY_SOURCES = ("dataset", "in-repo", "synthesized")
@@ -272,7 +272,7 @@ def _validate_target(node, errs):
 def validate(probe):
     """Structural errors against tools/repipe/schema/probe.schema.json, as a list of strings.
 
-    Hand-written because kuna's Python tooling is stdlib-only (no jsonschema anywhere on this
+    Hand-written because unlace's Python tooling is stdlib-only (no jsonschema anywhere on this
     machine). Empty list means valid. Two checks are deliberately *stricter* than the JSON Schema,
     which cannot express them: every regex clause must actually compile, and a statpred must carry
     a bound (a statpred with only ``stat`` asserts nothing, which is the failure mode this whole
@@ -461,16 +461,16 @@ def normalize(probe, is_acceptance=False):
 
 # --- substitution -----------------------------------------------------------
 
-def context(work=None, binary=None, tmp=None, baselines=None, kuna=None, specs=None):
+def context(work=None, binary=None, tmp=None, baselines=None, unlace=None, specs=None):
     """Build the ctx dict :func:`run` and :func:`substitute` take. Every field is optional."""
-    return {"work": work, "bin": binary, "tmp": tmp, "kuna": kuna, "specs": specs,
+    return {"work": work, "bin": binary, "tmp": tmp, "unlace": unlace, "specs": specs,
             "baselines": baselines or {}}
 
 
 def _token_values(ctx):
     ctx = ctx or {}
     return {
-        "KUNA": str(ctx.get("kuna") or config.kuna_bin()),
+        "UNLACE": str(ctx.get("unlace") or config.unlace_bin()),
         "SPECS": str(ctx.get("specs") or config.specs_dir()),
         "WORK": str(ctx["work"]) if ctx.get("work") else os.getcwd(),
         "TMP": str(ctx["tmp"]) if ctx.get("tmp") else None,
@@ -502,7 +502,7 @@ def _subst(value, values):
 
 
 def substitute(value, ctx):
-    """Expand {{KUNA}} {{BIN}} {{SPECS}} {{WORK}} {{TMP}} in a string, list or dict of values.
+    """Expand {{UNLACE}} {{BIN}} {{SPECS}} {{WORK}} {{TMP}} in a string, list or dict of values.
 
     Non-string leaves pass through untouched. An unknown token, or a known token the context
     cannot fill, raises :class:`ProbeError` -- running a command with a literal ``{{BIN}}`` in its
@@ -611,7 +611,7 @@ def _allowed_realpaths():
     """
     paths = set()
     from . import config as _cfg
-    for cand in (_cfg.kuna_bin(),
+    for cand in (_cfg.unlace_bin(),
                  _cfg.repo_root() / "target" / "release" / "decomp_dbg",
                  _cfg.repo_root() / "target" / "release" / "decomp_test_dbg",
                  _cfg.repo_root() / "target" / "release" / "slacomp",
@@ -636,7 +636,7 @@ def check_executable(argv, env=None):
 
     Two gates, and the second is the real one: the basename must not be an interpreter, and
     the RESOLVED FILE must be on the allowlist. Basename-only matching would let
-    `/tmp/anything/kuna` through, which a tester can create.
+    `/tmp/anything/unlace` through, which a tester can create.
     """
     if not argv:
         return "empty cmd"
@@ -787,7 +787,7 @@ def run(probe, ctx=None, timeout=None):
     against ``target.binary_sha256``/``binary_size`` before the first spawn (see
     :func:`target_mismatch`); a mismatch raises rather than producing a confident verdict about
     the wrong file. The child inherits
-    this process's environment updated with the probe's ``env``; nothing is scrubbed, because kuna
+    this process's environment updated with the probe's ``env``; nothing is scrubbed, because unlace
     needs its ambient SLEIGHHOME/PATH to run at all.
 
     ``repeat`` is honoured verbatim; the REPLAY_REPS / TIMING_REPS policy lives in verify.py.

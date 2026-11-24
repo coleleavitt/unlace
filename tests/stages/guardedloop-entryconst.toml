@@ -42,11 +42,11 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-GUARDEDLOOP-ENTRYCONST #1: the counted loop tests at the top with no guard (default)'
+name = 'UNLACE-GUARDEDLOOP-ENTRYCONST #1: the counted loop tests at the top with no guard (default)'
 count = 1
 literal = ['v1 = 0;', 'while (v1 < ']
 
 [[match]]
-name = 'KUNA-GUARDEDLOOP-ENTRYCONST #2: guardedloop off keeps the do-while'
+name = 'UNLACE-GUARDEDLOOP-ENTRYCONST #2: guardedloop off keeps the do-while'
 count = 1
 literal = 'do {'

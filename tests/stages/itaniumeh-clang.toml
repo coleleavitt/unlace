@@ -1,4 +1,4 @@
-# Kuna: option itaniumeh on clang code. clang starts a call-site range at the
+# Unlace: option itaniumeh on clang code. clang starts a call-site range at the
 # call's argument set-up, so the range's first instruction is not the call;
 # the edge goes on the first covered call all the same (#1, f_loop's catch
 # inside its loop). The catch header lists the pad's caught types in handler

@@ -1,4 +1,4 @@
-# kuna `loweredswitch linear`: a linear chain of equality tests on one variable.
+# unlace `loweredswitch linear`: a linear chain of equality tests on one variable.
 #
 # loweredswitch re-rolls a compare cascade only when it has a binary-search
 # range split, because a linear chain of equality tests reads as a hand-written

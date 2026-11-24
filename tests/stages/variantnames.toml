@@ -1,4 +1,4 @@
-# kuna: name a recovered Rust enum's discriminant VALUES (part of `option
+# unlace: name a recovered Rust enum's discriminant VALUES (part of `option
 # dwarf`, docs/multilang.md - the first VariantLayout consumer).
 #
 # Stage / sub-stage: P1 program-prep, external-refinement (the DWARF importer).

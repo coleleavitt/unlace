@@ -1,4 +1,4 @@
-# kuna #1644: a reader who knows where an indirect call goes can state it.
+# unlace #1644: a reader who knows where an indirect call goes can state it.
 # Stage / sub-stage: P2 flow-classification (the per-function Override store's
 # indirect-call redirect, consumed by FlowInfo::setup_callind_specs).
 # P0 assertion: `override indirect <callsite> <name|address>` (the console

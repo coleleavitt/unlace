@@ -3,7 +3,7 @@
 /* A global in .data and one in .sdata-eligible range: $gp-relative GOT/.sdata
    loads are what we want the prologue's $gp recovery to resolve. */
 int counter = 7;
-const char *banner = "kuna-mips";
+const char *banner = "unlace-mips";
 
 int bump(int n) {
     counter += n;        /* $gp-relative load/store of `counter` */

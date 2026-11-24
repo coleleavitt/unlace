@@ -25,13 +25,13 @@ fn unlace(args: &[&str]) -> Output {
     let specs = repo_root().join("specs");
     Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("UNLACE_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove("UNLACE_SLACOMP")
-        .env_remove("KUNA_SLACOMP")
+        .env_remove("UNLACE_SLACOMP")
         .args(args)
         .args(["--sleighpath", specs.to_str().unwrap()])
         .output()
-        .expect("run kuna")
+        .expect("run unlace")
 }
 
 fn fixture(name: &str) -> String {

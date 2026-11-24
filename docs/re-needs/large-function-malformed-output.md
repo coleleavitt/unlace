@@ -38,7 +38,7 @@ Readable pseudocode for the core checker at 0x140002d50, with coherent C++ strin
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x140002d50",
@@ -72,7 +72,7 @@ Readable pseudocode for the core checker at 0x140002d50, with coherent C++ strin
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x140002d50",
@@ -116,7 +116,7 @@ independent defects.
 The dominant one is an unmodelled instruction. x86 SLEIGH lowers `INT imm8` to
 `intloc = swi(imm8); call [intloc]` -- a `call` with **no matching push** -- while
 `x86-64-win.cspec`'s default `__fastcall` carries `extrapop="8" stackshift="8"`. Every `INT`
-therefore grows RSP by 8, and kuna prints it: `(*(void *)swi(0x29))(5);` is immediately followed
+therefore grows RSP by 8, and unlace prints it: `(*(void *)swi(0x29))(5);` is immediately followed
 by `v65 = &v64[8];`. The witness contains **eleven** `INT 0x29` (`__fastfail`, the MSVC `/GS` +
 STL `_STL_VERIFY` idiom). Once two paths join with RSP offsets 8 apart, the frame stops being a
 constant offset from the spacebase: stack locals degenerate into offsets off a `char *`, and each
@@ -165,7 +165,7 @@ _none recorded_
 ## Decision log
 
 - round 1: gated `admitted`, NOT built (round 1 closed 12 of 23). Carried into round 2.
-- round 2 wave 20 (captain): **RESTORED FROM `.kuna-repipe/rounds/1/gate.json` + the arena
+- round 2 wave 20 (captain): **RESTORED FROM `.unlace-repipe/rounds/1/gate.json` + the arena
   report** and RE-GATED against merged main 509bb7a3. This record carried only a `## Symptom`
   stub, no probe and no acceptance, so it was undispatchable by `select` and unclosable by
   B_DONE; the two arms below existed all along in round-1 state and were never transcribed.

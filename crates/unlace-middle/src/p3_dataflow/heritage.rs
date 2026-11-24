@@ -1633,7 +1633,7 @@ impl Heritage {
                 // panic the `decompile_func` orchestration boundary catches and
                 // degrades to a recoverable per-function Err — the same graceful
                 // route the C++ throw takes (aborting that function's decompile).
-                panic!("kuna heritage: Free varnode with multiple reads");
+                panic!("unlace heritage: Free varnode with multiple reads");
             }
             let op = fd
                 .vbank()
@@ -5554,7 +5554,7 @@ impl Heritage {
             fd.delete_varnode(vn)
                 .expect("refine_read: delete free read");
         } else {
-            panic!("kuna heritage: refining non-free varnode");
+            panic!("unlace heritage: refining non-free varnode");
         }
     }
 

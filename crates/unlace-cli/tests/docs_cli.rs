@@ -150,28 +150,28 @@ fn an_unknown_topic_is_a_usage_error_that_names_the_real_ones() {
 
 #[test]
 fn the_binary_carries_its_docs_out_of_the_repo() {
-    let sandbox = std::env::temp_dir().join(format!("kuna_docs_norepo_{}", std::process::id()));
+    let sandbox = std::env::temp_dir().join(format!("unlace_docs_norepo_{}", std::process::id()));
     std::fs::create_dir(&sandbox).expect("create sandbox");
     let exe = sandbox.join("unlace");
     let child = {
         let _setup = PROCESS_SETUP.lock().unwrap();
-        std::fs::copy(env!("CARGO_BIN_EXE_unlace"), &exe).expect("copy kuna");
+        std::fs::copy(env!("CARGO_BIN_EXE_unlace"), &exe).expect("copy unlace");
         make_executable(&exe);
         Command::new(&exe)
             .current_dir(&sandbox)
             .args(["docs", "cli"])
             .env_remove("UNLACE_SPECS")
-            .env_remove("KUNA_SPECS")
+            .env_remove("UNLACE_SPECS")
             .env_remove("SLEIGHHOME")
             .env_remove("UNLACE_DECOMP_DBG")
-            .env_remove("KUNA_DECOMP_DBG")
+            .env_remove("UNLACE_DECOMP_DBG")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .expect("run relocated kuna")
+            .expect("run relocated unlace")
     };
-    let output = child.wait_with_output().expect("wait for relocated kuna");
+    let output = child.wait_with_output().expect("wait for relocated unlace");
     let file_count = std::fs::read_dir(&sandbox).unwrap().count();
     std::fs::remove_dir_all(&sandbox).unwrap();
     assert!(
@@ -198,7 +198,7 @@ fn make_executable(_path: &Path) {}
 fn a_reader_that_walks_away_is_not_a_panic() {
     let mut child = spawn_docs(&["--all"]);
     drop(child.stdout.take().expect("stdout pipe"));
-    let output = child.wait_with_output().expect("wait for kuna");
+    let output = child.wait_with_output().expect("wait for unlace");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!stderr.contains("panicked"), "{stderr}");
     assert!(

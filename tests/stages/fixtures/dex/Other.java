@@ -1,5 +1,5 @@
 // Source of the second DEX file in two.apk, the fixture of
-// tests/stages/kuna-dex-apk.xml. Built as Hello.java describes, against
+// tests/stages/unlace-dex-apk.xml. Built as Hello.java describes, against
 // Hello's classes (javac -cp classes); two.apk is a zip of hello.dex as
 // classes.dex (deflated) and this file's DEX as classes2.dex (stored).
 package demo;

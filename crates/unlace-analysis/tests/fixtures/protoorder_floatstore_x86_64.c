@@ -1,7 +1,7 @@
 /* protoorder fixture: a float stored beside an int (x86-64).
  *
  * `fill` loads `fp[3]`, passes it to `h(int, float)` and stores it into
- * `s->f`, next to the int `s->i`.  kuna types `s` as `int *`, so a float vote
+ * `s->f`, next to the int `s->i`.  unlace types `s` as `int *`, so a float vote
  * on the loaded value printed the store as `v1[1] = (int)v3` -- a value
  * conversion where the machine copies bits.  The vote is refused on a value
  * that is stored, and the store stays `v1[1] = v3`.

@@ -7,7 +7,7 @@
 #     <resolveprototype name="__fastcall/__thiscall/__stdcall"> ... </resolveprototype>
 #     <eval_current_prototype name="__fastcall/__thiscall/__stdcall"/>
 #
-# kuna decoded the union and registered it by name, but never read the
+# unlace decoded the union and registered it by name, but never read the
 # <eval_current_prototype> element, so every function was evaluated with
 # <default_proto> = __stdcall, whose inputs are stack-only.  A __fastcall
 # function's ECX/EDX arguments are then not *possible* parameters and the reads
@@ -28,7 +28,7 @@
 #
 # Evaluated with <default_proto> alone, only the stack argument is a
 # parameter and ECX and EDX come out as undefined locals carrying their
-# storage comment.  The merged model (kuna_evalcurrentproto.rs, always on)
+# storage comment.  The merged model (unlace_evalcurrentproto.rs, always on)
 # resolves per function against the trials that are actually active, picks
 # __fastcall, and the function takes its three arguments.
 

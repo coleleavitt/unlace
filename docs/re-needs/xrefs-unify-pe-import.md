@@ -38,7 +38,7 @@ Find callers/references of the VirtualProtect function surfaced by `unlace funct
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "xrefs",
     "{{BIN}}",
     "--to",
@@ -80,7 +80,7 @@ Find callers/references of the VirtualProtect function surfaced by `unlace funct
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "xrefs",
     "{{BIN}}",
     "--to",

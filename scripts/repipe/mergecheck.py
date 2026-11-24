@@ -110,7 +110,7 @@ def show(base_ref, rel, repo=None):
 
 # --- shape B: re-derive, never trust the merged value ------------------------
 
-def assert_rederived(repo=None, kuna=None):
+def assert_rederived(repo=None, unlace=None):
     """Shape B. Every shared counter is re-derived on the rebased tree and asserted.
 
     A clean auto-merge of two identical `85 -> 86` edits leaves a file that no conflict, no
@@ -118,7 +118,7 @@ def assert_rederived(repo=None, kuna=None):
     value entirely and compares against `counters.derive()`.
     """
     try:
-        derived = counters.derive(repo=repo, kuna=kuna)
+        derived = counters.derive(repo=repo, unlace=unlace)
     except counters.DeriveError as exc:
         return [Finding("B", "rederive", REJECT, "derive-failed", "", 0,
                         "could not re-derive the counters: {}".format(exc),
@@ -240,9 +240,9 @@ def _catalog_count_key(baseline, phases, catalog, xml):
                 or queries.count(["phase", "catalog"]) != 1 or len(queries) != 7
                 or len(singles) != 6 or any(option not in options for option in singles)):
             return None
-        name = "KUNA-CATALOG #15: {} registry rows plus six individual queries".format(count)
+        name = "UNLACE-CATALOG #15: {} registry rows plus six individual queries".format(count)
         assertions = [node for node in tree.findall("stringmatch")
-                      if node.get("name", "").startswith("KUNA-CATALOG #15:")]
+                      if node.get("name", "").startswith("UNLACE-CATALOG #15:")]
         if len(assertions) != 1:
             return None
         assertion = assertions[0]
@@ -254,7 +254,7 @@ def _catalog_count_key(baseline, phases, catalog, xml):
         passing = data.get("passing")
         if (not isinstance(passing, list) or any(not isinstance(item, str) for item in passing)
                 or [item for item in passing
-                if isinstance(item, str) and item.startswith("data:KUNA-CATALOG #15:")] != [key]):
+                if isinstance(item, str) and item.startswith("data:UNLACE-CATALOG #15:")] != [key]):
             return None
         return key, count, singles
     except (ValueError, ET.ParseError):
@@ -388,11 +388,11 @@ def assert_baseline_untouched(base_ref="origin/main", repo=None):
 
 # --- the whole gate ---------------------------------------------------------
 
-def run_all(base_ref="origin/main", repo=None, kuna=None, paths=None):
+def run_all(base_ref="origin/main", repo=None, unlace=None, paths=None):
     """Every guard, in merge order. Any REJECT finding means: do not merge yet."""
     out = []
     out.extend(assert_baseline_untouched(base_ref, repo=repo))
-    out.extend(assert_rederived(repo=repo, kuna=kuna))
+    out.extend(assert_rederived(repo=repo, unlace=unlace))
     for rel in (paths if paths is not None else KEEPBOTH_PATHS):
         out.extend(assert_keepboth(rel, base_ref, repo=repo))
     return out
@@ -623,7 +623,7 @@ def main(argv=None) -> int:
     ap.add_argument("--against", "--base-ref", dest="base_ref", default="origin/main",
                     help="the ref this branch merges into (default: origin/main)")
     ap.add_argument("--repo", default=None, help="repo root (default: config.repo_root())")
-    ap.add_argument("--kuna", default=None, help="kuna binary (default: config.kuna_bin())")
+    ap.add_argument("--unlace", default=None, help="unlace binary (default: config.unlace_bin())")
     ap.add_argument("--path", action="append", default=None,
                     help="extra keep-both path to check (repeatable; replaces the default set)")
     ap.add_argument("--self-test", action="store_true",
@@ -641,7 +641,7 @@ def main(argv=None) -> int:
             _print_selftest(res)
         return 0 if res.get("ok") else 1
 
-    findings = run_all(args.base_ref, repo=args.repo, kuna=args.kuna, paths=args.path)
+    findings = run_all(args.base_ref, repo=args.repo, unlace=args.unlace, paths=args.path)
     bad = rejects(findings)
     if args.json:
         print(json.dumps({"ok": not bad, "base_ref": args.base_ref,

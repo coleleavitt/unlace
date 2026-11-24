@@ -147,7 +147,7 @@ cu_start('cu_old','Go cmd/compile go1.16.15')
 function('wrongProducer',[('p','u64',0)],['u32'])
 cu_end('cu_old')
 emit('.section .note.GNU-stack,"",@progbits')
-with tempfile.TemporaryDirectory(prefix='kuna-go-dwarf-') as directory:
+with tempfile.TemporaryDirectory(prefix='unlace-go-dwarf-') as directory:
     directory=Path(directory);source=directory/'fixture.S';obj=directory/'fixture.o'
     source.write_text('\n'.join(lines)+'\n')
     subprocess.run(['as','--64',str(source),'-o',str(obj)],check=True)

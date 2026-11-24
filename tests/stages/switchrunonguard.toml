@@ -1,4 +1,4 @@
-# GH-1034, P2 switch model, kuna_switchrunon's guard rule.
+# GH-1034, P2 switch model, unlace_switchrunon's guard rule.
 #
 # pick dispatches on a byte with no bounds check, the shape switchrunon
 # covers, but first tests an unrelated parameter: test esi,esi; jne. The

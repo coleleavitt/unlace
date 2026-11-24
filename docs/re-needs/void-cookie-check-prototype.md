@@ -38,7 +38,7 @@ Preserve main's explicit exit codes across its RAX-preserving cookie helper, ide
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_1400012f0",
@@ -70,7 +70,7 @@ Preserve main's explicit exit codes across its RAX-preserving cookie helper, ide
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_1400012f0",

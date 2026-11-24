@@ -29,7 +29,7 @@
   "ablation_changed": 0,
   "parity": "OK",
   "root_cause_class": "mis-ported-predicate",
-  "owning_file": "decompiler/crates/kuna-decomp/src/p4_calls/funcdata_callsite.rs",
+  "owning_file": "decompiler/crates/unlace-decomp/src/p4_calls/funcdata_callsite.rs",
   "owning_function": "check_input_trial_use",
   "upstream_anchor": "fspec.cc:5618 (FuncCallSpecs::checkInputTrialUse)",
   "spec_chapter": "docs/spec/04-calls-and-prototypes.md",
@@ -37,9 +37,9 @@
   "decisions": [
     "MIS-PORT, not unported and not a deliberate simplification: check_input_trial_use passes the trial's CALLEE-relative address to FuncProto::get_local_range().in_range(), where upstream fspec.cc:5618 passes the argument Varnode's CALLER-relative address. Everything else on the path (create_placeholder, resolve_spacebase_relative, guard_calls IPTR_SPACEBASE translation, build_input_from_trials) is line-for-line faithful and verified working by instrumentation.",
     "The published triage hypothesis (guard_calls short-circuits via tryregister=false because stackoffset stays OFFSET_UNKNOWN) is FALSE. Instrumented on both x86-64 and i386: tryregister=true, stackoffset resolves, register_trial + op_insert_input both run. The trials exist and are then scored no-use.",
-    "kuna's own spec chapter already documents the correct behaviour ('outside the caller's local stack range'), and the port comment in the code documents the incorrect one ('the callee's local range') - the implementation contradicts its own normative chapter.",
+    "unlace's own spec chapter already documents the correct behaviour ('outside the caller's local stack range'), and the port comment in the code documents the incorrect one ('the callee's local range') - the implementation contradicts its own normative chapter.",
     "The fix is one argument. Verified on a scratch build behind an env gate: witness, ssh-add/parse_dest_constraint and mydoom/msg_b64enc all fully recovered.",
-    "Ablation measured on the scratch build: kuna test --datatests -> 675/675 PARITY OK (zero assertions move). Stage corpus 304/305: the single movement is gh6882-sparcstructret #2, which is ITSELF a correctness improvement (the SPARC hidden struct-return buffer pointer is now passed: f() -> f(v2)); only the pinned expression text needs updating.",
+    "Ablation measured on the scratch build: unlace test --datatests -> 675/675 PARITY OK (zero assertions move). Stage corpus 304/305: the single movement is gh6882-sparcstructret #2, which is ITSELF a correctness improvement (the SPARC hidden struct-return buffer pointer is now passed: f() -> f(v2)); only the pinned expression text needs updating.",
     "Speed: no detectable delta (ssh-add decompile-all 10.80s -> 10.79s median of 3; mydoom 2.03s -> 1.98s min of 3).",
     "Recommend shipping GATED (option callsitestackargs, tier core, change_kind correctness-fix) despite being a strict bug fix, because it changes emitted C at a large fraction of call sites in every stripped binary on every architecture and has a known artifact class (over-recovery on unprototyped __cdecl callees). Default-ON is earned by the ablation. No DIV row needed - this converges on upstream rather than diverging from it - but docs/history.md should record the mis-port and its correction.",
     "Known artifact accepted for now: on i386, stale outgoing-argument slots from a previous call can be accepted as arguments of a later unprototyped call (mydoom CloseHandle renders with 5 arguments where it takes 1). Upstream Ghidra shares this behaviour and escapes it via PE IAT import prototypes; that is sequenced as increment 2.",
@@ -57,7 +57,7 @@
     "stage_assertion_changed_name": "GH6882 #2: sparcstructret on recovers the function tail (the real return expression)",
     "workspace_suite": "green (one pre-existing worktree failure, w10_adv_r2_guard_is_not_a_skipped_false_green, reproduces identically without the fix - missing 8051 .sla)",
     "corpus": {
-      "method": "kuna decompile-all --json, stock vs fixed on the same binary; count direct call sites of a callee kuna itself decompiled that render with fewer arguments than that callee's own recovered parameter count",
+      "method": "unlace decompile-all --json, stock vs fixed on the same binary; count direct call sites of a callee unlace itself decompiled that render with fewer arguments than that callee's own recovered parameter count",
       "ssh_add_x86_64": {
         "functions": 988,
         "calls_ge7_args_stock": 0,
@@ -245,7 +245,7 @@
       "options_md": "fresh"
     },
     "speed_final": {
-      "method": "interleaved off/on, 9 repetitions, taskset-pinned, `kuna decompile-all --json`; medians AND minimums reported because 5-rep runs proved too noisy to trust (a 5-rep run put coreutils/tr at +9.19%; the 9-rep run put it at -0.74%)",
+      "method": "interleaved off/on, 9 repetitions, taskset-pinned, `unlace decompile-all --json`; medians AND minimums reported because 5-rep runs proved too noisy to trust (a 5-rep run put coreutils/tr at +9.19%; the 9-rep run put it at -0.74%)",
       "budget_pct": 5,
       "x86_64": {
         "coreutils/tr O0": "-0.74% median, -0.38% min",

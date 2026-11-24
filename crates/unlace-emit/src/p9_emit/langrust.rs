@@ -608,7 +608,7 @@ impl PrintC {
 
 /// The sentence both halves of the unrepresentable-goto marker are built from;
 /// the target label follows it.
-pub const UNSTRUCTURED_GOTO_NOTE: &str = "kuna: unstructured goto to ";
+pub const UNSTRUCTURED_GOTO_NOTE: &str = "unlace: unstructured goto to ";
 
 /// The diverging half of the marker, and the one a counter matches: it is
 /// emitted exactly once per unrepresentable goto, where the comment half would
@@ -618,7 +618,7 @@ pub const UNSTRUCTURED_GOTO_NOTE: &str = "kuna: unstructured goto to ";
 /// decompiled program that embedded this very sentence in a string constant is
 /// printed as a Rust string literal, and the printer escapes an interior quote
 /// (`panic!(\"unlace: ...`), so program data cannot produce a match.
-pub const UNSTRUCTURED_GOTO_MARKER: &str = "panic!(\"kuna: unstructured goto to ";
+pub const UNSTRUCTURED_GOTO_MARKER: &str = "panic!(\"unlace: unstructured goto to ";
 
 /// How many unrepresentable gotos a rendered function body contains.
 ///
@@ -926,7 +926,7 @@ impl PrintC {
             if case.chain != -1 {
                 self.emit.tag_line();
                 self.emit.print(
-                    "/* kuna: C switch fall-through has no match form; the next arm's body is not duplicated */",
+                    "/* unlace: C switch fall-through has no match form; the next arm's body is not duplicated */",
                     SyntaxHighlight::CommentColor,
                 );
             }

@@ -43,7 +43,7 @@ Full write-up: [`docs/features/undefname/analysis.md`](docs/features/undefname/a
 ## Why it happened
 
 `Scope::buildUndefinedName` (`database.cc:2854`) names an empty-named Symbol `$$undef`
-plus 8 hex digits. Upstream that string is unobservable for two reasons, and kuna
+plus 8 hex digits. Upstream that string is unobservable for two reasons, and unlace
 inherits neither:
 
 * upstream `ActionNameVars::apply` renames **every** still-undefined Symbol before it
@@ -51,10 +51,10 @@ inherits neither:
   (`coreaction.cc:3079`);
 * upstream `PrintC` reads `sym->getDisplayName()` **live** at emit time.
 
-kuna caches the name per HighVariable (`HighVariable::kuna_name`), and its port of
+unlace caches the name per HighVariable (`HighVariable::unlace_name`), and its port of
 `ScopeInternal::assignDefaultNames` had **zero call sites in the tree**.
 
-Instrumented (a temporary backtrace on `set_kuna_name`; note `kuna decompile` shells out
+Instrumented (a temporary backtrace on `set_unlace_name`; note `unlace decompile` shells out
 to `decomp_dbg` with **stderr piped**, so the in-process `decompile-all` path is the one
 to instrument):
 
@@ -78,7 +78,7 @@ non-perturbingly: exactly **one** Symbol at that offset, and no `$$undef` Symbol
 consumes `base` and renumber every later local. Instead `ActionNameVars` grows the tail
 it was missing (`p6_variables/undefname.rs`): wire the catch-all `assignDefaultNames`,
 then re-resolve every high still holding a placeholder through the *same*
-`queryProperties(addr,1,usepoint)` containment query that bound it -- kuna's stand-in for
+`queryProperties(addr,1,usepoint)` containment query that bound it -- unlace's stand-in for
 the printer's live read. Both steps run after every `vN` is handed out and after the
 spacebase attach pass, so neither renumbers an existing local and every `&symbol` render
 stays byte-identical.
@@ -167,7 +167,7 @@ make test          -> datatests: 675/675 assertions passed   === baseline parity
 make test-stages   -> datatests: 394/394 assertions passed   === baseline parity ===  PARITY OK
 make rust-test     -> 4427 passed, 0 failed
 make check-spec    -> check-spec OK (lenient mode)
-kuna catalog --check -> catalog OK: documents exactly the registered kuna options
+unlace catalog --check -> catalog OK: documents exactly the registered unlace options
 ```
 
 `docs/baseline.json` is untouched. `docs/baseline-stages.json` was re-recorded, not
@@ -191,11 +191,11 @@ exists -- before this fix the names differed (`$$undef00000000` vs `v12`), so th
 could never match. Proven, not reasoned: pass 2 of the stage test runs with
 `option dedupvardecls off` and the fold still happens.
 
-**2. `kuna decompile` shells out to `decomp_dbg` with stderr PIPED, so engine-level
+**2. `unlace decompile` shells out to `decomp_dbg` with stderr PIPED, so engine-level
 instrumentation is invisible on that path.** An `eprintln!`/backtrace added inside the
-engine produces *nothing* when you drive it with `kuna decompile ...`, which reads as
+engine produces *nothing* when you drive it with `unlace decompile ...`, which reads as
 "my hypothesis is wrong" when it only means "you cannot see it from here". The
-in-process path is `kuna decompile-all <binary> --json --addr 0x...` -- instrument
+in-process path is `unlace decompile-all <binary> --json --addr 0x...` -- instrument
 against that. This has now cost two agents in this campaign real time.
 
 A third, cheaper one: the non-perturbing discriminator for symbol-vs-cache questions is

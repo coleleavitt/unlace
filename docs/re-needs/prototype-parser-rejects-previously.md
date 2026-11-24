@@ -44,7 +44,7 @@ Use struct JSValue as a prototype return type.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_9d9c0",
@@ -72,7 +72,7 @@ Use struct JSValue as a prototype return type.
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "main",

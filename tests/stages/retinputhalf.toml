@@ -1,8 +1,8 @@
-# kuna: a returned register half that is a formal input parameter is dropped as
+# unlace: a returned register half that is a formal input parameter is dropped as
 # "uncomputed" leftover, and the parameter it came from disappears with it.
 #
 # Stage / sub-stage: P4 call and prototype model, output-prototype.
-# The rule (kuna_retinputhalf.rs) is always on.
+# The rule (unlace_retinputhalf.rs) is always on.
 #
 # Source (gcc -O1 -fcf-protection=none, x86-64 SysV, bytes verbatim below):
 #
@@ -16,7 +16,7 @@
 # Both return the SysV RAX:RDX pair. They differ only in what the RDX half
 # holds: a plain copy of the second argument, versus arithmetic on it.
 #
-# The bug: kuna_returnuncomputed rejects a return half
+# The bug: unlace_returnuncomputed rejects a return half
 # whose move-only chain ends at an UNWRITTEN Varnode, which is how it kills the
 # callee-saved-restore phantom. A formal input parameter is unwritten by
 # definition, so `wide` loses the RDX half; the argument that fed it then has no

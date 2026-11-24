@@ -5,7 +5,7 @@
 `ActionConstantPtr::isPointer` refuses to look a constant up in the symbol table
 when its bit pattern "looks like a single bit or mask" (`bit_transitions < 3`).
 That guard is the only thing standing between integer flags, masks and round
-sizes and the global scope. kuna's `inferfuncentry` (GH-6930) lifts it whenever
+sizes and the global scope. unlace's `inferfuncentry` (GH-6930) lifts it whenever
 the constant resolves to an exact function entry, because a function placed at a
 power-of-two image base is a single-bit value but is still a function.
 

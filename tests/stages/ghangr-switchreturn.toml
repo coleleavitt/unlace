@@ -34,12 +34,12 @@
 #     }
 #
 # At -O0 every case compiles to `mov $K, %eax; jmp .Lepilogue`, merged at one
-# `pop %rbp; ret`, so kuna reconstructs `eax = MULTIEQUAL(#0, #1, ..., #-1); return
+# `pop %rbp; ret`, so unlace reconstructs `eax = MULTIEQUAL(#0, #1, ..., #-1); return
 # eax` in the exit block, kept structurally by default as the merged switch below.
 # Bytes [0x401106, 0x4011b8) of the linked executable; the 4-byte-relative jump
 # table (17 entries) at 0x402004.
 #
-# Pass 1 (option switchreturn off, the default): kuna keeps the merged dispatch,
+# Pass 1 (option switchreturn off, the default): unlace keeps the merged dispatch,
 # `switch (a0) { case 0: v1 = 0; break; ... } return v1;`, one trailing `return v1`
 # reached from every case; the default constant 0xffffffff is a plain assignment
 # (`v1 = 0xffffffff`), NOT a return.

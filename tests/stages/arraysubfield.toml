@@ -4,7 +4,7 @@
 # P9 emission.  `PrintC::pushSymbolDetail` routes a Varnode that covers only part
 # of its mapped Symbol through `pushPartialSymbol`, whose type walk descends
 # struct/union/array members uniformly and, when no member describes the access,
-# emits the artificial `._[off]_[size]_` field.  kuna's port routed STRUCT and
+# emits the artificial `._[off]_[size]_` field.  unlace's port routed STRUCT and
 # UNION into that walk but split plain ARRAY off into a dedicated `name[index]`
 # branch that computes `index = symboloff / elementAlignSize` WITHOUT consulting
 # the access size.  So an 8-byte read at offset 0 of a `char[16]` rendered
@@ -130,9 +130,9 @@ literal = 'return v1._0_16_ << 0x40;'
 [[match]]
 name = 'ARRAYSUBFIELD #8: opt-in C reads preserve the low eight bytes'
 count = 1
-literal = 'kuna_bytearray_load64_le(&g[0])'
+literal = 'unlace_bytearray_load64_le(&g[0])'
 
 [[match]]
 name = 'ARRAYSUBFIELD #9: opt-in C reads preserve the high eight bytes'
 count = 1
-literal = 'kuna_bytearray_load64_le(&g[8])'
+literal = 'unlace_bytearray_load64_le(&g[8])'

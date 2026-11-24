@@ -335,7 +335,7 @@ mod tests {
 
     #[test]
     fn a_file_holds_one_declaration_per_line_with_comments() {
-        let dir = std::env::temp_dir().join(format!("kuna-funcdecl-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("unlace-funcdecl-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("scratch dir");
         let path = dir.join("bounds.txt");
         std::fs::write(
@@ -352,7 +352,10 @@ mod tests {
 
     #[test]
     fn a_missing_file_is_an_error_naming_the_path() {
-        let err = parse_flag("@/nonexistent/kuna-bounds.txt").expect_err("refuses");
-        assert!(err.contains("/nonexistent/kuna-bounds.txt"), "got {err:?}");
+        let err = parse_flag("@/nonexistent/unlace-bounds.txt").expect_err("refuses");
+        assert!(
+            err.contains("/nonexistent/unlace-bounds.txt"),
+            "got {err:?}"
+        );
     }
 }

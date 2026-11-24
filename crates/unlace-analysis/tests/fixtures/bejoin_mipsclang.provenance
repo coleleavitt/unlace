@@ -1,6 +1,6 @@
 bejoin_mipsclang_O2.so -- MIPS32 big-endian clang image for option bejoin
 callers with a pair whose low word also feeds its high word (GH-904;
-tests/stages/kuna-bejoin-mipsclang.toml).
+tests/stages/unlace-bejoin-mipsclang.toml).
 
 What it is
   o32 PIC shared object from bejoin_mipsclang.c. clang computes add64's low

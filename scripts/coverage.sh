@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Merged line coverage for kuna: the cargo workspace suite plus the datatest,
+# Merged line coverage for unlace: the cargo workspace suite plus the datatest,
 # stages and tests/cli corpora, all through instrumented binaries, rolled up
 # into observatory/data/coverage.json + an lcov/HTML report. Heavy; run via
 # `bash scripts/coverage.sh`. See docs/observatory.md for the knobs and caveats.
@@ -27,10 +27,10 @@ eval "$(cargo llvm-cov show-env --sh)"
 export CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_PROFILE_RELEASE_DEBUG=0
 cargo llvm-cov clean --workspace
 TARGET="$CARGO_LLVM_COV_TARGET_DIR"
-# Pool-merged profile files: the suites spawn kuna/decomp_dbg thousands of
+# Pool-merged profile files: the suites spawn unlace/decomp_dbg thousands of
 # times and per-pid patterns would explode the file count. They must sit
 # directly in $TARGET -- `cargo llvm-cov report` does not scan subdirs.
-export LLVM_PROFILE_FILE="$TARGET/kuna-%16m.profraw"
+export LLVM_PROFILE_FILE="$TARGET/unlace-%16m.profraw"
 
 fail=0
 echo "== coverage 1/2: cargo workspace suite (with the datatest and stage parity target) =="
@@ -38,8 +38,8 @@ cargo test --workspace --no-fail-fast || fail=1
 
 echo "== coverage 2/2: tests/cli probes =="
 cargo build --release -p unlace-cli
-KUNA="$TARGET/release/unlace"
-(cd "$ROOT" && REPIPE_KUNA="$KUNA" PYTHONPATH="$ROOT" python3 -m scripts.repipe.clitests) || fail=1
+UNLACE="$TARGET/release/unlace"
+(cd "$ROOT" && REPIPE_UNLACE="$UNLACE" PYTHONPATH="$ROOT" python3 -m scripts.repipe.clitests) || fail=1
 
 echo "== coverage: reports =="
 mkdir -p "$OUT/coverage"

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kuna Atlas</title>
+<title>Unlace Atlas</title>
 <style>
 @@BASE_CSS@@
 .stats { display: flex; gap: 26px; flex-wrap: wrap; margin: 14px 0 4px; }
@@ -96,7 +96,7 @@ function build(data) {
   const passCount = data.schedule.passes.length;
   main.insertAdjacentHTML("beforeend", `
     <h1>Architecture atlas</h1>
-    <p class="lede">kuna turns bytes into C through ordered phases P1–P9 over an orthogonal
+    <p class="lede">unlace turns bytes into C through ordered phases P1–P9 over an orthogonal
     knowledge plane (P0), with Band B (P3–P6) iterating to a mutual fixed point. Folders are
     the taxonomy; the real pass order is the schedule at the bottom. Normative algorithms:
     <code>docs/spec/</code>; one-screen model: <code>docs/phases.md</code>.</p>
@@ -245,7 +245,7 @@ function wireOptionFilter() {
 function renderCrates(crates) {
   main.insertAdjacentHTML("beforeend", `
     <h2 id="crates">Workspace crates</h2>
-    <p class="hint">Internal dependency graph (kuna-* edges only) and sizes.</p>
+    <p class="hint">Internal dependency graph (unlace-* edges only) and sizes.</p>
     <div id="crate-dag"></div>
     <section class="card"><table class="grid">
       <thead><tr><th>crate</th><th>description</th><th class="num">files</th><th class="num">loc</th><th>depends on</th></tr></thead>

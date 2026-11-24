@@ -1,4 +1,4 @@
-/* (kuna) `protoorder` fixture -- a stack array whose address feeds callees
+/* (unlace) `protoorder` fixture -- a stack array whose address feeds callees
  * that read it through narrower pointers (`geti` as `int *`, `gets2` as
  * `short *`).  A pointer vote at the array's address re-lays the frame:
  * `char buf[256]` renders as `char [20]` plus `unsigned int [61]` while the

@@ -1,4 +1,4 @@
-@ (kuna) ARM32 shared object whose exported `answer` shares its address with a
+@ (unlace) ARM32 shared object whose exported `answer` shares its address with a
 @ local ARM veneer name (`__answer_from_arm`, GNU ld's spelling for its
 @ ARM-to-Thumb glue); the veneer branches to the Thumb body, and `caller` reaches
 @ `answer` through the PLT, so the name also labels a PLT stub. Built with

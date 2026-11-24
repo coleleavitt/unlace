@@ -4031,7 +4031,7 @@ impl JumpBasicModel {
             .map(|o| o.get_addr().clone())
             .unwrap_or_default();
         eprintln!(
-            "[kuna switchmultipred] recovered multi-predecessor unrolled-guard jump \
+            "[unlace switchmultipred] recovered multi-predecessor unrolled-guard jump \
              table at 0x{:x}: {} predecessor guards, union bound [0,{})",
             addr.get_offset(),
             ninput,
@@ -4450,7 +4450,7 @@ impl JumpBasicModel {
                 .unwrap_or_default();
             let base = self.loop_carried_seeds.first().map(|s| s.1).unwrap_or(0);
             eprintln!(
-                "[kuna switchsharedcase] recovered loop-carried-base PIC jump table \
+                "[unlace switchsharedcase] recovered loop-carried-base PIC jump table \
                  at 0x{:x}: base=0x{:x} entries={}",
                 addr.get_offset(),
                 base,

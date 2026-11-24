@@ -1,8 +1,8 @@
-"""kuna-engine reference-decompiler adapter.
+"""unlace-engine reference-decompiler adapter.
 
 The pipeline's comparison machinery (``compare``/``sweep``/``rank``/``worker``) is
 decompiler-agnostic: it maps a target to a :class:`ReferenceResult` and diffs that
-against kuna-under-test, structurally. This adapter exposes the kuna engine itself as
+against unlace-under-test, structurally. This adapter exposes the unlace engine itself as
 a reference (registry key ``unlace``), parallel to :class:`AngrReference`.
 
 It runs in the same interpreter by calling :func:`decompile` directly. The "version"
@@ -22,13 +22,13 @@ from ... import decompile as kdecompile
 from ... import paths
 
 
-class KunaReference(ReferenceDecompiler):
-    """The kuna decompiler, used as a comparison reference (registry key ``unlace``)."""
+class UnlaceReference(ReferenceDecompiler):
+    """The unlace decompiler, used as a comparison reference (registry key ``unlace``)."""
 
-    name = "kuna"
+    name = "unlace"
 
     def __init__(self, timeout=None):
-        self.timeout = timeout or config.KUNA_TIMEOUT
+        self.timeout = timeout or config.UNLACE_TIMEOUT
 
     # -- ReferenceDecompiler protocol ---------------------------------------
 
@@ -41,7 +41,7 @@ class KunaReference(ReferenceDecompiler):
     def version(self):
         # No semantic version for the in-tree build; pin the resolved binary path
         # so a differential is reproducible against a known artifact.
-        return "kuna (%s)" % self._binary_path()
+        return "unlace (%s)" % self._binary_path()
 
     def decompile(self, binary, selector, *, arch=None, load_debug=False,
                   structurer=None, timeout=None) -> ReferenceResult:
@@ -54,11 +54,11 @@ class KunaReference(ReferenceDecompiler):
             res.error = "binary not found: %s" % binary
             return res
         if not self.available():
-            res.error = ("kuna engine not built at %s -- run `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli`"
+            res.error = ("unlace engine not built at %s -- run `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli`"
                          % self._binary_path())
             return res
 
-        # @entry: kuna's console has no e_entry selector; resolve via the conventional
+        # @entry: unlace's console has no e_entry selector; resolve via the conventional
         # ELF entry symbol, leaving an explicit failure for the caller otherwise.
         sel = selector
         by_address = False
@@ -72,7 +72,7 @@ class KunaReference(ReferenceDecompiler):
                 binary, sel, by_address=by_address, timeout=timeout or self.timeout,
             )
         except kdecompile.DecompileError as e:
-            res.error = "kuna: %s" % e
+            res.error = "unlace: %s" % e
             return res
 
         res.text = text

@@ -23,7 +23,7 @@ use unlace_base::error::UnlaceResult;
 pub use crate::specnames::X87_UNARY_MODEL as MODEL_NAME;
 
 /// The two-operand model's name.
-pub const BINARY_MODEL_NAME: &str = "__kuna_x87binary";
+pub const BINARY_MODEL_NAME: &str = "__unlace_x87binary";
 
 /// The one-operand intrinsics of the MSVC CRT.
 pub const INTRINSICS: [&str; 13] = [

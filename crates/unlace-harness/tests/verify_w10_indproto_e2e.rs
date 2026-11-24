@@ -114,7 +114,7 @@ fn build_doc(struct_body: &str, stringmatches: &str) -> String {
 fn write_temp_xml(tag: &str, content: &str) -> PathBuf {
     let mut p = std::env::temp_dir();
     let pid = std::process::id();
-    p.push(format!("kuna_w10_indproto_{tag}_{pid}.xml"));
+    p.push(format!("unlace_w10_indproto_{tag}_{pid}.xml"));
     std::fs::write(&p, content).expect("write temp xml");
     p
 }

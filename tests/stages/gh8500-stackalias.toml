@@ -19,12 +19,12 @@
 # s-0x1c, the load re-heritages s-0x1c with no reaching definition and the
 # rendered C returns an undefined local (`return xStack_1c;`).
 #
-# Root cause (kuna): this race is exactly what Ghidra's heritage deadcode-delay
+# Root cause (unlace): this race is exactly what Ghidra's heritage deadcode-delay
 # restart is designed to defuse.  When `Heritage::removeRevisitedMarkers` runs
 # AFTER a dead-removal, it calls `Heritage::bumpDeadcodeDelay`, which installs a
 # one-pass deadcode delay on the affected space and requests a restart; the
 # restart re-flows with the bumped delay so the LOAD resolves before the stack
-# store can die.  In kuna that mechanism was BROKEN: `bumpDeadcodeDelay` was
+# store can die.  In unlace that mechanism was BROKEN: `bumpDeadcodeDelay` was
 # routed through a *fresh* `Override` each call, so its "delay already installed"
 # suppression guard never fired and the bump re-requested a restart on every
 # heritage pass.  The function therefore restart-looped until the driver's

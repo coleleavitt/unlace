@@ -1,13 +1,13 @@
 ## The problem
 
-Telling kuna that a `ret` is really a call recovers exactly one call, and the
+Telling unlace that a `ret` is really a call recovers exactly one call, and the
 rest of the function disappears. `push <continuation>; push <target>; ret` is a
 call written without a `call` instruction, and packed images build whole bodies
 out of them — one such `ret` per callee. Reclassifying one link leaves the next
 link a return, so everything behind it is dead:
 
 ```console
-$ kuna decompile ./bm3.exe 0x401757 --addr --assert 'flow 0x40176f call'
+$ unlace decompile ./bm3.exe 0x401757 --addr --assert 'flow 0x40176f call'
 void sub_401757(void)
 {
   LoadLibraryA(s_40151e);
@@ -21,7 +21,7 @@ next `ret` to override except by disassembling by hand.
 The same shape, reduced, is `retcallchain_i386` in this PR:
 
 ```console
-$ kuna decompile retcallchain_i386 chain_entry --assert 'flow 0x8049019 call'
+$ unlace decompile retcallchain_i386 chain_entry --assert 'flow 0x8049019 call'
 void chain_entry(void)
 {
   (*dat_804a000)();          # and nothing for the two links after it
@@ -61,7 +61,7 @@ nothing). Unpatched, `overriding_the_first_link_recovers_the_whole_chain` fails
 on the second call.
 
 Gates: `make test` 675/675 PARITY OK, `make test-stages` 687/687 PARITY OK,
-`make check-spec` OK, `kuna catalog --check` OK, `make test-cli` 83/83,
+`make check-spec` OK, `unlace catalog --check` OK, `make test-cli` 83/83,
 `make rust-test` exit 0 (375 test binaries). The six
 `override flow … callreturn` cases already in the two corpora do not move — an
 ordinary `ret` is not a link.

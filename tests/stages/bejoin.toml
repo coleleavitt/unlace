@@ -1,4 +1,4 @@
-# kuna option bejoin: a two-register value on a big-endian ABI is joined
+# unlace option bejoin: a two-register value on a big-endian ABI is joined
 # high word first.
 #
 # The SVR4 PowerPC ABI returns a long long in r3:r4 with the HIGH word in

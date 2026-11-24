@@ -1,7 +1,7 @@
 # Vendored webfonts
 
 The two families the site's design system uses (`assets/css/site.css`). Both are the
-subsets shipped by the Noelo Lab site (`noelo.org`), copied here so kuna's pages render
+subsets shipped by the Noelo Lab site (`noelo.org`), copied here so unlace's pages render
 identically and load nothing from a third-party CDN.
 
 | File | Family | Upstream | License |

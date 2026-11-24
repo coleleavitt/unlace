@@ -33,8 +33,8 @@ comments therefore entered the caller's program-wide output, and the
 list and the nested call is a no-op. An audit of the drive path found no other
 program-wide writer.
 
-The drive now owns an explicit depth (`kuna_drive_scope()`, an RAII guard whose
-drop balances the depth even on unwind). `kuna_drive_publishes()` is true for
+The drive now owns an explicit depth (`unlace_drive_scope()`, an RAII guard whose
+drop balances the depth even on unwind). `unlace_drive_publishes()` is true for
 the outermost drive and for a standalone flow build outside any drive; the two
 comment publishers and the mapped-flow warning cleanup are gated on it. The
 nested drive still hands its statements back explicitly; nothing else survives
@@ -52,7 +52,7 @@ for each propagation and refused after 4096 ops. Cost was quadratic in the
 function's op count, and the same evidence could be refused just because the
 function grew.
 
-`kuna_structsynth::every_access_through` now starts at the base. It walks the
+`unlace_structsynth::every_access_through` now starts at the base. It walks the
 pointer family forward through exactly the ops `peel_base_stride` walks backward
 (`COPY`, `CAST`, constant `INT_ADD`/`PTRSUB`, `PTRADD`), then peels each reached
 address to prove it names that base. The cost is one pass over the object's own
@@ -89,7 +89,7 @@ The repository currently has only `ActionGroup` and `ActionRestartGroup`.
 - `make check-spec`: OK
 - `make lint`, `make test-tools`, and `unlace catalog --check`: green
 - `make test-cli`: 303/303
-- `prefersplit_scope`: 9/9; `kuna_structsynth`: 32/32; `prefersplit`: 10/10;
+- `prefersplit_scope`: 9/9; `unlace_structsynth`: 32/32; `prefersplit`: 10/10;
   the new action test passes
 - A Clang-compiled scalar-double wrapper prints an unsigned integer access with
   `protoorder off` and a double access with the default

@@ -38,7 +38,7 @@ Find references to memcmp by name.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "xrefs",
     "{{BIN}}",
     "--to",
@@ -71,7 +71,7 @@ Find references to memcmp by name.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "xrefs",
     "{{BIN}}",
     "--to",

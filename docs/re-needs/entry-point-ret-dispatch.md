@@ -28,7 +28,7 @@ reject_reason: null
 See the transfer to LoadLibraryA, or a warning that stack-directed control flow was not recovered.
 
 > **Entry-point RET dispatch disappears into an empty return** (major, `5ab77f5c33c5d40ad448c681`)
-> Emitted only return; with exit 0. Kuna disassembly at 0x40175f shows PUSH 0x40151e; PUSH 0x401770; PUSH [0x4010fe]; RET. A flow-call override restores LoadLibraryA, confirming that the default output erased a transfer. These are decodable instructions, not encrypted code.
+> Emitted only return; with exit 0. Unlace disassembly at 0x40175f shows PUSH 0x40151e; PUSH 0x401770; PUSH [0x4010fe]; RET. A flow-call override restores LoadLibraryA, confirming that the default output erased a transfer. These are decodable instructions, not encrypted code.
 
 ## Reproduction
 
@@ -38,7 +38,7 @@ See the transfer to LoadLibraryA, or a warning that stack-directed control flow 
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x401757",
@@ -69,7 +69,7 @@ See the transfer to LoadLibraryA, or a warning that stack-directed control flow 
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "entry_dispatch"
@@ -121,7 +121,7 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 9 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD (captain in-tick, release binary 8df2a52e, arena .kuna-repipe/arena/9/5ab77f5c33c5d40ad448c681/target/bm3.zip.__x/bm3.exe).
+- round 9 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD (captain in-tick, release binary 8df2a52e, arena .unlace-repipe/arena/9/5ab77f5c33c5d40ad448c681/target/bm3.zip.__x/bm3.exe).
 
 FILED CAUSE ('RETURN handling appears to discard the computed destination and its feeding stores') is right, and the single-variable control proves the information is PRESENT and merely unused. Four runs, one variable each, same address:
  (D) default                                 -> void sub_401757(void) { return; }        [the bug]
@@ -130,7 +130,7 @@ FILED CAUSE ('RETURN handling appears to discard the computed destination and it
  (C) tiedstorekeep off / calleepop off / constselectjump on / tailcalljump off -> all byte-identical to (D)
 Nothing in the 164-row catalog moves this: there is no push-ret / stack-directed-transfer row at all, so 'no option covered it' is a fact about the catalog, not a tester ablation miss.
 
-THE DECISIVE POINT: the RET's popped destination is dword ptr [0x4010fe], an IAT slot, and kuna RESOLVES IT TO LoadLibraryA the instant the RET is reinterpreted as a transfer (run A). Same binary, same dataflow, same pass order -- only the RETURN interpretation differs. So the destination is computable at the point where it is thrown away; it is not a missing-analysis problem, it is that nothing ever asks whether a RETURN's popped value is a resolvable constant rather than the incoming frame's return address. Feeding stores then die as ordinary dead stack writes, which is why the body empties instead of degrading.
+THE DECISIVE POINT: the RET's popped destination is dword ptr [0x4010fe], an IAT slot, and unlace RESOLVES IT TO LoadLibraryA the instant the RET is reinterpreted as a transfer (run A). Same binary, same dataflow, same pass order -- only the RETURN interpretation differs. So the destination is computable at the point where it is thrown away; it is not a missing-analysis problem, it is that nothing ever asks whether a RETURN's popped value is a resolvable constant rather than the incoming frame's return address. Feeding stores then die as ordinary dead stack writes, which is why the body empties instead of degrading.
 
 Disassembly confirmed byte-for-byte (unlace disassemble 0x40175f): 68 1e 15 40 00 PUSH 0x40151e / 68 70 17 40 00 PUSH 0x401770 / ff 35 fe 10 40 00 PUSH [0x4010fe] / c3 RET. Stack at the RET is target=[0x4010fe], return-addr=0x401770, arg=0x40151e -- and run A picks the argument up correctly, which is further evidence the frame is understood. Note 0x401757 is the PE ENTRY POINT, and functions[0].size is 105 bytes: the whole entry stub renders as one empty return.
 

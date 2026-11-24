@@ -1,4 +1,4 @@
-/* Fixture for `option libctypes glibc` (tests/stages/kuna-libctypes.toml).
+/* Fixture for `option libctypes glibc` (tests/stages/unlace-libctypes.toml).
  *
  * Built: gcc -O1 -o libctypes_glibc_x86_64 libctypes_glibc_x86_64.c
  *        (no `-g`, on purpose)

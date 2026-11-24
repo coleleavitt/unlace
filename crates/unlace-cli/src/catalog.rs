@@ -248,12 +248,12 @@ pub fn cmd_check(pinned_by: Option<&str>) -> i32 {
     let mut problems: Vec<String> = Vec::new();
     for name in registered.difference(&cat) {
         problems.push(format!(
-            "registered kuna option {name:?} has no catalog row (undiscoverable)"
+            "registered unlace option {name:?} has no catalog row (undiscoverable)"
         ));
     }
     for name in cat.difference(&registered) {
         problems.push(format!(
-            "catalog row {name:?} matches no registered kuna option (stale)"
+            "catalog row {name:?} matches no registered unlace option (stale)"
         ));
     }
 
@@ -265,7 +265,7 @@ pub fn cmd_check(pinned_by: Option<&str>) -> i32 {
         return 1;
     }
     crate::output::emit_with_status(
-        "catalog OK: documents exactly the registered kuna options\n",
+        "catalog OK: documents exactly the registered unlace options\n",
         0,
     )
 }

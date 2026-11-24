@@ -1,6 +1,6 @@
 # structheadless: whole-corpus hunks
 
-`hunks.py cb-off cb-on` over the 45 castbench binaries (`kuna decompile-all`,
+`hunks.py cb-off cb-on` over the 45 castbench binaries (`unlace decompile-all`,
 x86-64, -O0/-O2/-O2-noinline), both arms of build a54805cab on main c960fb18d
 (`--option structheadless off` against `closed`; castimplied, castarith,
 castsign and globalref on in both). A function is `record name

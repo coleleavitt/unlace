@@ -26,7 +26,7 @@
     },
     {
       "id": "default-on",
-      "claim": "Shipped default-ON. Required: the acceptance probe runs `kuna decompile BIN sub_140002530` with no options, so only default output can close the need. The agents.md bar is met on its own terms.",
+      "claim": "Shipped default-ON. Required: the acceptance probe runs `unlace decompile BIN sub_140002530` with no options, so only default output can close the need. The agents.md bar is met on its own terms.",
       "evidence": "0/675 datatest assertions change (docs/baseline.json unmoved), tests/stages 600/600 PARITY OK unchanged, speed -0.13% against a 5% budget (scripts.pipeline.timeit, witness function, median of 5). `--option tiedstorekeep off` restores upstream's propagation exactly."
     },
     {
@@ -46,7 +46,7 @@
     }
   ],
   "sweep": {
-    "method": "whole-binary `kuna decompile-all` with `--option tiedstorekeep off` vs `on`, diffed raw and with `v\\d+` normalized to a single token, then compared as sorted statement multisets per function",
+    "method": "whole-binary `unlace decompile-all` with `--option tiedstorekeep off` vs `on`, diffed raw and with `v\\d+` normalized to a single token, then compared as sorted statement multisets per function",
     "binaries": 7,
     "identical": [
       "x86_64/fauxware",
@@ -77,8 +77,8 @@
     "make test": "675/675 PARITY OK",
     "make test-stages": "600/600 PARITY OK",
     "make check-spec": "OK",
-    "kuna catalog --check": "catalog OK",
-    "make rust-test": "green (2078 lib tests + workspace; run with KUNA_DECOMP_TEST unset)",
+    "unlace catalog --check": "catalog OK",
+    "make rust-test": "green (2078 lib tests + workspace; run with UNLACE_DECOMP_TEST unset)",
     "acceptance": "PASS (a-f2df446f39d5)"
   }
 }

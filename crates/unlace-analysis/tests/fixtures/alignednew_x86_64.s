@@ -1,4 +1,4 @@
-# (kuna) RE-friction round 2, need `argument-recovery-knobs-still` / option
+# (unlace) RE-friction round 2, need `argument-recovery-knobs-still` / option
 # `calleearityfwd`.  Minimal SysV x86-64 stand-in for MSVC's aligned
 # `operator new`: one callee reached from both arms of a size test, where the
 # small arm passes its argument register live-in and the guard branches on it.

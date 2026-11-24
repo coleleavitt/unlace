@@ -1,6 +1,6 @@
 from pathlib import Path
 import subprocess,os,json,hashlib,re
-r=Path('/home/mahaloz/kwt/angr-rust-fmt-pieces');w=Path('/tmp/kuna-rust-fmt-pieces-f874');env=os.environ|{'KUNA_SPECS':str(r/'specs')}
+r=Path('/home/mahaloz/kwt/angr-rust-fmt-pieces');w=Path('/tmp/unlace-rust-fmt-pieces-f874');env=os.environ|{'UNLACE_SPECS':str(r/'specs')}
 values=list(range(256))+[0x7fff,0x8000,0xffff,0x7fffffff,0x80000000,0xffffffff,0x7fffffffffffffff,0x8000000000000000,0xffffffffffffffff]
 names=['pieces_literal','pieces_plain','pieces_stderr','pieces_empty','pieces_u32','pieces_i64','pieces_pair','pieces_narrow','pieces_adjacent']
 bindings={
@@ -14,13 +14,13 @@ calls=['pieces_u32(x as u32)','pieces_i64(x as i64)','pieces_pair(x as i8,y)','p
 body=''.join(name+'();\n'for name in names[:4])+'let values:[u64;'+str(len(values))+']=['+','.join(hex(v)for v in values)+'];\nfor (i,x) in values.into_iter().enumerate(){let y=x.rotate_left(17)^0xa5a55a5a8000ffff;\n'
 for index,call in enumerate(calls):body+='println!("<'+str(index)+' {}>",i);eprintln!("<'+str(index)+' {}>",i);'+call+';println!("</'+str(index)+'>");eprintln!("</'+str(index)+'>");\n'
 body+='}\n'
-source=(r/'decompiler/crates/kuna-analysis/tests/fixtures/rust_fmt_pieces.rs').read_text().split('fn main()')[0]+'fn main(){'+body+'}\n'
+source=(r/'decompiler/crates/unlace-analysis/tests/fixtures/rust_fmt_pieces.rs').read_text().split('fn main()')[0]+'fn main(){'+body+'}\n'
 (w/'native-oracle.rs').write_text(source)
 def compile(tc,source,destination):
  p=subprocess.run(['rustc','+'+tc,'--edition=2021','--crate-name','pieces_execution','-C','opt-level=2','-C','debuginfo=1','-C','strip=debuginfo',str(source),'-o',str(destination)],capture_output=True,text=True)
  destination.with_suffix('.compile.log').write_text(p.stderr);assert p.returncode==0,p.stderr
 def decompile(binary,name,off=False):
- cmd=[str(r/'decompiler/target/release/kuna'),'decompile',str(binary),name,'--language','rust']
+ cmd=[str(r/'decompiler/target/release/unlace'),'decompile',str(binary),name,'--language','rust']
  if off:cmd+=['--option','rustfmtpieces','off']
  return subprocess.check_output(cmd,cwd=r,env=env,text=True)
 records=[]
@@ -47,7 +47,7 @@ for producer in ['1.89.0','1.90.0','nightly-2025-05-22']:
  print('native matched',producer,flush=True)
 controls=[]
 for producer in ['nightly-2025-05-21','1.93.1','1.99.1']:
- binary=w/f'control-{producer}';compile(producer,r/'decompiler/crates/kuna-analysis/tests/fixtures/rust_fmt_pieces.rs',binary)
+ binary=w/f'control-{producer}';compile(producer,r/'decompiler/crates/unlace-analysis/tests/fixtures/rust_fmt_pieces.rs',binary)
  for name in ['pieces_literal','pieces_u32','pieces_flags']:
   on,off=decompile(binary,name),decompile(binary,name,True);assert on==off,(producer,name)
   controls.append({'producer':producer,'function':name,'unchanged':True})

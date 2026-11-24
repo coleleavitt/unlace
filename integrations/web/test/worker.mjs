@@ -8,16 +8,16 @@ import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker as NodeWorker } from 'node:worker_threads';
 import {
-  KunaWorkerCancelledError,
-  KunaWorkerClient,
-} from '../kuna-worker-client.js';
+  UnlaceWorkerCancelledError,
+  UnlaceWorkerClient,
+} from '../unlace-worker-client.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = resolve(here, '../dist');
 const fixture = join(here, 'fixtures', 'sample.elf');
 
 if (!existsSync(join(dist, 'unlace_wasm.wasm')) ||
-    !existsSync(join(dist, 'kuna-worker.js'))) {
+    !existsSync(join(dist, 'unlace-worker.js'))) {
   throw new Error('dist/ not built — run integrations/web/build.sh first');
 }
 
@@ -117,8 +117,8 @@ function zipNames(bytes) {
   return names.sort();
 }
 
-const client = new KunaWorkerClient({
-  workerUrl: pathToFileURL(join(dist, 'kuna-worker.js')),
+const client = new UnlaceWorkerClient({
+  workerUrl: pathToFileURL(join(dist, 'unlace-worker.js')),
   wasmUrl: `${base}/unlace_wasm.wasm`,
   specRoot: `${base}/specs`,
   workerFactory: (url) => new BrowserWorker(url),
@@ -150,7 +150,7 @@ try {
   client.cancel('test hard cancellation');
   await assert.rejects(
     cancelled,
-    (error) => error instanceof KunaWorkerCancelledError,
+    (error) => error instanceof UnlaceWorkerCancelledError,
     'cancelling terminates the active Worker request',
   );
   await client.ready();
@@ -171,10 +171,10 @@ try {
   assert.deepEqual(
     zipNames(project.bytes),
     [
-      'sample.elf.kuna/README.md',
-      'sample.elf.kuna/sample.elf.asm',
-      'sample.elf.kuna/sample.elf.c',
-      'sample.elf.kuna/sample.elf.h',
+      'sample.elf.unlace/README.md',
+      'sample.elf.unlace/sample.elf.asm',
+      'sample.elf.unlace/sample.elf.c',
+      'sample.elf.unlace/sample.elf.h',
     ],
   );
   assert.deepEqual(
@@ -201,8 +201,8 @@ try {
   assert.ok(backToC.functions.length > 0);
   assert.doesNotMatch((await client.decompile('main')).functions[0].code, /let mut/, 'C session renders C');
 
-  const hashing = new KunaWorkerClient({
-    workerUrl: pathToFileURL(join(dist, 'kuna-worker.js')),
+  const hashing = new UnlaceWorkerClient({
+    workerUrl: pathToFileURL(join(dist, 'unlace-worker.js')),
     wasmUrl: `${base}/unlace_wasm.wasm`,
     specRoot: `${base}/specs`,
     workerFactory: (url) => new BrowserWorker(url),
@@ -216,8 +216,8 @@ try {
     await hashing.ready();
     assert.equal(await hashing.buildId(), wasm, 'and a respawned Worker has the same one');
     assert.equal(wasmRequests - before, 0, 'the new Worker runs the engine the page compiled, so it downloads nothing');
-    const racing = new KunaWorkerClient({
-      workerUrl: pathToFileURL(join(dist, 'kuna-worker.js')),
+    const racing = new UnlaceWorkerClient({
+      workerUrl: pathToFileURL(join(dist, 'unlace-worker.js')),
       wasmUrl: `${base}/unlace_wasm.wasm`,
       specRoot: `${base}/specs`,
       workerFactory: (url) => new BrowserWorker(url),
@@ -239,8 +239,8 @@ try {
   // new validator, then another wasm. A restarted Worker keeps running the
   // engine and the spec files this page loaded, so the build id stays.
   etag = '"one"';
-  const pinned = new KunaWorkerClient({
-    workerUrl: pathToFileURL(join(dist, 'kuna-worker.js')),
+  const pinned = new UnlaceWorkerClient({
+    workerUrl: pathToFileURL(join(dist, 'unlace-worker.js')),
     wasmUrl: `${base}/unlace_wasm.wasm`,
     specRoot: `${base}/specs`,
     workerFactory: (url) => new BrowserWorker(url),
@@ -279,8 +279,8 @@ try {
   // The site is deployed again between loading the page and the first
   // session (no validator, a wasm of the same size): the build id is still
   // the SHA-256 of the bytes this page compiled.
-  const early = new KunaWorkerClient({
-    workerUrl: pathToFileURL(join(dist, 'kuna-worker.js')),
+  const early = new UnlaceWorkerClient({
+    workerUrl: pathToFileURL(join(dist, 'unlace-worker.js')),
     wasmUrl: `${base}/unlace_wasm.wasm`,
     specRoot: `${base}/specs`,
     workerFactory: (url) => new BrowserWorker(url),
@@ -307,8 +307,8 @@ try {
       this.node.on('message', (data) => this.onmessage?.({ data: data?.result?.engine ? { ...data, result: { ...data.result, engine: null } } : data }));
     }
   }
-  const unpinned = new KunaWorkerClient({
-    workerUrl: pathToFileURL(join(dist, 'kuna-worker.js')),
+  const unpinned = new UnlaceWorkerClient({
+    workerUrl: pathToFileURL(join(dist, 'unlace-worker.js')),
     wasmUrl: `${base}/unlace_wasm.wasm`,
     specRoot: `${base}/specs`,
     workerFactory: (url) => new NoModuleWorker(url),

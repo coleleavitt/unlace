@@ -6,17 +6,17 @@
  "binary": "/home/mahaloz/github/decbench/results/full_run/O2-noinline/iproute2/stripped/ip",
  "selector": "0x20e10",
  "func_addr": "0x20e10",
- "source_decompiler": "kuna",
+ "source_decompiler": "unlace",
  "inspiration": "docs/decbench/triage/rodata-phantom-store.md (symptom); mechanism re-derived by instrumenting SplitDatatype::test_copy_constraints -- the filed is_return_copy() predicate is refuted",
  "phase": "P3 (simplification quiescence, cleanup pool)",
- "module": "decompiler/crates/kuna-decomp/src/p3_dataflow/subflow.rs (SplitDatatype::test_copy_constraints)",
+ "module": "decompiler/crates/unlace-decomp/src/p3_dataflow/subflow.rs (SplitDatatype::test_copy_constraints)",
  "change_kind": "correctness-fix",
  "option": null,
  "flag": null,
  "element_id": null,
  "default_on": true,
  "gated": false,
- "gating_rationale": "Emitting a store the program never performs is wrong output, not a judgment call, so CLAUDE.md's flag rule exempts it; there is no honest use_when prose for a knob that re-enables a store into read-only memory. A bisector already has `option togglerule splitcopy off` (splitcopy is the rule's registered name in the action pool, infra/universalaction.rs:558). Recorded as DIV-55 in docs/history.md because the added test is a divergence from upstream subflow.cc:2390 -- not a Convergence: nothing was restored, and the precondition it guards against is created by another kuna divergence (stackguard, DIV-14).",
+ "gating_rationale": "Emitting a store the program never performs is wrong output, not a judgment call, so CLAUDE.md's flag rule exempts it; there is no honest use_when prose for a knob that re-enables a store into read-only memory. A bisector already has `option togglerule splitcopy off` (splitcopy is the rule's registered name in the action pool, infra/universalaction.rs:558). Recorded as DIV-55 in docs/history.md because the added test is a divergence from upstream subflow.cc:2390 -- not a Convergence: nothing was restored, and the precondition it guards against is created by another unlace divergence (stackguard, DIV-14).",
  "history_entry": "DIV-55 (docs/history.md)",
  "ablation_changed": 0,
  "parity": "OK",
@@ -25,7 +25,7 @@
   "make test-stages": "375/375 PARITY OK (baseline re-recorded: purely additive, 369 -> 375 keys, no existing assertion moved)",
   "make rust-test": "green",
   "make check-spec": "check-spec OK (lenient mode)",
-  "kuna catalog --check": "catalog OK (no option added; phases.toml, p0_knowledge/options.rs, the catalog counts and docs/options.md are untouched)"
+  "unlace catalog --check": "catalog OK (no option added; phases.toml, p0_knowledge/options.rs, the catalog counts and docs/options.md are untouched)"
  },
  "stage_test": {
   "path": "tests/stages/ghdec-returncopysplit.xml",
@@ -37,7 +37,7 @@
  "mechanism_verified": true,
  "mechanism_note": "Instrumented `test_copy_constraints` on the witness function. The two ops that produce all 16 phantom statements are `0x00020fb0:119b` and `:119c`: rc=false, input at a unique (0x1000044a / 0x10000452, not addr-tied), output addr-tied at ram:0x822f0 / ram:0x822f8 with ro=true and persist=true. The genuine heritage return-copies at the same addresses (`:b56`, `:b97`) carry rc=true and are already declined by upstream's same-address gate. The real copy site (`0x00021160:b1f`, `:b20`) copies FROM the literal INTO the stack with ro=false on the output, and is still split after the fix.",
  "regression_sweep": {
-  "method": "whole-binary `kuna decompile-all --json` with a before/after release build pair of this worktree, diffed per function address",
+  "method": "whole-binary `unlace decompile-all --json` with a before/after release build pair of this worktree, diffed per function address",
   "binaries": 12,
   "functions": 15386,
   "functions_changed": 3,
@@ -168,7 +168,7 @@
   {
    "question": "DIV row or Convergences entry in docs/history.md?",
    "verdict": "DIV row (DIV-55)",
-   "rationale": "docs/history.md defines a Convergence as 'a port defect whose fix moves kuna back onto upstream's default'. Nothing was restored here: the test does not exist in upstream subflow.cc:2390, and the CFG shape that exposes the hole is produced by kuna's own stackguard divergence (DIV-14), so upstream cannot reach the case at all. That makes it an intentional change to default behaviour vs upstream, which is exactly what the DIV registry records."
+   "rationale": "docs/history.md defines a Convergence as 'a port defect whose fix moves unlace back onto upstream's default'. Nothing was restored here: the test does not exist in upstream subflow.cc:2390, and the CFG shape that exposes the hole is produced by unlace's own stackguard divergence (DIV-14), so upstream cannot reach the case at all. That makes it an intentional change to default behaviour vs upstream, which is exactly what the DIV registry records."
   },
   {
    "question": "Also fix the clone fidelity in CloneBlockOps::build_op_clone (carry return_copy across the clone)?",
@@ -176,7 +176,7 @@
    "rationale": "That mask is a verbatim transcription of upstream funcdata_block.cc:982-988 (its comment already documents one faithful upstream quirk), so changing it is a second, wider divergence affecting every node-split, not just this one. One fix, one PR. The read-only output test closes the emitted-C bug on its own, corpus-wide."
   }
  ],
- "corpus_file_count": "decompiler/crates/kuna-base/src/xml.rs: 187 -> 188 (83 datatests + 105 stages)",
+ "corpus_file_count": "decompiler/crates/unlace-base/src/xml.rs: 187 -> 188 (83 datatests + 105 stages)",
  "ged_recorded": 8.0,
  "ged_before": 8.0,
  "ged_after": 8.0,
@@ -184,7 +184,7 @@
  "ged_perfect_after": false,
  "ged_approximated": false,
  "ged_options": [],
- "ged_kuna_commit": "d1cf1250",
+ "ged_unlace_commit": "d1cf1250",
  "ged_results_root": "/home/mahaloz/github/decbench/results/full_run",
  "ged_siblings": {}
 }

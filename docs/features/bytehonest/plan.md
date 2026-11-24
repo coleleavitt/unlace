@@ -34,7 +34,7 @@ Deliberate non-choices:
 
 ## 2. Wiring
 
-`Architecture::byte_honest` (field + `reset_defaults` = ON + `set_kuna_option`
+`Architecture::byte_honest` (field + `reset_defaults` = ON + `set_unlace_option`
 arm), a `[[settable]]` row in `phases.toml` (P6, `naming-policy`,
 `change_kind = presentation-default`, `tier = core`, `live_field = byte_honest`),
 and the option name in `p0_knowledge/options.rs`. Count sites moved by

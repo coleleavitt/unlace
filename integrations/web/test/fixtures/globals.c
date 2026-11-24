@@ -13,7 +13,7 @@ char greeting[] = "hello, data";
 int primes[8] = {2, 3, 5, 7, 11, 13, 17, 19};
 struct point origin = {3, 4, "origin"};
 const long limit = 1000;
-const char *banner = "kuna data tab";
+const char *banner = "unlace data tab";
 char scratch[64];
 
 static int twice(int v) { return v * 2; }

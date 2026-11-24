@@ -1,6 +1,6 @@
 ; Clean-room repro: callees whose stack-argument reads the callee walk cannot
 ; place, and a caller whose pushed local an earlier bounded call frees
-; (kuna_calleestackargs, kuna_calleepurge).
+; (unlace_calleestackargs, unlace_calleepurge).
 ;
 ; Each reader is __cdecl(a, b) and reads b; its caller passes (0x11, 0x22)
 ; through `mov [esp+k]` stores with no cleanup after the call, so only the

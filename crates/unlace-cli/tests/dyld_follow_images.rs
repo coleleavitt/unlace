@@ -30,7 +30,10 @@ fn two_images_load_as_one_program() {
         stdout.contains("_callee_add(int a0,int a1)") && stdout.contains(CALLEE_BODY),
         "{stdout}"
     );
-    assert!(!stderr.contains("[kuna]"), "nothing was followed: {stderr}");
+    assert!(
+        !stderr.contains("[unlace]"),
+        "nothing was followed: {stderr}"
+    );
 
     let (stdout, stderr, rc) = unlace(
         "functions",
@@ -90,7 +93,7 @@ fn a_stub_island_is_followed_to_its_function() {
         stdout.contains("1 reference to callee_entry @ 0x180008800"),
         "the island is the import the call names (`exporttrie`): {stdout}"
     );
-    assert!(!stderr.contains("[kuna]"), "{stderr}");
+    assert!(!stderr.contains("[unlace]"), "{stderr}");
 }
 
 #[test]

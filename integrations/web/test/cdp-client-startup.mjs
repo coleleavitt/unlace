@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { launchChrome } from './cdp-client.mjs';
 
-const directory = mkdtempSync(join(tmpdir(), 'kuna-cdp-tests-'));
+const directory = mkdtempSync(join(tmpdir(), 'unlace-cdp-tests-'));
 const originalTmp = process.env.TMPDIR;
 process.env.TMPDIR = directory;
 const fixture = `#!/usr/bin/env node
@@ -54,7 +54,7 @@ function executable(mode) {
 }
 
 function noProfiles() {
-  assert.deepEqual(readdirSync(directory).filter(name => name.startsWith('kuna-cdp-')), []);
+  assert.deepEqual(readdirSync(directory).filter(name => name.startsWith('unlace-cdp-')), []);
 }
 
 async function rejected(path, pattern, options = {}) {

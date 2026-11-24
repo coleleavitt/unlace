@@ -4,7 +4,7 @@ pool: angr
 status: needs-proposal
 tier: X (angr queue) / M (ida queue)
 margin: 34
-fresh_verdict: reproduced verbatim on today's build in every mode (auto/aggressive, reliable, fast) — kuna emits `sub_28730("ssh-add.c","parse_dest_constraint",0x2f3,1,6,0)` with only the 6 register arguments, so the 8 NULL-default ternaries feeding stack arguments 7..15 are dead-code eliminated
+fresh_verdict: reproduced verbatim on today's build in every mode (auto/aggressive, reliable, fast) — unlace emits `sub_28730("ssh-add.c","parse_dest_constraint",0x2f3,1,6,0)` with only the 6 register arguments, so the 8 NULL-default ternaries feeding stack arguments 7..15 are dead-code eliminated
 option_closing: null
 feature_slug: callsite-stack-args
 scope: proposal
@@ -45,7 +45,7 @@ they produce are consumed as stack arguments of the 15-argument `sshlog` call:
 Ghidra (stored) is structurally identical — same four guards, same 16-input call
 (`FUN_00128730("ssh-add.c",...,*param_3,puVar6,puVar9,pcVar4,...)`).
 
-kuna (stored, 2026-07-27) and kuna (fresh, today) are structurally the same
+unlace (stored, 2026-07-27) and unlace (fresh, today) are structurally the same
 output; only print normalization (DIV-34..39) differs. Fresh:
 
 ```c
@@ -56,9 +56,9 @@ output; only print normalization (DIV-34..39) differs. Fresh:
   v5 = sub_2abf0(*a1,*a2,*a2 + 1,8);
 ```
 
-Structural metrics: ida 6 ifs / ghidra 6 ifs / kuna 2 ifs (stored *and* fresh).
+Structural metrics: ida 6 ifs / ghidra 6 ifs / unlace 2 ifs (stored *and* fresh).
 The four missing `if`s are exactly the four NULL-default guards above. The two
-calls kuna does emit stop dead at argument 6:
+calls unlace does emit stop dead at argument 6:
 
 ```c
   sub_241c0("ssh-add.c","parse_dest_constraint",0x2ee,0,1,0);   // fmt + os dropped
@@ -121,7 +121,7 @@ them costs GED 34 against a reference that scores 0.
 
 ## Analysis
 
-**Structural symptom (one).** kuna truncates every call-site argument list at
+**Structural symptom (one).** unlace truncates every call-site argument list at
 the six register arguments; SysV x86-64 stack-passed arguments (argument 7 and
 beyond) are never recovered. Because nothing consumes them, everything computed
 solely to fill those slots is dead-code eliminated — here the four `if`
@@ -228,7 +228,7 @@ subsystem, but a single instrumented run is required to say which — hence
 
 **Why the references win.** They all recover stack-passed arguments, so the
 ternary chain has consumers and survives dead-code elimination. Nothing about
-their structuring is better here; kuna's structuring of what it kept is fine.
+their structuring is better here; unlace's structuring of what it kept is fine.
 
 **Not an option gap.** No catalog option matches. Swept explicitly on both the
 real case and the minimal repro: `condfold wide`, `formatstring on`,
@@ -240,7 +240,7 @@ gated to `-fstack-check` probe loops; it is already on and inert here.
 **Not a metric artifact.** Source CFG is 29 nodes / 42 edges (not degenerate,
 not approximated, no truncation by the reference). The eight ternaries are real
 source-level control flow; five independent decompilers reproduce them and score
-0. kuna's missing four `if`s plus their edges account for the margin.
+0. unlace's missing four `if`s plus their edges account for the margin.
 
 ## Proposed fix
 
@@ -282,7 +282,7 @@ assertion rather than absorbed by a baseline re-pin. A speed delta must be
 measured: more live call inputs means more heritage/dead-code work.
 
 Payoff: this is not one case. It is a whole-binary, all-architecture argument-
-list truncation — the same defect will be behind many `kuna-specific` GED
+list truncation — the same defect will be behind many `unlace-specific` GED
 margins in the campaign whenever a function calls anything with more than six
 arguments (all of openssh's `sshlog`/`sshfatal`/`debug_f`/`error_f` macro
 family, every `snprintf`-style call, every wide wrapper).

@@ -1,4 +1,4 @@
-use kuna_console::engine::bootstrap_from_object;
+use unlace_console::engine::bootstrap_from_object;
 fn main() {
     let args: Vec<_> = std::env::args().collect();
     let mut program = bootstrap_from_object(&args[1], "", &[args[2].clone()]).unwrap();

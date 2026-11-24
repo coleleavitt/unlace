@@ -2,13 +2,13 @@
 
 > `rename`, `retype`, `map param`, `map return`, `override prototype` and
 > `parse line extern ...` are all functional in the console and none is reachable from
-> `kuna`. [...] For an agent, a rename that does not persist is the difference between
+> `unlace`. [...] For an agent, a rename that does not persist is the difference between
 > reading a decompilation once and actually working through one.
 >
 > — `docs/re-needs/no-cli-rename-or-prototype-override.md` (severity major, instances 1, rounds [2])
 
-Everything kuna knows about a program it *derived*. The console has carried the commands
-that correct each derivation all along; the `kuna` binary's generated script emitted a fixed
+Everything unlace knows about a program it *derived*. The console has carried the commands
+that correct each derivation all along; the `unlace` binary's generated script emitted a fixed
 vocabulary — `option`, `read symbols`, `load`, `kassert`, `function bounds`, `decompile` —
 and nothing else. `--kassert` exists but only its `Option` and `Rename` arms do real work,
 and the `Rename` one is a **silent no-op from the CLI**: it is emitted before the first
@@ -24,7 +24,7 @@ This is Stage A of the approved proposal (`docs/features/no-cli-rename-or-protot
 `decompile-project` and `functions`.
 
 ```bash
-kuna decompile ./a.out authenticate --json \
+unlace decompile ./a.out authenticate --json \
   --assert 'prototype authenticate int authenticate(char *user,char *pass)' \
   --assert 'type v2 char[16]' \
   --assert 'name v2 credbuf'
@@ -69,7 +69,7 @@ what it did before**. An unqualified directive on a multi-function run is reject
 detail naming the `<func>::<operand>` form rather than applied to every function that happens
 to have a `v2`.
 
-`@FILE` is the durable form, the `--define-function` contract verbatim: kuna does not write
+`@FILE` is the durable form, the `--define-function` contract verbatim: unlace does not write
 assertions back into the image, so the file is the artifact.
 
 ## Also fixed: `map return` aborted the process
@@ -131,7 +131,7 @@ this PR an instance of the failure mode it exists to close. Recorded as residue.
 | `make test-stages` | **PARITY OK**, 603/603 |
 | `make rust-test` | green |
 | `make check-spec` | OK |
-| `kuna catalog --check` | OK |
+| `unlace catalog --check` | OK |
 | `verify --need no-cli-rename-or-prototype-override` | acceptance **PASS** |
 
 No `phases.toml` row, no `options.rs` registration, no catalog counter, no `docs/options.md`

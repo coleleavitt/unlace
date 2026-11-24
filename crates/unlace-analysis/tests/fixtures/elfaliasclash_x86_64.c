@@ -1,4 +1,4 @@
-/* (kuna) `shared` is spelled twice: as a global alias of `twin` here, and as a
+/* (unlace) `shared` is spelled twice: as a global alias of `twin` here, and as a
  * static function in elfaliasclash_b_x86_64.c. Built with
  *   gcc -O1 -o elfaliasclash_x86_64 elfaliasclash_x86_64.c elfaliasclash_b_x86_64.c
  * See crates/unlace-analysis/tests/fixtures/README.md. */

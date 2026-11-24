@@ -1,10 +1,10 @@
 # angr test_decompiling_incorrect_duplication_chcon_main (coreutils chcon.o,
-# an ET_REL `.o`, function main).  kuna emitted ~90 lines of garbage after the
+# an ET_REL `.o`, function main).  unlace emitted ~90 lines of garbage after the
 # no-return `__stack_chk_fail()` call: the inter-function alignment padding
 # (`00 00 ...` decoded as `add byte ptr [rax], al`) was decompiled as live code
 # because flow never stopped at the call.  angr emits none of it.
 #
-# Root cause: `stack_chk_fail` is in kuna's vendored ELF known-no-return list
+# Root cause: `stack_chk_fail` is in unlace's vendored ELF known-no-return list
 # (option noreturn_known, default-on), so on a normal dynamically-linked ELF the
 # proto is marked no-return and `FlowInfo::queryCall` plants an
 # artificialHalt(noreturn).  But in an ET_REL `.o`, `__stack_chk_fail` is an
@@ -14,7 +14,7 @@
 # synthetic target (the call PRINTS the name) but no no-return flag is set, so
 # flow runs off the end into the padding.
 #
-# The name match of kuna_noreturn_externmatch (S2 flow-follow, ElementId 4104),
+# The name match of unlace_noreturn_externmatch (S2 flow-follow, ElementId 4104),
 # part of `option noreturn_known`, closes the gap: the `query_call_no_return`
 # seam also reports no-return for a callee whose NAME matches the same vendored
 # ELF known-no-return list, even when the address-keyed scan missed it.  A no-op

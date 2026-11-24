@@ -1,5 +1,5 @@
 /* Fixture for the width gate of `option libctypes`
- * (tests/stages/kuna-libctypes.toml).
+ * (tests/stages/unlace-libctypes.toml).
  *
  * Built (no 32-bit libc needed; the stub stands in for it):
  *   gcc -m32 -O0 -fno-pic -shared -nostdlib -Wl,-soname,libc.so.6 \

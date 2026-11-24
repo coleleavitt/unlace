@@ -1,10 +1,10 @@
 ## The problem
 
 A self-decrypting stub decompiles to an ordinary `return;`. Nothing in the C, and
-nothing in `--json`, says kuna ran into bytes it could not decode.
+nothing in `--json`, says unlace ran into bytes it could not decode.
 
 ```
-$ kuna decompile Defender.exe 0x401746 --addr
+$ unlace decompile Defender.exe 0x401746 --addr
 void sub_401746(void)
 {
   ...
@@ -21,9 +21,9 @@ void sub_401746(void)
 ```
 
 The switch is right: the packer transfers control with `push 0x40190e; pop ebx;
-jmp ebx` and kuna resolves the single constant target. But `0x40190e` is what the
-loop just wrote, so at load time it is ciphertext — `kuna disassemble --addr
-0x40190e --count 6` ends at `.byte 0xc6`. kuna knew: it planted an artificial
+jmp ebx` and unlace resolves the single constant target. But `0x40190e` is what the
+loop just wrote, so at load time it is ciphertext — `unlace disassemble --addr
+0x40190e --count 6` ends at `.byte 0xc6`. unlace knew: it planted an artificial
 halt (`return(#0x1)` with the `badinstruction` bit). It just printed it as a
 return, and `error` stayed `null`.
 
@@ -38,7 +38,7 @@ $ cstool -d x64 85ff7401c306 0x100000 | tail -2
 ## The fix
 
 - New `decodehalt` option (P2/flow-classification, `on|off`, default **on**,
-  DIV-151). It ports the part of upstream `PrintC::opReturn` (printc.cc:774) kuna
+  DIV-151). It ports the part of upstream `PrintC::opReturn` (printc.cc:774) unlace
   left out: the three decode-failure halt causes render as `halt_baddata()`,
   `halt_unimplemented()` and `halt_missing()` instead of `return;`.
 - The two warnings upstream buffers at the same point (`flow.cc:441-475`) were
@@ -49,7 +49,7 @@ $ cstool -d x64 85ff7401c306 0x100000 | tail -2
   it is already reported as `// no-return` on the call it follows, and its
   rendering is pinned by the corpus measurements behind `noreturn_propagate`.
 - A printer half travels with it, and it is the half that was already doing
-  damage. `voidtailreturn` — which every `kuna decompile` runs, since `auto`
+  damage. `voidtailreturn` — which every `unlace decompile` runs, since `auto`
   resolves to `aggressive` — elides a void function's trailing bare `return;`,
   and an artificial halt has exactly that shape. So on a straight-line truncation
   the marker was *deleted* and its warning re-attached to the statement that
@@ -64,7 +64,7 @@ $ cstool -d x64 85ff7401c306 0x100000 | tail -2
   The three decode-failure causes are excluded from that elision, gated on the
   same option so `decodehalt off` restores both halves together.
 
-Not gating this behind an off-by-default flag was the point: kuna cannot honestly
+Not gating this behind an off-by-default flag was the point: unlace cannot honestly
 assert a normal return at an address it could not read. `option decodehalt off`
 restores the silent `return;`.
 
@@ -79,7 +79,7 @@ probe over a newly vendored `decodehalt_x86_64` fixture that reduces the witness
 
 Gates: `make test` PARITY OK 675/675; `make test-stages` PARITY OK 734/734;
 `make rust-test` green (6,340 tests); `make test-cli` 117/117; `make check-spec`
-green (strict too); `kuna catalog --check` OK.
+green (strict too); `unlace catalog --check` OK.
 
 Sweep, `decompile-all` both arms over 82 binaries / 31,862 functions (27 decbench
 ELFs across seven architectures, 55 crackme PE/ELF images): 89 functions in 19

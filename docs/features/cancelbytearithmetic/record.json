@@ -5,7 +5,7 @@
   "scope": "small",
   "opportunity": "cancelling-byte-arithmetic-splits::0x1406fa160",
   "test_name": "RE-friction round 11 cancelling-byte-arithmetic-splits",
-  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/pe_subcommuteshift_x86_64.exe",
+  "binary": "decompiler/crates/unlace-analysis/tests/fixtures/pe_subcommuteshift_x86_64.exe",
   "selector": "0x1406fa160",
   "func_addr": "0x1406fa160",
   "angr_version": null,
@@ -19,7 +19,7 @@
   "subphase": "simplification-quiescence",
   "change_kind": "correctness-fix",
   "tier": "core",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "inspiration": "RE-friction need cancelling-byte-arithmetic-splits; upstream RuleSubCommute's conservative INT_LEFT input gate",
   "ablation_changed": 0,
   "parity": "90097/90097 bodies byte-identical across 795 O0/O2/O2-noinline slices (1590 arms)",
@@ -43,8 +43,8 @@
     "status": "passed 2/2, nonflaky, against the rebuilt immutable CLI"
   },
   "fixture": {
-    "path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_subcommuteshift_x86_64.exe",
-    "generator": "decompiler/crates/kuna-analysis/tests/fixtures/pe_subcommuteshift_x86_64.py",
+    "path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_subcommuteshift_x86_64.exe",
+    "generator": "decompiler/crates/unlace-analysis/tests/fixtures/pe_subcommuteshift_x86_64.py",
     "sha256": "a39bf9ded430fe75b3a84edebf55dec3ac299bc4428b838a041112a1f8c550fb",
     "size": 10240,
     "source_bytes": "tests/stages/subcommuteshift.xml exact 9024-byte bytechunk"
@@ -76,8 +76,8 @@
   "speed_within_budget": true,
   "speed_forced_off": false,
   "immutable": {
-    "directory": "/home/mahaloz/github/kuna-cancelbytearithmetic-immutable.5ecbb7d9",
-    "kuna_sha256": "5ecbb7d9b4ca054814e4b9ab820d277db71070a9e0be24bb4a552dffc0d79cc5",
+    "directory": "/home/mahaloz/github/unlace-cancelbytearithmetic-immutable.5ecbb7d9",
+    "unlace_sha256": "5ecbb7d9b4ca054814e4b9ab820d277db71070a9e0be24bb4a552dffc0d79cc5",
     "decomp_dbg_sha256": "e2a0d43ad88ff96de75d0b3cf3439895bad839d3ee56a416924721a978e87e96",
     "decomp_test_dbg_sha256": "6e9e08b8a39d3337f8bf19663c0cb1686c2fc2b676ace4a72d569fb886f19bce"
   },

@@ -5,7 +5,7 @@ group_id: cluster (betaflight/cleanflight::applyLedFixedLayers, cleanflight::fto
 status: feature-candidate
 tier: N
 margin: 0
-fresh_verdict: the cluster splits in two — CONCAT is INHERITED (kuna 4198 vs ghidra 3700 over 76046 matched functions, and kuna is *better* on the two rows that named it), while SUBPIECE-with-nonzero-offset is a kuna-specific 329x regression (kuna 5919 in 2394 functions vs ghidra 18 in 13) caused by `RuleSubRight::apply_op` being a stub that returns 0 before the `sub(V,c) => sub(V>>c*8,0)` rewrite
+fresh_verdict: the cluster splits in two — CONCAT is INHERITED (unlace 4198 vs ghidra 3700 over 76046 matched functions, and unlace is *better* on the two rows that named it), while SUBPIECE-with-nonzero-offset is a unlace-specific 329x regression (unlace 5919 in 2394 functions vs ghidra 18 in 13) caused by `RuleSubRight::apply_op` being a stub that returns 0 before the `sub(V,c) => sub(V>>c*8,0)` rewrite
 option_closing: null
 feature_slug: subright
 scope: small
@@ -14,9 +14,9 @@ confidence: high
 
 ## Verdict in one line
 
-`CONCAT` soup is **not a kuna defect** — Ghidra prints the same or more of it, and the
-source really is byte manipulation. `SUBPIECE` soup **is** a kuna defect, and it is one
-stubbed rule: kuna emits `SUB81(a1,7)` on 2,394 corpus functions where upstream Ghidra
+`CONCAT` soup is **not a unlace defect** — Ghidra prints the same or more of it, and the
+source really is byte manipulation. `SUBPIECE` soup **is** a unlace defect, and it is one
+stubbed rule: unlace emits `SUB81(a1,7)` on 2,394 corpus functions where upstream Ghidra
 emits `(char)(a1 >> 0x38)` on 13.
 
 ## The witness (fresh, today's build)
@@ -25,7 +25,7 @@ emits `(char)(a1 >> 0x38)` on 13.
 `--mode reliable` identical:
 
 ```
-$ export SLEIGHHOME=/home/mahaloz/github/kuna/specs
+$ export SLEIGHHOME=/home/mahaloz/github/unlace/specs
 $ ./decompiler/target/release/unlace decompile \
     ~/github/decbench/results/full_run/O2-noinline/openssh-portable/stripped/ssh \
     --addr 0x4cd60 --mode reliable
@@ -68,7 +68,7 @@ Ghidra (stored pane, same function, same binary):
 
 IDA: `HIBYTE(a2)` / `BYTE6(a2)` / … (its own macro family).
 
-The last line of kuna's own output is the proof: the *offset-0* SUBPIECE already renders
+The last line of unlace's own output is the proof: the *offset-0* SUBPIECE already renders
 as `(char)a1`. Nothing is wrong with the printer. The only thing missing is the
 normalization that turns a nonzero-offset SUBPIECE into `shift + offset-0 SUBPIECE`.
 
@@ -87,9 +87,9 @@ sshbuf_put_u64(struct sshbuf *buf, u_int64_t val)
 ```
 
 The source is a **shift**. Ghidra's `(char)(param_2 >> 0x38)` is literally the source
-line. kuna's `SUB81(a1,7)` is a p-code operator standing in for ordinary 64-bit
+line. unlace's `SUB81(a1,7)` is a p-code operator standing in for ordinary 64-bit
 arithmetic. This answers the track's question 3 for the SUBPIECE half: **not honest
-bitfield code — ordinary shift/mask arithmetic kuna failed to reassemble.**
+bitfield code — ordinary shift/mask arithmetic unlace failed to reassemble.**
 
 Same answer for `hsvToRgb24`
 (`.../O0/cleanflight/compiled/colorconversion.i`), which is plain 32-bit integer math:
@@ -100,16 +100,16 @@ Same answer for `hsvToRgb24`
         case 0: r.rgb.g = (((val - base) * hue) / 60) + base;
 ```
 
-kuna (fresh) vs ghidra (stored) on the same two expressions:
+unlace (fresh) vs ghidra (stored) on the same two expressions:
 
-| | kuna today | ghidra |
+| | unlace today | ghidra |
 |---|---|---|
 | `((255-sat)*val) >> 8` | `v2 = SUB41(v6,1);` | `bVar2 = (byte)((uint)iVar7 >> 8);` |
 | `hue / 60` | `SUB84((uint8)dat_80164e8 * (uint8)v3,4) >> 5` | `(uint)((ulonglong)DAT_080164e8 * (ulonglong)uVar4 >> 0x25)` |
 
 `0x25 == 37 == 32 + 5` — that is upstream `RuleSubRight` lumping the lone descendant
 right-shift into the synthesized shift. Neither decompiler recovers `/ 60` (a separate
-`RuleDivOpt`/ARM-UMULL gap); the delta kuna owns is only the SUBPIECE lowering.
+`RuleDivOpt`/ARM-UMULL gap); the delta unlace owns is only the SUBPIECE lowering.
 
 ## Root cause (instrumented, not read)
 
@@ -158,14 +158,14 @@ where upstream puts it. So the new INT_RIGHT and its unique get Highs assigned n
 
 ## Breadth (corpus-wide)
 
-Matched per-function comparison, kuna vs ghidra, over **788 binaries / 76,046 functions
+Matched per-function comparison, unlace vs ghidra, over **788 binaries / 76,046 functions
 that both tools recovered** in `~/github/decbench/results/full_run`
 (scanner is nesting-aware; args parsed with a balanced scan, so `CONCAT71(SUB87(x,1),y)`
 counts as one of each):
 
 | | SUBPIECE, offset != 0 | CONCAT |
 |---|---|---|
-| **kuna** | **5,919 in 2,394 fns (3.1%)** | 4,198 |
+| **unlace** | **5,919 in 2,394 fns (3.1%)** | 4,198 |
 | **ghidra** | **18 in 13 fns (0.017%)** | 3,700 |
 | **ida** | 0 | 0 (uses BYTEn/LOWORD macros) |
 
@@ -174,16 +174,16 @@ Ratio on SUBPIECE: **329x**. On CONCAT: **1.13x**.
 Stored-pane sweep validated against fresh `unlace decompile-all` on four binaries — the
 metric is stable across the DIV-34..39 print wave, so the corpus number is trustworthy:
 
-| binary (matched fns) | kuna fresh | kuna stored | ghidra | ida |
+| binary (matched fns) | unlace fresh | unlace stored | ghidra | ida |
 |---|---|---|---|---|
 | O0/cleanflight ARM (1506) | 203 SUB / 63 CONCAT | 196 / 62 | **2** / 72 | 0 / 0 |
 | O2ni/iproute2 ip (615) | 25 / 122 | 25 / 122 | **0** / 102 | 0 / 0 |
 | O2ni/e2fsprogs e2fsck (367) | 12 / 35 | 12 / 35 | **0** / 33 | 0 / 0 |
 | O2ni/openssh ssh (1250) | 60 / 41 | 60 / 41 | **0** / 19 | 0 / 0 |
 
-Top affected binaries (kuna SUB / ghidra SUB): betaflight O2ni 236/2, cleanflight O2ni
+Top affected binaries (unlace SUB / ghidra SUB): betaflight O2ni 236/2, cleanflight O2ni
 234/2, betaflight O0 230/2, crazyflie O0 154/0, openssh ssh-keyscan O0 115/0.
-Shape distribution over all kuna panes (7,839 occurrences): SUB41 2640, SUB84 2568,
+Shape distribution over all unlace panes (7,839 occurrences): SUB41 2640, SUB84 2568,
 SUB81 1021, SUB87 496, SUB42 472, SUB21 377, rest < 200.
 
 **Not double-counting `rodata-phantom-store`.** Only 102 of those 7,839 (1.3%) have a
@@ -195,14 +195,14 @@ them. So `subright` and `rodata-phantom-store` are disjoint fixes, and `subright
 
 ## What is DISPROVEN
 
-1. **CONCAT is not a kuna regression.** On the two rows that named it:
+1. **CONCAT is not a unlace regression.** On the two rows that named it:
    - `cleanflight::ftoa` (`concatx10`): ghidra's own pane is `local_28 = CONCAT31(...)`,
      `CONCAT11(0x30,(undefined1)local_28)`, `CONCAT12`, `CONCAT13`, `SUB41(uVar1,3)` —
      the same soup. The `.i` source is `sprintf`-style byte poking into a 4-byte char
      buffer, so some CONCAT is honest.
    - `betaflight/cleanflight::applyLedFixedLayers` (`concatx8`): ghidra emits
      `CONCAT22`/`CONCAT12`/`CONCAT13` in the same arms. Matched CONCAT counts on the
-     whole cleanflight binary: **kuna 63 vs ghidra 72 — kuna is better.**
+     whole cleanflight binary: **unlace 63 vs ghidra 72 — unlace is better.**
    The corpus-wide +13% CONCAT excess is a thin tail with no single mechanism (worst
    single function is +7 on `ssh` 0x1e830, `CONCAT44(dat_4,vN)` — an unresolved
    high-half global, a different bug). **Not a campaign item.**
@@ -211,10 +211,10 @@ them. So `subright` and `rodata-phantom-store` are disjoint fixes, and `subright
    `concatx1,subpiecex1`; today's build emits **zero** of either in that function. That
    row's wart component is stale.
 
-3. **`e2fsprogs::parse_int_node` is inherited and identical.** kuna 1 CONCAT, ghidra 1
+3. **`e2fsprogs::parse_int_node` is inherited and identical.** unlace 1 CONCAT, ghidra 1
    CONCAT, same expression (`CONCAT71(SUB87(v7,1), v4 != 0)` vs
    `CONCAT71((int7)((ulong)extraout_RDX >> 8), iVar4 != 0)`). Only the inner truncation
-   differs — the same `subright` gap. `ask_yn` is kuna 1 / ghidra 0 (one `CONCAT26`).
+   differs — the same `subright` gap. `ask_yn` is unlace 1 / ghidra 0 (one `CONCAT26`).
    Both rows are **goto-dominated** (`gotox11` / `gotox8`); their concat/subpiece
    components are noise and should not have clustered them here.
 
@@ -223,7 +223,7 @@ them. So `subright` and `rodata-phantom-store` are disjoint fixes, and `subright
    Today's build emits only `unsigned int v12; // stack - 0x24`. The remaining
    CONCAT/SUB in that function is the inherited kind above plus `SUB42(v12,2)` /
    `SUB41(v12,3)` where ghidra prints `local_24._2_2_` / `local_24._3_1_` — that residue
-   is the P6 partial-symbol/merge thread, not `subright` (kuna does render `v20._2_1_`
+   is the P6 partial-symbol/merge thread, not `subright` (unlace does render `v20._2_1_`
    elsewhere in the same function, so the printer path exists).
 
 ## Option / mode sweep (all negative)
@@ -250,7 +250,7 @@ None of the 83 catalog rows controls SUBPIECE truncation lowering (grepped
 - **One module, one function**: complete the port of
   `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_6.rs`
   `RuleSubRight::apply_op` — the ~45-line tail after the existing `is_piece_structured`
-  early return. Every primitive it needs already exists in kuna:
+  early return. Every primitive it needs already exists in unlace:
   `Varnode::is_addr_tied` / `Varnode::overlap` (`substrate/varnode.rs:813,1345`),
   `Funcdata::new_op` / `new_unique` / `op_set_output` / `op_set_input` /
   `op_insert_before` / `new_constant` / `op_unlink` / `op_set_opcode`
@@ -264,7 +264,7 @@ None of the 83 catalog rows controls SUBPIECE truncation lowering (grepped
   + `p0_knowledge/options.rs`, with the default-ON flip carried by the 0/675 ablation.
 - **Stage test**: `tests/stages/ghdec-subright.toml` (no angr analog) — two-pass, an
   8-byte big-endian store loop; option off = `SUB81(x,7)`, default = `(char)(x >> 0x38)`.
-- **Correctness value**: `SUB81` / `SUB84` are undeclared identifiers — kuna emits no
+- **Correctness value**: `SUB81` / `SUB84` are undeclared identifiers — unlace emits no
   helper header for them (grepped `unlace-cli`/`unlace-console`), so 5,919 call sites across
   2,394 functions make the exported `.c` non-compilable. Same tier as round 1's
   `spacebase-unnamed-location` and `realtypes-pointee-size`.

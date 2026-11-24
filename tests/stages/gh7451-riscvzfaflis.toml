@@ -13,7 +13,7 @@
 # Ghidra's listing showed four '?? NNh' undefined-byte code units and the
 # standalone decompiler reports "Unable to resolve constructor".
 #
-# Fix (kuna GH-7451): add an fli.s constructor in riscv.rv32f.sinc with an
+# Fix (unlace GH-7451): add an fli.s constructor in riscv.rv32f.sinc with an
 # fliConstS operand sub-table that renders the Zfa constant table and lifts
 # the load via the new fli() pcodeop.  Stage S1 decode-table (SLEIGH
 # spec-fix, no option).

@@ -1,7 +1,7 @@
 """Per-function CONTENT comparison of the `--option foldcallretphi on` dumps.
 
 Usage: python3 phicmp.py <tag> <dir>, where <dir> holds
-<tag>.{main,fix}.{off,on}.c produced by `kuna decompile-all <bin>` with and
+<tag>.{main,fix}.{off,on}.c produced by `unlace decompile-all <bin>` with and
 without `--option foldcallretphi on`, on a main build and on this branch.
 
 The acceptance test is the last line: a function may render differently under

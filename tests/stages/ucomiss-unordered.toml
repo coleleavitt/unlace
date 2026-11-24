@@ -3,7 +3,7 @@
 # branch after UCOMISS. Each condition flag is true for unordered inputs
 # (ZF=PF=CF=1), so x > one must print as one < x (false for a NaN) and
 # setbe as !(one < x) (true for a NaN), never as x <= one.
-# P3 nanignore folding (kuna_floatnegation.rs) keeps the exact single
+# P3 nanignore folding (unlace_floatnegation.rs) keeps the exact single
 # comparison before the NaN guards are dropped. Strict correctness fix,
 # no new option: pass 1 pins the defaults, pass 2 (nanignore none) keeps
 # the explicit guards. The compiled-C oracle is in

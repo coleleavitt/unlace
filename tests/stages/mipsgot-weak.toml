@@ -1,4 +1,4 @@
-# kuna relocatable-object loader: the GOT entry of an undefined weak symbol
+# unlace relocatable-object loader: the GOT entry of an undefined weak symbol
 # in a MIPS PIC object. The run-time loader fills that entry with the
 # symbol's address, or 0 when nothing defines it, so
 # `optional ? optional(x) : (x ^ 0x42)` tests the entry before calling

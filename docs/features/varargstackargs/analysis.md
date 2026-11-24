@@ -8,10 +8,10 @@ Track: `quality`.
 
 > **Call argument recovery drops scanf destination and printf varargs**
 > (`wrong-output` / `major`)
-> kuna emitted `scanf("%d")` while subsequently comparing an apparently
+> unlace emitted `scanf("%d")` while subsequently comparing an apparently
 > uninitialized `v3`, and emitted three `printf` calls containing `%s` with no
 > corresponding argument.
-> probe: `kuna decompile {{BIN}} _main` contains `v2 = scanf("%d");`
+> probe: `unlace decompile {{BIN}} _main` contains `v2 = scanf("%d");`
 > acceptance: same command contains `scanf("%d",&v3)`
 
 Reproduced on a fresh build of `fca7a971`. Filed hypothesis: *"AArch64 variadic-call
@@ -33,7 +33,7 @@ so clang -O0 sets up each call as
   0x100003e58: bl   scanf
 ```
 
-kuna gets the first three steps right. `libproto` gives `scanf` the prototype
+unlace gets the first three steps right. `libproto` gives `scanf` the prototype
 `int scanf(char *, ...)`, `Heritage::guard_calls` registers a stack-parameter trial
 at callee-relative `s:0x0` and appends the argument Varnode, and
 `FuncCallSpecs::check_input_trial_use` scores that trial **ACTIVE** — it passes the
@@ -89,12 +89,12 @@ behind it. That is why `_main` also *reads a local it never writes*: `v3` in the
 filed output is the `scanf` destination, and nothing assigns it because the only
 thing that ever did was the argument that was discarded.
 
-## Why this is kuna's problem and not the ABI's
+## Why this is unlace's problem and not the ABI's
 
 `fillin_map`'s positional inference is sound while arguments really do fill the
 resource in order. At a **variadic** call on an ABI that passes varargs on the stack
 they do not, and the gap is a property of the calling convention, not of the
-recovery. kuna already knows which calls those are: the trace shows
+recovery. unlace already knows which calls those are: the trace shows
 `dotdotdot=true inputlocked=true` on every one of the five sites. The information
 needed to stop guessing is present and unused.
 
@@ -108,7 +108,7 @@ stack argument have to stop being in the same section at all.
 
 P4 (calls & prototypes), sub-stage **active-input-trial-scoring**, in
 `ParamListStandard::fillin_map_standard`
-(`decompiler/crates/kuna-decomp/src/p4_calls/fspec.rs`), between
+(`decompiler/crates/unlace-decomp/src/p4_calls/fspec.rs`), between
 `separate_sections` and the `force_no_use` / `force_inactive_chain` loops. Spec
 chapter: `docs/spec/04-calls-and-prototypes.md` 4.2.
 
@@ -121,7 +121,7 @@ Reproduced and root-caused separately:
 |---|---|---|
 | `68149b8a` scanf/printf varargs | `fillin_map` section rules vs. a variadic stack tail | **this one** |
 | `69a54bd7` allocator args (`sub_140008160()`) | `Funcdata::only_op_use` rejects the trial because the size is also branched on (`ONLYUSE reject match=0x1400026b0 slot=2 at op 0x1400026aa CPUI_CBRANCH`) | no — see `docs/features/calleearity/` |
-| `68149b8a` `_secret_function(v2)` | x0 (scanf's return) is genuinely live and unused at the call; only the *callee's* body proves it takes no argument. Needs interprocedural prototype propagation, which kuna has for library functions (`libproto`) and not for internal ones | no |
+| `68149b8a` `_secret_function(v2)` | x0 (scanf's return) is genuinely live and unused at the call; only the *callee's* body proves it takes no argument. Needs interprocedural prototype propagation, which unlace has for library functions (`libproto`) and not for internal ones | no |
 | `5ab77f54` `sub_40c81e` 2 params vs 5 | callee-side: the function is itself variadic (`lea eax,[ebp+0x10]; push eax` forwards a `va_list` to `sub_40df87`), so its own `ActionInputPrototype` correctly recovers only the two parameters it *reads*. Materialising three more needs the 5-argument call site pushed into the callee | no |
 
 Only the first two are "an argument dropped at a call site", and even those are two

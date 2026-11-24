@@ -22,12 +22,12 @@
     {
       "id": "badinstruction-not-noreturn",
       "claim": "The halt is marked `badinstruction`, not `noreturn`.",
-      "evidence": "A `noreturn` halt is folded away by `kuna_ifnoexit` into an empty `if (cond) { }`, which reads as though the fall-through does nothing and carries on -- the one rendering that is actually wrong about where control goes. Both were built and compared."
+      "evidence": "A `noreturn` halt is folded away by `unlace_ifnoexit` into an empty `if (cond) { }`, which reads as though the fall-through does nothing and carries on -- the one rendering that is actually wrong about where control goes. Both were built and compared."
     },
     {
       "id": "reconvergence-exclusion-ablated",
-      "claim": "The reconvergence exclusion (`kuna_streams_reconverge`) is REACHED on ordinary compiler output and is the single clause standing between this option and deleting an atomic store on a live path. Verified by ablation, not by argument.",
-      "evidence": "glibc's conditional-`LOCK` idiom is compiler-generated and produces exactly this overlap: a statically linked binary built here carries 11 sites of `74 01` JE over an `f0` LOCK prefix (`_int_free`, `_int_malloc`, `arena_get2.part.0`). Instrumented, the strict-interior test MATCHES there (`curaddr=0x401004 step=5 target=0x401005 -> true`) and reconvergence declines it (`tlen=4 -> true`, both decodes end at 0x401009). With `kuna_streams_reconverge` forced to `false` and nothing else changed, the minimal `je +1`/`LOCK OR` fixture renders as `if (a1) return;` -- the atomic store deleted on a live path -- and `_int_free` moves 487 lines. As shipped, `_int_free`, `_int_malloc`, `arena_get2.part.0` and `malloc_consolidate` are byte-identical with the option on and off."
+      "claim": "The reconvergence exclusion (`unlace_streams_reconverge`) is REACHED on ordinary compiler output and is the single clause standing between this option and deleting an atomic store on a live path. Verified by ablation, not by argument.",
+      "evidence": "glibc's conditional-`LOCK` idiom is compiler-generated and produces exactly this overlap: a statically linked binary built here carries 11 sites of `74 01` JE over an `f0` LOCK prefix (`_int_free`, `_int_malloc`, `arena_get2.part.0`). Instrumented, the strict-interior test MATCHES there (`curaddr=0x401004 step=5 target=0x401005 -> true`) and reconvergence declines it (`tlen=4 -> true`, both decodes end at 0x401009). With `unlace_streams_reconverge` forced to `false` and nothing else changed, the minimal `je +1`/`LOCK OR` fixture renders as `if (a1) return;` -- the atomic store deleted on a live path -- and `_int_free` moves 487 lines. As shipped, `_int_free`, `_int_malloc`, `arena_get2.part.0` and `malloc_consolidate` are byte-identical with the option on and off."
     },
     {
       "id": "silent-fire-is-correct",
@@ -41,13 +41,13 @@
     },
     {
       "id": "default-on",
-      "claim": "Shipped default-ON. The acceptance probe runs `kuna decompile BIN 0x804881c --addr` with no options, so only default output can close the need.",
+      "claim": "Shipped default-ON. The acceptance probe runs `unlace decompile BIN 0x804881c --addr` with no options, so only default output can close the need.",
       "evidence": "0/675 datatest assertions change (docs/baseline.json byte-identical to origin/main), `make test-stages` 603/603 PARITY OK with the new two-pass testcase, `make rust-test` green (5,330 passed / 0 failed), speed -0.22% on a provably inert target and -1.71% on the witness against a 5% budget, and an interleaved min-of-9 A/B/A whose on-vs-on control shows the same shift. `--option overlapbranch off` restores the upstream fall-through-wins decode exactly."
     },
     {
       "id": "promotion",
       "claim": "The acceptance probe IS promotable, with its clauses verbatim and only its target re-pointed.",
-      "evidence": "The need's target is `binary_source: dataset` and CI has no dataset, so a 2 KiB ELF32 fixture carrying the same idiom at the same address was vendored (`decompiler/crates/kuna-analysis/tests/fixtures/overlapbranch_i386`, generator beside it). With `option overlapbranch off` it emits BOTH forbidden patterns (`dat_d98ddd00 += sub_b0c48ac();`), so the clauses are discriminating rather than vacuous. `tests/cli/` is executed by `scripts.repipe.clitests` (18/18) but by no CI job, so the same two passes are also a cargo test -- `kuna-cli/tests/overlapbranch_cli.rs` -- which `make rust-test` does run."
+      "evidence": "The need's target is `binary_source: dataset` and CI has no dataset, so a 2 KiB ELF32 fixture carrying the same idiom at the same address was vendored (`decompiler/crates/unlace-analysis/tests/fixtures/overlapbranch_i386`, generator beside it). With `option overlapbranch off` it emits BOTH forbidden patterns (`dat_d98ddd00 += sub_b0c48ac();`), so the clauses are discriminating rather than vacuous. `tests/cli/` is executed by `scripts.repipe.clitests` (18/18) but by no CI job, so the same two passes are also a cargo test -- `unlace-cli/tests/overlapbranch_cli.rs` -- which `make rust-test` does run."
     }
   ],
   "speed_off_ms": 333.36,
@@ -62,7 +62,7 @@
     "make test-stages": "PARITY OK 603/603",
     "make rust-test": "green, 5330 passed / 0 failed",
     "make check-spec": "OK",
-    "kuna catalog --check": "catalog OK (137 settables)",
+    "unlace catalog --check": "catalog OK (137 settables)",
     "scripts.repipe.clitests": "18/18",
     "acceptance a-52c2ad89b522": "PASS"
   }

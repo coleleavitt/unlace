@@ -1,4 +1,4 @@
-# Kuna DEX loader, APK input (P1 environment binding; option dexmodel,
+# Unlace DEX loader, APK input (P1 environment binding; option dexmodel,
 # default on). An APK is a zip of classes.dex, classes2.dex, ...; the
 # loader inflates each and maps them one after another.
 #

@@ -1,10 +1,10 @@
-# kuna issue testcase: an AIF gap candidate that is a fragment of the known
+# unlace issue testcase: an AIF gap candidate that is a fragment of the known
 # function around it is not a function (part of `option aif`).
 #
-# Issue:      kuna GH-299 - aif plants mid-function entries on a large i386
-#             PE, a third of them inside a function kuna already knows.
+# Issue:      unlace GH-299 - aif plants mid-function entries on a large i386
+#             PE, a third of them inside a function unlace already knows.
 # Stage:      P1 code/data partition - the AIF gap-walk accept
-#             (`analyzers/aif/kuna_aifbracket.rs`).
+#             (`analyzers/aif/unlace_aifbracket.rs`).
 # The XML wrapper only provides the harness architecture.  Both passes clear
 # it and loads `aifbracket_pe_i386.exe` (source `aifbracket_pe_i386.asm`
 # beside it): 22 leaf functions with one prologue, `dispatch` at 0x4011f0
@@ -47,16 +47,16 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-AIFBRACKET #1: dispatch is a function in both passes'
+name = 'UNLACE-AIFBRACKET #1: dispatch is a function in both passes'
 count = 2
 literal = '0x4011f0 sub_4011f0'
 
 [[match]]
-name = 'KUNA-AIFBRACKET #2: the fragment inside dispatch is never a function'
+name = 'UNLACE-AIFBRACKET #2: the fragment inside dispatch is never a function'
 count = 0
 literal = '0x4011fd sub_4011fd'
 
 [[match]]
-name = 'KUNA-AIFBRACKET #3: the pointer-referenced routine after padding stays an AIF function'
+name = 'UNLACE-AIFBRACKET #3: the pointer-referenced routine after padding stays an AIF function'
 count = 1
 literal = '0x401210 sub_401210'

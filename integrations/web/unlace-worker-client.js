@@ -1,9 +1,9 @@
-// kuna-worker-client.js — request/response facade for the decompiler Worker.
+// unlace-worker-client.js — request/response facade for the decompiler Worker.
 
-export class KunaWorkerCancelledError extends Error {
+export class UnlaceWorkerCancelledError extends Error {
   constructor(message = 'decompiler operation cancelled') {
     super(message);
-    this.name = 'KunaWorkerCancelledError';
+    this.name = 'UnlaceWorkerCancelledError';
   }
 }
 
@@ -11,9 +11,9 @@ function asUrl(value, base) {
   return new URL(value, base).href;
 }
 
-export class KunaWorkerClient {
+export class UnlaceWorkerClient {
   constructor({
-    workerUrl = new URL('./kuna-worker.js', import.meta.url),
+    workerUrl = new URL('./unlace-worker.js', import.meta.url),
     wasmUrl,
     specRoot,
     smallBundleUrl,
@@ -161,7 +161,7 @@ export class KunaWorkerClient {
         this.build = build;
         return build;
       } catch (error) {
-        if (error instanceof KunaWorkerCancelledError || generation !== this.generation) continue;
+        if (error instanceof UnlaceWorkerCancelledError || generation !== this.generation) continue;
         throw error;
       }
     }
@@ -169,7 +169,7 @@ export class KunaWorkerClient {
 
   checkGeneration(generation) {
     if (generation !== this.generation) {
-      throw new KunaWorkerCancelledError();
+      throw new UnlaceWorkerCancelledError();
     }
   }
 
@@ -187,7 +187,7 @@ export class KunaWorkerClient {
     });
     this.checkGeneration(generation);
     if (this.session !== session) {
-      throw new KunaWorkerCancelledError('binary session superseded');
+      throw new UnlaceWorkerCancelledError('binary session superseded');
     }
     session.format = details.format;
     this.workerSession = session;
@@ -207,7 +207,7 @@ export class KunaWorkerClient {
     const inventory = await this.request('list', { assertions });
     this.checkGeneration(generation);
     if (this.session !== session) {
-      throw new KunaWorkerCancelledError('binary session superseded');
+      throw new UnlaceWorkerCancelledError('binary session superseded');
     }
     return {
       ...inventory,
@@ -269,7 +269,7 @@ export class KunaWorkerClient {
 
   cancel(message = 'decompiler operation cancelled') {
     if (this.closed) return;
-    const error = new KunaWorkerCancelledError(message);
+    const error = new UnlaceWorkerCancelledError(message);
     this.generation++;
     this.worker.terminate();
     this.rejectPending(error);
@@ -286,7 +286,7 @@ export class KunaWorkerClient {
     this.closed = true;
     this.generation++;
     this.worker.terminate();
-    this.rejectPending(new KunaWorkerCancelledError('decompiler worker closed'));
+    this.rejectPending(new UnlaceWorkerCancelledError('decompiler worker closed'));
     this.session = null;
     this.engine = null;
     this.specs.clear();

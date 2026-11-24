@@ -14,7 +14,7 @@
 #     flat H1/H3 + address ordering with the dominance-tiered bucketing + H2
 #     post-dominator heuristic.  `cross` is a reducible function with sibling
 #     cross-edges that the acyclic schemas decline, so the structurer reaches the
-#     `virtualize_one_edge` fallback - confirmed live via `KUNA_RS_DEBUG=1`
+#     `virtualize_one_edge` fallback - confirmed live via `UNLACE_RS_DEBUG=1`
 #     (`[rs] VIRT ...`): the new ordering FIRES on this function and selects a
 #     DIFFERENT edge to virtualize than the flat ordering would.
 #
@@ -31,7 +31,7 @@
 # PARITY PROOF (the honest standalone result): the edge-virtualization ordering
 # only changes WHICH edge becomes a goto when the structurer is already FORCED to
 # virtualize.  Standalone (without the P1 cyclic-natural-loop fold that lets more
-# virtualized graphs converge), the kuna structurer that must virtualize on a knot
+# virtualized graphs converge), the unlace structurer that must virtualize on a knot
 # still reports `ok=false` for the FINAL collapse and falls back to
 # `CollapseStructure` to emit the C - so the net effect on emitted C is ZERO: pass
 # 1 (`regionedgeorder off`) and pass 2 (`regionedgeorder on`) emit byte-identical

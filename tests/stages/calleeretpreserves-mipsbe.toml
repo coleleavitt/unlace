@@ -1,4 +1,4 @@
-# kuna GH-878, big-endian: the same source as calleeretpreserves-mips.xml
+# unlace GH-878, big-endian: the same source as calleeretpreserves-mips.xml
 # built with -EB, the same defects and the same fix (see that file).
 #
 # Source (mipsel-linux-gnu-gcc 10.3 -EB -O2, linked -nostdlib -static):

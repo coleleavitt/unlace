@@ -9,7 +9,7 @@
 # attribute string (`T@"Base",&,N,Vinner`) and an ivar's encoding (`@"Base"`)
 # name it.
 #
-# Stage / sub-stage: P1 external-refinement. `analyzers/objc/kuna_objcprops.rs`
+# Stage / sub-stage: P1 external-refinement. `analyzers/objc/unlace_objcprops.rs`
 # reads the `property_list_t` of every class, metaclass, category and
 # protocol into getter/setter encodings that name the class;
 # `Selectors::record` keeps the class-naming spelling of two agreeing

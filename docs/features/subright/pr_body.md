@@ -20,7 +20,7 @@ transcribed; the body then read
 
 so upstream's `sub(V,c) => sub(V>>c*8,0)` rewrite never ran and **every SUBPIECE with a
 nonzero byte offset reached the printer**, which renders one as the raw p-code operator.
-`SUB41` / `SUB81` / `SUB84` are **undeclared identifiers** — kuna emits no header that
+`SUB41` / `SUB81` / `SUB84` are **undeclared identifiers** — unlace emits no header that
 defines them — so those function bodies were not compilable C.
 
 openssh `ssh` (O2-noinline, stripped) `sshbuf_put_u64` @ `0x4cd60`, `--mode reliable`:
@@ -44,7 +44,7 @@ unsigned long sub_4cd60(unsigned long a0,unsigned long a1) // early-return
 
 Upstream Ghidra on the same function emits `*local_18 = (char)((ulong)param_2 >> 0x38);`,
 and the source (`sshbuf-getput-basic.i`) is a plain shift:
-`((u_char *)(p))[0] = (__v >> 56) & 0xff;`. The last line of kuna's own *before* pane is
+`((u_char *)(p))[0] = (__v >> 56) & 0xff;`. The last line of unlace's own *before* pane is
 the proof that the printer was never at fault — the offset-0 SUBPIECE already rendered
 `(char)a1`.
 
@@ -52,7 +52,7 @@ the proof that the printer was never at fault — the offset-0 SUBPIECE already 
 
 The ~45-line tail is now transcribed from `ruleaction.cc:7291-7340`
 (`GHIDRA_REV=cef869af`), **with every guard upstream applies**, because each one protects a
-rendering kuna already gets right:
+rendering unlace already gets right:
 
 - `c == 0` — already least-significant; it prints as a cast.
 - output and input both address-tied with `overlap == c` — the SUBPIECE is the storage
@@ -69,7 +69,7 @@ SUBPIECE typed `TYPE_UINT`/`TYPE_INT` at the input width, and zero the SUBPIECE'
 Nothing needed wiring: the rule was already registered in upstream's own schedule position
 (`rrow!("subright", "cleanup", ...)`, `infra/universalaction.rs:552`).
 
-One kuna-side deviation, marked `// (kuna)`: the type-factory availability check is hoisted
+One unlace-side deviation, marked `// (unlace)`: the type-factory availability check is hoisted
 above the first mutation, so a hand-built `Funcdata` with no type factory (the rule-level
 unit-test fixtures) cannot leave a half-applied transform behind. On a real architecture the
 factory is always present.
@@ -96,13 +96,13 @@ precedent and returned `ungated`; its verdict is recorded verbatim in
 that change emitted C with no settable option.
 
 Recorded in `docs/history.md` under **Convergences**, not as a DIV row — the registry's own
-rule is that "a port defect whose fix moves kuna *back onto* upstream's default earns no DIV
+rule is that "a port defect whose fix moves unlace *back onto* upstream's default earns no DIV
 row, but a corpus-wide output shift still needs a record for anyone bisecting."
 
 ## Breadth
 
 Triage's corpus-wide count (matched per-function comparison over 788 binaries / 76,046
-functions both tools recovered): nonzero-offset SUBPIECE **kuna 5,919 in 2,394 functions
+functions both tools recovered): nonzero-offset SUBPIECE **unlace 5,919 in 2,394 functions
 (3.1%) vs ghidra 18 in 13 (0.017%) vs ida 0** — a 329x ratio.
 
 Measured directly for this PR, two release builds of this worktree (stubbed vs ported),
@@ -193,15 +193,15 @@ make test-stages 369/369 assertions passed -- PARITY OK   (baseline re-recorded:
                                                            361 -> 369 keys, no existing assertion moved)
 make rust-test   green -- 4424 passed; 0 failed; 37 ignored (cargo exit 0)
 make check-spec  check-spec OK (lenient mode) / check-spec OK (strict mode)
-kuna catalog --check   catalog OK: documents exactly the registered kuna options
+unlace catalog --check   catalog OK: documents exactly the registered unlace options
 ```
 
-Corpus file count in `decompiler/crates/kuna-base/src/xml.rs`: **186 -> 187** (base + #249's
+Corpus file count in `decompiler/crates/unlace-base/src/xml.rs`: **186 -> 187** (base + #249's
 `ghdec-funcptralign` + #250's `ghdec-paramcopyhoist` + this PR's `ghdec-subright`; 83 datatests
 + 104 stages).
 
 **No catalog surface is touched** — the diff against `main` for `phases.toml`,
-`src/p0_knowledge/`, `decompiler/crates/kuna-decomp/tests/` and `docs/options.md` is empty, and
+`src/p0_knowledge/`, `decompiler/crates/unlace-decomp/tests/` and `docs/options.md` is empty, and
 the settable-row count stays at #250's 85.
 
 ### Interaction with #250

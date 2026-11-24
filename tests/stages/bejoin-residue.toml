@@ -1,4 +1,4 @@
-# kuna option bejoin (default callers) and option bejoinpass (default
+# unlace option bejoin (default callers) and option bejoinpass (default
 # whole), GH-904 and GH-815: three more kinds of evidence that a big-endian
 # register pair is one 64-bit value, each from a shape that printed a wrong
 # value.

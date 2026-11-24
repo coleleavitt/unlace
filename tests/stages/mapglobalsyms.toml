@@ -2,14 +2,14 @@
 # of it, load_high reads its upper 4 bytes. Upstream Funcdata::mapGlobals
 # adds a DAT_ Symbol for the 8-byte group to the global scope while it
 # decompiles store64, so a load_high decompiled after it in the same session
-# reads a piece of that Symbol. Kuna recorded nothing (its per-function
+# reads a piece of that Symbol. Unlace recorded nothing (its per-function
 # GlobalQuery is a snapshot no action can write), so load_high always read a
 # free-standing dat_105004. The same holds for the coverVarnodes names:
 # read_wide reads 8 bytes at the int4 `small` and 4 at small+4, and mapGlobals names that upper half
 # small_4, and read_upper, decompiled next, reads that half alone.
 #
 # Stage model: P9 emit, naming-policy (p9_emit/coreaction_render.rs
-# map_globals records the group; p9_emit/kuna_mapglobalsyms.rs persist adds
+# map_globals records the group; p9_emit/unlace_mapglobalsyms.rs persist adds
 # it to the global scope after the function).
 #
 # Option: mapglobalsyms (default off). Pass 1 is off, pass 2 on; the same

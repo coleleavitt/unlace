@@ -28,7 +28,7 @@ long long binop(char *s1)
 }
 ```
 
-**kuna (fresh, no flags — identical to the stored pane)** — 11 nested `if`s:
+**unlace (fresh, no flags — identical to the stored pane)** — 11 nested `if`s:
 
 ```c
 bool binop(char *a0)
@@ -42,7 +42,7 @@ bool binop(char *a0)
 
 Ghidra's pane is the same 11-deep nest (bucket `inherited`; binja = 0, angr = 26).
 
-**kuna with `--option condfold wide`** — 4 `if`s:
+**unlace with `--option condfold wide`** — 4 `if`s:
 
 ```c
 bool sub_2920(char *a0)
@@ -65,8 +65,8 @@ Metrics from `triage --case O2-coreutils-_-binop --option condfold wide`:
 | output | loc | ifs |
 |---|---|---|
 | ida(stored) | 21 | 1 |
-| kuna(stored) | 29 | 11 |
-| kuna(fresh, condfold wide) | 15 | 4 |
+| unlace(stored) | 29 | 11 |
+| unlace(fresh, condfold wide) | 15 | 4 |
 
 `--option condfold on` produces **no change at all** on this function — only `wide`
 moves it.
@@ -87,7 +87,7 @@ binop (char const *s)
 ```
 
 One 12-clause short-circuit chain. IDA's single `if` with 11 `&&`s plus the trailing
-`strcmp(...) == 0` is that chain, De Morgan'd. kuna's 11-deep nest is the *same*
+`strcmp(...) == 0` is that chain, De Morgan'd. unlace's 11-deep nest is the *same*
 short-circuit CFG spelled as statements — semantically right, structurally noisy.
 
 ## Analysis
@@ -101,9 +101,9 @@ tree is correct; only its rendering is unfolded.
 ### Root cause
 
 This is the known `condfold` family (`docs/options.md`, and the memory note
-`kuna-condfold-isComplex-root`): upstream Ghidra's `ruleBlockOr` declines to fold a
+`unlace-condfold-isComplex-root`): upstream Ghidra's `ruleBlockOr` declines to fold a
 condition operand whose block `isComplex()` (more than a couple of printed
-statements), and each `iVar1 = strcmp(a0, "-xx");` clause is exactly that. kuna
+statements), and each `iVar1 = strcmp(a0, "-xx");` clause is exactly that. unlace
 already ships the relaxation as `--option condfold off|on|wide`
 (`p8_structure/condfold.rs`), default **off**, and it is **not** in the
 `aggressive` preset — which is why a no-flag run on today's build still shows the
@@ -155,7 +155,7 @@ three optimisation levels.
    one module. I would rank that *below* the default-flip: an unbounded fold produces
    a 12-term condition on one source line, and whether that reads better than a
    4-deep nest is a taste call, which is precisely what a value-carrying option is
-   for. It is not a correctness item — kuna's output here compiles and computes the
+   for. It is not a correctness item — unlace's output here compiles and computes the
    right value.
 
 GED value: real but capped. The Joern CFG for `A && B` and for `if(A){if(B){}}` are

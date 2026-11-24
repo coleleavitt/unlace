@@ -3,11 +3,11 @@
 ## The change
 
 One clause of `drop_clobber_tail_arg`
-(`decompiler/crates/kuna-decomp/src/p4_calls/argclobber.rs`) is replaced and
+(`decompiler/crates/unlace-decomp/src/p4_calls/argclobber.rs`) is replaced and
 one is demoted.
 
 * **New, admitting**: `callee_prototype_excludes` reads
-  `Funcdata::kuna_protoorder_types(entry)` — the parameter list `protoorder`
+  `Funcdata::unlace_protoorder_types(entry)` — the parameter list `protoorder`
   parked when it decompiled that callee — and requires it to exist and to have no
   parameter overlapping the argument's register bytes. No statement is a decline.
 * **Demoted, vetoing**: the bounded callee-entry walk (`proves_input`) runs after
@@ -26,7 +26,7 @@ identical where they do not.
 ## Tests
 
 * `tests/cli/argclobber-drops-a-trailing-clobbered-argument.json` — the positive
-  witness on `decompiler/crates/kuna-analysis/tests/fixtures/argclobber_x86_64`
+  witness on `decompiler/crates/unlace-analysis/tests/fixtures/argclobber_x86_64`
   (the stage fixture's construct, as a real program so `decompile-all` decompiles
   the callee first): `sub_401031(a0,5)`, no `// rdx` local, no `% 200`.
 * `tests/cli/argclobber-off-keeps-the-clobbered-argument.json` — its `off` arm,

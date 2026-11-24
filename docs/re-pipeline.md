@@ -1,18 +1,18 @@
-# The kuna RE-friction loop
+# The unlace RE-friction loop
 
 **The task**: find out where `unlace` fails an agent that is actually trying to reverse-engineer
 a binary, and close those gaps — autonomously, with no human in the loop. This file is the
 runbook: an agent (interactive or headless) should be able to run the whole cycle from what is
 written here.
 
-Its sibling, `docs/improvement-pipeline.md`, asks *"is kuna's emitted C worse than angr's?"*
+Its sibling, `docs/improvement-pipeline.md`, asks *"is unlace's emitted C worse than angr's?"*
 This one asks the question that matters for an agent-first decompiler: **can an agent use it
 at all?** The two loops share their scheduler, claim registry and PR opener; they differ in
 where the work comes from and what "done" means.
 
 One iteration:
 
-1. **Test** — codex agents try to solve crackmes from `~/github/kuna-re-dataset` with kuna as
+1. **Test** — codex agents try to solve crackmes from `~/github/unlace-re-dataset` with unlace as
    their primary tool, and record every place it was missing, wrong, slow or costly (§2).
 2. **Gate** — every recorded observation is replayed by machine. Two executable predicates
    decide whether it is real (§3).
@@ -48,9 +48,9 @@ no install step and no third-party dependency, matching `scripts/pipeline/`.
 tools/repipe/run.sh                     # bounded: REPIPE_ROUNDS (default 3)
 tools/repipe/run.sh --once              # exactly one full cycle
 python3 -m scripts.repipe.webui --port 8787     # watch it
-touch .kuna-repipe/STOP                 # graceful drain; INTEGRATE still runs
-touch .kuna-repipe/PAUSE                # finish what is running, spawn nothing
-touch .kuna-repipe/ABORT                # hard stop; worktrees and arenas left intact
+touch .unlace-repipe/STOP                 # graceful drain; INTEGRATE still runs
+touch .unlace-repipe/PAUSE                # finish what is running, spawn nothing
+touch .unlace-repipe/ABORT                # hard stop; worktrees and arenas left intact
 ```
 
 | Env var | Meaning (default) |
@@ -70,8 +70,8 @@ touch .kuna-repipe/ABORT                # hard stop; worktrees and arenas left i
 | `REPIPE_CAPTAIN_BACKEND` | `claude` \| `codex` (default `claude`) |
 | `REPIPE_CAPTAIN_MODEL` / `REPIPE_CAPTAIN_REASONING` | captain model; Codex defaults to `gpt-5.6-sol` / `low` |
 | `REPIPE_CAPTAIN_USD` | Claude-only dollar cap; Codex ticks are bounded by timeout, model, and reasoning effort |
-| `REPIPE_DATASET` | the crackme corpus (`~/github/kuna-re-dataset`) |
-| `KUNA_PIPELINE_STATE_DIR` | live state (`.kuna-repipe/`, gitignored) |
+| `REPIPE_DATASET` | the crackme corpus (`~/github/unlace-re-dataset`) |
+| `UNLACE_PIPELINE_STATE_DIR` | live state (`.unlace-repipe/`, gitignored) |
 
 The captain timeout is one hour because a cold `B_VERIFY` tick owns the release build, all
 four repository gates, and the acceptance suite; that supported path can exceed 20 minutes.
@@ -105,17 +105,17 @@ So the tester runs under
 path, the flag, `crackmes.one` and `solutions/`. A tripwire hit marks the run `contaminated`:
 its observations are kept — friction is friction — but its outcome is voided.
 
-The arena also **meters the tester**. `bin/kuna` and `bin/ida-decompile` are transparent shims
+The arena also **meters the tester**. `bin/unlace` and `bin/ida-decompile` are transparent shims
 that log every call to `notes/toolcalls.jsonl` with argv, exit code and wall-clock. That log
-is the pipeline's only per-call latency signal — kuna emits no timing of its own — and it makes
-"how often did kuna make a tester leave" a measured number rather than a self-report.
+is the pipeline's only per-call latency signal — unlace emits no timing of its own — and it makes
+"how often did unlace make a tester leave" a measured number rather than a self-report.
 
 Two things about the corpus that a harness must respect: the primary binary is **always**
 `meta.json → detected.primary.path` (never a `bin/` glob — the tree preserves recursive
 extraction shapes like `bin/CrackMe_3.zip.__x/CrackMe_3.exe`), and **58 of 287 shipped
 binaries have no execute bit**, so every copy is `chmod 0755`.
 
-**Giving up is a result.** `outcome: gave_up` with `gave_up_reason: kuna-blocked` is the
+**Giving up is a result.** `outcome: gave_up` with `gave_up_reason: unlace-blocked` is the
 loudest signal this pipeline can receive, and the prompt says so.
 
 ### Grading is deliberately weak, and says so
@@ -163,7 +163,7 @@ it automatically.
 **What this costs.** Friction with no machine-checkable predicate — "the output is hard to
 read", "I lost my renames every invocation" — is not a need. It lands in
 `docs/re-needs/rejected/` as `unprobeable`. The quantitative channels (`gave_up_reason`,
-`minutes_lost`, `fallbacks[].why_kuna_could_not`) still capture it and the dashboard charts it,
+`minutes_lost`, `fallbacks[].why_unlace_could_not`) still capture it and the dashboard charts it,
 but this pipeline will not build it. That is the trade to revisit first if the rejected pile
 turns out more interesting than the backlog.
 
@@ -178,7 +178,7 @@ python3 -m scripts.repipe.needs list --json
 python3 -m scripts.repipe.needs rank
 ```
 
-Clustering is deterministic first: the key is `(kind, kuna subcommand, acceptance clause
+Clustering is deterministic first: the key is `(kind, unlace subcommand, acceptance clause
 shape)`, with text similarity only as a tie-breaker. Bumping an existing need's `instances`
 and `challenges` is pure Python, so only genuinely novel observations ever cost an agent.
 
@@ -194,13 +194,13 @@ the *other* pipeline, not new work here.
 
 The corpus is deliberately hostile — 171 of its 250 challenges carry at least one obfuscation
 class, and 57 are code-virtualised. Hostile binaries are precisely where a decompiler's
-automatic answer is wrong, so the interesting question this loop asks is not "why did kuna
+automatic answer is wrong, so the interesting question this loop asks is not "why did unlace
 guess wrong" but **"why could the agent not tell it the right answer"**.
 
 That is a standing instruction to both halves of the loop, and it is in both prompts:
 
-- **Testers** are told to file a missing *interface* whenever they think "kuna should have
-  known this" — because the useful form of that complaint is almost always "kuna should have
+- **Testers** are told to file a missing *interface* whenever they think "unlace should have
+  known this" — because the useful form of that complaint is almost always "unlace should have
   let me say so". Define a function boundary, override a jump table, declare a blob as data
   with a type, steer structuring, fix a prototype, make a rename persist. They are told to
   check `unlace catalog --json` first: an option that already exists is a discoverability
@@ -229,8 +229,8 @@ Getting the track wrong is the most likely way to waste a builder session.
 
 | | **`tooling`** (the majority) | **`quality`** | **`perf`** |
 |---|---|---|---|
-| The gap is | a missing or broken capability | kuna's emitted C is wrong | it is too slow |
-| Lives in | `unlace-cli`, `unlace-console`, `unlace-analysis` | `unlace-decomp/src/pN_*/kuna_<slug>.rs` | either |
+| The gap is | a missing or broken capability | unlace's emitted C is wrong | it is too slow |
+| Lives in | `unlace-cli`, `unlace-console`, `unlace-analysis` | `unlace-decomp/src/pN_*/unlace_<slug>.rs` | either |
 | Changes emitted C | **no** | **yes** | must not |
 | `phases.toml` option | **not required** — the rule is "a judgement call ships behind a named option", and a new subcommand is not one | **required for a judgement call** (plus all 8 ritual steps); **forbidden for a strict correctness fix**, which ships always-on with a one-pass stage test (`docs/agents.md` → *Adding features*) | only if output moves |
 | Counters | none | `phases/tests.rs` (2 asserts + the tier tuple + the count-encoding *test names*), `catalog_bytecompat.rs` (3 asserts + the `phase_catalog.json` fixture), `tests/stages/catalog.toml`, `unlace-base/src/xml.rs` | none |
@@ -275,7 +275,7 @@ Three silent-merge shapes this repo has actually produced are guarded mechanical
 | **silent identical-edit** | both branches made the same `85 → 86` edit, git merged cleanly, the answer was 87 | re-derive every counter from a fresh capture on the rebased tree |
 | **silent keep-both** | a stale `data_footer: 375` against 381 real keys; a duplicated row in a README | diff every keep-both against `origin/main`: nothing removed, nothing added twice |
 
-The one permitted stage-baseline key replacement is `KUNA-CATALOG #15`'s
+The one permitted stage-baseline key replacement is `UNLACE-CATALOG #15`'s
 registry-count label when options are added. Both labels must match their
 tree's registry and captured catalog counts; the corresponding live XML
 assertion must count those rows plus the same six valid individual queries.
@@ -317,7 +317,7 @@ Three layers, cheapest first:
    trivial rebase would resolve it. Because every `quality` need needs the whole counter set,
    **at most one option-adding builder is ever in flight** with no special-casing, while
    `tooling` builders parallelize freely.
-3. **Contracts.** `.kuna-repipe/contracts.json` is rendered into every builder's prompt so each
+3. **Contracts.** `.unlace-repipe/contracts.json` is rendered into every builder's prompt so each
    knows what its siblings are touching, and a builder that needs someone else's file stops and
    says so instead of racing.
 
@@ -347,10 +347,10 @@ come from a slot.
   below `REPIPE_HALT_FREE_GB`.
 - **Specs.** Nothing to build or link: the engine and the workspace suite compile each `.slaspec`
   they need into the shared `.sla` cache on first use (`docs/dev-setup.md`), so a worktree reads
-  its own `specs/` (`KUNA_SPECS`/`SLEIGHHOME` point there).
+  its own `specs/` (`UNLACE_SPECS`/`SLEIGHHOME` point there).
 - **Never `git stash`** with sibling worktrees live — `refs/stash` is one shared stack and work
   has been lost that way.
-- **codex sqlite.** Each tester gets `CODEX_HOME=.kuna-repipe/runs/<id>/codexhome` (with
+- **codex sqlite.** Each tester gets `CODEX_HOME=.unlace-repipe/runs/<id>/codexhome` (with
   `auth.json` symlinked in), so rollouts and the sqlite stay inside the run instead of
   inflating `~/.codex/logs_2.sqlite`, already 270 MB over 612 rollouts. Not `--ephemeral`:
   harvest needs the transcript.
@@ -382,7 +382,7 @@ come from a slot.
 - **The genuinely unsafe part, stated plainly.** Builders run
   `codex exec --sandbox danger-full-access` with the network on, inside a worktree, confined
   only by convention and post-hoc checks. There is no sandbox around a builder, and that is
-  inherent to "implement in the kuna repo and self-merge". What *is* contained: `main` only
+  inherent to "implement in the unlace repo and self-merge". What *is* contained: `main` only
   ever advances through the serialized merge step, `docs/baseline.json` is a hard reject, and
   testers — which run exploratory work against 250 unknown binaries — are network-off and
   confined to an arena holding nothing of value.
@@ -397,7 +397,7 @@ tools/repipe/smoke.sh --level 0    # ~40 s
 Level 1 exercises the real machine against real defects: it builds arenas for the flag
 challenge and the `hints.txt` trap and asserts the flag is absent, the exec bits are repaired
 and `hints.txt` was dropped **by the serial-shape rule specifically**; it runs the two-arm gate
-against kuna's live `count: 0, exit 0` failure and requires the probe to pass and the
+against unlace's live `count: 0, exit 0` failure and requires the probe to pass and the
 acceptance to fail; it proves a misresolved target refuses instead of lying; it merges a 3-way
 duplicate into one need; it proves two `quality` needs cannot dispatch together; and it curls
 every dashboard route including a path-traversal attempt.
@@ -428,7 +428,7 @@ REPIPE_MAX_AGENTS=7 REPIPE_ROUND_USD=150 tools/repipe/run.sh --rounds 1
 
 - ≥6 needs pass the two-arm gate.
 - **≥2 rejected as `already-supported`/`user-error` — if this is zero, the gate is not
-  working.** With kuna's nine-subcommand surface and an eager tester, some fraction of filings
+  working.** With unlace's nine-subcommand surface and an eager tester, some fraction of filings
   must be user error.
 - ≥1 hypothesis overturned outside the `absence` class (the decbench prior is ~35%; zero is
   evidence the refuter is rubber-stamping).
@@ -441,7 +441,7 @@ Nine challenges, three codex testers, 26 observations filed, gated on a pinned `
 | Criterion | Result |
 |---|---|
 | ≥6 needs pass the two-arm gate | **23 admitted** of 26 |
-| ≥2 rejected as `already-supported`/`user-error` | **1** `already-supported`, 1 `not-reproducible`, 1 `unrunnable`. Strictly, the bar was **missed**: only one filing was refuted as *kuna was already fine*. |
+| ≥2 rejected as `already-supported`/`user-error` | **1** `already-supported`, 1 `not-reproducible`, 1 `unrunnable`. Strictly, the bar was **missed**: only one filing was refuted as *unlace was already fine*. |
 | ≥1 hypothesis overturned outside the `absence` class | **yes, 3** — see below |
 | ≥1 PR merged, ≥1 acceptance promoted to `tests/cli/` | **9 acceptances flipped; 4 promoted** |
 
@@ -459,7 +459,7 @@ symptom was real every time and the diagnosis was wrong:
   worklist took a direct `CALL` target unconditionally. The witness is an `e8` read one byte
   early behind an always-taken `je`.
 - *`main` typed `void(void)`* — filed as "interprocedural recovery failed to propagate".
-  Half right: nothing propagates *because* kuna recovers parameters from the callee's own
+  Half right: nothing propagates *because* unlace recovers parameters from the callee's own
   body, and `main` never reads its argument registers. The fix reads the caller instead, and
   is PE-only because on ELF the CRT lives in libc and there is no in-image call site to read.
 - *dialog dispatch renders `switch(0)`* — filed as a switch-recovery bug. Actually
@@ -497,7 +497,7 @@ forever. Round 2's tester brief should say: assert the symptom's *absence*, not 
 spelling.
 
 **A structural finding worth more than any single fix.** A quality fix ships behind a
-default-OFF option, but a tester-authored acceptance always invokes kuna with defaults — so
+default-OFF option, but a tester-authored acceptance always invokes unlace with defaults — so
 a correct fix behind a default-OFF flag can *never* flip its own acceptance. Two of round 1's
 four quality options shipped OFF and their acceptances still read as failing. The acceptance
 suite must record the option set a need was closed under, or it will keep re-filing work that
@@ -575,7 +575,7 @@ Round 2's two builders both ended `claude rc=1` about 30 minutes in, well inside
 `REPIPE_BUILDER_TIMEOUT`. The reason lives only in the result JSON:
 
 ```
-$ python3 -c 'import json; print(json.load(open(".kuna-repipe/logs/<wid>.result.json"))["result"])'
+$ python3 -c 'import json; print(json.load(open(".unlace-repipe/logs/<wid>.result.json"))["result"])'
 You've hit your session limit · resets 4:50am (UTC)
 ```
 
@@ -620,7 +620,7 @@ acceptance.expect {"stdout_absent":  ["sub_418fb0\\(\\)"]}
 
 **Exact polarity inverses on the same regex.** `probe-fail` and `acceptance-pass` are one
 fact — `sub_418fb0()` is absent — reported twice. Relabelling it `already-supported` would
-assert kuna does the desired thing when all that was observed is the symptom's absence.
+assert unlace does the desired thing when all that was observed is the symptom's absence.
 `not-reproducible` is the correct, weaker claim, and the existing precedence already yields it.
 
 The obsolescence is self-inflicted and worth naming. The tester brief now says *assert the
@@ -634,7 +634,7 @@ So judge the gate on whether it refutes anything at all — `not-reproducible` a
 to flip the precedence for these pairs was written and **rejected** in review for this reason;
 before re-litigating it, check whether the two arms are independent or complementary.
 
-## "It did not error" is not "it worked", and kuna will not tell you
+## "It did not error" is not "it worked", and unlace will not tell you
 
 Round 3 filed five independent observations saying prototype assertions reject standard C
 types. Reviewing them, I ran the assertion by hand, saw no error, and concluded the testers had
@@ -667,7 +667,7 @@ human or an LLM reviewing five reports by eye reached the wrong verdict on all f
 replaying the probes reached the right one on all twenty-three. When the machine and the
 reviewer disagree, re-run the probe before believing the reviewer.
 
-## The tester model can refuse the task, and that is not a kuna result
+## The tester model can refuse the task, and that is not a unlace result
 
 Round 3 lost a tester 78 seconds in, `codex exited rc=1`, no report, nine tool calls of
 evidence gone. The cause is only in the event stream:
@@ -685,12 +685,12 @@ reports, so it is not always fatal.
 
 This matters because it silently corrupts the two numbers the loop exists to produce. A
 refusal exits `1`, exactly like a crash, so it lands as a generic `failed` — and a challenge
-nobody was allowed to attempt is indistinguishable from one kuna could not support. Both the
-solve rate and `gave_up: kuna-blocked` drift by however often it happens.
+nobody was allowed to attempt is indistinguishable from one unlace could not support. Both the
+solve rate and `gave_up: unlace-blocked` drift by however often it happens.
 
 `tester.sh` now reads the event stream and records `--phase refused` with a
 `provider-refusal:` note, so `scripts.repipe.status` and the round's grading can tell it apart
-from a kuna failure and from a harness fault.
+from a unlace failure and from a harness fault.
 
 **Recorded, not worked around.** Do not reword prompts to get past the classifier — the
 refusal is the provider's call, and the sanctioned route is the authorization programme the
@@ -739,7 +739,7 @@ unmerged that way and their content had to be re-applied by hand.
 
 ## `SIGTERM` to a supervisor drains the whole loop, not that process
 
-`run.sh` traps `SIGTERM` and does a graceful stop, which writes `.kuna-repipe/STOP`. That
+`run.sh` traps `SIGTERM` and does a graceful stop, which writes `.unlace-repipe/STOP`. That
 file is **shared state**: every supervisor sharing the state dir sees it, transitions the
 round to `DRAINING`, and stops dispatching. Removing the file does not undo it —
 `DRAINING → RUNNING` is deliberately not a legal edge, so the round can only go on to
@@ -749,7 +749,7 @@ Once it is `STOPPED`, invoking `tools/repipe/run.sh` again is the explicit opera
 The launcher consumes the completed drain's `STOP`, reaps dead workers, requires no live
 tester or builder slots, reruns preflight, and records `STOPPED → RUNNING` before dispatching.
 It refuses an `ABORT`; remove that file manually only after resolving why the hard stop was
-requested. The lower-level equivalent is `rm .kuna-repipe/STOP` followed by
+requested. The lower-level equivalent is `rm .unlace-repipe/STOP` followed by
 `python3 -m scripts.repipe.captain --restart-stopped`.
 
 So `kill <supervisor>` is not "stop this process". It is "end this round". To remove a

@@ -2,7 +2,7 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile-all",
     "{{BIN}}"
   ],
@@ -33,6 +33,6 @@
       "sub_1190\\(0x4018,a2\\)"
     ]
   },
-  "notes": "sub_1190 is `if (!a) return 0; return ext3(o,a,b);` in plain C, with no function pointer anywhere: ext3 is a dynamic import nothing states a signature for, so nothing at that call site reads rdx and kuna recovers two parameters for sub_1190 -- exactly the arguments a drop leaves. The direct call to a target nothing accounts for declines it; answering every direct call accounted deletes it.",
+  "notes": "sub_1190 is `if (!a) return 0; return ext3(o,a,b);` in plain C, with no function pointer anywhere: ext3 is a dynamic import nothing states a signature for, so nothing at that call site reads rdx and unlace recovers two parameters for sub_1190 -- exactly the arguments a drop leaves. The direct call to a target nothing accounts for declines it; answering every direct call accounted deletes it.",
   "probe_id": "p-f1bada66dfff"
 }

@@ -7,7 +7,7 @@
 # `__objc_stubs` entry a modern link routes most sends through (`adrp/ldr x1`
 # of the selref, `br objc_msgSend`) was an anonymous function.
 #
-# Stage / sub-stage: P1 external-refinement. `analyzers/objc/kuna_objcrefs.rs`
+# Stage / sub-stage: P1 external-refinement. `analyzers/objc/unlace_objcrefs.rs`
 # names each `__objc_selrefs` slot `selRef_<sel>`, each `__objc_classrefs` /
 # `__objc_superrefs` slot `classRef_<Class>` / `superRef_<Class>` (a chained
 # bind slot from its import name), and each `__objc_stubs` entry
@@ -17,7 +17,7 @@
 # the `objcrefconst` option, now part of `objc`), so a load through
 # one folds to the selector string / class symbol (Ghidra's
 # ObjectiveC2_ClassAnalyzer marks the same three blocks read-only). The loader
-# unpacks the LC_DYLD_CHAINED_FIXUPS rebases first (`loader/kuna_machorelocs.rs`,
+# unpacks the LC_DYLD_CHAINED_FIXUPS rebases first (`loader/unlace_machorelocs.rs`,
 # under `dynrelocs`), without which a chained slot holds a packed chain word.
 #
 # P0 assertion: `option objc on|off`.
@@ -39,7 +39,7 @@
 # the default `objcresolve`, names the method it reaches, `-[Base greet:]`) and `_tag`
 # sends to `_OBJC_CLASS_$_Derived`; the bind slot `classRef_Remote` has no
 # static value and keeps its name. `objc_msgSendSuper2` is declared
-# `(void *, void *, ...)` (`analyzers/objc/kuna_objcruntime.rs`), so the
+# `(void *, void *, ...)` (`analyzers/objc/unlace_objcruntime.rs`), so the
 # method's `int` argument is the open tail's whole `x2`, which the method's
 # own `int4 arg1` fills: `(uint8)(uint4)arg1`.
 

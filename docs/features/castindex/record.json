@@ -1,5 +1,5 @@
 {
- "opportunity": "kuna prints a pointer plus a variable index, and the difference of two byte pointers, as integer round trips: *(long *)((long)v7 + v19 * 8) (two casts) where IDA prints v39[v27] (none), and (long)v24 - (long)v14 (two) where IDA prints sa - v52 (none).",
+ "opportunity": "unlace prints a pointer plus a variable index, and the difference of two byte pointers, as integer round trips: *(long *)((long)v7 + v19 * 8) (two casts) where IDA prints v39[v27] (none), and (long)v24 - (long)v14 (two) where IDA prints sa - v52 (none).",
  "test_name": "tests/stages/castindex.xml (7 assertions, pass 1 option castindex off, pass 2 on)",
  "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O0/coreutils/stripped/sort",
  "selector": "0xa5c0",
@@ -11,7 +11,7 @@
  "change_kind": "presentation-default",
  "tier": "core",
  "source_decompiler": "ida",
- "inspiration": "Hex-Rays prints v39[v27] = v48 - 32 and sub_5453(v52, sa - v52) at the addresses where kuna printed *(long *)((long)v7 + v19 * 8) = v10 + -0x20 and sub_5453(v14,(long)v24 - (long)v14); this reaches the same arithmetic through Ghidra's PTRADD and C's own pointer subtraction, without IDA's way of avoiding the cast elsewhere (typing the base a 64-bit integer, 16LL * i + a1).",
+ "inspiration": "Hex-Rays prints v39[v27] = v48 - 32 and sub_5453(v52, sa - v52) at the addresses where unlace printed *(long *)((long)v7 + v19 * 8) = v10 + -0x20 and sub_5453(v14,(long)v24 - (long)v14); this reaches the same arithmetic through Ghidra's PTRADD and C's own pointer subtraction, without IDA's way of avoiding the cast elsewhere (typing the base a 64-bit integer, 16LL * i + a1).",
  "default_on": true,
  "default_value": "on",
  "values": "on|off",
@@ -45,7 +45,7 @@
   "script": "docs/features/castindex/census.py (text); an env-instrumented build for the engine verdicts"
  },
  "castbench": {
-  "set": "full, 45 binaries x O0/O2/O2-noinline, 4,815 shared functions (kuna x IDA x main)",
+  "set": "full, 45 binaries x O0/O2/O2-noinline, 4,815 shared functions (unlace x IDA x main)",
   "base": "/home/mahaloz/kwt/castbench/main-c960fb18d (origin/main c960fb18d, castimplied/castarith/castsign/globalref on)",
   "casts": {
    "ida": 37821,
@@ -105,7 +105,7 @@
   }
  },
  "corpus_sweep": {
-  "method": "kuna decompile-all both arms of one build (--option castindex off vs on) over the 45 castbench binaries, every function; hunkclass.py checks each changed hunk keeps its identifier multiset, gains no constant, loses only an element-size scale, and drops casts; structcheck.py compares per-function lines, statements, gotos, labels, loops and returns",
+  "method": "unlace decompile-all both arms of one build (--option castindex off vs on) over the 45 castbench binaries, every function; hunkclass.py checks each changed hunk keeps its identifier multiset, gains no constant, loses only an element-size scale, and drops casts; structcheck.py compares per-function lines, statements, gotos, labels, loops and returns",
   "off_arm": "byte-identical to main c960fb18d on 45/45 binaries",
   "functions_changed": 776,
   "structural_changes": 0,
@@ -230,7 +230,7 @@
   "moved_off_perfect": 0
  },
  "speed": {
-  "method": "docs/features/castindex/speed.py: kuna decompile-all <bin> --json, --option castindex off vs the default (on), interleaved, one warm-up, min-of-15, same build, base c960fb18d",
+  "method": "docs/features/castindex/speed.py: unlace decompile-all <bin> --json, --option castindex off vs the default (on), interleaved, one warm-up, min-of-15, same build, base c960fb18d",
   "binaries": {
    "fmt_O2": {
     "off_min_ms": 4387.6,

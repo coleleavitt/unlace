@@ -9,15 +9,15 @@
   "default": "on",
   "div": "DIV-110",
   "touches": [
-    "decompiler/crates/kuna-analysis",
+    "decompiler/crates/unlace-analysis",
     "decompiler/crates/console",
-    "decompiler/crates/kuna-decomp"
+    "decompiler/crates/unlace-decomp"
   ],
-  "summary": "The string-literal analysis pass gains its 2-byte (UTF-16LE) width -- Ghidra StringsAnalyzer's allCharWidths arm, which kuna's 1-byte port left as a documented seam -- and plants a typelocked wchar2[N] at each wide literal, so a wide Windows-API argument renders whole (L\"ntdll.dll\") instead of as its own first character (\"n\").",
+  "summary": "The string-literal analysis pass gains its 2-byte (UTF-16LE) width -- Ghidra StringsAnalyzer's allCharWidths arm, which unlace's 1-byte port left as a documented seam -- and plants a typelocked wchar2[N] at each wide literal, so a wide Windows-API argument renders whole (L\"ntdll.dll\") instead of as its own first character (\"n\").",
   "decisions": [
     {
       "what": "the filed hypothesis is half right and names the wrong producer -- OVERTURNED in part",
-      "detail": "Filed: 'string markup or emission treats UTF-16LE data as an 8-bit NUL-terminated string'. The emission half is right; the markup half is not. StringLiteralPass marks up NOTHING at a wide literal -- read at 1-byte width it is a ONE-character run, which is below the pass's minimum length of 5, so no fact is emitted and no symbol is planted. Measured: with `--mode reliable` (no operand_refs) the same call renders the bare `LoadLibraryW(0x1400074b8)`, not `\"n\"`. What produces the `\"n\"` is `operand_refs`, whose `readonly_string_at` accepts a run of a SINGLE visible character (it exists for the residual short strings the main pass misses) and so reads the first unit's low byte plus the high-byte NUL behind it as a complete char[2]. operand_refs is an AGGRESSIVE_OVERRIDES member and `auto` picks aggressive under 500 KiB, so it is what the `kuna` binary runs by default. The captain's scouting was closer -- 'the missing link is the data/type markup, NOT the scanner and NOT the printer' -- but named StringLiteralPass as the markup; it is operand_refs."
+      "detail": "Filed: 'string markup or emission treats UTF-16LE data as an 8-bit NUL-terminated string'. The emission half is right; the markup half is not. StringLiteralPass marks up NOTHING at a wide literal -- read at 1-byte width it is a ONE-character run, which is below the pass's minimum length of 5, so no fact is emitted and no symbol is planted. Measured: with `--mode reliable` (no operand_refs) the same call renders the bare `LoadLibraryW(0x1400074b8)`, not `\"n\"`. What produces the `\"n\"` is `operand_refs`, whose `readonly_string_at` accepts a run of a SINGLE visible character (it exists for the residual short strings the main pass misses) and so reads the first unit's low byte plus the high-byte NUL behind it as a complete char[2]. operand_refs is an AGGRESSIVE_OVERRIDES member and `auto` picks aggressive under 500 KiB, so it is what the `unlace` binary runs by default. The captain's scouting was closer -- 'the missing link is the data/type markup, NOT the scanner and NOT the printer' -- but named StringLiteralPass as the markup; it is operand_refs."
     },
     {
       "what": "the ordering is half the fix, and it is why a scanner alone would not have closed the need",
@@ -25,7 +25,7 @@
     },
     {
       "what": "the matcher is MOVED, not duplicated",
-      "detail": "stringinv.rs already carried `scan_utf16_run` for `kuna strings --encoding utf16`, and its module docs already named this exact defect ('the L\"ntdll.dll\" argument of LoadLibraryW stops at the NUL after n'). It moved into the new widestrings.rs and both callers now use it, so the inventory a user reads and the markup the engine commits stay one scan rather than two that can drift."
+      "detail": "stringinv.rs already carried `scan_utf16_run` for `unlace strings --encoding utf16`, and its module docs already named this exact defect ('the L\"ntdll.dll\" argument of LoadLibraryW stops at the NUL after n'). It moved into the new widestrings.rs and both callers now use it, so the inventory a user reads and the markup the engine commits stay one scan rather than two that can drift."
     },
     {
       "what": "the 1-byte arm's failure mode is preserved exactly",
@@ -41,11 +41,11 @@
     },
     {
       "what": "a separate defect found and NOT fixed here",
-      "detail": "`kuna decompile --assert 'data <addr> <type>'` (the P5 const-pointer directive, i.e. `map address`) is INERT at an address that carries no symbol yet, on both PE and ELF: it reports status `applied` and changes nothing. The same `map address` typed into decomp_dbg before OR after `read symbols` works and produces L\"ntdll.dll\" on the witness. Measured while looking for a way to test the mechanism without building it. Out of scope for this need and left for its own record."
+      "detail": "`unlace decompile --assert 'data <addr> <type>'` (the P5 const-pointer directive, i.e. `map address`) is INERT at an address that carries no symbol yet, on both PE and ELF: it reports status `applied` and changes nothing. The same `map address` typed into decomp_dbg before OR after `read symbols` works and produces L\"ntdll.dll\" on the witness. Measured while looking for a way to test the mechanism without building it. Out of scope for this need and left for its own record."
     }
   ],
   "collateral_sweep": {
-    "method": "kuna decompile-all, widestrings on (default) vs off, over 88 RE-dataset binaries under 800 KiB, partitioned by `kuna strings --encoding utf16` into a control arm (no wide literal) and an affected arm. Every changed line of every changed binary was read, after normalising the variable RENUMBERING that one added declaration causes.",
+    "method": "unlace decompile-all, widestrings on (default) vs off, over 88 RE-dataset binaries under 800 KiB, partitioned by `unlace strings --encoding utf16` into a control arm (no wide literal) and an affected arm. Every changed line of every changed binary was read, after normalising the variable RENUMBERING that one added declaration causes.",
     "control_binaries": 40,
     "control_changed": 0,
     "affected_binaries": 48,
@@ -71,10 +71,10 @@
     "note": "the width is one extra linear pass over the same section bytes the 1-byte scan already walks"
   },
   "not_closed": [
-    "Scope is UTF-16LE whose code units are all in the 1-byte printable-ASCII charset -- the Windows-API case. A big-endian or non-Latin wide literal is still not recovered, exactly as `kuna strings --encoding utf16` does not recover it.",
+    "Scope is UTF-16LE whose code units are all in the 1-byte printable-ASCII charset -- the Windows-API case. A big-endian or non-Latin wide literal is still not recovered, exactly as `unlace strings --encoding utf16` does not recover it.",
     "UTF-32 (`StringsAnalyzer` also offers a 4-byte width) is untouched.",
     "A wide literal in a WRITABLE section gets its symbol but not its literal: the printer requires readonly before it will read the bytes, so it renders the name `s_<addr>` instead. Seen once in the sweep (crypto3/4/5.exe `s_405010`, a decode output buffer) and it is the same rule the 1-byte width has always followed.",
-    "`kuna strings --encoding utf16` reports a wide literal at ANY even address in a scanned region; the markup only reaches the ones a constant actually points at. The two surfaces still disagree on an unreferenced literal, which is correct but is not obvious from either.",
+    "`unlace strings --encoding utf16` reports a wide literal at ANY even address in a scanned region; the markup only reaches the ones a constant actually points at. The two surfaces still disagree on an unreferenced literal, which is correct but is not obvious from either.",
     "An INTERIOR pointer into a wide array (a loop bound like `while (p < (unsigned short *)0x10003fd18)`) now renders `while (p < L\"\")` -- the printer reads from the interior, hits a NUL and quotes an empty literal, losing the distinction between two such bounds. Seen twice in LOL. It is the same rendering the 1-byte width already produces for an interior pointer into a char array (`while (p < \"\")` is on the OFF arm of that very function), so this extends an existing behaviour rather than introducing one, but it is a real readability cost of typing the array."
   ]
 }

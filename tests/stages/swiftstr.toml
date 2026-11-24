@@ -6,7 +6,7 @@
 # `0xe600000000000000` beside `0x6c616d696e61`.
 #
 # Stage / sub-stage: P5 const-pointer, `RuleSwiftString`
-# (`unlace-decomp/src/p5_types/kuna_swiftstr.rs`), beside `fatstr`.
+# (`unlace-decomp/src/p5_types/unlace_swiftstr.rs`), beside `fatstr`.
 #
 # P0 assertion: `option swiftstr off|auto|always` (default auto: act on a
 # Swift image).

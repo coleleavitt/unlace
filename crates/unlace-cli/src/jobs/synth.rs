@@ -262,7 +262,7 @@ pub(super) fn name_structs_serially(
         }
     }
     eprintln!(
-        "[kuna --jobs] structsynth: {} function(s) with synthesized structures named as {} names \
+        "[unlace --jobs] structsynth: {} function(s) with synthesized structures named as {} names \
          them: {renamed} renamed, {forced} decompile(s) again",
         askers.len(),
         serial_run(cfg)
@@ -510,7 +510,7 @@ fn run_forced(
     let n = specs.len();
     let banner = |plan: &[Vec<usize>], workers: usize| {
         format!(
-            "[kuna --jobs] structsynth: {n} decompile(s) of the functions with synthesized \
+            "[unlace --jobs] structsynth: {n} decompile(s) of the functions with synthesized \
              structures again, with the serial names, {} chunk(s), {workers} worker process(es)",
             plan.len()
         )
@@ -617,7 +617,7 @@ fn serial_fallback(
     why: &str,
 ) -> Result<Named, String> {
     eprintln!(
-        "[kuna --jobs] note: {why}, so the {} function(s) with synthesized structures are \
+        "[unlace --jobs] note: {why}, so the {} function(s) with synthesized structures are \
          decompiled again in order by one worker process, as {} would.",
         askers.len(),
         serial_run(cfg)
@@ -625,7 +625,9 @@ fn serial_fallback(
     let specs: Vec<TargetSpec> = askers.iter().map(|&i| targets[i].clone()).collect();
     let n = specs.len();
     let banner = |_: &[Vec<usize>], _: usize| {
-        format!("[kuna --jobs] structsynth: {n} function(s) in one ordered chunk, 1 worker process")
+        format!(
+            "[unlace --jobs] structsynth: {n} function(s) in one ordered chunk, 1 worker process"
+        )
     };
     let phase = Phase {
         synth: SynthWorker::Serial,

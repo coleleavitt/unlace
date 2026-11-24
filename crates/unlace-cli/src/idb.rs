@@ -153,7 +153,7 @@ pub(crate) fn prepare_args(
             .file_name()
             .map_or("db".into(), |n| n.to_string_lossy().to_string());
         let file =
-            std::env::temp_dir().join(format!("kuna-idb-{}-{stem}.assert", std::process::id()));
+            std::env::temp_dir().join(format!("unlace-idb-{}-{stem}.assert", std::process::id()));
         let mut text = k.directives.join("\n");
         text.push('\n');
         std::fs::write(&file, text).map_err(|e| format!("{}: {e}", file.display()))?;
@@ -161,7 +161,7 @@ pub(crate) fn prepare_args(
         temp.push(file);
     }
     eprintln!(
-        "[kuna idb] {path}: {} {}-bit as {target}, {} segments, {} functions, {} directives",
+        "[unlace idb] {path}: {} {}-bit as {target}, {} segments, {} functions, {} directives",
         db.info.processor,
         db.info.bitness,
         db.memory.len(),

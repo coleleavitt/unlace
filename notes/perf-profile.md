@@ -25,7 +25,7 @@ A map for future speed work. It is taken after the speed PRs #805-#807, #823/#82
 
 | share of stacks | phase |
 |---|---|
-| 26% | `ActionBlockStructure` -> `run_region_structurer`, of which `KunaRegionIdentifier::compute` is 20% and `find_loop_headers` -> `kuna_dfs_back_edges` alone is 11% |
+| 26% | `ActionBlockStructure` -> `run_region_structurer`, of which `UnlaceRegionIdentifier::compute` is 20% and `find_loop_headers` -> `unlace_dfs_back_edges` alone is 11% |
 | 14% | `ActionPool` (the rule pools) |
 | 9.5% | `ActionMergeType` -> `Merge::merge_by_datatype` -> `merge_linear` (cover intersection tests) |
 | 7.4% | `ActionHeritage` (SSA: `place_multiequals` 4%, rename) |
@@ -44,15 +44,15 @@ is 27%.
 
 | # | self | function | verdict |
 |---|---|---|---|
-| 1 | 3.1% | libc `0x1627d5` (memmove/memcpy) | mostly inherent copying. Part of it is `KunaRegionGraph::clone` (3.1% of stacks) and `get_sorted_succs` allocating a fresh `Vec` per call; see 3-5. |
+| 1 | 3.1% | libc `0x1627d5` (memmove/memcpy) | mostly inherent copying. Part of it is `UnlaceRegionGraph::clone` (3.1% of stacks) and `get_sorted_succs` allocating a fresh `Vec` per call; see 3-5. |
 | 2 | 2.9% | `BTreeMap<BlockId, u64>` search | in `run_region_structurer`. A per-structuring order map keyed by `BlockId`; a slot-indexed `SecondaryMap` would make it O(1). **Waste (container choice).** |
-| 3 | 2.6% | `BTreeSet<KunaNodeKey>` insert | `find_loop_headers` builds a `KunaNodeSet` of headers on every call. |
-| 4 | 2.3% | `BTreeMap<KunaNodeKey, Adjacency>` search | `KunaRegionGraph::get_succs` goes id -> key (`keyof` BTreeMap) -> `nodes[&key]`: two tree searches per adjacency read. **Waste**: a dense `Vec<Adjacency>` indexed by `KunaNodeId` (ids are pool indices) gives O(1). |
-| 5 | 2.3% / 1.9% | `BTreeMap<KunaNodeId, (i32, i32)>`, `BTreeMap<KunaNodeId, KunaNodeKey>` | the same id-keyed lookups (`keyof`, node order). Same fix. |
+| 3 | 2.6% | `BTreeSet<UnlaceNodeKey>` insert | `find_loop_headers` builds a `UnlaceNodeSet` of headers on every call. |
+| 4 | 2.3% | `BTreeMap<UnlaceNodeKey, Adjacency>` search | `UnlaceRegionGraph::get_succs` goes id -> key (`keyof` BTreeMap) -> `nodes[&key]`: two tree searches per adjacency read. **Waste**: a dense `Vec<Adjacency>` indexed by `UnlaceNodeId` (ids are pool indices) gives O(1). |
+| 5 | 2.3% / 1.9% | `BTreeMap<UnlaceNodeId, (i32, i32)>`, `BTreeMap<UnlaceNodeId, UnlaceNodeKey>` | the same id-keyed lookups (`keyof`, node order). Same fix. |
 | 6 | 2.5% | `Cover::find` partition point | `Merge` cover intersection (`intersect_by_block`). Inherent to Ghidra's merge; the binary search is already the cheap form. |
-| 7 | 2.3% / 1.7% / 1.7% | libc malloc internals, `cfree` | allocation churn spread across the rule pools and the structurer: per-call `Vec`s in `get_sorted_succs` (`get_sorted_succs_into` with a reused buffer already exists, but `kuna_dfs_back_edges` does not use it), and `bb_ops` collecting (`Funcdata::bb_ops_iter` exists for read-only callers). **Partly waste.** |
+| 7 | 2.3% / 1.7% / 1.7% | libc malloc internals, `cfree` | allocation churn spread across the rule pools and the structurer: per-call `Vec`s in `get_sorted_succs` (`get_sorted_succs_into` with a reused buffer already exists, but `unlace_dfs_back_edges` does not use it), and `bb_ops` collecting (`Funcdata::bb_ops_iter` exists for read-only callers). **Partly waste.** |
 | 8 | 1.8% | `ActionPool::apply` | the rule dispatch loop itself. Its cost is arena-slot cache misses; inherent. |
-| 9 | 1.7% | `kuna_namedglobals::References::record_named` | every printed varnode of a merged global scans all instances of its `HighVariable` for the one in the data space. That is O(instances) per printed read, quadratic in printing for globals with many instances. **Waste**: cache the data-space instance per `HighVariable` for one print. |
+| 9 | 1.7% | `unlace_namedglobals::References::record_named` | every printed varnode of a merged global scans all instances of its `HighVariable` for the one in the data space. That is O(instances) per printed read, quadratic in printing for globals with many instances. **Waste**: cache the data-space instance per `HighVariable` for one print. |
 | 10 | 1.5% | `MergeContext::vn_cover_ref` | merge cover access. Inherent. |
 | 11 | 1.4% | `Address::get_space` | dev-build accessor, not inlined (see Method). |
 | 12 | 1.3% | `ActionDirectWrite::apply` | a sweep over every varnode per pass. Inherent (upstream algorithm). |
@@ -64,15 +64,15 @@ is 27%.
 
 1. **Region identifier (`p7_regions`), about 20-25% on large functions.**
    - `make_regions` re-runs `find_loop_headers`, a full DFS from the start node, on every pass of
-     both its outer and inner loops, and clones the `KunaRegionGraph` (BTreeMaps) per region attempt.
-   - `KunaRegionGraph` keys nodes through two BTreeMaps (`keyof`, `nodes`). Make it a dense
-     `Vec<Option<Adjacency>>` indexed by `KunaNodeId`, keeping a separately sorted key list where
+     both its outer and inner loops, and clones the `UnlaceRegionGraph` (BTreeMaps) per region attempt.
+   - `UnlaceRegionGraph` keys nodes through two BTreeMaps (`keyof`, `nodes`). Make it a dense
+     `Vec<Option<Adjacency>>` indexed by `UnlaceNodeId`, keeping a separately sorted key list where
      iteration order matters. That removes items 2-5.
-   - In `kuna_dfs_back_edges`, use `get_sorted_succs_into` with reused buffers.
+   - In `unlace_dfs_back_edges`, use `get_sorted_succs_into` with reused buffers.
    - These are container and algorithm changes; output must stay identical, since node order comes
-     from `KunaNodeKey`.
+     from `UnlaceNodeKey`.
 2. **`record_named` (item 9):** quadratic in printing for heavily merged globals. A small fix.
-3. **Settle bookkeeping after each function:** `kuna_voidret::due` is now incremental (#878).
+3. **Settle bookkeeping after each function:** `unlace_voidret::due` is now incremental (#878).
    `stale_readers` still scans `changed` × readers per function, about 0.5% on libcrypto; it grows
    quadratically with function count, so watch it on 50k+ function images.
 4. **Merge (`merge_by_datatype`, 9.5%)** and **heritage (7%)** are upstream Ghidra algorithms.

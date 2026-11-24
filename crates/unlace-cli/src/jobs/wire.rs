@@ -13,8 +13,8 @@ use unlace_decomp::structsynth::shard::FunctionRecord;
 
 use super::TargetSpec;
 
-const SPEC_MAGIC: &[u8; 12] = b"KUNAJOBSPEC3";
-pub(super) const RESULT_MAGIC: &[u8; 12] = b"KUNAJOBRES12";
+const SPEC_MAGIC: &[u8; 12] = b"UNLACEJOBSP3";
+pub(super) const RESULT_MAGIC: &[u8; 12] = b"UNLACEJOBR12";
 
 /// Result-stream frame kinds.  The envelope is what lets a truncated tail be
 /// dropped rather than guessed.

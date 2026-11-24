@@ -8,7 +8,7 @@
 # so the bin and the test exercise identical code.
 [package]
 name = "unlace-lift-diff"
-description = "kuna Rust port: self-test driver for the B2 lift differential (delegates to unlace-harness)"
+description = "unlace Rust port: self-test driver for the B2 lift differential (delegates to unlace-harness)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

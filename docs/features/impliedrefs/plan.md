@@ -10,8 +10,8 @@ pub struct OptionImpliedRefs;   // -> Architecture::max_implied_ref
 pub struct OptionTermDup;       // -> Architecture::max_term_duplication
 ```
 
-Two arms in `Architecture::set_kuna_option` write the parsed value into the field
-the pass already reads, and two names join `KUNA_OPTION_NAMES`. Nothing in
+Two arms in `Architecture::set_unlace_option` write the parsed value into the field
+the pass already reads, and two names join `UNLACE_OPTION_NAMES`. Nothing in
 `coreaction_cleanup.rs` changes: `base_explicit` and `process_multiplier` were
 already reading `data.get_arch().max_implied_ref` / `.max_term_duplication` off
 the per-function `ArchSeam` context, which `Architecture` refreshes from these
@@ -39,10 +39,10 @@ The defaults are the constants, so the defaults must be byte-identical. Proven
 three ways:
 
 * `make test` 675/675 and `make test-stages` PARITY OK;
-* `kuna decompile-all fmt` with no options == with `--option impliedrefs 2` ==
+* `unlace decompile-all fmt` with no options == with `--option impliedrefs 2` ==
   with `--option termdup 2`, byte for byte;
 * `decompile-all` over 20 decbench ELFs (12 O2, 8 O0; coreutils, bzip2, chibios,
-  sysvinit, shadow, diffutils, dpkg, e2fsprogs), this branch's `kuna` vs the
+  sysvinit, shadow, diffutils, dpkg, e2fsprogs), this branch's `unlace` vs the
   `main` build: 152,308 lines of emitted C, 0 differing.
 
 ## 4. Test
@@ -67,5 +67,5 @@ and `2.5` are all refused).
 `settables` 205 -> 207, tiers `(66, 78, 61)` -> `(66, 80, 61)`, catalog JSON
 records 204 -> 206, `catalog_bytecompat.rs` fixture recaptured,
 `tests/stages/catalog.toml` bucket #8 (`opt-in-tool`) 18 -> 20, stage corpus
-count in `kuna-base/src/xml.rs` 293 -> 294, `docs/baseline-stages.json`
+count in `unlace-base/src/xml.rs` 293 -> 294, `docs/baseline-stages.json`
 re-recorded (1007 -> 1013 keys), `docs/options.md` regenerated.

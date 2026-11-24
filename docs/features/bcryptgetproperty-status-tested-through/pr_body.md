@@ -5,7 +5,7 @@ function never assigns. On any x86-64 binary where a call's guard INDIRECTs get
 an op inserted into them, the call silently loses its return value:
 
 ```
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/mcount_x86_64 __printf_fp_l
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/mcount_x86_64 __printf_fp_l
 ...
         v54 = hack_digit(&v41);
 ...
@@ -30,7 +30,7 @@ it whose result is consumed by the identical `test eax,eax; js` pair.
 ## The fix
 
 - `Funcdata::opInsertAfter` redirects an insertion after an INDIRECT marker to
-  the CALL (or STORE) that marker speaks for. kuna carried that redirect as a
+  the CALL (or STORE) that marker speaks for. unlace carried that redirect as a
   `STUB(W3-varnode)` because the iop decode belonged to a later wave; this
   completes it (`p3_dataflow/indirectanchor.rs`).
 - Without the redirect, `RulePullsubIndirect` — pulling a SUBPIECE through the
@@ -56,7 +56,7 @@ option off. `tests/cli/bcryptgetproperty-status-tested-through.json` pins the
 
 Gates: `make test` PARITY OK 675/675 (0 assertions moved), `make test-stages`
 PARITY OK, `make rust-test` green, `make test-cli` 81/81, `make check-spec`
-green, `kuna catalog --check` OK. Sweep over 35 crackmes (7,919 functions) and
+green, `unlace catalog --check` OK. Sweep over 35 crackmes (7,919 functions) and
 every in-repo fixture (1,676 functions): 51 functions change, 0 added or
 removed, every one of them a bare call that regains its return value; net −57
 lines. `__printf_fp_l` decompiles 10.2% faster (median of 7).

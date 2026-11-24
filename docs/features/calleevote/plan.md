@@ -3,9 +3,9 @@
 ## 1. The option
 
 `calleevote off|types|fields`, default `fields`, P4 `prototype-source`
-(`decompiler/crates/kuna-decomp/src/p4_calls/calleevote.rs`). It needs the
+(`decompiler/crates/unlace-decomp/src/p4_calls/calleevote.rs`). It needs the
 callee-first whole-binary pass `protoorder` drives, so it lives beside it and is
-inert wherever that pass is (single-function `kuna decompile`, narrowed runs,
+inert wherever that pass is (single-function `unlace decompile`, narrowed runs,
 `--jobs`, raw images, `--option protoorder off`).
 
 ## 2. The pieces
@@ -16,7 +16,7 @@ inert wherever that pass is (single-function `kuna decompile`, narrowed runs,
    `(storage, HighVariable type)`. Hooked in `console` `decompile_pulled`
    next to `protoorder`'s park.
 2. **Knowing every caller** (`CallGraph::direct_call_sites`,
-   `open_function_entries`, `kuna-cli` `decompile_all.rs`). Direct calls and
+   `open_function_entries`, `unlace-cli` `decompile_all.rs`). Direct calls and
    tail jumps from other functions; `None` when the address is a data reference,
    a pointer-width word of any section the image loads (`SHF_ALLOC` on ELF), a
    Mach-O chained-fixup target, a dynamic relocation, an exported symbol or the
@@ -29,7 +29,7 @@ inert wherever that pass is (single-function `kuna decompile`, narrowed runs,
    the storage matches, and the type is the same committed pointer everywhere.
 4. **Voting** (`input_vote`, from `buildLocaltypes` ahead of `ptrfromuse`). Only
    over an uncommitted fold, refused by `protoorder`'s own family refusals
-   (`kuna_protoorder::input_refuses`, a new `Reading::Input`), and a `char *`
+   (`unlace_protoorder::input_refuses`, a new `Reading::Input`), and a `char *`
    refused over a constant stored through the value wider than a byte.
 5. **Rounds** (`callee_vote_rounds`). Redo the newly decided functions in plan
    order, re-record, decide again, up to 3 rounds. A redo that fails keeps the
@@ -47,7 +47,7 @@ inert wherever that pass is (single-function `kuna decompile`, narrowed runs,
 * Unit: `calleevote/tests.rs` (12: parse, committed/uncommitted, the
   decision's agreement, storage, graph and recursion rules),
   `structsynth/tests.rs` `a_lone_field_is_one_wide_access_away_from_the_base`,
-  `kuna-cli` `decompile_all.rs` `calleevote_stored_tests` (4: only an aligned
+  `unlace-cli` `decompile_all.rs` `calleevote_stored_tests` (4: only an aligned
   word equal to an entry stores it, a relocatable object is open, every MIPS
   function is open, a table in a `.text` loaded at address 0 is read);
   `calleevote/tests.rs` `a_forgotten_function_keeps_no_statement`,
@@ -55,7 +55,7 @@ inert wherever that pass is (single-function `kuna decompile`, narrowed runs,
   `a_callers_record_replaces_the_callees_lone_record`,
   `a_statement_naming_a_superseded_record_is_forgotten`.
 * CLI, two-pass over the whole binary path, fixture
-  `decompiler/crates/kuna-analysis/tests/fixtures/calleevote_x86_64` (+ `.c`):
+  `decompiler/crates/unlace-analysis/tests/fixtures/calleevote_x86_64` (+ `.c`):
   `tests/cli/calleevote-off-leaves-the-callee-untyped.json`,
   `calleevote-types-takes-what-every-caller-passes.json`,
   `calleevote-fields-reads-a-closed-getters-lone-field.json` (`mark` pins the

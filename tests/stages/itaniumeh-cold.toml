@@ -1,4 +1,4 @@
-# Kuna (IDA 9.5 eh34 design): P2 flow classification, option itaniumeh
+# Unlace (IDA 9.5 eh34 design): P2 flow classification, option itaniumeh
 # (default off), with GCC's hot/cold split. The script loads the committed
 # itaniumeh/eh_x86_64_cold.elf (g++ -O2, the default partitioning, from the
 # same eh.cc): catcher()'s landing pad is a two-instruction stub that jumps

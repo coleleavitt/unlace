@@ -1,10 +1,10 @@
-# GH-854 (kuna), the Apple arm64 convention: AARCH64_apple.cspec lists x8 as its
+# GH-854 (unlace), the Apple arm64 convention: AARCH64_apple.cspec lists x8 as its
 # `hiddenret` input entry exactly as the Linux AARCH64.cspec does, so a value a
 # caller leaves in x8 is printed as the next call's first argument there too.
 # gh854-hiddenretarg-a64.xml carries the full fixture and the reasoning; this
 # test runs three of its functions under this compiler spec.
 #
-# Stage / sub-stage: P4 "active-input-trial-scoring" (kuna_hiddenretarg.rs,
+# Stage / sub-stage: P4 "active-input-trial-scoring" (unlace_hiddenretarg.rs,
 # always on).
 #
 #   f     mov x8,#0x38; mov x0,#3; bl foo   foo is `add x0,x0,#1; ret`

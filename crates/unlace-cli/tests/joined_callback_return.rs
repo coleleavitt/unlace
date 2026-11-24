@@ -12,7 +12,7 @@ fn records() -> serde_json::Value {
         "--functions",
         "make_pair,first,second,both,forward,narrow_second,scalar,invoke_void",
         "--assert",
-        &format!("@{}", common::fixture("joined_callback_return.kuna")),
+        &format!("@{}", common::fixture("joined_callback_return.unlace")),
         "--option",
         "ctypes",
         "off",

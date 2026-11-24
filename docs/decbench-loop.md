@@ -9,25 +9,25 @@ option-gated, default-on when clean, measured.
 
 [decbench](https://github.com/mahaloz/decbench) scores decompilers per function on a
 compiled-project corpus (**94,575 functions / 803 binaries / 39 projects ×
-{O0, O2, O2-noinline}**, eleven decompilers including kuna). The campaign metric is
+{O0, O2, O2-noinline}**, eleven decompilers including unlace). The campaign metric is
 **GED** — CFG graph edit distance between the Joern-parsed original source and the
 Joern-parsed decompiled C. Lower is better; **0 = perfect structural recovery**.
 `decbench improvements` mines the per-function cases where a base decompiler beats a
 target.
 
-Where kuna stands after the **2026-08-03** refresh (share of functions scored perfect,
+Where unlace stands after the **2026-08-03** refresh (share of functions scored perfect,
 from `~/github/decbench/results/full_run/scoreboard.toml`):
 
 | metric | scored | standings |
 |---|---:|---|
-| **GED** | 91,072 | ida 36.06% · **kuna 35.93%** · angr 34.20% · ghidra 25.13% · binja 20.42% |
-| **overall** (all three metrics) | 94,267 | ida 38.01% · **kuna 37.91%** · angr 36.98% · ghidra 27.07% · binja 23.26% |
-| **byte_match** | 90,890 | **kuna 3.41% (1st)** · ida 1.77% · angr 0.53% · ghidra 0.48% · binja 0.20% |
+| **GED** | 91,072 | ida 36.06% · **unlace 35.93%** · angr 34.20% · ghidra 25.13% · binja 20.42% |
+| **overall** (all three metrics) | 94,267 | ida 38.01% · **unlace 37.91%** · angr 36.98% · ghidra 27.07% · binja 23.26% |
+| **byte_match** | 90,890 | **unlace 3.41% (1st)** · ida 1.77% · angr 0.53% · ghidra 0.48% · binja 0.20% |
 
 **Treat this tree as a mining instrument, not a publishable cross-tool leaderboard.**
-kuna's column is current — re-decompiled and re-scored on 2026-08-03 from a pinned build.
+unlace's column is current — re-decompiled and re-scored on 2026-08-03 from a pinned build.
 Every rival's column is whatever its own last run left behind, weeks earlier. The columns
-are therefore not contemporaneous, and kuna's byte_match is additionally *under*-counted on
+are therefore not contemporaneous, and unlace's byte_match is additionally *under*-counted on
 ARM/PE at two of three optimisation levels (see *Refreshing the signal*). Use the numbers to
 find cases; do not quote them as a measured cross-tool result without re-running every
 decompiler on one tree.
@@ -45,24 +45,24 @@ Decisions baked in:
 - venv: `~/.virtualenvs/decbench` (angr 9.2.213 pinned, pyjoern, cfgutils, editable
   decbench). Only `rescore`/`srcsizes` need it; `mine`/`novel`/`triage`/`status` run on
   plain python3.
-- results tree: `~/github/decbench/results/full_run` (override `KUNA_DECBENCH_RESULTS`).
+- results tree: `~/github/decbench/results/full_run` (override `UNLACE_DECBENCH_RESULTS`).
   The benchmark ran on **stripped** copies with the function's own name relabeled
   post-hoc, so fresh decompiles must use `<opt>/<project>/stripped/<bin>` + self-relabel
   to stay comparable.
 - **Verify-first is mandatory, and it is not optional bookkeeping** — see the next
   section for exactly how stale the stored output is.
-- **PE addresses: the pools carry RVAs, kuna wants VAs.** decbench records a PE
+- **PE addresses: the pools carry RVAs, unlace wants VAs.** decbench records a PE
   function's address as an RVA (`function_results.json`, and every rival's
-  `// Function: <fn> @ 0x..` marker — only kuna's own artifact writes VAs), so a mined
+  `// Function: <fn> @ 0x..` marker — only unlace's own artifact writes VAs), so a mined
   case may hold either form. `triage`/`rescore`/`showcase` rebase it off the binary's
-  own PE `ImageBase` before calling `kuna --addr` (`config.kuna_addr`), which differs
+  own PE `ImageBase` before calling `unlace --addr` (`config.unlace_addr`), which differs
   per binary — `mydoom.exe`/`x0r-usb.exe` 0x400000, `dexter.dll` 0x69940000. ELF
   addresses are already VAs and pass through untouched.
 - GED quirks to respect in triage: graphs > 60 nodes are **approximated** as
   |Δnodes| + |Δedges| (`approximated: true` on a case, taken from the run's own
   `ged_large_graph_audit.json`); `inf` means missing/unparseable, not "bad"; a
   degenerate source CFG (`source_nodes: 1`) means the source function is a single basic
-  block — either genuinely straight-line (then extra control flow in kuna's output IS a
+  block — either genuinely straight-line (then extra control flow in unlace's output IS a
   real defect, usually a missed no-return) or a Joern parse failure (then the score is
   meaningless). Read the source before deciding which.
 
@@ -75,9 +75,9 @@ Decisions baked in:
    vs if-cascade, function boundary, missing blocks, wrong types.
 2. **Mode presets did not exist when the benchmark ran — and the scored column is
    `aggressive`, not `reliable`.** This file said the opposite until round 4 checked the
-   backend: `decbench/decompilers/raw/kuna_raw.py`'s `_build_command` builds
+   backend: `decbench/decompilers/raw/unlace_raw.py`'s `_build_command` builds
    `unlace decompile-all <bin> --json --max-fn-seconds 120`, appends `--mode` **only** when
-   `DECBENCH_KUNA_MODE` is set (it is not), and appends `--option` only from
+   `DECBENCH_UNLACE_MODE` is set (it is not), and appends `--option` only from
    `config.extra_options`, which is empty. There is no injected `option listing on`
    anywhere in it. So the benchmark ran `--mode auto`, which picks from the input's byte
    length: `aggressive` below 500 KiB, `reliable` up to 2 MiB, `fast` at 2 MiB and above.
@@ -104,9 +104,9 @@ Decisions baked in:
    `v850indirectbranch` are the six it does not carry, so sweep those explicitly
    (`--option condfold on|wide`). **Recount rather than copy this** — the queue adds
    options faster than the prose tracks them.
-3. **The stored kuna column is a snapshot of one pinned build, and it is never HEAD.** The
-   2026-08-03 refresh re-decompiled all three optimisation levels from **kuna 9623dc27**
-   (`~/decbench-campaign-state/stable/PINNED_KUNA_COMMIT.txt`), which closed the worst case
+3. **The stored unlace column is a snapshot of one pinned build, and it is never HEAD.** The
+   2026-08-03 refresh re-decompiled all three optimisation levels from **unlace 9623dc27**
+   (`~/decbench-campaign-state/stable/PINNED_UNLACE_COMMIT.txt`), which closed the worst case
    of this — round 2 opened with the O0 pool ~100 commits behind, older than the
    2026-07-27 date the docs then cited, and one whole track resolved to `already-fixed`
    purely because of it. It does not remove the rule: **verify on today's build before any
@@ -156,7 +156,7 @@ draft PR). Plus:
      per-step pass rates, and the struct-candidate census. The census is split by
      what the evidence was — a base the code reads at a written-down byte offset
      (`*(T *)(B + K)`, `B->f`) against one seen only through `B[k]`, which an array
-     walk produces just as readily — and the match→miss channel (candidates kuna
+     walk produces just as readily — and the match→miss channel (candidates unlace
      **already** types correctly, and would spend) is only meaningful per pool: it is
      ~1% on the field pool and ~15% on the index pool.
    - **A claim about variable *count* is made with `varcensus`**, not by eye:
@@ -201,7 +201,7 @@ unclassifiable ones for a human).
 
 This queue ran up to four output-changing PRs concurrently, and every one of them touches
 the same handful of hard-coded counters (`catalog_bytecompat.rs`, `phase_catalog.json`,
-`unlace-base/src/xml.rs`' corpus count, `docs/baseline-stages.json`, the `kuna_phases`
+`unlace-base/src/xml.rs`' corpus count, `docs/baseline-stages.json`, the `unlace_phases`
 count asserts, `tests/stages/README.md`). Round 2 produced **three distinct failure
 shapes, and only one of them announced itself**:
 
@@ -243,9 +243,9 @@ python3 -m scripts.decbench.mine --base ida --select 20   # base ida (current le
 python3 -m scripts.decbench.mine --base ida --metric type_match --select 20  # the type pool
 python3 -m scripts.decbench.novel --select 16             # the NOVEL pool
 #   -> docs/decbench/cases[-<base>].json    the full pool, bucketed + deduped (gitignored)
-#   -> docs/decbench/cases-missing*.json    kuna-failed pool (recall workstream owns it)
+#   -> docs/decbench/cases-missing*.json    unlace-failed pool (recall workstream owns it)
 #   -> docs/decbench/backlog[-<base>].md    ranked human table (one row per group)
-#   -> docs/decbench/novel.{json,md}        kuna-is-best-and-still-bad, ranked by warts
+#   -> docs/decbench/novel.{json,md}        unlace-is-best-and-still-bad, ranked by warts
 #   -> docs/decbench/triage-queue*.json     the stratified triage picks
 #   a non-GED pool suffixes every one of those with its metric
 #   (cases-ida-type_match.json, ...), so the GED pools are never overwritten
@@ -299,7 +299,7 @@ every default flip and every gate on a default-ON pass.
 
 ### `entrysweep` is its discovery-tier twin — GED cannot see which functions you found
 
-`optsweep` measures the C kuna emits for a function it already found, so a P1 discovery
+`optsweep` measures the C unlace emits for a function it already found, so a P1 discovery
 change (`aif` and its `strict`/`precise` values, `ptrentry`, `poolentry`, `tailcallentry`,
 `funcstart_patterns`) is invisible to it: an option that invents a thousand phantom
 functions, or loses a thousand real ones, moves no GED at all. `entrysweep` measures the
@@ -372,7 +372,7 @@ Five things to know before quoting any of them:
 * **`typescore`'s one invalidating control is `identical_variables_scored_differently`**,
   which must be 0: two arms that handed the metric byte-identical `variables[]` cannot
   legitimately score differently. `retyped_functions` next to it is the count the option
-  actually changed — the expected signal, not a warning. Its cached rows carry the kuna
+  actually changed — the expected signal, not a warning. Its cached rows carry the unlace
   binary (by content), the decbench commit and both arm values; a cache that disagrees
   with the run is dropped instead of re-reported, and every field of the block —
   including which projects it covers — is derived from the rows summarized.
@@ -383,7 +383,7 @@ Five things to know before quoting any of them:
   exactly, so the step to work on is the one holding the points. On coreutils at O0
   that is `is_c_pointer` (53–65% of the loss); at O2 it is `defined`, i.e. the export
   surface, at 76–80%.
-* **`structscore` reports 0 layout-F1 today by construction** — kuna synthesizes no
+* **`structscore` reports 0 layout-F1 today by construction** — unlace synthesizes no
   structs, so the number to record before any struct work is the *denominator*: how many
   pointer-to-struct parameters and GT fields exist to be recovered at all.
 
@@ -391,10 +391,10 @@ Five things to know before quoting any of them:
 
 | bucket | meaning | action |
 |---|---|---|
-| `kuna-specific` | kuna GED > ghidra + 2 — regression vs kuna's own ancestor | fix first, most tractable |
-| `inherited` | kuna ≈ ghidra — Ghidra-family-wide gap vs the base | SAILR-style structuring features |
-| `ahead` | kuna already beats ghidra, still behind the base | genuine remaining distance |
-| `artifact_suspect` | kuna ≤ best(ghidra, ida, binja) + 1 while only the base = 0, or the source CFG is degenerate | verify truncation / parse failure; route to a decbench fix |
+| `unlace-specific` | unlace GED > ghidra + 2 — regression vs unlace's own ancestor | fix first, most tractable |
+| `inherited` | unlace ≈ ghidra — Ghidra-family-wide gap vs the base | SAILR-style structuring features |
+| `ahead` | unlace already beats ghidra, still behind the base | genuine remaining distance |
+| `artifact_suspect` | unlace ≤ best(ghidra, ida, binja) + 1 while only the base = 0, or the source CFG is degenerate | verify truncation / parse failure; route to a decbench fix |
 
 ### The three pools
 
@@ -402,11 +402,11 @@ Five things to know before quoting any of them:
 |---|---|---|---|
 | `angr` | where does angr's structuring beat ours | `mine.py` (default base) | 3,596 cases / 1,813 groups |
 | `ida` | where does the current scoreboard leader beat ours | `mine.py --base ida` | 6,057 cases / 2,687 groups |
-| `novel` | where is kuna already the best and the output is **still bad** | `novel.py` | 4,842 cases / 2,301 groups |
+| `novel` | where is unlace already the best and the output is **still bad** | `novel.py` | 4,842 cases / 2,301 groups |
 
 The NOVEL pool exists because a metric win says nothing about whether the pane reads
 well, and because no rival holds the answer there — the fix has to be invented. It
-ranks by warts in kuna's own emission (gotos, `(code *)` casts, raw register names,
+ranks by warts in unlace's own emission (gotos, `(code *)` casts, raw register names,
 `CONCAT`/`SUBPIECE` soup, `halt_baddata`), not by GED, and excludes O2 by default
 because inlining detaches the decompiled CFG from the source function. **A fix that
 comes out of this pool is tagged `(NOVEL)` in its commit subject** so the provenance is
@@ -414,7 +414,7 @@ unambiguous: no other decompiler showed us the answer.
 
 ### The recall pool (`cases-missing*.json`) is not a triage pool — check it first anyway
 
-Functions the base scored and kuna produced **no usable GED for at all**, every one of them
+Functions the base scored and unlace produced **no usable GED for at all**, every one of them
 a guaranteed zero. On the 2026-08-03 snapshot that is **1,420 functions against
 `--base angr`** (966 of them base-perfect) and **1,552 against `--base ida`**, with
 **0 whole-binary failures**. It is now almost entirely embedded ARM Cortex-M:
@@ -433,11 +433,11 @@ Recall work outranks structuring work per function recovered — check this pool
 mining another structuring case. The three causes this file used to name are all resolved
 or were never right, and none of them should be repeated:
 
-- **"u-boot 100%, freertos 100%" was a decbench artifact, not a kuna discovery failure.**
-  Neither project appears in either pool, and not because kuna improved: **angr and ida
+- **"u-boot 100%, freertos 100%" was a decbench artifact, not a unlace discovery failure.**
+  Neither project appears in either pool, and not because unlace improved: **angr and ida
   score nothing at all there**, so the pool cannot contain them. decbench's raw backends
   keep only functions inside `.text`, u-boot's `.text` is 936 bytes and freertos is built
-  `-ffunction-sections`. Measured past the filter, kuna covers 261 of freertos's 265 and
+  `-ffunction-sections`. Measured past the filter, unlace covers 261 of freertos's 265 and
   1,833 of u-boot's 2,968 functions (`docs/decbench/recall-measurement.md`).
 - **"betaflight 22%" is stale.** betaflight is still the single largest contributor at 575
   rows, but that is 6.0% of the 11,070 betaflight functions any non-LLM rival scored.
@@ -447,7 +447,7 @@ or were never right, and none of them should be repeated:
   either pool.
 
 The measured breakdown of what is left — 98.3% of it function-entry granularity on
-embedded ARM, median 24 bytes from the containing kuna entry — is
+embedded ARM, median 24 bytes from the containing unlace entry — is
 `docs/decbench/recall-measurement.md`. The approved sequence against it was
 **[PROPOSAL] PR #239**, and it is now essentially delivered: step 1 `cortexmvectors`
 (#248), step 2 `ptrentry` (#255) and step 3 `tailcallentry` (#259) are merged, as is an
@@ -465,7 +465,7 @@ per-option acceptance numbers are in `docs/features/{cortexmvectors,ptrentry,tai
 ### Per-case procedure (the triage agent)
 
 1. `triage --case <id> --also ida,ghidra` — read every pane side by side.
-2. Gap gone on fresh kuna? → `status: already-fixed` (name the PR; rescore to confirm).
+2. Gap gone on fresh unlace? → `status: already-fixed` (name the PR; rescore to confirm).
    Say whether `--mode reliable` also closes it (a code fix) or only the no-flag run
    does (the aggressive default closed it).
 3. Sweep relevant default-OFF options (`unlace catalog --json`, `use_when` match;
@@ -477,7 +477,7 @@ per-option acceptance numbers are in `docs/features/{cortexmvectors,ptrentry,tai
    `calloverlap`, `spillargtrial`, `outline`) have no single "on" a preset could pin.
 4. Pin ONE dominant structural difference (gotos into shared tails, missing switch,
    loop shape, boundary overrun, …).
-5. Metric-artifact check: approximated large CFGs, Joern parse failures on kuna's
+5. Metric-artifact check: approximated large CFGs, Joern parse failures on unlace's
    emission style, degenerate source CFG, truncated angr output scoring 0.
    → `status: metric-artifact` (sub-reason) or a decbench-side bug note.
 6. Read the ORIGINAL SOURCE — it is what "correct structure" means, and it is in the
@@ -486,8 +486,8 @@ per-option acceptance numbers are in `docs/features/{cortexmvectors,ptrentry,tai
 7. Root-cause in the reference: for angr, the venv site-packages (9.2.213 — the version
    that ran) is ground truth, `~/github/angr-dev/angr` master for readability; name the
    pass/class. For the ida and novel pools there is no readable reference — root-cause
-   in kuna alone.
-8. Owning kuna phase from `docs/phases.md`.
+   in unlace alone.
+8. Owning unlace phase from `docs/phases.md`.
 9. Scope: small option-gated pass vs `[PROPOSAL]`.
 10. Check siblings reproduce the same symptom.
 11. Write `docs/decbench/triage/<case-id>.md`:
@@ -506,9 +506,9 @@ feature_slug: <proposed or null>
 scope: small | proposal
 confidence: high | medium | low
 ---
-## Side-by-side      (reference / stored kuna / fresh kuna, fenced)
+## Side-by-side      (reference / stored unlace / fresh unlace, fenced)
 ## Source            (the original function from the .i)
-## Analysis          (symptom, root cause, why the reference wins; kuna phase)
+## Analysis          (symptom, root cause, why the reference wins; unlace phase)
 ## Proposed fix      (mechanism, owning files, risks)
 ```
 
@@ -517,23 +517,23 @@ named structural symptom, one named phase, and a mechanism that fits in one modu
 Without the mechanism the honest status is `needs-proposal`. A disproven case is worth
 more than an invented feature.
 
-## Finding good kuna examples
+## Finding good unlace examples
 
-The loop above mines kuna's **losses**. The same results tree also answers the mirror
-question — *where does kuna already beat everyone?* — which is what stocks the landing
+The loop above mines unlace's **losses**. The same results tree also answers the mirror
+question — *where does unlace already beat everyone?* — which is what stocks the landing
 page's compare section (`integrations/web/compare-samples.js`, rendered at
-[kuna.noelo.org](https://kuna.noelo.org) → *compare*). Ask an agent to **"find good kuna
+[kuna.noelo.org](https://kuna.noelo.org) → *compare*). Ask an agent to **"find good unlace
 examples"** and this is the procedure it runs.
 
 ```bash
-# 1. MINE — optimized builds, medium functions, kuna beats ida and nobody beats kuna
+# 1. MINE — optimized builds, medium functions, unlace beats ida and nobody beats unlace
 python3 -m scripts.decbench.showcase --perfect --limit 40 \
         --dump /tmp/showcase-cands
 #   --rival ghidra|binja|angr   compare against a different decompiler
 #   --no-sweep                  accept beating --rival only (default: beat all four)
-#   --perfect                   require kuna GED == 0 (structurally exact)
+#   --perfect                   require unlace GED == 0 (structurally exact)
 #   --min-size/--max-size       pane fit, default 22..100 decompiled lines
-#   -> /tmp/showcase-cands/<case-id>/{kuna,ida,ghidra,binja,angr,source}.c + meta.json
+#   -> /tmp/showcase-cands/<case-id>/{unlace,ida,ghidra,binja,angr,source}.c + meta.json
 
 # 2. VERIFY — does the recorded pane still reproduce on today's build?
 python3 -m scripts.decbench.showcase --perfect --limit 40 \
@@ -554,29 +554,29 @@ the panes are the argument. Keep the emitter's output free of prose.
 
 **Step 3 is the whole job.** GED is a *filter*, not a verdict: roughly half of decbench's
 cross-decompiler gaps are scoring artifacts (see *Caveats*), and a metric win says
-nothing about whether kuna's pane is pleasant to read. So fan out one reviewer per
+nothing about whether unlace's pane is pleasant to read. So fan out one reviewer per
 handful of candidates — each reads **all six panes in full** — then run an **adversarial
-second pass** whose brief is *"this sample is about to embarrass kuna on its own front
+second pass** whose brief is *"this sample is about to embarrass unlace on its own front
 page; find the reason"*. Both passes were what turned an 89-candidate mined pool into
 the shipped samples; the first pass rejected roughly two thirds, and the skeptics killed
 half of what survived.
 
 Reject a candidate for any of:
 
-- **Semantic wrongness** — kuna's body disagrees with `source.c` (dropped call, inverted
+- **Semantic wrongness** — unlace's body disagrees with `source.c` (dropped call, inverted
   test, a value read before the call that produces it). A pretty but wrong pane is fatal.
 - **A rival that simply reads better.** The visitor can flip the dropdown; if Ghidra or
   angr wins that pane, the sample backfires. This is why the miner defaults to `--sweep`.
-- **An invisible GED win** — kuna scores lower only because it *dropped* code the rivals
+- **An invisible GED win** — unlace scores lower only because it *dropped* code the rivals
   recovered (compare pane lengths, then read for the missing block).
-- **Constants kuna alone fails to resolve** — a bare `0x7f373` in a `printf` format slot,
+- **Constants unlace alone fails to resolve** — a bare `0x7f373` in a `printf` format slot,
   or a `dat_XXXX` where all four rivals print `stderr`. One or two is normal on a stripped
   binary; a pattern of it while every rival resolves is a loss the visitor sees.
 - Raw register names as variables, leaked uniques, `halt_baddata`, a truncated decode.
 - A trivial three-line wrapper, or a source pane that is macro soup (`source_status:
   "preprocessed"` in `meta.json` — the `.c` was unavailable and the `.i` was used).
 
-Explicitly **not** a defect: kuna's own `/* WARNING: <pass>: ... */` transform banners
+Explicitly **not** a defect: unlace's own `/* WARNING: <pass>: ... */` transform banners
 (`branchflip`, `taildup`, `earlyreturn`, `tailcalljump`, …). They are documented,
 default-on provenance annotations (`docs/options.md`) — judge the code, not them.
 
@@ -588,13 +588,13 @@ the current build before anything ships.
 
 ## Refreshing the signal
 
-After a future benchmark re-run: point `KUNA_DECBENCH_RESULTS` at the new tree, re-run
+After a future benchmark re-run: point `UNLACE_DECBENCH_RESULTS` at the new tree, re-run
 `srcsizes` (it reads that tree's `ged_src/` + `ged_large_graph_audit.json`), then
 `mine`/`novel` — a new snapshot supersedes the old; existing triage records keep their
 case ids. The mined pool JSONs are gitignored (tens of MB, regenerable); the ranked
 tables, the triage queues and the triage records are committed.
 
-Refreshing **kuna's own column in place** (re-decompile + re-score just kuna, leaving the
+Refreshing **unlace's own column in place** (re-decompile + re-score just unlace, leaving the
 rivals frozen) is a different and much more dangerous operation. The working recipe lives
 outside this repo, at `~/decbench-campaign-state/`, because it carries multi-hundred-MB
 pinned inputs:
@@ -603,24 +603,24 @@ pinned inputs:
 |---|---|
 | `o0-refresh/resume_from_ged.sh` | the driver — GED, byte_match, type_match, finalize |
 | `o0-refresh/make_baseline_all.py` | builds the GED comparison baseline |
-| `o0-refresh/restore_kuna_bytematch.py` | repairs the byte_match trap below |
+| `o0-refresh/restore_unlace_bytematch.py` | repairs the byte_match trap below |
 | `o0-refresh/STATE.md` | what the last run did, and what it broke |
 | `ged-baseline-20260727/` | the pinned published GED inputs the rivals' scores are bound to |
-| `stable/kuna` + `stable/specs` | a snapshotted kuna binary and specs |
+| `stable/unlace` + `stable/specs` | a snapshotted unlace binary and specs |
 
 Two pinning rules it enforces, both by aborting:
 
 - **decbench must not move off its pinned commit** (`PINNED_DECBENCH_STATE.txt`). The
   rivals' frozen GED checkpoints were produced by that evaluator; a different one silently
   re-defines the metric under them.
-- **The refresh must run a snapshotted kuna binary and specs** (`KUNA_BIN`/`KUNA_SPECS`
+- **The refresh must run a snapshotted unlace binary and specs** (`UNLACE_BIN`/`UNLACE_SPECS`
   → `stable/`), so a concurrent `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli` in the main tree cannot swap the
   decompiler mid-run. A refreshed column that is half one build and half another is worse
   than a stale one.
 
 And one baseline rule that is not obvious and cost a whole run:
 
-> **The GED baseline must drop kuna's published scores for EVERY optimisation level that
+> **The GED baseline must drop unlace's published scores for EVERY optimisation level that
 > has been re-decompiled — not just the one you are refreshing.** `reeval_ged.eval_one`
 > audits by replaying the *published* evaluator against the *on-disk* artifact and
 > asserting it reproduces the published score. That assertion is only meaningful while the
@@ -639,16 +639,16 @@ ARM → `arm-none-eabi`, x86 → gcc). **This machine has only `gcc`**: no
 `arm-none-eabi-gcc`, no MinGW. For every ARM and PE binary the metric returns
 `{"skipped": True}`, the re-scorer drops it, and an **empty** checkpoint is written.
 
-So deleting kuna's checkpoints **destroys kuna's ARM/PE byte_match while every rival keeps
-theirs** — an asymmetric corruption that makes kuna look like it compiles nothing on
+So deleting unlace's checkpoints **destroys unlace's ARM/PE byte_match while every rival keeps
+theirs** — an asymmetric corruption that makes unlace look like it compiles nothing on
 embedded targets. `finalize_results.py`'s coverage guard caught it (34 slices, every one
-kuna at O0 on ARM/PE: betaflight 2,848 → 0, crazyflie 2,128 → 0, cleanflight 1,967 → 0)
-and `restore_kuna_bytematch.py --apply` repaired them from
+unlace at O0 on ARM/PE: betaflight 2,848 → 0, crazyflie 2,128 → 0, cleanflight 1,967 → 0)
+and `restore_unlace_bytematch.py --apply` repaired them from
 `pre-o0-refresh-backup/function_results.json`.
 
-**kuna's ARM/PE byte_match at O2 and O2-noinline is still missing.** An earlier session hit
+**unlace's ARM/PE byte_match at O2 and O2-noinline is still missing.** An earlier session hit
 the same trap and published it with `DECBENCH_ALLOW_DROPS=1`; no local copy of those values
-survives, and the 2026-07-27 published snapshot does not carry them either. kuna leads
+survives, and the 2026-07-27 published snapshot does not carry them either. unlace leads
 byte_match anyway — with two of three optimisation levels under-counted on embedded targets.
 
 > **Never pass `DECBENCH_ALLOW_DROPS=1` without reading every `[guard]` line.** The guard is
@@ -659,7 +659,7 @@ byte_match anyway — with two of three optimisation levels under-counted on emb
 
 ### Trap 2: `rescore` cannot touch a PE case
 
-The mined pools store a PE function's address as an **RVA** where kuna uses the **VA**, and
+The mined pools store a PE function's address as an **RVA** where unlace uses the **VA**, and
 `scripts.decbench.rescore` passes `case["address_hex"]` straight to
 `unlace decompile-all --addr`. Every PE case therefore fails out of the box:
 
@@ -683,14 +683,14 @@ the same rather than editing a pool by hand, because the pools are a snapshot of
 decbench recorded and a hand edit will be silently reverted by the next `mine`.
 
 Known limitation, not yet fixed. Suggested direction: have `rescore` resolve the image base
-from the loaded binary (kuna already reports absolute addresses in `functions --json`) and
+from the loaded binary (unlace already reports absolute addresses in `functions --json`) and
 add the delta when the pool row's address falls outside the loaded range — a per-case fix in
 `scripts/decbench/rescore.py`, not a miner change.
 
 ## Caveats
 
 - The Jun-29 run-binary skew: always trust the fresh decompile, not the stored one.
-- `~/.cache/decbench/metric` and `~/.cache/decbench/kuna-src-cfg` are
+- `~/.cache/decbench/metric` and `~/.cache/decbench/unlace-src-cfg` are
   content-addressed — fresh inputs always recompute; never stale, safe to delete.
 - The decbench working tree carries user WIP: campaign tooling only READS it; any
   decbench fix goes through a fresh branch off `origin/main` staging only named files.

@@ -6,7 +6,7 @@
 reading the `--dump-decisions` rows of a `scripts.decbench.typesweep --option
 structsynth param` run. Decisions are paired positionally per function (the
 decision list is in ground-truth order in both arms). Each changed decision is
-classed by what kuna now says (a synthesized `struct_N` or something else), by
+classed by what unlace now says (a synthesized `struct_N` or something else), by
 what the ground truth is, and by whether the metric matched it before and after.
 
 The ground-truth classes follow the rule that a primitive pointer (`char *`,
@@ -59,16 +59,16 @@ def main(path: str) -> None:
             if len(base[fn]) != len(test[fn]):
                 raise SystemExit(f"{slice_name} {fn}: decision lists differ in length")
             for b, t in zip(base[fn], test[fn]):
-                if b["kuna_type"] == t["kuna_type"]:
+                if b["unlace_type"] == t["unlace_type"]:
                     continue
                 gt = re.sub(r"\s+", " ", (t["gt_type"] or "").strip())
-                key = ("struct_N" if "struct_" in t["kuna_type"] else "other",
+                key = ("struct_N" if "struct_" in t["unlace_type"] else "other",
                        gt_class(gt),
                        f"{'match' if b['ok'] else 'miss'} -> {'match' if t['ok'] else 'miss'}")
                 cls[key] += 1
                 functions.add((slice_name, fn))
                 examples[key].append(f"{slice_name} {fn} {t['gt_name']}: GT {gt} | "
-                                     f"{b['kuna_type']} -> {t['kuna_type']}")
+                                     f"{b['unlace_type']} -> {t['unlace_type']}")
     print(f"{sum(cls.values())} changed decisions in {len(functions)} functions")
     for key, n in cls.most_common():
         print(f"{n:6d}  {key[0]:8s}  {key[1]:32s}  {key[2]}")

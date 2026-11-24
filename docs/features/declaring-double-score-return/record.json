@@ -9,7 +9,7 @@
   "option": "calleeretpreserves",
   "default_on": true,
   "change_kind": "correctness-fix",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "scope": "existing-option-extension",
   "parity": "675/675",
   "stage_parity": "811/811",
@@ -36,7 +36,7 @@
     "details": "docs/features/declaring-double-score-return/mergecheck.md"
   },
   "fixture": {
-    "path": "decompiler/crates/kuna-analysis/tests/fixtures/pe_double_score_return_x86_64.exe",
+    "path": "decompiler/crates/unlace-analysis/tests/fixtures/pe_double_score_return_x86_64.exe",
     "sha256": "3cf5307ef9c572400d67db3556f5f4bfc5e9483d2ae1b787f4f34ed494eaed19",
     "size": 3584
   },

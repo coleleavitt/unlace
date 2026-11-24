@@ -2,7 +2,7 @@
 # (binaries/tests/x86_64/decompiler/tee_O2, x86-64).  The *type* half of that
 # case (the wrapper around `char *setlocale(int, const char *)`).
 #
-# On the real binary kuna had no prototype for `setlocale`, so the call's
+# On the real binary unlace had no prototype for `setlocale`, so the call's
 # result was an untyped `undefined8`: the `setlocale(...)` call carried no
 # `char *`, its NULL second argument rendered as a bare `0`, and (where the
 # type DID flow, e.g. a caller that stores the result) the wrapper was typed

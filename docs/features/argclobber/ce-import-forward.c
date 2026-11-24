@@ -2,7 +2,7 @@
    an import with no signature -- no function pointer anywhere, plain C.
 
    `wrap` tests `a` and calls `ext3`, whose signature nothing states, so nothing
-   at that call site reads rdx and kuna recovers TWO parameters for `wrap`.
+   at that call site reads rdx and unlace recovers TWO parameters for `wrap`.
    Those two are exactly the arguments a drop would leave behind, so the
    recovered-prototype accounting is satisfied and the forwarded rdx argument is
    deleted -- together with mk()'s 16-byte rax:rdx return half that feeds it --
@@ -17,7 +17,7 @@
    the binary, and is not committed.
 
    This file is the committed fixture's source: the build line and the binary
-   are at decompiler/crates/kuna-analysis/tests/fixtures/argclobber_import_x86_64
+   are at decompiler/crates/unlace-analysis/tests/fixtures/argclobber_import_x86_64
    (+ .c), and tests/cli/argclobber-keeps-an-argument-an-import-reads.json is the
    regression probe. */
 extern long ext3(void *o, long a, long b);

@@ -4,7 +4,7 @@
   "change_kind": "correctness-fix",
   "phase": "P2",
   "subphase": "pre-SSA lift repair",
-  "module": "decompiler/crates/kuna-decomp/src/p2_lift/linuxsyscall.rs",
+  "module": "decompiler/crates/unlace-decomp/src/p2_lift/linuxsyscall.rs",
   "option": "linuxsyscall",
   "default_on": false,
   "div": "DIV-165",
@@ -15,11 +15,11 @@
     "Resolve the complete RAX/RBX/RCX/RDX/RSI/RDI/RBP register records at their declared eight-byte widths, then retain their offsets with four-byte parameter and result types. This is a bounded language probe, not permissive sub-register lookup.",
     "Accept only an exact constant COPY to the four-byte number storage or, in long mode only, the exact eight-byte RAX storage emitted by SLEIGH. Source and destination widths must match; partial, mismatched, computed, overlapping, and non-x86 writes remain refusals.",
     "Keep the structural `swi(0x80)` matcher and rewrite unchanged. Native x86-64 `SYSCALL` remains owned by `x64syscall`, so linuxsyscall cannot reinterpret native syscall number 1 as i386 exit.",
-    "The `kuna-base/src/xml.rs` delta is only the generated corpus guard changing from 274 to 275 because one stage file was added; it contains no production or register-resolution logic."
+    "The `unlace-base/src/xml.rs` delta is only the generated corpus guard changing from 274 to 275 because one stage file was added; it contains no production or register-resolution logic."
   ],
   "fixture": {
-    "path": "decompiler/crates/kuna-analysis/tests/fixtures/raw_compat_int80_x86_64",
-    "generator": "decompiler/crates/kuna-analysis/tests/fixtures/raw_compat_int80_x86_64.py",
+    "path": "decompiler/crates/unlace-analysis/tests/fixtures/raw_compat_int80_x86_64",
+    "generator": "decompiler/crates/unlace-analysis/tests/fixtures/raw_compat_int80_x86_64.py",
     "size": 17,
     "sha256": "2724e20a8bd5db91b218fc4e67b622d010749ba749ac7253b92c7e44ad74348f"
   },
@@ -41,7 +41,7 @@
     "cargo test --workspace --no-fail-fast": "green",
     "make test-stages": "788/788 PARITY OK (including the GH1537 control at 2/2)",
     "make check-spec": "OK (lenient + strict)",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "counters": "190 settables; tiers 61/70/59; 275 corpus files; next ElementId 4164",
     "mergecheck": "0 rejects after preserving every pre-existing phases.toml option-catalog line byte-for-byte; shape A confirms DIV-165 was free on the rebased parent, shape B confirms every counter, and docs/baseline.json is untouched"
   },

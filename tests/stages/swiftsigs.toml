@@ -10,8 +10,8 @@
 # register, the real first argument slides over, and the context is an
 # unnamed register.
 #
-# Stage / sub-stage: P1 external-refinement (`kuna_swiftcall.rs`, the
-# declared prototypes) and P4 prototype models (`kuna_swiftcall::derive_model`).
+# Stage / sub-stage: P1 external-refinement (`unlace_swiftcall.rs`, the
+# declared prototypes) and P4 prototype models (`unlace_swiftcall::derive_model`).
 #
 # P0 assertion: `option swiftcall on|off` (default on).
 #

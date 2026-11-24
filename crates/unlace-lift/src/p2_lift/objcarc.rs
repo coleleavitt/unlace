@@ -21,7 +21,7 @@ use unlace_base::error::UnlaceResult;
 
 /// Every fixup this module registers starts with this; the installer
 /// (`unlace_analysis::analyzers::callfixup`) drops them all under `option objcarc off`.
-pub const FIXUP_PREFIX: &str = "kuna_objcarc_";
+pub const FIXUP_PREFIX: &str = "unlace_objcarc_";
 
 /// Runtime entry points whose result is their argument.
 pub const PASS_THROUGH: [&str; 9] = [
@@ -124,7 +124,7 @@ pub fn decode_payload(
     register: &mut dyn FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> UnlaceResult<()>,
 ) -> UnlaceResult<()> {
     use unlace_base::xml::DocumentStorage;
-    let wrapped = format!("<kuna_objcarc>\n{xml}</kuna_objcarc>");
+    let wrapped = format!("<unlace_objcarc>\n{xml}</unlace_objcarc>");
     let mut store = DocumentStorage::new();
     let root = store.parse_document(wrapped.as_bytes())?.get_root().clone();
     for child in root.get_children() {

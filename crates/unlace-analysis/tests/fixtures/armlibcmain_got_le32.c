@@ -15,7 +15,7 @@ int main(int argc, char **argv)
 {
     char buf[32];
 
-    printf("kuna armlibcmain got prompt");
+    printf("unlace armlibcmain got prompt");
     if (fgets(buf, sizeof buf, stdin) && buf[0] == 'k')
         return 0;
     return 1;

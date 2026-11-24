@@ -1,4 +1,4 @@
-# Kuna GH-904: P4 calls and prototypes, option callwide (default off).
+# Unlace GH-904: P4 calls and prototypes, option callwide (default off).
 # The script loads the committed sealed MIPS32-BE ELF, including its root,
 # all six callers and consumer-only DWARF. No producer prototype is supplied.
 # Both passes explicitly use narrowext compiler, which establishes the

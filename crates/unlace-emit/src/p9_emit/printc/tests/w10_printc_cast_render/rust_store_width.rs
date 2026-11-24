@@ -173,7 +173,7 @@ fn rust_store_width_matches_memory_bytes() {
         .unwrap()
         .as_nanos();
     let directory =
-        std::env::temp_dir().join(format!("kuna-store-width-{}-{stamp}", std::process::id()));
+        std::env::temp_dir().join(format!("unlace-store-width-{}-{stamp}", std::process::id()));
     std::fs::create_dir(&directory).unwrap();
     let source = directory.join("stores.rs");
     let binary = directory.join("stores");

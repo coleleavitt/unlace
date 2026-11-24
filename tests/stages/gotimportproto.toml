@@ -6,7 +6,7 @@
 # passes nothing, so only the declared libc prototype states the argument.
 #
 # The type-only declaration is bound at the loader-proven import
-# (kuna_gotimportproto.rs, always on): strlen receives the argument and the
+# (unlace_gotimportproto.rs, always on): strlen receives the argument and the
 # parameter is a pointer.  Under the storage requirement alone the call would
 # keep the arguments its trials recover: none.
 

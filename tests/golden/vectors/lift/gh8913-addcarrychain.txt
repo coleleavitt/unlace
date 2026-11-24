@@ -1,4 +1,4 @@
-# kuna golden lift fixture (per-instruction raw p-code from the C++ oracle)
+# unlace golden lift fixture (per-instruction raw p-code from the C++ oracle)
 # corpus: tests/stages/gh8913-addcarrychain.toml
 # sla: Ghidra/Processors/6502/data/languages/6502.sla (relative to specs/)
 # cap: 80 instructions per lift point

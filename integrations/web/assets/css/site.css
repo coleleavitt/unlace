@@ -1,9 +1,9 @@
 /* =========================================================================
-   kuna — site styles.
+   unlace — site styles.
 
    Same family as the Noelo Lab site (https://noelo.org — BSD 2-Clause,
    Copyright (c) 2026, Noelo Lab at University of Georgia): its palette, its
-   two typefaces, its flat 1px rules. The layout is kuna's own — a tool page,
+   two typefaces, its flat 1px rules. The layout is unlace's own — a tool page,
    not a lab page: one display line, then everything in monospace.
 
    Light, flat, monospace. Black, white, and the red out of the mark.
@@ -184,15 +184,15 @@ p{margin:0;}
 .panes{display:grid;grid-template-columns:1fr 1fr;gap:clamp(12px,1.4vw,18px);
   margin-top:20px;align-items:stretch;}
 .pane{border:1px solid var(--rule-2);min-width:0;display:flex;flex-direction:column;}
-.pane.kuna{border-color:var(--ink);}
+.pane.unlace{border-color:var(--ink);}
 .panehead{display:flex;align-items:center;gap:9px;padding:10px 13px;
   border-bottom:1px solid var(--rule);background:var(--paper);}
-.pane.kuna .panehead{background:var(--ink);color:var(--paper);border-bottom-color:var(--ink);}
-.pane.kuna .panehead .label{color:var(--paper);}
-.pane.kuna .panehead .tick{color:var(--on-ink-red);}
+.pane.unlace .panehead{background:var(--ink);color:var(--paper);border-bottom-color:var(--ink);}
+.pane.unlace .panehead .label{color:var(--paper);}
+.pane.unlace .panehead .tick{color:var(--on-ink-red);}
 .panehead .grow{flex:1;}
 .panehead .note{font-size:.6875rem;color:var(--muted);letter-spacing:.04em;}
-.pane.kuna .panehead .note{color:var(--on-ink);}
+.pane.unlace .panehead .note{color:var(--on-ink);}
 .code{
   margin:0;padding:15px 17px;overflow:auto;white-space:pre;flex:1 1 auto;
   background:var(--paper-2);font-family:var(--mono);

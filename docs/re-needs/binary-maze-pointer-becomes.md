@@ -44,7 +44,7 @@ Preserve the address of the 585-byte packed maze.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_402020"
@@ -77,7 +77,7 @@ Preserve the address of the 585-byte packed maze.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x401136",
@@ -121,7 +121,7 @@ _not yet refuted_
 
 - filed by cluster.py from 1 observation(s)
 - split out of the round-4 `16-byte-vm-state` mega-bucket by the captain at T_DEDUP: cluster.py's key is `kind|subcommand|clause-shape`, so nine unrelated wrong-output `decompile` defects collapsed into one need whose probe covered only the first. Each carries its own probe and acceptance from its own observation.
-- round 4 REFUTER: hypothesis **overturned** (was inconclusive). REFUTED IN-TICK BY THE CAPTAIN (no refuter role exists in the launcher), on the 60be2ad4 witness, sha 6188e204, arena ".kuna-repipe/arena/4/60be2ad433c5d410b8842c95/target/Sabloom Text 6.exe".
+- round 4 REFUTER: hypothesis **overturned** (was inconclusive). REFUTED IN-TICK BY THE CAPTAIN (no refuter role exists in the launcher), on the 60be2ad4 witness, sha 6188e204, arena ".unlace-repipe/arena/4/60be2ad433c5d410b8842c95/target/Sabloom Text 6.exe".
 
 SYMPTOM REPRODUCED AND THE DATA IS REAL. `unlace decompile "<Sabloom Text 6.exe>" sub_402020` emits `v16 = ""; v21 = "";` where the disassembly loads 0x403550, and the very next loop walks that pointer (`v16 = &v16[1]`) until `(int)v16 < 0x403799` -- 585 bytes, exactly the maze. `unlace read <bin> 0x403550 --addr --bytes 64` confirms nine 00 bytes and then `77 df 77 ff fd ff 7f ...`, so the tester's "nonzero maze bytes follow the initial zero row" is verbatim true. The address 0x403550 appears NOWHERE in the emitted C (grep: 0 hits), while 0x403511 and 0x403799 both survive as constants -- so this is the loss of one specific pointer, not of address rendering generally.
 

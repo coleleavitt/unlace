@@ -1,4 +1,4 @@
-// Self-contained Mach-O fixture for stack blocks (tests/stages/kuna-objcblocks.toml):
+// Self-contained Mach-O fixture for stack blocks (tests/stages/unlace-objcblocks.toml):
 // `-[Runner maker:]` builds a block literal on its frame (`_NSConcreteStackBlock`
 // isa, the invoke and descriptor addresses stored after it) and sends it;
 // `-[Runner tally:]` captures an object, a double, a `__block` cell and an int

@@ -387,7 +387,7 @@ fn unclassified_apu_notes_keep_the_generic_decoder_under_ppcapu() {
             assert!(!quiet.contains("APU"), "{quiet}");
             let (text, stderr) = decompile(&path, "caller", &["--option", "ppcapu", "on"]);
             assert_eq!(text, expected);
-            assert!(stderr.contains("[kuna target]"), "{stderr}");
+            assert!(stderr.contains("[unlace target]"), "{stderr}");
             assert!(stderr.contains("APU note"), "{stderr}");
             let (_, stderr) = decompile(&path, "caller", &[]);
             assert!(!stderr.contains("APU"), "{stderr}");

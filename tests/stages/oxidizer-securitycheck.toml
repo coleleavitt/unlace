@@ -1,5 +1,5 @@
 # SEFCOM Oxidizer `SecurityCheckRemover` (angr
-# angr/rust/optimization_passes/security_check_remover.py), ported as kuna
+# angr/rust/optimization_passes/security_check_remover.py), ported as unlace
 # `option securitycheck` (P7 edge-virtualization, DIV-82, default ON).
 #
 # rustc emits a check in front of every slice index, every string slice and
@@ -16,7 +16,7 @@
 # All seven names are Rust-only, so the option is structurally inert on a C
 # binary, which is what lets it ship default ON with no compiler-detection
 # channel.  The option also asserts the divergence fact at the flow seam (the
-# seven helpers are all declared `-> !` in libcore), so a helper kuna's
+# seven helpers are all declared `-> !` in libcore), so a helper unlace's
 # address-keyed no-return discovery could not walk still produces a diverging
 # panic block for the P7 edge removal to collect.
 #

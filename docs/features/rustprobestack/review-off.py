@@ -1,6 +1,6 @@
 from pathlib import Path
 import datetime,hashlib,json
-w=Path('/tmp/kuna-rust-probestack')
+w=Path('/tmp/unlace-rust-probestack')
 read=lambda n:json.loads((w/n).read_text())
 sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
 build=read('build.json');fresh=read('breadth-off/record.json');old=read('auto-study/breadth-final.json');manual=read('auto-study/manual-review.json')

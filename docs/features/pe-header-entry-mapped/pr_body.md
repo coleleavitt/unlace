@@ -1,15 +1,15 @@
 ## The problem
 
 Windows maps a PE in two parts: `SizeOfHeaders` file bytes at `ImageBase`, then
-each section. kuna mapped the sections only, so an image that puts code in its
+each section. unlace mapped the sections only, so an image that puts code in its
 header page — a packer stub, a hand-built keygenme — had an entry no surface
 could reach, not even an explicit `--define-function`.
 
 ```
-$ python3 decompiler/crates/kuna-analysis/tests/fixtures/pe_headerentry_i386.py
+$ python3 decompiler/crates/unlace-analysis/tests/fixtures/pe_headerentry_i386.py
 wrote .../pe_headerentry_i386.exe (1024 bytes)
 
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/pe_headerentry_i386.exe \
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/pe_headerentry_i386.exe \
       0x400154 --addr --define-function 0x400154=entry
 error: address 0x400154 is not mapped in this input
 $ echo $?
@@ -50,7 +50,7 @@ fails on the unpatched tree with the error above and now emits
 goes from exit 1 to the aPLib-style bit-reader stub at `0x400154`.
 
 Gates: `make test` PARITY OK 675/675 · `make test-stages` PARITY OK 644/644 ·
-`make test-cli` 50/50 · `make check-spec` OK · `kuna catalog --check` OK ·
+`make test-cli` 50/50 · `make check-spec` OK · `unlace catalog --check` OK ·
 `make rust-test` green.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

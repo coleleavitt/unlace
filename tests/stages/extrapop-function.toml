@@ -2,7 +2,7 @@
 #
 # OptionExtraPop (decompiler/cpp/options.cc) with a function name sets that
 # function's prototype extrapop, which every caller copies into its call
-# spec (ActionDefaultParams). kuna returned "Unknown function name" for
+# spec (ActionDefaultParams). unlace returned "Unknown function name" for
 # every name.
 #
 # Authored x86-32 (nasm): f pushes 2 and 1, calls g, then returns [esp+4];

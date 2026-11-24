@@ -1,13 +1,13 @@
 # boolbyte — census and analysis
 
 What a byte that is only ever a truth value is declared as today, how often that
-byte has `_Bool` ground truth, and which of kuna's three bool mechanisms is
+byte has `_Bool` ground truth, and which of unlace's three bool mechanisms is
 responsible.
 
 Everything below is measured on the campaign slice set: the decbench
 `full_run_address_2026-09-11` tree, projects `coreutils grep gzip diffutils bzip2
 findutils tar shadow` at `O0`, `O2` and `O2-noinline` — **444 slices, 10,748
-scored functions**, `DECBENCH_NO_CACHE=1`, `KUNA_BIN` a fresh `main` build
+scored functions**, `DECBENCH_NO_CACHE=1`, `UNLACE_BIN` a fresh `main` build
 (83830e86, which already carries `bytehonest`, so an *uncommitted* byte is
 exported `undefined1` and already matches `_Bool`).
 
@@ -27,12 +27,12 @@ ground-truth decisions, of which **3,228 have `_Bool` ground truth**.
 | … of those, already a hit | 928 |
 | … of those, a miss | 1,129 |
 
-Of the 1,129 misses, the ones this item can address are those where kuna has
+Of the 1,129 misses, the ones this item can address are those where unlace has
 **committed** to a non-bool spelling. A width-only spelling (`undefined1`,
 `uint1`, …) already matches `_Bool` through decbench's `_SIZE_SCALARS`, so it is
 not a loss:
 
-| kuna's spelling on a missed GT `_Bool` | count |
+| unlace's spelling on a missed GT `_Bool` | count |
 |---|---|
 | `char` | 700 |
 | `unsigned char` | 166 |
@@ -50,7 +50,7 @@ That is 43x the 20-row bar this item was gated on.
 
 ## 2. How many of them are actually truth-valued
 
-For each of the 866 one-byte rows, kuna's emitted C for that function was read
+For each of the 866 one-byte rows, unlace's emitted C for that function was read
 and every occurrence of the variable classified (a text heuristic: `if (v)`,
 `!v`, `v == 0|1`, `v && …`, `v ^ 1`, `v ? a : b`, `return v` count as truth
 uses; parentheses and the `'\x01'`/`'\0'` rendering of the flag constants are
@@ -90,7 +90,7 @@ written-ness at `build_localtypes`, plus every firing of the B-i refusal.
 **All 15 are B-iii.** Every sampled argument's byte carries local type `char`,
 mask `0xff`, `written=false` — there is no bool candidate for B-i to refuse or
 B-ii to demote. The sampled stack slots carry `char`/`uint1`/`xunknown1`, four of
-the six with mask `0x1` (the value is *provably* 0 or 1 and kuna still says
+the six with mask `0x1` (the value is *provably* 0 or 1 and unlace still says
 `char`). B-i does fire in these functions — 3 to 546 times each — but always on
 other Varnodes; it is not what blocks these.
 
@@ -144,7 +144,7 @@ Measured with the shipped predicate over the same 444 slices
 
 See `record.json` for the benchmark block, the speed block and the whole-corpus
 before/after classification, and `census-classified.json` for the 866 rows of
-section 2 one per line (slice, function, kuna spelling, ground-truth name, class).
+section 2 one per line (slice, function, unlace spelling, ground-truth name, class).
 
 ## 6. Soundness checks
 
@@ -223,7 +223,7 @@ on :  v41 = SUB41(v15,0);      # before the arm
 on :  v41 = (bool)v15;         # after it
 ```
 
-`kuna_boolbyte::truncation_form`, consulted from
+`unlace_boolbyte::truncation_form`, consulted from
 `printc::subpiece_cast_form`, supplies the missing arm for a low-piece
 truncation into a `bool`. The destination's mask is not enough to make `(bool)x`
 safe. A C conversion to `bool` tests every bit of `x`, and the truncation keeps
@@ -235,7 +235,7 @@ copy to `c` (whose own mask is 1), and a bare `(bool)(x & 0x201)` is 1 for
 `x = 0x200` where the byte is 0. So the arm prints `(bool)x` only when the
 operand's non-zero mask proves every bit above the destination zero, and
 `(bool)(unsigned char)x` otherwise. The mask is re-derived at print time
-(`kuna_boolbyte::value_mask`) because the stored one is refreshed only inside
+(`unlace_boolbyte::value_mask`) because the stored one is refreshed only inside
 the main loop: a Varnode created later, such as a cast or a block the return
 duplication cloned, still carries the all-ones default. The truncation is
 always printed; only its spelling changes (`(char)v15` with the option off).

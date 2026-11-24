@@ -12,7 +12,7 @@ in the second register, reads as the `long long` with the same registers
    two used trials holds the low half, from the flag the matched output rule
    sets. `ParamListStandard::holds_high_first` / `FuncProto::output_holds_high_first`
    read the same order back from where a joined value's halves sit.
-2. `kuna_bejoin::join_order`, called by `ActionReturnRecovery` once the output
+2. `unlace_bejoin::join_order`, called by `ActionReturnRecovery` once the output
    map is derived, classifies the second register at every live RETURN
    (`classify`: `Wide`, `Returned`, `Zero`, `Nothing`, `Entry`, `Scratch`,
    `Compared` -- a computed 0/1 in the first register, or a sum or difference
@@ -49,22 +49,22 @@ in the second register, reads as the `long long` with the same registers
    `(0, 1)`, main's order.
    `build_return_output` builds `PIECE(hi, lo)` and its join address from that
    order.
-3. `Funcdata::kuna_pairs_first_low` records a function whose pair kept the old
+3. `Funcdata::unlace_pairs_first_low` records a function whose pair kept the old
    join; `build_output_from_trials` then builds the call-output pairs in that
    function first register low too, and `ParamActive::join_pair_order` order
-   elsewhere (`kuna_rustabi::build_call_output_pair` takes the order).
-4. `kuna_returnuncomputed::strip_uncomputed_return_piece` skips a pair joined
-   first register high (`kuna_bejoin::first_register_holds_high`); otherwise it
-   is main's code. `kuna_rustabi::holds_scalar_pair` maps the PIECE's halves back
+   elsewhere (`unlace_rustabi::build_call_output_pair` takes the order).
+4. `unlace_returnuncomputed::strip_uncomputed_return_piece` skips a pair joined
+   first register high (`unlace_bejoin::first_register_holds_high`); otherwise it
+   is main's code. `unlace_rustabi::holds_scalar_pair` maps the PIECE's halves back
    to register order before asking for the Rust tag.
-5. `kuna_rustabi::pair_join_address` keeps a join record when the contiguous
+5. `unlace_rustabi::pair_join_address` keeps a join record when the contiguous
    pair's parent register is global storage (AVR `R25R24`), with the option on.
 6. `option bejoin` (`phases.toml`, `Architecture::be_join` copied to
-   `ArchContext::be_join`, `kuna_bejoin::live`) gates steps 2-5: off, every
+   `ArchContext::be_join`, `unlace_bejoin::live`) gates steps 2-5: off, every
    pair and call pair joins first register low and nothing else moves.
 
 Tests: `bejoin/tests.rs` (the classification on hand-built IR);
-`kuna-cli/tests/decompile_all_cli.rs` compiled round trips for wide values
+`unlace-cli/tests/decompile_all_cli.rs` compiled round trips for wide values
 (`bejoin_*.o`, `bejoin_carry_*`, `bejoin_avr.bin`, `bejoin_window64_*`) and for
 functions that return one register and must keep it (`bejoin_zero_mips32_O0.o`,
 `bejoin_window_sparc32_*`, `bejoin_narrow_sparc32_*`, the ARM big-endian

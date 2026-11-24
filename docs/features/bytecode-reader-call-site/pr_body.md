@@ -5,7 +5,7 @@ parameters straight through, renders with no arguments at all — even though a
 separate decompile of that same callee recovers four.
 
 ```
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/calleearitycut_x86_64 caller
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/calleearitycut_x86_64 caller
 int caller(int a0,long a1,long a2)
 {
   if (a2 != a1)
@@ -66,7 +66,7 @@ wrong, and still more than the `(void)` it replaces.
 
 Gates: `make test` PARITY OK 675/675 (0 assertions moved), `make test-stages`
 PARITY OK 687/687 (purely additive), `make test-cli` 78/78, `make rust-test`
-green, `make check-spec` OK, `kuna catalog --check` OK. Speed: −29.8% on the
+green, `make check-spec` OK, `unlace catalog --check` OK. Speed: −29.8% on the
 witness (median of 7), which is this machine's single-target noise floor rather
 than an effect — the rule adds a few comparisons to a call that was already
 captured and takes no new decode.

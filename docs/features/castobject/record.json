@@ -10,10 +10,10 @@
  "subphase": "stack-frame-layout",
  "change_kind": "type-inference",
  "tier": "transform",
- "source_decompiler": "kuna",
+ "source_decompiler": "unlace",
  "inspiration": "the 2026-09-27 address-of cast census: waitpid(v2,(int *)&v5,0) over unsigned int v5 where IDA prints int stat_loc; waitpid(v1,&stat_loc,0)",
  "witness": {
-  "repro": "gcc -O0 st.c (exit_code, see the PR body); kuna decompile-all st --functions exit_code",
+  "repro": "gcc -O0 st.c (exit_code, see the PR body); unlace decompile-all st --functions exit_code",
   "before": [
    "unsigned int v1; // stack - 0x14",
    "if (waitpid(a0,(int *)&v1,0) <= -1)",
@@ -82,7 +82,7 @@
   }
  },
  "castbench": {
-  "set": "full: 45 binaries x O0/O2/O2-noinline; functions kuna and IDA both emit",
+  "set": "full: 45 binaries x O0/O2/O2-noinline; functions unlace and IDA both emit",
   "base": "origin/main 29cfedee0; castobject off on the branch build is byte-identical to the castbench arm of 0096e984d on all 45 binaries",
   "shared_functions": 4815,
   "ida_casts": 37821,
@@ -151,7 +151,7 @@
   "file": "docs/features/castobject/corpus-hunks.txt",
   "off_arm_vs_main": "byte-identical on all 45 castbench binaries"
  },
- "round_trips": "kuna-cli/tests/decompile_all_cli.rs an_out_parameter_local_round_trips_through_the_printed_c: castobject_{gcc,clang}_{O0,O2}_x86_64 (exit_code status_order reaped escaped two_widths plus_one cancel_state, and init_signed init_ushr init_ult init_zext gid_mixed stored_value initialized from a parameter and run over top-bit values), printed C built by gcc and clang at -O0 and -O2, output equals the binary's, option off and on",
+ "round_trips": "unlace-cli/tests/decompile_all_cli.rs an_out_parameter_local_round_trips_through_the_printed_c: castobject_{gcc,clang}_{O0,O2}_x86_64 (exit_code status_order reaped escaped two_widths plus_one cancel_state, and init_signed init_ushr init_ult init_zext gid_mixed stored_value initialized from a parameter and run over top-bit values), printed C built by gcc and clang at -O0 and -O2, output equals the binary's, option off and on",
  "gates_on_default": {
   "base": "origin/main 29cfedee0",
   "make_test": "675/675 PARITY OK",
@@ -167,7 +167,7 @@
   "clang -O2: a slot allocated by push %rax reads back the pushed register after the call that wrote it (castobject_clang_O2_x86_64 exit_code/status_order/reaped), both arms; calleeprotostack's alias test reads only the range's first byte"
  ],
  "speed": {
-  "method": "interleaved min-of-15 kuna decompile-all --json, --option castobject off vs on, same build (docs/features/castobject/speed.py)",
+  "method": "interleaved min-of-15 unlace decompile-all --json, --option castobject off vs on, same build (docs/features/castobject/speed.py)",
   "per_binary": {
    "fmt": {
     "off_min_ms": 4264.1,

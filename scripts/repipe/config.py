@@ -1,9 +1,9 @@
 """Environment-driven configuration for the RE-friction loop.
 
 Every knob has a default that works on this machine and is overridable by an env var, in
-the idiom of scripts/pipeline/config.py. Nothing here imports a third-party package: kuna's
+the idiom of scripts/pipeline/config.py. Nothing here imports a third-party package: unlace's
 Python tooling is stdlib-only by convention (no pyproject.toml, no requirements.txt, and
-~/.virtualenvs/kuna carries zero third-party packages).
+~/.virtualenvs/unlace carries zero third-party packages).
 """
 import os
 import shutil
@@ -13,7 +13,7 @@ from .. import paths
 
 # --- repo + state -----------------------------------------------------------
 
-STATE_DIRNAME = os.environ.get("REPIPE_STATE_DIRNAME", ".kuna-repipe")
+STATE_DIRNAME = os.environ.get("REPIPE_STATE_DIRNAME", ".unlace-repipe")
 
 
 def repo_root() -> Path:
@@ -22,7 +22,7 @@ def repo_root() -> Path:
 
 def state_dir() -> Path:
     """Live state (gitignored): inventory, rounds, arenas, worktrees, logs."""
-    env = os.environ.get("KUNA_PIPELINE_STATE_DIR")
+    env = os.environ.get("UNLACE_PIPELINE_STATE_DIR")
     if env:
         return Path(env)
     return repo_root() / STATE_DIRNAME
@@ -61,7 +61,7 @@ def logs_dir() -> Path:
 
 # --- the dataset ------------------------------------------------------------
 
-DEFAULT_DATASET = str(Path.home() / "github" / "kuna-re-dataset")
+DEFAULT_DATASET = str(Path.home() / "github" / "unlace-re-dataset")
 
 
 def dataset_root() -> Path:
@@ -74,9 +74,9 @@ def manifest_path() -> Path:
 
 # --- tools ------------------------------------------------------------------
 
-def kuna_bin() -> Path:
-    """The release kuna the testers and probes drive."""
-    env = os.environ.get("REPIPE_KUNA")
+def unlace_bin() -> Path:
+    """The release unlace the testers and probes drive."""
+    env = os.environ.get("REPIPE_UNLACE")
     if env:
         return Path(env)
     return repo_root() / "target" / "release" / "unlace"
@@ -87,7 +87,7 @@ def specs_dir() -> Path:
 
 
 # The reference stack. IDA Pro 9.2 is installed here; its python bindings live in the
-# decbench venv, NOT in the default python3 and NOT in ~/.virtualenvs/kuna.
+# decbench venv, NOT in the default python3 and NOT in ~/.virtualenvs/unlace.
 DEFAULT_REF_PYTHON = str(Path.home() / ".virtualenvs" / "decbench" / "bin" / "python")
 DEFAULT_DECOMPILER = str(Path.home() / ".virtualenvs" / "decbench" / "bin" / "decompiler")
 

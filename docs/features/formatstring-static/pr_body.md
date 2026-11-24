@@ -6,7 +6,7 @@ already possible (`--option formatstring on`), but it cost a second decompile of
 every caller, +43% to +77% on a whole binary, so it stayed off.
 
 ```
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/fmt_x86_64 main
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/fmt_x86_64 main
 unsigned long main(unsigned int a0,unsigned long *a1)
 {
   printf("%d %s\n",(unsigned long)a0,*a1);

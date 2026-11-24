@@ -6,7 +6,7 @@
 #     movslq (table + idx*4) ; add table_base ; jmp   (table at 0x96ac, 55
 #     self-relative entries)
 #
-# kuna's jump-table recovery runs early on the partial/truncated function,
+# unlace's jump-table recovery runs early on the partial/truncated function,
 # before the `sub;ja` flag idiom is simplified and before the stack spill is
 # collapsed, so JumpBasic::analyzeGuards cannot bound the index.  The basic
 # model is declined, JumpTable::recoverAddresses throws "Too many branches",
@@ -16,7 +16,7 @@
 # the switch (6 cases plus default); the test asserts the call to fileno() and
 # the -e/strdup case do not go missing.
 #
-# Stage model: S2 "switch-model" sub-stage.  The kuna gate `option
+# Stage model: S2 "switch-model" sub-stage.  The unlace gate `option
 # switchguardbound on` makes JumpBasic::recoverModel, after the normal model
 # (and the modulo/and-mask extension) fail to bound the table, EVALUATE the
 # range guard as a function of the index and re-bound the table to [0, N).  The

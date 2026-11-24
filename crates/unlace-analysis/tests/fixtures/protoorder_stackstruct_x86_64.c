@@ -1,4 +1,4 @@
-/* (kuna) `protoorder` fixture -- coreutils tail's `tail_bytes` shape.  `dump`
+/* (unlace) `protoorder` fixture -- coreutils tail's `tail_bytes` shape.  `dump`
  * compares its byte count against 0x1000, which is also the address of `.init`,
  * so its own recovery types the parameter `void *`.  Voted onto `n_bytes` in
  * `tail_bytes`, that pointer reaches `end_pos` and then the `st_size` read, the

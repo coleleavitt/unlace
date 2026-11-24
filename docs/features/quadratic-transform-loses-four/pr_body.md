@@ -5,9 +5,9 @@ pointer loop, and never assigned. Build the 252-byte MSVC function this comes fr
 and ask for it:
 
 ```
-$ as --32 -o /tmp/f.o decompiler/crates/kuna-analysis/tests/fixtures/indexaliasguard_i386.s
-$ ld -m elf_i386 -T decompiler/crates/kuna-analysis/tests/fixtures/indexaliasguard_i386.ld -o /tmp/f /tmp/f.o
-$ kuna decompile /tmp/f 0x401330 --addr
+$ as --32 -o /tmp/f.o decompiler/crates/unlace-analysis/tests/fixtures/indexaliasguard_i386.s
+$ ld -m elf_i386 -T decompiler/crates/unlace-analysis/tests/fixtures/indexaliasguard_i386.ld -o /tmp/f /tmp/f.o
+$ unlace decompile /tmp/f 0x401330 --addr
 unsigned int transform(int a0,int a1,int a2,int a3)
 {
   unsigned int v10 [4];
@@ -22,7 +22,7 @@ unsigned int transform(int a0,int a1,int a2,int a3)
 `v10` is never written. The binary writes it four times, right at the top:
 
 ```
-$ kuna disassemble /tmp/f --addr 0x401330 --count 8
+$ unlace disassemble /tmp/f --addr 0x401330 --count 8
 0x401330      83ec20        SUB ESP,0x20
 0x401333      a1bc604000    MOV EAX,[0x4060bc]
 0x401338      8b0dc0604000  MOV ECX,dword ptr [0x4060c0]
@@ -43,7 +43,7 @@ sddecoder `decoder.exe`).
 ## The fix
 
 - New option `indexaliasguard off|load|full`, default `load`, restoring the last
-  arm of `Heritage::guard` (heritage.cc:1194) that kuna shipped behind a
+  arm of `Heritage::guard` (heritage.cc:1194) that unlace shipped behind a
   hard-coded `highPtrPossible == false`.
 - `load` runs `Heritage::guardLoads` (heritage.cc:1570): an `addrforce` `COPY`
   read of the range in front of every indexed-stack LOAD whose guard window
@@ -57,7 +57,7 @@ sddecoder `decoder.exe`).
   +1,166 lines and +14 gotos, against `load`'s 56 changed functions, **-61 lines
   and no goto change** — and `full` recovers nothing `load` does not.
 - `highPtrPossible` is upstream's inline minus the cspec `<nohighptr>` ranges,
-  which only the PIC families set and kuna does not read.
+  which only the PIC families set and unlace does not read.
 
 The need's filed hypothesis (store liveness) and the round-8 refutation (P6
 `RangeHint` joining) are both overturned; the shadow scalars the refutation found
@@ -81,7 +81,7 @@ redeclaring one name eight times with eight different types.
 
 Gates: `make test` PARITY OK 675/675, `make test-stages` PARITY OK 721/721,
 `make rust-test` green, `make check-spec` green (strict too), `make test-cli`
-105/105, `kuna catalog --check` OK. Speed: +2.24% on the witness function
+105/105, `unlace catalog --check` OK. Speed: +2.24% on the witness function
 (median of 7, 5% budget) and +0.28% on a whole-binary `decompile-all` of
 coreutils `ginstall` (14.46 s -> 14.50 s, median of 3).
 

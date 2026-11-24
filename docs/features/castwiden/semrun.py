@@ -1,7 +1,7 @@
 """decompile-all both castwiden arms (off, the default) with struct definitions
 printed, for semhunks.py to type structure fields:
 
-  python3 semrun.py <kuna> <outdir> castbench|corpus8|extra11
+  python3 semrun.py <unlace> <outdir> castbench|corpus8|extra11
 
 castbench is castbench.py's full corpus (15 binaries x O0/O2/O2-noinline),
 corpus8 eight whole binaries outside it, extra11 eleven binaries outside

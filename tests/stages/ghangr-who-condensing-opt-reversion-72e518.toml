@@ -6,7 +6,7 @@
 # shared basic block, and all but one predecessor reach it by a goto.  In
 # who.o::scan_entries the two identical `v1 = *a1;` reload tails (the
 # `need_deadprocs && v1 == 8` case and the skip/else path) were condensed into
-# one shared block, so kuna emits exactly one residual goto:
+# one shared block, so unlace emits exactly one residual goto:
 #
 #     else if (need_deadprocs and v1 == 8) {
 #         print_deadprocs(a1);
@@ -32,7 +32,7 @@
 # is `call print_8;` then a BACKWARD goto into the shared `v1 = *p` reload tail
 # (which the skip/else path falls into).  That backward cross-jump into a shared,
 # fall-through tail is exactly the ISC-condensed shape Ghidra's CollapseStructure
-# (and kuna's region structurer) must express as a goto.
+# (and unlace's region structurer) must express as a goto.
 #
 #   cj:    loop { eax = gate();
 #                 if (!eax) { shared: v1=*p; goto conv; }
@@ -75,7 +75,7 @@ hex = '534889fb4189f4e87400000085c0751b0fb7036683f8027505e86a0000004883c3404885d
 
 [script]
 commands = [
-    # kuna: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
+    # unlace: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
     'option gotoreduce off',
     'option crossjumprevert off',
     'option dedupitetail off',

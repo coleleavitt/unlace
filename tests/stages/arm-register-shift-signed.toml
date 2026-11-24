@@ -1,4 +1,4 @@
-# Kuna #849 signed consumers: converting the LSL shiftee to uint4 makes
+# Unlace #849 signed consumers: converting the LSL shiftee to uint4 makes
 # counts 0..31 defined, but the guarded conditional must still deliver the
 # original signed result when its value is consumed by signed code.
 #

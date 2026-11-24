@@ -21,13 +21,13 @@
 # strip is the reproducible win.)
 #
 # Stage model: S7 region/structure recovery, "edge-virtualization" sub-stage
-# (the goto is a forced edge).  The kuna Action runs late on the simplified
+# (the goto is a forced edge).  The unlace Action runs late on the simplified
 # post-SSA CFG, immediately before ActionReturnSplit; it removes the
 # corrupted-canary branch with the stock Funcdata::removeBranch primitive and
 # lets removeUnreachableBlocks collect the orphaned __stack_chk_fail block.
 # Detection is purely structural (the canary compare: both CBRANCH operands
 # derive from a LOAD of base+0x28, with a handler CALL on the corrupted
-# branch) because kuna's BFD console loader does not resolve the PLT stub to
+# branch) because unlace's BFD console loader does not resolve the PLT stub to
 # its __stack_chk_fail name (it renders as sub_<addr>).
 #
 # P0 assertion: `option stackguard on|off` (default off = upstream

@@ -1,5 +1,5 @@
 # decbench campaign case O2-noinline-mydoom-mydoom-scan_textfile (NOVEL pool:
-# kuna already scored best of all decompilers on this function and the output
+# unlace already scored best of all decompilers on this function and the output
 # was still not C, so no other decompiler surfaced this fix).
 #
 # P9 emission, leaf naming.  A PTRSUB(spacebase, off) is a reference into the
@@ -18,7 +18,7 @@
 #
 # Ghidra flags the same case with "WARNING: Unable to track spacebase fully
 # for stack" and emits its unnamed stack location leaf, stack0x00000008.
-# kuna instead bailed out of the SPACEBASE arm to the FUNCTIONAL render and
+# unlace instead bailed out of the SPACEBASE arm to the FUNCTIONAL render and
 # emitted internal p-code into the C body:
 #
 #     *(void *)PTRSUB(ESP,8)[v2] = 0;
@@ -29,7 +29,7 @@
 # register) is declared anywhere in the function; the body is not C.
 #
 # Stage model: P9 emission, leaf naming sub-stage (printc.rs
-# push_spacebase_unnamed_ir / kuna_unnamed_location_name, the C++
+# push_spacebase_unnamed_ir / unlace_unnamed_location_name, the C++
 # PrintC::pushUnnamedLocation leaf the SPACEBASE arm was declining to use).
 #
 # No option: this is a correctness fix (emitting an undeclared p-code

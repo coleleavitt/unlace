@@ -98,7 +98,7 @@ fn json_functions_reports_exact_relocation_count_with_fixed_stderr_ceiling() {
             "fast",
         ])
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "functions failed: {stderr}");
     assert!(stderr.contains("4000 relocation(s) skipped"), "{stderr}");
@@ -110,7 +110,7 @@ fn json_functions_reports_exact_relocation_count_with_fixed_stderr_ceiling() {
         stderr.len()
     );
     assert_eq!(
-        stderr.matches("[kuna ET_REL loader]").count(),
+        stderr.matches("[unlace ET_REL loader]").count(),
         2,
         "{stderr}"
     );

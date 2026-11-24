@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """After the ledger converges, no emitted layout may be contained in another."""
 import json, re, subprocess, sys, os
-KUNA = sys.argv[1]
+UNLACE = sys.argv[1]
 MEM = re.compile(r'^\s{4}(.*?)([A-Za-z_]\w*)\s*(\[(\d+)\])?;\s*$')
 def claimed(defn):
     out = []
@@ -85,7 +85,7 @@ def answers_for(big, small):
 tot = 0
 for b in sys.argv[2:]:
     tag = b.split('/')[-4] + '/' + os.path.basename(b)
-    p = subprocess.run([KUNA, 'decompile-all', b, '--option', 'structsynth', 'param',
+    p = subprocess.run([UNLACE, 'decompile-all', b, '--option', 'structsynth', 'param',
                         '--option', 'structdefs', 'on', '--json'], capture_output=True, text=True)
     d = json.loads(p.stdout)
     st = {}

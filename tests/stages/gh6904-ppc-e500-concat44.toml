@@ -15,7 +15,7 @@
 #     mr. r31,r3        (= or. r31,r3,r3)   ; ptr (r3) copied 64-bit-wide
 #     if (CONCAT44(in_r3,ptr) != 0) ...     ; the bug
 #
-# Fix (kuna GH-6904): for the E500 variant, `or` / `or.` (the `mr`/`mr.`
+# Fix (unlace GH-6904): for the E500 variant, `or` / `or.` (the `mr`/`mr.`
 # register-move idiom, the dominant boundary-widening op) zero-extend a 32-bit
 # result so the upper word of rD is cleared.  Guarded by @ifdef E500, so the
 # 32-bit-register PowerPC:BE:32:default model is untouched.

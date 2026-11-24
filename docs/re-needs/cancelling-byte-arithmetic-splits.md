@@ -38,7 +38,7 @@ Read the constant usage message after defining its buffer as char usage[22].
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x1406fa160",
@@ -73,7 +73,7 @@ Read the constant usage message after defining its buffer as char usage[22].
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x1406fa160",
@@ -130,7 +130,7 @@ CORRECTION 1: THE DATA ASSERTION IS NOT INVOLVED. The need is written as if the 
 
 CORRECTION 2: THE ARITHMETIC IS SOUND, SO THIS IS A MISSED SIMPLIFICATION, NOT A REFUSAL TO BE WRONG. '\xfe' is -2 and the store is 8-bit, so the value is (-2X + 2X + 'w') mod 256 = 'w' = 0x77. Truncation order does not threaten it: 2*(X mod 256) = 2X mod 256, so the two addends cancel at any width. The surrounding bytes confirm the answer independently -- 0x1408f1c08.. spells "Usage: %s <pass" then this byte then "ord>", i.e. the string is "password" and the byte must be 'w'.
 
-THE BLOCKING LINE. p3_dataflow/ruleaction_4.rs:695-710, RuleSubCommute (upstream ruleaction.cc:4465). The rule DOES handle this exact shape -- CPUI_SUBPIECE over CPUI_INT_LEFT, offset 0 -- but gates it: it reads the shift's own input and returns 0 unless that input is defined by CPUI_INT_ZEXT or CPUI_PIECE (and returns 0 outright if the input is not written). Here the shift's input is the INT_AND of two loads, so the rule bails, the SUBPIECE never moves inside the shift, the two addends never reduce to a common base varnode, and term collection cannot add the coefficients 0xfe + 2 = 0x100 = 0 mod 256. This is upstream Ghidra's own gate faithfully ported, NOT a kuna porting defect -- so any fix is a deliberate DIVERGENCE and needs a DIV row plus an option, not a "repair the port" framing. Confirm the operand shape with a p-code dump before writing code: the INT_AND read is inferred from the emitted C, which is strong but is not a dump.
+THE BLOCKING LINE. p3_dataflow/ruleaction_4.rs:695-710, RuleSubCommute (upstream ruleaction.cc:4465). The rule DOES handle this exact shape -- CPUI_SUBPIECE over CPUI_INT_LEFT, offset 0 -- but gates it: it reads the shift's own input and returns 0 unless that input is defined by CPUI_INT_ZEXT or CPUI_PIECE (and returns 0 outright if the input is not written). Here the shift's input is the INT_AND of two loads, so the rule bails, the SUBPIECE never moves inside the shift, the two addends never reduce to a common base varnode, and term collection cannot add the coefficients 0xfe + 2 = 0x100 = 0 mod 256. This is upstream Ghidra's own gate faithfully ported, NOT a unlace porting defect -- so any fix is a deliberate DIVERGENCE and needs a DIV row plus an option, not a "repair the port" framing. Confirm the operand shape with a p-code dump before writing code: the INT_AND read is inferred from the emitted C, which is strong but is not a dump.
 
 WRONG-FIX TRAP. The ZEXT/PIECE gate is conservatism, not correctness -- commuting SUBPIECE to the low piece through a left shift is arithmetically safe. The risk in relaxing it is RULE OSCILLATION: RuleSubCommute deliberately "prefers short forms" and other rules re-widen operands, so a broadened gate can ping-pong with them, and it fires everywhere, not just here. Budget for a full datatest run and a speed delta; a narrow relaxation (offset 0 and a left shift by a constant less than the output bit width) is far likelier to survive than removing the gate.
 

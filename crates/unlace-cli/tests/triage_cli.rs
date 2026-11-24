@@ -43,7 +43,7 @@ fn run_unlace(args: &[&str]) -> (String, String, i32) {
         .args(args)
         .env("SLEIGHHOME", specs())
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -558,7 +558,7 @@ fn a_repaired_header_still_reports_the_summary_entry() {
             "{name}: the repair must be named in `warnings`: {out}"
         );
         assert!(
-            err.contains(&format!("[kuna] {warning}")),
+            err.contains(&format!("[unlace] {warning}")),
             "{name}: and on stderr: {err}"
         );
     }

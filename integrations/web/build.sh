@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # build.sh — assemble the self-contained in-browser decompiler demo.
 #
-# Produces integrations/web/dist/, a static site that runs the kuna decompiler
+# Produces integrations/web/dist/, a static site that runs the unlace decompiler
 # entirely client-side (WebAssembly + WASI shim). Serve it with any static file
 # server; nothing talks to a backend.
 #
@@ -17,7 +17,7 @@ PROFILE="release"
 TARGET="wasm32-wasip1"
 
 # The demo supports WHATEVER THE CLI SUPPORTS — every format (ELF/PE/Mach-O/COFF)
-# and every architecture kuna ships a `.sla` for — with no per-arch manifest. The
+# and every architecture unlace ships a `.sla` for — with no per-arch manifest. The
 # engine resolves the language for any binary; the browser preloads the small
 # runtime files (the ~1.7 MB of `.ldefs`/`.pspec`/`.cspec`/`.dwarf`, which lets
 # the engine resolve ANY binary) and lazily fetches just the one resolved `.sla`
@@ -47,8 +47,8 @@ mkdir -p "$DIST/specs"
 # — /decompile/ reaches them with '../', and the Node tests serve dist/ the same
 # way a browser does.
 # CNAME rides along so the deployed bundle claims kuna.noelo.org.
-cp "$HERE/index.html" "$HERE/compare-samples.js" "$HERE/kuna-web.js" \
-   "$HERE/kuna-worker.js" "$HERE/kuna-worker-client.js" "$HERE/zip.js" "$HERE/sha256.js" \
+cp "$HERE/index.html" "$HERE/compare-samples.js" "$HERE/unlace-web.js" \
+   "$HERE/unlace-worker.js" "$HERE/unlace-worker-client.js" "$HERE/zip.js" "$HERE/sha256.js" \
    "$HERE/CNAME" "$DIST/"
 cp -r "$HERE/assets" "$DIST/assets"
 cp -r "$HERE/decompile" "$DIST/decompile"

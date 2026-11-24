@@ -8,8 +8,8 @@ writes to those bytes.
 
 ## Reproducing shared stack storage
 
-Run this self-contained example with an upstream `kuna` executable on x86-64 Linux.
-It needs a C compiler with the GNU assembler and matching Kuna processor specs.
+Run this self-contained example with an upstream `unlace` executable on x86-64 Linux.
+It needs a C compiler with the GNU assembler and matching Unlace processor specs.
 The same input and assertions work with the lifetime proposal; add the options
 shown below to expose the two logical objects. The reference native result is 67.
 
@@ -50,7 +50,7 @@ ASM
 cc -nostdlib -no-pie \
   -Wl,--build-id=none,-Ttext=0x401000,-Tdata=0x402000,-e,reuse \
   /tmp/reuse.S -o /tmp/reuse
-cat >/tmp/reuse.kuna <<'ASSERT'
+cat >/tmp/reuse.unlace <<'ASSERT'
 typedef struct Pair { int x; int y; };
 typedef struct Handle { const int *value; };
 prototype reuse int reuse(void)
@@ -58,8 +58,8 @@ prototype read_pair int read_pair(const struct Pair *pair)
 prototype read_handle int read_handle(const struct Handle *handle)
 data 0x402000 int datum
 ASSERT
-kuna decompile /tmp/reuse reuse --mode reliable --assert-strict \
-  --assert @/tmp/reuse.kuna --json
+unlace decompile /tmp/reuse reuse --mode reliable --assert-strict \
+  --assert @/tmp/reuse.unlace --json
 # On this branch, add --option stackviews on --option structdefs on.
 ```
 
@@ -74,17 +74,17 @@ The authored native code and the actual generated C return 67 under GCC and Clan
 
 ## Reproducing detached member emission
 
-This neutral tree fixture keeps one frame range live through both node-pointer and pointer-slot accesses. Run from the repository root with a built `kuna` executable on `PATH` and matching x86 specs in `specs/`:
+This neutral tree fixture keeps one frame range live through both node-pointer and pointer-slot accesses. Run from the repository root with a built `unlace` executable on `PATH` and matching x86 specs in `specs/`:
 
 ```sh
-fixture=decompiler/crates/kuna-analysis/tests/fixtures/tree_range_members.c
-image=/tmp/kuna-member-tree-range.elf
+fixture=decompiler/crates/unlace-analysis/tests/fixtures/tree_range_members.c
+image=/tmp/unlace-member-tree-range.elf
 gcc -O2 -no-pie -fno-stack-protector -fcf-protection=none "$fixture" -o "$image"
 tree_range_addr=$(nm -n "$image" | awk '$3 == "tree_range" { print $1 }')
 consume_range_addr=$(nm -n "$image" | awk '$3 == "consume_range" { print $1 }')
 tree_range_addr=$(printf '%x' "0x$tree_range_addr")
 consume_range_addr=$(printf '%x' "0x$consume_range_addr")
-kuna decompile "$image" tree_range \
+unlace decompile "$image" tree_range \
   --target x86:LE:64:default:windows --mode reliable --json --assert-strict \
   --option structdefs on --option stackviews on --option stackalias off \
   --sleighpath specs \
@@ -116,25 +116,25 @@ compares original assembly with generated C using GCC and Clang at O0 and O2.
 This neutral x86-64 Linux input uses a Win64 helper. The assembly saves XMM6–XMM9
 in the caller's frame, then passes a separate 16-byte rectangle to a helper
 whose four writes do not overlap those saves. The checked-in source files are
-[`savedxmm_msabi.S`](../../../decompiler/crates/kuna-analysis/tests/fixtures/savedxmm_msabi.S)
-and [`savedxmm_msabi.c`](../../../decompiler/crates/kuna-analysis/tests/fixtures/savedxmm_msabi.c).
+[`savedxmm_msabi.S`](../../../decompiler/crates/unlace-analysis/tests/fixtures/savedxmm_msabi.S)
+and [`savedxmm_msabi.c`](../../../decompiler/crates/unlace-analysis/tests/fixtures/savedxmm_msabi.c).
 With Clang and matching x86-64 specs, build and decompile it with:
 
 ```sh
-cargo build --manifest-path decompiler/Cargo.toml -p kuna-cli
-kuna_bin=decompiler/target/debug/kuna
+cargo build --manifest-path decompiler/Cargo.toml -p unlace-cli
+unlace_bin=decompiler/target/debug/unlace
 image=/tmp/savedxmm-clang-o0
 clang -std=c11 -O0 -no-pie \
   -Wl,--section-start=.saved_xmm_rect=0x700000 \
-  decompiler/crates/kuna-analysis/tests/fixtures/savedxmm_msabi.S \
-  decompiler/crates/kuna-analysis/tests/fixtures/savedxmm_msabi.c \
+  decompiler/crates/unlace-analysis/tests/fixtures/savedxmm_msabi.S \
+  decompiler/crates/unlace-analysis/tests/fixtures/savedxmm_msabi.c \
   -o "$image"
 "$image"
 symbol() { nm -n "$image" | awk -v wanted="$1" '$3 == wanted { print "0x" $1; exit }'; }
 target_addr=$(symbol fixture_spills_rect)
 copy_addr=$(symbol fixture_copy_rect)
 rect_addr=$(symbol rect_source)
-"$kuna_bin" decompile "$image" fixture_spills_rect \
+"$unlace_bin" decompile "$image" fixture_spills_rect \
   --target x86:LE:64:default:windows --mode reliable --json --assert-strict \
   --option stackviews on --option structdefs on --sleighpath specs \
   --assert 'typedef struct Rect { float x; float y; float width; float height; };' \

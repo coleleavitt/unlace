@@ -1,10 +1,10 @@
-# kuna issue testcase: the Listing walk reads a Thumb tbb/tbh switch table.
+# unlace issue testcase: the Listing walk reads a Thumb tbb/tbh switch table.
 #
-# Issue:      kuna GH-299 - aif plants mid-function entries; on Cortex-M
+# Issue:      unlace GH-299 - aif plants mid-function entries; on Cortex-M
 #             firmware most of them sit in switch case bodies behind a
 #             tbb/tbh the walk could not follow.
 # Stage:      P1 code/data partition - the Listing walk's computed-jump
-#             successors (`listing/kuna_thumbswitch.rs`).
+#             successors (`listing/unlace_thumbswitch.rs`).
 #
 # The XML wrapper only provides the harness architecture.  The pass clears
 # it and loads `thumbswitch_le32` (generator `thumbswitch_le32.py` beside it):
@@ -48,26 +48,26 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-THUMBSWITCH #1: the bhi-guarded dispatcher is a function'
+name = 'UNLACE-THUMBSWITCH #1: the bhi-guarded dispatcher is a function'
 count = 1
 literal = '0x8226 sub_8226'
 
 [[match]]
-name = 'KUNA-THUMBSWITCH #2: the bhi-guarded case body is not a function'
+name = 'UNLACE-THUMBSWITCH #2: the bhi-guarded case body is not a function'
 count = 0
 literal = '0x8238 sub_8238'
 
 [[match]]
-name = 'KUNA-THUMBSWITCH #3: the bcs-guarded dispatcher is a function'
+name = 'UNLACE-THUMBSWITCH #3: the bcs-guarded dispatcher is a function'
 count = 1
 literal = '0x8254 sub_8254'
 
 [[match]]
-name = 'KUNA-THUMBSWITCH #4: the bcs-guarded case body is not a function'
+name = 'UNLACE-THUMBSWITCH #4: the bcs-guarded case body is not a function'
 count = 0
 literal = '0x8264 sub_8264'
 
 [[match]]
-name = 'KUNA-THUMBSWITCH #5: a bge bounds no table, so the function after it is not read as a case'
+name = 'UNLACE-THUMBSWITCH #5: a bge bounds no table, so the function after it is not read as a case'
 count = 1
 literal = '0x8290 sub_8290'

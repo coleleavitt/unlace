@@ -8,7 +8,7 @@
 # there.
 #
 # Bytes: `dispatch` @ 0xd380 is gcc -O2's tail-call dispatcher on its first
-# parameter, from a real x86-64 ELF (kuna-re-dataset bin_213). It compiles the
+# parameter, from a real x86-64 ELF (unlace-re-dataset bin_213). It compiles the
 # argument once (`mov eax,edi`) and reuses EDI (the first-parameter register) for
 # the tail calls' own argument (`mov rdi,rsi`) before the compares run, so EDI -
 # the recorded home storage, holds the SECOND parameter by the time the switch

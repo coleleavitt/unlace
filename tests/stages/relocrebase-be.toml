@@ -1,4 +1,4 @@
-# kuna analysis (relocrebase, always on), GH-904: a big-endian
+# unlace analysis (relocrebase, always on), GH-904: a big-endian
 # relocatable object's analysis facts at the addresses the loader gives it.
 #
 # The analysis tier reads a relocatable object through a copy patched to the

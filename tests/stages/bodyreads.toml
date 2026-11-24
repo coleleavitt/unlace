@@ -11,12 +11,12 @@
 # setup names edx, so the call gets no argument for it (heritage registers a
 # trial only for a range some op reads or writes, and upstream's
 # AncestorRealistic refuses the function's own input at a call slot). With the
-# option off kuna prints `mix(a0,a1 - 1 & 7)`, and `key` is only the `char` the
+# option off unlace prints `mix(a0,a1 - 1 & 7)`, and `key` is only the `char` the
 # store reads.
 #
 # Stage / sub-stage: P4 "active-input-trial-scoring"
-# (`p4_calls/kuna_passthrough.rs` `stated_width` / `stated_registers`, with
-# `p4_calls/kuna_entryreads.rs` taking the body's reads at the first heritage).
+# (`p4_calls/unlace_passthrough.rs` `stated_width` / `stated_registers`, with
+# `p4_calls/unlace_entryreads.rs` taking the body's reads at the first heritage).
 # No callee was decompiled first, so nothing is stated: the only evidence is
 # the function's own body, which reads edx (`lea 0x19(%rdx),%ecx`), so the
 # recursive call takes it and the parameter is the four bytes that read's

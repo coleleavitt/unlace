@@ -1,4 +1,4 @@
-# kuna_atomics (option atomics, docs/spec/02-lift-and-flow.md): an AArch64 LSE atomic lifts to
+# unlace_atomics (option atomics, docs/spec/02-lift-and-flow.md): an AArch64 LSE atomic lifts to
 # one __sync builtin (ldaddal, ldsetal, swpal, casal at 4, 8 and 1 bytes,
 # ldclral of a negated operand, stadd of a global, and a casal retry loop whose
 # compare-exchange must stay inside the loop; before, the conditional store moved

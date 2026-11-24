@@ -1,4 +1,4 @@
-# kuna x87depth warnings: a declared type that the x87 stack depth
+# unlace x87depth warnings: a declared type that the x87 stack depth
 # contradicts.
 #
 #     8048100 h:  fld1; ret                 ; leaves one value on the x87 stack

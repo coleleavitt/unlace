@@ -3,17 +3,17 @@
 ## The gap
 
 On the cast census's 4,815 functions matched by address with IDA Pro (45 binaries,
-O0/O2/O2-noinline), kuna printed 45,126 casts against IDA's 37,821 (1.19x). One
+O0/O2/O2-noinline), unlace printed 45,126 casts against IDA's 37,821 (1.19x). One
 of the census's ranked levers is the casts C's own conversion rules already
 perform:
 
 ```c
 ida : v25 = (char *)memchr(ptr, v12, v19 - (char *)ptr);
-kuna: v7  = memchr(v10,(int)v4,(long)v14 - (long)v10);          // memchr takes an int
+unlace: v7  = memchr(v10,(int)v4,(long)v14 - (long)v10);          // memchr takes an int
 
-kuna: *(char *)((long)(int)(unsigned int)(unsigned char)sub_4042((int)v1) + 0x23560)
-kuna: v31 = (unsigned long)v48;              // unsigned long v31; unsigned int v48;
-kuna: return (unsigned long)(a1 < a0);       // unsigned long sub_afb1(long a0,long a1)
+unlace: *(char *)((long)(int)(unsigned int)(unsigned char)sub_4042((int)v1) + 0x23560)
+unlace: v31 = (unsigned long)v48;              // unsigned long v31; unsigned int v48;
+unlace: return (unsigned long)(a1 < a0);       // unsigned long sub_afb1(long a0,long a1)
 ```
 
 (sort -O0, sort -O2, ls -O0.)
@@ -55,7 +55,7 @@ and a conversion between integer types depends only on the value converted
 Two conditions carry all of the risk, and the rule is built around them:
 
 1. **The destination must be the one C sees.** A varargs position has no parameter
-   type (the default promotions apply instead), and kuna's `formatstring` closes a
+   type (the default promotions apply instead), and unlace's `formatstring` closes a
    resolved printf's varargs into ordinary per-call-site parameters; a trial
    prototype is a guess. Only a type-locked parameter of a direct call with no
    per-call-site override counts. A ternary arm's type is the arms' common type, not

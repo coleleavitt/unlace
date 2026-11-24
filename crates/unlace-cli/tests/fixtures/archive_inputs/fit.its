@@ -1,6 +1,6 @@
 /dts-v1/;
 / {
-    description = "kuna FIT fixture";
+    description = "unlace FIT fixture";
     #address-cells = <1>;
     images {
         kernel-1 {

@@ -48,7 +48,7 @@ fn svd_bytes(arg: &str) -> Result<Vec<u8>, String> {
         return std::fs::read(arg).map_err(|e| format!("could not read {arg}: {e}"));
     }
     if let Some((name, doc)) = svd::bundled(arg) {
-        eprintln!("[kuna firmware] SVD: bundled description {name} for {arg}");
+        eprintln!("[unlace firmware] SVD: bundled description {name} for {arg}");
         return Ok(doc);
     }
     let names = svd::bundled_names();
@@ -141,7 +141,7 @@ pub fn prepare(
                 std::fs::write(&path, &inner)
                     .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 eprintln!(
-                    "[kuna firmware] {format}: loading the ELF it wraps ({} bytes)",
+                    "[unlace firmware] {format}: loading the ELF it wraps ({} bytes)",
                     inner.len()
                 );
                 out[0] = path.display().to_string();
@@ -158,13 +158,13 @@ pub fn prepare(
                     flat = containers::bios_flash(&bytes).unwrap_or(flat);
                 }
                 if let Some(note) = &flat.note {
-                    eprintln!("[kuna firmware] {}: {note}", flat.format);
+                    eprintln!("[unlace firmware] {}: {note}", flat.format);
                 }
                 let path = temp_path(&binary, "bin");
                 std::fs::write(&path, &flat.bytes)
                     .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 eprintln!(
-                    "[kuna firmware] {}: {} bytes at {:#x}, target {}, entries {:x?}",
+                    "[unlace firmware] {}: {} bytes at {:#x}, target {}, entries {:x?}",
                     flat.format,
                     flat.bytes.len(),
                     flat.base,
@@ -240,7 +240,7 @@ pub fn prepare(
             out.extend(["--assert".into(), format!("volatile {device}")]);
         }
         eprintln!(
-            "[kuna firmware] Cortex-M vector table: base {:#x}, initial SP {:#x}, {} handlers, reset {:#x}",
+            "[unlace firmware] Cortex-M vector table: base {:#x}, initial SP {:#x}, {} handlers, reset {:#x}",
             table.base,
             table.initial_sp,
             table.handlers.len(),
@@ -261,7 +261,7 @@ pub fn prepare(
             .collect();
         if !flat_entries.is_empty() {
             eprintln!(
-                "[kuna firmware] AVR vector table: {} handler(s), reset {:#x}",
+                "[unlace firmware] AVR vector table: {} handler(s), reset {:#x}",
                 flat_entries.len(),
                 flat_entries[0]
             );
@@ -335,7 +335,7 @@ fn declare_device(device: &svd::Device, out: &mut Vec<String>) {
         ]);
     }
     eprintln!(
-        "[kuna firmware] SVD {}: {} peripherals, {} interrupts",
+        "[unlace firmware] SVD {}: {} peripherals, {} interrupts",
         device.name,
         device.peripherals.len(),
         device.interrupts.len()
@@ -362,7 +362,10 @@ fn temp_path(binary: &str, ext: &str) -> std::path::PathBuf {
     let stem = std::path::Path::new(binary)
         .file_name()
         .map_or("image".into(), |n| n.to_string_lossy().to_string());
-    std::env::temp_dir().join(format!("kuna-firmware-{}-{stem}.{ext}", std::process::id()))
+    std::env::temp_dir().join(format!(
+        "unlace-firmware-{}-{stem}.{ext}",
+        std::process::id()
+    ))
 }
 
 /// Formats the loader parses itself.

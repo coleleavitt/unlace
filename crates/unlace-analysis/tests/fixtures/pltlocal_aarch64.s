@@ -1,4 +1,4 @@
-// (kuna) AArch64 shared object whose `timer_wrapper` calls its own exports
+// (unlace) AArch64 shared object whose `timer_wrapper` calls its own exports
 // through the PLT: `bl timer_helper@plt` forwards the caller's x0, x1, w2 and
 // w3 untouched, and `b send_helper@plt` tail-calls after reloading x0/x1.
 // GH-1342's standalone reproducer, verbatim. Built with

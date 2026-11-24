@@ -53,16 +53,16 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-LOOPROTATE #1: the bit-count loop tests at the top (default)'
+name = 'UNLACE-LOOPROTATE #1: the bit-count loop tests at the top (default)'
 count = 1
 literal = 'for (; a0; a0 = a0 >> 1)'
 
 [[match]]
-name = 'KUNA-LOOPROTATE #2: the counting loop is a for loop up to n (default)'
+name = 'UNLACE-LOOPROTATE #2: the counting loop is a for loop up to n (default)'
 count = 1
 regex = 'for \(\w+ = 0; \w+ < a1; \w+ = \w+ \+ 1\)'
 
 [[match]]
-name = 'KUNA-LOOPROTATE #3: looprotate off keeps both do-while loops'
+name = 'UNLACE-LOOPROTATE #3: looprotate off keeps both do-while loops'
 count = 2
 literal = 'do {'

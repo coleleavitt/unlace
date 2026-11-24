@@ -1,4 +1,4 @@
-# Stripped PE32 i386 fixture for kuna_calleereginputs (tests/stages/kuna-calleereginputs.toml).
+# Stripped PE32 i386 fixture for unlace_calleereginputs (tests/stages/unlace-calleereginputs.toml).
 #
 # thiscall_pe_i386.cpp is compiled by Visual C++ 2005 SP1 (`cl /O2 /c`, output
 # renamed thiscall_pe_i386_c.obj). The stub below stands in for the

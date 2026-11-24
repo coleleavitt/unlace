@@ -2,7 +2,7 @@
  * object without an aarch64 sysroot/linker — the decompiler only needs the code.
  *
  * Rebuild:  clang -c --target=aarch64-linux-gnu -O0 -o sample_aarch64.o sample_aarch64.c
- * (produces an ELF ET_REL, ARM aarch64; kuna loads it via its relocobjects path.)
+ * (produces an ELF ET_REL, ARM aarch64; unlace loads it via its relocobjects path.)
  */
 static int add(int a, int b) { return a + b; }
 

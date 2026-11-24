@@ -38,7 +38,7 @@ Trustworthy function boundaries and complete checker disassembly.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"
@@ -68,7 +68,7 @@ Trustworthy function boundaries and complete checker disassembly.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--json"

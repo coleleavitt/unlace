@@ -84,8 +84,8 @@ fn run_one(stem: &str) -> Option<String> {
 /// Extract just the rendered `print C` body from the UNLACE_DUMP envelope.
 fn dump_body(out: &str) -> String {
     match (
-        out.find("===KUNA_DUMP_BEGIN"),
-        out.find("===KUNA_DUMP_MID==="),
+        out.find("===UNLACE_DUMP_BEGIN"),
+        out.find("===UNLACE_DUMP_MID==="),
     ) {
         (Some(b), Some(m)) => out[b..m].to_string(),
         _ => out.to_string(),

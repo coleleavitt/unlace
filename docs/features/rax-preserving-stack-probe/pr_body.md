@@ -1,12 +1,12 @@
 ## The problem
 
 Every MSVC frame larger than a page opens with a call to the out-of-line stack
-probe, and kuna loses the frame across it. The probe reads `RAX` and never
-writes it, so `sub rsp,rax` is a constant allocation — but kuna prints the whole
+probe, and unlace loses the frame across it. The probe reads `RAX` and never
+writes it, so `sub rsp,rax` is a constant allocation — but unlace prints the whole
 frame indexed off a local it never assigns:
 
 ```
-$ kuna decompile crackme_shroud.exe sub_1408dcdf8
+$ unlace decompile crackme_shroud.exe sub_1408dcdf8
 void sub_1408dcdf8(unsigned long long *a0,uint4 a1,char *a2,uint8 a3)
 {
   int8 v4;
@@ -81,11 +81,11 @@ negative control that must render identically in both passes. Five unit tests in
 
 `tests/cli/rax-preserving-stack-probe.json` runs the same shape end to end
 through the CLI against a new 4,768-byte fixture,
-`decompiler/crates/kuna-analysis/tests/fixtures/calleescratchbody_x86_64` (its
+`decompiler/crates/unlace-analysis/tests/fixtures/calleescratchbody_x86_64` (its
 `.s` is checked in beside it). With the option off it renders
 `*(unsigned long *)&(&Stack0000000000000008)[-chkstk()] = a0;` and fails.
 
 Gates: `make test` 675/675, `make test-stages` 730/730, `make test-cli` 109/109,
-`make rust-test` green, `make check-spec` green, `kuna catalog --check` OK.
+`make rust-test` green, `make check-spec` green, `unlace catalog --check` OK.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

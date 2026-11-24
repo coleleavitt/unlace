@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Layout precision for structsynth, filler counted and filler excluded.
 
-    KUNA_BIN=<release kuna> ~/.virtualenvs/decbench/bin/python \
+    UNLACE_BIN=<release unlace> ~/.virtualenvs/decbench/bin/python \
         docs/features/structsynth/layoutscore.py
 
 A synthesized layout has two kinds of member: a field the pass claims (a scalar
@@ -23,8 +23,8 @@ from scripts.decbench import structscore as SS
 RES = Path("/home/mahaloz/github/decbench/results/full_run_address_2026-09-11")
 BINS = [("fmt","O0"),("fmt","O2"),("ls","O0"),("ls","O2"),("sort","O0"),("sort","O2"),
         ("du","O0"),("du","O2")]
-if os.environ.get("KUNA_BIN"):
-    SS.KUNA = os.environ["KUNA_BIN"]
+if os.environ.get("UNLACE_BIN"):
+    SS.UNLACE = os.environ["UNLACE_BIN"]
 # `LAYOUTSCORE_OPTIONS="protoorder off,..."` adds option arguments to both runs,
 # for an ablation arm.  Both runs, because a layout is joined to the parameter
 # that carries it by the `struct_N` name, and the ledger numbers names in the

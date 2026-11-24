@@ -1,6 +1,6 @@
 // A hand-written stand-in for an SDK framework header (no Apple text): the
 // declaration shapes the `objcsdk` reader must understand. Read by the
-// kuna_objcsdk unit tests and the kuna-objcsdk stage test.
+// unlace_objcsdk unit tests and the unlace-objcsdk stage test.
 #import <Foundation/Foundation.h>
 
 typedef double CGFloat;

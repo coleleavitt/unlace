@@ -25,7 +25,7 @@ offered to.
 ## Acceptance
 
 * `make test` 675/675, `make test-stages` PARITY OK, `make rust-test`,
-  `make check-spec` (+ `--strict`), `make test-cli`, `kuna catalog --check`,
+  `make check-spec` (+ `--strict`), `make test-cli`, `unlace catalog --check`,
   `counters --check`, `docs/options.md` byte-fresh.
 * 444-slice typesweep (coreutils grep gzip diffutils bzip2 findutils tar shadow,
   O0/O2/O2-noinline, pinned metric): perfect at least main's, no row worse.

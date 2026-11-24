@@ -6,7 +6,7 @@
 #
 # angr's test_reverting_switch_clustering_and_lowering_mv_o2_main expects one
 # switch with cases 102,116,118,128,105,110,83,4294967165(-131),4294967166(-130),
-# 90,98.  kuna recovers a single switch with the simple option characters as
+# 90,98.  unlace recovers a single switch with the simple option characters as
 # explicit cases (83/90/98/102/105/116/118/128 = S/Z/b/f/i/t/v/0x80) plus a
 # default.  That recovery is not exact: the tree reaches 0x2da0 (cmp eax,0x6e:
 # the n option sets no-clobber) and 0x2d50/0x2db2 (the version and help options) on edges

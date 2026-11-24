@@ -5,9 +5,9 @@
   "opportunity": "arm-prompt-string-owning",
   "witness": "crackmes.one 5ab77f5d33c5d40ad448c69c (arm_kgme1) -- ELF 32-bit LSB executable, ARM EABI4, dynamically linked, stripped",
   "selector": "0x9124 (the \"Enter your key: \\n\" prompt)",
-  "source_decompiler": "kuna",
+  "source_decompiler": "unlace",
   "phase": "P1 (program prep, entry discovery)",
-  "module": "decompiler/crates/kuna-analysis/src/analyzers/entry/armlibcmain.rs (ArmLibcMainPass)",
+  "module": "decompiler/crates/unlace-analysis/src/analyzers/entry/armlibcmain.rs (ArmLibcMainPass)",
   "change_kind": "correctness-fix",
   "tier": "analysis",
   "option": "armlibcmain",
@@ -26,7 +26,7 @@
   ],
   "acceptance": {
     "probe_id": "a-7837f5c28063",
-    "command": "kuna strings <arm_kgme1> --json --filter 'Enter your key'",
+    "command": "unlace strings <arm_kgme1> --json --filter 'Enter your key'",
     "before": "xrefs_count 0, functions []",
     "after": "xrefs_count 1, functions [{name: main, address_hex: 0x8cf8}]",
     "verify": "scripts.repipe.verify --need arm-prompt-string-owning --json => pass 1 / fail 0, transition 'closed'",
@@ -37,9 +37,9 @@
     "result": "the previous inventory returns exactly: no `main` symbol, no function at that address under any name, xrefs_count 0 and functions [] for the prompt"
   },
   "regression_sweep": {
-    "method": "`kuna functions --json` in both arms over 143 images -- the 129 object fixtures under decompiler/crates/*/tests/fixtures plus every ARM binary in the RE dataset (14) -- then a full `kuna decompile-all --json` both-arm diff on every image that changed at all",
+    "method": "`unlace functions --json` in both arms over 143 images -- the 129 object fixtures under decompiler/crates/*/tests/fixtures plus every ARM binary in the RE dataset (14) -- then a full `unlace decompile-all --json` both-arm diff on every image that changed at all",
     "fired_on": 2,
-    "fired": ["decompiler/crates/kuna-analysis/tests/fixtures/armlibcmain_le32 + armlibcmain_got_le32 (the new fixtures)", "kuna-re-dataset arm_kgme1 (the witness)", "kuna-re-dataset armageddon (challenge 5edb0b8533c5d449d91ae73b, an unrelated stripped non-PIE ARM ELF -- main recovered at 0x14a04)"],
+    "fired": ["decompiler/crates/unlace-analysis/tests/fixtures/armlibcmain_le32 + armlibcmain_got_le32 (the new fixtures)", "unlace-re-dataset arm_kgme1 (the witness)", "unlace-re-dataset armageddon (challenge 5edb0b8533c5d449d91ae73b, an unrelated stripped non-PIE ARM ELF -- main recovered at 0x14a04)"],
     "emitted_c_hunks_moved": 0,
     "classification": "on both dataset images the diff is exactly ONE function added (main) and ZERO changes to any pre-existing function's `code`; the only other movement is the gap-fill extent above it shrinking by the length of the function now sitting there (arm_kgme1 _INIT_0 3368 -> 2320, armageddon _INIT_0 19960 -> 17736)",
     "inert_elsewhere": "127 of 129 repo fixtures and 12 of 14 dataset ARM binaries are byte-identical in both arms, including every PIE ARM image (oracle 4 already resolves those), every AArch64 image, the ARM PE, and every static ARM ELF (no __libc_start_main stub to anchor on)"
@@ -50,15 +50,15 @@
     "non_arm_control": "fauxware `authenticate`: off=142.18 ms, on=100.61 ms, delta -29.24% on structurally byte-identical output -- reported as the machine's single-target noise floor, not an effect (docs/features/returncopysplit/record.json measured -20.23% / -12.18% on byte-identical output on the same host)"
   },
   "tests": {
-    "unit": "decompiler/crates/kuna-analysis/src/analyzers/entry/armlibcmain.rs (5 tests): both crt1 shapes claimed at the right VMA, the PIE/static/non-ARM refusals, and the three A32 decoders on the exact words the witness _start carries",
+    "unit": "decompiler/crates/unlace-analysis/src/analyzers/entry/armlibcmain.rs (5 tests): both crt1 shapes claimed at the right VMA, the PIE/static/non-ARM refusals, and the three A32 decoders on the exact words the witness _start carries",
     "end_to_end": "decompiler/crates/console/tests/verify_armlibcmain.rs (3 tests, two-pass): option off = no function covers main at all; default = both shapes recover it and its body reaches the printf/fgets calls; and the count guard (exactly one entry added, none on a PIE ARM image)",
     "cli": "tests/cli/arm-prompt-string-owning.json -- make test-cli 66/66",
     "stage_test": null,
     "stage_test_rationale": "tests/stages is a bytechunk corpus with no ELF container, so it cannot carry a case whose whole premise is a PLT stub and a program header; the two-pass gate lives in verify_armlibcmain.rs instead, which is where machomain's does for the same reason."
   },
   "fixtures": [
-    "decompiler/crates/kuna-analysis/tests/fixtures/armlibcmain_le32 (+ .c) -- the classic crt1 literal-pool shape, `_start` written out because a modern -no-pie link supplies the other one",
-    "decompiler/crates/kuna-analysis/tests/fixtures/armlibcmain_got_le32 (+ .c) -- the GOT-indexed shape, a plain -no-pie link"
+    "decompiler/crates/unlace-analysis/tests/fixtures/armlibcmain_le32 (+ .c) -- the classic crt1 literal-pool shape, `_start` written out because a modern -no-pie link supplies the other one",
+    "decompiler/crates/unlace-analysis/tests/fixtures/armlibcmain_got_le32 (+ .c) -- the GOT-indexed shape, a plain -no-pie link"
   ],
   "gates": {
     "make test": "675/675 PARITY OK (docs/baseline.json NOT re-pinned)",
@@ -66,7 +66,7 @@
     "make rust-test": "green",
     "make check-spec": "check-spec OK (strict mode)",
     "make test-cli": "66/66",
-    "kuna catalog --check": "catalog OK"
+    "unlace catalog --check": "catalog OK"
   },
   "docs": {
     "spec": "docs/spec/01-program-prep.md -- the oracle-4 sentence now names the non-PIE ARM arm, and a new section after the machomain one states the mechanism, the refusals and the sweep",

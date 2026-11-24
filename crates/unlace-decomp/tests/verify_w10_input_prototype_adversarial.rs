@@ -22,7 +22,7 @@
 //!
 //! Both are skipped (not failed) when a binary or `.sla` is unavailable, so the
 //! suite stays green in a worktree without a built C++/spec tree (honoring the
-//! same `KUNA_*` overrides as `printc_parity.rs`).
+//! same `UNLACE_*` overrides as `printc_parity.rs`).
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -75,9 +75,9 @@ fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout).into_owned();
-    let begin = text.find("===KUNA_DUMP_BEGIN")?;
+    let begin = text.find("===UNLACE_DUMP_BEGIN")?;
     let after_begin = text[begin..].find('\n')? + begin + 1;
-    let mid = text[after_begin..].find("===KUNA_DUMP_MID===")? + after_begin;
+    let mid = text[after_begin..].find("===UNLACE_DUMP_MID===")? + after_begin;
     Some(text[after_begin..mid].to_string())
 }
 

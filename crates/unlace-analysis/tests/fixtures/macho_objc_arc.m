@@ -1,5 +1,5 @@
 // Self-contained Mach-O fixture for ARC call handling (`objcarc`,
-// tests/stages/kuna-objcarc.toml): alloc/init chains, retain/release traffic,
+// tests/stages/unlace-objcarc.toml): alloc/init chains, retain/release traffic,
 // autoreleased return values and an ivar store, built with -fobjc-arc so the
 // compiler emits the runtime calls. `-x` strips local symbols so only the
 // `__objc_*` metadata and the import stubs name anything. See

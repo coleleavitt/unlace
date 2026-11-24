@@ -1,4 +1,4 @@
-// Source of hello.dex, the DEX fixture of tests/stages/kuna-dex.xml.
+// Source of hello.dex, the DEX fixture of tests/stages/unlace-dex.xml.
 //
 //   javac --release 8 -d classes Hello.java
 //   java -cp r8-8.5.35.jar com.android.tools.r8.D8 --debug --min-api 21 \

@@ -6,9 +6,9 @@ fixture this PR adds and see it (an ELF crackme's XOR string decoder, reduced to
 a single XOR):
 
 ```
-$ as -o f.o decompiler/crates/kuna-analysis/tests/fixtures/calleearityscratch_x86_64.s
+$ as -o f.o decompiler/crates/unlace-analysis/tests/fixtures/calleearityscratch_x86_64.s
 $ ld -o f f.o
-$ kuna decompile ./f scratch_byte
+$ unlace decompile ./f scratch_byte
 int scratch_byte(unsigned char *a0)
 {
   a0[4] = a0[4] ^ *a0;
@@ -61,6 +61,6 @@ the sibling branch's `sub_1a2f0(v17,v10,a0,a1)`. Speed: `decompile-all` on a
 
 Gates: `make test` PARITY OK 675/675, `make test-stages` PARITY OK (687 -> 692
 keys, purely additive), `make rust-test` green, `make test-cli` 85/85,
-`make check-spec` OK, `kuna catalog --check` OK, acceptance probe PASS.
+`make check-spec` OK, `unlace catalog --check` OK, acceptance probe PASS.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

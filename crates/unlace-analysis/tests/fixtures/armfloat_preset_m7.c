@@ -1,4 +1,4 @@
-/* Cortex-M7 shapes for the armfloat preset (tests/stages/kuna-armfloat-preset.toml).
+/* Cortex-M7 shapes for the armfloat preset (tests/stages/unlace-armfloat-preset.toml).
    arm-none-eabi-gcc -mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard -O2 -c armfloat_preset_m7.c -o armfloat_preset_m7.o */
 #define NI __attribute__((noinline))
 NI int first(int x) { return x * 3 + 1; }

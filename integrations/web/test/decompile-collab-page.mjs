@@ -77,16 +77,16 @@ const ICE_LOG = `(() => {
   };
 })();`;
 
-/** Worker answers arrive `window.__kunaDelay` ms late, so an engine request can be caught in flight; `__kunaWorkers` counts engine starts. */
+/** Worker answers arrive `window.__unlaceDelay` ms late, so an engine request can be caught in flight; `__unlaceWorkers` counts engine starts. */
 const DELAY_SHIM = `(() => {
   const Real = window.Worker;
-  window.__kunaDelay = 0;
-  window.__kunaWorkers = 0;
+  window.__unlaceDelay = 0;
+  window.__unlaceWorkers = 0;
   window.Worker = function (url, opts) {
     const w = new Real(url, opts);
-    window.__kunaWorkers++;
+    window.__unlaceWorkers++;
     let handler = null;
-    w.addEventListener('message', (ev) => { const d = window.__kunaDelay || 0; if (d) setTimeout(() => handler && handler(ev), d); else if (handler) handler(ev); });
+    w.addEventListener('message', (ev) => { const d = window.__unlaceDelay || 0; if (d) setTimeout(() => handler && handler(ev), d); else if (handler) handler(ev); });
     Object.defineProperty(w, 'onmessage', { get() { return handler; }, set(fn) { handler = fn; }, configurable: true });
     return w;
   };
@@ -108,12 +108,12 @@ const DROP_FILE = `(() => {
   };
 })();`;
 
-/** Every request the page makes of the engine, by method, in `window.__kunaCalls`. */
+/** Every request the page makes of the engine, by method, in `window.__unlaceCalls`. */
 const COUNT_CALLS = `(() => {
-  window.__kunaCalls = [];
+  window.__unlaceCalls = [];
   const post = Worker.prototype.postMessage;
   Worker.prototype.postMessage = function (m, t) {
-    window.__kunaCalls.push(m && m.method);
+    window.__unlaceCalls.push(m && m.method);
     return post.call(this, m, t);
   };
 })();`;
@@ -156,7 +156,7 @@ const LOCKS_LATE = `(() => {
   navigator.locks.request = (...args) => new Promise((resolve, reject) => setTimeout(() => request(...args).then(resolve, reject), 4000));
 })();`;
 
-const OWN_KEY = `kuna.d2.session.${SAMPLE_HASH}`;
+const OWN_KEY = `unlace.d2.session.${SAMPLE_HASH}`;
 const stored = (records) => JSON.stringify({ v: 1, rawSeq: 0, bytes: [], records });
 const MAIN = '0x1198';
 const SUM = '0x1161';
@@ -190,7 +190,7 @@ const front = (p) => p.send('Page.bringToFront');
 
 /** Open the page with this browser's storage emptied first (then `seed`), so no case inherits another's settings. */
 async function open(p, { seed = null } = {}) {
-  await p.navigate(`${server.base}/kuna-web.js`);
+  await p.navigate(`${server.base}/unlace-web.js`);
   await p.call((entries) => {
     localStorage.clear();
     for (const [k, v] of entries) localStorage.setItem(k, v);
@@ -317,12 +317,12 @@ try {
     await popover(ben, '#ccode .t[data-sym="v1"]', 'n', 'bens_name');
     await front(ana);
     await popover(ana, '#ccode .t[data-sym="argc"]', 'n', 'anas_name');
-    await ana.evaluate('window.__kunaDelay = 4000; true');
+    await ana.evaluate('window.__unlaceDelay = 4000; true');
     await ana.key('Enter');
     await ben.key('Enter');
     await sleep(1500);
     assert.equal(await ana.evaluate(`!document.getElementById('cancelbtn').disabled`), true, 'Ana\'s edit is in flight');
-    await ana.evaluate(`document.getElementById('cancelbtn').click(); window.__kunaDelay = 0; true`);
+    await ana.evaluate(`document.getElementById('cancelbtn').click(); window.__unlaceDelay = 0; true`);
     for (const p of [ana, ben]) {
       await p.waitFor(`[...document.querySelectorAll('#sesslist li')].length === 2`, { what: `${p.label}: both changes kept`, timeout: 20000 });
     }
@@ -335,12 +335,12 @@ try {
     const { ana, ben } = await pair({ anaScript: DELAY_SHIM });
     await front(ana);
     await popover(ana, '#ccode .t[data-sym="argc"]', 'n', 'anas_name');
-    await ana.evaluate('window.__kunaDelay = 3000; true');
+    await ana.evaluate('window.__unlaceDelay = 3000; true');
     await ana.key('Enter');
     await sleep(800);
     await setSelect(ben, 'mode', 'fast');
     await ana.waitFor(`document.getElementById('mode').value === 'fast'`, { what: 'Ana takes the new effort', timeout: 20000 });
-    await ana.evaluate('window.__kunaDelay = 0; true');
+    await ana.evaluate('window.__unlaceDelay = 0; true');
     for (const p of [ana, ben]) {
       await idle(p);
       await p.waitFor(`/anas_name/.test(document.getElementById('ccode').textContent)`, { what: `${p.label} keeps Ana's rename`, timeout: 60000 });
@@ -367,7 +367,7 @@ try {
       ['fn:0x1161', { kind: 'fn', addr: '0x1161', name: 'mine_sum' }],
       ['var:0x1161:v1', { kind: 'var', func: '0x1161', sym: 'v1', name: 'bens_own', type: null }],
     ] });
-    const { ana, ben } = await pair({ other: true, benSeed: [[`kuna.d2.session.${SAMPLE_HASH}`, own]] });
+    const { ana, ben } = await pair({ other: true, benSeed: [[`unlace.d2.session.${SAMPLE_HASH}`, own]] });
     await front(ana);
     await ana.click('#fnlist .fn[data-addr="0x1161"]');
     await idle(ana);
@@ -377,8 +377,8 @@ try {
     await ana.key('Enter');
     await ben.waitFor(`/summation\\(add/.test(document.getElementById('ccode').textContent)`, { what: 'Ben sees the session', timeout: 30000 });
     await sleep(500);
-    assert.equal(await ben.evaluate(`localStorage.getItem(${JSON.stringify(`kuna.d2.session.${SAMPLE_HASH}`)})`), own, 'Ben\'s own stored changes are untouched');
-    assert.match(await ben.evaluate(`localStorage.getItem(${JSON.stringify(`kuna.d2.shared.${SAMPLE_HASH}`)}) || ''`), /summation/, 'the session is saved apart');
+    assert.equal(await ben.evaluate(`localStorage.getItem(${JSON.stringify(`unlace.d2.session.${SAMPLE_HASH}`)})`), own, 'Ben\'s own stored changes are untouched');
+    assert.match(await ben.evaluate(`localStorage.getItem(${JSON.stringify(`unlace.d2.shared.${SAMPLE_HASH}`)}) || ''`), /summation/, 'the session is saved apart');
     await ben.click('#d2roster [data-act=collab-open]');
     await ben.waitFor(`document.querySelector('#d2collab [data-act=save-aside]')`, { what: 'the offer to save them, in the dialog', timeout: 10000 });
     await ben.evaluate(`(() => { window.__saved = null; const real = URL.createObjectURL; URL.createObjectURL = (b) => { b.text().then((t) => { window.__saved = t; }); return real.call(URL, b); }; return true; })()`);
@@ -394,8 +394,8 @@ try {
 
   await test('#10 a follower\'s page finishes opening a function while the others keep moving', async () => {
     const { ana, ben } = await pair({ benScript: DELAY_SHIM });
-    const starts = await ben.evaluate('window.__kunaWorkers');
-    await ben.evaluate('window.__kunaDelay = 2500; true');
+    const starts = await ben.evaluate('window.__unlaceWorkers');
+    await ben.evaluate('window.__unlaceDelay = 2500; true');
     await ben.click('#d2roster .d2-who');
     await front(ana);
     await ana.click('#fnlist .fn[data-addr="0x1161"]');
@@ -404,7 +404,7 @@ try {
       await ana.click(i % 2 ? '#tab-c' : '#tab-asm');
     }
     await ben.waitFor(`document.getElementById('vname').textContent === 'sum_to' && /for \\(/.test(document.getElementById('ccode').textContent)`, { what: 'Ben shows sum_to', timeout: 30000 });
-    assert.equal(await ben.evaluate('window.__kunaWorkers'), starts, 'Ben\'s open was never cancelled and restarted');
+    assert.equal(await ben.evaluate('window.__unlaceWorkers'), starts, 'Ben\'s open was never cancelled and restarted');
   });
 
   await test('#12 after a failed join, the tab can join another invite', async () => {
@@ -436,7 +436,7 @@ try {
     await popover(ana, '#ccode .t[data-sym="argc"]', 'n', 'anas_name');
     await ana.key('Enter');
     await idle(ana);
-    await ana.evaluate('window.__kunaDelay = 3000; true');
+    await ana.evaluate('window.__unlaceDelay = 3000; true');
     await front(ben);
     await popover(ben, '#ccode .t[data-sym="v1"]', 'n', 'bens_name');
     await ben.key('Enter');
@@ -444,7 +444,7 @@ try {
     await front(ana);
     await ana.evaluate(`document.body.focus(); true`);
     await ana.key('u');
-    await ana.evaluate('window.__kunaDelay = 0; true');
+    await ana.evaluate('window.__unlaceDelay = 0; true');
     for (const p of [ana, ben]) {
       await p.waitFor(`!/anas_name/.test(document.getElementById('sesslist').textContent)`, { what: `${p.label}: Ana's rename undone`, timeout: 30000 });
     }
@@ -452,7 +452,7 @@ try {
 
   await test('#20 Cancel keeps another person\'s change queued for the code on screen', async () => {
     const { ana, ben } = await pair({ anaScript: DELAY_SHIM });
-    await ana.evaluate('window.__kunaDelay = 4000; true');
+    await ana.evaluate('window.__unlaceDelay = 4000; true');
     await front(ana);
     await ana.click('#ccode');
     await ana.key('x');
@@ -461,7 +461,7 @@ try {
     await popover(ben, '#ccode .t[data-sym="v1"]', 'n', 'bens_name');
     await ben.key('Enter');
     await sleep(1200);
-    await ana.evaluate(`window.__kunaDelay = 0; document.getElementById('cancelbtn').click(); true`);
+    await ana.evaluate(`window.__unlaceDelay = 0; document.getElementById('cancelbtn').click(); true`);
     await ana.waitFor(`/bens_name/.test(document.getElementById('ccode').textContent)`, { what: 'Ana\'s code shows Ben\'s rename', timeout: 30000 });
   });
 
@@ -483,7 +483,7 @@ try {
   await test('#22 the restored-changes banner goes once a session starts', async () => {
     const stored = JSON.stringify({ v: 1, rawSeq: 1, bytes: [], records: [['raw:1', { kind: 'raw', text: 'readonly 0x2000+8' }]] });
     const ana = await tab('Ana');
-    await open(ana, { seed: [[`kuna.d2.session.${SAMPLE_HASH}`, stored]] });
+    await open(ana, { seed: [[`unlace.d2.session.${SAMPLE_HASH}`, stored]] });
     await example(ana);
     await ana.waitFor(`document.querySelector('.d2banner')`, { what: 'the restored banner', timeout: 20000 });
     await inviteLink(ana, 'Ana');
@@ -646,11 +646,11 @@ try {
     const { ana, ben } = await pair({ anaScript: DELAY_SHIM });
     await ben.click('#d2roster .d2-who');
     await front(ana);
-    await ana.evaluate('window.__kunaDelay = 3000; true');
+    await ana.evaluate('window.__unlaceDelay = 3000; true');
     await ana.click(`#fnlist .fn[data-addr="${SUM}"]`);
     await sleep(400);
     await ana.click(`#fnlist .fn[data-addr="${MAIN}"]`);
-    await ana.evaluate('window.__kunaDelay = 0; true');
+    await ana.evaluate('window.__unlaceDelay = 0; true');
     await sleep(3500);
     assert.equal(await text(ana, '#vname'), 'main');
     assert.equal(await text(ben, '#vname'), 'main', 'Ben follows Ana to main, not to the function she stopped opening');
@@ -660,7 +660,7 @@ try {
   await test('second review #8 a view setting changed while another person\'s change waits: the change still reaches the code', async () => {
     const { ana, ben } = await pair({ anaScript: DELAY_SHIM });
     await front(ana);
-    await ana.evaluate('window.__kunaDelay = 10000; true');
+    await ana.evaluate('window.__unlaceDelay = 10000; true');
     await ana.click('#ccode');
     await ana.key('x');
     await ana.waitFor(`!document.getElementById('cancelbtn').disabled`, { what: 'Ana is busy', timeout: 10000 });
@@ -679,7 +679,7 @@ try {
     })()`);
     assert.equal(await ana.evaluate(`!document.getElementById('cancelbtn').disabled`), true, 'the re-decompile is still waiting for Ana\'s request');
     assert.ok(!/bens_name/.test(await code(ana)), 'and the code does not have Ben\'s change yet');
-    await ana.evaluate('window.__kunaDelay = 0; true');
+    await ana.evaluate('window.__unlaceDelay = 0; true');
     await ana.waitFor(`/bens_name/.test(document.getElementById('ccode').textContent)`, { what: 'Ana\'s code shows Ben\'s rename', timeout: 30000 });
   });
 
@@ -746,10 +746,10 @@ try {
 
   await test('second review #12 Stop while a new decompiler effort reloads the program leaves the session cleanly', async () => {
     const { ana, ben } = await pair({ anaScript: DELAY_SHIM });
-    await ana.evaluate('window.__kunaDelay = 5000; true');
+    await ana.evaluate('window.__unlaceDelay = 5000; true');
     await setSelect(ben, 'mode', 'fast');
     await ana.waitFor(`document.getElementById('mode').value === 'fast' && !document.getElementById('cancelbtn').disabled`, { what: 'Ana reloads the program', timeout: 20000 });
-    await ana.evaluate(`document.getElementById('cancelbtn').click(); window.__kunaDelay = 0; true`);
+    await ana.evaluate(`document.getElementById('cancelbtn').click(); window.__unlaceDelay = 0; true`);
     await ana.waitFor(`(() => { const r = document.getElementById('d2roster'); return !r || r.hidden; })()`, { what: 'Ana is out of the session', timeout: 10000 });
     assert.ok((await toasts(ana)).some((t) => /left the session/.test(t)));
     await ben.waitFor(`document.querySelectorAll('#d2roster .d2-who').length === 0`, { what: 'Ben sees Ana go', timeout: 20000 });
@@ -761,7 +761,7 @@ try {
     await example(ana);
     const link = await inviteLink(ana, 'Ana');
     const ben = await tab('Ben', { other: true });
-    const old = `kuna.d2.session.${legacyKey(readFileSync(fixture('sample.elf')))}`;
+    const old = `unlace.d2.session.${legacyKey(readFileSync(fixture('sample.elf')))}`;
     await open(ben, { seed: [[old, stored([varRec(MAIN, 'v1', 'from_before')])]] });
     await ben.navigate(link);
     await nameAndGo(ben, 'Ben');
@@ -778,10 +778,10 @@ try {
     await open(ana, { seed: [[OWN_KEY, stored([rawRec(1, 'bytes 0x10 zz'), rawRec(2, 'bytes 0x10 zz')])]] });
     await example(ana);
     await sleep(1500);
-    const before = await ana.evaluate('window.__kunaCalls.length');
+    const before = await ana.evaluate('window.__unlaceCalls.length');
     await sleep(3000);
-    const after = await ana.evaluate('window.__kunaCalls.length');
-    assert.equal(after, before, `the page kept asking the engine: ${JSON.stringify(await ana.evaluate('window.__kunaCalls.slice(-6)'))}`);
+    const after = await ana.evaluate('window.__unlaceCalls.length');
+    assert.equal(after, before, `the page kept asking the engine: ${JSON.stringify(await ana.evaluate('window.__unlaceCalls.slice(-6)'))}`);
     assert.match(await rail(ana), /bytes 0x10 zz/);
   });
 
@@ -794,17 +794,17 @@ try {
     await open(ben, { seed: [[OWN_KEY, stored([varRec(MAIN, 'v1', 'bens_own')])]] });
     await ben.navigate(link);
     await nameAndGo(ben, 'Ben');
-    await ben.evaluate('window.__kunaDelay = 4000; true');
+    await ben.evaluate('window.__unlaceDelay = 4000; true');
     await carryReply(ana, ben);
     await ben.waitFor(`/Finding the functions in sample.elf/.test(document.getElementById('status').textContent)`, { what: 'Ben opens the program', timeout: 20000 });
     await ana.closeTab();
     tabs = tabs.filter((t) => t !== ana);
     await ben.waitFor(`/closed the connection|stopped answering/.test((document.getElementById('d2collab')?.textContent || '') + [...document.querySelectorAll('.d2-toast')].map((t) => t.textContent).join(' '))`, { what: 'Ben is told', timeout: 30000 });
-    await ben.evaluate('window.__kunaDelay = 0; true');
+    await ben.evaluate('window.__unlaceDelay = 0; true');
     await closeDialog(ben);
     await ben.waitFor(`/bens_own/.test(document.getElementById('ccode').textContent)`, { what: 'Ben\'s own changes show', timeout: 30000 });
     assert.ok(!/summation/.test(await code(ben)), 'not the session\'s');
-    assert.equal(await ben.evaluate(`localStorage.getItem(${JSON.stringify(`kuna.d2.shared.${SAMPLE_HASH}`)})`), null, 'and nothing is saved as a session\'s copy');
+    assert.equal(await ben.evaluate(`localStorage.getItem(${JSON.stringify(`unlace.d2.shared.${SAMPLE_HASH}`)})`), null, 'and nothing is saved as a session\'s copy');
   });
 
   await test('third review #5 another person\'s change queued behind an open that a cached function replaced still reaches the code', async () => {
@@ -813,7 +813,7 @@ try {
     await ben.click(`#fnlist .fn[data-addr="${SUM}"]`);
     await ben.waitFor(`document.getElementById('vname').textContent === 'sum_to' && document.getElementById('cancelbtn').disabled`, { what: 'Ben on sum_to', timeout: 30000 });
     await front(ana);
-    await ana.evaluate('window.__kunaDelay = 4000; true');
+    await ana.evaluate('window.__unlaceDelay = 4000; true');
     await ana.click(`#fnlist .fn[data-addr="${SUM}"]`);
     await ana.waitFor(`!document.getElementById('cancelbtn').disabled`, { what: 'Ana opens sum_to', timeout: 10000 });
     await front(ben);
@@ -824,7 +824,7 @@ try {
     await sleep(800);
     assert.equal(await ana.evaluate(`!document.getElementById('cancelbtn').disabled`), true, 'Ana is still opening sum_to, so the re-decompile waits');
     await ana.click(`#fnlist .fn[data-addr="${MAIN}"]`);
-    await ana.evaluate('window.__kunaDelay = 0; true');
+    await ana.evaluate('window.__unlaceDelay = 0; true');
     await ana.waitFor(`document.getElementById('vname').textContent === 'main' && document.getElementById('cancelbtn').disabled`, { what: 'Ana back on main', timeout: 20000 });
     await front(ben);
     await ben.click(`#fnlist .fn[data-addr="${MAIN}"]`);
@@ -927,14 +927,14 @@ try {
       const { ana, ben } = await pair({ anaScript: DELAY_SHIM });
       wasmTag = '"deployed-again"';
       const fetched = wasmFetches;
-      const workers = await ana.evaluate('window.__kunaWorkers');
-      await ana.evaluate('window.__kunaDelay = 4000; true');
+      const workers = await ana.evaluate('window.__unlaceWorkers');
+      await ana.evaluate('window.__unlaceDelay = 4000; true');
       await front(ana);
       await ana.click(`#fnlist .fn[data-addr="${SUM}"]`);
       await sleep(1000);
       assert.equal(await ana.evaluate(`!document.getElementById('cancelbtn').disabled`), true, 'Ana\'s request is in flight');
-      await ana.evaluate(`document.getElementById('cancelbtn').click(); window.__kunaDelay = 0; true`);
-      await ana.waitFor(`window.__kunaWorkers > ${workers}`, { what: 'Ana\'s engine restarted', timeout: 20000 });
+      await ana.evaluate(`document.getElementById('cancelbtn').click(); window.__unlaceDelay = 0; true`);
+      await ana.waitFor(`window.__unlaceWorkers > ${workers}`, { what: 'Ana\'s engine restarted', timeout: 20000 });
       await idle(ana);
       await ana.click(`#fnlist .fn[data-addr="${SUM}"]`);
       await ana.waitFor(`document.getElementById('vname').textContent === 'sum_to' && document.getElementById('cancelbtn').disabled`, { what: 'Ana on sum_to', timeout: 30000 });
@@ -959,7 +959,7 @@ try {
     const ben = await tab('Ben', { other: true, script: DELAY_SHIM });
     const macho = readFileSync(fixture('sample_macho.o'));
     const machoHash = 'sha256:' + createHash('sha256').update(macho).digest('hex');
-    await open(ben, { seed: [[OWN_KEY, stored([varRec(MAIN, 'v1', 'bens_own')])], [`kuna.d2.session.${machoHash}`, stored([noteRec('0x0', '0x0', 'bens macho note')])]] });
+    await open(ben, { seed: [[OWN_KEY, stored([varRec(MAIN, 'v1', 'bens_own')])], [`unlace.d2.session.${machoHash}`, stored([noteRec('0x0', '0x0', 'bens macho note')])]] });
     await ben.call((b64) => {
       const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
       const dt = new DataTransfer();
@@ -979,12 +979,12 @@ try {
     await closeDialog(ben);
     await front(ben);
     await popover(ben, '#ccode .t[data-sym]', 'n', 'bens_macho_name');
-    await ben.evaluate('window.__kunaDelay = 30000; true');
+    await ben.evaluate('window.__unlaceDelay = 30000; true');
     await ben.key('Enter');
     await sleep(1000);
-    await ben.evaluate('window.__kunaDelay = 0; true');
+    await ben.evaluate('window.__unlaceDelay = 0; true');
     assert.equal(await ben.evaluate(`!document.getElementById('cancelbtn').disabled`), true, 'Ben\'s edit is in flight');
-    assert.match(await ben.evaluate(`localStorage.getItem(${JSON.stringify(`kuna.d2.session.${machoHash}`)}) || ''`), /bens_macho_name/, 'and saved');
+    assert.match(await ben.evaluate(`localStorage.getItem(${JSON.stringify(`unlace.d2.session.${machoHash}`)}) || ''`), /bens_macho_name/, 'and saved');
     if (!(await ana.evaluate(`!!document.querySelector('#d2collab input[name=reply]')`))) {
       await ana.click('#collabbtn');
       await ana.waitFor(`document.querySelector('#d2collab input[name=reply]')`, { what: 'Ana\'s paste box' });
@@ -992,8 +992,8 @@ try {
     await ana.call((r) => { const i = document.querySelector('#d2collab input[name=reply]'); i.value = r; i.form.requestSubmit(); return true; }, reply);
     await ben.waitFor(`document.getElementById('crumbname')?.textContent === 'sample.elf' && /sum_to/.test(document.getElementById('ccode').textContent)`, { what: 'Ben has the session\'s program', timeout: 60000 });
     await idle(ben);
-    assert.equal(await ben.evaluate(`localStorage.getItem(${JSON.stringify(`kuna.d2.shared.${machoHash}`)})`), null, 'nothing is saved as a session\'s copy of the other program');
-    const own = await ben.evaluate(`localStorage.getItem(${JSON.stringify(`kuna.d2.session.${machoHash}`)}) || ''`);
+    assert.equal(await ben.evaluate(`localStorage.getItem(${JSON.stringify(`unlace.d2.shared.${machoHash}`)})`), null, 'nothing is saved as a session\'s copy of the other program');
+    const own = await ben.evaluate(`localStorage.getItem(${JSON.stringify(`unlace.d2.session.${machoHash}`)}) || ''`);
     assert.ok(/bens macho note/.test(own) && !/bens_macho_name/.test(own), 'its own store keeps Ben\'s note, without the undone edit');
   });
 
@@ -1003,12 +1003,12 @@ try {
     await example(ana);
     const link = await inviteLink(ana, 'Ana');
     const ben = await tab('Ben', { other: true, script: DELAY_SHIM });
-    await open(ben, { seed: [[`kuna.d2.shared.${SAMPLE_HASH}`, stored([fnRec(SUM, 'from_an_old_session')])]] });
-    await ben.evaluate('window.__kunaDelay = 4000; true');
+    await open(ben, { seed: [[`unlace.d2.shared.${SAMPLE_HASH}`, stored([fnRec(SUM, 'from_an_old_session')])]] });
+    await ben.evaluate('window.__unlaceDelay = 4000; true');
     await openSample(ben);
     await sleep(1000);
     assert.equal(await ben.evaluate(`!document.getElementById('cancelbtn').disabled`), true, 'Ben is opening the example');
-    await ben.evaluate(`document.getElementById('cancelbtn').click(); window.__kunaDelay = 0; true`);
+    await ben.evaluate(`document.getElementById('cancelbtn').click(); window.__unlaceDelay = 0; true`);
     await idle(ben);
     await joinByHash(ben, link);
     await carryReply(ana, ben);
@@ -1028,13 +1028,13 @@ try {
     await open(ben, { seed: [[OWN_KEY, stored([varRec(MAIN, 'v1', 'bens_own'), rawRec(1, 'volatile 0x3000+4')])]] });
     await ben.navigate(link);
     await nameAndGo(ben, 'Ben');
-    await ben.evaluate('window.__kunaDelay = 4000; true');
+    await ben.evaluate('window.__unlaceDelay = 4000; true');
     await carryReply(ana, ben);
     await ben.waitFor(`/Finding the functions in sample.elf/.test(document.getElementById('status').textContent)`, { what: 'Ben lists the program', timeout: 20000 });
     await ana.closeTab();
     tabs = tabs.filter((t) => t !== ana);
     await ben.waitFor(`/closed the connection|stopped answering/.test((document.getElementById('d2collab')?.textContent || '') + [...document.querySelectorAll('.d2-toast')].map((t) => t.textContent).join(' '))`, { what: 'Ben is told', timeout: 30000 });
-    await ben.evaluate('window.__kunaDelay = 0; true');
+    await ben.evaluate('window.__unlaceDelay = 0; true');
     await closeDialog(ben);
     await ben.waitFor(`/bens_own/.test(document.getElementById('ccode').textContent)`, { what: 'Ben\'s own changes show', timeout: 30000 });
     await idle(ben);
@@ -1047,11 +1047,11 @@ try {
     await open(ana);
     await example(ana);
     await ana.click('#collabbtn');
-    await ana.evaluate('window.__kunaDelay = 3000; true');
+    await ana.evaluate('window.__unlaceDelay = 3000; true');
     await nameAndGo(ana, 'Ana');
     await openSample(ana);
     await ana.waitFor(`!document.getElementById('cancelbtn').disabled`, { what: 'the example opening again', timeout: 5000 });
-    await ana.evaluate(`document.getElementById('cancelbtn').click(); window.__kunaDelay = 0; true`);
+    await ana.evaluate(`document.getElementById('cancelbtn').click(); window.__unlaceDelay = 0; true`);
     await ana.waitFor(`/open a program first/i.test(document.getElementById('d2collab')?.textContent || '')`, { what: 'the invite gives up', timeout: 20000 });
     const said = await ana.evaluate(`document.getElementById('d2collab').textContent`);
     assert.doesNotMatch(said, /Cannot read/, said);
@@ -1096,7 +1096,7 @@ try {
     await ana.waitFor(`document.getElementById('vname').textContent === 'sum_to' && document.getElementById('cancelbtn').disabled`, { what: 'Ana on sum_to', timeout: 30000 });
     await ana.click(`#fnlist .fn[data-addr="${MAIN}"]`);
     await ana.waitFor(`document.getElementById('vname').textContent === 'main' && document.getElementById('cancelbtn').disabled`, { what: 'Ana back on main', timeout: 30000 });
-    await ana.evaluate('window.__kunaDelay = 4000; true');
+    await ana.evaluate('window.__unlaceDelay = 4000; true');
     await front(ben);
     await popover(ben, '#ccode .t[data-sym="v1"]', 'n', 'bens_name');
     await ben.key('Enter');
@@ -1104,7 +1104,7 @@ try {
     await ana.waitFor(`!document.getElementById('cancelbtn').disabled`, { what: 'Ana decompiles main again for Ben\'s change', timeout: 10000 });
     await ana.click(`#fnlist .fn[data-addr="${SUM}"]`);
     assert.equal(await text(ana, '#vname'), 'sum_to');
-    await ana.evaluate('window.__kunaDelay = 0; true');
+    await ana.evaluate('window.__unlaceDelay = 0; true');
     await sleep(5000);
     assert.equal(await text(ana, '#vname'), 'sum_to', 'the view stays on the function Ana opened');
     assert.match(await ana.evaluate('location.hash'), /0x1161/);
@@ -1129,7 +1129,7 @@ try {
     assert.deepEqual(await ana.evaluate('window.__ice.at(-1)'), [], 'unticked: no STUN server');
     const localInv = await decodeCode(codeFrom(local, 'invite'), 'invite');
     assert.equal(crossesNetworks(localInv.d), false, 'and no internet address in the link');
-    assert.equal(JSON.parse(await ana.evaluate(`localStorage.getItem('kuna.d2.collab')`)).stun, undefined, 'the setting stays unset');
+    assert.equal(JSON.parse(await ana.evaluate(`localStorage.getItem('unlace.d2.collab')`)).stun, undefined, 'the setting stays unset');
 
     await ana.click('#d2collab [data-act=leave]');
     await ana.click('#collabbtn');
@@ -1138,7 +1138,7 @@ try {
     const wide = await inviteLink(ana, 'Ana');
     assert.notEqual(wide, local);
     assert.deepEqual(await ana.evaluate('window.__ice.at(-1)'), CLOUDFLARE, 'ticked: Cloudflare\'s STUN server');
-    assert.equal(JSON.parse(await ana.evaluate(`localStorage.getItem('kuna.d2.collab')`)).stun, true, 'and the choice is kept');
+    assert.equal(JSON.parse(await ana.evaluate(`localStorage.getItem('unlace.d2.collab')`)).stun, true, 'and the choice is kept');
     await ana.click('#d2collab [data-act=invite]');
     await ana.waitFor(`document.querySelector('#d2collab [data-copytext]')?.value !== ${JSON.stringify(wide)}`, { what: 'another link' });
     assert.deepEqual(await ana.evaluate('window.__ice.at(-1)'), CLOUDFLARE, 'the session\'s later links too');

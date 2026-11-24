@@ -30,10 +30,10 @@ described at the bottom — it is not campaign-grade at that breadth.
 
 Two traps a follow-up agent will hit:
 
-1. The `kuna_*.c` artifacts under `~/github/decbench/results/full_run` were **partially
+1. The `unlace_*.c` artifacts under `~/github/decbench/results/full_run` were **partially
    regenerated after the pool was mined**. `docs/decbench/novel.json` was written
-   2026-08-01 17:28 UTC; `O2-noinline/sysvinit/decompiled/kuna_utmpdump.c` was rewritten
-   2026-08-01 23:54 UTC and `O2-noinline/mydoom/decompiled/kuna_mydoom.c` at 23:49 UTC,
+   2026-08-01 17:28 UTC; `O2-noinline/sysvinit/decompiled/unlace_utmpdump.c` was rewritten
+   2026-08-01 23:54 UTC and `O2-noinline/mydoom/decompiled/unlace_mydoom.c` at 23:49 UTC,
    both by a post-#226 build. So `triage --case` prints a "stored" pane with **zero**
    raw registers while the pool row says `raw_reg: 6`. That is not a mining bug — it is
    an artifact that no longer matches the snapshot it was mined from.
@@ -42,7 +42,7 @@ Two traps a follow-up agent will hit:
 
 ## Side-by-side
 
-### `print_utline` — before (benchmark-era artifact, `O0/sysvinit/decompiled/kuna_utmpdump.c`, 2026-07-15)
+### `print_utline` — before (benchmark-era artifact, `O0/sysvinit/decompiled/unlace_utmpdump.c`, 2026-07-15)
 
 ```c
 // Function: print_utline @ 0x18ff
@@ -69,7 +69,7 @@ both undeclared; the body is not C.
 ### `print_utline` — after (today's build, `9623dc27`, no flags = `--mode auto`)
 
 ```
-$ SLEIGHHOME=/home/mahaloz/github/kuna/specs \
+$ SLEIGHHOME=/home/mahaloz/github/unlace/specs \
   ./decompiler/target/release/unlace decompile \
       ~/github/decbench/results/full_run/O2-noinline/sysvinit/stripped/utmpdump --addr 0x1a00
 ```
@@ -102,7 +102,7 @@ Six `PTRSUB(RSP,…)` → six `&Stack<hex>`. Zero register identifiers, zero p-c
 Same result under `--mode reliable`, `--mode aggressive` and `--mode fast` (transcript
 below), so this is a **code fix**, not a mode-preset effect.
 
-### `scan_textfile` — before (`O0/mydoom/decompiled/kuna_mydoom.c`, 2026-07-15) / after
+### `scan_textfile` — before (`O0/mydoom/decompiled/unlace_mydoom.c`, 2026-07-15) / after
 
 ```c
   *(void *)&PTRSUB(ESP,0x14)[v2] = 0;          //  before  (x8, i386 PE, MSVC _chkstk frame)
@@ -132,7 +132,7 @@ nothing to flip. The change was unflagged, as a strict output-correctness fix sh
 
 ## Corpus-wide re-verification (the number that settles it)
 
-**Before.** Scanning all 803 stored `kuna_*.c` artifacts (89,143 function blocks) with a
+**Before.** Scanning all 803 stored `unlace_*.c` artifacts (89,143 function blocks) with a
 register-name matcher over comment- and string-stripped text:
 
 | form | occurrences | functions |
@@ -228,7 +228,7 @@ normalized to a spacebase `PTRSUB`. The bare input varnode then reaches
 `push_vn_explicit_ir`'s no-bound-name tail. It has no name because
 `HighVariable::has_name` (`p6_variables/variable.rs:883-886`) returns `false` for the
 unaffected stack-pointer input — a *faithful* port of upstream — and
-`kuna_unnamed_location_name` (`printc.rs:8451-8460`) then returns the register name.
+`unlace_unnamed_location_name` (`printc.rs:8451-8460`) then returns the register name.
 
 So the leaf render is upstream-faithful; the divergence is upstream that reference would
 already be a PTRSUB. That makes this a **P5/P3 pointer-arithmetic normalization** gap
@@ -248,10 +248,10 @@ identifiers; `DH`/`pc` hits are string-literal false positives in every column):
 | ghidra | 77,262 | 0 (66 = `DH` in gnutls strings) |
 | ida | 88,725 | 51 (`R8`/`R9`/`R10`/`R11`, real) |
 | binja | 61,096 | 7,450 (`r4`–`r15`, real) |
-| kuna (stored, pre-#226) | 89,143 | 267 |
-| **kuna (fresh, today)** | **83,168** | **28** |
+| unlace (stored, pre-#226) | 89,143 | 267 |
+| **unlace (fresh, today)** | **83,168** | **28** |
 
-#226 moved kuna from worse-than-IDA to better-than-IDA on this symptom.
+#226 moved unlace from worse-than-IDA to better-than-IDA on this symptom.
 
 ## What actually replaced it, and why that is the bigger case
 

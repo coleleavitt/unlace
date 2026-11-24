@@ -31,7 +31,7 @@
 # register there is.
 #
 # Stage / sub-stage: P4 "trial-finalization".  The extension
-# (kuna_calleearitylive.rs, always on) reuses the sibling reconciliation's
+# (unlace_calleearitylive.rs, always on) reuses the sibling reconciliation's
 # refusals and is deferred to the end of `ActionActiveParam::apply` because on
 # the witness the four short sites are the FIRST four.
 #

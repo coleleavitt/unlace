@@ -7,7 +7,7 @@ code and resolve as ordinary direct calls. The only pass that resolves such a ta
 `ActionDeindirect` (`coreaction.cc:1235`), gates its `queryExternalRefFunction` arm on
 `isPersist() && isExternalRef()`, and **`Varnode::externref` was set nowhere in the
 workspace**: Ghidra sets it from an `ExternRefSymbol` (`Scope::addExternalRef`) that
-kuna's port never carried.
+unlace's port never carried.
 
 So every Windows API call in every PE stayed an unnamed `(*dat_4112c4)(0)` — no name,
 no prototype and, the damaging part, **no no-return flow effect**, so a function
@@ -15,14 +15,14 @@ ending in `ExitThread`/`ExitProcess` kept its fall-through and swallowed the who
 the next function.
 
 Closes decbench case `O0-mydoom-mydoom-mmsender_th` (IDA, Ghidra and angr all GED 0;
-kuna 37) and its un-triaged ida-pool sibling `O0-mydoom-mydoom-sync_visual_th`.
+unlace 37) and its un-triaged ida-pool sibling `O0-mydoom-mydoom-sync_visual_th`.
 
 ## Before / after — `mmsender_th` (mydoom.exe @ `0x4041e2`)
 
 ```c
 // BEFORE (option peimportcall off) — 50 lines, 4 ifs, and a `while` loop the
 // function does not have: everything from `v7 = ...0x4102e0;` down belongs to the
-// NEXT function, which kuna separately emits as sub_40424c, statement for statement.
+// NEXT function, which unlace separately emits as sub_40424c, statement for statement.
 void sub_4041e2(int4 a0)
 {
   ...
@@ -67,13 +67,13 @@ void sub_4041e2(int4 a0)
 The stored IDA pane for reference (GED 0): `_InterlockedExchangeAdd(&dword_4102E4,
 1u);` … `if (lpThreadParameter) { … sub_4040EB(…); … }` … `if (dword_4102E4)
 _InterlockedExchangeAdd(…);` … `ExitThread(0);`. The full captured side-by-side,
-including the `sub_40424c` body kuna had been absorbing, is
+including the `sub_40424c` body unlace had been absorbing, is
 `docs/features/peimportcall/before-after.txt`.
 
 ## Mechanism (three parts, one gate)
 
 1. **`externref` over the IAT slots.**
-   `kuna-analysis/src/loader/peimportcall.rs (PeImportCallPass)` reports one
+   `unlace-analysis/src/loader/peimportcall.rs (PeImportCallPass)` reports one
    `[slot, slot+ptr)` range per import-descriptor entry (`pe_iat::resolve_pe_import_slots`,
    reusing the existing INT/IAT lockstep walk), and the commit ORs
    `Varnode::externref` over each in the symbol-table property map — the same
@@ -81,7 +81,7 @@ including the `sub_40424c` body kuna had been absorbing, is
    `Scope::queryProperties` folds the property map into every global Varnode covering
    the range, so the slot read now carries `persist|externref` and `ActionDeindirect`
    resolves it against the `FunctionSymbol` `pe_iat` already registered at that same
-   slot VA. No second symbol is mapped: kuna's `query_function` keys on the Varnode's
+   slot VA. No second symbol is mapped: unlace's `query_function` keys on the Varnode's
    own address where upstream indirects through `ExternRefSymbol::refaddr`, and the
    import FunctionSymbol's map entry is 1 byte (`min_funcsymbol_size`), so a
    pointer-width slot read never finds it as a container and always takes the property
@@ -95,13 +95,13 @@ including the `sub_40424c` body kuna had been absorbing, is
 
 3. **Upstream's PE-only no-return API list.**
    `Ghidra/Features/Base/data/PEFunctionsThatDoNotReturn` is vendored verbatim at
-   `decompiler/crates/kuna-analysis/data/PEFunctionsThatDoNotReturn` and matched against
-   a **PE/COFF object only**. kuna merges the PE and Mach-O name sets into one shipped
+   `decompiler/crates/unlace-analysis/data/PEFunctionsThatDoNotReturn` and matched against
+   a **PE/COFF object only**. unlace merges the PE and Mach-O name sets into one shipped
    file (`PeMacFunctionsThatDoNotReturn`, 8 shared CRT names) where upstream keeps them
    separate; rather than widen that merged file with `ExitProcess`/`ExitThread`/
    `KeBugCheck`/the MSVC-mangled `?_Xbad_alloc@std@@YAXXZ` family — Windows names a
    Mach-O would then be matched against — the Windows list stays its own file on its own
-   format arm. (kuna's Mach-O list is still missing upstream's `MachOFunctionsThatDoNotReturn`
+   format arm. (unlace's Mach-O list is still missing upstream's `MachOFunctionsThatDoNotReturn`
    names: a separate, out-of-scope gap, recorded in the bundle.)
 
 Each part alone can change emitted C on *some* target, so all three sit behind the one
@@ -157,9 +157,9 @@ could now resolve to a known no-return callee. Measured as inert on every ELF te
 
 ## Follow-up filed (campaign-wide, not this PR): decbench cannot rescore PE cases
 
-`scripts.decbench.rescore` invokes `kuna decompile-all --addr 0x<address_hex>` using the
+`scripts.decbench.rescore` invokes `unlace decompile-all --addr 0x<address_hex>` using the
 address stored in the mined pools. For a PE those pools store an **RVA** (`0x41e2`)
-while kuna — like IDA and Ghidra — uses the image-based **VA** (`0x4041e2`), so every PE
+while unlace — like IDA and Ghidra — uses the image-based **VA** (`0x4041e2`), so every PE
 case fails with `no fresh code: Unable to load 512 bytes at r0x000041e2` before any
 comparison happens. This silently blocks GED rescoring for the whole PE half of the
 corpus (mydoom and dexter), which is exactly the half this PR moves.
@@ -192,7 +192,7 @@ keys).
 
 ## Regression sweep — both PE binaries, whole-binary
 
-`kuna decompile-all`, option OFF vs ON:
+`unlace decompile-all`, option OFF vs ON:
 
 | | mydoom.exe | dexter.dll |
 |---|---|---|
@@ -240,7 +240,7 @@ re-measurement, not from memory.
 | `O0-mydoom-mydoom-sync_visual_th` | 39 (recomputed; 34 recorded) | **0** | perfect — a second mined ida-pool row, closed by the same fix |
 
 Both **re-measured on the refreshed decbench results tree and the re-mined pools**, at
-the final rebase (`ged_kuna_commit 6d160156`), not quoted from the pre-refresh run --
+the final rebase (`ged_unlace_commit 6d160156`), not quoted from the pre-refresh run --
 the numbers are unchanged. See the follow-up section above: the RVA/VA bug is **still
 present after the pool re-mine** (`address_hex` is still `0x41e2`), so the measurement
 still needs a local address fix-up first.
@@ -265,7 +265,7 @@ Whole-binary is negative because the truncated functions are less work.
 
 `tests/stages/ghdec-peimportcall.toml` — a two-pass `decompilertest` over the real
 `load file → read symbols → decompile` path on a new 6 KB PE fixture
-(`pe_noreturn_import.exe`, built with MinGW-w64 in the `kuna-dev` container; source and
+(`pe_noreturn_import.exe`, built with MinGW-w64 in the `unlace-dev` container; source and
 recipe committed beside it and documented in the fixtures README). It is purpose-built
 for the one call shape `pe_imports.exe` lacks: a `__declspec(dllimport)`
 `call [__imp_ExitProcess]` (the direct IAT-slot shape MSVC emits for every Win32 call),
@@ -286,11 +286,11 @@ make test        -> datatests: 675/675 assertions passed   |  PARITY OK
 make test-stages -> datatests: 386/386 assertions passed   |  PARITY OK
 make rust-test   -> green (workspace suite)
 make check-spec  -> check-spec OK (lenient mode) / check-spec OK (strict mode)
-kuna catalog --check -> catalog OK: documents exactly the registered kuna options
+unlace catalog --check -> catalog OK: documents exactly the registered unlace options
 ```
 
 All five re-run on the final base `65543461` (after #252/DIV-55 and #253/DIV-56).
-Shared counters this PR moves: `kuna-base/src/xml.rs` corpus count 189 -> **190**,
+Shared counters this PR moves: `unlace-base/src/xml.rs` corpus count 189 -> **190**,
 settables 86 -> **87**, transform tier 40 -> 41, live-value 28 -> 29 (`itecondlist`
 declares no `live_field`, so only this PR moves that last one).
 `tests/fixtures/phase_catalog.json` was **re-captured** on the rebased tree rather than

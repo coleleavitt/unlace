@@ -7,7 +7,7 @@
 # offsets off that pointer, and the creator was a run of stores to numbered
 # locals.
 #
-# Fix: `analyzers/objc/kuna_objcblocks/x86.rs (sites)` decodes each x86-64
+# Fix: `analyzers/objc/unlace_objcblocks/x86.rs (sites)` decodes each x86-64
 # function that references the `_NSConcreteStackBlock` GOT slot: the isa is
 # `mov r, [rip + slot]`, the invoke and descriptor are `lea r, [rip + addr]`,
 # and the stores go through `rbp`, `rsp` or a register holding a frame

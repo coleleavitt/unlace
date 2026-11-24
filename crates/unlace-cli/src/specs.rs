@@ -106,7 +106,7 @@ fn usage() {
          -a <dir> compiles every .slaspec under <dir> recursively; a bare list of\n\
          files compiles just those.  Nothing needs this to decompile: the engine\n\
          compiles each .sla it needs into the .sla cache (UNLACE_SLA_CACHE) on\n\
-         first use.  A release kuna carries its compiled specs inside itself.\n\
+         first use.  A release unlace carries its compiled specs inside itself.\n\
          --diff prints guidance for independent compiler and decompiler checks; it runs neither."
     );
 }

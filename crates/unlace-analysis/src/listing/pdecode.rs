@@ -349,7 +349,7 @@ pub(super) fn try_parallel(plan: &WalkPlan, inputs: &ParallelInputs<'_>) -> Opti
     match admit(plan, inputs) {
         Ok(admitted) => {
             plan.announce(format!(
-                "[kuna --jobs] decode: {} lanes, {} intervals",
+                "[unlace --jobs] decode: {} lanes, {} intervals",
                 admitted.lanes,
                 admitted.intervals.len()
             ));
@@ -359,13 +359,13 @@ pub(super) fn try_parallel(plan: &WalkPlan, inputs: &ParallelInputs<'_>) -> Opti
                     Some(state)
                 }
                 Err(why) => {
-                    plan.announce(format!("[kuna --jobs] decode: serial ({})", why.reason()));
+                    plan.announce(format!("[unlace --jobs] decode: serial ({})", why.reason()));
                     None
                 }
             }
         }
         Err(why) => {
-            plan.announce(format!("[kuna --jobs] decode: serial ({})", why.reason()));
+            plan.announce(format!("[unlace --jobs] decode: serial ({})", why.reason()));
             None
         }
     }
@@ -1121,7 +1121,7 @@ fn run(
 
     if env_usize(DECODE_STATS_ENV).is_some_and(|n| n > 0) {
         eprintln!(
-            "[kuna --jobs] decode stats: lanes={} intervals={} rounds={} crossings={} \
+            "[unlace --jobs] decode stats: lanes={} intervals={} rounds={} crossings={} \
              decodes={} walk={:.2}s merge={:.2}s lane_excess={:.2}GB",
             lanes,
             ivs.len(),
@@ -1288,7 +1288,7 @@ pub(super) fn compare(parallel: &WalkState, serial: &WalkState) -> usize {
     let mut report = |line: String| {
         differences += 1;
         if differences <= SELFCHECK_REPORT {
-            eprintln!("[kuna --jobs] selfcheck: {line}");
+            eprintln!("[unlace --jobs] selfcheck: {line}");
         }
     };
 
@@ -1336,9 +1336,9 @@ pub(super) fn compare(parallel: &WalkState, serial: &WalkState) -> usize {
     }
 
     if differences == 0 {
-        eprintln!("[kuna --jobs] selfcheck: 0 differences over the whole walk");
+        eprintln!("[unlace --jobs] selfcheck: 0 differences over the whole walk");
     } else {
-        eprintln!("[kuna --jobs] selfcheck: {differences} differences");
+        eprintln!("[unlace --jobs] selfcheck: {differences} differences");
     }
     differences
 }

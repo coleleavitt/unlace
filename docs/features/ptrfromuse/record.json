@@ -20,7 +20,7 @@
  "ablation_changed": 0,
  "parity": "OK",
  "bisect": {
-  "method": "throwaway instrumented build, env-gated eprintln (KUNA_DBG_PTRFROMUSE, KUNA_DBG_CEILING)",
+  "method": "throwaway instrumented build, env-gated eprintln (UNLACE_DBG_PTRFROMUSE, UNLACE_DBG_CEILING)",
   "function": "coreutils fmt -O2 get_line @0x3420",
   "seed_fold_votes": {
    "INT_ADD x3": "int8 (wins)",
@@ -32,7 +32,7 @@
   "conclusion": "Both halves fail independently: the fold has no pointer candidate at all (TypeOpIntAdd::getInputLocal votes int8), and the up-edge that would supply one is refused. A candidate folded into build_localtypes is order-independent; flipping the up-edge would fire on every local and its pointee would be the access width, not the GT-dominant char *."
  },
  "sweep": {
-  "surface": "kuna decompile-all off vs byte vs void, 16 stripped binaries (8 projects x O2 and O0), 7,523 functions, every changed function classified per hunk",
+  "surface": "unlace decompile-all off vs byte vs void, 16 stripped binaries (8 projects x O2 and O0), 7,523 functions, every changed function classified per hunk",
   "binaries": "coreutils fmt, coreutils ls, grep, gzip, bzip2, dash, tar, diffutils diff -- each at O2 and at O0 (the O0 half was added in review: the statement-fold class below only shows there)",
   "functions": 7523,
   "byte": {
@@ -256,7 +256,7 @@
   }
  },
  "type_recovery_ceiling": {
-  "instrument": "throwaway env-gated eprintln at Funcdata::set_type_recovery_exceeded (KUNA_DBG_CEILING), reverted before the final build",
+  "instrument": "throwaway env-gated eprintln at Funcdata::set_type_recovery_exceeded (UNLACE_DBG_CEILING), reverted before the final build",
   "result": "identical in all three arms on all 16 binaries",
   "counts_off_byte_void": {
    "O2-coreutils-fmt": [
@@ -399,13 +399,13 @@
  },
  "gates": {},
  "files": [
-  "decompiler/crates/kuna-decomp/phases.toml",
-  "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
-  "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",
-  "decompiler/crates/kuna-decomp/src/p5_types/coreaction_infertypes.rs",
-  "decompiler/crates/kuna-decomp/src/p5_types/ptrfromuse.rs",
-  "decompiler/crates/kuna-decomp/src/p5_types/ptrfromuse/tests.rs",
-  "decompiler/crates/kuna-decomp/src/substrate/context.rs",
+  "decompiler/crates/unlace-decomp/phases.toml",
+  "decompiler/crates/unlace-decomp/src/infra/architecture.rs",
+  "decompiler/crates/unlace-decomp/src/p0_knowledge/options.rs",
+  "decompiler/crates/unlace-decomp/src/p5_types/coreaction_infertypes.rs",
+  "decompiler/crates/unlace-decomp/src/p5_types/ptrfromuse.rs",
+  "decompiler/crates/unlace-decomp/src/p5_types/ptrfromuse/tests.rs",
+  "decompiler/crates/unlace-decomp/src/substrate/context.rs",
   "docs/features/ptrfromuse/analysis.md",
   "docs/features/ptrfromuse/plan.md",
   "docs/features/ptrfromuse/record.json",
@@ -577,7 +577,7 @@
    }
   },
   "arity_counters": {
-   "corpus": "11 binaries, 4,490 functions (kuna decompile-all --json), off vs the flipped default",
+   "corpus": "11 binaries, 4,490 functions (unlace decompile-all --json), off vs the flipped default",
    "call_site_arguments": "36959 -> 36959",
    "phantom_arguments": "134 -> 134",
    "variables_arg_rows": "8251 -> 8251",
@@ -636,7 +636,7 @@
    "make_test_stages": "1250/1250 assertions passed, PARITY OK after 13 assertions follow the void spelling; no name changed, docs/baseline-stages.json unchanged",
    "make_test_cli": "207/207 passed (3 protoorder mipsel probes and the wide-store probe follow the void spelling, ids recomputed; 1 new probe)",
    "check_spec": "OK (lenient) + OK (strict)",
-   "kuna_catalog_check": "catalog OK",
+   "unlace_catalog_check": "catalog OK",
    "counters_check": "no drift",
    "options_md": "byte-fresh",
    "make_rust_test": "RUST_TEST_RC=0 (7,285 passed, 0 failed)",

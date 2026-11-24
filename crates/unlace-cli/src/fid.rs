@@ -79,7 +79,7 @@ fn usage() {
          \x20                     [--assert <directive | @file>]..\n\
          unlace fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n\
          \n\
-         Generate a kuna `.fid` fingerprint database from a static library or\n\
+         Generate a unlace `.fid` fingerprint database from a static library or\n\
          object files. --lang is the SLEIGH language id (e.g. x86:LE:64:default),\n\
          --cspec the compiler-spec id (e.g. gcc); both are written into the header.\n\
          A database applies only to an image whose language has the header\n\
@@ -93,7 +93,7 @@ fn usage() {
          A match then declares the function it names, unless debug information or\n\
          an --assert of the run already does, or its body reads a parameter the\n\
          prototype lacks.\n\
-         With kuna_fid_db set, a run that does not match against the database\n\
+         With unlace_fid_db set, a run that does not match against the database\n\
          (missing, unreadable, invalid, or incompatible with the image) says why on\n\
          stderr and still exits 0; --json documents list each database under\n\
          fid_databases [{{path, status, records, language, compiler_spec, reason}}].\n\

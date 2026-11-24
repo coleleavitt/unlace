@@ -28,7 +28,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub const PARENT_ENV: &str = "UNLACE_PARENT_BUILD";
 
 /// The stderr line prefix a mismatched child answers with.
-pub const REPLY: &str = "kuna-build-mismatch: ";
+pub const REPLY: &str = "unlace-build-mismatch: ";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChildKind {
@@ -37,7 +37,7 @@ pub enum ChildKind {
 }
 
 /// The release `MAJOR.MINOR` baked by release CI, else the workspace Cargo version.
-pub const VERSION: &str = match option_env!("KUNA_VERSION") {
+pub const VERSION: &str = match option_env!("UNLACE_VERSION") {
     Some(v) => v,
     None => env!("CARGO_PKG_VERSION"),
 };
@@ -50,13 +50,13 @@ pub fn identity(kind: ChildKind) -> &'static str {
         ChildKind::Engine => ENGINE.get_or_init(|| {
             format!(
                 "{VERSION} (source {})",
-                env!("KUNA_ENGINE_SOURCE_FINGERPRINT")
+                env!("UNLACE_ENGINE_SOURCE_FINGERPRINT")
             )
         }),
         ChildKind::Harness => HARNESS.get_or_init(|| {
             format!(
                 "{VERSION} (source {})",
-                env!("KUNA_HARNESS_SOURCE_FINGERPRINT")
+                env!("UNLACE_HARNESS_SOURCE_FINGERPRINT")
             )
         }),
     }
@@ -169,7 +169,7 @@ mod tests {
         let text = mismatch_warning(
             ChildKind::Engine,
             "decomp_dbg",
-            Path::new("/opt/kuna-v1.329/decomp_dbg"),
+            Path::new("/opt/unlace-v1.329/decomp_dbg"),
             "1.329 (source 00ff)",
             Some("UNLACE_DECOMP_DBG"),
         );
@@ -186,7 +186,7 @@ mod tests {
         );
         assert_eq!(
             lines[2],
-            "  decomp_dbg: 1.329 (source 00ff) /opt/kuna-v1.329/decomp_dbg, chosen by UNLACE_DECOMP_DBG"
+            "  decomp_dbg: 1.329 (source 00ff) /opt/unlace-v1.329/decomp_dbg, chosen by UNLACE_DECOMP_DBG"
         );
     }
 

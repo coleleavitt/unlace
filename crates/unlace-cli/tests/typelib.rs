@@ -124,7 +124,7 @@ fn a_pe_reads_the_built_in_windows_library() {
     let image = fixture("pe_imports.exe");
     let (_, stderr, code) = common::run_unlace(&["decompile-all", &image]);
     assert_eq!(code, 0, "{stderr}");
-    assert!(!stderr.contains("[kuna typelib]"), "{stderr}");
+    assert!(!stderr.contains("[unlace typelib]"), "{stderr}");
 }
 
 /// One IDA type-library entry (format 0x12, 32-bit ordinal).

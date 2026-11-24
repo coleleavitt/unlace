@@ -1,4 +1,4 @@
-# (kuna) `codescalar` fixture -- RE-friction round 9, need
+# (unlace) `codescalar` fixture -- RE-friction round 9, need
 # `decompiler-emits-void-scalar` (challenge 5ab77f5f33c5d40ad448c834, PE32
 # `crkme.exe`, the INT3-detection stub at 0x44ac6b), reduced to one witness and
 # one control.

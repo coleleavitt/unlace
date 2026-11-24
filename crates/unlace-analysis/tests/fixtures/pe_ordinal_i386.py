@@ -46,7 +46,7 @@ def call_slot(va):
 
 def build_entry():
     code = b''
-    code += b'\x68' + struct.pack('<I', IMAGE_BASE + WSTR_RVA)   # push L"kuna"
+    code += b'\x68' + struct.pack('<I', IMAGE_BASE + WSTR_RVA)   # push L"unlace"
     code += call_slot(slot(0, 0))                                 # SysAllocString
     code += b'\x50'                                               # push eax
     code += call_slot(slot(0, 1))                                 # SysFreeString
@@ -75,7 +75,7 @@ def build_section():
         put(name_rva, name.encode() + b'\0')
         descs += struct.pack('<IIIII', int_rva, 0, 0, name_rva, iat)
     put(DESC_RVA, descs + b'\0' * 20)
-    put(WSTR_RVA, 'kuna\0'.encode('utf-16-le'))
+    put(WSTR_RVA, 'unlace\0'.encode('utf-16-le'))
     put(ENTRY_RVA, build_entry())
     return bytes(body)
 

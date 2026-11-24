@@ -5,7 +5,7 @@ to one dataset revision so a dataset refresh can never move the nightly numbers 
 own. The sample is a deterministic, project-stratified set of binaries from one config
 (default `optimized`, the O2-noinline functions): projects take turns contributing
 their next binary, in an order fixed by the seed, until the sample is full. A binary is
-the unit because kuna decompiles a whole binary at once; every function the config
+the unit because unlace decompiles a whole binary at once; every function the config
 scores in a sampled binary is scored.
 
     python3 -m scripts.nightly.dataset --revision <sha> --binaries 96 \
@@ -40,7 +40,7 @@ def fetch(url: str, dest: Path, sha256: str | None = None, size: int | None = No
     if dest.is_file() and _verifies(dest, sha256, size):
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
-    headers = {"User-Agent": "kuna-nightly"}
+    headers = {"User-Agent": "unlace-nightly"}
     token = os.environ.get("HF_TOKEN")
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -152,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--revision", required=True, help="pinned dataset commit sha")
     ap.add_argument("--config", default="optimized")
     ap.add_argument("--binaries", type=int, default=96, help="sample size, in binaries")
-    ap.add_argument("--seed", default="kuna-nightly-v1")
+    ap.add_argument("--seed", default="unlace-nightly-v1")
     ap.add_argument("--data", type=Path, required=True, help="download root (mirrors the repo)")
     ap.add_argument("--sample-out", type=Path, required=True)
     ap.add_argument("--jobs", type=int, default=8)

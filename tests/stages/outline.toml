@@ -3,7 +3,7 @@
 # Option `outline off|<fn>:<head>-<exit>[;...]` (default OFF, ELEM 4124).
 #
 # Stage 2 of inline identification.  Stage 1 (`almostregion`,
-# tests/stages/kuna-almostregion.xml) FINDS candidate inlined regions; this
+# tests/stages/unlace-almostregion.xml) FINDS candidate inlined regions; this
 # ACTS on one.  The region is supplied as the option value rather than taken
 # from stage 1, so a human reading the code - or an LLM agent reading stage
 # 1's report - drives the transform directly.  The function entry is part of

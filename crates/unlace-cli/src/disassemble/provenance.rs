@@ -474,7 +474,7 @@ impl Provenance {
                 )
             });
             notes.push(format!(
-                "zero fill, not file bytes: {parts} -- kuna reads a segment's memory past what the file holds \
+                "zero fill, not file bytes: {parts} -- unlace reads a segment's memory past what the file holds \
                  for it as zeroes; `--json` lists each range's source in `provenance`"
             ));
         }
@@ -488,7 +488,7 @@ impl Provenance {
                 format!("file offset 0x{:x}", r.file_offset.unwrap_or(0))
             });
             notes.push(format!(
-                "repaired, not file bytes: {parts} -- kuna rewrote a header field there so the image would \
+                "repaired, not file bytes: {parts} -- unlace rewrote a header field there so the image would \
                  parse; the file's own bytes are at that offset"
             ));
         }
@@ -512,7 +512,7 @@ impl Provenance {
                     seg.perms.map_or("unknown".to_string(), Perms::spelled)
                 )
             });
-            notes.push(format!("no read access: {parts} -- the image declares the segment unreadable; kuna lists its bytes anyway"));
+            notes.push(format!("no read access: {parts} -- the image declares the segment unreadable; unlace lists its bytes anyway"));
         }
         let shared: Vec<&Range> = self
             .ranges
@@ -529,7 +529,7 @@ impl Provenance {
                 parts.push(format!("and {} more", shared.len() - NOTE_RANGES));
             }
             notes.push(format!(
-                "overlapping segments: {} -- the image maps these addresses more than once; kuna orders its \
+                "overlapping segments: {} -- the image maps these addresses more than once; unlace orders its \
                  segments by start address, equal starts in table order, ends each one's zero fill where the \
                  next starts, and reads the first that covers an address; `--json` lists the others in each \
                  range's `overlaps`",

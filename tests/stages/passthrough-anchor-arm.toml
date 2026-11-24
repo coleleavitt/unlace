@@ -23,7 +23,7 @@
 #   zero before the branch to __stack_chk_fail; that zero reached both calls
 #   and printed `__stack_chk_fail(a0,a1,a2,0)`.  A constant written in a
 #   block that ends in a branch whose other side makes a call is not set up
-#   for the call (kuna_passthrough.rs, set_before_branch).
+#   for the call (unlace_passthrough.rs, set_before_branch).
 # - tick: r3 is the alignment slot of `push {r3,lr}`, restored by the pop
 #   in front of the tail jump, and printed `part(a0,a1,a2,a3)` (FreeRTOS
 #   O2 xTaskIncrementTick has this shape).  A register reloaded from the
@@ -37,7 +37,7 @@
 #   storage whose output the function reads.
 #
 # Stage / sub-stage: P4 "active-input-trial-scoring", option `passthrough`
-# (kuna_passthrough.rs, anchors_neutral_run).  `g3` is `bx ip`, a tail jump
+# (unlace_passthrough.rs, anchors_neutral_run).  `g3` is `bx ip`, a tail jump
 # the callee probe cannot see through, and `part` and `hook` are outside the
 # image.  Both passes print what the option-off pass prints.
 

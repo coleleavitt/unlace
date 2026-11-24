@@ -44,7 +44,7 @@ Connect the returned payload and tag to the reader call.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_9d9c0",
@@ -83,7 +83,7 @@ Connect the returned payload and tag to the reader call.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_9d9c0",

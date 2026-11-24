@@ -281,10 +281,10 @@ mod tests {
 
     #[test]
     fn unique_single_record_yields_its_name() {
-        let recs = [rec(0x1234, "kuna_crc32")];
+        let recs = [rec(0x1234, "unlace_crc32")];
         assert_eq!(
             pick_unique_name(&recs, &quad()).as_deref(),
-            Some("kuna_crc32")
+            Some("unlace_crc32")
         );
     }
 
@@ -297,10 +297,10 @@ mod tests {
     fn collapsing_aliases_yield_the_shared_name() {
         // Several records that all carry the same name collapse to it (the same
         // function fingerprinted under aliased symbols).
-        let recs = [rec(0x1234, "kuna_crc32"), rec(0x1234, "kuna_crc32")];
+        let recs = [rec(0x1234, "unlace_crc32"), rec(0x1234, "unlace_crc32")];
         assert_eq!(
             pick_unique_name(&recs, &quad()).as_deref(),
-            Some("kuna_crc32")
+            Some("unlace_crc32")
         );
     }
 

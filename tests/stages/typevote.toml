@@ -42,11 +42,11 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-TYPEVOTE #1: the voted shifts need no cast (default)'
+name = 'UNLACE-TYPEVOTE #1: the voted shifts need no cast (default)'
 count = 1
 literal = '*a0 = (char)(a1 >> 0x18);'
 
 [[match]]
-name = 'KUNA-TYPEVOTE #2: typevote off casts the undefined instances'
+name = 'UNLACE-TYPEVOTE #2: typevote off casts the undefined instances'
 count = 3
 literal = '(uint4)a1 >>'

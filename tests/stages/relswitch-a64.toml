@@ -1,4 +1,4 @@
-# kuna-relswitch: an arm64e hardened jump table (clang
+# unlace-relswitch: an arm64e hardened jump table (clang
 # -faarch64-jump-table-hardening; Swift enum dispatch on iOS) recovered as a
 # switch.  It printed as
 # `(*(void (*)(void))(*(int *)&sub_4060[a0 * 4] + 0x4020L))(); // jump-as-call`.
@@ -23,7 +23,7 @@
 #
 # Passes 3 and 4 load the Mach-O fixture itself, whose LC_FUNCTION_STARTS
 # lists the inline table at 0x4060 as Apple's linker does.  P1 program-prep,
-# code-data-partition (listing/kuna_accesswidth.rs data_targets): the
+# code-data-partition (listing/unlace_accesswidth.rs data_targets): the
 # adrp/add/ldrsw read makes 0x4060 a data target, so under `aif strict` the
 # veto (`aifdataveto`, default on) drops the start; with `aifdataveto off`
 # it is listed.

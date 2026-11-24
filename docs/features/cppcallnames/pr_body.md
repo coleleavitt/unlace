@@ -1,8 +1,8 @@
 ## What
 
-kuna printed `sub_<addr>` at every call to a demangled C++ function on an
-**unstripped** binary — for a name it already had. `kuna functions` listed
-`Account::deposit`; `kuna decompile <bin> 'Account::deposit'` resolved and
+unlace printed `sub_<addr>` at every call to a demangled C++ function on an
+**unstripped** binary — for a name it already had. `unlace functions` listed
+`Account::deposit`; `unlace decompile <bin> 'Account::deposit'` resolved and
 decompiled by that name; only the call site lost it. IDA Pro 9.2 and Ghidra 12.1
 both render the qualified name on the same bytes.
 
@@ -10,7 +10,7 @@ Captured on the vendored fixture `cpp_noreturn_x86_64` (no probe needed — this
 reproduces in-tree):
 
 ```console
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/cpp_noreturn_x86_64 fail
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/cpp_noreturn_x86_64 fail
 ```
 ```diff
   void fail(void)
@@ -25,7 +25,7 @@ name, so the *same function* printed two different headers depending on how you
 selected it:
 
 ```console
-$ kuna decompile ...cpp_noreturn_x86_64 --addr 0x401070
+$ unlace decompile ...cpp_noreturn_x86_64 --addr 0x401070
 ```
 ```diff
 - void sub_401070(void)
@@ -58,7 +58,7 @@ variable naming.
 
 Three plausible causes are all **wrong**, and were checked: the name is not stored
 only as an alias, there is no identifier filter rejecting `::`, and the call-site
-path reads the same symbol table `kuna functions` does. It is also not a demangler
+path reads the same symbol table `unlace functions` does. It is also not a demangler
 defect — a demangled name with *no namespace* (`_Z8topleveli` → `toplevel`) rendered
 fine all along.
 
@@ -109,7 +109,7 @@ selection alias.
 Deliberate, for three reasons:
 
 1. **There is no driver-tier option axis.** All 76 `phases.toml` settables carry an
-   engine phase P1–P9; `console`/`kuna-cli` only ever *write* options. Gating
+   engine phase P1–P9; `console`/`unlace-cli` only ever *write* options. Gating
    this would mean inventing an axis, not filling in a row (precedent:
    `--max-fn-seconds`, "Driver policy, not a stage-model settable").
 2. **The "after" behavior already ships** under `--mode reliable`. This removes an
@@ -134,7 +134,7 @@ Every C++ diff is exactly `-N/+N`: no line added or removed, no structural or
 signature change anywhere. Plain C is untouched **structurally** — a C symbol has no
 `::`, so the global-only probe always found it and no duplicate was ever created.
 
-Discovery itself is provably unchanged: `kuna functions --json` before vs after over
+Discovery itself is provably unchanged: `unlace functions --json` before vs after over
 **15 discovery fixtures** (ARM/Thumb, Cortex-M, AArch64, RISC-V, Mach-O, i386-PIE,
 `funcstart_patterns`, `aif_gap`, stripped ELF) — **zero entries lost, gained, or
 renamed** on any of them. The fix only changes naming when a function already exists
@@ -144,7 +144,7 @@ The 3 address-taken lines (`sub_2ca0` → `perimeter`, `sub_2d20` → `emit`,
 `sub_401120` → `~runtime_error`) render the symbol's *base* name, because
 `Funcdata::link_spacebase_symbol` binds the **unscoped** `name_for_global_varnode`
 where the sibling `ActionNameVars` path uses `name_for_global_varnode_scoped` +
-`kuna_qualify_global_name`. That gap is pre-existing and unrelated: on `main` the
+`unlace_qualify_global_name`. That gap is pre-existing and unrelated: on `main` the
 same fixture already emits `{virtual override thunk}` in exactly that position and
 `void Account::~Account(void)` as a function header. Recorded as a follow-up.
 
@@ -181,12 +181,12 @@ A sanitized identifier spelling for the export path is a genuinely separate feat
 | `make test-stages` | **PARITY OK — 394/394**, no re-pin |
 | `make rust-test` | green |
 | `make check-spec` | OK |
-| `kuna catalog --check` | catalog OK |
+| `unlace catalog --check` | catalog OK |
 
 ## Speed
 
 No option to flip, so `scripts.pipeline.timeit` (which times one binary off vs on)
-does not apply — same as DIV-58. Arms are the pre-change `kuna` and this build,
+does not apply — same as DIV-58. Arms are the pre-change `unlace` and this build,
 interleaved, **minimum of 11 pairs** (the box is shared with concurrent agents, so
 medians are contaminated: a first 5-pair pass reported +40.96% on `probe_O0` that the
 11-pair minimum resolves to −0.46%).

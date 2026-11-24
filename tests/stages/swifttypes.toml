@@ -11,7 +11,7 @@
 # `self` of 8,560 getters.
 #
 # Stage / sub-stage: P1 external-refinement, the Swift metadata pass
-# (`unlace-analysis/src/analyzers/swift/kuna_swifttypes.rs`).
+# (`unlace-analysis/src/analyzers/swift/unlace_swifttypes.rs`).
 #
 # P0 assertion: `option swifttypes on|off` (default on; inert unless
 # `swiftmetadata` is on).

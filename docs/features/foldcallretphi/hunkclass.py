@@ -1,4 +1,4 @@
-"""Classify every hunk between two `kuna decompile-all` dumps (foldcallretphi off vs on).
+"""Classify every hunk between two `unlace decompile-all` dumps (foldcallretphi off vs on).
 
 Per function, the two bodies are compared with every `vN` renamed to `V`, so a pure
 renumbering is not a hunk at all, and each remaining hunk gets a class:

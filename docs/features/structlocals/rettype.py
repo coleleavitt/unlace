@@ -5,7 +5,7 @@ sys.path.insert(0, os.environ.get("PINDB_DIR", str(Path(__file__).resolve().pare
 import pindb; pindb.pin()
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from scripts.decbench import structscore as SS
-R = pathlib.Path(os.environ.get("KUNA_DECBENCH_RESULTS", "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"))
+R = pathlib.Path(os.environ.get("UNLACE_DECBENCH_RESULTS", "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from canon import split
 def gt_rets(twin):

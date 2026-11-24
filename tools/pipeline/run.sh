@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # The continuous driver loop: keep up to N feature workers running, each implementing one
-# angr-inspired kuna feature and opening a PR, until the backlog is exhausted or the time
+# angr-inspired unlace feature and opening a PR, until the backlog is exhausted or the time
 # budget runs out. Observe live with: python -m scripts.pipeline.status --watch
 #
 #   PIPELINE_WORKERS=2 PIPELINE_HOURS=6 tools/pipeline/run.sh
 #   PIPELINE_WORKERS=1 tools/pipeline/run.sh --once     # do exactly one feature, then stop
 #
-# Stop gracefully any time: `touch .kuna-pipeline/STOP` (workers in flight finish first),
+# Stop gracefully any time: `touch .unlace-pipeline/STOP` (workers in flight finish first),
 # or Ctrl-C (same). Nothing ever lands on main without a human-reviewed PR.
 set -uo pipefail
 
-REPO="${KUNA_REPO:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel)}"
-KUNA_PY="${KUNA_PY:-$HOME/.virtualenvs/kuna/bin/python}"
+REPO="${UNLACE_REPO:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel)}"
+UNLACE_PY="${UNLACE_PY:-$HOME/.virtualenvs/unlace/bin/python}"
 WORKERS="${PIPELINE_WORKERS:-1}"
 HOURS="${PIPELINE_HOURS:-0}"            # 0 = no time limit (run until backlog empty)
 POLL="${PIPELINE_POLL:-15}"            # seconds between scheduler ticks
@@ -20,7 +20,7 @@ ONCE=0
 
 # Seams so a second pipeline reuses this driver without a fork (docs/re-pipeline.md).
 # Every one defaults to the angr fleet's behaviour, so an unset environment is unchanged.
-STATE_DIRNAME="${PIPELINE_STATE_DIRNAME:-.kuna-pipeline}"
+STATE_DIRNAME="${PIPELINE_STATE_DIRNAME:-.unlace-pipeline}"
 SELECT_MOD="${PIPELINE_SELECT_MOD:-scripts.pipeline.select}"
 WORKER_SCRIPT="${PIPELINE_WORKER_SCRIPT:-tools/pipeline/worker.sh}"
 WID_PREFIX="${PIPELINE_WID_PREFIX:-w}"
@@ -28,7 +28,7 @@ WORKTREE_MATCH="${PIPELINE_WORKTREE_MATCH:-/$STATE_DIRNAME/worktrees/}"
 BRANCH_MATCH="${PIPELINE_BRANCH_MATCH:-feat/angr-}"
 MIN_FREE_GB="${PIPELINE_MIN_FREE_GB:-0}"
 
-export KUNA_REPO="$REPO" KUNA_PY="$KUNA_PY"
+export UNLACE_REPO="$REPO" UNLACE_PY="$UNLACE_PY"
 # Run scripts.pipeline.* without an install: repo root on the import path.
 export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
 STATE_DIR="$REPO/$STATE_DIRNAME"
@@ -37,8 +37,8 @@ STOP_FILE="$STATE_DIR/STOP"
 # THIS shell -- worker.sh's own mkdir runs in the child, too late. Without this the very first
 # spawn into a fresh state dir fails.
 mkdir -p "$STATE_DIR/logs" "$STATE_DIR/worktrees"
-export KUNA_PIPELINE_STATE_DIR="$STATE_DIR"
-export KUNA_PIPELINE_WORKTREE_MATCH="$WORKTREE_MATCH" KUNA_PIPELINE_BRANCH_MATCH="$BRANCH_MATCH"
+export UNLACE_PIPELINE_STATE_DIR="$STATE_DIR"
+export UNLACE_PIPELINE_WORKTREE_MATCH="$WORKTREE_MATCH" UNLACE_PIPELINE_BRANCH_MATCH="$BRANCH_MATCH"
 rm -f "$STOP_FILE"
 
 START=$(date +%s)
@@ -95,7 +95,7 @@ disk_ok() {
 spawn_worker() {
   local opp rc
   disk_ok || return 3
-  opp="$("$KUNA_PY" -m "$SELECT_MOD" --shell)"
+  opp="$("$UNLACE_PY" -m "$SELECT_MOD" --shell)"
   rc=$?
   case "$rc" in
     0) ;;
@@ -106,7 +106,7 @@ spawn_worker() {
   SEQ=$((SEQ+1))
   local wid; wid="${WID_PREFIX}$(date +%s)-$SEQ"
   # claim atomically; if already taken (race), skip this tick
-  "$KUNA_PY" -m scripts.pipeline.state claim --worker "$wid" --opportunity "$OPP_ID" >/dev/null
+  "$UNLACE_PY" -m scripts.pipeline.state claim --worker "$wid" --opportunity "$OPP_ID" >/dev/null
   rc=$?
   case "$rc" in
     0) ;;
@@ -131,7 +131,7 @@ while :; do
   gc_merged_worktrees
   # Free the claims of workers that died without saying so; otherwise their opportunities are
   # blocked forever and the backlog silently shrinks.
-  if ! "$KUNA_PY" -m scripts.pipeline.state reap >/dev/null; then
+  if ! "$UNLACE_PY" -m scripts.pipeline.state reap >/dev/null; then
     log "reaper failed; stopping dispatch"
     DRIVER_STATUS=2
     break
@@ -155,5 +155,5 @@ done
 log "waiting for in-flight workers to finish"
 for wid in "${!WPID[@]}"; do wait "${WPID[$wid]}" 2>/dev/null; done
 log "done. $SPAWNED worker(s) launched this run."
-"$KUNA_PY" -m scripts.pipeline.status || true
+"$UNLACE_PY" -m scripts.pipeline.status || true
 exit "$DRIVER_STATUS"

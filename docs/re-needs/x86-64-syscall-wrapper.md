@@ -38,7 +38,7 @@ An instruction-level ABI override retaining the dynamic syscall number, argument
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x78",
@@ -81,7 +81,7 @@ An instruction-level ABI override retaining the dynamic syscall number, argument
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x78",
@@ -139,7 +139,7 @@ _not yet refuted_
 - filed by cluster.py from 1 observation(s)
 - round 7 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK 2026-09-07 10:2xZ by the captain (no refuter role exists; see the refute-tick memory). VERDICT: UPHELD, and the mechanism is now pinned to a single line of vendored SLEIGH -- but the FIX SHAPE THE HYPOTHESIS IMPLIES IS NOT linuxsyscall's, and a builder that copies linuxsyscall CANNOT flip this probe. Read this before designing.
 
-REPRO on the need's own arena binary (.kuna-repipe/arena/7/652e6f896e7e520ff1c3db3c/target/crackme.tar.gz.__x/crackme.tar.__x/crackme/crackme, ELF64 PIE, static, NO SECTION HEADER):
+REPRO on the need's own arena binary (.unlace-repipe/arena/7/652e6f896e7e520ff1c3db3c/target/crackme.tar.gz.__x/crackme.tar.__x/crackme/crackme, ELF64 PIE, static, NO SECTION HEADER):
   unlace decompile $B 0x78 --addr --option linuxsyscall on --option calleearity on --option varargstackargs on --assert 'prototype 0x78 long kernel_call(long number, long address, long length)'
   -> long sub_78(long number,long address,long length) { syscall(); return number; }
 Reproduces exactly as filed. NOTE the --assert IS honored (the three parameters are named and typed as asserted), so the prototype/argument-assertion path is NOT at fault -- do not spend a builder there.
@@ -153,7 +153,7 @@ i.e. a **zero-input, zero-output CALLOTHER**. That single fact produces BOTH hal
   0x94 MOV RDI,RDX
   0x97 SYSCALL
   0x99 MOV [RBP-0x8],RAX
-(a) NO INPUTS -> the RAX/RDI/RSI/RDX setup stores have no reader, the dead-code fixpoint collects them, and syscall() prints with empty parens. (b) NO OUTPUT -> nothing redefines RAX across 0x97, so the RAX that 0x99 stores is still the RAX that 0x88 loaded from 'number'. 'return number;' is not an invented value -- it is correct copy-propagation over an operation kuna has been told writes nothing. The tester's one-line hypothesis ('the x86-64 syscall userop likely lacks register input/output effects') is right on both counts.
+(a) NO INPUTS -> the RAX/RDI/RSI/RDX setup stores have no reader, the dead-code fixpoint collects them, and syscall() prints with empty parens. (b) NO OUTPUT -> nothing redefines RAX across 0x97, so the RAX that 0x99 stores is still the RAX that 0x88 loaded from 'number'. 'return number;' is not an invented value -- it is correct copy-propagation over an operation unlace has been told writes nothing. The tester's one-line hypothesis ('the x86-64 syscall userop likely lacks register input/output effects') is right on both counts.
 
 WHY THE OBVIOUS PATCH IS THE WRONG ONE -- THE SYSCALL NUMBER HERE IS A RUNTIME PARAMETER. linuxsyscall (P2/flow-classification, default off) works by *resolving the number to a constant* via a backward block walk that accepts only a full-width EAX=<const>, looking the name+arity up in a vetted 332-entry table, and retargeting a CALLIND onto a synthesized sys_<name> spec. NONE of that transfers:
   - there is no CALLIND at all here. int 0x80 lowers to 'intloc = swi(0x80); call [intloc]'; SYSCALL lowers to a bare CALLOTHER with no indirect call to retarget.

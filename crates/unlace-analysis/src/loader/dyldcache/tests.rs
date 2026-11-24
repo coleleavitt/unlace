@@ -276,7 +276,7 @@ fn a_file_that_is_not_a_cache_is_left_to_the_other_loaders() {
 
 #[test]
 fn without_its_symbols_file_a_redacted_local_stays_nameless() {
-    let dir = std::env::temp_dir().join(format!("kuna-dyld-nosymbols-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-dyld-nosymbols-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     for suffix in ["", ".01"] {
         let name = format!("dyld_shared_cache_arm64e{suffix}");
@@ -296,7 +296,7 @@ fn without_its_symbols_file_a_redacted_local_stays_nameless() {
 
 /// A copy of the fixture cache in a fresh directory, its main file patched.
 fn patched_fixture(tag: &str, patch: impl FnOnce(&mut Vec<u8>)) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("kuna-dyld-{tag}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-dyld-{tag}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     for suffix in ["", ".01", ".symbols"] {
         let name = format!("dyld_shared_cache_arm64e{suffix}");
@@ -476,7 +476,7 @@ fn image_paths_copy_at_most_the_file() {
         );
     }
     bytes[pool_at + 1..pool_at + (1 << 16) - 1].fill(b'a');
-    let dir = std::env::temp_dir().join(format!("kuna-dyld-paths-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-dyld-paths-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("cache");
     std::fs::write(&path, &bytes).unwrap();
@@ -570,7 +570,7 @@ fn objc_selector_base_below_the_objc_opt_t_record() {
         .join("tests/fixtures/dyld_cache_objc_v16/dyld_shared_cache_arm64e");
     let mut bytes = std::fs::read(src).unwrap();
     put(&mut bytes, 0x5028, &(-0x1_0000i64).to_le_bytes());
-    let dir = std::env::temp_dir().join(format!("kuna-dyld-objcneg-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-dyld-objcneg-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("dyld_shared_cache_arm64e");
     std::fs::write(&path, &bytes).unwrap();

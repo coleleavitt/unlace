@@ -1,4 +1,4 @@
-# kuna option bejoin (off by default, GH-904; on here): SPARC returns a long long in %o0:%o1 with the
+# unlace option bejoin (off by default, GH-904; on here): SPARC returns a long long in %o0:%o1 with the
 # HIGH word in %o0.  restore copies every in-register back to its
 # out-register, so %o1 also comes back from functions that return one int,
 # holding whatever the function left in %i1 (bejoin-sparc.xml).  These

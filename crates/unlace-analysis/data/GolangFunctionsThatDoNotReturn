@@ -129,7 +129,7 @@ runtime.Goexit
 runtime.sigpanic
 runtime.sigpanic0.abi0
 
-# (kuna) From the Go 1.26 sources: the calls cmd/compile/internal/ssagen/ssa.go
+# (unlace) From the Go 1.26 sources: the calls cmd/compile/internal/ssagen/ssa.go
 # ends a block at (`runtime.block`, `runtime.panicrangestate`, beside the
 # panicunsafe*/panicmakeslice*/gopanic/panicwrap names above), the bounds and
 # SIMD panics the same file looks up (`runtime.panicBounds`,
@@ -147,7 +147,7 @@ runtime.panicExtend
 runtime.panicSimdImm
 os.Exit
 
-# (kuna, #28) runtime/asm_*.s `runtime.goexit` (the frame a goroutine returns
+# (unlace, #28) runtime/asm_*.s `runtime.goexit` (the frame a goroutine returns
 # into; it calls goexit1, "does not return"), runtime/stack.go
 # `runtime.morestackc` (body is throw), runtime/signal_windows.go
 # `runtime.dieFromException` (ends in RaiseFailFastException, "bypasses all

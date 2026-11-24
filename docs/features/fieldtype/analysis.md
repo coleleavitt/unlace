@@ -10,10 +10,10 @@ part that is structsynth's to fix; the rest is measured and handed on.
 
 ### 1.1 The address-of family, by what `x` is
 
-`census2.py` over the castbench arm of main 632437155, the 4,815 functions kuna
+`census2.py` over the castbench arm of main 632437155, the 4,815 functions unlace
 and IDA both emit (the castbench counter's own cast grammar):
 
-| what the cast's operand is | kuna | example |
+| what the cast's operand is | unlace | example |
 |---|---:|---|
 | an element of a pointer to a scalar, `&p[k]` | 1,843 | `*(int *)&v36[0x15]` over `unsigned long *v36` (ls `struct fileinfo`) |
 | a member of an opaque libc shell (`FILE`, `tm`, `obstack`, `stat`, `lconv`, ...) | 763 | `**(char **)&v26->field_0x8` over `lconv *v26` (sort `main`) |
@@ -27,7 +27,7 @@ members, so every access names the pseudo-member `field_0x8` behind a cast.
 IDA prints `v7->decimal_point`. That class is `libctypes glibc`'s (the published
 layouts; opt-in, docs/features/libctypes/glibc.md; castobject's analysis
 measured `FILE` alone at 67 functions fewer, 0 more). The element class is a
-record kuna types as an array of words; IDA prints the same accesses as
+record unlace types as an array of words; IDA prints the same accesses as
 `*((_DWORD *)v36 + 42)`, one cast each, so it is not a gap against IDA.
 
 ### 1.2 Every cast on a synthesized record's member
@@ -45,7 +45,7 @@ casts**, of which the address-of form is 51. The value form is the larger:
 
 ### 1.3 Why structsynth declared the field so
 
-`KUNA_FIELDTYPE_TRACE=1` prints every synthesized field with every access of
+`UNLACE_FIELDTYPE_TRACE=1` prints every synthesized field with every access of
 its width and what the program does with the value (`ftanalyze.py`). Over the
 45 binaries, 7,650 distinct fields:
 
@@ -77,10 +77,10 @@ ptr = (void *)(*a1 + a1[1]);
 if ( a1[22] != &unk_2B020 ) ... free(a1[22]); ... freecon(a1[22]);
 ```
 
-Castbench per function (kuna off -> on, IDA): fillbuf 22 -> 19 (28), free_ent
+Castbench per function (unlace off -> on, IDA): fillbuf 22 -> 19 (28), free_ent
 2 -> 0 (1), find -O2 0xa040 20 -> 12 (34), tar -O2-noinline 0x28d20 24 -> 11
 (38), tar -O0 0x2faf0 19 -> 11 (29). The tar pair is a `struct tar_stat_info *`
-field kuna reads by the word: `*(int8 *)(a0->field_0x18 + 0x140)` becomes
+field unlace reads by the word: `*(int8 *)(a0->field_0x18 + 0x140)` becomes
 `a0->field_0x18[0x28]`, the same address.
 
 ## 2. The rule (`p5_types/fieldtype.rs`)
@@ -167,7 +167,7 @@ byte-identical to main on all 45 castbench binaries.
   cannot be told from an address and is declared `void *`; the option never
   makes a field an integer, so an index whose one -O2 load feeds both a table read
   and `write` stays `void *` as the first-access rule already declares it.
-- kuna spells a code pointer `void *`, so a call through a field so typed is
+- unlace spells a code pointer `void *`, so a call through a field so typed is
   not compilable C in either arm (`(*a0->field_0x8)(...)`); pre-existing.
 - A pointer stored through an `unsigned long *` prints without the cast C
   requires (`*a1 = v2[0]`, e2fsck -O0 `ext2fs_init_dblist` once the option moves

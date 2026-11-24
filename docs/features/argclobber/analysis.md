@@ -3,11 +3,11 @@
 ## The symptom, still
 
 coreutils `fmt` -O2 (stripped, decbench `full_run_address_2026-09-11`) calls one
-static function three times from `main` and kuna renders three different arities,
+static function three times from `main` and unlace renders three different arities,
 the longest of which reads a local nothing assigns:
 
 ```
-$ kuna decompile-all O2/coreutils/stripped/fmt --option argclobber off
+$ unlace decompile-all O2/coreutils/stripped/fmt --option argclobber off
   unsigned long v9;  // rdx        <- never assigned
   unsigned long v11; // rdx        <- never assigned
       v12 &= sub_3700(v6);
@@ -48,7 +48,7 @@ The evaluation also measured the opposite rule (drop only on *positive* proof
 that the register is dead through the callee) and it declined three of the four
 drops the option shipped as correct. The one signal that separates the two sets
 is the one the rule never read: **the callee's own recovered prototype**. All
-four shipped drops land on a callee kuna itself recovers with two parameters;
+four shipped drops land on a callee unlace itself recovers with two parameters;
 every counterexample callee recovers three, or has no body.
 
 ## What changed
@@ -57,7 +57,7 @@ Reading that prototype needs callees decompiled before their callers, which is
 `protoorder`'s machinery (#669, merged). `protoorder types` parks each callee's
 recovered parameter list — storage and type — as it decompiles the call graph
 callee-first, and the caller reads it back through
-`Funcdata::kuna_protoorder_types`.
+`Funcdata::unlace_protoorder_types`.
 
 The callee clause is now:
 
@@ -72,7 +72,7 @@ nothing for a recursive component (`Decline::Scc`), an import with no recovered
 body, a callee that recovered no parameters, and a callee whose prototype is
 already *declared* (which input-locks the call spec, declined at the rule's first
 line). A callee that was never decompiled first states nothing, so the rule is
-inert on a single-function `kuna decompile`, a narrowed `decompile-all`, a
+inert on a single-function `unlace decompile`, a narrowed `decompile-all`, a
 `--jobs N` run, and under `--option protoorder off`.
 
 The accounting clause is what carries the rest, and it exists because of a
@@ -85,9 +85,9 @@ fwd:    movq (%rdi), %rax
         jmp  *%rax
 ```
 
-The thunk never names `rsi` or `rdx`, so kuna recovers **one** parameter for it
+The thunk never names `rsi` or `rdx`, so unlace recovers **one** parameter for it
 while the function it tail calls consumes three, and `protoorder` states that
-short list in both its modes (`KUNA_PROTOORDER_TRACE=1` prints
+short list in both its modes (`UNLACE_PROTOORDER_TRACE=1` prints
 `state sub_11cd params=1`). With only the free-bytes test the drop is admitted
 and the forwarded `rdx` argument is deleted. The accounting clause declines it:
 one recovered parameter cannot be the two arguments that would remain.
@@ -108,7 +108,7 @@ with a `va_arg` read of the third argument, built `gcc -O2` and stripped, states
 three parameters:
 
 ```
-$ KUNA_PROTOORDER_TRACE=1 kuna decompile-all ./vprobe 2>&1 >/dev/null | grep 11d0
+$ UNLACE_PROTOORDER_TRACE=1 unlace decompile-all ./vprobe 2>&1 >/dev/null | grep 11d0
 [protoorder] state sub_11d0 @0x11d0 params=3 trimmed=0
 ```
 
@@ -135,7 +135,7 @@ long fwd(struct box *o, long a, long b)
 { if (!a) return 0; return o->fn(o, a, b); }
 ```
 
-`gcc -O2` emits `test %rsi,%rsi; je; jmp *(%rdi)`. kuna recovers `(rdi, rsi)` —
+`gcc -O2` emits `test %rsi,%rsi; je; jmp *(%rdi)`. unlace recovers `(rdi, rsi)` —
 two parameters, an honest report of the two registers the body touches — while
 the function it jumps to consumes three. Two recovered parameters are exactly the
 two arguments the drop would leave behind, so `stated.len() == surviving.len()`,
@@ -144,10 +144,10 @@ no parameter lies in `rdx`, and the third argument is deleted together with
 
 ```
 $ gcc -O2 -o t3 ce-forward-thunk-2param.c && strip t3
-$ kuna decompile-all ./t3 --option argclobber off
+$ unlace decompile-all ./t3 --option argclobber off
     v2 = sub_1160(a1); a2 = SUB168(v2,8); v1 = SUB168(v2,0);
     return sub_1190((unsigned long *)0x4018,v1,a2) + 1;
-$ kuna decompile-all ./t3                            # the drop, before this change
+$ unlace decompile-all ./t3                            # the drop, before this change
     a2 = sub_1160(a1);
     return sub_1190((unsigned long *)0x4018,a2) + 1;
 ```
@@ -178,7 +178,7 @@ too, because the clause asks for positive evidence. That subsumes
 
 ## What it still cannot know
 
-The evidence is a recovery, not a fact: a callee whose own parameter list kuna
+The evidence is a recovery, not a fact: a callee whose own parameter list unlace
 under-recovers states a prototype that admits the drop. That is the residual
 hole, and it is the hole every callee-derived statement has. Two clauses bound
 it. The accounting clause requires the under-recovery to be exactly one slot

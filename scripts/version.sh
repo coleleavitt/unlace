@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Print the kuna version as MAJOR.MINOR (see docs/release.md).
+# Print the unlace version as MAJOR.MINOR (see docs/release.md).
 #
 # MAJOR is the top-level VERSION file, edited only by maintainers (CODEOWNERS
 # gates it). MINOR counts releases: a commit already tagged vMAJOR.N is MAJOR.N,

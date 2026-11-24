@@ -117,7 +117,7 @@ fn unlace(args: &[&str]) -> String {
         .args(["--sleighpath"])
         .arg(common::repo_root().join("specs"))
         .output()
-        .expect("run kuna");
+        .expect("run unlace");
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(
         output.status.success(),

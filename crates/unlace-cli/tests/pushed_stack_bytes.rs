@@ -83,7 +83,7 @@ fn fixture() -> (std::path::PathBuf, std::path::PathBuf) {
         .collect();
     let image = common::scratch_file("pushed-stack-bytes", "elf");
     std::fs::write(&image, arm_images::elf(&code, &[(0, "$a")], &symbols)).unwrap();
-    let assertions = image.with_extension("kuna");
+    let assertions = image.with_extension("unlace");
     let directives: String = FUNCTIONS.iter().map(|&(address, size, name, args)| {
         format!("function {address:#x}-{:#x}={name}\nprototype {address:#x} unsigned int {name}({args})\n", address + size)
     }).collect();

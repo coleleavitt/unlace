@@ -25,7 +25,7 @@ impl Scratch {
             .unwrap()
             .as_nanos();
         let path =
-            std::env::temp_dir().join(format!("kuna_actionprof_{}_{stamp}", std::process::id()));
+            std::env::temp_dir().join(format!("unlace_actionprof_{}_{stamp}", std::process::id()));
         std::fs::create_dir(&path).unwrap();
         Self(path)
     }

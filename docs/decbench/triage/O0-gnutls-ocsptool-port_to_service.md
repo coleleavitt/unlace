@@ -4,7 +4,7 @@ pool: ida
 status: feature-candidate
 tier: S
 margin: 10
-fresh_verdict: reproduced unchanged on today's build in BOTH --mode auto/aggressive and --mode reliable; kuna still merges the source's three `return sport;` guards into one short-circuit `if` with a comma side effect and a single trailing `return v2`
+fresh_verdict: reproduced unchanged on today's build in BOTH --mode auto/aggressive and --mode reliable; unlace still merges the source's three `return sport;` guards into one short-circuit `if` with a comma side effect and a single trailing `return v2`
 option_closing: null
 feature_slug: repeatreturn
 scope: small
@@ -32,7 +32,7 @@ char *port_to_service(const char *a1, const char *a2)
 }
 ```
 
-kuna (fresh, today's build, `--mode auto` == aggressive; byte-identical under `--mode reliable`):
+unlace (fresh, today's build, `--mode auto` == aggressive; byte-identical under `--mode reliable`):
 
 ```c
 char * port_to_service(char *a0,unsigned long a1)
@@ -55,10 +55,10 @@ char * port_to_service(char *a0,unsigned long a1)
 }
 ```
 
-Structure vs stored kuna is UNCHANGED (2 ifs / 0 gotos / 0 labels / one trailing return in both);
+Structure vs stored unlace is UNCHANGED (2 ifs / 0 gotos / 0 labels / one trailing return in both);
 only the DIV-34..39 print wave differs (`v1 != 0` -> `v1`, `v1 = v1 & 0xffff` -> `v1 &= 0xffff`,
 brace elision, `dat_1f060` -> `stderr`, banner -> `// branch-flip`). Ghidra (stored) is the same
-shape and scores the same 10 — this is inherited upstream behaviour, not a kuna regression.
+shape and scores the same 10 — this is inherited upstream behaviour, not a unlace regression.
 
 ## Source
 
@@ -109,7 +109,7 @@ untouched and still open.
 
 ## Analysis
 
-**Structural symptom (one).** kuna renders a function whose source is four guard-clause
+**Structural symptom (one).** unlace renders a function whose source is four guard-clause
 returns as ONE merged exit: `v2 = a0;` at entry, the first two guards fused by
 `rule_block_or` into a single short-circuit condition carrying a comma side effect
 (`(sub_15c46(v1) == '\x01') && (v1 = atoi(a0), v1)`), the third guard demoted to an
@@ -131,7 +131,7 @@ The RETURN block at `0x114f5` has `size_in == 4` and its return value is
 `MULTIEQUAL(a0, a0, a0, load(sr))` — three IDENTICAL variable slots plus one distinct.
 Because the guards share that out-target, `rule_block_or` is free to comma-merge them.
 
-**Root cause — the const-return gate in P8.** kuna already owns the machinery to undo
+**Root cause — the const-return gate in P8.** unlace already owns the machinery to undo
 this (`ActionReturnDup`, the SAILR `ReturnDuplicatorHigh` port). It declines here by
 design. `Funcdata::returndup_apply`
 (`decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs:2973`) requires
@@ -188,7 +188,7 @@ leaving the `load(sr)` edge on the original block — exactly IDA's four-return 
 The repetition is the evidence the const gate was standing in for. At -O0 the only way
 several distinct predecessors can converge on one identical value at the epilogue is that
 the source wrote `return <that value>;` several times; at -O2 the same shape is compiler
-cross-jumping, which kuna already reverts for non-return tails (`crossjumprevert`). The
+cross-jumping, which unlace already reverts for non-return tails (`crossjumprevert`). The
 shape the ~976-regression measurement punished — one DISTINCT variable per in-edge
 (`v = f(); ... v = g(); return v;`) — has no repeated arm and stays merged under this
 narrowing, so the narrowing is strictly disjoint from the regressing population.
@@ -197,7 +197,7 @@ Owning files:
 - `decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs` (new predicate + the
   `returndup_apply` gate; reuses `return_split_is_splittable` + `node_split` verbatim)
 - `decompiler/crates/unlace-decomp/src/p8_structure/returndup.rs` (option plumbing, or
-  a sibling `kuna_repeatreturn.rs` action if it wants its own ablation switch — preferred,
+  a sibling `unlace_repeatreturn.rs` action if it wants its own ablation switch — preferred,
   so the decbench delta is separable from `returndup`'s)
 - `decompiler/crates/unlace-decomp/phases.toml` + `src/p0_knowledge/options.rs` (new option
   row, default OFF pending the ablation) + the hard-coded catalog counts
@@ -217,7 +217,7 @@ Risks:
 
 **Leverage.** The whole 9-case `gnutls::port_to_service` family is this one gap
 (3 x margin 10 at O0, 6 x margin 5 at O2/O2-noinline = 60 total), and in EVERY one Ghidra
-scores identically to kuna while angr/binja/phoenix score 0 — the signature of an
+scores identically to unlace while angr/binja/phoenix score 0 — the signature of an
 inherited upstream merge that SAILR's return duplicator undoes. Spot-checked
-`O2-gnutls-ocsptool-port_to_service` (0xf700): same class, kuna nests the guards and ends
+`O2-gnutls-ocsptool-port_to_service` (0xf700): same class, unlace nests the guards and ends
 with one shared `return a0`.

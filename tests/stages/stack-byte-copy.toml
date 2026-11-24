@@ -1,4 +1,4 @@
-# Kuna #810 / P3 heritage guard. The stack store guard expands proven short byte copies in instruction order, so pushed scratch bytes never read as the saved seed and an earlier snapshot survives; stackviews remains optional. The CLI companion compiles each exact body at O2.
+# Unlace #810 / P3 heritage guard. The stack store guard expands proven short byte copies in instruction order, so pushed scratch bytes never read as the saved seed and an earlier snapshot survives; stackviews remains optional. The CLI companion compiles each exact body at O2.
 
 [image]
 arch = 'ARM:LE:32:v5t:default'

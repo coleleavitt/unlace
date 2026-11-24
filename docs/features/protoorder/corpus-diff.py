@@ -3,7 +3,7 @@
 
     python3 corpus-diff.py <dir> [<dir> ...] > report.json
 
-Each <dir> holds `<slice>.off.json` beside `<slice>.on.json` (`kuna decompile-all
+Each <dir> holds `<slice>.off.json` beside `<slice>.on.json` (`unlace decompile-all
 --json` with `--option protoorder off` and with the default).  `review.txt` is
 written next to this script: every function whose change is not explained by a
 normalizer below, with its diff, for reading by hand.

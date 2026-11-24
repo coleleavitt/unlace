@@ -191,7 +191,7 @@ fn real_elf_decompiles_under_engine() {
 
     // Write to a temp file so `bootstrap_from_object` exercises the real path.
     let mut path = std::env::temp_dir();
-    path.push(format!("kuna_w11_elf_{}.elf", std::process::id()));
+    path.push(format!("unlace_w11_elf_{}.elf", std::process::id()));
     std::fs::write(&path, &elf).unwrap();
 
     let prog = bootstrap_from_object(path.to_str().unwrap(), "", &spec_roots)

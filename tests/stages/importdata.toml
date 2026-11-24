@@ -1,7 +1,7 @@
 # Data imports read through an import slot (`option importdata on|off`).
 #
 # Issue: a data import is reached through a slot the dynamic loader fills
-# with the import's address, `ldr x8,[slot]; ldr w8,[x8]`. kuna names that
+# with the import's address, `ldr x8,[slot]; ldr w8,[x8]`. unlace names that
 # slot for the import and paints it externref, which is how a CALL through it
 # deindirects to the import; a DATA read is not a call, so it printed as a
 # dereference of the anonymous slot. In an arm64e iOS system daemon that is

@@ -3,7 +3,7 @@
 1. Census the address-of family on the castbench arm of main by what the operand
    is (`census2.py`), every cast on a synthesized member with its declared field
    type (`census4.py` over `decompile-project` headers), and every synthesized
-   field's accesses (`KUNA_FIELDTYPE_TRACE`, `ftanalyze.py`); analysis.md section 1.
+   field's accesses (`UNLACE_FIELDTYPE_TRACE`, `ftanalyze.py`); analysis.md section 1.
 2. Keep every access of a field's widest width in structsynth's evidence and let
    `p5_types/fieldtype.rs` declare a field the program uses as a pointer as
    the most specific pointer those uses carry, option `fieldtype on|off`; a type

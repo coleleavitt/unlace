@@ -1,11 +1,11 @@
 ## The problem
 
-`kuna xrefs --to <name>` refuses to answer for an import, because an import's
+`unlace xrefs --to <name>` refuses to answer for an import, because an import's
 name is on two addresses and the selector model calls that ambiguous — while
 either of the two addresses answers the question fine.
 
 ```console
-$ kuna xrefs decompiler/crates/kuna-analysis/tests/fixtures/pe_imports.exe --to VirtualProtect --json
+$ unlace xrefs decompiler/crates/unlace-analysis/tests/fixtures/pe_imports.exe --to VirtualProtect --json
 error: selector "VirtualProtect" is ambiguous; candidates:
   VirtualProtect at synthetic 0x1400079b0
   VirtualProtect at synthetic 0x14000d234
@@ -13,7 +13,7 @@ use a section-qualified selector to choose one candidate
 $ echo $?
 1
 
-$ kuna xrefs decompiler/crates/kuna-analysis/tests/fixtures/pe_imports.exe --to 0x1400079b0
+$ unlace xrefs decompiler/crates/unlace-analysis/tests/fixtures/pe_imports.exe --to 0x1400079b0
 # 2 references to VirtualProtect @ 0x1400079b0
 # same import at 0x14000d234 (VirtualProtect) - a forwarding veneer and the pointer slot it jumps through
 0x140001a9e	read	__write_memory.part.0+0x18e	CALL qword ptr [0x14000d234]
@@ -43,7 +43,7 @@ name was the only spelling that could not reach them.
 
 ## The tests
 
-Three cases in `kuna-cli/tests/xrefs_cli.rs`: the import resolved by name answers
+Three cases in `unlace-cli/tests/xrefs_cli.rs`: the import resolved by name answers
 byte-for-byte what its veneer address answers; `puts`, reached through the veneer
 rather than the slot, folds the same way; and `duplicate_local` in a relocatable
 object is still refused with both candidates. The first two fail without the fix

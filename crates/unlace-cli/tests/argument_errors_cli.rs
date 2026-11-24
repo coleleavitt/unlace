@@ -6,10 +6,10 @@ fn rejects_missing_value(prefix: &[&str], flag: &str) {
         .arg(flag)
         .env(
             "UNLACE_DECOMP_DBG",
-            "/nonexistent/kuna-missing-argument-engine",
+            "/nonexistent/unlace-missing-argument-engine",
         )
         .output()
-        .expect("run kuna");
+        .expect("run unlace");
     let stderr = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
     assert_eq!(output.status.code(), Some(2), "{prefix:?} {flag}: {stderr}");
     assert!(
@@ -41,7 +41,7 @@ fn decompile_reports_the_argument_error_before_resolving_the_request() {
     for json in [false, true] {
         let mut prefix = vec![
             "decompile",
-            "/nonexistent/kuna-missing-argument-input",
+            "/nonexistent/unlace-missing-argument-input",
             "main",
         ];
         if json {
@@ -80,7 +80,7 @@ fn help_remains_a_successful_command() {
         let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([command, "--help"])
             .output()
-            .expect("run kuna");
+            .expect("run unlace");
         assert!(output.status.success(), "{command} --help failed");
         assert!(String::from_utf8_lossy(&output.stderr).starts_with("usage:"));
     }

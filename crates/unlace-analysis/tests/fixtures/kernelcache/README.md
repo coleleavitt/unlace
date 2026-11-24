@@ -1,6 +1,6 @@
 # Kernelcache fixtures
 
-Inputs for the `kernelcache` option (`loader/kuna_kernelcache`), and for
+Inputs for the `kernelcache` option (`loader/unlace_kernelcache`), and for
 `tests/stages/kernelcache.toml`.
 
 | File | What |

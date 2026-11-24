@@ -11,7 +11,7 @@
 # demangled ones.
 #
 # Fix: one mapping from runtime name to shown name
-# (`analyzers/objc/kuna_swiftclassnames.rs`) names every type the ObjC pass
+# (`analyzers/objc/unlace_swiftclassnames.rs`) names every type the ObjC pass
 # interns or declares; lookups between the ObjC tables keep the runtime
 # spelling. Under `swifttypes` on a Swift image the class's layout is left to
 # the field descriptors (the ivar list encodes Swift types as nothing), so

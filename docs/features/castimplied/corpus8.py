@@ -3,11 +3,11 @@ R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11"
 BINS = ["O0/bzip2/stripped/bzip2", "O2/bash/stripped/bash", "O2/kmod/stripped/kmod",
         "O2/dpkg/stripped/dpkg-divert", "O0/shadow/stripped/chage", "O2/cronie/stripped/crontab",
         "O2-noinline/dash/stripped/dash", "O0/cronie/stripped/crond"]
-kuna, out = sys.argv[1], pathlib.Path(sys.argv[2])
+unlace, out = sys.argv[1], pathlib.Path(sys.argv[2])
 arms = {"on": [], "off": ["--option", "castimplied", "off"]}
 def run(job):
     arm, b = job
-    p = subprocess.run([kuna, "decompile-all", f"{R}/{b}", "--json", *arms[arm]], capture_output=True, text=True, timeout=7200)
+    p = subprocess.run([unlace, "decompile-all", f"{R}/{b}", "--json", *arms[arm]], capture_output=True, text=True, timeout=7200)
     if p.returncode != 0:
         return f"{arm} {b} rc={p.returncode} {p.stderr[-200:]}"
     d = json.loads(p.stdout)

@@ -21,13 +21,13 @@
 # block complex once its statement count exceeds 2, and a clause block holding
 # a call plus its branch plus one more statement is already at 3.  So the fold
 # is declined, the cascade is left to the if/sequence schemas, and one of the
-# two edges into BODY must be virtualized: kuna emits a forward "goto label_X"
+# two edges into BODY must be virtualized: unlace emits a forward "goto label_X"
 # out of one arm plus a "label_X:" inside the sibling arm.  angr emits
 # neither, because when its _match_acyclic_short_circuit_conditions hits a
 # non-single-statement operand it wraps the operand in a
 # MultiStatementExpression instead of declining.
 #
-# THE FIX.  option condfold relaxes that one gate.  kuna's printer already
+# THE FIX.  option condfold relaxes that one gate.  unlace's printer already
 # renders a folded BlockCondition's second operand under
 # modifiers::COMMA_SEPARATE (emit_basic_block_ops walks EVERY op in the block
 # and emits them comma-separated with the semicolon suppressed), so nothing is
@@ -41,11 +41,11 @@
 # sequences left to right, so the emitted expression evaluates B1's statements
 # and condition and then - only if the short circuit does not cut - B2's.
 # That is the CFG's own order and conditionality, which is why predicates that
-# call functions need no purity analysis.  See p8_structure/kuna_condfold.rs.
+# call functions need no purity analysis.  See p8_structure/unlace_condfold.rs.
 #
 # WHICH LEVEL, AND WHY `wide`.  Both admission rules sit on top of ONE shared
 # printed-width budget: the folded operand may render at most 5 comma elements
-# at `on` and 9 at `wide`, measured by kuna_condfold.rs (printed_shape) with
+# at `on` and 9 at `wide`, measured by unlace_condfold.rs (printed_shape) with
 # the printer's own skip rules.  On THIS vehicle the stub callees have no
 # prototype and no frame recovery, so each guard block still carries the
 # call's stack-effect ops (INT_ADD / STORE / LOAD around the CALL) when
@@ -60,7 +60,7 @@
 # WHICH RULE FIRES.  Rule A, both times.  `condfold`'s admission predicate is
 # the UNION of two rules and condfold_ok consults Rule A first; at `wide` Rule
 # A's budget also admits these guard blocks (measured with
-# KUNA_CONDFOLD_DEBUG=1: 2 `prefix` folds per engine, 0 `shape`), so this
+# UNLACE_CONDFOLD_DEBUG=1: 2 `prefix` folds per engine, 0 `shape`), so this
 # witness proves the guard-cascade SHAPE folds end to end but does NOT isolate
 # Rule B.  Deleting Rule B would leave it green.  Rule B is isolated by the
 # third condfold witness, tests/stages/ghangr-condfold-ruleb.xml, whose middle

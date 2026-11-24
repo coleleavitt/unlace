@@ -3,7 +3,7 @@
 ## Design
 
 Replace the `funcptr_align()` STUB(W4) accessor in
-`decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_8.rs` with the live
+`decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_8.rs` with the live
 architecture read, `data.get_arch().funcptr_align` - the same accessor
 `p2_lift/jumptable.rs:3661` and `p3_dataflow/ruleaction_6.rs:609` already use.
 
@@ -47,13 +47,13 @@ because the registry records no-flag bug fixes (DIV-43...DIV-53).
 
 ## Artifacts
 
-- `decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_8.rs` - the accessor,
+- `decompiler/crates/unlace-decomp/src/p3_dataflow/ruleaction_8.rs` - the accessor,
   the stale STUB(W4) module-header note, and three rule-level unit tests
   (align=0 inert, align=1 strips `& ~1`, align=2 strips `& ~3` and declines
   `& ~1`).
 - `tests/stages/ghdec-funcptralign.toml` - two-pass ARM/Thumb end-to-end test
   (0/2 pre-fix, 2/2 post-fix), plus the corpus-file-count bump in
-  `decompiler/crates/kuna-base/src/xml.rs` and the re-recorded
+  `decompiler/crates/unlace-base/src/xml.rs` and the re-recorded
   `docs/baseline-stages.json`.
 - `docs/spec/03-ssa-and-simplification.md` section 3.2 - the normative prose.
 - `docs/history.md` - the DIV row.

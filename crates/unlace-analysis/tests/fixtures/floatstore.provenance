@@ -1,5 +1,5 @@
 floatstore_x86_64_O2.o, floatstore_a64_O2.o -- the x86-64 and AArch64 halves of
-tests/stages/kuna-floatstore.toml.
+tests/stages/unlace-floatstore.toml.
 
 What they are
   floatstore.c (beside them) compiled to relocatable objects. mat_param stores

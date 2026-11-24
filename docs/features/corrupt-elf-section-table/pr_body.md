@@ -5,13 +5,13 @@ program headers described every loadable byte. One round-3 challenge binary
 (`5ab77f6633c5d40ad448cc64`) carries `e_shoff=57005`, `e_shnum=57007`,
 `e_shstrndx=47806` in a 161 KB file — a section table 2 MB past EOF — beside nine
 intact program headers. `readelf -l` prints the entry point and both LOAD segments
-and exits 0; every kuna surface exited 1.
+and exits 0; every unlace surface exited 1.
 
 Reproduce it on a 107-byte file built from those same three values:
 
 ```console
-$ python3 decompiler/crates/kuna-analysis/tests/fixtures/corruptshdr_i386.py /tmp/x
-$ kuna functions /tmp/x --json
+$ python3 decompiler/crates/unlace-analysis/tests/fixtures/corruptshdr_i386.py /tmp/x
+$ unlace functions /tmp/x --json
 error: could not build an architecture for /tmp/x: File: /tmp/x : not in
 recognized object file format: Invalid ELF section header offset/size/alignment
 $ echo $?
@@ -40,7 +40,7 @@ Clearing those three fields by hand got the file to load, and still reported
 - A UPX image is section-less too, but its load segments are a decompressor stub,
   so a segment carrying the `UPX!` magic declines the fallback. Otherwise the
   stub's five routines would displace the `image appears UPX-packed; try
-  \`kuna unpack\`` diagnostic, which is the more useful answer and is pinned by
+  \`unlace unpack\`` diagnostic, which is the more useful answer and is pinned by
   `tests/cli/zero-functions-exit-0.json`.
 - `strings`, `xrefs`, `decompile-graph` and the call graph parse the image
   themselves rather than through the loader, and read it through the same

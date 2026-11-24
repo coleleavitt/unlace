@@ -6,7 +6,7 @@
   "scope": "small",
   "round": 6,
   "branch": "feat/re-prototype-assertion-rejects-explicit",
-  "summary": "`kuna decompile <bin> 0xADDR` emitted the function in full and answered `--assert 'prototype 0xADDR ...'` with `rejected: no function starts at 0xADDR` -- the address it had just decompiled. `load addr` follows flow from an address without installing a FunctionSymbol, so nothing on the by-address selection path registered the entry the assertion plane resolves against; the identical directive bound the moment the same run selected the function by name. The generated script now declares the selected entry (`function bounds <vma>`) between the caller's own `--define-function` lines and the program-scoped directives, which is the same install `--define-function <start>` performs.",
+  "summary": "`unlace decompile <bin> 0xADDR` emitted the function in full and answered `--assert 'prototype 0xADDR ...'` with `rejected: no function starts at 0xADDR` -- the address it had just decompiled. `load addr` follows flow from an address without installing a FunctionSymbol, so nothing on the by-address selection path registered the entry the assertion plane resolves against; the identical directive bound the moment the same run selected the function by name. The generated script now declares the selected entry (`function bounds <vma>`) between the caller's own `--define-function` lines and the program-scoped directives, which is the same install `--define-function <start>` performs.",
   "decisions": [
     {
       "what": "the round-5 refuter's diagnosis is CONFIRMED, and its prescription is what shipped",
@@ -14,11 +14,11 @@
     },
     {
       "what": "why the by-NAME run works, which the refuter got half right",
-      "detail": "The refuter said the by-name path installs the FunctionSymbol as a side effect of resolving a synthesized name. Measured, it is one level up: `load function sub_401571` MISSES on the first attempt (`no function matches`), and `kuna decompile`'s own retry (decompile.rs, the DIV-20/DIV-68 `funcstart_patterns`+`aif` bundle held back for a second attempt) then discovers 0x401571 as a real entry, which is what installs the symbol. A by-address run never misses -- `load addr` succeeds from any mapped address -- so it never retries and never gets the entry. Same conclusion, different mechanism; nothing in the retry logic changed."
+      "detail": "The refuter said the by-name path installs the FunctionSymbol as a side effect of resolving a synthesized name. Measured, it is one level up: `load function sub_401571` MISSES on the first attempt (`no function matches`), and `unlace decompile`'s own retry (decompile.rs, the DIV-20/DIV-68 `funcstart_patterns`+`aif` bundle held back for a second attempt) then discovers 0x401571 as a real entry, which is what installs the symbol. A by-address run never misses -- `load addr` succeeds from any mapped address -- so it never retries and never gets the entry. Same conclusion, different mechanism; nothing in the retry logic changed."
     },
     {
       "what": "the declaration is the SELECTION's, not an amnesty for the resolver",
-      "detail": "The guard the fix must not break: `prototype 0x999999 ...` on a genuinely bogus address stays `rejected` (kuna-cli/tests/decompile_cli.rs, console/tests/verify_assertplane.rs). Nothing in `resolve_proto_target` was touched -- it still reads the symbol table and still errors. Only the CLI's by-address selection now declares its own entry, so an operand naming any OTHER unregistered address is rejected exactly as before; `an_unselected_address_that_starts_no_function_is_still_rejected` pins that on a by-address run."
+      "detail": "The guard the fix must not break: `prototype 0x999999 ...` on a genuinely bogus address stays `rejected` (unlace-cli/tests/decompile_cli.rs, console/tests/verify_assertplane.rs). Nothing in `resolve_proto_target` was touched -- it still reads the symbol table and still errors. Only the CLI's by-address selection now declares its own entry, so an operand naming any OTHER unregistered address is rejected exactly as before; `an_unselected_address_that_starts_no_function_is_still_rejected` pins that on a by-address run."
     },
     {
       "what": "an existing `--define-function` for the same start wins",
@@ -35,27 +35,27 @@
   ],
   "inertness": {
     "method": "`selected_vma` returns `None` for every by-NAME run, so the extra line exists only on `--addr`. `register_symbol`'s new `prior` lookup changes an outcome only when the SAME name is re-registered at the SAME address it already holds -- otherwise `prior` is `None` and the computed provenance is used verbatim. The Thumb fold is `vma & !1` gated on an ARM-family language description and is a no-op everywhere else.",
-    "note": "make test 675/675 PARITY OK and make test-stages PARITY OK confirm it; neither corpus goes through kuna-cli."
+    "note": "make test 675/675 PARITY OK and make test-stages PARITY OK confirm it; neither corpus goes through unlace-cli."
   },
   "sweep": {
     "question": "does declaring the selected entry change any by-address decompile that used to work?",
-    "method": "Every by-address surface, before vs after, on 41 vendored fixtures plus the dataset witness: `kuna functions --json` for the entries, then up to 14 addresses per binary through `kuna decompile <bin> <addr> --addr`, diffing stdout, stderr and exit code. 464 targets. Fixtures span ELF x86-64/i386/ARM/Thumb/Cortex-M/PPC64, PE i386 and x86-64, Mach-O (fat, arm64e, objc, stripped), ET_REL and COFF objects.",
+    "method": "Every by-address surface, before vs after, on 41 vendored fixtures plus the dataset witness: `unlace functions --json` for the entries, then up to 14 addresses per binary through `unlace decompile <bin> <addr> --addr`, diffing stdout, stderr and exit code. 464 targets. Fixtures span ELF x86-64/i386/ARM/Thumb/Cortex-M/PPC64, PE i386 and x86-64, Mach-O (fat, arm64e, objc, stripped), ET_REL and COFF objects.",
     "result": "0 real differences. One transient (ptx.o 0x400470 hit the 600 s cap on the new side while a sibling builder's decbench sweep loaded the box; re-run head-to-head it is 0.18 s / 0.13 s and byte-identical C). The et_rel_status_arm.o import regression this sweep DID catch on the first pass is the provenance defect above, fixed and re-swept clean."
   },
   "gates": {
     "make test": "PARITY OK, 675/675 assertions (rebased tree)",
     "make test-stages": "PARITY OK, 674/674 assertions (rebased tree)",
-    "make rust-test": "exit 0, 5,927 passed / 0 failed with KUNA_DECOMP_TEST unset. With the loop's own KUNA_DECOMP_TEST exported (it points at this worktree's decomp_test_dbg) the same tree is 5,923/1: verify_w10_proto_unlock::w10_proto_unlock_const_return_collapses_no_tied_roundtrip reports 'oracle promote_compare signature drifted', the known repipe-worktree artifact, and passes 4/4 with the variable unset.",
+    "make rust-test": "exit 0, 5,927 passed / 0 failed with UNLACE_DECOMP_TEST unset. With the loop's own UNLACE_DECOMP_TEST exported (it points at this worktree's decomp_test_dbg) the same tree is 5,923/1: verify_w10_proto_unlock::w10_proto_unlock_const_return_collapses_no_tied_roundtrip reports 'oracle promote_compare signature drifted', the known repipe-worktree artifact, and passes 4/4 with the variable unset.",
     "make check-spec": "OK (lenient mode)",
     "make test-cli": "63/63 with the probe promoted",
-    "kuna catalog --check": "catalog OK: documents exactly the registered kuna options"
+    "unlace catalog --check": "catalog OK: documents exactly the registered unlace options"
   },
   "acceptance": {
     "acceptance_id": "a-df3bacaa5f17",
     "result": "PASS",
     "transition": "closed",
     "promoted_to": "tests/cli/prototype-assertion-rejects-explicit.json",
-    "promotion_note": "The filed acceptance targets the dataset image (crackmes.one 64f1f7fad931496abf909535, illusion.exe) and PASSES there after the fix -- `scripts.repipe.verify --need prototype-assertion-rejects-explicit --json` reports 1 pass / 0 fail / closed. `--promote` refuses a dataset target and CI has no dataset, so the promoted copy is re-pointed at the vendored `kuna-analysis/tests/fixtures/fauxware`: 0x400678 is an instruction boundary inside `authenticate` that discovery does not call a function start, which is the same shape as illusion.exe's 0x401571 (an entry only the wider discovery bundle finds). Re-cutting cmd+expect derives the id a-a5a2238dff30.",
+    "promotion_note": "The filed acceptance targets the dataset image (crackmes.one 64f1f7fad931496abf909535, illusion.exe) and PASSES there after the fix -- `scripts.repipe.verify --need prototype-assertion-rejects-explicit --json` reports 1 pass / 0 fail / closed. `--promote` refuses a dataset target and CI has no dataset, so the promoted copy is re-pointed at the vendored `unlace-analysis/tests/fixtures/fauxware`: 0x400678 is an instruction boundary inside `authenticate` that discovery does not call a function start, which is the same shape as illusion.exe's 0x401571 (an entry only the wider discovery bundle finds). Re-cutting cmd+expect derives the id a-a5a2238dff30.",
     "reproduction_confirmed_on_main": "On 9c4c4508 the witness exits 1 with `rejected: no function starts at 0x401571` while printing `void sub_401571(unsigned int a0,int4 a1,int4 a2)`; after the fix it exits 0 and prints `void sub_401571(uint4 key,uint4 start,uint4 end)`. The vendored twin on 9c4c4508 exits 1 with `rejected: no function starts at 0x400678` and prints `unsigned long sub_400678(void)`; after the fix, `int sub_400678(char *user,char *pass)`."
   },
   "not_closed": [

@@ -2,8 +2,8 @@
 
 ## 1. The module (`p9_emit/structdefs.rs`)
 
-- `OptionStructDefs` — the `on|off` parse, the kuna option idiom
-  (`ELEM_STRUCTDEFS = 4174`); the caller (`Architecture::set_kuna_option`) does
+- `OptionStructDefs` — the `on|off` parse, the unlace option idiom
+  (`ELEM_STRUCTDEFS = 4174`); the caller (`Architecture::set_unlace_option`) does
   the printer write.
 - `referenced_types(fd)` — roots (prototype output + params, every Varnode
   data-type, every HighVariable's mapped Symbol type) then a postorder DFS
@@ -32,7 +32,7 @@ emitted as whole lines (`tag_line` + `print`), since a type definition has no
 `PcodeOp`/`Varnode` for the markup back-end to bind to.
 
 Placing it inside `emit_function_document` rather than in the CLI is what makes
-`kuna decompile`, `decompile-all`, the console `print C` and the datatest driver
+`unlace decompile`, `decompile-all`, the console `print C` and the datatest driver
 one surface; it is also why the two-pass stage test can drive the whole feature
 through `print C`.
 
@@ -50,7 +50,7 @@ bodies through that one function.
 `decompile_drive::extract_type_definitions` → `FuncResult::types` →
 `decompile-all --json` `functions[].types[]` (`{name, definition, size}`).
 Additive: the key is always present, and empty unless the option is on. The
-record travels through the `--jobs` worker codec (`kuna-cli/src/jobs.rs`), since
+record travels through the `--jobs` worker codec (`unlace-cli/src/jobs.rs`), since
 a pooled worker renders the C and the parent has no `Funcdata` left to
 re-derive from.
 
@@ -76,7 +76,7 @@ nothing.
 - `tests/cli/structdefs-json-types-array.json` + `-key-off.json` — the `--json`
   `types` contract, on and off.
 - `tests/cli/structdefs-graph-document-carries-the-definitions.json` +
-  `-has-no-definitions-off.json` — `kuna decompile-graph`, the other C-emitting
+  `-has-no-definitions-off.json` — `unlace decompile-graph`, the other C-emitting
   surface with no header: the preamble is in `codeC` with the option on and
   absent by default.
 - `tests/cli/structdefs-declines-a-rust-document.json` — the preamble and the

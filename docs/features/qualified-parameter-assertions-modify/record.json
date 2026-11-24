@@ -5,19 +5,19 @@
   "scope": "medium",
   "round": 4,
   "branch": "feat/re-qualified-parameter-assertions-modify",
-  "summary": "A `<func>::`-qualified `--assert` now binds to the function it names. `param`/`return` state that function's prototype -- including the declared STORAGE, which rides on the parked PrototypePieces in a new `input_storage` field re-applied by FuncProto::set_pieces -- so a caller can tell kuna what a callee takes and the call site renders against it. `comment`, `flow`, `name` and `type` have no cross-function reading and are rejected with a reason instead of being applied to the selected function.",
+  "summary": "A `<func>::`-qualified `--assert` now binds to the function it names. `param`/`return` state that function's prototype -- including the declared STORAGE, which rides on the parked PrototypePieces in a new `input_storage` field re-applied by FuncProto::set_pieces -- so a caller can tell unlace what a callee takes and the call site renders against it. `comment`, `flow`, `name` and `type` have no cross-function reading and are rejected with a reason instead of being applied to the selected function.",
   "decisions": [
     {
       "what": "hypothesis UPHELD, and the refuter's reading of the mechanism was exact",
-      "detail": "The `..` in `Body::Param { index, storage, decl, .. }` in kuna-cli/src/assertdecl.rs ate `func`, and the same discard was in the Return/Comment/Flow/Name/Type arms -- six directives, not one. Reproduced on 39fa1a9a: `kuna decompile 'Sabloom Text 6.exe' sub_402020 --assert 'param sub_401c50::0 ECX char *maze' --assert 'param sub_401c50::1 EDX char *moves'` printed `unsigned int sub_402020(char *maze,char *moves)` and kept `v15 = sub_401c50();`, exit 0, empty stderr."
+      "detail": "The `..` in `Body::Param { index, storage, decl, .. }` in unlace-cli/src/assertdecl.rs ate `func`, and the same discard was in the Return/Comment/Flow/Name/Type arms -- six directives, not one. Reproduced on 39fa1a9a: `unlace decompile 'Sabloom Text 6.exe' sub_402020 --assert 'param sub_401c50::0 ECX char *maze' --assert 'param sub_401c50::1 EDX char *moves'` printed `unsigned int sub_402020(char *maze,char *moves)` and kept `v15 = sub_401c50();`, exit 0, empty stderr."
     },
     {
       "what": "the two surfaces disagreed, and the in-process one was already honest",
-      "detail": "The same command with `--json` (which loads in-process rather than spawning decomp_dbg) rejected both directives: `no decompiled function matched this directive`. So the text surface's silent misapplication was a lowering defect, not a missing engine concept -- `kuna_console::assertions::binds_to` had the right rule all along. The fix makes the text surface agree AND gives both the capability the rejection was standing in for."
+      "detail": "The same command with `--json` (which loads in-process rather than spawning decomp_dbg) rejected both directives: `no decompiled function matched this directive`. So the text surface's silent misapplication was a lowering defect, not a missing engine concept -- `unlace_console::assertions::binds_to` had the right rule all along. The fix makes the text surface agree AND gives both the capability the rejection was standing in for."
     },
     {
       "what": "the declared STORAGE is carried, not silently dropped",
-      "detail": "PrototypePieces describes types; storage is re-derived from the model, which is why `map return` already needed a kuna-only `output_storage`. A cross-function `param f::0 ECX ...` has the same problem on the input side, and dropping it would ship exactly this plane's own failure mode (accepted and not what was said). New `input_storage: Vec<(int4, ParameterPieces)>` on PrototypePieces, re-applied by `FuncProto::set_pieces` after `update_all_types`, guarded to slots the model actually assigned. Measured on the witness: `ECX/EDX` -> `sub_401c50((char *)maze,moves)`, types-only (`prototype`, model-derived stack) -> `sub_401c50((char *)v20,moves)`, deliberately wrong `EAX/EBX` -> `sub_401c50(v16,(char *)((unsigned int)v20 << 8))`. Three different arguments from three different declarations, so the field is load-bearing."
+      "detail": "PrototypePieces describes types; storage is re-derived from the model, which is why `map return` already needed a unlace-only `output_storage`. A cross-function `param f::0 ECX ...` has the same problem on the input side, and dropping it would ship exactly this plane's own failure mode (accepted and not what was said). New `input_storage: Vec<(int4, ParameterPieces)>` on PrototypePieces, re-applied by `FuncProto::set_pieces` after `update_all_types`, guarded to slots the model actually assigned. Measured on the witness: `ECX/EDX` -> `sub_401c50((char *)maze,moves)`, types-only (`prototype`, model-derived stack) -> `sub_401c50((char *)v20,moves)`, deliberately wrong `EAX/EBX` -> `sub_401c50(v16,(char *)((unsigned int)v20 << 8))`. Three different arguments from three different declarations, so the field is load-bearing."
     },
     {
       "what": "the qualifier is added to `map param`/`map return`, not to a new console command",
@@ -44,17 +44,17 @@
   "gates": {
     "make test": "PARITY OK, 675/675 assertions",
     "make test-stages": "PARITY OK, 640/640 assertions",
-    "make rust-test": "5,742 passed / 1 failed on the pre-rebase tree. The one failure is `verify_w10_proto_unlock::w10_proto_unlock_const_return_collapses_no_tied_roundtrip` ('oracle drifted') -- the known repipe-worktree artifact: the loop exports KUNA_DECOMP_TEST at this worktree's decomp_test_dbg. Re-run with it unset: 4/4 pass. The rebased tree was re-run with KUNA_DECOMP_TEST unset and was still in flight at 1,135 passed / 0 failed when the PR was opened; the `full-ci` label makes GitHub run the same suite on the merge commit, which is the gate that decides.",
+    "make rust-test": "5,742 passed / 1 failed on the pre-rebase tree. The one failure is `verify_w10_proto_unlock::w10_proto_unlock_const_return_collapses_no_tied_roundtrip` ('oracle drifted') -- the known repipe-worktree artifact: the loop exports UNLACE_DECOMP_TEST at this worktree's decomp_test_dbg. Re-run with it unset: 4/4 pass. The rebased tree was re-run with UNLACE_DECOMP_TEST unset and was still in flight at 1,135 passed / 0 failed when the PR was opened; the `full-ci` label makes GitHub run the same suite on the merge commit, which is the gate that decides.",
     "make check-spec": "OK (lenient mode)",
     "make test-cli": "50/50 with the probe promoted",
-    "kuna catalog --check": "catalog OK: documents exactly the registered kuna options"
+    "unlace catalog --check": "catalog OK: documents exactly the registered unlace options"
   },
   "acceptance": {
     "acceptance_id": "a-64ae0f00be99",
     "result": "PASS",
     "transition": "closed",
     "promoted_to": "tests/cli/qualified-parameter-assertions-modify.json",
-    "promotion_note": "the filed acceptance targets the dataset image (crackmes.one 60be2ad433c5d410b8842c95, 'Sabloom Text 6.exe') and PASSES there -- `scripts.repipe.verify --need qualified-parameter-assertions-modify` reports 1 pass / 0 fail / closed. `--promote` refuses a dataset target and CI has no dataset, so the promoted probe is re-pointed at the vendored `kuna-analysis/tests/fixtures/fauxware`: `param open::0 RDI char *pathname` on `authenticate`, asserting `open(a0)` present and `authenticate(...pathname` / `open(a0,0)` absent. Both expectations fail on the unpatched tree. `notes` was cut to 398 characters for the 400-character schema cap.",
+    "promotion_note": "the filed acceptance targets the dataset image (crackmes.one 60be2ad433c5d410b8842c95, 'Sabloom Text 6.exe') and PASSES there -- `scripts.repipe.verify --need qualified-parameter-assertions-modify` reports 1 pass / 0 fail / closed. `--promote` refuses a dataset target and CI has no dataset, so the promoted probe is re-pointed at the vendored `unlace-analysis/tests/fixtures/fauxware`: `param open::0 RDI char *pathname` on `authenticate`, asserting `open(a0)` present and `authenticate(...pathname` / `open(a0,0)` absent. Both expectations fail on the unpatched tree. `notes` was cut to 398 characters for the 400-character schema cap.",
     "reproduction_confirmed_on_main": "on 39fa1a9a the witness command prints `unsigned int sub_402020(char *maze,char *moves)` with `v15 = sub_401c50();`; after the fix it prints `unsigned int sub_402020(unsigned char *a0,char *a1)` with `v13 = sub_401c50((char *)maze,moves);`. The disassembly agrees with the tester's claim: `MOV ECX,EDI; MOV EDX,ESI` before `CALL 0x401c50`, and the callee opens with `MOV [EBP-0x1c],EDX; MOV [EBP-0x8],ECX`."
   },
   "not_closed": [

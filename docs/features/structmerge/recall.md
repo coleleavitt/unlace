@@ -1,6 +1,6 @@
 # Where the 8,626 unclaimed ground-truth fields are
 
-Measured on kuna 31ac2b26e (`#711` has since raised both arms; the option's own
+Measured on unlace 31ac2b26e (`#711` has since raised both arms; the option's own
 effect is unchanged -- see `analysis.md`). `structsynth`'s per-parameter layout
 precision is 0.8710 and its recall is 0.0865: of the
 9,443 DWARF fields behind the 835 pointer-to-struct parameters of the eight layout builds
@@ -15,8 +15,8 @@ Three views of the same eight builds are joined per parameter
 * the DWARF ground truth for every pointer-to-struct parameter — `structscore.dwarf_functions`
   and `struct_layout`, the layout instrument's own denominator (835 parameters, 9,443 fields,
   reproducing the published figure exactly);
-* kuna's `decompile-all --json` plus a `decompile-project` header, which says which of those
-  parameters kuna typed as a record and with which members — `structscore.measure_layout`
+* unlace's `decompile-all --json` plus a `decompile-project` header, which says which of those
+  parameters unlace typed as a record and with which members — `structscore.measure_layout`
   field for field, reproducing 817/938 fields-only and 941/1,197 filler-counted;
 * an `SSCENSUS` stderr line per candidate base from a census build of the pass
   ([`census.patch`](census.patch), never committed to the engine), which says what the
@@ -35,11 +35,11 @@ evidence, so this is the honest ceiling.
 | the reading function dereferences it (per-function ceiling) | **1,469** | 15.6% |
 | some function taking a pointer to the same record dereferences it (cross-function ceiling) | **5,922** | 62.7% |
 | … counting only readers `structsynth` accepts today | 3,818 | 40.4% |
-| … and only on the 200 parameters kuna types today | **1,451** | 15.4% |
-| kuna claims correctly today | 817 | 8.7% |
+| … and only on the 200 parameters unlace types today | **1,451** | 15.4% |
+| unlace claims correctly today | 817 | 8.7% |
 
 **84.4% of the ground-truth fields are invisible to the function that holds the parameter.**
-Against the per-function ceiling kuna already recovers 55.6% of what is there (817 of 1,469),
+Against the per-function ceiling unlace already recovers 55.6% of what is there (817 of 1,469),
 which is a very different picture from "recall 0.087". The headroom is not inside one
 function: it is that **805 of the 835 parameters read a record some other parameter in the
 same binary also reads** (131 distinct records, 101 with two or more readers, one with 35),
@@ -67,7 +67,7 @@ siblings dereference:
 | `spacebase_or_global` | 1 | 0 | 0 | 4 |
 | **total untyped** | **635** | **7,781** | **748** | **2,367** |
 
-And on the 200 parameters kuna does type: the function dereferences 721 ground-truth fields,
+And on the 200 parameters unlace does type: the function dereferences 721 ground-truth fields,
 717 of them survive the prune, and **37** of those are still not claimed at the end.
 
 ## What this rules out
@@ -78,7 +78,7 @@ And on the 200 parameters kuna does type: the function dereferences 721 ground-t
 * **Holes are not the bottleneck.** Filler is 259 of the 1,197 members; the fields-only and
   filler-counted arms differ by 124 true positives, not thousands.
 * **Per-function evidence is not the bottleneck either** — it is a real ceiling at 1,469, and
-  kuna is already at 55.6% of it. Every rule that loosens a single function's evidence
+  unlace is already at 55.6% of it. Every rule that loosens a single function's evidence
   (`array_shaped`, `phi_reached`, `dynamic_offset`) is bounded by 266 fields *in total*, and
   each of them exists because loosening it was measured to produce wrong layouts.
 
@@ -89,7 +89,7 @@ prove**. The ledger unifies two layouts only when one *contains* the other; two 
 measured overlapping-but-different parts of the same record get a name each and each keeps only
 its own fields. The census says exactly how often that happens:
 
-* **23 of the 77 ground-truth records kuna types at all are given more than one `struct_N`.**
+* **23 of the 77 ground-truth records unlace types at all are given more than one `struct_N`.**
 * The reverse error is rare: **1 of 136 `struct_N` is shared by two different ground-truth
   records**, so the current unification is precise and there is room to spend.
 * Merging the claims of the readers `structsynth` already accepts, into the records it already

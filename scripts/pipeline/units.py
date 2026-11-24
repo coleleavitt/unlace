@@ -94,8 +94,8 @@ _TEST_FILE_TARGET_CLASS = {
     "test_peephole_redundant_bitshifts.py": "RemoveRedundantShiftsAroundComparators",
 }
 
-# Prefer x86 targets for the repro (kuna's strongest arch); these map a path component to a
-# kuna --arch value.
+# Prefer x86 targets for the repro (unlace's strongest arch); these map a path component to a
+# unlace --arch value.
 _ARCH_BY_DIR = {
     "x86_64": "x86_64",
     "i386": "x86",

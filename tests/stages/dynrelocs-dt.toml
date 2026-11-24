@@ -1,4 +1,4 @@
-# Kuna #64 (personal): P1 GOT synthesis for relocatable objects and
+# Unlace #64 (personal): P1 GOT synthesis for relocatable objects and
 # dynamic relocations read from PT_DYNAMIC (option dynrelocs, default on).
 # #1-#2: a PIC x86-64 object's GOTPCRELX/REX_GOTPCRELX and a PIC AArch64
 # object's ADR_GOT_PAGE/LD64_GOT_LO12_NC go through a synthesized read-only

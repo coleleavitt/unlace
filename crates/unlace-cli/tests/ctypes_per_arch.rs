@@ -74,7 +74,7 @@ fn decompile_all(fixture_name: &str, ctypes: &str) -> String {
             ctypes,
         ])
         .output()
-        .expect("failed to spawn the kuna binary");
+        .expect("failed to spawn the unlace binary");
     let stderr = String::from_utf8_lossy(&out.stderr);
     if !out.status.success() {
         panic!("unlace decompile-all failed on {fixture_name}: {stderr}");

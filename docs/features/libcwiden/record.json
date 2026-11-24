@@ -1,7 +1,7 @@
 {
- "opportunity": "The 206-entry `libcsigs` table was selected by which callee would move type_match on a case a rival already gets right -- a narrow question that never asks which callees the corpus actually imports. On the campaign's 444 slices, 158 of the 878 ground-truth `char *` variables binja gets right and kuna does not sit in a function that calls a libc import kuna cannot type, across 35 distinct names (docs/features/libcwiden/gap.md).",
+ "opportunity": "The 206-entry `libcsigs` table was selected by which callee would move type_match on a case a rival already gets right -- a narrow question that never asks which callees the corpus actually imports. On the campaign's 444 slices, 158 of the 878 ground-truth `char *` variables binja gets right and unlace does not sit in a function that calls a libc import unlace cannot type, across 35 distinct names (docs/features/libcwiden/gap.md).",
  "test_name": "tests/stages/libcwiden.xml (9 two-pass assertions over one real ELF) + 3 table-invariant unit tests in libcsigs.rs",
- "binary": "decompiler/crates/kuna-analysis/tests/fixtures/libcwiden_x86_64",
+ "binary": "decompiler/crates/unlace-analysis/tests/fixtures/libcwiden_x86_64",
  "selector": "can_write / move_entry / make_dir / jail",
  "witness_binary": "decbench full_run_address_2026-09-11/O0/coreutils/stripped/ginstall",
  "witness_addr": "0xb57a",
@@ -59,7 +59,7 @@
    "llabs (long long int, 18)"
   ],
   "pinned_by": "a_sixty_four_bit_return_is_still_rejected",
-  "note": "strtoll and strtoumax are the two most widely imported names kuna still cannot type, and both are rejected only for their RETURN; their char*/char** parameters are exactly this lane's evidence. Admitting them needs a fixed-width 64-bit Ty, which is its own PR."
+  "note": "strtoll and strtoumax are the two most widely imported names unlace still cannot type, and both are rejected only for their RETURN; their char*/char** parameters are exactly this lane's evidence. Admitting them needs a fixed-width 64-bit Ty, which is its own PR."
  },
  "wrongness_axis": {
   "rule": "unchanged -- an entry applies ONLY to a name the image IMPORTS and does not itself define",
@@ -213,7 +213,7 @@
   "worse_rows_read": "All four are the placeholder strip, not the table: against the table-alone arm the table has 0 worse rows, and the strip alone is 0 improved / 4 worse / aggregate -0.31. Every one is the same class -- a GT `_Bool` one-byte stack local that spelled `bool` and now spells `char`, in two distinct functions (ls/dir/vdir are one program). Both functions have an alloca-shaped frame whose stack pointer is itself a variable, which is the shape that kept the placeholder in the first place. It is core type inference, not `boolbyte`: `--option boolbyte off` changes neither arm's rendering of those slots. Read at the statement level (cp make_dir_parents_private, slot -0x1ad): the callee whose parameter the slot feeds still declares `bool a3` in BOTH arms, the defs and tests are the same statements, and the emitted C stays correct -- the slot is `char` and each test casts it (`if ((bool)v26)`). What moves is which vote the merged variable folds, alongside one extra level of block nesting around the def. A metric loss on the `bool` class, not wrong output, and not `boolbyte`'s."
  },
  "sweep": {
-  "surface": "kuna decompile-all, 12 stripped binaries / 6,886 functions, both arms, every hunk classified",
+  "surface": "unlace decompile-all, 12 stripped binaries / 6,886 functions, both arms, every hunk classified",
   "binaries": "coreutils cp/ginstall/mv (O0), coreutils ls (O2), coreutils du (O2-noinline), tar (O0), grep (O0), findutils find (O0), gzip (O2), shadow useradd (O2), diffutils diff (O2-noinline), bzip2 (O0)",
   "functions_off": 6886,
   "functions_on": 6886,
@@ -251,7 +251,7 @@
   }
  },
  "speed": {
-  "instrument": "scripts.pipeline.timeit shape: `kuna decompile-all <bin> --json --max-fn-seconds 120`, interleaved arm order per iteration, min-of-15, -O2 binaries; arm-base = origin/main, arm-fix = what ships (the table plus the placeholder strip). Run 2026-09-23 05:33-06:50Z with ~8 other campaign lanes on the box (load 17-37), which is why the medians are quoted beside the minima.",
+  "instrument": "scripts.pipeline.timeit shape: `unlace decompile-all <bin> --json --max-fn-seconds 120`, interleaved arm order per iteration, min-of-15, -O2 binaries; arm-base = origin/main, arm-fix = what ships (the table plus the placeholder strip). Run 2026-09-23 05:33-06:50Z with ~8 other campaign lanes on the box (load 17-37), which is why the medians are quoted beside the minima.",
   "budget": "+5% worst case",
   "worst": "fmt +3.01% min",
   "fmt": {
@@ -516,8 +516,8 @@
    ],
    "note": "measured against the table-alone arm on the pre-rebase base; the rebase does not change what the strip alone does"
   },
-  "gates": "make test 675/675 PARITY OK and make test-stages PARITY OK with ZERO moved assertions; the only new keys are the three KUNA-CALLPLACEHOLDER ones.",
-  "test": "tests/stages/callplaceholder.xml over decompiler/crates/kuna-analysis/tests/fixtures/callplaceholder_x86_64",
+  "gates": "make test 675/675 PARITY OK and make test-stages PARITY OK with ZERO moved assertions; the only new keys are the three UNLACE-CALLPLACEHOLDER ones.",
+  "test": "tests/stages/callplaceholder.xml over decompiler/crates/unlace-analysis/tests/fixtures/callplaceholder_x86_64",
   "stack_arguments_unaffected": "A call with more arguments than the six register slots still renders all of them, byte-identically in both arms: an -O0 `printf(\"%d ...\", argc, argc+1 ... argc+7)` (8 args) and a 6-arg `snprintf`. The resolved sites take their offset from `resolve_spacebase_relative`'s own record, which is made before the strip, not from the placeholder."
  },
  "gates": {
@@ -526,7 +526,7 @@
   "make test-stages": "1323/1323 assertions passed, PARITY OK (1,311 -> 1,323 is exactly the 12 new assertions; none moved)",
   "make test-cli": "235/235 passed",
   "make rust-test": "RUST_TEST_RC=0 -- 7,452 passed, 0 failed, 38 ignored; options_md_matches_the_generator_byte_for_byte ok. Lane started 06:57:39Z on the rebased tree, after the last source change (06:55:40Z), finished 07:27:24Z.",
-  "kuna catalog --check": "OK",
+  "unlace catalog --check": "OK",
   "scripts.repipe.counters --check": "no drift",
   "check-spec": "OK lenient and strict",
   "docs/options.md": "byte-fresh (regenerated, git diff empty)",
@@ -534,7 +534,7 @@
  },
  "speed_on_the_rebased_base": {
   "base": "origin/main 9e07ab931 (the PR's base, i.e. after #711 calleevote), built in a throwaway worktree; arm `new` is this branch's release build.",
-  "method": "scripts-free interleaved min-of-15, `kuna decompile-all <bin> --json --max-fn-seconds 120`, -O2 stripped coreutils fmt/ls/sort and bash; the box carried 13-27 load average throughout, so read the min, not the median.",
+  "method": "scripts-free interleaved min-of-15, `unlace decompile-all <bin> --json --max-fn-seconds 120`, -O2 stripped coreutils fmt/ls/sort and bash; the box carried 13-27 load average throughout, so read the min, not the median.",
   "delta_min_pct": {
    "fmt": 0.75,
    "ls": -1.21,

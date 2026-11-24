@@ -9,7 +9,7 @@ fn complete_rust_integer_conversions_match_native_values_and_calls() {
         return;
     }
     let declarations =
-        std::fs::read_to_string(common::fixture("rust_integer_conversions.kuna")).unwrap();
+        std::fs::read_to_string(common::fixture("rust_integer_conversions.unlace")).unwrap();
     let names: Vec<_> = declarations
         .lines()
         .map(|line| line.split_whitespace().nth(1).unwrap())
@@ -67,7 +67,7 @@ fn complete_rust_integer_conversions_match_native_values_and_calls() {
         "--language",
         "rust",
         "--assert",
-        &format!("@{}", common::fixture("rust_integer_conversions.kuna")),
+        &format!("@{}", common::fixture("rust_integer_conversions.unlace")),
     ]));
     let document: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     for assertion in document["assertions"].as_array().unwrap() {
@@ -119,7 +119,7 @@ fn complete_rust_integer_context_preserves_shifts_and_loop_calls() {
         return;
     }
     let declarations =
-        std::fs::read_to_string(common::fixture("rust_integer_context.kuna")).unwrap();
+        std::fs::read_to_string(common::fixture("rust_integer_context.unlace")).unwrap();
     let names: Vec<_> = declarations
         .lines()
         .map(|line| line.split_whitespace().nth(1).unwrap())
@@ -135,7 +135,7 @@ fn complete_rust_integer_context_preserves_shifts_and_loop_calls() {
                     optimization,
                     "-fwrapv",
                     "-fno-inline",
-                    "-DKUNA_NATIVE_MAIN",
+                    "-DUNLACE_NATIVE_MAIN",
                     "-std=c11",
                     "-Wall",
                     "-Wextra",
@@ -165,7 +165,7 @@ fn complete_rust_integer_context_preserves_shifts_and_loop_calls() {
         "--language",
         "rust",
         "--assert",
-        &format!("@{}", common::fixture("rust_integer_context.kuna")),
+        &format!("@{}", common::fixture("rust_integer_context.unlace")),
     ]));
     let document: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     for assertion in document["assertions"].as_array().unwrap() {

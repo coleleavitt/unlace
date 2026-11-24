@@ -4,7 +4,7 @@
 signature but used a newly declared, uninitialized `a0` in the body.
 
 ```console
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/assertranges_x86_64 sample --option namestyle ghidra
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/assertranges_x86_64 sample --option namestyle ghidra
 int sample(int param_1)
 {
   int a0;

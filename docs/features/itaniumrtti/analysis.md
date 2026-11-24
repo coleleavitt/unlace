@@ -10,11 +10,11 @@ in auto-analysis. Measured on a stripped `g++ -O0` probe, Ghidra 12.1 resolves t
 `Shape` vtable to `DAT_00107a80` and every virtual method to `FUN_<addr>`.
 
 IDA Pro **does** reconstruct it — `_ZTV6Widget`, `_ZTI6Widget`, `_ZTS8Drawable` come
-back from `.rodata` + `.data.rel.ro` alone. kuna had **zero** `_ZTV` / `_ZTI` /
+back from `.rodata` + `.data.rel.ro` alone. unlace had **zero** `_ZTV` / `_ZTI` /
 `__class_type_info` / `__cxxabiv1` hits anywhere in `decompiler/crates` before this
 PR: the Itanium side was entirely absent while the MSVC side had been ported.
 
-So this is a place kuna can beat Ghidra outright rather than catch up.
+So this is a place unlace can beat Ghidra outright rather than catch up.
 
 ## 2. The scoping decision, and the measurement that forced it
 
@@ -226,7 +226,7 @@ every binary in the sweep — the pass names things, it never discovers them.
 
 ## 9. A rendering decision worth recording
 
-Data labels join the class to the kind with `_` (`Shape_vptr`), not `::`. kuna's
+Data labels join the class to the kind with `_` (`Shape_vptr`), not `::`. unlace's
 scope splitter splits on every `::` and the C printer emits a global by its **leaf**
 name, so `Shape::vptr` and `Circle::vptr` both render as a bare, ambiguous `vptr` —
 verified on the probe before the naming was chosen. Function symbols keep the `::`
@@ -237,7 +237,7 @@ form, because a callee's qualified name *is* rendered at the call site
 
 A default-off option is only half a decision. `auto` selects `aggressive` for any
 input under 500 KiB (DIV-40), which is the default path for `decompile-all`, the
-`kuna` CLI, the web front-end and the benchmark — so an option outside
+`unlace` CLI, the web front-end and the benchmark — so an option outside
 `AGGRESSIVE_OVERRIDES` **never runs for anyone**. Measured on the shipped fixture,
 before the preset change:
 

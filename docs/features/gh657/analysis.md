@@ -18,7 +18,7 @@ int main(void) { int t = f(7); k = 42; return t + k; }
 ```
 
 ```console
-$ gcc -O2 -o /tmp/p1 p1.c && kuna decompile /tmp/p1 main
+$ gcc -O2 -o /tmp/p1 p1.c && unlace decompile /tmp/p1 main
 int main(void)
 {
   k = 0x2a;
@@ -110,7 +110,7 @@ landing statement. An earlier revision of this branch moved that guard into
 *gained* a fold that `origin/main` declines.
 
 `foldcallretphi.rs` now composes its guard exactly as it shipped; only
-`print_point` and the raw storage test delegate to `kuna_callretfold`, so the two
+`print_point` and the raw storage test delegate to `unlace_callretfold`, so the two
 options share the helpers without sharing the policy. Since that guard is strictly
 wider than the second `foldcallret` span, a phi-discounted fold is decided exactly
 as it was on `origin/main`.

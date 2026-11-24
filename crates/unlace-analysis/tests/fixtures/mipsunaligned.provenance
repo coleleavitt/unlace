@@ -1,5 +1,5 @@
 mipsunaligned_eb.o, mipsunaligned_el.o -- MIPS32 big- and little-endian
-objects for option mipsunaligned (GH-904; tests/stages/kuna-mipsunaligned.toml).
+objects for option mipsunaligned (GH-904; tests/stages/unlace-mipsunaligned.toml).
 
 What they are
   The same packed-struct word load, store and copy from mipsunaligned.c,

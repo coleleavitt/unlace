@@ -48,16 +48,16 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-CANARYGLOBAL #1: canaryglobal off keeps the __stack_chk_fail call'
+name = 'UNLACE-CANARYGLOBAL #1: canaryglobal off keeps the __stack_chk_fail call'
 count = 1
 literal = '__stack_chk_fail('
 
 [[match]]
-name = 'KUNA-CANARYGLOBAL #2: canaryglobal off keeps the compare against the global'
+name = 'UNLACE-CANARYGLOBAL #2: canaryglobal off keeps the compare against the global'
 count = 2
 literal = '__stack_chk_guard'
 
 [[match]]
-name = 'KUNA-CANARYGLOBAL #3: both passes return fill(...) + 1'
+name = 'UNLACE-CANARYGLOBAL #3: both passes return fill(...) + 1'
 count = 2
 literal = 'fill('

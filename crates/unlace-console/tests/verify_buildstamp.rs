@@ -9,7 +9,7 @@ use unlace_console::buildstamp::{ChildKind, PARENT_ENV, REPLY, identity};
 
 fn run(parent: Option<&str>) -> (String, String) {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_decomp_dbg"));
-    cmd.args(["-s", "/nonexistent-kuna-specs"])
+    cmd.args(["-s", "/nonexistent-unlace-specs"])
         .env_remove(PARENT_ENV)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

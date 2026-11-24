@@ -24,7 +24,7 @@ use std::sync::Arc;
 
 use unlace_base::filemanage::FileManage;
 
-const MEMORY_ROOT_SCHEME: &str = "kuna-memory://";
+const MEMORY_ROOT_SCHEME: &str = "unlace-memory://";
 
 type Bytes = Box<dyn AsRef<[u8]> + Send + Sync>;
 type Files = [(Cow<'static, str>, Bytes)];
@@ -410,7 +410,7 @@ mod tests {
     fn find_file_takes_the_first_directory_in_order() {
         let (mounts, root) = mounted();
         let mut paths = FileManage::default();
-        paths.add_dir_2_path("/nonexistent/kuna/specs");
+        paths.add_dir_2_path("/nonexistent/unlace/specs");
         paths.add_dir_2_path(&format!("{root}/Ghidra/Processors/toy/data/languages/old"));
         paths.add_dir_2_path(&format!("{root}/Ghidra/Processors/toy/data/languages"));
         let mut res = String::new();

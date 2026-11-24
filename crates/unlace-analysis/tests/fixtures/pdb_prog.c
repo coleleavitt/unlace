@@ -3,7 +3,7 @@
 // the PE debug directory). Fixture for the PDB-consuming pass (unlace-analysis
 // s1_pdb PR-P1: stripped FUN_* -> real names via the matching `.pdb`).
 //
-// The EXE's own symbol table is NOT a source of these names — kuna's loader does
+// The EXE's own symbol table is NOT a source of these names — unlace's loader does
 // not read the COFF symbol table for function naming, so without the `.pdb` the
 // uniquely-named function below is a stripped `FUN_<addr>`. Only the PDB symbol
 // stream (S_PUB32/S_GPROC32) recovers the real name.

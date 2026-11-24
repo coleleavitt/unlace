@@ -8,9 +8,9 @@
 # `String.append(_:)` kept the C model, so the address of the string it
 # appends to, passed in swiftself, was dropped.
 #
-# Stage / sub-stage: P4 prototype recovery. `p4_calls/kuna_swiftinfer.rs
+# Stage / sub-stage: P4 prototype recovery. `p4_calls/unlace_swiftinfer.rs
 # (probe_reads)` walks past calls, which preserve the register; the
-# `swiftcall` arm (`unlace-analysis analyzers/swift/kuna_swiftcall.rs (bind)`)
+# `swiftcall` arm (`unlace-analysis analyzers/swift/unlace_swiftcall.rs (bind)`)
 # binds the Swift model to the stub of every import whose symbol demangles
 # to a method.
 #

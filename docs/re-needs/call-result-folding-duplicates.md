@@ -38,7 +38,7 @@ Preserve one random-number draw per outer iteration, reusing its result for comp
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140002930"
@@ -69,7 +69,7 @@ Preserve one random-number draw per outer iteration, reusing its result for comp
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140002930"
@@ -104,7 +104,7 @@ _not yet refuted_
 
 ## Reference
 
-- `ida-decompile load ./target/vm_obfuscation.exe` — Reference unavailable: server exited status 1 before registering. Kuna disassembly and option-off output independently confirm the defect.
+- `ida-decompile load ./target/vm_obfuscation.exe` — Reference unavailable: server exited status 1 before registering. Unlace disassembly and option-off output independently confirm the defect.
 
 ## Instances
 
@@ -113,6 +113,6 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 10 REFUTER: hypothesis **upheld** (was inconclusive). REFUTER RAN (captain, tick 10:05Z). Filed cause -- 'foldcallret appears to propagate a call expression into multiple uses across a loop' -- is UPHELD, and it is worse than the wording suggests: this is a SEMANTICS CHANGE, not a presentation defect. GROUND TRUTH, unlace disassemble .kuna-repipe/arena/10/661daf77cddae72ae250c836/target/vm_obfuscation.exe 0x1400029b0 --count 16: ONE call at 0x1400029c0 (CALL 0x14000d018), the sign-fixup at 0x1400029c5..0x1400029d3, then an inner loop 0x1400029d8..0x1400029e6 (CMP word ptr [RSP+RCX*2+0x62],AX / INC RCX / CMP RCX,0x10 / JL back to 0x1400029d8) that re-reads AX WITHOUT re-calling. AX is loop-invariant; the machine draws once. DEFAULT OUTPUT emits it TWICE, once inside the loop: 'do { if (v8[v4] == (unsigned short)sub_14000d018()) goto label_1400029a1; v4 += 1; } while (v4 < 0x10); v8[v6] = (unsigned short)sub_14000d018();' -- so the C makes up to 17 RNG draws where the binary makes 1, compares against a different value each iteration, and stores a value that was never compared. Both initialization loops are affected. --option foldcallret off collapses both to a single 'v4 = sub_14000d018();' and the probe regex stops matching, which isolates the pass beyond doubt (/tmp/fold_def.c matches, /tmp/fold_off.c does not). *** THE DECISIVE POINT FOR THE BUILDER: kuna IS VIOLATING ITS OWN DOCUMENTED OPTION CONTRACT, SO THIS NEEDS NO NEW FLAG. *** docs/options.md:998 defines foldcallret as 'Fold an order-safe SINGLE-USE call return value into its use site' and its symptoms row says 'call result spilled to a temp USED EXACTLY ONCE'; it further promises 'Only folds when the single use is in the same block with no intervening call/load/store'. Here the value has TWO use sites in TWO different blocks, one of them a loop body. Per AGENTS.md a strict bug fix that only corrects wrong output ships without an option -- the guard to enforce is the one already written down: fold only at a single use site, and never across a back-edge. DO NOT ship 'foldcallret off' as the fix; the option is default-ON under DIV-14 and turning it off regresses the presentation win it was measured for. Guard the fold, keep the default.
+- round 10 REFUTER: hypothesis **upheld** (was inconclusive). REFUTER RAN (captain, tick 10:05Z). Filed cause -- 'foldcallret appears to propagate a call expression into multiple uses across a loop' -- is UPHELD, and it is worse than the wording suggests: this is a SEMANTICS CHANGE, not a presentation defect. GROUND TRUTH, unlace disassemble .unlace-repipe/arena/10/661daf77cddae72ae250c836/target/vm_obfuscation.exe 0x1400029b0 --count 16: ONE call at 0x1400029c0 (CALL 0x14000d018), the sign-fixup at 0x1400029c5..0x1400029d3, then an inner loop 0x1400029d8..0x1400029e6 (CMP word ptr [RSP+RCX*2+0x62],AX / INC RCX / CMP RCX,0x10 / JL back to 0x1400029d8) that re-reads AX WITHOUT re-calling. AX is loop-invariant; the machine draws once. DEFAULT OUTPUT emits it TWICE, once inside the loop: 'do { if (v8[v4] == (unsigned short)sub_14000d018()) goto label_1400029a1; v4 += 1; } while (v4 < 0x10); v8[v6] = (unsigned short)sub_14000d018();' -- so the C makes up to 17 RNG draws where the binary makes 1, compares against a different value each iteration, and stores a value that was never compared. Both initialization loops are affected. --option foldcallret off collapses both to a single 'v4 = sub_14000d018();' and the probe regex stops matching, which isolates the pass beyond doubt (/tmp/fold_def.c matches, /tmp/fold_off.c does not). *** THE DECISIVE POINT FOR THE BUILDER: unlace IS VIOLATING ITS OWN DOCUMENTED OPTION CONTRACT, SO THIS NEEDS NO NEW FLAG. *** docs/options.md:998 defines foldcallret as 'Fold an order-safe SINGLE-USE call return value into its use site' and its symptoms row says 'call result spilled to a temp USED EXACTLY ONCE'; it further promises 'Only folds when the single use is in the same block with no intervening call/load/store'. Here the value has TWO use sites in TWO different blocks, one of them a loop body. Per AGENTS.md a strict bug fix that only corrects wrong output ships without an option -- the guard to enforce is the one already written down: fold only at a single use site, and never across a back-edge. DO NOT ship 'foldcallret off' as the fix; the option is default-ON under DIV-14 and turning it off regresses the presentation win it was measured for. Guard the fold, keep the default.
 - round 10 CAPTAIN (18:35Z tick, B_DRAIN off-critical-path repair): PROBE TARGET BOUND -- this need was STRUCTURALLY UNCLOSABLE as filed. Both arms carried no `target` block, so `verify --acceptance-suite` returned `ProbeError: {{BIN}} used but the context supplies no bin` with unrunnable=true / transition=indeterminate: a builder could have done the work and still not closed it. Bound both arms to the single ELF/PE candidate under ds/challenges/<hexid>/ (sha256 + size captured from the dataset copy, binary_source=dataset). Verified post-fix: unrunnable=false, passed=false, transition=unchanged -- i.e. the acceptance now FAILS honestly and can be seen to flip. NOTE probe ids did NOT move: probe_id_of() is keyed on cmd+expect only (needs.py:269), so binding a target is id-stable and breaks no historical reference. PROMOTION CAVEAT: binary_source is `dataset` and `verify --promote` refuses that verbatim (CI has no dataset, --force does not help) -- vendor an in-repo fixture in the SAME PR or B_DONE cannot promote this probe into tests/cli/.
 - round 12 BUILDER: retargeted both probes without changing their command or expectation to the vendored `callretmulti_x86_64` minimizer. It preserves the witness's CALL / sign-fixup / low-word fan-out shape in 72 text bytes, reproduces the duplicate-call default on the parent tree, and is available to CLI CI.

@@ -1,4 +1,4 @@
-# kuna #1288: under a prototype model with extrapop="unknown" the stack
+# unlace #1288: under a prototype model with extrapop="unknown" the stack
 # solver guesses each call's stack-pointer change as 4, the x86-32 return
 # address. An x86 16-bit near call stores a two-byte return address, so a
 # callee that pops nothing was credited two bytes it never popped and every
@@ -16,7 +16,7 @@
 # (nasm -f bin, org 0.) The guess's base is now the bytes the call
 # instruction itself stores: two for the near call, four for the far one.
 #
-# Stage: P6 variables, kuna_calleepop.rs (return_address_bytes), always on.
+# Stage: P6 variables, unlace_calleepop.rs (return_address_bytes), always on.
 
 [image]
 arch = 'x86:LE:16:Real Mode'

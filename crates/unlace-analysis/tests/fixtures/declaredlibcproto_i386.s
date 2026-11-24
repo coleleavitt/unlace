@@ -1,4 +1,4 @@
-# (kuna `declaredlibcproto`) Naming a callee must also give it a prototype.
+# (unlace `declaredlibcproto`) Naming a callee must also give it a prototype.
 #
 # The reduction of the witness (a stripped, statically linked i386 crackme whose
 # anti-debug state machine calls glibc's `ptrace`, dataset challenge

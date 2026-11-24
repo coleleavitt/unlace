@@ -3,11 +3,11 @@
 A call renders with fewer arguments than the disassembly passes it, whenever
 the missing registers were set up *before* the branch the call sits behind.
 The shape is a container `append` with the one-element fast path inlined and
-the grow path left as a call — ubiquitous in C++ — and kuna's own recovery of
+the grow path left as a call — ubiquitous in C++ — and unlace's own recovery of
 the callee disagrees with its recovery of the call site.
 
 ```
-$ kuna decompile vm.exe sub_140004540 | tail -7
+$ unlace decompile vm.exe sub_140004540 | tail -7
   if (*(char **)(a0 + 8) != *(char **)(a0 + 0x10)) {
     **(char **)(a0 + 8) = *(char *)((a1 & 0xff) + 0x14000b290);
     *(long long *)(a0 + 8) = *(long long *)(a0 + 8) + 1;
@@ -16,7 +16,7 @@ $ kuna decompile vm.exe sub_140004540 | tail -7
   sub_140007be0(a0);
 }
 
-$ kuna decompile vm.exe sub_140007be0 | head -1
+$ unlace decompile vm.exe sub_140007be0 | head -1
 char *sub_140007be0(long long *a0,long long a1,char *a2)
 ```
 
@@ -24,7 +24,7 @@ Two live arguments are gone. The disassembly sets both up two instructions
 before the test, because both arms need them:
 
 ```
-$ kuna disassemble vm.exe --addr 0x1400046af --count 8
+$ unlace disassemble vm.exe --addr 0x1400046af --count 8
 0x1400046af   MOV RDX,qword ptr [RBX + 0x8]     ; the write cursor
 0x1400046b3   LEA R8,[RSI + RDI*0x1]            ; the source byte
 0x1400046b7   CMP RDX,qword ptr [RBX + 0x10]
@@ -84,7 +84,7 @@ measured against.
 `make test` PARITY OK 675/675 (no re-pin) · `make test-stages` PARITY OK
 768/768 (763 → 768 for the new assertions, none moved) · `make rust-test` green
 (6469 tests) · `make check-spec` OK strict · `make test-cli` 125/125 ·
-`kuna catalog --check` OK. Speed: 164.61 ms → 161.29 ms on the witness
+`unlace catalog --check` OK. Speed: 164.61 ms → 161.29 ms on the witness
 (`scripts.pipeline.timeit`, median of 7, −2.02%, budget 5%).
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

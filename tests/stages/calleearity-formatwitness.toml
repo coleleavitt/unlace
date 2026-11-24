@@ -8,7 +8,7 @@
 # same format operation at both sites.
 #
 # Phase: P4 call recovery.  The partial-list extension
-# (kuna_calleearitylive.rs, always on) uses the equal constant first argument
+# (unlace_calleearitylive.rs, always on) uses the equal constant first argument
 # as the sibling witness and restores both values.  no_conversion_control
 # repeats the call shapes with a plain string and proves that pointer
 # equality alone does not lend the longer arity.

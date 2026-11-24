@@ -79,7 +79,7 @@ assert.match(plain.tokens_error, /inspect/);
 assert.equal(plain.proto, 'int main(int argc,char **argv)');
 const noted = normalizeInspect({ function: { name: 'f', address_hex: '0x10', code: 'int f(void) // return-dupe\n{\n  return 0;\n}',
   tokens: [{ line: 1, col: 12, len: 14, text: '// return-dupe', kind: 'comment' }] } });
-assert.equal(noted.code, 'int f(void)\n{\n  return 0;\n}', 'kuna\'s notes leave the code');
+assert.equal(noted.code, 'int f(void)\n{\n  return 0;\n}', 'unlace\'s notes leave the code');
 assert.deepEqual(noted.notes.get(1).map((t) => t.tag), ['return-dupe'], 'and are kept by line');
 assert.equal(noted.tokens.length, 0);
 assert.equal(noted.proto, 'int f(void)');

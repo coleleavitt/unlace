@@ -1,4 +1,4 @@
-# kuna option bejoin callers (the default), GH-904: a pair whose low word
+# unlace option bejoin callers (the default), GH-904: a pair whose low word
 # also feeds its high word.
 #
 # clang computes a 64-bit sum's low word in the second return register

@@ -2,7 +2,7 @@
 
 ## 1. The measured symptom
 
-`kuna decompile-all <O2/coreutils/stripped/sort> --addr 0x3ec0` printed a switch
+`unlace decompile-all <O2/coreutils/stripped/sort> --addr 0x3ec0` printed a switch
 arm that jumps to a label the function does not contain:
 
 ```c
@@ -48,7 +48,7 @@ have a marked target. Three independent paths broke that:
 2. **A goto the printer emits but the marker skipped.** `mark_unstructured`
    marks a `BlockGoto`'s target only `if goto_prints()` — upstream's rule,
    correct upstream because `PrintC::emitBlockGoto` suppresses the goto under
-   the same test. kuna's `emit_block_goto` prints the trailing goto for every
+   the same test. unlace's `emit_block_goto` prints the trailing goto for every
    target it has, so a goto whose target *is* the next block in flow printed
    unlabelled (`grep` O0 `main`, `goto label_aa4b;` with the target block
    immediately below it).

@@ -1,4 +1,4 @@
-# Kuna (IDA 9.5 gooMBA design, MBA without SMT): P3 simplification
+# Unlace (IDA 9.5 gooMBA design, MBA without SMT): P3 simplification
 # quiescence, option mba (default off). The groups and polynomial half.
 #
 #   0x1000 mba4 (hand-assembled, subterms recomputed as an obfuscator emits

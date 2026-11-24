@@ -114,7 +114,7 @@ fn tree_range_members_use_the_pointer_type_of_each_native_access() {
         let source = common::scratch_file("tree-range-emitted", "c");
         let include = fixture.replace('\\', "\\\\").replace('"', "\\\"");
         let program = format!(
-            "{PRELUDE}\n{types}\n#define KUNA_EMITTED_TREE_TYPES 1\n#define KUNA_EMITTED_TREE_BODY 1\n#include \"{include}\"\n__attribute__((ms_abi))\n{body}\n"
+            "{PRELUDE}\n{types}\n#define UNLACE_EMITTED_TREE_TYPES 1\n#define UNLACE_EMITTED_TREE_BODY 1\n#include \"{include}\"\n__attribute__((ms_abi))\n{body}\n"
         );
         std::fs::write(&source, program).unwrap();
         for compiler in &compilers {
@@ -421,7 +421,7 @@ fn decompile_surface(
             "--assert-strict",
             "--assert",
         ])
-        .arg(format!("@{fixture}.kuna"))
+        .arg(format!("@{fixture}.unlace"))
         .args([
             "--option",
             "stackviews",
@@ -773,7 +773,7 @@ struct LifetimeHandle *volatile volatile_handle;
                     "reliable",
                     "--assert-strict",
                     "--assert",
-                    &format!("@{fixture}.kuna"),
+                    &format!("@{fixture}.unlace"),
                     "--option",
                     "stackviews",
                     "on",

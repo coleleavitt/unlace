@@ -3,7 +3,7 @@
 ## The gap
 
 The 2026-09-24 cast census counted 1,994 `(char *)<call>` casts on the 4,815
-functions kuna and IDA both emit (IDA: 1,172). 682 of them sit on a call to a
+functions unlace and IDA both emit (IDA: 1,172). 682 of them sit on a call to a
 function whose own listing, printed earlier by the same `decompile-all`,
 already declares the `char *` return:
 
@@ -16,7 +16,7 @@ v7 = (char *)sub_e8ca(4,(char *)sub_43ee(a0)); /* recheck @0x5a69 */
 IDA prints the same call as `v9 = sub_43EE((const char **)a1);`: the result
 takes the callee's prototype and needs no conversion.
 
-## Why kuna printed it
+## Why unlace printed it
 
 Upstream's `TypeOpCall::getOutputLocal` answers only for a LOCKED output. A
 recovered prototype is never locked (locking it would commit the output trial
@@ -64,7 +64,7 @@ result the function hands back beside
 `return -1` makes its return type a pointer (grep `bmexec_trans` returns
 `ptrdiff_t`; dash's token reader returned `(long **)(unsigned long)v4`).
 
-The fix is an audit of the finished function (`kuna_callrettype::contradicted`)
+The fix is an audit of the finished function (`unlace_callrettype::contradicted`)
 and one more decompile of the caller without the contradicted statements. On
 the census corpus it removed every new "pointer variable assigned an integer"
 line and every new pointer return type beside a returned non-address number.
@@ -126,7 +126,7 @@ no write in between (`return neg32(x);`, `call; ret`) keeps its statement.
 The return is not the only reader outside the function. The dead-bit trimming
 counts only the possibly-nonzero bits of a call input as consumed, so it
 narrows a zero-extended argument to its narrow value even for a callee that
-reads the whole register, and records the slot (`kuna_truncarg`):
+reads the whole register, and records the slot (`unlace_truncarg`):
 
 ```c
 unsigned long halve(unsigned long v) { return v >> 1; }
@@ -153,12 +153,12 @@ a 32-bit value returned from a function the source declares `unsigned long`
 after arithmetic or a merge (`unsigned int r = neg32(x) * 3u; other(); return
 r;` prints `int wmul(...)`), and a signed 32-bit expression passed to a wider
 parameter whose extension the trimming dropped (`half(v1 + 1)` with `int
-v1`). They do not involve the vote; kuna's own return and argument typing
+v1`). They do not involve the vote; unlace's own return and argument typing
 leaves a trimmed zero-extension unspelled when the value is signed.
 
 ## Residue
 
-- `(char *)<call>` on callees kuna recovers as `void` whose callers read the
+- `(char *)<call>` on callees unlace recovers as `void` whose callers read the
   result (a wrapper ending in `call; leave; ret`): a `void` callee states
   nothing; recovering that return is the callee's prototype question.
 - `(long)p - (long)q` for a pointer difference: `castarith` keeps pointer

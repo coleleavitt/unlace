@@ -1,4 +1,4 @@
-# kuna GH-180: "Overflow guards read the post-add value:
+# unlace GH-180: "Overflow guards read the post-add value:
 # v3 = v3 + v1; if (SCARRY8(v3,v1))"
 #
 # GNU grep -O2 nlscan (the in-repo witness tests/bug-repro/grep @ 0x7c90)
@@ -8,7 +8,7 @@
 #     7ce3  49 89 dd   mov r13,rbx
 #     7ce6  70 19      jo  7d01        ; tests OF from 7ce0
 #
-# kuna's IR keeps the SCARRY input (pre-add RBX) and the ADD output as two
+# unlace's IR keeps the SCARRY input (pre-add RBX) and the ADD output as two
 # distinct Varnodes, but the two were merged into one HighVariable, so the
 # emitted C read the guard AFTER the add on the same variable:
 #
@@ -51,7 +51,7 @@
 # intrinsic call must name the same tokens the sum expression adds, and the
 # collapsed self-update-then-test rendering must not appear.  #1 also pins
 # the two global stores in the order 0x7ce8 executes them (dat_2b818 then
-# dat_2b7c0); before kuna #1355 the cloned return block printed them
+# dat_2b7c0); before unlace #1355 the cloned return block printed them
 # swapped, because its dat_2b818 return guard had been rewritten into a
 # store.
 

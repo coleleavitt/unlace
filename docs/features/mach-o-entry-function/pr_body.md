@@ -6,7 +6,7 @@ RE-friction round 2, need `mach-o-entry-function` (major, 1 instance, challenge
 > functions listed the program routine only as `sub_100003a80`; no function named `main`
 > was present, and decompilation rendered it as `unsigned long sub_100003a80(void)`.
 
-`kuna functions` answered with 24 functions, every one of them a `sub_<addr>`. The one an
+`unlace functions` answered with 24 functions, every one of them a `sub_<addr>`. The one an
 agent needs first — where the program starts — was indistinguishable from the other
 twenty-three, so finding `main` meant reading bodies until one looked like a prompt loop.
 
@@ -14,7 +14,7 @@ The image had been saying which one it was the whole time. `LC_MAIN` is a Mach-O
 command whose `entryoff` field is documented as the file offset of `main()`, `ld64` emits it
 for every normally-linked executable, `dyld` calls `__TEXT.vmaddr + entryoff` as
 `main(argc, argv, envp, apple)` — and, unlike the symbol table, it survives `strip` intact.
-kuna's Mach-O entry oracle already *read* that command: `sub_100003a80` **is**
+unlace's Mach-O entry oracle already *read* that command: `sub_100003a80` **is**
 `0x100000000 + 0x3a80`. Only the name and the prototype were missing.
 
 The filed hypothesis — "the Mach-O `LC_MAIN` loader path does not label/type the entry
@@ -23,7 +23,7 @@ routine" — stands.
 ## Mechanism
 
 New option **`machomain`** (`on|off`, default **on**, DIV-111), a P1 analysis pass in
-`decompiler/crates/kuna-analysis/src/analyzers/entry/machomain.rs`:
+`decompiler/crates/unlace-analysis/src/analyzers/entry/machomain.rs`:
 
 - the **name** `main` rides the existing `entry_names` overlay — the same additive map the
   commit boundary already consults for the ELF `_INIT_<i>` / `_DT_INIT` names — so the
@@ -44,15 +44,15 @@ every executable section; an entry that already carries a function symbol; and a
 already defines a symbol spelled `main`.
 
 ```
-$ kuna functions crackme0x04 --json | grep -A2 '"name": "main"'
+$ unlace functions crackme0x04 --json | grep -A2 '"name": "main"'
       "name": "main",
       "address_hex": "0x100003a80",
 
-$ kuna decompile crackme0x04 main
+$ unlace decompile crackme0x04 main
 int main(int argc,char **argv)
 { ...
 
-$ kuna decompile crackme0x04 --addr 0x100003a80 --option machomain off
+$ unlace decompile crackme0x04 --addr 0x100003a80 --option machomain off
 unsigned long sub_100003a80(void)
 { ...
 ```
@@ -103,7 +103,7 @@ Of the 8 that fire: 6 change only the declaration line; 1 also narrows a local f
 `unsigned int` to `int` (the return type propagating); 2 also gain **one spurious argument
 at an unprototyped callee** — `___chkstk_darwin(CONCAT44(v7,argc))` and
 `sub_100003790(CONCAT44(v11,argc))`. Declaring `argc` makes the first ABI argument register
-live at `main`'s own entry, so a callee kuna has no prototype for now finds a value in it.
+live at `main`'s own entry, so a callee unlace has no prototype for now finds a value in it.
 That is the standing behaviour the PE pass above already documents and measures at 4 of its
 30 firing images; the answer is prototype coverage at the callee, not withholding the entry
 declaration. It is recorded in `not_closed`.
@@ -124,7 +124,7 @@ PE.
 | `make rust-test` | green (workspace suite) |
 | `make check-spec` | OK, lenient **and** `--strict` |
 | `make test-cli` | 27/27 (26 before, +the promoted probe) |
-| `kuna catalog --check` | catalog OK |
+| `unlace catalog --check` | catalog OK |
 | `scripts.repipe.counters` | no drift |
 | speed | **+0.11%** (min) / +0.46% (median), interleaved min-of-15 pairs — budget 5% |
 

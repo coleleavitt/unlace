@@ -1,12 +1,12 @@
 ## The problem
 
-`kuna decompile` emits the function at an address and then rejects an assertion
+`unlace decompile` emits the function at an address and then rejects an assertion
 that names that same address. Any vendored fixture shows it — `0x400678` is an
 instruction boundary inside `authenticate` that discovery does not call a
 function start:
 
 ```console
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/fauxware 0x400678 --addr \
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/fauxware 0x400678 --addr \
     --assert-strict --assert 'prototype 0x400678 int4 checkpw(char *user,char *pass)'
 warning: --assert "prototype 0x400678 int4 checkpw(char *user,char *pass)" rejected: no function starts at 0x400678
 unsigned long sub_400678(void) // return-dupe x2
@@ -42,7 +42,7 @@ identical directive.
   odd shadow no load would find.
 
 ```console
-$ kuna decompile ... 0x400678 --addr --assert-strict --assert 'prototype 0x400678 int4 checkpw(char *user,char *pass)'
+$ unlace decompile ... 0x400678 --addr --assert-strict --assert 'prototype 0x400678 int4 checkpw(char *user,char *pass)'
 int sub_400678(char *user,char *pass) // return-dupe x2
 $ echo $?
 0
@@ -61,6 +61,6 @@ before vs after — 0 differences in C, stderr or exit code.
 
 Gates: `make test` PARITY OK 675/675 · `make test-stages` PARITY OK 674/674 ·
 `make rust-test` green · `make check-spec` OK · `make test-cli` 63/63 ·
-`kuna catalog --check` OK.
+`unlace catalog --check` OK.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

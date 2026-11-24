@@ -3,10 +3,10 @@
 ## 1. The symptom
 
 `put_word` in a stripped `-O2` coreutils `fmt` takes one pointer and reads two
-fields of the object behind it. kuna proves what the pointer points at and stops:
+fields of the object behind it. unlace proves what the pointer points at and stops:
 
 ```
-$ kuna decompile-all .../O2/coreutils/stripped/fmt --addr 0x3000
+$ unlace decompile-all .../O2/coreutils/stripped/fmt --addr 0x3000
 void sub_3000(unsigned long *a0)
 {
   v2 = *(unsigned int *)&a0[1];
@@ -52,9 +52,9 @@ site into the wrapper's own parameter, so the wrapper is named after all. All
 nine decline now:
 
 ```
-$ kuna decompile-all fmt --addr 0x42d0 --option structsynth param
+$ unlace decompile-all fmt --addr 0x42d0 --option structsynth param
 unsigned long sub_42d0(FILE *a0,unsigned long a1,unsigned int a2)
-$ kuna decompile-all fmt --addr 0x42d0 --option structsynth param --option libctypes off
+$ unlace decompile-all fmt --addr 0x42d0 --option structsynth param --option libctypes off
 unsigned long sub_42d0(struct_0 *a0,unsigned long a1,unsigned int a2)
 ```
 
@@ -105,7 +105,7 @@ offsets `{0, 1}` and become two-field structures over a string.
 `ActionInferTypes::apply` returns 0 unconditionally, so type propagation never
 drives the enclosing `REPEAT` and nothing waits for a fixpoint; the flag is armed
 at the end of the *first* `fullloop`, so an action gated on it reads the first of
-up to seven passes. Measured with `KUNA_ACTION_PROF` on `fmt` O2: `put_word` runs
+up to seven passes. Measured with `UNLACE_ACTION_PROF` on `fmt` O2: `put_word` runs
 6 `infertypes` passes and `main` 9.
 
 **`return 1` marks nothing.** `Action::perform` compares `lcount < count` and reads
@@ -163,7 +163,7 @@ test says nothing. The layout prune below is what declines it: offset 4 sits
 inside the bytes offset 0 claims, so one field is left and one field is not a
 layout. Off and on are byte-identical on that function.
 
-**The layout has to survive a C compiler.** `kuna decompile-project` writes the
+**The layout has to survive a C compiler.** `unlace decompile-project` writes the
 synthesized declarations into the project header, as source, and the bodies
 alongside them. Neither is worth anything unless the compiler that reads them
 back puts each member where the body says it is, and the body text cannot tell
@@ -219,7 +219,7 @@ cannot see the body:
   projects, 2,174 members. (The two ARM32 projects need `--m32`; a 64-bit host
   compiler gives their `T *` members 8 bytes and moves every later field. That
   is the instrument.)
-* `kuna decompile-project` + `gcc -fsyntax-only` over the whole project compiles
+* `unlace decompile-project` + `gcc -fsyntax-only` over the whole project compiles
   the *bodies*. The export does not compile today for reasons unrelated to this
   option, so the reading is the delta: over 14 binaries the option adds five
   errors in total, all of them the pre-existing `'NULL' undeclared`, and **zero**
@@ -248,7 +248,7 @@ which recompiles to `b[1]=137438953505 b[2]=0` — the original.
 ### 6.1 Layout precision (`structscore.py` + `layoutscore.py`, 8 binaries)
 
 Layout-F1 is field-level P/R/F1 against the DWARF twin's binary layout,
-restricted to pointer-to-struct parameters (RecStruct §4.1 Task 1). kuna scored
+restricted to pointer-to-struct parameters (RecStruct §4.1 Task 1). unlace scored
 **0.0 everywhere** before, because it synthesized no structures at all — which
 makes F1 a tautology on its own. **Precision is the number that decides this
 option**: of every field the pass emits for a parameter DWARF says is a struct
@@ -397,7 +397,7 @@ gap-tolerant array rule closed the one class the earlier round could not see
 
 The campaign sweep: `coreutils`, `grep`, `gzip`, `diffutils`, `bzip2`,
 `findutils`, `tar`, `shadow` at O0, O2 and O2-noinline, `DECBENCH_NO_CACHE=1`,
-`KUNA_BIN` pinned to the branch build.
+`UNLACE_BIN` pinned to the branch build.
 
 | | off | on |
 |---|---:|---:|
@@ -457,7 +457,7 @@ O2-noinline level, `tar` and `shadow`, and the three rows above.
 Interleaved off/param, min-of-15, six whole-binary cases plus an inert control
 where the option cannot fire (`docs/features/structsynth/speed.py`, on the rebased build):
 
-| `kuna decompile-all` | off (ms) | param (ms) | delta |
+| `unlace decompile-all` | off (ms) | param (ms) | delta |
 |---|---:|---:|---:|
 | fmt O2 | 4264.7 | 4251.2 | −0.32% |
 | ls O2 | 14010.9 | 13863.9 | −1.05% |
@@ -598,4 +598,4 @@ struct struct_28 {
 ```
 
 — nine of the ten members of the real `struct hash_table`, each at its own
-offset. (The comments are this document's, not kuna's: the pass has no names.)
+offset. (The comments are this document's, not unlace's: the pass has no names.)

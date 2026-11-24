@@ -1,4 +1,4 @@
-/* (kuna) Option `compacttable`: clang -O2 lowers `dispatch`'s dense switch to
+/* (unlace) Option `compacttable`: clang -O2 lowers `dispatch`'s dense switch to
  * an AArch64 compact table (ldrb; adr; add x, x, w, lsl #2; br). Each case
  * calls its own function, which only the table reaches.
  * Build: clang --target=aarch64-linux-gnu -O2 -nostdlib -ffreestanding -static

@@ -38,7 +38,7 @@ Supply recovered plaintext at original virtual addresses through durable asserti
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x43d060",
@@ -75,7 +75,7 @@ Supply recovered plaintext at original virtual addresses through durable asserti
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x43d060",
@@ -126,10 +126,10 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- split by captain at T_DEDUP from round 12's `missing-capability|decompile|exit_code,stderr_absent,stdout_is_json` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.kuna-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
+- split by captain at T_DEDUP from round 12's `missing-capability|decompile|exit_code,stderr_absent,stdout_is_json` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.unlace-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
 - round 12 REFUTER: hypothesis **upheld** (was inconclusive). REFUTER (round 12, captain in-tick, pre-dispatch check). VERDICT UPHELD. No hypothesis was ever filed for this need -- the section offers none -- so there was no diagnosis to overturn. I recorded upheld against the symptom rather than inconclusive, because that string IS the filed default and would read as "nobody looked".
 
-WHY THIS WAS REFUTED AT ALL, given it is effectively an absence need: for a missing-capability ask the load-bearing question is not "is the root cause right" but "does the capability already exist under another spelling", because a builder that starts here will otherwise ship a duplicate of a mechanism kuna already has. That check is the whole of this refutation and it came back clean.
+WHY THIS WAS REFUTED AT ALL, given it is effectively an absence need: for a missing-capability ask the load-bearing question is not "is the root cause right" but "does the capability already exist under another spelling", because a builder that starts here will otherwise ship a duplicate of a mechanism unlace already has. That check is the whole of this refutation and it came back clean.
 
 MEASURED ON b9029a8f, release binaries:
 

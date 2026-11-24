@@ -1,11 +1,11 @@
 ## The problem
 
-`--define-function START-END` is how an agent tells kuna where a function really
+`--define-function START-END` is how an agent tells unlace where a function really
 is on a packed or obfuscated image. Declaring an end that any branch crosses
 killed the whole function instead of clipping it:
 
 ```console
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/aif_gap_x86_64 \
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/aif_gap_x86_64 \
       0x1070 --addr --define-function 0x1070-0x1098=deregister
 error: Could not find op at target address: (ram,0x00001098)
 $ echo $?
@@ -19,15 +19,15 @@ that cuts real control flow is reported rather than silently truncating the
 body"), and the warning it promises exists; nothing could reach it.
 
 The second half is worse and shows up on *correct* boundaries. Declaring the
-extent kuna itself derived should be free; it deleted the last instruction:
+extent unlace itself derived should be free; it deleted the last instruction:
 
 ```console
-$ kuna decompile ...aif_gap_x86_64 sub_1129                 # derived extent, undeclared
+$ unlace decompile ...aif_gap_x86_64 sub_1129                 # derived extent, undeclared
 int sub_1129(int a0)
 {
   return (a0 + 10) * 2;
 }
-$ kuna decompile ...aif_gap_x86_64 sub_1129 --define-function 0x1129-0x1141
+$ unlace decompile ...aif_gap_x86_64 sub_1129 --define-function 0x1129-0x1141
 void sub_1129(void) // warn: Function flows out of bounds
 { // warn: Function flow out of bounds: r0x00001140 flows to r0x00001140
 }
@@ -65,9 +65,9 @@ re-aimed at the in-repo fixture above (the dataset witness is a 7 MB PE CI has
 no copy of; same shape, same clauses). Plus three cargo tests, each failing
 without the change: the branch-cut case and the declared-derived-extent oracle
 in `console/tests/verify_funcbounds.rs`, and the in-extent/out-of-extent
-split in `kuna-decomp/tests/verify_w3_ir_flow.rs`.
+split in `unlace-decomp/tests/verify_w3_ir_flow.rs`.
 
-Measured over the 112 binary fixtures under `kuna-analysis/tests/fixtures`,
+Measured over the 112 binary fixtures under `unlace-analysis/tests/fixtures`,
 declaring every discovered function at its derived extent (2,765 functions):
 bodies differing from the undeclared decompile **403 → 138**, functions that
 hard-error under the declaration **142 → 0**. With nothing declared,
@@ -75,7 +75,7 @@ hard-error under the declaration **142 → 0**. With nothing declared,
 
 Gates: `make test` 675/675 PARITY OK, `make test-stages` 635/635 PARITY OK,
 `make rust-test` green, `make check-spec` OK (lenient + strict), `make test-cli`
-35/35, `kuna catalog --check` OK. No new option, no catalog counter, no stages
+35/35, `unlace catalog --check` OK. No new option, no catalog counter, no stages
 XML.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

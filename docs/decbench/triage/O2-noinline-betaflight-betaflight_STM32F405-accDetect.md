@@ -4,7 +4,7 @@ pool: novel
 status: feature-candidate
 tier: N
 margin: 1
-fresh_verdict: kuna still wins the case (GED 10 vs ghidra 11) and its 19 gotos match ghidra exactly, but every call reachable only through the jump table keeps a spurious `setISAMode(1);` statement that ghidra/ida do not emit — 10 of them in this function, reproduced on today's build in both `--mode reliable` and `--mode aggressive`.
+fresh_verdict: unlace still wins the case (GED 10 vs ghidra 11) and its 19 gotos match ghidra exactly, but every call reachable only through the jump table keeps a spurious `setISAMode(1);` statement that ghidra/ida do not emit — 10 of them in this function, reproduced on today's build in both `--mode reliable` and `--mode aggressive`.
 option_closing: null
 feature_slug: jumptable-callother-inject
 scope: small
@@ -53,7 +53,7 @@ switchD_08041e80_caseD_8:
       }
 ```
 
-kuna (fresh, today's build) — identical control flow, plus a `setISAMode(1);` in front of
+unlace (fresh, today's build) — identical control flow, plus a `setISAMode(1);` in front of
 every table-reachable call:
 
 ```c
@@ -79,7 +79,7 @@ label_8041e00:
       }
 ```
 
-kuna (stored, 2026-07-27) has the same 10 `setISAMode(1)` statements and the same 19 gotos —
+unlace (stored, 2026-07-27) has the same 10 `setISAMode(1)` statements and the same 19 gotos —
 only the print-normalisation wave (DIV-34..39: truthy conditions, brace elision, inline
 `// branch-flip`) differs. Structure is unchanged.
 
@@ -115,7 +115,7 @@ Source CFG: 38 nodes / 64 edges, so the GED is exact (not approximated).
 **The miner hint is wrong.** "19 gotos vs a switch in source, likely a P8 structuring gap" does
 not survive contact with the panes: ghidra emits **exactly the same 19 gotos / 9 labels / 2
 switches / 18 cases**, and IDA's prettier 10-goto rendering (case labels welded onto the
-fall-through chain blocks) scores *worse* (GED 17 vs kuna 10, ghidra 11). Recovering the
+fall-through chain blocks) scores *worse* (GED 17 vs unlace 10, ghidra 11). Recovering the
 source's `case X:`-attached fall-through chain would be a large P8 feature that the metric does
 not even reward here; it is not this case's finding. `condfold on` and `condfold wide` both
 leave the goto count at 19, and `--mode aggressive` changes nothing (the stripped image is
@@ -124,7 +124,7 @@ mode and today's product default coincide).
 
 **The one structural symptom:** 10 spurious `setISAMode(1);` statements in the emitted C,
 one in front of every call site (and one in the inner `tbb` dispatch block) that is reachable
-only through the recovered jump table. No other decompiler emits them, and kuna itself does not
+only through the recovered jump table. No other decompiler emits them, and unlace itself does not
 emit them for the same instruction in the same binary when the block is reached by ordinary
 fall-thru.
 
@@ -139,13 +139,13 @@ raises a `CALLOTHER`. `ARM.cspec:307` supplies the standard NOP eraser:
 </callotherfixup>
 ```
 
-kuna does parse and register it (`infra/architecture.rs:2382 init_userops_and_fixups`), and
+unlace does parse and register it (`infra/architecture.rs:2382 init_userops_and_fixups`), and
 `p2_lift/flow.rs:1193-1203` (`xref_control_flow`) queues every injected-userop `CALLOTHER` onto
 `injectlist`. But the drain runs **once**:
 
 `decompiler/crates/unlace-decomp/src/p2_lift/flow.rs:1735`
 ```rust
-    pub fn generate_ops(&mut self) -> KunaResult<()> {
+    pub fn generate_ops(&mut self) -> UnlaceResult<()> {
         self.clear_properties();
         self.addrlist.push(self.data.get_address().clone());
         while !self.addrlist.is_empty() {
@@ -184,7 +184,7 @@ confirms the survivors, all at table-reachable addresses:
 Ghidra wins here purely because it applies the same declared fixup to table-discovered flow too.
 
 Secondary (not claimed, worth a look in the same PR): the leftover `CALLOTHER` sits *inside*
-the inner `tbb` dispatch block, and that is also the switch whose `default:` kuna failed to fold
+the inner `tbb` dispatch block, and that is also the switch whose `default:` unlace failed to fold
 in — it emits a hoisted `if (4 <= x - 6) v1 = '\b'; else switch (...) {4 cases, no default}`
 where ghidra emits one 5-case switch with `default:`. Causality is unproven; the guard fold-in
 may be an independent P2 jump-table issue.
@@ -199,7 +199,7 @@ discovered. One call site; `inject_pcode` is already re-entrant (it re-reads `in
 and clears at the end).
 
 **Classification.** Strict bug fix, not a judgment call: the compiler spec declares the userop
-must be replaced by a NOP, kuna already honours that everywhere else in the same function, and
+must be replaced by a NOP, unlace already honours that everywhere else in the same function, and
 the current behaviour is internally inconsistent. Per `docs/agents.md` this needs no option
 flag. It does need a `tests/stages/` case (an ARM Thumb function whose jump-table targets
 contain calls) and a spec-prose update in the P2 chapter.

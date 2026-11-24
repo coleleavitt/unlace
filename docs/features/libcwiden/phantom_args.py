@@ -1,6 +1,6 @@
 """Count the phantom trailing argument the unported clearStackPlaceholders left behind.
 
-A phantom is a call to a name the SAME whole-binary `kuna decompile-all` output
+A phantom is a call to a name the SAME whole-binary `unlace decompile-all` output
 declares non-variadic, carrying exactly one argument more than that declared
 arity, whose last argument is a bare stack-array element at a negative
 displacement (the slot the `call` pushed its return address into).

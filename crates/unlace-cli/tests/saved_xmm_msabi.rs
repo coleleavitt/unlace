@@ -111,7 +111,7 @@ fn decompile(image: &Path) -> Value {
         String::from_utf8_lossy(&output.stderr),
         String::from_utf8_lossy(&output.stdout)
     );
-    let document: Value = serde_json::from_slice(&output.stdout).expect("Kuna JSON output");
+    let document: Value = serde_json::from_slice(&output.stdout).expect("Unlace JSON output");
     assert_eq!(
         document["assertions"].as_array().unwrap().len(),
         assertions.len(),
@@ -194,7 +194,7 @@ fn emitted_c_round_trip(
         .replace('\\', "\\\\")
         .replace('"', "\\\"");
     let translation_unit = format!(
-        "#include <stdint.h>\ntypedef float float4;\n__attribute__((ms_abi)) float fixture_spills_rect(void);\n{type_prefix}\n#define KUNA_EMITTED_RECT_DEFINED 1\n#include \"{include_path}\"\n__attribute__((ms_abi))\n{function_body}\n"
+        "#include <stdint.h>\ntypedef float float4;\n__attribute__((ms_abi)) float fixture_spills_rect(void);\n{type_prefix}\n#define UNLACE_EMITTED_RECT_DEFINED 1\n#include \"{include_path}\"\n__attribute__((ms_abi))\n{function_body}\n"
     );
     std::fs::write(&source, translation_unit).expect("write emitted-C harness");
     required(

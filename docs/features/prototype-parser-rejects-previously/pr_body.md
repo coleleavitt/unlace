@@ -1,12 +1,12 @@
 ## The problem
 
-A struct tag that kuna has just accepted cannot be used as a type. Declare
+A struct tag that unlace has just accepted cannot be used as a type. Declare
 `struct JSValue`, then name it as a prototype's return type, and the prototype
 is thrown away as a syntax error — a typedef alias for the same structure works,
 which is what makes it look arbitrary.
 
 ```bash
-kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/fauxware main \
+unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/fauxware main \
   --assert 'typedef struct JSValue { unsigned long payload; long tag; };' \
   --assert 'prototype authenticate struct JSValue authenticate(char *user, char *pass)' \
   --assert-strict
@@ -55,7 +55,7 @@ the old expectation and now asserts the kind error under its new name.
 
 Gates on the rebased tree: `make test` PARITY OK 675/675, `make test-stages`
 PARITY OK, `make rust-test` green, `make check-spec` OK, `make test-cli` 81/81,
-`kuna catalog --check` OK. All 263 `parse line` / `parse file` payloads in
+`unlace catalog --check` OK. All 263 `parse line` / `parse file` payloads in
 `tests/datatests` + `tests/stages` were replayed through the old and new
 `decomp_dbg` in their original per-file order: zero output differences.
 

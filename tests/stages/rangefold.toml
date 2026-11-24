@@ -1,4 +1,4 @@
-# kuna `rangefold`: a conditional branch on `V cmp K` bounds `V` in every
+# unlace `rangefold`: a conditional branch on `V cmp K` bounds `V` in every
 # block one of its out-edges controls.  A comparison of `V` against a
 # constant whose outcome those ranges fix folds to `true` or `false`, so the
 # branch on it goes away, and `V & 0xff` on a `V` the ranges keep below 256

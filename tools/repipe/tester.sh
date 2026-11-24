@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Launch ONE tester: a headless `codex exec` session that tries to solve one crackme with
-# kuna as its primary tool and records every place kuna failed it.
+# unlace as its primary tool and records every place unlace failed it.
 #
 #   ROUND=3 HEXID=64f1f7afd931496abf909525 tools/repipe/tester.sh
 #
-# The tester's real job is not to solve the crackme. It is to find ways kuna is bad, and
-# giving up because kuna was unusable is a first-class result (docs/re-pipeline.md).
+# The tester's real job is not to solve the crackme. It is to find ways unlace is bad, and
+# giving up because unlace was unusable is a first-class result (docs/re-pipeline.md).
 #
 # Two things here are load-bearing and easy to get wrong if you edit this file:
 #
@@ -20,10 +20,10 @@
 #      tee'd and scraped. Do not "simplify" that away.
 set -uo pipefail
 
-REPO="${KUNA_REPO:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel)}"
-KUNA_PY="${KUNA_PY:-$HOME/.virtualenvs/kuna/bin/python}"
-STATE_DIR="${KUNA_PIPELINE_STATE_DIR:-$REPO/.kuna-repipe}"
-DATASET="${REPIPE_DATASET:-$HOME/github/kuna-re-dataset}"
+REPO="${UNLACE_REPO:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel)}"
+UNLACE_PY="${UNLACE_PY:-$HOME/.virtualenvs/unlace/bin/python}"
+STATE_DIR="${UNLACE_PIPELINE_STATE_DIR:-$REPO/.unlace-repipe}"
+DATASET="${REPIPE_DATASET:-$HOME/github/unlace-re-dataset}"
 TIMEOUT="${REPIPE_TESTER_TIMEOUT:-3600}"
 MODEL="${REPIPE_TESTER_MODEL:-gpt-5.6-sol}"
 REASONING="${REPIPE_TESTER_REASONING:-low}"
@@ -42,14 +42,14 @@ RUN_ID="${RUN_ID:-$TESTER_ID-$(date +%s)}"
 ARENA="$STATE_DIR/arena/$ROUND/$HEXID"
 
 export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
-export KUNA_PIPELINE_STATE_DIR="$STATE_DIR"
+export UNLACE_PIPELINE_STATE_DIR="$STATE_DIR"
 
 # The arena's bin/ MUST be first on the tester's PATH: `unlace` and `ida-decompile` there are
 # the metering shims. Without this the shims are dead code -- no toolcalls.jsonl, no
-# per-call latency signal (kuna emits none of its own), and IDA writes its .i64 databases
+# per-call latency signal (unlace emits none of its own), and IDA writes its .i64 databases
 # wherever it likes instead of inside the arena.
 export PATH="$ARENA/bin:$PATH"
-export REPIPE_REAL_KUNA="${REPIPE_REAL_KUNA:-$REPO/target/release/unlace}"
+export REPIPE_REAL_UNLACE="${REPIPE_REAL_UNLACE:-$REPO/target/release/unlace}"
 export REPIPE_ARENA="$ARENA"
 
 RUN_DIR="$STATE_DIR/runs/$RUN_ID"
@@ -61,25 +61,25 @@ EVENTS="$RUN_DIR/events.jsonl"
 log() { echo "[$(date +%H:%M:%S)] tester $TESTER_ID: $*" | tee -a "$LOG"; }
 
 finish() {  # always release the slot, however we exit
-  "$KUNA_PY" -m scripts.pipeline.state slot-release --pool tester --id "$TESTER_ID" >/dev/null 2>&1
+  "$UNLACE_PY" -m scripts.pipeline.state slot-release --pool tester --id "$TESTER_ID" >/dev/null 2>&1
 }
 trap finish EXIT
 
 # Ensure the pool has a cap before claiming a slot. The captain sets caps on every tick, but
 # tester.sh is also runnable standalone (docs/re-pipeline.md's Level-2 check does exactly
 # that), and an unset pool has cap 0 -- which would refuse every slot and look like a bug.
-"$KUNA_PY" - <<'PY' >/dev/null 2>&1
+"$UNLACE_PY" - <<'PY' >/dev/null 2>&1
 from scripts.pipeline import state
 from scripts.repipe import config
 snap = state.snapshot()
 if not (snap.get("slots") or {}).get("tester", {}).get("cap"):
     state.slot_cap("tester", config.agent_split()["testers"])
 PY
-if ! "$KUNA_PY" -m scripts.pipeline.state slot-acquire --pool tester --id "$TESTER_ID" --pid $$ --kind tester; then
+if ! "$UNLACE_PY" -m scripts.pipeline.state slot-acquire --pool tester --id "$TESTER_ID" --pid $$ --kind tester; then
   log "no free tester slot (cap reached); not starting"
   exit 3
 fi
-"$KUNA_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --phase setup --status running >/dev/null 2>&1
+"$UNLACE_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --phase setup --status running >/dev/null 2>&1
 
 # --- 1. arena ---------------------------------------------------------------
 # REUSE an arena the captain already built. T_WORKSPACE stages every arena for the round and
@@ -88,22 +88,22 @@ fi
 # "never clobber tester evidence" guard correctly reads as a run in progress and refuses.
 # Careful verification upstream must not look like a failure downstream.
 if [ -d "$ARENA/target" ] \
-   && "$KUNA_PY" -m scripts.repipe.workspace check "$ARENA" --hexid "$HEXID" >/dev/null 2>&1; then
+   && "$UNLACE_PY" -m scripts.repipe.workspace check "$ARENA" --hexid "$HEXID" >/dev/null 2>&1; then
   log "reusing the arena staged for this round"
 else
   log "building arena $ARENA"
-  if ! "$KUNA_PY" -m scripts.repipe.workspace build "$HEXID" --round "$ROUND" --force >>"$LOG" 2>&1; then
+  if ! "$UNLACE_PY" -m scripts.repipe.workspace build "$HEXID" --round "$ROUND" --force >>"$LOG" 2>&1; then
     log "arena build failed"
-    "$KUNA_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status failed --note "arena build failed"
+    "$UNLACE_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status failed --note "arena build failed"
     exit 1
   fi
 fi
 
 # The contamination guard must run on the real path, not only in smoke.sh: a bad arena is
 # the one failure that quietly poisons a whole round's evidence.
-if ! "$KUNA_PY" -m scripts.repipe.workspace check "$ARENA" --hexid "$HEXID" >>"$LOG" 2>&1; then
+if ! "$UNLACE_PY" -m scripts.repipe.workspace check "$ARENA" --hexid "$HEXID" >>"$LOG" 2>&1; then
   log "arena FAILED its contamination check; refusing to launch a tester on it"
-  "$KUNA_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status failed --note "arena contaminated"
+  "$UNLACE_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status failed --note "arena contaminated"
   exit 1
 fi
 
@@ -122,9 +122,9 @@ fi
 
 # --- 3. render the prompt ---------------------------------------------------
 PROMPT_FILE="$RUN_DIR/prompt.md"
-"$KUNA_PY" -m scripts.repipe.render_tester_prompt \
+"$UNLACE_PY" -m scripts.repipe.render_tester_prompt \
   --hexid "$HEXID" --round "$ROUND" --arena "$ARENA" --out "$PROMPT_FILE" >>"$LOG" 2>&1 || {
-  log "prompt render failed"; "$KUNA_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status failed --note "prompt render failed"; exit 1
+  log "prompt render failed"; "$UNLACE_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status failed --note "prompt render failed"; exit 1
 }
 
 # --- 4. launch --------------------------------------------------------------
@@ -158,7 +158,7 @@ if [ "$SANDBOX_MODE" = "auto" ]; then
     # choice (REPIPE_SANDBOX=none), never an accident of a missing binary.
     log "ERROR: REPIPE_SANDBOX=auto but bwrap is not installed. Refusing to run uncontained."
     log "       Install bwrap, or set REPIPE_SANDBOX=none to accept prompt-only containment."
-    "$KUNA_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status failed --note "no bwrap under sandbox=auto"
+    "$UNLACE_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status failed --note "no bwrap under sandbox=auto"
     exit 1
   fi
 fi
@@ -194,11 +194,11 @@ if [ "$SANDBOX_MODE" = "bwrap" ]; then
   log "launching under bwrap ($HID path(s) hidden incl. both dataset copies and \$HOME creds), timeout ${TIMEOUT}s"
 else
   log "WARNING: no bwrap; dataset is READABLE. Relying on the prompt + the post-hoc tripwire."
-  "$KUNA_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --note "sandbox=none (low trust)" >/dev/null 2>&1
+  "$UNLACE_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --note "sandbox=none (low trust)" >/dev/null 2>&1
   WRAP=()
 fi
 
-"$KUNA_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --phase solving >/dev/null 2>&1
+"$UNLACE_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --phase solving >/dev/null 2>&1
 START=$(date +%s)
 "${WRAP[@]+"${WRAP[@]}"}" timeout -k 60 "$TIMEOUT" \
   codex "${CODEX_ARGS[@]}" "$(cat "$PROMPT_FILE")" </dev/null 2>>"$LOG" | tee "$EVENTS" >/dev/null
@@ -206,7 +206,7 @@ RC=${PIPESTATUS[0]}
 ELAPSED=$(( $(date +%s) - START ))
 
 # --- 5. scrape the thread id + record the attempt ---------------------------
-THREAD_ID="$("$KUNA_PY" - "$EVENTS" <<'PY' 2>/dev/null
+THREAD_ID="$("$UNLACE_PY" - "$EVENTS" <<'PY' 2>/dev/null
 import json, sys
 for line in open(sys.argv[1], errors="replace"):
     try:
@@ -219,7 +219,7 @@ for line in open(sys.argv[1], errors="replace"):
 PY
 )"
 
-"$KUNA_PY" - "$RUN_DIR/attempt.json" <<PY
+"$UNLACE_PY" - "$RUN_DIR/attempt.json" <<PY
 import json, sys
 json.dump({
     "run_id": "$RUN_ID", "tester_id": "$TESTER_ID", "hexid": "$HEXID",
@@ -232,11 +232,11 @@ PY
 
 if [ "$RC" -eq 124 ]; then
   log "timed out after ${TIMEOUT}s (partial report still harvested if present)"
-  "$KUNA_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status done --phase timeout --note "timeout ${TIMEOUT}s"
+  "$UNLACE_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status done --phase timeout --note "timeout ${TIMEOUT}s"
 elif [ "$RC" -ne 0 ]; then
-  # A provider-side content refusal is NOT a kuna failure and not a harness bug, and counting
+  # A provider-side content refusal is NOT a unlace failure and not a harness bug, and counting
   # it as one corrupts the two numbers this loop exists to produce: the solve rate and
-  # `gave_up: kuna-blocked`. It is only visible in the event stream -- the exit code is a bare
+  # `gave_up: unlace-blocked`. It is only visible in the event stream -- the exit code is a bare
   # 1, identical to a crash. Round 3 hit it on 6 of 36 tester runs, and on ALL THREE attempts
   # at challenge 63d5a26a, which makes that challenge systematically unmeasurable with this
   # tester model rather than hard.
@@ -249,17 +249,17 @@ elif [ "$RC" -ne 0 ]; then
     REFUSAL=1
   fi
   if [ -n "$REFUSAL" ]; then
-    log "PROVIDER REFUSAL (not a kuna failure): the tester model declined this challenge on"
+    log "PROVIDER REFUSAL (not a unlace failure): the tester model declined this challenge on"
     log "  content policy. Evidence from this run is partial by construction. See $EVENTS."
-    "$KUNA_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status failed \
+    "$UNLACE_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status failed \
       --phase refused --note "provider-refusal: tester model declined on content policy (codex rc=$RC)"
   else
     log "codex exited rc=$RC"
-    "$KUNA_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status failed --note "codex rc=$RC"
+    "$UNLACE_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status failed --note "codex rc=$RC"
   fi
 else
   log "done in ${ELAPSED}s (thread $THREAD_ID)"
-  "$KUNA_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status done --phase done
+  "$UNLACE_PY" -m scripts.pipeline.state update --worker "$TESTER_ID" --status done --phase done
 fi
 # A timed-out or crashed tester that still filed observations contributed real evidence, so
 # harvest runs regardless of rc -- it is the captain's HARVEST state that decides.

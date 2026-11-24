@@ -2,7 +2,7 @@
 
 ## Symptom
 
-`kuna decompile ... --option defaultprototype __thiscall` fails on every target:
+`unlace decompile ... --option defaultprototype __thiscall` fails on every target:
 
 ```
 Execution error: Unknown prototype model :__thiscall
@@ -13,7 +13,7 @@ even on an x86 PE binary whose compiler spec has *defined* `__thiscall` since th
 was vendored (`specs/Ghidra/Processors/x86/data/languages/x86win.cspec:156`).
 
 Downstream, every MSVC C++ member function loses its `this` pointer. On
-`decompiler/crates/kuna-analysis/tests/fixtures/msvc_rtti_x86.exe`:
+`decompiler/crates/unlace-analysis/tests/fixtures/msvc_rtti_x86.exe`:
 
 ```c
 int4 Box::vftable_0(void)
@@ -24,12 +24,12 @@ int4 Box::vftable_0(void)
 ```
 
 `v1` is read before it is ever assigned - not valid C - because ECX carries the `this`
-pointer under `__thiscall`, and the model kuna evaluates the function with (`__stdcall`)
+pointer under `__thiscall`, and the model unlace evaluates the function with (`__stdcall`)
 has no register `<pentry>` at all.
 
 ## Root cause
 
-kuna's `this`-pointer machinery is **fully ported, wired and consumed**:
+unlace's `this`-pointer machinery is **fully ported, wired and consumed**:
 
 | Piece | Where |
 |---|---|
@@ -45,7 +45,7 @@ a `ProtoModel` in the live engine was `Architecture::build_default_proto`, which
 exactly one element: `<default_proto><prototype>`. The C++
 `Architecture::parseCompilerConfig` (`architecture.cc:1253/1280-1284`) additionally
 dispatches `<prototype>`, `<resolveprototype>`, `<modelalias>`,
-`<eval_called_prototype>` and `<eval_current_prototype>`; kuna's reader dispatched none
+`<eval_called_prototype>` and `<eval_current_prototype>`; unlace's reader dispatched none
 of them. `ProtoModel::decode` (the marshaling-decoder entry point) is a hard `Err` stub.
 
 So `Architecture::proto_models` held exactly **one** entry per program, and every lookup
@@ -75,7 +75,7 @@ Registers what the spec declares, and nothing else:
   `getModel("__thiscall")` resolves on every language, not just the x86 family.
 
 A named model that fails to decode is skipped rather than aborting the spec (upstream
-throws). The vendored cspec corpus spans every processor kuna ships; one undecodable
+throws). The vendored cspec corpus spans every processor unlace ships; one undecodable
 named model must not cost the architecture its default one.
 
 ## What this change deliberately does NOT do

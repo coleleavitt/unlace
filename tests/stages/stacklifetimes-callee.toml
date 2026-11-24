@@ -1,4 +1,4 @@
-# Kuna #810. P3 callee-memory summaries / P6 physical-write liveness. stackviews off retains the first initializer; on removes two unread initializers while hidden and branch readers retain theirs. Const write control must not return the stale 12.
+# Unlace #810. P3 callee-memory summaries / P6 physical-write liveness. stackviews off retains the first initializer; on removes two unread initializers while hidden and branch readers retain theirs. Const write control must not return the stale 12.
 
 [image]
 arch = 'x86:LE:64:default:gcc'

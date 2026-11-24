@@ -31,7 +31,7 @@ fn decompile_binary(binary: String, function: &str, extra: &[&str]) -> String {
         .args(extra)
         .args(["--sleighpath", &sleigh])
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     if !out.status.success() {

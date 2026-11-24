@@ -5,7 +5,7 @@
 # epsilon `SkipNextInstr` sub-table that computed dest = inst_next + 1 but
 # never CONSUMED the rel8 operand byte.  So BRN disassembled as a single byte
 # and the following rel8 byte was mis-decoded as the start of the next
-# instruction (upstream Ghidra prints it as a `??` bad byte; kuna's console
+# instruction (upstream Ghidra prints it as a `??` bad byte; unlace's console
 # greedily re-decodes it into a bogus instruction).
 #
 # With bytes `21 05 21 00 21 fa 3d a7 a7 3d` the buggy decode is:

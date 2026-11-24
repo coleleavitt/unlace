@@ -34,7 +34,7 @@ fn run(case: &str, records: &[&str], argument: &str) -> String {
     let specs = std::env::var_os("SLEIGHHOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| root.join("specs"));
-    let dir = std::env::temp_dir().join(format!("kuna-records-{}-{case}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-records-{}-{case}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let binary = dir.join("fixture.elf");
     std::fs::write(&binary, image()).unwrap();
@@ -60,7 +60,7 @@ fn run(case: &str, records: &[&str], argument: &str) -> String {
         "--assert",
         &format!("prototype read_chain int read_chain({argument} *node)"),
     ]);
-    let output = cmd.output().expect("run kuna");
+    let output = cmd.output().expect("run unlace");
     assert!(
         output.status.success(),
         "{}",

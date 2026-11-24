@@ -1,6 +1,6 @@
 # The `returndup` regression set: what it is, why it appeared, and why it stays (2026-08-02)
 
-A kuna-only decbench re-run on the optimized datasets (kuna `36641d35` versus the stored
+A unlace-only decbench re-run on the optimized datasets (unlace `36641d35` versus the stored
 2026-07-15/16 artifacts, rivals frozen) reported **411 wins / 189 regressions** at
 O2-noinline and **293 / 114** at O2, with a return/tail-duplication transform firing on the
 large majority of every function whose score moved. This file is the triage of that finding.
@@ -18,14 +18,14 @@ every subpopulation examined. The code is unchanged.
 ## Method
 
 Every number below comes from one of two measurements, both over the full O2 + O2-noinline
-kuna corpus (**536 slices, 52,862 scored functions**):
+unlace corpus (**536 slices, 52,862 scored functions**):
 
-- **The A/B ablation.** The same `36641d35` binary, invoked exactly as decbench's `kuna_raw`
+- **The A/B ablation.** The same `36641d35` binary, invoked exactly as decbench's `unlace_raw`
   backend does (`decompile-all --json --max-fn-seconds 120`, no `--mode`, so `auto` applies),
   once as shipped and once with `--option returndup off`. Function names are re-mapped to
   their DWARF names by address exactly as `run_benchmark._relabel_to_dwarf` does, and each
   `.c` is scored with decbench's own `GEDMetric` against the cached project source CFGs.
-  Two independent controls: the harness reproduces the published `kuna_update-passwd.c`
+  Two independent controls: the harness reproduces the published `unlace_update-passwd.c`
   **byte for byte** and its scores match `ged_new.json` on all 47 functions of that slice with
   zero mismatches; and across the corpus the **46,005 functions where `returndup` never fired
   score identically** in both arms (0 differ). The ablation therefore isolates exactly one
@@ -333,7 +333,7 @@ binary says so -- `coreutils factor`, this file's flagship win, goes 0 to 12.
 ## Reproducing
 
 ```bash
-# the two arms (kuna_raw's exact invocation; `auto` selects aggressive under 500 KiB)
+# the two arms (unlace_raw's exact invocation; `auto` selects aggressive under 500 KiB)
 unlace decompile-all <stripped> --json --max-fn-seconds 120
 unlace decompile-all <stripped> --json --max-fn-seconds 120 --option returndup off
 

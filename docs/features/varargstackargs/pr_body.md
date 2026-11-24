@@ -4,7 +4,7 @@ RE-friction round 1, challenge `68149b8a8f555589f353117c` (Mach-O arm64
 `practice_2_rengr`), observation *"Call argument recovery drops scanf destination
 and printf varargs"*:
 
-> kuna emitted `scanf("%d")` while subsequently comparing an apparently
+> unlace emitted `scanf("%d")` while subsequently comparing an apparently
 > uninitialized `v3`, and emitted three `printf` calls containing `%s` with no
 > corresponding argument.
 
@@ -51,7 +51,7 @@ acceptance string does not match.
 
 ## Ablation, sweep, gates
 
-- **Ablation**: `kuna test --datatests --baseline docs/baseline.json`
+- **Ablation**: `unlace test --datatests --baseline docs/baseline.json`
   → **675/675, PARITY OK**, 0 assertions changed. `docs/baseline.json` untouched.
 - **Sweep** (standing requirement 7): 46 binaries / 3857 functions across
   PE x86·x86-64·ARM, ELF x86·x86-64·ARM·ARM64·MIPS·SPARC·PPC64, Mach-O

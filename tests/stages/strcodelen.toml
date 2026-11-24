@@ -1,4 +1,4 @@
-# Kuna (IDA 9.5 rust.so 0xd200 string-length finder): P1 external
+# Unlace (IDA 9.5 rust.so 0xd200 string-length finder): P1 external
 # refinement, option strcodelen (default on). The script loads the committed
 # strcodelen/strs_x86_64.elf (a no_std rustc build, source and command beside
 # it). greet() passes "hello there" and "general kenobi" as (ptr, len) pairs;

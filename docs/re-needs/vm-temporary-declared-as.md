@@ -38,7 +38,7 @@ Consistently typed VM pseudocode suitable for translating into an evaluator.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_1005350",
@@ -74,7 +74,7 @@ Consistently typed VM pseudocode suitable for translating into an evaluator.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_1005350",
@@ -123,7 +123,7 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- split by captain at T_DEDUP from round 12's `wrong-output|decompile|exit_code,stdout_absent` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.kuna-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
+- split by captain at T_DEDUP from round 12's `wrong-output|decompile|exit_code,stdout_absent` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.unlace-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
 - sibling of `byte-comparisons-incorrectly-dereference` — near-sibling: inconsistent type on a merged register variable. Kept separate (Jaccard 0.048).
 - round 12 REFUTER: hypothesis **upheld** (was inconclusive). round 12 REFUTER (captain, tick 05:3xZ) -- VERDICT UPHELD, but the filed cause aims a builder at the WRONG SUBSYSTEM; read the redirect before dispatching.
 
@@ -132,12 +132,12 @@ WHAT IS MEASURED, on aa18e56d, one command (unlace decompile <graphy> sub_100535
 2. THE OUTPUT DOES NOT TYPE-CHECK. gcc -fsyntax-only -std=c99 on the emitted body (only addition: stddef.h for NULL) reports 65 -Wint-conversion diagnostics in this one function -- "returning long unsigned int from a function with return type long unsigned int * makes pointer from integer without a cast" and "assignment to long unsigned int from long unsigned int * makes integer from pointer without a cast". -Wint-conversion is an error by default in GCC 14+ and clang 16+, so this is invalid C on a current toolchain, not merely ugly C. Severity major is if anything low.
 3. The hypothesis as written is literally TRUE. v6 is one identifier covering distinct rax values with incompatible types: at some program points it holds a node pointer that is returned and dereferenced, at others an opcode index multiplied by 8. Those are different values, one name, incompatible types. UPHELD.
 
-THE REDIRECT, AND IT IS THE POINT OF THIS VERDICT. "Distinct register values share one identifier" reads as an instruction to stop merging them -- p6 variable merge surgery, high risk, and not necessary to fix the emitted C. There is a second, independently sufficient defect in p9 that the same output proves: THE CAST MACHINERY AND THE DECLARATION PRINTER DISAGREE ABOUT THIS ONE HighVariable. Every cast kuna itself inserted around v6 treats it as "unsigned long *" (it casts the 0xffffffff constant to a pointer to compare against v6, and casts the loaded values to pointer types on the way in); the declaration line calls it "unsigned long"; and the return statements carry no cast at all. One producer says pointer, the other says integer, in the same function, for the same high. Making the declaration agree with the casts the printer already emits makes the body compile without touching the merge at all. Structural context for whoever takes it: vn_high_type_def_facing (p6_variables/funcdata_facing.rs:139-152) resolves through high_get_type(vn) but FALLS BACK to the raw Varnode type when the high has none -- a divergence path of exactly this shape. I did not instrument to confirm the fallback fires here, so treat that pin as a lead, not a measurement.
+THE REDIRECT, AND IT IS THE POINT OF THIS VERDICT. "Distinct register values share one identifier" reads as an instruction to stop merging them -- p6 variable merge surgery, high risk, and not necessary to fix the emitted C. There is a second, independently sufficient defect in p9 that the same output proves: THE CAST MACHINERY AND THE DECLARATION PRINTER DISAGREE ABOUT THIS ONE HighVariable. Every cast unlace itself inserted around v6 treats it as "unsigned long *" (it casts the 0xffffffff constant to a pointer to compare against v6, and casts the loaded values to pointer types on the way in); the declaration line calls it "unsigned long"; and the return statements carry no cast at all. One producer says pointer, the other says integer, in the same function, for the same high. Making the declaration agree with the casts the printer already emits makes the body compile without touching the merge at all. Structural context for whoever takes it: vn_high_type_def_facing (p6_variables/funcdata_facing.rs:139-152) resolves through high_get_type(vn) but FALLS BACK to the raw Varnode type when the high has none -- a divergence path of exactly this shape. I did not instrument to confirm the fallback fires here, so treat that pin as a lead, not a measurement.
 
 ACCEPTANCE, CHECKED, AND IT IS SATISFIABLE BUT GAMEABLE. The regex is (?m)^  unsigned long (v[0-9]+);[\s\S]*?\*\1\b. I enumerated every integer declaration in the body (v11, v2, v3, v4, v5, v6, v7, v8, v9) and every *vN use: only v6 both matches the declaration form and is dereferenced. v1 IS dereferenced but is declared "unsigned long *v1;" so it cannot match. So the acceptance fires on v6 alone and a correct fix clears it -- it is not the loose kind. The gaming risk is the flip side: declaring "unsigned long *v6;" alone clears the regex while merely MOVING the 65 int-conversions to the integer assignments. Add a clause that fails on an uncast integer-to-pointer assignment or return, or better, gate on the emitted body compiling clean under -Werror=int-conversion. Do not let a builder close this by editing one declaration.
 
 TWO MEASURED FACTS FOR THE SIBLINGS, both out of the --json arm of the same command, both free:
-(a) local-type-assertion-target is CONFIRMED AT ITS ROOT and this is the harder half of its evidence. The JSON "variables" array for this function has 12 entries and contains ZERO register variables: 3 args plus 9 stack slots. v1 through v9 and v11 -- every register temporary the C body declares, INCLUDING v6 -- are absent from kuna's own variable inventory. The reason a local type assertion cannot target v6 is not that the assertion parser rejects the name; it is that kuna never exports a handle for it. That need is about the inventory, not the parser.
+(a) local-type-assertion-target is CONFIRMED AT ITS ROOT and this is the harder half of its evidence. The JSON "variables" array for this function has 12 entries and contains ZERO register variables: 3 args plus 9 stack slots. v1 through v9 and v11 -- every register temporary the C body declares, INCLUDING v6 -- are absent from unlace's own variable inventory. The reason a local type assertion cannot target v6 is not that the assertion parser rejects the name; it is that unlace never exports a handle for it. That need is about the inventory, not the parser.
 (b) A naming inconsistency in the DEFAULT namestyle, which no round-12 need currently covers: the same invocation prints the signature as sub_1005350(long a0, unsigned int a1, unsigned long *a2) in the C arm and names those same three parameters param_1, param_2, param_3 in the JSON arm. C output and JSON output disagree on parameter names in the default style, so any agent that reads names from --json and feeds them back to an assertion is wrong before it starts. This is NOT the already-refuted ghidra-naming-style-disconnects (that one needs --option namestyle ghidra; this reproduces with no option at all).
 
 DEAD LINES CLOSED: both probe options are irrelevant to this defect. The filed reproduction pins calleearity and varargstackargs on; the round has repeatedly shown those two aim a builder at call/argument recovery, which is the wrong subsystem here. Drop them from probe and acceptance before dispatch, as was done for ghidra-naming-style-disconnects.

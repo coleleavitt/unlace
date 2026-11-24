@@ -38,7 +38,7 @@ Apply an address-based prototype to the function selected in the same invocation
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x401571",
@@ -65,7 +65,7 @@ Apply an address-based prototype to the function selected in the same invocation
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x401571",

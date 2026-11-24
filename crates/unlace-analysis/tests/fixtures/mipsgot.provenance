@@ -1,8 +1,8 @@
 mipsgot_gcc_be.so, mipsgot_clang_el.so, mipsgot_gcc_be64.so -- MIPS PIC
 shared objects whose calls and data accesses go through the primary GOT to
 functions and variables the image itself defines (GH-904;
-crates/unlace-analysis/src/loader/kuna_mipsgot.rs,
-tests/stages/kuna-mipsgot-local.toml).
+crates/unlace-analysis/src/loader/unlace_mipsgot.rs,
+tests/stages/unlace-mipsgot-local.toml).
 
 What they are
   mipsgot_gcc_be.so     o32 big-endian, gcc -O2.

@@ -13,15 +13,15 @@ confidence: high
 
 ## Side-by-side
 
-Recorded scores: kuna GED **62 (best of all)**, ghidra 62, angr 68, ida 70, phoenix 70,
+Recorded scores: unlace GED **62 (best of all)**, ghidra 62, angr 68, ida 70, phoenix 70,
 binja 89. Source CFG 32 nodes / 70 edges (exact GED, not approximated).
 
 | output | loc | gotos | labels | ifs | loops |
 |---|---|---|---|---|---|
 | ghidra(stored) | 63 | 0 | 0 | 13 | 0 |
 | ida(stored) | 75 | **1** | **1** | 12 | 0 |
-| kuna(stored) | 57 | 0 | 0 | 13 | 0 |
-| kuna(fresh) | 48 | 0 | 0 | 14 | 0 |
+| unlace(stored) | 57 | 0 | 0 | 13 | 0 |
+| unlace(fresh) | 48 | 0 | 0 | 14 | 0 |
 
 ### ghidra (stored) — the co-best pane
 
@@ -43,7 +43,7 @@ int set_acl_fd(undefined8 param_1,int param_2,__mode_t param_3,undefined8 *param
         }
 ```
 
-Ghidra uses **exactly the same `(code *)` indirect-call rendering as kuna** — 6+ of them —
+Ghidra uses **exactly the same `(code *)` indirect-call rendering as unlace** — 6+ of them —
 and still ties for best. Its parameter is `undefined8 *param_4`, so `param_4[1]` is a
 stride-8 index and the expression is well formed.
 
@@ -57,12 +57,12 @@ stride-8 index and the expression is well formed.
 ```
 
 IDA does *not* recover `struct error_context` either — it casts the raw `a4 + 8` load
-exactly like kuna/ghidra do and merely spills the loaded value into a typed local. It also
-emits a `goto LABEL_13` that the source does not have, and scores **70 — worse than kuna's
+exactly like unlace/ghidra do and merely spills the loaded value into a typed local. It also
+emits a `goto LABEL_13` that the source does not have, and scores **70 — worse than unlace's
 62**. The miner hint ("IDA prints typed function-pointer locals") describes a cosmetic
-difference that costs IDA 8 GED points, not a kuna gap.
+difference that costs IDA 8 GED points, not a unlace gap.
 
-### kuna (fresh, today's default `--mode auto` → aggressive)
+### unlace (fresh, today's default `--mode auto` → aggressive)
 
 ```c
 int4 set_acl_fd(unsigned long a0,unsigned int a1,unsigned int a2,void *a3) // return-dupe x3
@@ -84,7 +84,7 @@ int4 set_acl_fd(unsigned long a0,unsigned int a1,unsigned int a2,void *a3) // re
 `--mode reliable` (the mode the benchmark actually ran) is structurally identical; the only
 difference is the `""` argument, which reliable still prints as the raw `0x71d3`. On this
 one point today's default is the *most* faithful pane of the three: the source passes `""`,
-kuna(auto) prints `""`, ghidra prints `&DAT_001071d3`.
+unlace(auto) prints `""`, ghidra prints `&DAT_001071d3`.
 
 Second witness for the same defect, `acl_calc_mask` @ 0x2820 (same binary, no flags):
 
@@ -146,14 +146,14 @@ Every `(code *)` call site in every pane corresponds to one of `ctx->error`,
 `ctx->quote`, `ctx->quote_free`. The `error_context` type is a *header* type that is not in
 the binary's debug info, and the source deliberately duplicates the quote/error/quote_free
 triple across the `else` arm and the `chmod_only` tail — so the two identical-looking blocks
-in kuna's output are real, not a duplication artifact.
+in unlace's output are real, not a duplication artifact.
 
 ## Analysis
 
-**The nominated gap does not exist.** On today's build kuna reproduces the source control
+**The nominated gap does not exist.** On today's build unlace reproduces the source control
 flow as well as any tool measured: 0 gotos, 0 labels, both copies of the quote/error/
 quote_free triple present, the `chmod_only` tail correctly attached, the `errno == 95 ||
-errno == 38` short-circuit intact, and the whole function boundary recovered. kuna ties
+errno == 38` short-circuit intact, and the whole function boundary recovered. unlace ties
 ghidra for the best GED and beats IDA, which invents a `goto`. The `(code *)` cast the miner
 flagged is the standard Ghidra-lineage rendering for an indirect call through an untyped
 pointer, and the co-best pane (ghidra) emits it identically — so it costs nothing. Neither
@@ -163,7 +163,7 @@ no P4/P5 gap to close here, and no reference pane to copy.
 **The one structural symptom that is real** — found while checking the hint, and reproduced
 on today's default build in both `auto` and `reliable`:
 
-> kuna declares the callback-table parameter `void *a3` and then emits `*a3`, `a3[1]` and
+> unlace declares the callback-table parameter `void *a3` and then emits `*a3`, `a3[1]` and
 > `a3[2]` against it. Dereferencing or indexing a `void *` is a hard C error
 > (`error: invalid use of void expression`, verified with `gcc -std=gnu11 -c`), and under
 > GCC's void-arithmetic extension the indices would denote byte offsets **1 and 2 instead
@@ -210,7 +210,7 @@ is uncompilable C.
 
 **Why the reference "wins" this sub-point.** Ghidra keeps the placeholder name
 (`undefined8 *`) rather than trying to render a real C type, so its declaration and its
-`param_4[1]` agree. kuna's `realtypes` feature is the better idea — it just took the wrong
+`param_4[1]` agree. unlace's `realtypes` feature is the better idea — it just took the wrong
 branch for the pointer case.
 
 ## Proposed fix

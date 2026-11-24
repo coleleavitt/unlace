@@ -3413,7 +3413,7 @@ impl ConsoleProgram {
                 unlace_base::notes::say_once(
                     &path,
                     &format!(
-                        "[kuna entrythumbflow] {path}: the Thumb context walk from the entry stopped at {} instructions; code it did not reach decodes as A32 (use --isa thumb for a wholly Thumb image)",
+                        "[unlace entrythumbflow] {path}: the Thumb context walk from the entry stopped at {} instructions; code it did not reach decodes as A32 (use --isa thumb for a wholly Thumb image)",
                         unlace_analysis::listing::entrythumbflow::MAX_INSTRUCTIONS
                     ),
                 );
@@ -3817,7 +3817,7 @@ impl ConsoleProgram {
             };
             if let Some(message) = said {
                 let path = self.image_path();
-                unlace_base::notes::say_once(&path, &format!("[kuna typelib] {message}"));
+                unlace_base::notes::say_once(&path, &format!("[unlace typelib] {message}"));
             }
         }
         let committed = commit_analysis_output(self, &code_space, merged, zero_size_data_names);
@@ -5738,7 +5738,7 @@ pub(crate) fn bootstrap_wasm_bytes(
         unlace_base::notes::say_once(
             path,
             &format!(
-                "[kuna wasm] {path}: {} of {} function bodies were not lowered and decompile to an unsupported() call; the first is function {index}, which {reason}",
+                "[unlace wasm] {path}: {} of {} function bodies were not lowered and decompile to an unsupported() call; the first is function {index}, which {reason}",
                 image.refused.len(),
                 image
                     .functions
@@ -5752,7 +5752,7 @@ pub(crate) fn bootstrap_wasm_bytes(
         unlace_base::notes::say_once(
             path,
             &format!(
-                "[kuna wasm] {path}: {} data or element segment(s) have an offset that is not a constant inside the memory or table, and were not placed",
+                "[unlace wasm] {path}: {} data or element segment(s) have an offset that is not a constant inside the memory or table, and were not placed",
                 image.unplaced_segments
             ),
         );
@@ -5928,7 +5928,7 @@ pub(crate) fn bootstrap_mz_bytes(
         unlace_base::notes::say_once(
             path,
             &format!(
-                "[kuna mz] {path}: {packer}-compressed; its code is the decompressor stub and \
+                "[unlace mz] {path}: {packer}-compressed; its code is the decompressor stub and \
                  a packed body, so unpack it first ({unpack})"
             ),
         );
@@ -5937,7 +5937,7 @@ pub(crate) fn bootstrap_mz_bytes(
         unlace_base::notes::say_once(
             path,
             &format!(
-                "[kuna mz] {path}: {} relocation(s) name a word outside the load module and were not applied",
+                "[unlace mz] {path}: {} relocation(s) name a word outside the load module and were not applied",
                 image.skipped_relocations
             ),
         );
@@ -6199,7 +6199,7 @@ pub(crate) fn bootstrap_esp_image(
         languages,
         RawBytes::Segmented(loader),
     )?;
-    unlace_base::notes::say_once(path, &format!("[kuna esp] {path}: {}", image.describe()));
+    unlace_base::notes::say_once(path, &format!("[unlace esp] {path}: {}", image.describe()));
     let readonly = {
         let loader = program.arch().translate().loader_rc();
         let loader = loader.borrow();
@@ -6472,7 +6472,7 @@ pub(crate) fn bootstrap_object(
                 unlace_analysis::loader::kernelcache::peel_file(Path::new(path), bytes, &choice)
                     .map_err(UnlaceError::lowlevel)?;
             if let Some(note) = &peeled.note {
-                unlace_base::notes::say_once(path, &format!("[kuna] {note}"));
+                unlace_base::notes::say_once(path, &format!("[unlace] {note}"));
             }
             let bytes = peeled.bytes;
             signed = peeled.signed;
@@ -6528,7 +6528,7 @@ pub(crate) fn bootstrap_object(
         }
     };
     for note in &load_notes {
-        unlace_base::notes::say_once(path, &format!("[kuna] {note}"));
+        unlace_base::notes::say_once(path, &format!("[unlace] {note}"));
     }
     // (unlace goreg) The Go toolchain version is a BUILD-TIME fact: the goreg
     // shells are interned inside the cspec decode during the sleigh build

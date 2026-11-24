@@ -103,9 +103,9 @@ fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
-    let begin = text.find("===KUNA_DUMP_BEGIN")?;
+    let begin = text.find("===UNLACE_DUMP_BEGIN")?;
     let after_begin = text[begin..].find('\n')? + begin + 1;
-    let mid = text[after_begin..].find("===KUNA_DUMP_MID===")? + after_begin;
+    let mid = text[after_begin..].find("===UNLACE_DUMP_MID===")? + after_begin;
     Some(text[after_begin..mid].to_string())
 }
 

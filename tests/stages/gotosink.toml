@@ -1,4 +1,4 @@
-# kuna `gotosink`: two rewrites of a structured statement list run after the
+# unlace `gotosink`: two rewrites of a structured statement list run after the
 # other structuring passes.  `L: S1..Sk; goto L;` (or `if (c) goto L;` at
 # the end) becomes a `while( true )` (or `do ... while (c)`) around the
 # statements, with other jumps to `L` from that loop printing as

@@ -10,7 +10,7 @@
 # P6 gives that root its own declaration: two 16-byte locals per multiply site
 # whose entire content is the operand.  The signed sibling never had this -
 # `IMUL` lowers through `sext`, and `INT_SEXT` is not in RulePieceStructure's
-# op list - so kuna already prints `SUB168(SEXT816(x) * SEXT816(y),8)`.
+# op list - so unlace already prints `SUB168(SEXT816(x) * SEXT816(y),8)`.
 #
 # Source (gcc -O2, x86-64), both halves of the product used:
 #

@@ -3,7 +3,7 @@
   "test_name": "tests/analyses/decompiler/test_go_builtins.py::TestBuiltinsGo122Unoptimized::test_checks_and_helpers_are_removed",
   "option": "gojumpchain",
   "flag": "go_jump_chain",
-  "binary": "/tmp/kuna-angr-reference/binaries/go122-builtins-N",
+  "binary": "/tmp/unlace-angr-reference/binaries/go122-builtins-N",
   "selector": "main.push",
   "func_addr": "0x46fa60",
   "angr_commit": "6afa0c79a83d9f677a46b0275cdb63bf16c1979e",

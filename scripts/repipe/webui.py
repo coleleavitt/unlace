@@ -73,13 +73,13 @@ VOLATILE_KEYS = {"ts", "now", "age_s", "uptime_s", "cache", "elapsed_s", "stale_
 def bind_state_dir(state_dir=None):
     """Point scripts.pipeline.state/status at the RE loop's state dir and worktrees."""
     if state_dir:
-        os.environ["KUNA_PIPELINE_STATE_DIR"] = str(Path(state_dir).expanduser())
+        os.environ["UNLACE_PIPELINE_STATE_DIR"] = str(Path(state_dir).expanduser())
     else:
-        os.environ.setdefault("KUNA_PIPELINE_STATE_DIR",
+        os.environ.setdefault("UNLACE_PIPELINE_STATE_DIR",
                               str(rconfig.repo_root() / rconfig.STATE_DIRNAME))
-    os.environ.setdefault("KUNA_PIPELINE_WORKTREE_MATCH", rconfig.STATE_DIRNAME)
-    os.environ.setdefault("KUNA_PIPELINE_BRANCH_MATCH", "feat/re-")
-    return Path(os.environ["KUNA_PIPELINE_STATE_DIR"])
+    os.environ.setdefault("UNLACE_PIPELINE_WORKTREE_MATCH", rconfig.STATE_DIRNAME)
+    os.environ.setdefault("UNLACE_PIPELINE_BRANCH_MATCH", "feat/re-")
+    return Path(os.environ["UNLACE_PIPELINE_STATE_DIR"])
 
 
 # --- small readers ----------------------------------------------------------
@@ -711,7 +711,7 @@ def _collect_needs(needs_dir, rejected_dir):
             "admitted": len(backlog),
             "rejected": len(rejected),
             # The honest denominator: how much of what the testers filed was the tester
-            # being wrong rather than kuna being bad.
+            # being wrong rather than unlace being bad.
             "rejected_pct": round(100.0 * len(rejected) / filed, 1) if filed else 0.0,
             "overturned": sum(1 for n in backlog if n["hypothesis_status"] == "overturned"),
         },
@@ -824,7 +824,7 @@ def _collect_corpus(state_dir, rounds):
 #
 # Rows = every acceptance probe ever filed, columns = rounds, cells = pass/fail. A cell that
 # was green and is now red is a regression, which is the whole point of the screen: it is the
-# one view that answers "is the loop actually improving kuna".
+# one view that answers "is the loop actually improving unlace".
 
 def _acceptance_rows(doc):
     """rounds/<n>/acceptance.json in any of the shapes verify.py might reasonably emit."""
@@ -923,7 +923,7 @@ def _collect_acceptance(state_dir, rounds, need_index):
 # --- spend ------------------------------------------------------------------
 
 def _replay_status(state_dir):
-    """probe_id -> the status of its most recent replay, from .kuna-repipe/replays/*.jsonl.
+    """probe_id -> the status of its most recent replay, from .unlace-repipe/replays/*.jsonl.
 
     Rebuilt only when that directory's mtime signature moves, so the common case is a dict
     lookup rather than one open() per probe per tick.
@@ -1198,7 +1198,7 @@ def _cli_probe_index():
 def read_probe(state_dir, probe_id, replays=40):
     """The probe document plus its last N replay results.
 
-    Replays come from .kuna-repipe/replays/<id>.jsonl (probe.py's own log) and from every
+    Replays come from .unlace-repipe/replays/<id>.jsonl (probe.py's own log) and from every
     round's acceptance.json, so an acceptance probe shows its per-round history even when
     no replay log exists yet.
     """
@@ -1275,7 +1275,7 @@ class Handler(BaseHTTPRequestHandler):
     """Read-only. Every route answers from Handler.cache; none of them starts a process."""
 
     protocol_version = "HTTP/1.1"
-    server_version = "kuna-repipe-webui/1"
+    server_version = "unlace-repipe-webui/1"
     cache = None
     state_dir = None
     log_path = None
@@ -1636,7 +1636,7 @@ def main(argv=None):
         description="Live dashboard for the RE-friction loop (read-only, loopback).")
     p.add_argument("--bind", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8787, help="0 picks an ephemeral port")
-    p.add_argument("--state-dir", default=None, help="default: $REPO/.kuna-repipe")
+    p.add_argument("--state-dir", default=None, help="default: $REPO/.unlace-repipe")
     p.add_argument("--interval", type=float, default=1.0, help="refresher tick, seconds")
     p.add_argument("--gh-repo", default=None)
     p.add_argument("--no-checks", action="store_true",

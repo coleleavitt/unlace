@@ -2,7 +2,7 @@
 
 ## 1. The measured symptom
 
-kuna already recovers the address of `main` on a stripped ELF. Entry-discovery
+unlace already recovers the address of `main` on a stripped ELF. Entry-discovery
 oracle 4 (`analyzers/entry/mod.rs`, `libc_start_main_target`) decodes the
 `_start` → `__libc_start_main(main, …)` idiom on x86-64, AArch64, ARM and RISC-V
 and seeds the recovered VMA as a function entry. It then does nothing else with
@@ -20,10 +20,10 @@ Three separate things are wrong and each one has its own cause.
 
 **The name.** Nothing said `main`, although the oracle recovered the address from
 the call whose first argument *is* `main` by the C runtime's contract. The cost is
-not cosmetic: `kuna functions` on a stripped Linux binary lists no `main` at all,
+not cosmetic: `unlace functions` on a stripped Linux binary lists no `main` at all,
 so finding where the program starts means reading bodies.
 
-**The parameters.** kuna reads a callee's parameters out of the callee's OWN body
+**The parameters.** unlace reads a callee's parameters out of the callee's OWN body
 — an ABI argument register read before it is written is a parameter — so the two
 slots appear only when this particular `main` happens to read both. One that reads
 only `argc` declares one anonymous slot; one that ignores its arguments declares
@@ -32,7 +32,7 @@ none. When a slot does appear it is untyped, so the argument vector is an
 
 **The return type.** This is the half body-driven recovery can never supply:
 `main`'s value is consumed by `__libc_start_main`, which is outside the image, so
-nothing in the object constrains it and kuna types it from the widest register
+nothing in the object constrains it and unlace types it from the widest register
 write it can see — `unsigned long` where the declaration says `int`. It is also
 the half that is visible at every call site.
 
@@ -53,7 +53,7 @@ that program, and under a two-argument declaration it rendered
 
 ```c
   unsigned int v4; // r2        <-- assigned nowhere in the body
-  __printf_chk(2,"kuna armlibcmain prompt",v4,0);
+  __printf_chk(2,"unlace armlibcmain prompt",v4,0);
 ```
 
 Nothing readable at load time tells that `main` apart from one that truly ignores
@@ -74,14 +74,14 @@ version suffix stripped.
 
 ## 3. How often the claim is right
 
-`kuna functions` on every stripped ELF of the decbench corpus that has an
+`unlace functions` on every stripped ELF of the decbench corpus that has an
 unstripped twin, against the twin's `main` from `nm`:
 
 758 images have a twin. 33 of them are stripped only of `.symtab` and still export
 `main` from `.dynsym`, so the pass refuses and the name comes from the symbol
 table as it always did (`bash` and its six build tools, `e2fsck`, `ip`, `rtmon`,
 `rsyslogd`, at all three optimisation levels). They are not evidence about this
-pass and are excluded; `kuna decompile-all` on one of them is byte-identical with
+pass and are excluded; `unlace decompile-all` on one of them is byte-identical with
 and without `--option elfmain off`. That leaves **725** images where the pass is
 the only thing that could supply the name:
 

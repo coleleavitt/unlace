@@ -25,14 +25,14 @@ Source: `~/SiteResearch/ida-pro/sqlite/plugins__pdb.sqlite` (1,432 functions) an
 
 ## 2. Plan for unlace
 
-The type-library path built for `.til` files (`kuna_til::to_typelib` renders records, typedefs and
-prototypes as typelib text; `kuna_typelib::seed` interns what imports and named functions ask for) is
+The type-library path built for `.til` files (`unlace_til::to_typelib` renders records, typedefs and
+prototypes as typelib text; `unlace_typelib::seed` interns what imports and named functions ask for) is
 the natural sink: render the PDB's TPI the same way and seed it by address for every PDB function.
 
 | step | what | where | size |
 |---|---|---|---|
-| 1 | **Types.** `pdbtypes.rs`: walk `type_information()` with a `TypeFinder`; render classes/structs/unions (member offsets are in the field list, no layout needed), enums, typedefs (from `S_UDT`), pointers, arrays, bitfields, procedure types as typelib text. Bound counts and recursion depth (hostile PDB); forward references resolved by name, as `kuna_til` does. | `unlace-analysis/src/analyzers/pdb/` | M |
-| 2 | **Prototypes.** For each `S_GPROC32`/`S_LPROC32`, its procedure or member-function type as a prototype at the function address (`prototypes_at`), `this` typed as the class pointer; calling convention from the type record. A PDB prototype outranks `win32sigs`/`cppsig` for that address. | same + `kuna_typelib::seed` | S-M |
+| 1 | **Types.** `pdbtypes.rs`: walk `type_information()` with a `TypeFinder`; render classes/structs/unions (member offsets are in the field list, no layout needed), enums, typedefs (from `S_UDT`), pointers, arrays, bitfields, procedure types as typelib text. Bound counts and recursion depth (hostile PDB); forward references resolved by name, as `unlace_til` does. | `unlace-analysis/src/analyzers/pdb/` | M |
+| 2 | **Prototypes.** For each `S_GPROC32`/`S_LPROC32`, its procedure or member-function type as a prototype at the function address (`prototypes_at`), `this` typed as the class pointer; calling convention from the type record. A PDB prototype outranks `win32sigs`/`cppsig` for that address. | same + `unlace_typelib::seed` | S-M |
 | 3 | **Locals.** `S_REGREL32` (frame-register relative), `S_BPREL32`, and `S_LOCAL` with `S_DEFRANGE_REGISTER`/`_FRAMEPOINTER_REL`/`_REGISTER_REL` ranges, imported like `dwarfscopes` imports DWARF locals (names and types per storage and range), including `S_BLOCK32` scopes. | same, through the declared-variables path `dwarfscopes` uses | M |
 | 4 | **Lines (optional).** The C13 line program as `file:line` comments, behind the same switch as DWARF lines (`dwarf_lines`). | same | S |
 | 5 | **Fetch (opt-in).** `_NT_SYMBOL_PATH`-style `srv*cache*url` download, off unless asked (network on an explicit flag only, as IDA prompts), with the fingerprint gate unchanged. | `locate.rs` | S-M |

@@ -12,7 +12,7 @@ fn boolean_loop_expressions_preserve_values_calls_and_stores() {
     let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let declarations =
-        include_str!("../../unlace-analysis/tests/fixtures/rust_boolean_expressions.kuna");
+        include_str!("../../unlace-analysis/tests/fixtures/rust_boolean_expressions.unlace");
     let bodies = |language: &str| {
         let mut command = Command::new(&unlace);
         command.args([

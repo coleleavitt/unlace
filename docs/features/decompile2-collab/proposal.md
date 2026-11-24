@@ -92,8 +92,8 @@ pointer positions, throttled to 30 Hz. The handshake:
 
 **Hello.** On connect, peers exchange `{protocol version, build id, file
 SHA-256, name, colour}` and refuse politely on any mismatch ("Ben's page is a
-different version of Kuna; reload both"). The build id is the SHA-256 of the
-`kuna_wasm.wasm` bytes the loader already fetches (hashed once, from a clone of
+different version of Unlace; reload both"). The build id is the SHA-256 of the
+`unlace_wasm.wasm` bytes the loader already fetches (hashed once, from a clone of
 that response) plus the page's collaboration protocol version, so no engine
 change is needed. Then a register snapshot each way (which carries the mode),
 merged; then live ops.
@@ -110,7 +110,7 @@ flash animation, in the sender's colour.
 the session (`validOp` in the spike, tested against 17 hostile ops): a known key
 shape; a value of its kind's shape (a byte is two hex digits, a name is an
 identifier, a mode is one of the four); no control characters, so nothing can
-split into a second directive in an exported `.kuna` file; and never a form that
+split into a second directive in an exported `.unlace` file; and never a form that
 makes the engine read a file, i.e. no `@` token in a raw directive (which covers
 both `@FILE` and `bytes ADDR @FILE`) and no `@` in a type or signature.
 Messages are size-capped (64 KiB, except the file, which is chunked and capped
@@ -153,7 +153,7 @@ answers in PR #742.
 2. **STUN: built, off.** STUN is free (Google's public server, no account);
    only a TURN relay costs money. By default there are no ICE servers (same
    machine or same network). One setting turns them on, with no switch in the
-   page: `localStorage` key `kuna.d2.collab`, `{"stun": true}` for Google's
+   page: `localStorage` key `unlace.d2.collab`, `{"stun": true}` for Google's
    server (or a `stun:` URL), `{"turn": {"urls", "username", "credential"}}` for
    a relay (`docs/web-integration.md` §4.2). *(2026-10-03: the switch is now in the page, the invite dialog's **Connect
    across the internet** box, still unticked by default, and it uses Cloudflare's STUN
@@ -181,7 +181,7 @@ Where the build departs from the design above, and why:
   by the Worker from a clone of the response it compiles (a client that does
   not ask for it, like `/decompile/`, pays nothing), and again after each
   restart; a page whose engine changes during a session leaves it. (The first
-  build hashed its own fetch of `kuna_wasm.wasm`; a review showed two pages on
+  build hashed its own fetch of `unlace_wasm.wasm`; a review showed two pages on
   either side of a deploy could then pass the check.)
 - **Directive order: as made when alone, by birth when shared.** The design's
   "one canonical order (by kind, then key)" broke replay wherever order
@@ -192,8 +192,8 @@ Where the build departs from the design above, and why:
   every page agrees on. A solo page is unchanged.
 - **A guest's own stored changes are kept apart, not merged,** when the
   program arrives with the join: the session is saved under its own key
-  (`kuna.d2.shared.<hash>`), the session dialog offers to save the guest's
-  changes as a `.kuna` file, and leaving brings them back (a toast offers the
+  (`unlace.d2.shared.<hash>`), the session dialog offers to save the guest's
+  changes as a `.unlace` file, and leaving brings them back (a toast offers the
   session's changes instead). A guest with nothing stored keeps the session as
   its own. A guest who already has the program open when joining brings its
   changes into the session (the session's value wins where both changed a

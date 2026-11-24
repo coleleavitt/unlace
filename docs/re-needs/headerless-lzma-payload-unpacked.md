@@ -38,7 +38,7 @@ Recover an analyzable image, with an explicit compressed-range and codec-paramet
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "unpack",
     "{{BIN}}",
     "--json"
@@ -68,7 +68,7 @@ Recover an analyzable image, with an explicit compressed-range and codec-paramet
     "binary_source": "dataset"
   },
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "unpack",
     "{{BIN}}",
     "-o",
@@ -126,11 +126,11 @@ _not yet refuted_
 
 FILED CAUSE, PART 1 -- VERIFIED. 'unlace unpack --help' prints exactly 'usage: unlace unpack <binary> [-o OUT] [--json]'. There is no range, codec, props or dict-size override, so PackHeader discovery really is mandatory. Repro on the release binary against arena/9/68ac5cd78fac2855fe6fb898/target/keygenme.exe (1,400,832 bytes): exit 1, 'no UPX PackHeader found' plus 'unlace unpack handles UPX-packed executables; this file is not one'. Both messages are CORRECT -- this file genuinely is not UPX.
 
-FILED CAUSE, PART 2 -- ALSO VERIFIED, AND IT IS THE REASON A BUILDER MUST NOT TAKE THIS NEED AS WRITTEN. The acceptance runs bare 'unlace unpack {{BIN}} --json' and demands exit 0. It passes NO override, so satisfying it requires kuna to AUTOMATICALLY recognise and unpack the payload. What that payload actually is (from the tester's own notes/packed-data.json + recover_lzma.py, both re-read this tick): a raw LZMA1 stream at 0x1403ea000..0x14053e47c, 1,393,788 packed bytes, prefixed by a TWO-BYTE APP-SPECIFIC parameter header -- byte0 low 3 bits = pb (0x1a -> 2), byte1 = lp<<4|lc (0x03 -> lp 0, lc 3), which is neither the 13-byte .lzma container nor the standard single props byte (lc+9*lp+45*pb would be 0x5d). The tester only knew those two bytes because they read the decoder's setup code. Auto-detecting that is not 'headerless LZMA support', it is recognising one packer's private header.
+FILED CAUSE, PART 2 -- ALSO VERIFIED, AND IT IS THE REASON A BUILDER MUST NOT TAKE THIS NEED AS WRITTEN. The acceptance runs bare 'unlace unpack {{BIN}} --json' and demands exit 0. It passes NO override, so satisfying it requires unlace to AUTOMATICALLY recognise and unpack the payload. What that payload actually is (from the tester's own notes/packed-data.json + recover_lzma.py, both re-read this tick): a raw LZMA1 stream at 0x1403ea000..0x14053e47c, 1,393,788 packed bytes, prefixed by a TWO-BYTE APP-SPECIFIC parameter header -- byte0 low 3 bits = pb (0x1a -> 2), byte1 = lp<<4|lc (0x03 -> lp 0, lc 3), which is neither the 13-byte .lzma container nor the standard single props byte (lc+9*lp+45*pb would be 0x5d). The tester only knew those two bytes because they read the decoder's setup code. Auto-detecting that is not 'headerless LZMA support', it is recognising one packer's private header.
 
 THE TRAP, SAME SHAPE AS THE r9 BERIA ONE: an 'exit_code 0 + stderr_absent' acceptance on a MISSING-CAPABILITY need is passable by DEGRADING THE ERROR PATH. Making 'unpack' exit 0 with a warning on any non-UPX file passes this acceptance, ships a regression of a correct diagnostic, and delivers nothing.
 
-AND EVEN THE HONEST VERSION DOES NOT YIELD AN ANALYZABLE IMAGE. notes/decompressed.bin is 5,489,913 bytes and starts '48 8d 05 49 e6 01 00 / 48 89 05 5a 5a 4f 00 / c3' -- raw x86-64 code, no MZ, no PE header, no section table, no imports, no relocs; the decoder also reported end marker seen: False. So an override that writes this blob out gives a file kuna cannot load as a program. The need's own Reference says the same ('Recovery is incomplete ... imports, relocations, and executable reconstruction remain undone').
+AND EVEN THE HONEST VERSION DOES NOT YIELD AN ANALYZABLE IMAGE. notes/decompressed.bin is 5,489,913 bytes and starts '48 8d 05 49 e6 01 00 / 48 89 05 5a 5a 4f 00 / c3' -- raw x86-64 code, no MZ, no PE header, no section table, no imports, no relocs; the decoder also reported end marker seen: False. So an override that writes this blob out gives a file unlace cannot load as a program. The need's own Reference says the same ('Recovery is incomplete ... imports, relocations, and executable reconstruction remain undone').
 
 WHAT I RECOMMEND AT T_TRIAGE / TO THE BUILDER. Keep the need, keep severity, but REWRITE THE ACCEPTANCE to exercise the override the title asks for, not automatic unpacking: invoke 'unlace unpack {{BIN}} -o <out> --raw-lzma 0x1403ea000:0x14053e47c --lzma-props <pb,lp,lc or the 2-byte prefix>' (spelling is the builder's call) and assert exit 0 PLUS a positive witness on the produced artifact -- byte length 5489913, or the JSON reporting the payload's load address -- so the clause cannot be passed by an error-path change. With that acceptance the work is a bounded unlace-cli change and scope=small holds. WITHOUT it, the need reads as 'reconstruct a PE from a raw code blob', which is a plane and belongs in a PROPOSAL, not a builder slot. Do NOT dispatch this need until its acceptance is rewritten.
 
@@ -139,7 +139,7 @@ WHAT I RECOMMEND AT T_TRIAGE / TO THE BUILDER. Keep the need, keep severity, but
 Ranked #2 and lease-free, but deliberately skipped. Two reasons, both measured:
 
 - The acceptance as filed is `unlace unpack {{BIN}} --json` exiting 0 with no
-  "no UPX PackHeader found". That demands kuna **automatically** detect and unpack a
+  "no UPX PackHeader found". That demands unlace **automatically** detect and unpack a
   headerless LZMA payload out of a non-UPX PE — strictly more than this need's own title
   ("with analyst-supplied parameters") asks for, and a questionable default besides.
 - `unlace unpack --help` today is exactly `usage: unlace unpack <binary> [-o OUT] [--json]` —
@@ -167,7 +167,7 @@ tester's notes:
   UPX image with a stripped PackHeader.
 - **The two prop bytes at that VA are `1a 03`** — and that is bit-for-bit the layout
   `unlace_analysis::upx::lzma::Properties::split` already parses (`pb = head[0] & 7` = 2,
-  `lc = head[1] & 0x0f` = 3, `lp = head[1] >> 4` = 0). kuna therefore already owns a raw
+  `lc = head[1] & 0x0f` = 3, `lp = head[1] >> 4` = 0). unlace therefore already owns a raw
   LZMA1 decoder for exactly this stream. The deliverable is *exposing* it, not writing one.
 - **The witness constant is reproducible.** Decoding `0x400+2 .. 1394812` as raw LZMA1
   (lc 3 / lp 0 / pb 2) yields **5,489,913 bytes** starting `48 8d 05 49 e6 01 00 48`,

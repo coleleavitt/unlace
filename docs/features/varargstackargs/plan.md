@@ -21,7 +21,7 @@ FuncCallSpecs::resolve_and_derive_input_map        (called from ActionActivePara
         build_trial_map
         force_exclusion_group
         separate_sections            -> trial_start[]
-   +    kuna_varargstackargs::stack_section_split   <- the new decision
+   +    unlace_varargstackargs::stack_section_split   <- the new decision
         force_no_use            (per section)
         force_inactive_chain    (per section)
         mark everything still active as used

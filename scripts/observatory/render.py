@@ -25,7 +25,7 @@ DATASETS = {
         "nav": "Atlas",
         "blurb": "The P0–P9 pipeline, each phase's modules, options and spec chapter, "
         "the crate graph, and the real pass schedule.",
-        "regen": "PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace",
+        "regen": "PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --unlace target/release/unlace",
     },
     "coverage": {
         "title": "Test coverage",
@@ -39,14 +39,14 @@ DATASETS = {
         "nav": "Walkthrough",
         "blurb": "One real function traced through the engine: bytes, disassembly, "
         "raw p-code, final IR, region tree, C.",
-        "regen": "PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace",
+        "regen": "PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --unlace target/release/unlace",
     },
     "churn": {
         "title": "Churn & ownership",
         "nav": "Churn",
         "blurb": "A treemap of where change concentrates: live file size × windowed "
         "churn × who changed it (agents vs people).",
-        "regen": "PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace",
+        "regen": "PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --unlace target/release/unlace",
     },
 }
 

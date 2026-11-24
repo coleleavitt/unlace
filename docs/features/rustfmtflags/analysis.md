@@ -23,7 +23,7 @@ and the pinned [angr template decoder](https://github.com/angr/angr/blob/6afa0c7
 Both supported Rust tags were inspected; broader versions remain unqualified.
 
 A Rust 1.93.1 native witness (`show(x: u64)` printing `hex {:08x}`) was built
-with optimization level two. Current Kuna renders `_print(0x4e50,&mut v2)`.
+with optimization level two. Current Unlace renders `_print(0x4e50,&mut v2)`.
 Its callback has both full `LowerHex for u64` and `LowerHex for usize` symbols
 at the same address. Those aliases are equivalent in this verified 64-bit layout;
 a Display/LowerHex conflict or different access width must still invalidate an

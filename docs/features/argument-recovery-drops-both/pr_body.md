@@ -5,7 +5,7 @@ instructions before it plainly load its argument registers. The same function
 recovers arguments fine at a call that is not in that loop.
 
 ```
-$ kuna decompile WeeperVM--Level_1 0x113d9 --addr --define-function 0x110ff=watchdog
+$ unlace decompile WeeperVM--Level_1 0x113d9 --addr --define-function 0x110ff=watchdog
     ...
     v8 += 1;
     if (watchdog()) {          <-- 0x1146a MOV ESI,0x2 / 0x1146f MOV EDI,0x13050
@@ -13,7 +13,7 @@ $ kuna decompile WeeperVM--Level_1 0x113d9 --addr --define-function 0x110ff=watc
       printf((char *)sub_10e27(v7,v6,v3,v2));   <-- same shape, four arguments
 ```
 
-The callee uses both: `kuna decompile <bin> 0x110ff --addr` recovers
+The callee uses both: `unlace decompile <bin> 0x110ff --addr` recovers
 `sub_110ff(long a0,int a1,...)` and reads `a0` as a timer array indexed by `a1`.
 
 The trials do not fail realism, they fail exclusivity. `Funcdata::onlyOpUse`
@@ -49,7 +49,7 @@ promoted to `tests/cli/argument-recovery-drops-both.json`.
 
 Gates: `make test` PARITY OK 675/675 · `make test-stages` PARITY OK 725/725 ·
 `make rust-test` green · `make check-spec` green (strict too) · `make test-cli`
-106/106 · `kuna catalog --check` OK.
+106/106 · `unlace catalog --check` OK.
 
 Whole-corpus sweep, `decompile-all` in both arms over 21 linked x86-64 ELF
 binaries / 5,857 functions: **141 functions change, 148 argument positions

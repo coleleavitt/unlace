@@ -16,7 +16,7 @@ uint64_t mixed_less(uint64_t a,int64_t b,uint64_t c){return a+b<c;}
 uint64_t mixed_left(uint64_t a,int64_t b,uint64_t n){return (a+b)<<(n&63);}
 uint64_t mixed_sub_less(uint64_t a,int64_t b,uint64_t c){return a-b<c;}
 uint64_t mixed_sub_left(uint64_t a,int64_t b,uint64_t n){return (a-b)<<(n&63);}
-#ifndef KUNA_NATIVE_MAIN
+#ifndef UNLACE_NATIVE_MAIN
 int main(void){return 0;}
 #else
 #include <stdio.h>

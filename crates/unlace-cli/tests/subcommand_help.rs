@@ -7,7 +7,7 @@ fn run(argv: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(argv)
         .output()
-        .expect("failed to spawn the kuna binary")
+        .expect("failed to spawn the unlace binary")
 }
 
 fn help_text(out: &Output) -> String {
@@ -93,12 +93,12 @@ fn help_needs_no_binary_and_no_specs() {
         let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
             .args([sub, "--help"])
             .env_remove("UNLACE_SPECS")
-            .env_remove("KUNA_SPECS")
+            .env_remove("UNLACE_SPECS")
             .env_remove("SLEIGHHOME")
             .env_remove("UNLACE_DECOMP_DBG")
-            .env_remove("KUNA_DECOMP_DBG")
+            .env_remove("UNLACE_DECOMP_DBG")
             .output()
-            .expect("failed to spawn the kuna binary");
+            .expect("failed to spawn the unlace binary");
         assert_eq!(
             out.status.code(),
             Some(0),
@@ -305,7 +305,7 @@ fn specs_diff_explains_independent_gates_without_running_a_compiler() {
             concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"),
         )
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     assert_eq!(out.status.code(), Some(0), "{}", help_text(&out));
     assert!(out.stderr.is_empty(), "{}", help_text(&out));
     let text = String::from_utf8(out.stdout).expect("UTF-8 guidance");

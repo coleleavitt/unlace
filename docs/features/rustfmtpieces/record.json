@@ -3,7 +3,7 @@
   "default": "on",
   "baseline_commit": "c255d11ebeb2e08439c2f03aa38a2a0df76e7834",
   "integrated_main_commit": "69fad3ce4cbdbb3232680938252bd75c2bec5a68",
-  "kuna_sha256": "2a9b5c5676fc685ad3e6944b2d73c190ff57971cc7645a5e14d88c9114ede4c6",
+  "unlace_sha256": "2a9b5c5676fc685ad3e6944b2d73c190ff57971cc7645a5e14d88c9114ede4c6",
   "reference_angr_commit": "6afa0c79a83d9f677a46b0275cdb63bf16c1979e",
   "reference_binaries_commit": "76ad9e296dde8f82b8ede93ce06a578cd1933639",
   "producers": [
@@ -92432,7 +92432,7 @@
     "monitor": {
       "method": "balanced_randomized_block_bootstrap",
       "execution": "Shared independent case workers on disjoint physical CPU pairs; no owned builds/tests/corpus during sampling.",
-      "attempt": "/tmp/kuna-rust-fmt-pieces-f874/timing-randomized-attempts/20261102-005536",
+      "attempt": "/tmp/unlace-rust-fmt-pieces-f874/timing-randomized-attempts/20261102-005536",
       "cpu_assignments": {
         "0:scalar-c": {
           "target_cpu": 61,

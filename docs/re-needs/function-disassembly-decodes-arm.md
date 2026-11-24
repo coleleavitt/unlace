@@ -38,7 +38,7 @@ Distinguish main's trailing success constant from executable instructions.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "disassemble",
     "{{BIN}}",
     "main",
@@ -67,7 +67,7 @@ Distinguish main's trailing success constant from executable instructions.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "disassemble",
     "{{BIN}}",
     "main",

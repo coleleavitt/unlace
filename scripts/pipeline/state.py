@@ -2,7 +2,7 @@
 
 Workers run as independent processes (headless agent sessions in worktrees) and the
 driver loop is a separate process again, so live state lives in flock-guarded JSON under
-``.kuna-pipeline/`` (gitignored), not in memory. This is the single place ``status.py``
+``.unlace-pipeline/`` (gitignored), not in memory. This is the single place ``status.py``
 reads to answer "how many workers are running and what is each doing", and the place the
 driver reads to avoid two workers claiming the same angr testcase.
 
@@ -264,7 +264,7 @@ def claim_approved(worker, opportunity):
 # How stale a worker with no trustworthy pid must be before reap() will fail it. Longer than
 # any single feature run, because with no liveness signal staleness is all we have and a
 # heartbeat gap is not proof of death.
-UNTRUSTED_STALE_SECONDS = int(os.environ.get("KUNA_PIPELINE_UNTRUSTED_STALE", "14400"))
+UNTRUSTED_STALE_SECONDS = int(os.environ.get("UNLACE_PIPELINE_UNTRUSTED_STALE", "14400"))
 
 
 def _pid_alive(pid):

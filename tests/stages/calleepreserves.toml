@@ -1,4 +1,4 @@
-# kuna calleepreserves: an i386 get-PC thunk eats a live argument.
+# unlace calleepreserves: an i386 get-PC thunk eats a live argument.
 #
 # x86gcc.cspec lists ECX and EDX as killedbycall because cdecl allows a callee
 # to clobber them, and Heritage::guardCalls (heritage.cc:1444) applies that

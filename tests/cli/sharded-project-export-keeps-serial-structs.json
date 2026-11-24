@@ -2,7 +2,7 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile-project",
     "{{BIN}}",
     "-o",
@@ -39,12 +39,12 @@
     ],
     "stderr_matches": [
       "note: --jobs decompiles without the callee-first order \\(option protoorder, on by default\\)",
-      "\\[kuna --jobs\\] structsynth: \\d+ function\\(s\\) with synthesized structures named as --jobs 1 --option protoorder off names them: \\d+ renamed, \\d+ decompile\\(s\\) again"
+      "\\[unlace --jobs\\] structsynth: \\d+ function\\(s\\) with synthesized structures named as --jobs 1 --option protoorder off names them: \\d+ renamed, \\d+ decompile\\(s\\) again"
     ],
     "stderr_absent": [
       "worker shards recovered different user-defined types",
       "structsynth is off",
-      "\\[kuna --jobs\\] note:"
+      "\\[unlace --jobs\\] note:"
     ]
   },
   "notes": "Workers used to number their own struct_N and the merged .h tore definitions apart. Now each gets the serial names and the workers rendering the .h hold the same replayed structures, so the merge warning never fires. That serial run is `--jobs 1 --option protoorder off`. Fixture moved off i386_pie_nl: libctypes names its one structure re_pattern_buffer."

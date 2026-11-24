@@ -10963,7 +10963,7 @@ impl PrintC {
 
     #[doc(hidden)]
     pub fn go_loop_temporary(&self, index: i32) -> String {
-        let mut name = format!("_kuna_first_{index}");
+        let mut name = format!("_unlace_first_{index}");
         while self.declared_locals.iter().any(|v| v.name == name)
             || self.signature_param_names.values().any(|v| v == &name)
         {

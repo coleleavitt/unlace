@@ -6,7 +6,7 @@ checked against, so a one-byte comparison read as an eight-byte dereference.
 RAX across an obfuscated dispatch loop:
 
 ```
-$ kuna decompile crackme.obf.exe 0x1400542a1 --option tailcallframe off
+$ unlace decompile crackme.obf.exe 0x1400542a1 --option tailcallframe off
   unsigned long long *v9; // rax
   ...
         v9 = (char *)sub_1400778c4(&v14[0x58],6);
@@ -36,12 +36,12 @@ because it saw a one-byte pointee. Only the declaration disagreed.
   printc.cc:1719), which is the merged HighVariable's type -- the member
   `HighVariable::getTypeRepresentative` picks as most specialized, and the same
   type `ActionSetCasts` reads through `getHighTypeReadFacing`. Declaration and
-  body agree by construction. kuna's printer walks HighVariables rather than
+  body agree by construction. unlace's printer walks HighVariables rather than
   Symbols and took the type off its *declaration* representative (first
   address-tied member, else member zero) -- a different Varnode.
 - New option `declhightype` (default on, DIV-160) declares the type
   representative's type instead.
-- Bounded to a high the Symbol table does not describe. kuna does not always
+- Bounded to a high the Symbol table does not describe. unlace does not always
   type-lock the storage a Symbol claims, so on a mapped local the most
   specialized member can be a transient the Symbol never described: an ungated
   first cut re-declared a DWARF `acl_entry_obj_tag *` as the `obj_prefix` struct

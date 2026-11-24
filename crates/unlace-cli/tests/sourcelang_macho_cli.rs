@@ -45,12 +45,12 @@ fn specs() -> String {
 fn run(args: &[&str]) -> (String, String, bool) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env_remove("UNLACE_DECOMP_DBG")
-        .env_remove("KUNA_DECOMP_DBG")
+        .env_remove("UNLACE_DECOMP_DBG")
         .env_remove("UNLACE_SLACOMP")
-        .env_remove("KUNA_SLACOMP")
+        .env_remove("UNLACE_SLACOMP")
         .args(args)
         .output()
-        .expect("run kuna");
+        .expect("run unlace");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),

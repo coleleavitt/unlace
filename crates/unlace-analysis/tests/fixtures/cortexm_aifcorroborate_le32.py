@@ -41,7 +41,7 @@ Three shapes, one per branch of `startCount >= 50 || corroborated`:
   * **THE DEFECT** -- `U` opens `movs ; movs` (count 20), calls nothing, jumps
     nowhere, and merely reaches `bx lr`. Upstream Ghidra refuses exactly this
     accept (`AggressiveInstructionFinderAnalyzer.java:367`,
-    `!addsInfo && startCount < 50`); kuna never ported that half, so under `aif on`
+    `!addsInfo && startCount < 50`); unlace never ported that half, so under `aif on`
     and `aif strict` `U` becomes a function on a two-mnemonic coincidence. Under
     `aif precise` it is refused.
 

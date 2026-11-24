@@ -131,7 +131,9 @@ pub trait DatabaseArch {
 /// Render an address as lowercase hex with no leading zeros and no "0x" prefix
 /// (C++ `unlacePrintBareAddr`): the angr address form used by `dat_`/`sub_`/`label_`.
 fn unlace_bare_addr(addr: &Address) -> String {
-    let space = addr.get_space().expect("kuna_bare_addr on invalid address");
+    let space = addr
+        .get_space()
+        .expect("unlace_bare_addr on invalid address");
     // byteToAddress(off, wordsize): the word-addressed offset.
     let off = AddrSpace::byte_to_address(addr.get_offset(), space.get_word_size());
     format!("{off:x}")
@@ -6372,8 +6374,8 @@ mod tests {
                     }
                     assert_eq!(
                         lines[b + 1].trim(),
-                        "self.kuna_gen += 1;",
-                        "Database mutator at line {} does not bump kuna_gen: {}",
+                        "self.unlace_gen += 1;",
+                        "Database mutator at line {} does not bump unlace_gen: {}",
                         j + 1,
                         lines[j].trim()
                     );
@@ -6409,7 +6411,7 @@ mod tests {
                 assert!(
                     !code.contains(hatch.as_str()),
                     "interior mutability at line {}: a `&mut self` scan cannot see through it, \
-                     so `kuna_gen` would stop covering every mutation",
+                     so `unlace_gen` would stop covering every mutation",
                     n + 1
                 );
             }

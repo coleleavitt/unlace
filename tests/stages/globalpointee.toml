@@ -1,6 +1,6 @@
 # A pointer the binary stores to a global and keeps using from its register
 # is dereferenced through its own variable, not through the global (P3
-# kuna_pointeestorekeep, P6 kuna_pointeevalue; GitHub issue #767).
+# unlace_pointeestorekeep, P6 unlace_pointeevalue; GitHub issue #767).
 #
 # Merge joins a register value with the global it is copied to.  The joined
 # value then prints as a read of the global, and a dereference through it
@@ -9,7 +9,7 @@
 #     char *gc;
 #     int p_int(int *p, int k) { int *q = p + k; gc = (char *)q; return q[1] + q[2]; }
 #
-# kuna used to print `gc = &a0[a1]; return gc[2] + gc[1];`.  kuna never
+# unlace used to print `gc = &a0[a1]; return gc[2] + gc[1];`.  unlace never
 # declares the global, so a reader who gives `gc` its real type reads two
 # bytes and gets 0 where the binary returns 9; a `struct rec *` global made
 # `return gr[3] + *gr;` add two records, and a `void *` global made
@@ -17,7 +17,7 @@
 # binary makes it when a marker would take it, and Merge refuses the
 # copy-shadow join, so the value keeps its own variable and type.  A load of
 # the global the binary makes after the store stays a load: g_alias stores
-# through a pointer that may point at gi before reading gi[1], and kuna used
+# through a pointer that may point at gi before reading gi[1], and unlace used
 # to print `return (&a0[a1])[1];`.  g_reload, g_before, g_write, g_diff,
 # g_twice, g_old and g_branch also read the value from its register; a load
 # of the global after a store through a pointer still reads the global,

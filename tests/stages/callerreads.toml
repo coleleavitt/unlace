@@ -1,5 +1,5 @@
 # A function decompiled alone returns what its callers read after the call
-# (kuna_callerreads.rs, always on). Issue #843.
+# (unlace_callerreads.rs, always on). Issue #843.
 #
 # The script loads callerreads_x86_64_gcc_O2 (gcc -O2, source callerreads.c
 # beside it). triple is `gi = a * 3; return gi;`, compiled to

@@ -28,7 +28,7 @@ reject_reason: null
 Recover the vector end and byte pointer passed in RDX and R8 at 0x1400046cc.
 
 > **Bytecode append call loses two live register arguments** (major, `69b7492049fa49a2a260218f`)
-> With calleearity and varargstackargs enabled, the final append call has only one argument. Kuna disassembly shows RDX and R8 prepared before the call. Explicit prototypes restore all three arguments. The catalog's sibling-call reconciliation has no witness here; this does not establish a regression in that capability.
+> With calleearity and varargstackargs enabled, the final append call has only one argument. Unlace disassembly shows RDX and R8 prepared before the call. Explicit prototypes restore all three arguments. The catalog's sibling-call reconciliation has no witness here; this does not establish a regression in that capability.
 
 ## Reproduction
 
@@ -38,7 +38,7 @@ Recover the vector end and byte pointer passed in RDX and R8 at 0x1400046cc.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140004540",
@@ -74,7 +74,7 @@ Recover the vector end and byte pointer passed in RDX and R8 at 0x1400046cc.
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "sub_140004540",
@@ -114,7 +114,7 @@ _not yet refuted_
 
 ## Reference
 
-- `ida-decompile decompile 0x140004540 --binary target/vm.exe --raw` — No reference result: decompile reported no running server; subsequent load failed before registration. Kuna disassembly established the three register arguments.
+- `ida-decompile decompile 0x140004540 --binary target/vm.exe --raw` — No reference result: decompile reported no running server; subsequent load failed before registration. Unlace disassembly established the three register arguments.
 
 ## Instances
 
@@ -123,11 +123,11 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- split by captain at T_DEDUP from round 12's `wrong-output|decompile|exit_code,stdout_absent` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.kuna-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
+- split by captain at T_DEDUP from round 12's `wrong-output|decompile|exit_code,stdout_absent` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.unlace-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
 - sibling of `argument-recovery-drops-both` — same family (callee-arity under-applied at a call site; explicit prototype restores). Kept separate: Jaccard 0.138, distinct ABIs (MS x64 here, SysV there), distinct acceptances.
 - round 12 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK (captain, round 12). SYMPTOM UPHELD AND THE OUTPUT IS GENUINELY WRONG; nothing the need filed is false, but its only diagnostic element (the two arity options) is DEAD, and the mechanism is caller-side, not callee-side.
 
-WHAT WAS VERIFIED. (1) Probe reproduces: `unlace decompile vm.exe sub_140004540` ends in `sub_140007be0(a0);`. (2) The loss is real wrong output, not a judgement call: kuna ITSELF recovers the callee as `char *sub_140007be0(long long *a0,long long a1,char *a2)`, and its prologue reads both dropped registers (`MOV R12,R8` @0x140007bfd, `MOV RBP,RDX` @0x140007c03). Two live, meaningful arguments are dropped at the call site.
+WHAT WAS VERIFIED. (1) Probe reproduces: `unlace decompile vm.exe sub_140004540` ends in `sub_140007be0(a0);`. (2) The loss is real wrong output, not a judgement call: unlace ITSELF recovers the callee as `char *sub_140007be0(long long *a0,long long a1,char *a2)`, and its prologue reads both dropped registers (`MOV R12,R8` @0x140007bfd, `MOV RBP,RDX` @0x140007c03). Two live, meaningful arguments are dropped at the call site.
 
 FOUR DEAD LINES, so no builder repeats them. (a) calleearity and varargstackargs are DEFAULT-ON, so 'with both enabled' is vacuous; both OFF emits byte-identical output to the default. Neither option is on this path in either direction. (b) Callee arity does NOT fail -- it succeeds, 3 params, see above. (c) It is not a single-function-mode blind spot: whole-binary `decompile-all --json` over all 172 functions still emits `sub_140007be0(a0)`. (d) The trial machinery is alive in this very binary -- 223 call sites recover 2+ arguments (vs 196 one-arg, 31 zero-arg) in the same MS x64 image. Control for the silent-unknown-option trap: an unknown --option now errors, so --option does reach this command.
 

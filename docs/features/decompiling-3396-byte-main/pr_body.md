@@ -1,18 +1,18 @@
 ## The problem
 
-An x64 PE's `.pdata` says which byte ranges are one function's body, and kuna
+An x64 PE's `.pdata` says which byte ranges are one function's body, and unlace
 starts functions in the middle of them anyway. `nikos_crack_me.exe` declares one
 43,152-byte body at `[0x140023350, 0x14002dbe0)`; the gap walk decodes what
 recursive descent could not reach and mints three functions inside it, and the
 fall-through bound then truncates the real function's flow when it reaches one:
 
 ```
-$ kuna functions nikos_crack_me.exe | grep -E '14002(3e34|b324|b6a8)'
+$ unlace functions nikos_crack_me.exe | grep -E '14002(3e34|b324|b6a8)'
 0x140023e34	sub_140023e34
 0x14002b324	sub_14002b324
 0x14002b6a8	sub_14002b6a8
 
-$ kuna decompile nikos_crack_me.exe sub_140023350 | grep funcboundflow
+$ unlace decompile nikos_crack_me.exe sub_140023350 | grep funcboundflow
         v74 = 0x140024921; // warn: funcboundflow: fall-through reached the next function entry; truncating flow here
         if ((v21 + (v83 - 1) & 1) != (v21 + (v83 - 1) & 1)) { // warn: funcboundflow: ...
 ```
@@ -50,7 +50,7 @@ exactly.
 
 Gates: `make test` 675/675 PARITY OK, `make test-stages` 749/749 PARITY OK,
 `make rust-test` green, `make check-spec` green, `make test-cli` 119/119,
-`kuna catalog --check` OK.
+`unlace catalog --check` OK.
 
 Side effect, measured because this branch is the `decompiling-3396-byte-main`
 perf need: removing the false starts takes that witness **10,432 → 9,988 ms

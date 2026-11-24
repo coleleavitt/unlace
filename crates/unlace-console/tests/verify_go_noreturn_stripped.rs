@@ -139,7 +139,7 @@ fn stripped_go_panicshift_truncates_flow_under_the_default() {
         eprintln!("verify_go_noreturn_stripped: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_go_noreturn_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_go_noreturn_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_stripped_shift");
     if !build_go(&dir, &out_bin) {

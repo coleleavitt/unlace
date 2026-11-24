@@ -17,25 +17,25 @@
   "decisions": [
     {
       "what": "The filed hypothesis is upheld, and the refuter's narrower reading is the one implemented.",
-      "detail": "The need's hypothesis reads as 'invent an incompleteness diagnostic'. It is not an invention: upstream PrintC::opReturn (printc.cc:774) already switches on getHaltType() and FlowInfo::processInstruction already buffers two warnings (flow.cc:441-475). kuna ported the halt and left the printer's plain-return arm plus three STUB(W4) warning comments. The change is finishing that port."
+      "detail": "The need's hypothesis reads as 'invent an incompleteness diagnostic'. It is not an invention: upstream PrintC::opReturn (printc.cc:774) already switches on getHaltType() and FlowInfo::processInstruction already buffers two warnings (flow.cc:441-475). unlace ported the halt and left the printer's plain-return arm plus three STUB(W4) warning comments. The change is finishing that port."
     },
     {
       "what": "noreturn, the fourth halt cause, is deliberately NOT renamed, though upstream renames it to halt_noreturn().",
-      "detail": "It is not a decode failure, kuna already reports it as `// no-return` on the call it follows, and its rendering is pinned by the whole-corpus measurements behind noreturn_propagate and guardarm. Renaming it would move output on a shape this need says nothing about."
+      "detail": "It is not a decode failure, unlace already reports it as `// no-return` on the call it follows, and its rendering is pinned by the whole-corpus measurements behind noreturn_propagate and guardarm. Renaming it would move output on a shape this need says nothing about."
     },
     {
       "what": "The voidtailreturn exclusion is gated on decodehalt and scoped to the three renamed causes -- narrowed from the first implementation, which excluded every halt-marked RETURN unconditionally.",
       "detail": "Unconditional was wrong twice over: with `decodehalt off` it would print a `return;` main elides, so the option would not restore main; and it changed noreturn halts in BOTH arms, which this option explicitly does not claim. Measured load-bearing, not defensive: ablating the exclusion on a straight-line truncation (`movq $1,sink(%rip); .byte 0x06`) deletes halt_baddata() and leaves `dat_101000 = 1; // warn: Bad instruction - Truncating control flow here` -- the truncation blamed on an instruction that decoded fine. The sweep found 24 real instances of that shape."
     },
     {
-      "what": "The stage test runs with `option voidtailreturn on` because that is what kuna decompile runs (auto -> aggressive), and without it the test cannot reach the elision seam.",
+      "what": "The stage test runs with `option voidtailreturn on` because that is what unlace decompile runs (auto -> aggressive), and without it the test cannot reach the elision seam.",
       "detail": "It also makes the off arm's failure sharper: with voidtailreturn on, the pre-fix output is not a bare `return;` -- the truncated path leaves NO statement at all, so the function reads as fully analysed with a clean early exit."
     }
   ],
   "tests": {
     "stages": "tests/stages/decodehalt.xml (two-pass, 4 assertions, an x86-64 `test edi,edi / je +1 / ret / .byte 0x06` where 0x06 is not an instruction in 64-bit mode)",
-    "unit": "decompiler/crates/kuna-decomp/src/p2_lift/decodehalt/tests.rs (6 tests: the option parse, the three cause->pseudo-call mappings, the noreturn/halt/plain negatives, the combined-mask precedence, the upstream warning strings, the ElementId range)",
-    "cli_probe": "tests/cli/undecodable-encrypted-code-becomes.json, hand-promoted: `verify --promote` refuses a `binary_source: dataset` target, so the probe is re-pointed at a new vendored fixture, decompiler/crates/kuna-analysis/tests/fixtures/decodehalt_x86_64 (9,824 bytes, source .s checked in beside it) -- an XOR-in-place decrypt loop over a payload whose first byte is 0x06 at load time, reached through `push $payload; pop %rbx; jmp *%rbx`. `--option decodehalt off` renders `case 0x101000: return;` and fails the probe's stdout_absent clause; the default renders `halt_baddata()`."
+    "unit": "decompiler/crates/unlace-decomp/src/p2_lift/decodehalt/tests.rs (6 tests: the option parse, the three cause->pseudo-call mappings, the noreturn/halt/plain negatives, the combined-mask precedence, the upstream warning strings, the ElementId range)",
+    "cli_probe": "tests/cli/undecodable-encrypted-code-becomes.json, hand-promoted: `verify --promote` refuses a `binary_source: dataset` target, so the probe is re-pointed at a new vendored fixture, decompiler/crates/unlace-analysis/tests/fixtures/decodehalt_x86_64 (9,824 bytes, source .s checked in beside it) -- an XOR-in-place decrypt loop over a payload whose first byte is 0x06 at load time, reached through `push $payload; pop %rbx; jmp *%rbx`. `--option decodehalt off` renders `case 0x101000: return;` and fails the probe's stdout_absent clause; the default renders `halt_baddata()`."
   },
   "gates": {
     "make test": "PARITY OK 675/675",
@@ -43,7 +43,7 @@
     "make rust-test": "green (rc 0, 6,340 tests, 0 failures) -- run on the rebased tree",
     "make check-spec": "green, and green under --strict",
     "make test-cli": "117/117 (116 + the promoted probe). One run scored 116/117 while the workspace suite was compiling on the same box; two clean re-runs, before and after, are 117/117, so it was contention and not a probe.",
-    "kuna catalog --check": "catalog OK",
+    "unlace catalog --check": "catalog OK",
     "scripts.repipe.counters": "no drift"
   },
   "sweep": {

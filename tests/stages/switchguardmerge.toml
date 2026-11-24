@@ -65,21 +65,21 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-SWITCHGUARDMERGE #1: the outliers are cases of the switch (default)'
+name = 'UNLACE-SWITCHGUARDMERGE #1: the outliers are cases of the switch (default)'
 count = 1
 literal = 'case 100:'
 
 [[match]]
-name = 'KUNA-SWITCHGUARDMERGE #2: both outliers are cases (default)'
+name = 'UNLACE-SWITCHGUARDMERGE #2: both outliers are cases (default)'
 count = 1
 literal = 'case 200:'
 
 [[match]]
-name = 'KUNA-SWITCHGUARDMERGE #3: switchguardmerge off keeps the range guard'
+name = 'UNLACE-SWITCHGUARDMERGE #3: switchguardmerge off keeps the range guard'
 count = 1
 literal = 'if (a0 <= 6)'
 
 [[match]]
-name = 'KUNA-SWITCHGUARDMERGE #4: one switch per pass'
+name = 'UNLACE-SWITCHGUARDMERGE #4: one switch per pass'
 count = 2
 literal = 'switch(a0)'

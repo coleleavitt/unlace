@@ -156,7 +156,7 @@ pub fn data_pointers(file: &object::File, bytes: &[u8]) -> DataPointers {
         (BinaryFormat::Pe, _) => match file {
             object::File::Pe32(pe) => pe_relocated(file, pe),
             object::File::Pe64(pe) => pe_relocated(file, pe),
-            _ => DataPointers::empty(Coverage::Unsupported, "a PE image kuna cannot read as PE"),
+            _ => DataPointers::empty(Coverage::Unsupported, "a PE image unlace cannot read as PE"),
         },
         (format, _) => DataPointers::empty(
             Coverage::Unsupported,
@@ -301,7 +301,7 @@ fn macho(file: &object::File, bytes: &[u8]) -> DataPointers {
         return DataPointers::empty(
             Coverage::Unsupported,
             "an image built into a dyld shared cache or kernel collection (MH_DYLIB_IN_CACHE): the cache's slide \
-             info or the collection's chained fixups relocate its pointers, and kuna does not list them",
+             info or the collection's chained fixups relocate its pointers, and unlace does not list them",
         );
     }
     if commands.chained {

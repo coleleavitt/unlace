@@ -1,7 +1,7 @@
-"""Mine the NOVEL pool: functions kuna already wins yet still decompiles badly.
+"""Mine the NOVEL pool: functions unlace already wins yet still decompiles badly.
 
-``mine.py`` finds cases where another decompiler shows kuna a better answer. This
-module finds the opposite and harder pool: functions where **kuna's GED is the
+``mine.py`` finds cases where another decompiler shows unlace a better answer. This
+module finds the opposite and harder pool: functions where **unlace's GED is the
 best (or tied-best) of every production decompiler and is still large**. No rival
 holds the answer, so a fix here is genuinely novel — the campaign tags those PRs
 ``(NOVEL)`` so the provenance is unambiguous.
@@ -17,8 +17,8 @@ Outputs (under docs/decbench/):
     triage-queue-novel.json   (--select) the stratified picks
 
 Filters that keep the pool honest (all overridable):
-- kuna GED >= ``--min-ged`` (default 8; the corpus median is 5)
-- kuna GED <= min(GED of angr/ghidra/ida/binja/phoenix), at least
+- unlace GED >= ``--min-ged`` (default 8; the corpus median is 5)
+- unlace GED <= min(GED of angr/ghidra/ida/binja/phoenix), at least
   ``--min-rivals`` (default 3) of which have a finite score
 - source CFG present and between ``--min-source-nodes`` (default 4) and
   ``--max-source-nodes`` (default 60) nodes: below that the score is degenerate,
@@ -41,7 +41,7 @@ from . import config
 PRODUCTION = ("angr", "ghidra", "ida", "binja", "phoenix")
 MARKER = re.compile(r"^// Function: (\S+) @ (0x[0-9a-fA-F]+)\s*$", re.M)
 
-# Output-shaped warts in kuna's OWN emission. GED cannot see most of these — a
+# Output-shaped warts in unlace's OWN emission. GED cannot see most of these — a
 # function can win the metric and still read badly — so they are the second,
 # independent axis this pool ranks on. Weight = how much the wart costs a reader.
 DEFECTS: dict[str, tuple] = {
@@ -68,9 +68,9 @@ def defect_profile(block: str) -> dict:
             "lines": block.count("\n") + 1}
 
 
-def kuna_blocks(opt: str, project: str, binary: str) -> dict[str, str]:
-    """function -> stored kuna block for one binary (the run's own artifact)."""
-    path = config.results_root() / opt / project / "decompiled" / f"kuna_{binary}.c"
+def unlace_blocks(opt: str, project: str, binary: str) -> dict[str, str]:
+    """function -> stored unlace block for one binary (the run's own artifact)."""
+    path = config.results_root() / opt / project / "decompiled" / f"unlace_{binary}.c"
     if not path.is_file():
         return {}
     text = path.read_text(errors="replace")
@@ -83,9 +83,9 @@ def kuna_blocks(opt: str, project: str, binary: str) -> dict[str, str]:
 
 
 def _addresses(opt: str, project: str, binary: str) -> dict[str, int]:
-    """function -> address, from kuna's own decompiled artifact for that binary."""
+    """function -> address, from unlace's own decompiled artifact for that binary."""
     root = config.results_root() / opt / project / "decompiled"
-    for dec in ("kuna", "ghidra", "ida", "angr", "binja"):
+    for dec in ("unlace", "ghidra", "ida", "angr", "binja"):
         path = root / f"{dec}_{binary}.c"
         if path.is_file():
             hits = {m.group(1): int(m.group(2), 16) for m in MARKER.finditer(
@@ -125,7 +125,7 @@ def build_pool(args) -> dict:
             continue
         blocks: dict[str, str] | None = None
         for f in g["functions"]:
-            kv = f["values"].get("kuna", {}).get("ged")
+            kv = f["values"].get("unlace", {}).get("ged")
             if kv is None or not math.isfinite(kv) or kv < args.min_ged:
                 continue
             rivals = {}
@@ -137,14 +137,14 @@ def build_pool(args) -> dict:
                 continue
             best_rival = min(rivals, key=lambda d: rivals[d])
             if rivals[best_rival] < kv:
-                continue  # somebody beats kuna: that is mine.py's pool, not this one
+                continue  # somebody beats unlace: that is mine.py's pool, not this one
             src = config.source_cfg(src_sizes, opt, project, binary, f["function"])
             n = src["source_nodes"]
             if n is None or not (args.min_source_nodes <= n <= args.max_source_nodes):
                 continue
             if src["approximated"]:
                 continue
-            # A GED far larger than the whole source CFG is not "kuna structured
+            # A GED far larger than the whole source CFG is not "unlace structured
             # this badly" — it is the decompiled graph having no counterpart at
             # all (inlining, a wrong function boundary, a metric artifact).
             if kv > n * args.max_ged_ratio:
@@ -156,7 +156,7 @@ def build_pool(args) -> dict:
             address = addr_cache[key].get(f["function"])
             bpath = _binary_path(opt, project, binary)
             if blocks is None:
-                blocks = kuna_blocks(opt, project, binary)
+                blocks = unlace_blocks(opt, project, binary)
             profile = defect_profile(blocks.get(f["function"], ""))
             c = {
                 "case_id": config.case_id(opt, project, binary, f["function"]),
@@ -221,17 +221,17 @@ def write_table(doc: dict) -> str:
     ranked = _rank(doc)
     fl = doc["filters"]
     lines = [
-        "# decbench NOVEL backlog — kuna is best of all decompilers and still bad",
+        "# decbench NOVEL backlog — unlace is best of all decompilers and still bad",
         "",
         "Generated by `python3 -m scripts.decbench.novel` from "
         f"`{doc['results_root']}` ({doc['snapshot_date']}).",
-        f"Filters: kuna GED >= {fl['min_ged']} and <= {fl['max_ged_ratio']}x the source "
+        f"Filters: unlace GED >= {fl['min_ged']} and <= {fl['max_ged_ratio']}x the source "
         f"CFG, unlace <= every rival, {fl['min_source_nodes']} <= source nodes <= "
         f"{fl['max_source_nodes']}, opt in {fl['opt_levels']}. Ranked by {fl['rank']}.",
         f"{doc['totals']['cases']} cases in {doc['totals']['groups']} groups. "
         "Do not edit by hand.",
         "",
-        "| # | group | defects | score | kuna GED | best rival | src nodes | cases | opts |",
+        "| # | group | defects | score | unlace GED | best rival | src nodes | cases | opts |",
         "|---|-------|---------|-------|----------|------------|-----------|-------|------|",
     ]
     axis = "defect_score" if fl["rank"] == "defects" else "target_value"
@@ -280,7 +280,7 @@ def main(argv=None) -> None:
                     help="comma-separated opt levels; O2 is excluded by default because "
                          "inlining detaches the decompiled CFG from the source function")
     ap.add_argument("--rank", choices=("defects", "ged"), default="defects",
-                    help="ranking axis: warts in kuna's own output (default) or raw GED")
+                    help="ranking axis: warts in unlace's own output (default) or raw GED")
     ap.add_argument("--per-project", type=int, default=2,
                     help="cap on queue picks from one project (default 2)")
     args = ap.parse_args(argv)

@@ -1,4 +1,4 @@
-# Kuna option itaniumeh (default on): a landing pad folded into the handler
+# Unlace option itaniumeh (default on): a landing pad folded into the handler
 # it jumps to still prints as a try region.
 #
 # The script loads the committed itaniumeh/eh4_x86_64.elf (g++ -O2, source

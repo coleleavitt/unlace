@@ -1,11 +1,11 @@
-# kuna issue `hideshadow` (P6, sub-stage merge-aggressiveness).
+# unlace issue `hideshadow` (P6, sub-stage merge-aggressiveness).
 #
 # Two Varnodes copied from one common ancestor always hold the same value, so
 # upstream Ghidra calls them shadows of one variable.  When the copy paths are
 # not nested the merge machinery cannot fold them into one chain, and the
 # emitted C repeats the assignment.  ActionHideShadow (coreaction.cc:4976) is
 # the upstream pass that repairs this by re-pointing the second copy at the
-# first; kuna carried it as a no-op stub although the engine half
+# first; unlace carried it as a no-op stub although the engine half
 # (Merge::hideShadows, merge.rs) was fully ported.
 #
 # Both functions are gcc -O0 x86-64, each spilling its parameters to the

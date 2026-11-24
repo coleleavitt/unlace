@@ -2,7 +2,7 @@
 
 ## 1. The measured symptom
 
-kuna's DWARF type mapper truncates ordinary C declarations to `void`. Counting the
+unlace's DWARF type mapper truncates ordinary C declarations to `void`. Counting the
 sites directly out of `.debug_info` (simulating both live variants of
 `build_datatype` against every defined subprogram's parameters, `DW_OP_fbreg`
 locals and every CU-top-level `DW_OP_addr` global) over six `-g` C binaries:
@@ -47,7 +47,7 @@ private boolean trackRecursion(long id, int delta) {
 
 Upstream counts **re-entries of one DIE offset** and refuses the third. That fires
 only on a cycle: an acyclic chain visits each offset once, however long it is.
-kuna's reduction conflates "the same DIE again" with "a deep but finite chain", and
+unlace's reduction conflates "the same DIE again" with "a deep but finite chain", and
 four DIEs is ordinary C:
 
 | declaration | chain | hops |
@@ -109,7 +109,7 @@ through, so a local `mbstate_t` is not fused with every other unnamed struct und
 typedef struct { unsigned char op, bits; unsigned short val; } code;
 ```
 
-and kuna registers a **core type named `code`** (`set_core_type("code", 1,
+and unlace registers a **core type named `code`** (`set_core_type("code", 1,
 TYPE_CODE, …)`). `get_type_struct("code")` therefore hits an existing type of
 another kind, the factory refuses the redefinition, the aggregate builds as `None`,
 and the pointer arm's `.or_else(get_type_void)` degrades `code *next` to
@@ -131,7 +131,7 @@ Everything else in the sweep is an improvement, in four shapes:
 The one class that is *noisier* rather than cleaner, and is reported as such: a
 local now typed as a named **opaque** struct (`z_stream_s *strm`) renders its field
 accesses through a cast (`*(char **)strm` where `(char *)*strm` stood before),
-because kuna maps an aggregate to a named opaque with no fields. That is the
+because unlace maps an aggregate to a named opaque with no fields. That is the
 existing `cppproto` seam (struct field population is a separate increment), not a
 new one; the type asserted is the DWARF truth in both cases.
 
@@ -143,7 +143,7 @@ DWARF pass produces nothing there and this change cannot move a single scored
 function. Verified rather than assumed: `decompile-all` off vs on over the stripped
 zlib `minigzip` differs by **0 lines**.
 
-That also re-frames the C `type_match` standing (kuna 5.17%, behind angr 7.29% and
+That also re-frames the C `type_match` standing (unlace 5.17%, behind angr 7.29% and
 ida 5.55%): that gap is measured with **no debug info present**, so it is a gap in
 *inference*, not in DWARF consumption, and no amount of DWARF fidelity addresses it.
 The honest measurement for this change is the unstripped arm — decbench's own

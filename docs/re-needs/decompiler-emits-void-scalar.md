@@ -41,7 +41,7 @@ A valid scalar type for the recovered AL value, even when control flow remains u
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x44ac6b",
@@ -72,7 +72,7 @@ A valid scalar type for the recovered AL value, even when control flow remains u
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x44ac6b",

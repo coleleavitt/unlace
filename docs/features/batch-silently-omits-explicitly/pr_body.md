@@ -1,6 +1,6 @@
 ## The problem
 
-`--define-function` declares where a function starts and ends, and every kuna
+`--define-function` declares where a function starts and ends, and every unlace
 surface honours it except the one that decompiles a whole binary. On a PE that
 flags all of its sections as data — which is what a packer produces, since setting
 `IMAGE_SCN_MEM_EXECUTE` is the packer's choice and NEOLite does not — the
@@ -8,17 +8,17 @@ declaration enumerates and decompiles fine one function at a time, and the batch
 drops it and reports success.
 
 ```console
-$ python3 decompiler/crates/kuna-analysis/tests/fixtures/pe_datasection_entry_i386.py
+$ python3 decompiler/crates/unlace-analysis/tests/fixtures/pe_datasection_entry_i386.py
 wrote pe_datasection_entry_i386.exe (1536 bytes)
-$ F=decompiler/crates/kuna-analysis/tests/fixtures/pe_datasection_entry_i386.exe
+$ F=decompiler/crates/unlace-analysis/tests/fixtures/pe_datasection_entry_i386.exe
 
-$ kuna functions $F --json --define-function 0x402001-0x40200c=entry
+$ unlace functions $F --json --define-function 0x402001-0x40200c=entry
 { "count": 1, "functions": [ { "name": "entry", "address_hex": "0x402001", "size": 11 } ] }
 
-$ kuna decompile $F entry --define-function 0x402001-0x40200c=entry
+$ unlace decompile $F entry --define-function 0x402001-0x40200c=entry
 void entry(void) { sub_401000(); }
 
-$ kuna decompile-all $F --json --define-function 0x402001-0x40200c=entry
+$ unlace decompile-all $F --json --define-function 0x402001-0x40200c=entry
 { "count": 0, "error": null, "functions": [] }
 $ echo $?
 0
@@ -27,7 +27,7 @@ $ echo $?
 The same three commands on the reported image (crackmes.one
 `5ab77f5433c5d40ad448c1c1`, a NEOLite-packed `CryptoME.exe` whose six sections all
 carry `0xc0000040`) give `count: 7`, `void entry(void) { sub_4f7990(); }`, and
-`count: 0`. A bare `kuna decompile-all` on it also exits `0` with a null error, so
+`count: 0`. A bare `unlace decompile-all` on it also exits `0` with a null error, so
 nothing anywhere tells the caller the run failed.
 
 ## The fix

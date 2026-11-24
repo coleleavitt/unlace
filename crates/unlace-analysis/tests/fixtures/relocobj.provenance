@@ -1,5 +1,5 @@
 relocobj_* -- PowerPC and MIPS relocatable objects whose calls and addresses
-are relocations (GH-904; tests/stages/kuna-relocobj-ppc-mips.toml).
+are relocations (GH-904; tests/stages/unlace-relocobj-ppc-mips.toml).
 
 What they are
   relocobj_ppc32_O2.o      PowerPC32 BE, -fno-pic: REL24 calls, ADDR16_HA/LO

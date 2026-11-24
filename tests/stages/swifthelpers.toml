@@ -15,8 +15,8 @@
 # call sites. A generic type's metadata accessor result stays `long`.
 #
 # Stage / sub-stage: P1 external-refinement, the Swift metadata pass
-# (`unlace-analysis/src/analyzers/swift/kuna_swifthelpers.rs`), and P5
-# type propagation (`unlace-decomp/src/p5_types/kuna_swiftmetaresult.rs`,
+# (`unlace-analysis/src/analyzers/swift/unlace_swifthelpers.rs`), and P5
+# type propagation (`unlace-decomp/src/p5_types/unlace_swiftmetaresult.rs`,
 # a `sitetypelock` client).
 #
 # P0 assertion: `option swifthelpers on|off` (default on; inert unless

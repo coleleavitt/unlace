@@ -44,7 +44,7 @@ Find the large VM interpreter using size-based inventory filtering.
   },
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--min-size",
@@ -79,7 +79,7 @@ Find the large VM interpreter using size-based inventory filtering.
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "functions",
     "{{BIN}}",
     "--min-size",
@@ -140,7 +140,7 @@ _none recorded_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- round 4 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK BY THE CAPTAIN, on the filed witness 605443e3, sha 6188e204, arena .kuna-repipe/arena/4/605443e333c5d42c3d016f59/target/KataVM_Level_1.7z.__x/KataVM_Level_1/KataVM_L1.
+- round 4 REFUTER: hypothesis **upheld** (was inconclusive). REFUTED IN-TICK BY THE CAPTAIN, on the filed witness 605443e3, sha 6188e204, arena .unlace-repipe/arena/4/605443e333c5d42c3d016f59/target/KataVM_Level_1.7z.__x/KataVM_Level_1/KataVM_L1.
 
 SYMPTOM REPRODUCED AND ISOLATED BY CONTROL. `unlace functions <bin> --json` on the witness returns 12 functions, ALL with size 0. The control matters more than the repro: the same binary from a different round-4 arena, graphy (sectioned static ELF), returns 55 functions with ZERO of them size 0 (sub_1002c90 size 8704). So `size` is not structurally dead -- it works, and it dies on this binary specifically. `file` reports the witness as a PIE with 'no section header'.
 

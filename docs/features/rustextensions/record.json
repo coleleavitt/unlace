@@ -4,7 +4,7 @@
   "selection": "outlang rust; existing C and Go behavior preserved",
   "baseline_commit": "c28134ce02f52cc26a70e0ba71be210f3dd60d8d",
   "actual_main_merge": "c28134ce02f52cc26a70e0ba71be210f3dd60d8d",
-  "kuna_sha256": "29270f9e6c85786a398482beed0f01b16050f651993bc605bc976c16c17f3050",
+  "unlace_sha256": "29270f9e6c85786a398482beed0f01b16050f651993bc605bc976c16c17f3050",
   "breadth": {
     "images": 18,
     "distinct_functions": 25339,

@@ -3,20 +3,20 @@
 # `globals`. The script loads an in-tree linked image of opaqueglobal.c
 # (source beside it): clang -O0, x86-64, freestanding and static.
 #
-# Narrow inputs (kuna_opaquedomain.rs): (v * v * v - v) % 3 is zero and
+# Narrow inputs (unlace_opaquedomain.rs): (v * v * v - v) % 3 is zero and
 # v * v is not negative for every byte v, so cube and square lose their
 # dead arm; cubewide tests a 32-bit v, for which the product wraps, and
 # stays.
 #
-# Implied (kuna_opaqueimplied.rs): inside `if (v > 5)` the test `v <= 5` is
+# Implied (unlace_opaqueimplied.rs): inside `if (v > 5)` the test `v <= 5` is
 # false (again), inside `if (v < 5)` so is `v > 10` (range); `v > 2` is
 # still open there (rangekeep).
 #
-# Identical arms (kuna_opaquearms.rs): same and samecall run the same
+# Identical arms (unlace_opaquearms.rs): same and samecall run the same
 # operations whichever way their branch goes, so one copy remains; differ
 # multiplies by another constant in one arm and keeps both.
 #
-# Never-written globals (kuna_opaqueglobals.rs, value `globals` only): no
+# Never-written globals (unlace_opaqueglobals.rs, value `globals` only): no
 # instruction stores to y, seven or next and no code holds their address,
 # so `y >= 10` (bogus), `seven != 7` (init) and `next != 0` (afterarr) are
 # decided by the image's bytes. `on` leaves bogus and init alone. live is

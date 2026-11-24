@@ -1,4 +1,4 @@
-# (kuna) `option msvcstackguard` (P7 edge-virtualization, default OFF), the
+# (unlace) `option msvcstackguard` (P7 edge-virtualization, default OFF), the
 # Windows sibling of `stackguard`.  GH-468 finding 3.
 #
 # MSVC's /GS scrambles a global cookie with the stack pointer at entry and

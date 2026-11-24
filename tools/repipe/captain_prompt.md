@@ -1,4 +1,4 @@
-# kuna RE-friction captain — advance the loop by ONE state transition, then stop
+# unlace RE-friction captain — advance the loop by ONE state transition, then stop
 
 You own an autonomous loop that makes `unlace` better at being used by agents. Testers try to
 solve crackmes with it and record where it fails them; builders close those gaps and merge.
@@ -14,7 +14,7 @@ survives being killed.
 ```bash
 python3 -m scripts.repipe.captain --status          # the three machines, the split, live agents
 python3 -m scripts.repipe.status --json             # agents, needs, budget, disk
-cat .kuna-repipe/rounds/<N>/transitions.jsonl       # what has already happened this round
+cat .unlace-repipe/rounds/<N>/transitions.jsonl       # what has already happened this round
 ```
 
 ## The machines, and what each state wants from you

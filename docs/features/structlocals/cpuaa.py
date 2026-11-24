@@ -1,6 +1,6 @@
 """Interleaved min-of-N decompile-all wall AND cpu time with an A/A control: param, default locals and param again, one build.
 
-    python3 cpuaa.py <N> <out.json> sort[,fmt,...] <kuna>
+    python3 cpuaa.py <N> <out.json> sort[,fmt,...] <unlace>
 
 CPU time is less sensitive than wall time to a box shared with other jobs.
 """
@@ -8,18 +8,18 @@ import json, os, statistics, subprocess, sys, time
 R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2"
 ALL = {"fmt": f"{R}/coreutils/stripped/fmt", "ls": f"{R}/coreutils/stripped/ls",
        "sort": f"{R}/coreutils/stripped/sort", "bash": f"{R}/bash/stripped/bash"}
-SP = os.environ["KUNA_SPECS"]
-N = int(sys.argv[1]); outf = sys.argv[2]; which = sys.argv[3].split(","); kuna = sys.argv[4]
+SP = os.environ["UNLACE_SPECS"]
+N = int(sys.argv[1]); outf = sys.argv[2]; which = sys.argv[3].split(","); unlace = sys.argv[4]
 K = {"param": ["--option", "structsynth", "param"], "locals": [], "param_b": ["--option", "structsynth", "param"]}
 ARMS = list(K)
-env = dict(os.environ, SLEIGHHOME=SP, KUNA_SPECS=SP)
+env = dict(os.environ, SLEIGHHOME=SP, UNLACE_SPECS=SP)
 out = {}
 for name in which:
     wall = {a: [] for a in ARMS}; cpu = {a: [] for a in ARMS}
     for i in range(N):
         for lab in (ARMS[i % 3:] + ARMS[:i % 3]):
             t0 = time.perf_counter()
-            p = subprocess.Popen([kuna, "decompile-all", ALL[name], "--json", "--max-fn-seconds", "120"] + K[lab],
+            p = subprocess.Popen([unlace, "decompile-all", ALL[name], "--json", "--max-fn-seconds", "120"] + K[lab],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
             _, status, ru = os.wait4(p.pid, 0)
             wall[lab].append(round((time.perf_counter() - t0) * 1000, 1))

@@ -3,7 +3,7 @@
 Measured on the campaign's 444 slices (projects coreutils grep gzip diffutils bzip2
 findutils tar shadow x, `--opt O0 --opt O2 --opt O2-noinline`, stripped images), against
 the unstripped DWARF twins in the same tree. Scripts: `.scratch/cbscan.py` (the objdump
-walk) and `.scratch/cbstep2.py` (kuna + DWARF), kept in the PR as `census-scan.py` /
+walk) and `.scratch/cbstep2.py` (unlace + DWARF), kept in the PR as `census-scan.py` /
 `census-types.py` beside this file.
 
 ## 1. How many
@@ -35,11 +35,11 @@ handlers (`bzip2` spells it `IntNative`, a `typedef` for `int`), `void *(void *)
 `sortlines_thread`. Not one target is reached through two slots that disagree, and not one
 has a DWARF declaration the slot contradicts.
 
-## 3. What does kuna recover today?
+## 3. What does unlace recover today?
 
-Parameters of the 50, from `kuna decompile-all --json` on 796939d54:
+Parameters of the 50, from `unlace decompile-all --json` on 796939d54:
 
-| rows | declared | kuna today | |
+| rows | declared | unlace today | |
 |---|---|---|---|
 | 16 | `(int)` | `()` | the handler ignores its argument, so nothing is recovered |
 | 15 | `(void *, void *)` | `(unsigned long *, unsigned long *)` | right shape, wrong pointee |
@@ -49,7 +49,7 @@ Parameters of the 50, from `kuna decompile-all --json` on 796939d54:
 | 3 | `(void *)` | `(unsigned long *)` | |
 | 1 | `(int)` | `(int)` | already right |
 
-**67 GT parameters** would move, of which 16 are a parameter kuna does not recover at all
+**67 GT parameters** would move, of which 16 are a parameter unlace does not recover at all
 (the signal handlers that never read `edi`) and the remaining 51 are a pointee. Seven rows
 are signedness-only and move no metric.
 

@@ -7,7 +7,7 @@ The reported binary carried `e_shoff=57005` (0xDEAD), `e_shnum=57007` and
 `e_shstrndx=47806` in a 161156-byte file -- a section table 2 MB past EOF -- and
 nine intact program headers. `readelf -h -l` warns and then prints the entry
 point and both LOAD segments; `object::File::parse` rejects the whole file, so
-every kuna surface exited 1. Those three header values are reproduced verbatim
+every unlace surface exited 1. Those three header values are reproduced verbatim
 here over two functions, `_start` and the leaf it calls:
 
     08048054  55                push ebp

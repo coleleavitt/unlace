@@ -24,7 +24,7 @@ fn run_unlace(args: &[&str]) -> (String, String, i32) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     (
         String::from_utf8_lossy(&out.stdout).into_owned(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -82,7 +82,7 @@ fn each_row_names_the_function_that_references_it() {
 
 #[test]
 fn extract_writes_each_file_byte_for_byte() {
-    let dir = std::env::temp_dir().join(format!("kuna-blobs-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace-blobs-{}", std::process::id()));
     let (out, err, code) = run_unlace(&[
         "blobs",
         &fixture(),

@@ -1,4 +1,4 @@
-# Kuna #1634: a WebAssembly module is an input (P1 program prep, P2 lift;
+# Unlace #1634: a WebAssembly module is an input (P1 program prep, P2 lift;
 # always on, no option). The loader lays the module out as a flat image and
 # lowers each stack-machine body to register form; Wasm.slaspec lifts it.
 # One pass: there is no earlier output to compare with, the module did not

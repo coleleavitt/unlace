@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
 fn build(source: &str) -> (std::path::PathBuf, std::path::PathBuf, String) {
     let asm = common::scratch_file("direct-call-return", "S");
     let elf = asm.with_extension("elf");
-    let assertions = asm.with_extension("kuna");
+    let assertions = asm.with_extension("unlace");
     std::fs::write(&asm, source).unwrap();
     process::required_output(
         Command::new("clang")

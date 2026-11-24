@@ -31,7 +31,7 @@ below, not argued.
 
 — a `call` with **no matching push**. Every other x86 `CALL` pcode does `RSP = RSP - 8` first,
 and `x86-64-win.cspec`'s default `__fastcall` carries `extrapop="8" stackshift="8"`, so a real
-call is net zero. This one is net **+8**, and kuna prints it:
+call is net zero. This one is net **+8**, and unlace prints it:
 
 ```c
 (*(void *)swi(0x29))(5);
@@ -55,11 +55,11 @@ v12 = BCryptGenerateSymmetricKey(*(unsigned long long *)&v66[0x50],&v53,v60,v51)
 ### The mechanism is proven, twice, without touching engine code
 
 `__fastfail` never returns — that is its entire contract — so the honest answer is to cut flow
-there. kuna already has that lever on the `--assert` plane, which makes the fix measurable
+there. unlace already has that lever on the `--assert` plane, which makes the fix measurable
 before it is written:
 
 ```bash
-kuna decompile selam.exe 0x140002d50 --addr \
+unlace decompile selam.exe 0x140002d50 --addr \
   --assert 'flow 0x140003d8f callreturn' ... (× the 11 INT 0x29 sites)
 ```
 
@@ -128,7 +128,7 @@ The condition the tester quoted is **faithfully in the binary**. MSVC emitted it
 0x140003864   MOV ECX,0x6 ; XOR EAX,EAX ; MOV RDI,R12 ; REP STOSB     ; memset(R12,0,6)
 ```
 
-`first != last` where `last = first + 6`, which the compiler never folded. kuna reproduces it
+`first != last` where `last = first + 6`, which the compiler never folded. unlace reproduces it
 honestly and then also fails to collapse the fill itself, so one `memset(p,0,6)` costs six lines
 and two variables:
 

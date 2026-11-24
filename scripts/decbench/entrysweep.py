@@ -1,8 +1,8 @@
 """Corpus-scale, bidirectional A/B for a **function-discovery** option flip.
 
-`optsweep` is the GED-tier ablation: it measures the C kuna emits for functions
+`optsweep` is the GED-tier ablation: it measures the C unlace emits for functions
 it already found. This is its discovery-tier twin -- it measures *which functions
-kuna finds* -- and it is the instrument GH-299 and GH-313 are scored on.
+unlace finds* -- and it is the instrument GH-299 and GH-313 are scored on.
 
 Every stripped binary in the decbench results tree has an unstripped `compiled/`
 twin, so each arm's entry set is scored against an exact symbol table by
@@ -33,7 +33,7 @@ Usage (from the repo root; plain python3, pyelftools optional)::
     python3 -m scripts.decbench.entrysweep --arms shipped: g1:aif=precise \\
         aifoff:aif=off --marginal aifoff --out /tmp/sweep_g1.json
 
-    # re-print a saved run (per-binary table + tripwires), no kuna runs
+    # re-print a saved run (per-binary table + tripwires), no unlace runs
     python3 -m scripts.decbench.entrysweep --report /tmp/sweep_g1.json
 
     # a single witness with no decbench twin (a reference-decompiler inventory)
@@ -45,7 +45,7 @@ runs the 693 x86-64 twins as the no-regression control, and `--tripwire SUBSTR`
 (repeatable) names the per-binary rows to print first -- the images whose
 regression vetoes a flip regardless of the totals.
 
-Knobs: `KUNA_BIN`, `KUNA_SPECS`, `KUNA_DECBENCH_RESULTS` (see `config.py`).
+Knobs: `UNLACE_BIN`, `UNLACE_SPECS`, `UNLACE_DECBENCH_RESULTS` (see `config.py`).
 """
 import argparse
 import collections
@@ -56,7 +56,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 
 from . import config
-from .entryscore import ground_truth, kuna_entries, score
+from .entryscore import ground_truth, unlace_entries, score
 
 SKIP_EXT = (".id0", ".id1", ".id2", ".nam", ".til", ".json", ".c", ".log", ".txt", ".idb", ".i64")
 METRICS = ("entries", "exact", "midbody", "midbody_known", "unknown", "gt", "seconds")
@@ -112,7 +112,7 @@ def score_one(t, arms, mode, timeout, marginal):
         gt = ground_truth(gtp)
         ents = {}
         for name, opts in arms:
-            ents[name], dt = kuna_entries(sp, opts, mode, timeout)
+            ents[name], dt = unlace_entries(sp, opts, mode, timeout)
             row[name] = dict(seconds=round(dt, 2))
         for name, _ in arms:
             row[name].update(score(ents[name], gt))
@@ -225,7 +225,7 @@ def main(argv=None):
         if a.limit:
             tg = tg[: a.limit]
     print(f"targets={len(tg)} arms={[n for n, _ in arms]} mode={a.mode} "
-          f"bin={config.kuna_bin()}", flush=True)
+          f"bin={config.unlace_bin()}", flush=True)
 
     rows = []
     with ThreadPoolExecutor(max_workers=a.jobs) as ex:

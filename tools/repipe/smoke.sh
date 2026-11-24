@@ -18,17 +18,17 @@
 #   - at least one need must have been produced by clustering (zero needs is not "clean").
 set -uo pipefail
 
-REPO="${KUNA_REPO:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel)}"
-PY="${KUNA_PY:-python3}"
+REPO="${UNLACE_REPO:-$(git -C "$(dirname "$0")" rev-parse --show-toplevel)}"
+PY="${UNLACE_PY:-python3}"
 LEVEL="${1:-}"
 [ "$LEVEL" = "--level" ] && LEVEL="${2:-1}" || LEVEL=1
 
 export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
 SMOKE_STATE="$(mktemp -d "${TMPDIR:-/tmp}/repipe-smoke-XXXXXX")"
-export KUNA_PIPELINE_STATE_DIR="$SMOKE_STATE"
+export UNLACE_PIPELINE_STATE_DIR="$SMOKE_STATE"
 trap 'rm -rf "$SMOKE_STATE"' EXIT
 
-DATASET="${REPIPE_DATASET:-$HOME/github/kuna-re-dataset}"
+DATASET="${REPIPE_DATASET:-$HOME/github/unlace-re-dataset}"
 FIX="$REPO/tools/repipe/fixtures"
 PASS=0; FAIL=0
 # canaries
@@ -139,7 +139,7 @@ grep -q -- '--disable multi_agent' "$REPO/tools/repipe/tester.sh" \
   && grep -q -- '--disable multi_agent_v2' "$REPO/tools/repipe/tester.sh" \
   && ok "reversers cannot bypass pipeline slots with Codex sub-agents" \
   || bad "reverser launch does not disable Codex multi-agent features"
-KUNA_PIPELINE_STATE_DIR="$SMOKE_STATE/spawn-policy" "$PY" - <<'PY' >/dev/null 2>&1 \
+UNLACE_PIPELINE_STATE_DIR="$SMOKE_STATE/spawn-policy" "$PY" - <<'PY' >/dev/null 2>&1 \
   && ok "captain exports the validated Sol-low policy to reversers" \
   || bad "captain does not pin the reverser subprocess environment"
 from scripts.repipe import captain
@@ -199,7 +199,7 @@ printf 'base\n' > "$LAUNCH_REPO/tracked"
 git -C "$LAUNCH_REPO" add tracked
 git -C "$LAUNCH_REPO" commit -qm base
 run_prepare() {
-  KUNA_REPO="$LAUNCH_REPO" KUNA_PY="$PY" PIPELINE_STATE_DIRNAME=.state \
+  UNLACE_REPO="$LAUNCH_REPO" UNLACE_PY="$PY" PIPELINE_STATE_DIRNAME=.state \
     WORKER_PREPARE_ONLY=1 WORKER_ID="$1" OPP_ID=smoke TEST_NAME=smoke \
     SELECTOR=- BINARY=- SLUG=collision ARCH= WORKER_BRANCH="$2" \
     IMPL_PROPOSAL="${3:-0}" RESUME_BRANCH="${4:-}" \
@@ -333,7 +333,7 @@ printf '%s\n' \
   'printf "%s\\n" '\''{"type":"item.completed","item":{"type":"agent_message","text":"event fallback"}}'\''' \
   > "$FAKE_BIN/codex"
 chmod +x "$FAKE_BIN/codex"
-if PATH="$FAKE_BIN:$PATH" PYTHONPATH="$REPO" KUNA_REPO="$LAUNCH_REPO" KUNA_PY="$PY" \
+if PATH="$FAKE_BIN:$PATH" PYTHONPATH="$REPO" UNLACE_REPO="$LAUNCH_REPO" UNLACE_PY="$PY" \
    PIPELINE_STATE_DIRNAME=.state WORKER_ID=codex-launch OPP_ID='odd&|path\name' TEST_NAME=smoke \
    SELECTOR=- BINARY=- SLUG=codex-launch ARCH= \
    WORKER_BRANCH=feat/re-codex-launch WORKER_BACKEND=codex WORKER_MODEL=gpt-5.6-sol \
@@ -369,7 +369,7 @@ printf '%s\n' \
   'printf "%s\\n" '\''{"session_id":"claude-smoke","result":"mock final response"}'\''' \
   > "$FAKE_BIN/claude"
 chmod +x "$FAKE_BIN/claude"
-if PATH="$FAKE_BIN:$PATH" PYTHONPATH="$REPO" KUNA_REPO="$LAUNCH_REPO" KUNA_PY="$PY" \
+if PATH="$FAKE_BIN:$PATH" PYTHONPATH="$REPO" UNLACE_REPO="$LAUNCH_REPO" UNLACE_PY="$PY" \
    PIPELINE_STATE_DIRNAME=.state WORKER_ID=claude-launch OPP_ID=smoke TEST_NAME=smoke \
    SELECTOR=- BINARY=- SLUG=claude-launch ARCH= WORKER_BRANCH=feat/re-claude-launch \
    WORKER_BACKEND=claude WORKER_MODEL=opus \
@@ -400,7 +400,7 @@ CAP_BRANCH="$($PY -c 'from scripts.repipe.captain import _builder_branch; print(
   && ok "RE captain assigns a stable round-specific fresh branch" \
   || bad "RE captain branch is not stable and round-specific" "$CAP_BRANCH"
 
-KUNA_PIPELINE_STATE_DIR="$SMOKE_STATE/resume-test" "$PY" - <<'PY' >/dev/null 2>&1 \
+UNLACE_PIPELINE_STATE_DIR="$SMOKE_STATE/resume-test" "$PY" - <<'PY' >/dev/null 2>&1 \
   && ok "operator resume is guarded and clears HALT_REASON only on success" \
   || bad "operator HALTED recovery guard failed"
 from scripts.repipe import captain, config
@@ -462,7 +462,7 @@ assert captain.load_round(9)["supervisor"] == "RUNNING"
 assert reason.read_text() == "later halt\n"
 PY
 
-KUNA_PIPELINE_STATE_DIR="$SMOKE_STATE/restart-test" "$PY" - <<'PY' >/dev/null 2>&1 \
+UNLACE_PIPELINE_STATE_DIR="$SMOKE_STATE/restart-test" "$PY" - <<'PY' >/dev/null 2>&1 \
   && ok "STOPPED restart is guarded and records the operator edge" \
   || bad "operator STOPPED restart guard failed"
 import json
@@ -514,7 +514,7 @@ assert not out["ok"] and "ABORT" in out["problems"][0], out
 assert captain.load_round(10)["supervisor"] == "STOPPED"
 PY
 
-KUNA_PIPELINE_STATE_DIR="$SMOKE_STATE/restart-concurrent" "$PY" - <<'PY' >/dev/null 2>&1 \
+UNLACE_PIPELINE_STATE_DIR="$SMOKE_STATE/restart-concurrent" "$PY" - <<'PY' >/dev/null 2>&1 \
   && ok "concurrent launchers produce one restart without a stale STOP" \
   || bad "concurrent STOPPED launchers can still drain the winner"
 import json
@@ -555,7 +555,7 @@ assert len(operator_edges) == 1, records
 assert operator_edges[0]["from"] == "STOPPED" and operator_edges[0]["to"] == "RUNNING"
 PY
 
-KUNA_PIPELINE_STATE_DIR="$SMOKE_STATE/lifetime-lock" \
+UNLACE_PIPELINE_STATE_DIR="$SMOKE_STATE/lifetime-lock" \
   REPIPE_LOCK_TREE="$FIX/supervisor_lock_tree.sh" "$PY" - <<'PY' >/dev/null 2>&1 \
   && ok "nested foreground trees retain supervisor ownership across TERM and SIGKILL" \
   || bad "nested supervisor lifetime ownership failed"
@@ -566,7 +566,7 @@ import subprocess
 import sys
 import time
 
-root = Path(os.environ["KUNA_PIPELINE_STATE_DIR"])
+root = Path(os.environ["UNLACE_PIPELINE_STATE_DIR"])
 root.mkdir(parents=True)
 tree = os.environ["REPIPE_LOCK_TREE"]
 
@@ -662,10 +662,10 @@ printf '%s\n' \
   'case "$*" in' \
   '  *"--preflight"*) exit 0;;' \
   '  *"--restart-stopped"*)' \
-  '    case "$*" in *"--consume-stop"*) rm -f "$KUNA_PIPELINE_STATE_DIR/STOP";; esac' \
-  '    [ ! -e "$KUNA_PIPELINE_STATE_DIR/STOP" ] || exit 1' \
-  '    [ ! -e "$KUNA_PIPELINE_STATE_DIR/ABORT" ] || exit 1' \
-  '    touch "$KUNA_PIPELINE_STATE_DIR/restarted";;' \
+  '    case "$*" in *"--consume-stop"*) rm -f "$UNLACE_PIPELINE_STATE_DIR/STOP";; esac' \
+  '    [ ! -e "$UNLACE_PIPELINE_STATE_DIR/STOP" ] || exit 1' \
+  '    [ ! -e "$UNLACE_PIPELINE_STATE_DIR/ABORT" ] || exit 1' \
+  '    touch "$UNLACE_PIPELINE_STATE_DIR/restarted";;' \
   '  *"--status"*) printf '\''{"states":{"supervisor":"STOPPED"},"round":1}\n'\'';;' \
   '  *'\''["states"]["supervisor"]'\''*) printf '\''STOPPED\n'\'';;' \
   '  *'\''["round"]'\''*) printf '\''1\n'\'';;' \
@@ -673,7 +673,7 @@ printf '%s\n' \
   'esac' > "$RUN_PY"
 chmod +x "$RUN_REPO/tools/repipe/captain.sh" "$RUN_PY"
 touch "$RUN_REPO/.state/STOP"
-if KUNA_REPO="$RUN_REPO" KUNA_PY="$RUN_PY" REPIPE_LOCK_PY="$PY" REPIPE_STATE_DIRNAME=.state \
+if UNLACE_REPO="$RUN_REPO" UNLACE_PY="$RUN_PY" REPIPE_LOCK_PY="$PY" REPIPE_STATE_DIRNAME=.state \
    bash "$REPO/tools/repipe/run.sh" >/dev/null 2>&1 \
    && [ -e "$RUN_REPO/.state/restarted" ] && [ ! -e "$RUN_REPO/.state/STOP" ]; then
   ok "run.sh consumes a completed STOP and invokes guarded restart"
@@ -682,7 +682,7 @@ else
 fi
 rm -f "$RUN_REPO/.state/restarted"
 touch "$RUN_REPO/.state/STOP" "$RUN_REPO/.state/ABORT"
-if KUNA_REPO="$RUN_REPO" KUNA_PY="$RUN_PY" REPIPE_LOCK_PY="$PY" REPIPE_STATE_DIRNAME=.state \
+if UNLACE_REPO="$RUN_REPO" UNLACE_PY="$RUN_PY" REPIPE_LOCK_PY="$PY" REPIPE_STATE_DIRNAME=.state \
    bash "$REPO/tools/repipe/run.sh" >/dev/null 2>&1; then
   bad "run.sh accepted an uncleared ABORT"
 elif [ -e "$RUN_REPO/.state/STOP" ] && [ -e "$RUN_REPO/.state/ABORT" ] \
@@ -691,7 +691,7 @@ elif [ -e "$RUN_REPO/.state/STOP" ] && [ -e "$RUN_REPO/.state/ABORT" ] \
 else
   bad "run.sh mutated control files while refusing ABORT"
 fi
-KUNA_REPO="$RUN_REPO" KUNA_PY="$RUN_PY" REPIPE_LOCK_PY="$PY" REPIPE_STATE_DIRNAME=.state \
+UNLACE_REPO="$RUN_REPO" UNLACE_PY="$RUN_PY" REPIPE_LOCK_PY="$PY" REPIPE_STATE_DIRNAME=.state \
   bash "$REPO/tools/repipe/run.sh" --internal-supervisor-lock-held >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 2 ] && [ ! -e "$RUN_REPO/.state/restarted" ]; then
@@ -709,7 +709,7 @@ touch "$CONCURRENT_REPO/.state/STOP"
 (
   touch "$CONCURRENT_REPO/gate/1"
   while [ ! -e "$CONCURRENT_REPO/gate/2" ]; do sleep 0.01; done
-  KUNA_REPO="$CONCURRENT_REPO" KUNA_PY="$FIX/concurrent_launcher_python.py" \
+  UNLACE_REPO="$CONCURRENT_REPO" UNLACE_PY="$FIX/concurrent_launcher_python.py" \
     REPIPE_LOCK_PY="$PY" REPIPE_STATE_DIRNAME=.state REPIPE_POLL=0 \
     timeout 15 bash "$REPO/tools/repipe/run.sh"
 ) >"$SMOKE_STATE/concurrent-run-1.log" 2>&1 &
@@ -717,7 +717,7 @@ RUN1=$!
 (
   touch "$CONCURRENT_REPO/gate/2"
   while [ ! -e "$CONCURRENT_REPO/gate/1" ]; do sleep 0.01; done
-  KUNA_REPO="$CONCURRENT_REPO" KUNA_PY="$FIX/concurrent_launcher_python.py" \
+  UNLACE_REPO="$CONCURRENT_REPO" UNLACE_PY="$FIX/concurrent_launcher_python.py" \
     REPIPE_LOCK_PY="$PY" REPIPE_STATE_DIRNAME=.state REPIPE_POLL=0 \
     timeout 15 bash "$REPO/tools/repipe/run.sh"
 ) >"$SMOKE_STATE/concurrent-run-2.log" 2>&1 &
@@ -752,7 +752,7 @@ printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$DELAYED_REPO/tools/repipe/capta
 chmod +x "$DELAYED_REPO/tools/repipe/captain.sh"
 printf 'STOPPED\n' > "$DELAYED_REPO/.state/fake-state"
 touch "$DELAYED_REPO/.state/STOP"
-KUNA_REPO="$DELAYED_REPO" KUNA_PY="$FIX/concurrent_launcher_python.py" \
+UNLACE_REPO="$DELAYED_REPO" UNLACE_PY="$FIX/concurrent_launcher_python.py" \
   REPIPE_LOCK_PY="$PY" REPIPE_STATE_DIRNAME=.state REPIPE_POLL=0 \
   timeout 15 bash "$REPO/tools/repipe/run.sh" \
   >"$SMOKE_STATE/delayed-run-1.log" 2>&1 &
@@ -762,7 +762,7 @@ for _ in $(seq 1 500); do
   if [ -e "$DELAYED_REPO/.state/tick-waiting" ]; then READY=1; break; fi
   sleep 0.01
 done
-KUNA_REPO="$DELAYED_REPO" KUNA_PY="$FIX/concurrent_launcher_python.py" \
+UNLACE_REPO="$DELAYED_REPO" UNLACE_PY="$FIX/concurrent_launcher_python.py" \
   REPIPE_LOCK_PY="$PY" REPIPE_STATE_DIRNAME=.state REPIPE_POLL=0 \
   timeout 5 bash "$REPO/tools/repipe/run.sh" \
   >"$SMOKE_STATE/delayed-run-2.log" 2>&1
@@ -831,14 +831,14 @@ if command -v bwrap >/dev/null 2>&1; then
   N="$(bwrap --dev-bind / / --tmpfs "$DATASET" -- ls "$DATASET" 2>/dev/null | wc -l)"
   [ "$N" = "0" ] && { ok "dataset is empty inside the namespace"; SAW_SANDBOX=1; } || bad "dataset still visible ($N entries)"
   bwrap --dev-bind / / --tmpfs "$DATASET" -- "$REPO/target/release/unlace" --version >/dev/null 2>&1 \
-    && ok "kuna still runs inside the namespace" || bad "kuna broken inside the namespace"
+    && ok "unlace still runs inside the namespace" || bad "unlace broken inside the namespace"
 else
   bad "bwrap missing -- containment is prompt-only and this canary must not be skipped silently"
 fi
 
 head_ "L1  the two-arm gate returns each of its three verdicts"
 CH="$DATASET/challenges/64f1f7afd931496abf909525"   # a real work dir for the probes below
-# This used to gate against a live kuna defect, and the canary caught the day that defect was
+# This used to gate against a live unlace defect, and the canary caught the day that defect was
 # FIXED: the probe stopped reproducing and the smoke failed for the best possible reason. A
 # self-test must not decay every time the product improves, so the arms below are constructed
 # to hold forever, and the "against truth" job moved to tests/cli/ -- five probes that each
@@ -847,10 +847,10 @@ GATE_OBS="$SMOKE_STATE/gate-obs.json"
 mk_obs() {  # $1 probe-expect, $2 acceptance-expect
   "$PY" - "$1" "$2" > "$GATE_OBS" <<'PY'
 import json, sys
-arm = lambda e: {"schema": "re-probe/1", "kind": "cli", "cmd": ["{{KUNA}}", "--version"],
+arm = lambda e: {"schema": "re-probe/1", "kind": "cli", "cmd": ["{{UNLACE}}", "--version"],
                  "cwd": "{{TMP}}", "timeout_s": 30, "repeat": 1, "expect": json.loads(e)}
 json.dump({"kind": "bad-ux", "title": "gate self-test", "what_i_wanted": "x",
-           "what_kuna_did": "y", "severity": "minor",
+           "what_unlace_did": "y", "severity": "minor",
            "probe": arm(sys.argv[1]), "acceptance": arm(sys.argv[2])},
           open("/dev/stdout", "w"))
 PY
@@ -877,9 +877,9 @@ V="$(gate_verdict)"
 # traceback: one such observation used to take down the gate for the whole round with it
 "$PY" - > "$GATE_OBS" <<'PY'
 import json
-arm = '{"schema":"re-probe/1","kind":"cli","cmd":["{{KUNA}}","--version"],"expect":{"stdout_matches":["\\s+"]}}'
+arm = '{"schema":"re-probe/1","kind":"cli","cmd":["{{UNLACE}}","--version"],"expect":{"stdout_matches":["\\s+"]}}'
 json.dump({"kind": "bad-ux", "title": "gate self-test", "what_i_wanted": "x",
-           "what_kuna_did": "y", "severity": "minor",
+           "what_unlace_did": "y", "severity": "minor",
            "probe": arm, "acceptance": arm}, open("/dev/stdout", "w"))
 PY
 V="$(gate_verdict)"
@@ -907,7 +907,7 @@ else
 fi
 "$PY" - <<'PY' >/dev/null 2>&1 && ok "the checker actually catches a violation" || bad "strictschema check is inert"
 import sys
-sys.path.insert(0, "/home/mahaloz/github/kuna")
+sys.path.insert(0, "/home/mahaloz/github/unlace")
 from scripts.repipe import strictschema
 # an object missing a key from `required`, and a bare enum with no type
 bad_schema = {"type": "object", "additionalProperties": False,
@@ -949,14 +949,14 @@ p = json.load(open(F + "probe-zero-functions.json"))
 a = json.load(open(F + "accept-zero-functions.json"))
 def o(title, hexid, tester, kind="silent-failure", wanted="function inventory"):
     return {"kind": kind, "title": title, "what_i_wanted": wanted,
-            "what_kuna_did": "count 0 exit 0", "severity": "blocker",
+            "what_unlace_did": "count 0 exit 0", "severity": "blocker",
             "probe": p, "acceptance": a, "_hexid": hexid, "_tester": tester, "_round": 1}
 json.dump([
     o("unlace functions returns 0 functions on a stripped PIE", "64f1f7af", "t1"),
     o("functions --json is empty for a section-stripped binary", "60be2a60", "t2"),
     o("no functions found and no error reported", "6609e458", "t3"),
-    o("kuna has no way to list strings", "64f1f7af", "t1", "missing-capability", "the string inventory"),
-    o("cannot enumerate strings from kuna at all", "6883765e", "t2", "missing-capability", "string table"),
+    o("unlace has no way to list strings", "64f1f7af", "t1", "missing-capability", "the string inventory"),
+    o("cannot enumerate strings from unlace at all", "6883765e", "t2", "missing-capability", "string table"),
 ], open("/dev/stdout", "w"), indent=2)
 PY
 CL="$("$PY" -m scripts.repipe.cluster --round 1 --from-file "$OBS" --dry-run --json 2>/dev/null)"
@@ -983,7 +983,7 @@ head_ "L1  regressions the review found (each of these shipped broken once)"
 # newline in a tester-authored title used to destroy every front-matter field after it
 "$PY" - <<'PY' >/dev/null 2>&1 && ok "a newline in a title cannot corrupt front matter" || bad "front-matter escaping regressed"
 import sys, tempfile, os
-sys.path.insert(0, "/home/mahaloz/github/kuna")
+sys.path.insert(0, "/home/mahaloz/github/unlace")
 from scripts.repipe import needs
 evil = "one\nstatus: HIJACKED\ntrack: quality"
 n = needs.Need(fields={"need_id": "x", "title": evil, "track": "tooling", "severity": "major"})
@@ -994,7 +994,7 @@ PY
 # a probe and its own negation both passing made the gate report already-supported
 "$PY" - <<'PY' >/dev/null 2>&1 && ok "exists/absent cannot both pass on a mixed array" || bad "json quantifier regressed"
 import sys
-sys.path.insert(0, "/home/mahaloz/github/kuna")
+sys.path.insert(0, "/home/mahaloz/github/unlace")
 from scripts.repipe import probe
 obs = {"runs": [{"exit_code": 0, "stdout": '{"f":[{"s":1},{}]}', "stderr": "",
                  "wall_ms": 1, "timed_out": False, "error": None, "stdout_bytes": 10}],
@@ -1008,7 +1008,7 @@ PY
 # a catastrophic-backtracking regex used to hang the gate forever
 timeout 60 "$PY" - <<'PY' >/dev/null 2>&1 && ok "a pathological regex is time-bounded" || bad "regex budget regressed (hung or errored)"
 import sys
-sys.path.insert(0, "/home/mahaloz/github/kuna")
+sys.path.insert(0, "/home/mahaloz/github/unlace")
 from scripts.repipe import probe
 obs = {"runs": [{"exit_code": 0, "stdout": "a"*40+"!", "stderr": "", "wall_ms": 1,
                  "timed_out": False, "error": None, "stdout_bytes": 41}], "baselines": {}}
@@ -1046,8 +1046,8 @@ done
 head_ "L1  every status surface agrees with the inventory about a LIVE agent"
 
 # Round 2 shipped with BOTH status surfaces silently wrong on a loop that was running
-# perfectly: the CLI read the other pipeline's inventory (KUNA_PIPELINE_STATE_DIR unset,
-# so `.kuna-pipeline/` -- empty), and the dashboard read meta["tracks"]["test"]["state"]
+# perfectly: the CLI read the other pipeline's inventory (UNLACE_PIPELINE_STATE_DIR unset,
+# so `.unlace-pipeline/` -- empty), and the dashboard read meta["tracks"]["test"]["state"]
 # and transition["track"] where captain.py writes flat meta["test"] and ["machine"]. Both
 # rendered "0 agents" and "--" while three testers held three slots. Checking routes and
 # JSON shape did not catch either, because both answered 200 with a well-formed document
@@ -1071,12 +1071,12 @@ sys.exit(0 if os.environ["SMOKE_SLOT"] in held else 1)'; then
         "$("$PY" -m scripts.repipe.status 2>&1 | head -2)"
   fi
 
-  # The bare-invocation case is the one that broke: no KUNA_PIPELINE_STATE_DIR in the
+  # The bare-invocation case is the one that broke: no UNLACE_PIPELINE_STATE_DIR in the
   # environment, which is how docs/re-pipeline.md tells an operator to run it. It cannot be
   # tested by planting a slot -- with the variable unset the module correctly resolves the
   # REPO's state dir, not this smoke's temp one -- so assert the resolution itself: the
-  # inventory it would read must sit under the repipe state dir, never `.kuna-pipeline`.
-  if ( unset KUNA_PIPELINE_STATE_DIR
+  # inventory it would read must sit under the repipe state dir, never `.unlace-pipeline`.
+  if ( unset UNLACE_PIPELINE_STATE_DIR
        "$PY" -c '
 import importlib, sys
 from scripts.repipe import config, status          # importing status is what pins the var
@@ -1087,8 +1087,8 @@ sys.exit(0 if got.startswith(want) else 1)
 ' ) 2>/dev/null; then
     ok "... and resolves the repipe inventory with the env unset"
   else
-    bad "status resolves the wrong inventory when KUNA_PIPELINE_STATE_DIR is unset" \
-        "$( unset KUNA_PIPELINE_STATE_DIR; "$PY" -c '
+    bad "status resolves the wrong inventory when UNLACE_PIPELINE_STATE_DIR is unset" \
+        "$( unset UNLACE_PIPELINE_STATE_DIR; "$PY" -c '
 from scripts.repipe import config, status
 from scripts.pipeline import state as pstate
 print("want prefix:", config.state_dir())

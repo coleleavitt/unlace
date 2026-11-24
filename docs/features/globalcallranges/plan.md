@@ -6,14 +6,14 @@ writes 16 bytes through its first argument and returns. Heritage currently build
 an INDIRECT for every global at every call: about 51.8 million guards. On main
 `d1f98e52e`, a 150-second attempt reached 14,168,728 KiB RSS and stopped in heritage.
 
-Reuse the complete bounded `kuna_calleememory` body walker and its existing cache.
+Reuse the complete bounded `unlace_calleememory` body walker and its existing cache.
 Add a conservative eligibility witness for global queries: absolute memory accesses,
 direct memory input/output storage and frame accesses other than the architectural return fetch make that witness
 false. Unknown addresses, opaque calls/user operations, unresolved control flow,
 incomplete walks and unsupported direct memory writes already fail closed.
 Expose only the complete eligible summary's register-rooted read and write ranges.
 
-One new P3 module, `kuna_globalcallranges`, resolves every effect root to the
+One new P3 module, `unlace_globalcallranges`, resolves every effect root to the
 call's exact matching register parameter and its definite constant actual value.
 Only width-preserving copies and bounded constant expressions establish an actual;
 unknowns, partial-register mismatches and address arithmetic wrap retain the guard.

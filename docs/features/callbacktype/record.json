@@ -1,7 +1,7 @@
 {
- "opportunity": "A function reached only through a function pointer has no call site of its own, so neither `protoorder` (callee to callers) nor `calleevote` (callers to callee) reaches it and its own body is all it has. The program declares it anyway: `qsort`'s fourth parameter is `int (*)(const void *, const void *)` and `signal`'s second is `void (*)(int)`. Over the campaign's 444 slices, 294 callback arguments name 114 distinct functions, 50 of which decbench scores; all 50 DWARF declarations are exactly the slot's signature, and 67 ground-truth parameters would move, 16 of them parameters kuna recovers no trace of.",
+ "opportunity": "A function reached only through a function pointer has no call site of its own, so neither `protoorder` (callee to callers) nor `calleevote` (callers to callee) reaches it and its own body is all it has. The program declares it anyway: `qsort`'s fourth parameter is `int (*)(const void *, const void *)` and `signal`'s second is `void (*)(int)`. Over the campaign's 444 slices, 294 callback arguments name 114 distinct functions, 50 of which decbench scores; all 50 DWARF declarations are exactly the slot's signature, and 67 ground-truth parameters would move, 16 of them parameters unlace recovers no trace of.",
  "test_name": "35 unit tests (slot table, run ledger, the direct-call refusal (direct_calls_disagree), body-agrees, the arity/width/return refusals, the caller-read ledger, the narrow-return walk) + tests/stages/callbacktype.xml (two-pass negative control) + fifteen tests/cli probes over five fixtures (callbacktype_x86_64, callbacktype_refused_x86_64, callbacktype_width_x86_64, callbacktype_narrow_x86_64, callbacktype_forward_x86_64): the parks, off, --jobs, eleven refusals, and direct callers of parked callbacks that print their off form; see docs/features/callbacktype/default-on-evaluation.md (c)",
- "binary": "decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_x86_64",
+ "binary": "decompiler/crates/unlace-analysis/tests/fixtures/callbacktype_x86_64",
  "selector": "by_key",
  "func_addr": null,
  "angr_version": null,
@@ -193,28 +193,28 @@
   "make test-cli": "tests/cli: 262/262 passed",
   "make rust-test": "LANE: start 2026-09-27T06:59:26Z / LANE: done rc=0 2026-09-27T07:27:12Z / RUST_TEST_RC=0 on 31d6f2849 (rebased onto 29cfedee0): 429 suites, 7665 passed, 0 failed",
   "make check-spec": "check-spec OK (lenient mode); check-spec OK (strict mode)",
-  "kuna catalog --check": "catalog OK: documents exactly the registered kuna options",
+  "unlace catalog --check": "catalog OK: documents exactly the registered unlace options",
   "counters --check": "no drift: every hard-coded site agrees with the derived truth",
-  "docs/options.md": "regenerated (kuna catalog --markdown)",
+  "docs/options.md": "regenerated (unlace catalog --markdown)",
   "phases.toml": "parses with python3.11 tomllib (CI's parser): 241 settables",
   "base": "29cfedee0"
  },
  "files": [
-  "decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_forward_x86_64",
-  "decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_forward_x86_64.c",
-  "decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_narrow_x86_64.c",
-  "decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_refused_x86_64.c",
-  "decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_width_x86_64.c",
-  "decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_x86_64.c",
-  "decompiler/crates/kuna-cli/src/decompile_all.rs",
+  "decompiler/crates/unlace-analysis/tests/fixtures/callbacktype_forward_x86_64",
+  "decompiler/crates/unlace-analysis/tests/fixtures/callbacktype_forward_x86_64.c",
+  "decompiler/crates/unlace-analysis/tests/fixtures/callbacktype_narrow_x86_64.c",
+  "decompiler/crates/unlace-analysis/tests/fixtures/callbacktype_refused_x86_64.c",
+  "decompiler/crates/unlace-analysis/tests/fixtures/callbacktype_width_x86_64.c",
+  "decompiler/crates/unlace-analysis/tests/fixtures/callbacktype_x86_64.c",
+  "decompiler/crates/unlace-cli/src/decompile_all.rs",
   "decompiler/crates/console/src/project.rs",
-  "decompiler/crates/kuna-decomp/src/p4_calls/callbacktype.rs",
-  "decompiler/crates/kuna-decomp/src/p4_calls/callbacktype/tests.rs",
-  "decompiler/crates/kuna-decomp/src/p4_calls/passthrough.rs",
-  "decompiler/crates/kuna-decomp/src/p4_calls/protoorder.rs",
+  "decompiler/crates/unlace-decomp/src/p4_calls/callbacktype.rs",
+  "decompiler/crates/unlace-decomp/src/p4_calls/callbacktype/tests.rs",
+  "decompiler/crates/unlace-decomp/src/p4_calls/passthrough.rs",
+  "decompiler/crates/unlace-decomp/src/p4_calls/protoorder.rs",
   "docs/spec/04-calls-and-prototypes.md"
  ],
- "notes": "Inert without a callee-first whole-binary pass, like protoorder and calleevote: `kuna decompile`, a run narrowed by --addr/--functions, decompile-project --stream, --option protoorder off, and a --jobs N run that does not name the option state nothing; naming it alongside --jobs N is refused. On an architecture whose code builds an address from two instructions the escape question has no answer and nothing is parked.",
+ "notes": "Inert without a callee-first whole-binary pass, like protoorder and calleevote: `unlace decompile`, a run narrowed by --addr/--functions, decompile-project --stream, --option protoorder off, and a --jobs N run that does not name the option state nothing; naming it alongside --jobs N is refused. On an architecture whose code builds an address from two instructions the escape question has no answer and nothing is parked.",
  "default_evaluation": "docs/features/callbacktype/default-on-evaluation.md",
  "arity": {
   "slices": "the 76 slices that hold a callback argument",
@@ -265,7 +265,7 @@
   "driver": "docs/features/callbacktype/hunks-corpus.py"
  },
  "speed": {
-  "method": "interleaved whole-binary `kuna decompile-all --json --max-fn-seconds 120`, `--option callbacktype off` against the new default, same build (docs/features/callbacktype/speed.py), min-of-15, contended (other campaign lanes running)",
+  "method": "interleaved whole-binary `unlace decompile-all --json --max-fn-seconds 120`, `--option callbacktype off` against the new default, same build (docs/features/callbacktype/speed.py), min-of-15, contended (other campaign lanes running)",
   "binaries": "O2 coreutils fmt/ls/sort + bash, and libselinux.so.1 at -O0 and -O2-noinline",
   "build": "419b1b6a2 (engine code be75f8cc8), on 0096e984d",
   "results": {
@@ -547,7 +547,7 @@
    "arity": "16 gained, 16 DWARF-confirmed, 0 lost, 0 phantom -- unchanged",
    "note": "neither shape occurs in the 444-slice corpus, which is why both are pinned by probes over a fixture built for them"
   },
-  "new_fixture": "decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_refused_x86_64 (built with noipa: gcc's interprocedural register allocation otherwise hoists an argument register past a call and kuna's call-site recovery, which has only the convention, reads it as the wrong call's). Four refused shapes: cmp3 (forwarder cast into qsort's slot), cleanup (one lea -> signal + set_hook), quit_either (one lea -> signal + an indirect call through a phi), quit_kept (one lea -> signal + a write into a global nothing reads back)",
+  "new_fixture": "decompiler/crates/unlace-analysis/tests/fixtures/callbacktype_refused_x86_64 (built with noipa: gcc's interprocedural register allocation otherwise hoists an argument register past a call and unlace's call-site recovery, which has only the convention, reads it as the wrong call's). Four refused shapes: cmp3 (forwarder cast into qsort's slot), cleanup (one lea -> signal + set_hook), quit_either (one lea -> signal + an indirect call through a phi), quit_kept (one lea -> signal + a write into a global nothing reads back)",
   "pre_fix_verification": "the three refusal probes run against the reviewed build (c057c9e1c): all three FAIL -- int cmp3(void *a0,void *a1) with cmp3(v1,\"x\"), void cleanup(int a0), void quit_either(int a0) and void quit_kept(int a0); on the shipped build all three pass"
  },
  "casts": {
@@ -613,7 +613,7 @@
  },
  "review_round_5": {
   "findings_addressed": [
-   "blocker: phases.toml carried an unescaped quote (printf(\"%ld\")) in the callbacktype summary; build.rs reads only a value's first and last quote so every local gate passed, but CI's tomllib parse failed. Escaped; the file now parses with python3.11 tomllib, kuna catalog --markdown | cmp docs/options.md is unchanged and catalog --check is OK",
+   "blocker: phases.toml carried an unescaped quote (printf(\"%ld\")) in the callbacktype summary; build.rs reads only a value's first and last quote so every local gate passed, but CI's tomllib parse failed. Escaped; the file now parses with python3.11 tomllib, unlace catalog --markdown | cmp docs/options.md is unchanged and catalog --check is OK",
    "rebased (squash) onto 003db2dd8 (#722 castarith, #724 castsign): counts re-derived (233 settables, tiers 74/95/64, 232 catalog records, 339 stage files), phase_catalog capture byte-identical, baseline-stages re-recorded 1362 -> 1365 (the 3 CALLBACKTYPE keys); no tests/cli expectation moved",
    "minor: casts that grow outside castbench (a parked void * replacing a struct_N * or typed pointer) are counted per function in hunks.md and stated in default-on-evaluation.md (f)/(h) and the PR body; the PR body's fix section is cut to three bullets"
   ]
@@ -666,7 +666,7 @@
  "rescope_2026_09_27": {
   "decision": "a park changes ONLY the parked function: the caller redo is removed; a direct call that contradicts the declaration in arity or in a used-vs-void result refuses the park instead",
   "why": "review rounds 6-9 each found a new defect in the caller redo (a caller losing its own parameter/return types or gaining casts; last a thread's direct caller forwarding its own long into the parked void * slot became void *a0)",
-  "code": "the park round runs after calleevote's rounds and the convergence pass and decompiles only the parked functions; deleted: Ledger::caller_changes/printed_the_return/stated, seed, pointee_vote, narrows_a_void_pointer, forget_statements_naming, the Funcdata kuna_callback_stated field, the infertypes hook, protoorder::argument_vote_holds; new: Ledger::direct_calls_disagree, CallGraph::direct_callers, Decline::DirectCallDisagrees (direct-call-disagrees), Decline::CallerNotSeen (caller-not-seen)",
+  "code": "the park round runs after calleevote's rounds and the convergence pass and decompiles only the parked functions; deleted: Ledger::caller_changes/printed_the_return/stated, seed, pointee_vote, narrows_a_void_pointer, forget_statements_naming, the Funcdata unlace_callback_stated field, the infertypes hook, protoorder::argument_vote_holds; new: Ledger::direct_calls_disagree, CallGraph::direct_callers, Decline::DirectCallDisagrees (direct-call-disagrees), Decline::CallerNotSeen (caller-not-seen)",
   "tests": "forwarding fixture + parts 6/7 (the round-9 pthread shape); probes callbacktype-leaves-a-direct-caller-of-a-parked-callback-as-it-was and callbacktype-refuses-a-callback-whose-direct-call-passes-another-count, both fail on 5ced9725b's code; the old forwarding probe is deleted",
   "results": "typesweep rows identical (+10 kept), arity identical, castbench +21 identical, hunks: 128 changed, all parked, 0 callers; speed worst +0.55% (ls-O2)"
  },

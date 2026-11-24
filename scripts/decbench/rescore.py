@@ -12,8 +12,8 @@ MUST run under the decbench venv python (imports decbench.* + pyjoern):
 
 How a value is computed (mirrors scripts/reeval_ged.py in the decbench repo):
 - source CFG: Joern on the project's O0 header-stripped ``.i`` (source is
-  opt-independent); cached content-addressed under ~/.cache/decbench/kuna-src-cfg.
-- BEFORE: Joern on the STORED run artifact (decompiled/kuna_<stem>.c); this
+  opt-independent); cached content-addressed under ~/.cache/decbench/unlace-src-cfg.
+- BEFORE: Joern on the STORED run artifact (decompiled/unlace_<stem>.c); this
   recomputes the recorded run value (printed as a METRIC-DRIFT warning if they
   disagree — e.g. the GED code changed since the run).
 - AFTER: fresh `unlace decompile-all <stripped> --json --addr 0x<addr>` with the
@@ -39,8 +39,8 @@ from . import config
 from .triage import MARKER, case_addr, load_case, split_blocks
 
 SRC_CACHE = Path(os.environ.get(
-    "KUNA_DECBENCH_SRC_CACHE",
-    str(Path.home() / ".cache" / "decbench" / "kuna-src-cfg"),
+    "UNLACE_DECBENCH_SRC_CACHE",
+    str(Path.home() / ".cache" / "decbench" / "unlace-src-cfg"),
 ))
 
 
@@ -60,7 +60,7 @@ def _decbench_imports():
 def _cached_cfgs(path: Path, text_for_key: str, extract, stable_hash) -> dict:
     """Joern CFGs for one file, content-cached (never stale)."""
     SRC_CACHE.mkdir(parents=True, exist_ok=True)
-    key = stable_hash("kuna-src-cfg-v1", text_for_key)
+    key = stable_hash("unlace-src-cfg-v1", text_for_key)
     pkl = SRC_CACHE / f"{key}.pkl"
     if pkl.exists():
         try:
@@ -105,18 +105,18 @@ def ged_of(source, decompiled, GEDMetric) -> tuple[float, dict]:
 
 def artifact_path(case: dict) -> Path:
     return (config.results_root() / case["opt_level"] / case["project"] /
-            "decompiled" / f"kuna_{case['binary']}.c")
+            "decompiled" / f"unlace_{case['binary']}.c")
 
 
-def fresh_block(case: dict, options: list[list[str]], kuna_bin: str) -> str:
+def fresh_block(case: dict, options: list[list[str]], unlace_bin: str) -> str:
     addr = case_addr(case)
-    cmd = [kuna_bin, "decompile-all", case["stripped_path"], "--json",
+    cmd = [unlace_bin, "decompile-all", case["stripped_path"], "--json",
            "--addr", addr]
     for name, value in options:
         cmd += ["--option", name, value]
     out = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     if out.returncode != 0:
-        raise RuntimeError(f"kuna exited {out.returncode}: {out.stderr[:300]}")
+        raise RuntimeError(f"unlace exited {out.returncode}: {out.stderr[:300]}")
     fns = json.loads(out.stdout).get("functions", [])
     if not fns or fns[0].get("error") or not fns[0].get("code"):
         raise RuntimeError(f"no fresh code: {fns[0].get('error') if fns else 'no record'}")
@@ -146,7 +146,7 @@ def spliced_cfgs(case: dict, new_block: str, extract, stable_hash) -> dict:
         tmp.unlink(missing_ok=True)
 
 
-def rescore_case(case: dict, options: list[list[str]], kuna_bin: str) -> dict:
+def rescore_case(case: dict, options: list[list[str]], unlace_bin: str) -> dict:
     GEDMetric, extract, strip, stable_hash = _decbench_imports()
     scfg, src_file = source_cfg(case, extract, strip, stable_hash)
     if scfg is None:
@@ -176,9 +176,9 @@ def rescore_case(case: dict, options: list[list[str]], kuna_bin: str) -> dict:
         result["before"] = None
         result["before_error"] = "function not in stored artifact / Joern parse failed"
 
-    # AFTER: fresh kuna (current build), spliced into the artifact.
+    # AFTER: fresh unlace (current build), spliced into the artifact.
     try:
-        block = fresh_block(case, options, kuna_bin)
+        block = fresh_block(case, options, unlace_bin)
     except Exception as e:  # noqa: BLE001
         result["after"] = None
         result["after_error"] = str(e)
@@ -210,25 +210,25 @@ def main(argv=None) -> None:
     ap.add_argument("--case", required=True)
     ap.add_argument("--option", nargs=2, action="append", default=[],
                     metavar=("NAME", "VALUE"),
-                    help="kuna --option applied to the AFTER run")
+                    help="unlace --option applied to the AFTER run")
     ap.add_argument("--siblings", action="store_true",
                     help="also rescore every sibling case in the dedup group")
     ap.add_argument("--record", type=Path, default=None,
                     help="record.json to splice ged_* fields into")
-    ap.add_argument("--kuna-bin", default=None)
+    ap.add_argument("--unlace-bin", default=None)
     args = ap.parse_args(argv)
 
-    kuna_bin = args.kuna_bin or config.kuna_bin()
+    unlace_bin = args.unlace_bin or config.unlace_bin()
     # Every field this writes is a GED field, so it reads the GED pool even
     # where a type_match pool carries the same id.
     case = load_case(args.case, "ged")
-    results = [rescore_case(case, args.option, kuna_bin)]
+    results = [rescore_case(case, args.option, unlace_bin)]
     if args.siblings:
         for sib in case.get("siblings", []):
-            results.append(rescore_case(load_case(sib, "ged"), args.option, kuna_bin))
+            results.append(rescore_case(load_case(sib, "ged"), args.option, unlace_bin))
 
     main_r = results[0]
-    kuna_commit = subprocess.run(
+    unlace_commit = subprocess.run(
         ["git", "-C", str(config.repo_root()), "rev-parse", "--short", "HEAD"],
         capture_output=True, text=True).stdout.strip()
     summary = {
@@ -240,7 +240,7 @@ def main(argv=None) -> None:
         "ged_perfect_after": main_r.get("perfect_after"),
         "ged_approximated": main_r.get("after_approximated"),
         "ged_options": [f"{n}={v}" for n, v in args.option],
-        "ged_kuna_commit": kuna_commit,
+        "ged_unlace_commit": unlace_commit,
         "ged_results_root": str(config.results_root()),
     }
     if args.siblings:

@@ -1,7 +1,7 @@
 # #871: a computed value copied to a global after an aliasing pointer load
-# must keep that store after the load (P6 kuna_globalorder). A switch's
+# must keep that store after the load (P6 unlace_globalorder). A switch's
 # case-local copies must likewise stay on their original paths; P3
-# kuna_globalorderkeep preserves them before a forced return-phi merge.
+# unlace_globalorderkeep preserves them before a forced return-phi merge.
 # This is a strict fix at the existing indexaliasguard global default.
 #
 # ew is GCC -O0 for `t = gi * 2 + b; x = *p; gi = t; return x + t * 100`.

@@ -1,7 +1,7 @@
 {
- "opportunity": "At -O0 each C local has its own spill slot. The dataflow folds the stored value into its readers, so framelayout reports the emptied slot from an early pass as the width-only undefinedN while the C body prints the value as char * (or FILE *, passwd *, ...). 805 of the 1,625 ground-truth char * variables Binary Ninja gets and kuna missed on the campaign's 444 slices were such slots.",
+ "opportunity": "At -O0 each C local has its own spill slot. The dataflow folds the stored value into its readers, so framelayout reports the emptied slot from an early pass as the width-only undefinedN while the C body prints the value as char * (or FILE *, passwd *, ...). 805 of the 1,625 ground-truth char * variables Binary Ninja gets and unlace missed on the campaign's 444 slices were such slots.",
  "test_name": "console verify_slotptr (two-pass e2e over every function of fauxware) + 6 unit tests in slotptr/tests.rs + the tests/cli probe pair slotptr-types-a-spilled-string-slot{,-option-off}",
- "binary": "decompiler/crates/kuna-analysis/tests/fixtures/fauxware",
+ "binary": "decompiler/crates/unlace-analysis/tests/fixtures/fauxware",
  "selector": "authenticate",
  "func_addr": "0x400664",
  "angr_version": null,
@@ -27,7 +27,7 @@
   "in_repo_equivalent": "fauxware authenticate: local_28 / local_20 (the spilled char * arguments) undefined8 -> char *; local_30 (call return-address pushes, non-zero constants) keeps undefined8"
  },
  "sweep": {
-  "surface": "kuna decompile-all --json, --option slotptr off vs the new default, every function compared field by field",
+  "surface": "unlace decompile-all --json, --option slotptr off vs the new default, every function compared field by field",
   "binaries": "coreutils fmt/ls/sort at O0 and O2, bash O2, tar O0",
   "functions": 6265,
   "functions_with_differing_c": 0,
@@ -197,10 +197,10 @@
    "diffutils O0 diff scan_char_literal",
    "grep O2 grep main"
   ],
-  "worse_cause": "each slot takes the type kuna's own C body already gives the stored value, and that type is wrong (pointer difference printed as pointer arithmetic; a register variable merging an lseek result with an errno pointer)"
+  "worse_cause": "each slot takes the type unlace's own C body already gives the stored value, and that type is wrong (pointer difference printed as pointer arithmetic; a register variable merging an lseek result with an errno pointer)"
  },
  "speed": {
-  "method": "interleaved min-of-15 whole-binary kuna decompile-all --json, --option slotptr off vs on, same build (docs/features/slotptr/measure/speed.py)",
+  "method": "interleaved min-of-15 whole-binary unlace decompile-all --json, --option slotptr off vs on, same build (docs/features/slotptr/measure/speed.py)",
   "binaries": "O2 coreutils fmt/ls/sort + bash",
   "results": {
    "fmt": {
@@ -244,14 +244,14 @@
   "options_md": "fresh"
  },
  "files": [
-  "decompiler/crates/kuna-decomp/src/p6_variables/slotptr.rs",
-  "decompiler/crates/kuna-decomp/src/p6_variables/slotptr/tests.rs",
-  "decompiler/crates/kuna-decomp/src/infra/decompile_drive.rs",
-  "decompiler/crates/kuna-decomp/src/p6_variables/funcdata_spacebase.rs",
-  "decompiler/crates/kuna-decomp/src/substrate/funcdata.rs",
-  "decompiler/crates/kuna-decomp/src/substrate/context.rs",
-  "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
-  "decompiler/crates/kuna-decomp/phases.toml",
+  "decompiler/crates/unlace-decomp/src/p6_variables/slotptr.rs",
+  "decompiler/crates/unlace-decomp/src/p6_variables/slotptr/tests.rs",
+  "decompiler/crates/unlace-decomp/src/infra/decompile_drive.rs",
+  "decompiler/crates/unlace-decomp/src/p6_variables/funcdata_spacebase.rs",
+  "decompiler/crates/unlace-decomp/src/substrate/funcdata.rs",
+  "decompiler/crates/unlace-decomp/src/substrate/context.rs",
+  "decompiler/crates/unlace-decomp/src/infra/architecture.rs",
+  "decompiler/crates/unlace-decomp/phases.toml",
   "decompiler/crates/console/tests/verify_slotptr.rs",
   "decompiler/crates/console/tests/verify_framelayout.rs",
   "tests/cli/slotptr-types-a-spilled-string-slot.json",

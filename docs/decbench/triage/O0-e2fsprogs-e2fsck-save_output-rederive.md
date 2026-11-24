@@ -24,8 +24,8 @@ $ python3 -m scripts.decbench.triage --case O0-e2fsprogs-e2fsck-save_output --al
 | output       | loc | gotos | labels | ifs | loops |
 | ida(stored)  |  84 |     0 |      0 |  16 |     3 |
 | ghidra(stored)| 103 |    1 |      1 |  17 |     4 |
-| kuna(stored) |  93 |     1 |      0 |  16 |     4 |
-| kuna(fresh)  |  78 |     0 |      0 |  16 |     4 |
+| unlace(stored) |  93 |     1 |      0 |  16 |     4 |
+| unlace(fresh)  |  78 |     0 |      0 |  16 |     4 |
 ```
 
 ```
@@ -97,7 +97,7 @@ becomes the new op's **Address** only. The physical placement is the next statem
 
 ```rust
 // p6_variables/merge.rs:1610  Merge::trimOpInput
-fn trim_op_input(&mut self, ctx: &mut dyn MergeContext, op: OpId, slot: int4) -> KunaResult<()> {
+fn trim_op_input(&mut self, ctx: &mut dyn MergeContext, op: OpId, slot: int4) -> UnlaceResult<()> {
     let (in_vn, pc, is_multiequal) = ctx.trim_op_input_prep(op, slot);
     let copy_op = self.allocate_copy_trim(ctx, in_vn, pc, op)?;
     ...
@@ -155,7 +155,7 @@ self.op_insert_end(new_copy, dom_bl);
 
 **`find_common_block_set` over the two trim sites is what decides where the printed
 `vN = aM;` lands.** For `a0` that is BB0 -- the entry block -- so parameter 1 renders
-correctly. For `a1` it is BB3, for `a2` BB6. kuna is internally inconsistent about the
+correctly. For `a1` it is BB3, for `a2` BB6. unlace is internally inconsistent about the
 identical construct, and the discriminator is nothing but whether the guard's join
 happens to be the entry block.
 
@@ -196,7 +196,7 @@ i.e. copy-shadows of an unmodified incoming parameter emitted outside the entry 
 | O0 bzip2/bzip2 | 160 | 4 (2.5%) | 4 | 5 |
 | **total** | **3031** | **127 (4.2%)** | **208** | **333** |
 
-So **~4 in 10 parameter copy-shadows kuna emits at top level are outside the entry
+So **~4 in 10 parameter copy-shadows unlace emits at top level are outside the entry
 block.** At O2 the same scan over `O2/{bzip2,gzip}` gives 9/318 functions (2.8%) and
 only 1 of 16 in the guard shape -- the pattern is O0-dominated, as round 1 guessed.
 
@@ -280,6 +280,6 @@ Risks / what is NOT yet proven:
 `aif` all leave the raw address). `operand_refs` is default-off and lives in the
 `aggressive` preset, and `--mode auto` picks `reliable` for anything >= 500 KiB, so
 **every default run on a binary over 500 KiB prints a raw address in a `char *`
-argument slot where IDA/ghidra print the string.** That is the "constants kuna alone
+argument slot where IDA/ghidra print the string.** That is the "constants unlace alone
 fails to resolve" reject criterion from `docs/decbench-loop.md` firing on the product
 default. Worth its own case.

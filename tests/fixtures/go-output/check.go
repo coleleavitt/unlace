@@ -25,7 +25,7 @@ func main(){
   var got int64;v:=condition_value(n,&got);want:=int64(0);if n>0{want=1};expected:=int64(3);if n>2{expected=n*2};expect(v==expected && got==want,"short circuit retained value")
   got=0;v=condition_for(n,&got);want=0;expected=0;for i:=int64(0);;i++{want++;if n-i<=2{break};if i&1==0{expected+=n-i}};expect(v==expected && got==want,"for condition retained value")
   expected=0;for x:=n;;x--{expected+=x;if x<=1{break}};expect(name_collision(n)==expected,"loop temporary collision")
-  expect(_kuna_ident_676f(n,3)==n+3,"keyword and escaped-prefix parameters")
+  expect(_unlace_ident_676f(n,3)==n+3,"keyword and escaped-prefix parameters")
  }
  for a:=uint64(0);a<100;a++{for b:=uint64(0);b<64;b++{c:=a*17+b;expect(tiers(a,b,c)==(a|b)^(c+(a&(b>>3))),"precedence")}}
  for _,raw:=range []uint64{0,1,0x8000000000000000,0x3ff0000000000000,0x7ff0000000000000,0xfff0000000000000,0x7ff8000000000123,0xffffffffffffffff}{
@@ -36,7 +36,7 @@ func main(){
  expect(from_word(to_word(&xs[0]))==&xs[0],"pointer conversions")
  f:=1.25;expect(unsafe.Pointer(retype(&f))==unsafe.Pointer(&f),"pointer retype")
  want:=[]byte("quote\" tab\t utf8é\x00");got:=unsafe.Slice((*byte)(unsafe.Pointer(text())),len(want));expect(bytes.Equal(got,want),"string contents and terminator")
- expect(_kuna_ident_72756e65()==0x1f600,"rune")
+ expect(_unlace_ident_72756e65()==0x1f600,"rune")
  expect(null_pointer()==nil && is_null(nil) && !is_null(&xs[0]),"nil constants")
  expect(shadow_null(nil,7)==7 && shadow_null(&xs[0],7)==0,"nil variable collision")
  expect(bool_true() && !bool_false(),"boolean constants")

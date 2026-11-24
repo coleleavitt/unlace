@@ -1,12 +1,12 @@
 # Versioning & binary releases
 
-How kuna versions itself and how the binary release CI
+How unlace versions itself and how the binary release CI
 (`.github/workflows/release.yml`) turns a day's work on `main` into a tagged
 GitHub Release.
 
 ## The version scheme: MAJOR.MINOR
 
-kuna versions are **two components only** — `MAJOR.MINOR` (e.g. `0.14`,
+unlace versions are **two components only** — `MAJOR.MINOR` (e.g. `0.14`,
 `1.3`). There is no patch component.
 
 | Component | Where it lives | Who/what changes it |
@@ -39,7 +39,7 @@ on shallow clones; in a clone without the tags it reports the wrong minor, so
 
 ## What `unlace --version` reports
 
-Release CI exports `KUNA_VERSION=<MAJOR.MINOR>` while building; `unlace-cli`
+Release CI exports `UNLACE_VERSION=<MAJOR.MINOR>` while building; `unlace-cli`
 bakes it in via `option_env!` and `unlace --version` prints exactly that (Cargo's
 own package version must stay three-part semver, so it is not used for
 releases). Dev builds without the env var fall back to the workspace Cargo
@@ -75,7 +75,7 @@ and 18 tags**.
    no-op guard above). A failed run creates no tag — the tag is the last thing
    published — so re-running it recomputes the same version.
 2. **specs** — compiles every `.slaspec` → `.sla` once on Linux and packages
-   the whole `specs/` tree as `kuna-v<ver>-specs.tar.gz`. `.sla` files are
+   the whole `specs/` tree as `unlace-v<ver>-specs.tar.gz`. `.sla` files are
    platform-independent, so one tree serves every OS: each **build** row
    embeds it, and it also ships as an asset (for `UNLACE_SPECS`, and the
    nightly's speed baseline).
@@ -85,13 +85,13 @@ and 18 tags**.
    - Linux `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu` (native,
      on the `ubuntu-24.04-arm` runner)
    - Linux `x86_64-unknown-linux-musl` — a fully static build (no glibc
-     dependency, runs on any Linux). kuna pulls in no C via a `cc`-crate
+     dependency, runs on any Linux). unlace pulls in no C via a `cc`-crate
      dependency, so the musl target links self-contained; `rustup target add`
      is the only extra setup.
    - macOS `aarch64-apple-darwin` and `x86_64-apple-darwin` (the latter
      cross-compiled on the arm64 runner)
    - Windows `x86_64-pc-windows-msvc`
-   Each archive (`kuna-v<ver>-<os-arch>.tar.gz`, `.zip` on Windows) contains
+   Each archive (`unlace-v<ver>-<os-arch>.tar.gz`, `.zip` on Windows) contains
    `unlace`, `LICENSE`, `NOTICE` — `unlace` is self-contained: the decompiler
    console (`decomp_dbg`) and the SLEIGH compiler (`slacomp`) are built in
    as hidden subcommands, and `embed-specs` carries the compiled SLEIGH tree.
@@ -101,8 +101,8 @@ and 18 tags**.
    datatest harness only makes sense inside the repo.) The `unlace_ghidra`
    binaries are not in the archives: each row uploads its binary as a
    `ghidra-bin-<platform>` workflow artifact for the **ghidra-ext** job.
-4. **ghidra-ext** — packages the ready-to-install KunaDecompiler Ghidra
-   extension, `kuna-v<ver>-KunaDecompiler-ghidra_<ghidra-version>.zip`. It
+4. **ghidra-ext** — packages the ready-to-install UnlaceDecompiler Ghidra
+   extension, `unlace-v<ver>-UnlaceDecompiler-ghidra_<ghidra-version>.zip`. It
    downloads the pinned Ghidra release (version *and* full asset URL are
    pinned in the workflow's `env`, since the asset filename embeds a build
    date; the zip is cached with `actions/cache` under a key derived from the
@@ -120,10 +120,10 @@ and 18 tags**.
    specs arrive over the wire), so it installs airgapped; it is version-locked
    to the pinned Ghidra release, other 12.x installs go through the
    installer's "Install Anyway" dialog. See
-   `integrations/ghidra/KunaDecompiler/README.md` for the install steps.
+   `integrations/ghidra/UnlaceDecompiler/README.md` for the install steps.
 5. **release** — `gh release create v<ver>` with all assets, tagging the built
    commit. This is what creates the git tag; no tags are pushed from anywhere
-   else. (It downloads only `kuna-*` artifacts — the `ghidra-bin-*` binaries
+   else. (It downloads only `unlace-*` artifacts — the `ghidra-bin-*` binaries
    are inter-job plumbing, not assets.)
 
 ## Using a released binary
@@ -136,12 +136,12 @@ per-user cache directory (`%LOCALAPPDATA%\unlace` on Windows,
 elsewhere, and the system temp directory when none of those is writable):
 
 ```bash
-tar xzf kuna-v<ver>-linux-x86_64.tar.gz
-./kuna-v<ver>-linux-x86_64/kuna decompile ./a.out main
+tar xzf unlace-v<ver>-linux-x86_64.tar.gz
+./unlace-v<ver>-linux-x86_64/unlace decompile ./a.out main
 ```
 
 `UNLACE_SPECS` still overrides the built-in tree (for example with the
-`kuna-v<ver>-specs.tar.gz` asset, or a tree of your own); the full list of
+`unlace-v<ver>-specs.tar.gz` asset, or a tree of your own); the full list of
 overrides is in `docs/cli.md`. A release whose specs did not change reuses
 the tree already unpacked. Old trees are never removed automatically; deleting
 the cache directory is always safe, and the next run unpacks again.
@@ -151,6 +151,6 @@ specs, and they are found from the repo root, each `.sla` compiled into the `.sl
 first use. `cargo build --release -p unlace-cli --features embed-specs` builds the
 self-contained binary locally; its build script compiles every language through the same cache.)
 
-The `kuna-v<ver>-KunaDecompiler-ghidra_<ghidra-version>.zip` asset is not an
+The `unlace-v<ver>-UnlaceDecompiler-ghidra_<ghidra-version>.zip` asset is not an
 archive to extract — install it from inside Ghidra (**File → Install
-Extensions… → `+`**); see `integrations/ghidra/KunaDecompiler/README.md`.
+Extensions… → `+`**); see `integrations/ghidra/UnlaceDecompiler/README.md`.

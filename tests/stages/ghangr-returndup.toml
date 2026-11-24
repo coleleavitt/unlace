@@ -9,7 +9,7 @@
 #
 # is compiled by gcc -O0 into a single SHARED epilogue/RETURN block reached from
 # several predecessors (each `return K` becomes `mov eax, K; jmp .Lepilogue`).
-# kuna, like upstream Ghidra, keeps the merged form: CollapseStructure fuses the
+# unlace, like upstream Ghidra, keeps the merged form: CollapseStructure fuses the
 # guards into one nested if/else with a single trailing `return v;` whose value is a
 # MULTIEQUAL merge of the per-path constants, and the existing ActionReturnSplit (the
 # goto-driven ReturnDuplicatorLow analog) never fires because clean structuring left
@@ -20,7 +20,7 @@
 # Stage / sub-stage: S8 structure / goto-quality (return duplication), owned by the
 # P0 assertion `option returndup on|off` (default ON since DIV-54, which supersedes
 # the DIV-18 revert).  The `returndup` pass
-# (s8_structure/kuna_returndup.rs) reuses the EXISTING `return_split_is_splittable`
+# (s8_structure/unlace_returndup.rs) reuses the EXISTING `return_split_is_splittable`
 # bare-epilogue filter (only MULTIEQUAL/COPY/RETURN over constant/annotation/non-free
 # inputs) and the EXISTING `node_split` machinery ActionReturnSplit already drives:
 # for every shared bare-epilogue RETURN block it splits every in-edge but one, giving
@@ -37,7 +37,7 @@
 #         .L2: mov eax,3
 #         .Lend: ret                          ; SHARED bare epilogue, 3 in-edges
 #
-# Pass 1 (option returndup off, overriding the DIV-54 default): kuna keeps the merged form - one
+# Pass 1 (option returndup off, overriding the DIV-54 default): unlace keeps the merged form - one
 # `return v1;` (the MULTIEQUAL of 1/2/3) reached through the nested if/else; NO
 # constant early returns.
 # Pass 2 (option returndup on): the shared epilogue is duplicated into 2 of its 3

@@ -26,7 +26,7 @@ declared type of the base variable.
 At the function level against IDA on the 4,815 shared functions, only one class
 is a real gap:
 
-| functions holding the class | functions | kuna casts | IDA casts | ratio |
+| functions holding the class | functions | unlace casts | IDA casts | ratio |
 |---|---:|---:|---:|---:|
 | pointer element | 326 | 11,288 | 10,894 | 1.036 |
 | libc aggregate member | 117 | 4,051 | 3,322 | **1.219** |
@@ -91,7 +91,7 @@ out-parameter the callee declares, and the frame model's ordering is what
 declares it at the other sign:
 
 ```c
-/* kuna (sort -O0 0x48cf) */                  /* IDA, same address */
+/* unlace (sort -O0 0x48cf) */                  /* IDA, same address */
 unsigned int v5; // stack - 0x28              int stat_loc; // [rsp+10h] [rbp-20h] BYREF
 v6 = waitpid(v2,(int *)&v5,(unsigned int)(a0 == 0));
                                               v9 = waitpid(v1, &stat_loc, a1 == 0);

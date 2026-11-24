@@ -1568,7 +1568,7 @@ mod tests {
     fn parse_err(input: &[u8]) -> String {
         match xml_tree(input) {
             Err(UnlaceError::Decoder { explain }) => explain,
-            Err(other) => panic!("expected KunaError::Decoder, got {other:?}"),
+            Err(other) => panic!("expected UnlaceError::Decoder, got {other:?}"),
             Ok(doc) => panic!(
                 "expected parse failure, got document with root <{}>",
                 doc.get_root().get_name()

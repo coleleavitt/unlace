@@ -6,7 +6,7 @@ LIBC = {"FILE*", "stat*", "timespec*", "tm*", "dirent*", "passwd*", "group*", "s
 def bucket(d):
     s = "arg" if d["gt_is_arg"] else ("stack" if d["gt_has_off"] else "reg")
     cls = d["cls"] or ""
-    kt = re.sub(r"struct_\d+", "struct_N", d.get("kuna_type") or "")
+    kt = re.sub(r"struct_\d+", "struct_N", d.get("unlace_type") or "")
     if s == "reg" or (cls.startswith("ptr") and d["gt_type"] == "void"):
         return "U"
     prog = cls == "ptr_struct" and d["gt_type"] not in LIBC

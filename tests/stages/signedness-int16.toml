@@ -1,5 +1,5 @@
-# kuna `signedness`: the width below which a declaration is never re-signed is
-# the `int` of the compiler that reads kuna's output, not the `int` of the
+# unlace `signedness`: the width below which a declaration is never re-signed is
+# the `int` of the compiler that reads unlace's output, not the `int` of the
 # target.
 #
 # C promotes anything narrower than `int` before every operator, and the

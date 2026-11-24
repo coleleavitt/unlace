@@ -1,4 +1,4 @@
-"""Goal-2 census: varcensus + phantom locals/args, round I vs final (round L) kuna."""
+"""Goal-2 census: varcensus + phantom locals/args, round I vs final (round L) unlace."""
 import json, os, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -9,14 +9,14 @@ import callsite_metrics as CM
 
 R = Path("/home/mahaloz/github/decbench/results/full_run_address_2026-09-11")
 OUT = Path("/home/mahaloz/kwt/_final-l/goal2")
-KUNAS = {"l": ("/home/mahaloz/kwt/_final-l/kuna", "/home/mahaloz/kwt/_final-main/specs"),
-         "i": ("/home/mahaloz/kwt/_final-i/kuna", "/home/mahaloz/kwt/_final-main/specs")}
+UNLACES = {"l": ("/home/mahaloz/kwt/_final-l/unlace", "/home/mahaloz/kwt/_final-main/specs"),
+         "i": ("/home/mahaloz/kwt/_final-i/unlace", "/home/mahaloz/kwt/_final-main/specs")}
 BINS = [(o, b) for o in ("O2", "O0") for b in ("fmt", "ls", "sort", "du")]
 
 
 def run(label, opt, b):
-    kb, specs = KUNAS[label]
-    env = dict(os.environ, SLEIGHHOME=specs, KUNA_SPECS=specs)
+    kb, specs = UNLACES[label]
+    env = dict(os.environ, SLEIGHHOME=specs, UNLACE_SPECS=specs)
     binp = R / opt / "coreutils" / "stripped" / b
     d = OUT / label
     d.mkdir(parents=True, exist_ok=True)
@@ -45,7 +45,7 @@ def run(label, opt, b):
 
 
 if __name__ == "__main__":
-    jobs = [(l, o, b) for l in KUNAS for (o, b) in BINS]
+    jobs = [(l, o, b) for l in UNLACES for (o, b) in BINS]
     res = {}
     with ThreadPoolExecutor(max_workers=16) as ex:
         for l, o, b, tot in ex.map(lambda x: run(*x), jobs):

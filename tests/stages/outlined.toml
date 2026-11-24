@@ -8,8 +8,8 @@
 # MachineOutliner splits functions into shared `OUTLINED_FUNCTION_<n>`
 # fragments, which printed as opaque calls with nonsense arguments.
 #
-# Stage / sub-stage: P2. `p2_lift/kuna_chkstkdarwin.rs` deletes the probe
-# CALL pre-SSA; `p2_lift/kuna_outlinedinline.rs` flags each fragment inline
+# Stage / sub-stage: P2. `p2_lift/unlace_chkstkdarwin.rs` deletes the probe
+# CALL pre-SSA; `p2_lift/unlace_outlinedinline.rs` flags each fragment inline
 # so flow splices it into the caller, and the inliner keeps a fragment's own
 # RETURN when the caller tail-calls it.
 #

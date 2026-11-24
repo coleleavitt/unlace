@@ -1,5 +1,5 @@
 ; Clean-room repro: `rep movsd` copies with a constant count into and out of
-; the frame (kuna_repframecopy), and the shapes left as loops.
+; the frame (unlace_repframecopy), and the shapes left as loops.
 ;
 ;   fill8(Rect r, int b)  __stdcall, reads all eight dwords of r and b, `ret 0x24`.
 ;   use1(int x)           __stdcall, reads x, `ret 4`.
@@ -28,7 +28,7 @@
 ;   big_draw(a, b, src)   calls paint3(a, b, 3), then passes a 32-dword struct
 ;                         by value: the copy stays a loop and its bottom-of-frame
 ;                         pointer is what `calleeargs` keeps from costing paint3
-;                         its pushed arguments (tests/stages/kuna-calleeargs.toml).
+;                         its pushed arguments (tests/stages/unlace-calleeargs.toml).
 ;   shift_pass(a)         fills nine slots at the stack pointer, moves the upper
 ;                         eight down one slot with an overlapping `rep movsd`,
 ;                         and calls fill8: it takes 1..8 and 8.

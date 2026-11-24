@@ -2,10 +2,10 @@
 
 ## 1. The opportunity
 
-`kuna-analysis/src/analyzers/protos/mod.rs` carries a **27-entry** libc prototype
+`unlace-analysis/src/analyzers/protos/mod.rs` carries a **27-entry** libc prototype
 table. Its own header says why it is small and calls the shortfall out as a
 documented LOSS: Ghidra applies parsed C headers shipped as binary `.gdt` data-type
-archives, that format is not vendored into the kuna tree, and the table is "a
+archives, that format is not vendored into the unlace tree, and the table is "a
 faithful, minimal stand-in". Nothing about the constraint is licensing — the
 signatures are standard C library declarations, and `docs/missing-ghidra-analyses.md`
 classifies the whole item as a dependency/data substitution of the same kind as
@@ -16,13 +16,13 @@ The cost is that every libc callee outside those 27 leaves its callers' argument
 as an inferred `unsigned long`:
 
 ```
-kuna: unsigned long authenticate(unsigned long a0, char *a1)   /* a0 is a path */
+unlace: unsigned long authenticate(unsigned long a0, char *a1)   /* a0 is a path */
       v4 = open(a0, 0);                                        /* v4 is unsigned int */
 ```
 
-This is kuna's weakest metric on plain C — third on `type_match` behind binja and
-angr — and 50% of the 1,587 cases where IDA scores a perfect `type_match` and kuna
-does not have an integer-typed kuna parameter where IDA has a concrete type.
+This is unlace's weakest metric on plain C — third on `type_match` behind binja and
+angr — and 50% of the 1,587 cases where IDA scores a perfect `type_match` and unlace
+does not have an integer-typed unlace parameter where IDA has a concrete type.
 
 ## 2. Which names — measured, not guessed
 
@@ -31,7 +31,7 @@ Two independent rankings over the **frozen** decbench C corpus
 
 1. **Breadth.** `objdump -d` over the 547 C binaries that carry a scored case; a
    histogram of every `call <name@plt>`. 1,930 distinct imported names.
-2. **Metric alignment.** The 1,587 `type_match` cases where IDA is perfect and kuna
+2. **Metric alignment.** The 1,587 `type_match` cases where IDA is perfect and unlace
    is not, each mapped into its containing function block, counting which imports
    that function calls. This answers "which callee, if typed, would move the
    metric", rather than "which callee is popular".

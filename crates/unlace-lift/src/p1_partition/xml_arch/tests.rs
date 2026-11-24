@@ -32,7 +32,7 @@ fn capability_file_match_reads_binaryimage_prefix() {
     use std::io::Write;
     // A file beginning (after whitespace) with "<bi" matches; anything else does
     // not (the C++ reads three chars after skipping leading whitespace).
-    let dir = std::env::temp_dir().join(format!("kuna_xmlarch_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_xmlarch_{}", std::process::id()));
     let _ = std::fs::create_dir_all(&dir);
 
     let yes = dir.join("yes.xml");

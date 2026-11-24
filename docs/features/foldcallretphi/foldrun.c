@@ -1,6 +1,6 @@
 /* Compile-and-run check for the foldcallretphi default.
  *
- * Every rendering below is transcribed verbatim from `kuna decompile-all`
+ * Every rendering below is transcribed verbatim from `unlace decompile-all`
  * (stripped binaries of decbench full_run_address_2026-09-11, and the repo's
  * tests/bug-repro/faillog), once as `--option foldcallretphi off` prints it and
  * once as the default prints it.  Every callee is a stub that logs its call
@@ -19,7 +19,7 @@
  * Negative controls (each must MISMATCH, so the check can see the defect):
  *   B', F'  the fold the default used to print there, `sub_c5b0(stdin) == -1`,
  *           against a stub that returns 0xffffffff as the binary's
- *           `mov $0xffffffff,%eax` and kuna's own `return 0xffffffff;` do;
+ *           `mov $0xffffffff,%eax` and unlace's own `return 0xffffffff;` do;
  *   K       a call folded past a global write (stages target2).
  * Short-circuit and joined-return sites (review round 3):
  *   G  cx7 z1 -O2         ferror(stdin) folded into the LEFT operand of ||
@@ -251,7 +251,7 @@ static long siteE_on(FAKEFILE *v19) {
   return iters;
 }
 
-/* ---- negative control K: tests/stages/kuna-foldcallretphi.xml `target2` */
+/* ---- negative control K: tests/stages/unlace-foldcallretphi.xml `target2` */
 static int k, g, ok;
 static int helper(int x) { LOG("helper(%d,k=%d) ", x, k); return k; }
 static void ctl_good(void) { int v1 = ok, v2; v2 = helper(g); k = 42; ok = v1 & v2; }
@@ -276,8 +276,8 @@ static int siteG3_oldfold(int a0) { gflag = (unsigned int)(5 < a0 && !fflush(std
 #undef stdin
 #undef stdout
 
-/* ---- sites H / H': i386 edx:eax (tests/stages/kuna-foldcallretphi-join.xml).
- * kuna prints the callee `unsigned long long big(int4 a0)` ending in
+/* ---- sites H / H': i386 edx:eax (tests/stages/unlace-foldcallretphi-join.xml).
+ * unlace prints the callee `unsigned long long big(int4 a0)` ending in
  * `return 0xffffffff;`; the caller reads eax alone.  The default keeps the
  * spill; H' is the fold it printed before the joined-return probe. */
 static unsigned long long s_big(FAKEFILE *f) { LOG("big(%d) ", f ? f->pos : -1); return f ? 0xffffffffULL : 1; }

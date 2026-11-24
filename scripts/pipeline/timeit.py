@@ -41,7 +41,7 @@ SPEED_FIELDS = (
 def _decompile_once(binary, selector, func_addr, option, value, *, timeout):
     """Wall-clock one decompile with the option flipped; return elapsed ms, or None on failure.
 
-    Name-first, address-fallback selection (mirrors prdemo._kuna), but timed rather than
+    Name-first, address-fallback selection (mirrors prdemo._unlace), but timed rather than
     captured. A failed decompile yields None so it is excluded from the median rather than
     silently counted as fast.
     """
@@ -73,7 +73,7 @@ def time_decompile(binary, selector, func_addr, option, value, *,
                    repeat=None, timeout=None):
     """Return up to ``repeat`` wall-clock ms samples for one (option, value) setting."""
     repeat = config.SPEED_REPEAT if repeat is None else repeat
-    timeout = config.KUNA_TIMEOUT if timeout is None else timeout
+    timeout = config.UNLACE_TIMEOUT if timeout is None else timeout
     samples = []
     for _ in range(repeat):
         ms = _decompile_once(binary, selector, func_addr, option, value, timeout=timeout)
@@ -104,7 +104,7 @@ def measure(record=None, *, option=None, binary=None, selector=None, func_addr=N
 
     # Warm up (discarded): settle page cache + spec mmap so the first timed run isn't an outlier.
     for _ in range(max(0, warmup)):
-        _decompile_once(binary, selector, func_addr, option, "off", timeout=config.KUNA_TIMEOUT)
+        _decompile_once(binary, selector, func_addr, option, "off", timeout=config.UNLACE_TIMEOUT)
 
     off = time_decompile(binary, selector, func_addr, option, "off", repeat=repeat)
     on = time_decompile(binary, selector, func_addr, option, "on", repeat=repeat)

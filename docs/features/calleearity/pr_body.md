@@ -8,7 +8,7 @@ the model loader"*:
 > and other sized calls, but renders several paths as `sub_140008160()` with no
 > argument, destroying the buffer-size dataflow.
 
-Its acceptance probe — `kuna decompile <bin> 0x1400024a0 --addr` must not contain
+Its acceptance probe — `unlace decompile <bin> 0x1400024a0 --addr` must not contain
 `sub_140008160();` — **now passes on the default build**.
 
 ## The mechanism
@@ -41,7 +41,7 @@ Root cause: [`analysis.md`](analysis.md) · design and rejected alternatives:
 
 ## Ablation, sweep, gates
 
-- **Ablation**: `kuna test --datatests --baseline docs/baseline.json` →
+- **Ablation**: `unlace test --datatests --baseline docs/baseline.json` →
   **675/675, PARITY OK**, 0 assertions changed. `docs/baseline.json` untouched.
 - **Sweep** (standing requirement 7): 46 binaries / 3857 functions → **25 change
   (0.65%)**, all classified, no regression found. The first cut ("same callee,

@@ -9,8 +9,8 @@ the argument disappears.
 Build the fixture this PR adds and decompile its entry:
 
 ```
-$ python3 decompiler/crates/kuna-analysis/tests/fixtures/calleedeadarg_noterm_x86_64.py
-$ kuna decompile calleedeadarg_noterm_x86_64.exe 0x140001000 --addr
+$ python3 decompiler/crates/unlace-analysis/tests/fixtures/calleedeadarg_noterm_x86_64.py
+$ unlace decompile calleedeadarg_noterm_x86_64.exe 0x140001000 --addr
 
 void sub_140001000(void)
 {

@@ -1,2 +1,2 @@
 /dts-v1/;
-/ { model = "kuna-board"; compatible = "kuna,board"; };
+/ { model = "unlace-board"; compatible = "unlace,board"; };

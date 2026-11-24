@@ -1,8 +1,8 @@
 """Interleaved min-of-N decompile-all timing of protoorder arms on one build.
 
-    python3 speed.py <kuna> <N> <out.json> fmt,ls,sort,bash [types,cycles]
+    python3 speed.py <unlace> <N> <out.json> fmt,ls,sort,bash [types,cycles]
 
-SLEIGHHOME / KUNA_SPECS are taken from the environment."""
+SLEIGHHOME / UNLACE_SPECS are taken from the environment."""
 import json, os, statistics, subprocess, sys, time
 R = "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2"
 ALL = {"fmt": f"{R}/coreutils/stripped/fmt", "ls": f"{R}/coreutils/stripped/ls",
@@ -22,7 +22,7 @@ for name in which:
         order = arms[i % len(arms):] + arms[:i % len(arms)]
         for lab in order:
             opts, extra = ARMS[lab]
-            env = dict(os.environ, SLEIGHHOME=sp, KUNA_SPECS=sp, **extra)
+            env = dict(os.environ, SLEIGHHOME=sp, UNLACE_SPECS=sp, **extra)
             t0 = time.perf_counter()
             p = subprocess.run([K, "decompile-all", ALL[name], "--json", "--max-fn-seconds", "120"] + opts,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)

@@ -1,4 +1,4 @@
-/* (kuna) Fixture calltable_split_x86_64, file 3 of 3: a range-checked switch
+/* (unlace) Fixture calltable_split_x86_64, file 3 of 3: a range-checked switch
  * whose table is followed in .rodata by `ftab`, a table of functions the
  * entry calls directly. */
 extern volatile int sink;

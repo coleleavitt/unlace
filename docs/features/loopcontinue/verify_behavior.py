@@ -87,7 +87,7 @@ def main():
     assembly = (Path(__file__).with_name("repro.S").read_text()
                 .split("__errno_location: ret")[0])
     assembly += '\n.section .note.GNU-stack,"",@progbits\n'
-    with tempfile.TemporaryDirectory(prefix="kuna-loopcontinue-") as directory:
+    with tempfile.TemporaryDirectory(prefix="unlace-loopcontinue-") as directory:
         directory = Path(directory)
         (directory / "harness.c").write_text(HARNESS)
         (directory / "original.S").write_text(assembly)

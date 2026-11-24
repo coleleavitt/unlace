@@ -4,7 +4,7 @@
 
 An ELF with no usable section table loses every import name. `readelf -r
 --use-dynamic` still reads all eight of KataVM_L1's PLT relocations off
-`PT_DYNAMIC`; kuna named none of them, so the `puts` thunk and its call sites
+`PT_DYNAMIC`; unlace named none of them, so the `puts` thunk and its call sites
 came out anonymous.
 
 Reproduce with any dynamically linked binary — zeroing `e_shoff`/`e_shnum`/
@@ -17,7 +17,7 @@ import struct; b=bytearray(open('nosec','rb').read())
 struct.pack_into('<Q',b,0x28,0); struct.pack_into('<H',b,0x3c,0); struct.pack_into('<H',b,0x3e,0)
 open('nosec','wb').write(bytes(b))"
 
-$ kuna decompile ./sec main
+$ unlace decompile ./sec main
 unsigned long main(void)
 {
   char v1 [8];
@@ -27,7 +27,7 @@ unsigned long main(void)
   return 0;
 }
 
-$ kuna decompile ./nosec "$(nm sec | awk '$3=="main"{print "0x"$1}')" --addr
+$ unlace decompile ./nosec "$(nm sec | awk '$3=="main"{print "0x"$1}')" --addr
 unsigned long sub_1189(void)
 {
   char v1 [8];
@@ -73,11 +73,11 @@ Two sweeps over the same 131 ELF images (98 repo fixtures across eight
 architectures, 33 system binaries with up to 233 imports). Resolved with and
 without their section table, every name the segment path produced matched the
 section path's answer at the same address — 0 mismatches, 0 extra names. Resolved
-unmodified against a base-commit build, `kuna functions --json` is identical on
+unmodified against a base-commit build, `unlace functions --json` is identical on
 all 131, which is the inertness claim measured rather than argued.
 
 Gates: `make test` 675/675 PARITY OK · `make test-stages` 692/692 PARITY OK ·
 `make rust-test` green · `make check-spec` OK · `make test-cli` 91/91 ·
-`kuna catalog --check` OK.
+`unlace catalog --check` OK.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

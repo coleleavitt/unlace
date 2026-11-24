@@ -10,7 +10,7 @@
 # four.
 #
 # Stage / sub-stage: P1 external-refinement.
-# `analyzers/objc/kuna_objcrefs.rs` `Selectors::stub_encoding` types a stub
+# `analyzers/objc/unlace_objcrefs.rs` `Selectors::stub_encoding` types a stub
 # from the image's agreed spelling only when the SDK headers (`objcsdk`),
 # when they spell the selector, agree on the register classes of its return
 # and arguments, and a floating-point return only a protocol declares (no

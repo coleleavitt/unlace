@@ -1,13 +1,13 @@
 # Go scalar and pointer signatures from DWARF
 
-Kuna recognizes Go register arguments, but it discards the source signature in
+Unlace recognizes Go register arguments, but it discards the source signature in
 Go DWARF. For example, a Go 1.22.5 `func fromWord(p uintptr) *int32` consists of a
-single RET instruction. Current Kuna emits `func fromWord() { return }`, losing
+single RET instruction. Current Unlace emits `func fromWord() { return }`, losing
 the input and result. `main.add` in the pinned angr basics image retains its
 machine arithmetic but calls the parameters `a0` and `a1`.
 
 The Go compiler writes type references as absolute `.debug_info` offsets, often
-into a different compilation unit. Kuna's general DWARF snapshot only retains
+into a different compilation unit. Unlace's general DWARF snapshot only retains
 unit-relative type references. Go also represents results as formal-parameter
 DIEs with `DW_AT_variable_parameter=true`; treating every formal as an input
 would install a wrong signature when cross-unit references start resolving.
@@ -27,7 +27,7 @@ profile continues to spell unaliased scalar types by width.
 The seven pinned reference DWARF-signature tests pass against both Go 1.22.5
 and 1.27.1 basics images and the langdetect image. These tests also cover
 aggregate and multi-result metadata beyond this feature's initial scope.
-A manual Kuna prototype assertion confirms that the existing call model and
+A manual Unlace prototype assertion confirms that the existing call model and
 Go emitter preserve the missing identity and narrowing values once supplied
 with the source contract:
 
@@ -46,7 +46,7 @@ the results with empty locations plus the result flag. The source `uintptr`
 is currently emitted as the width-correct `uint64`; alias preservation is not
 part of this feature.
 
-The implementation also handles ELF zlib debug sections. Kuna's `object` build
+The implementation also handles ELF zlib debug sections. Unlace's `object` build
 omits general decompression, so the Go 1.22.5 and 1.27.1 reference files supplied
 no ordinary DWARF snapshots at all. A Go-only deferred path retains at most
 64 MiB of combined stored/declared sections, inflates them only under the option,
@@ -86,7 +86,7 @@ metadata. 1,384 agree with pinned angr's reader on input names, scalar widths,
 pointer shapes and result roles. Two native `runtime.asmcgocall` wrappers have
 the same names as separate no-formal ABI0 DIEs selected by angr's name-keyed map.
 Independent DWARF inspection and Go's objdump establish their RAX/RBX inputs and
-32-bit results. Kuna binds the source contracts by address. The two collision
+32-bit results. Unlace binds the source contracts by address. The two collision
 JSON files and `asmcgocall*.txt` retain that evidence.
 
 Go 1.27.3 reproduces the CI failure on one-byte identity functions: it gives

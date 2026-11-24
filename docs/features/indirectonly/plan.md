@@ -29,7 +29,7 @@ the action is the inert stub it was before, byte-for-byte.
 ## 4. Why default-off
 
 The first draft shipped it on, on the grounds that it is the upstream body for an
-action kuna already schedules. It is — but the behaviour is wrong on a shape that
+action unlace already schedules. It is — but the behaviour is wrong on a shape that
 occurs in the corpus, so the default is off.
 
 The lifted `merge_test_adjacent` refusal is sound only when the illegal input is
@@ -65,8 +65,8 @@ than a porting error.
 ## 6. Counters and docs
 
 `counters --rederive` / `--fix` on a freshly built tree (settables 213 -> 214),
-`kuna catalog --markdown > docs/options.md`, the stages corpus count in
-`kuna-base/src/xml.rs`, `docs/baseline-stages.json` re-recorded, and the prose in
+`unlace catalog --markdown > docs/options.md`, the stages corpus count in
+`unlace-base/src/xml.rs`, `docs/baseline-stages.json` re-recorded, and the prose in
 `docs/spec/06-variables-and-merge.md` §6.1 — where the sentence naming
 `ActionMarkIndirectOnly` as an inert stub is replaced by the description of what
 it now does.

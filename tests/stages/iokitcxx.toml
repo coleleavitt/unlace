@@ -1,4 +1,4 @@
-# Kuna `iokitclasses on` (the typed classes) against `iokitclasses names`
+# Unlace `iokitclasses on` (the typed classes) against `iokitclasses names`
 # on an XNU kext.
 #
 # The fixture (gen_iokitcxx.py) is an arm64 MH_KEXT_BUNDLE whose

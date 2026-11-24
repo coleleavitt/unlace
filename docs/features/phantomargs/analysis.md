@@ -7,7 +7,7 @@ the shipped option that removes it.
 ## 1. The measured symptom
 
 ```
-$ kuna decompile-all .../O2/coreutils/stripped/fmt --addr 0x26a0
+$ unlace decompile-all .../O2/coreutils/stripped/fmt --addr 0x26a0
 unsigned long sub_26a0(int a0,char **a1)
 {
   ...
@@ -33,7 +33,7 @@ fabricated third argument.
 
 ## 2. Root cause, proven with an instrumented build
 
-A throwaway instrumentation (`KUNA_DBG_TRIAL`, printing each `ParamActive` trial's
+A throwaway instrumentation (`UNLACE_DBG_TRIAL`, printing each `ParamActive` trial's
 flags per `ActionActiveParam` pass, whether `AncestorRealistic` ran, what it
 returned, and the defining op of the Varnode the call reads) on the call at
 `0x2ac1`:
@@ -107,17 +107,17 @@ arguments.
 ```
 
 Same call, same three arguments, same two phantom values — Ghidra merely *names*
-them `extraout_RDX`, which says out loud what kuna's `v9`/`v11` hide. kuna's
+them `extraout_RDX`, which says out loud what unlace's `v9`/`v11` hide. unlace's
 `fillin_map_standard` is a faithful port of `ParamListStandard::fillinMap`
 (`build_trial_map` -> `force_exclusion_group` -> `separate_sections` ->
 `force_no_use` -> `force_inactive_chain` -> mark active trials used), so this is
-not a kuna scheduling divergence. IDA renders one argument at all three sites (its
+not a unlace scheduling divergence. IDA renders one argument at all three sites (its
 own arity story, also not the DWARF two).
 
 ## 4. (b) The minimal sound fix
 
 The seam is `build_input_from_trials`, immediately after
-`kuna_calleearity::unify_with_sibling_call` — not `check_input_trial_use`, where
+`unlace_calleearity::unify_with_sibling_call` — not `check_input_trial_use`, where
 the trials are not yet sorted or entry-assigned and "trailing" is not computable
 (`active.sort_trials()` runs at the tail of `fillin_map_standard`). Shipped as
 `p4_calls/argclobber.rs`, option **`argclobber`, default off**, with eight
@@ -139,7 +139,7 @@ clauses:
    failure shape;
 8. **a sibling that really used that storage wins** — no already-final call to the
    same callee entry in this function passed an argument there
-   (`kuna_calleearity::best_witness_for`).
+   (`unlace_calleearity::best_witness_for`).
 
 Clauses 3 and 5 were added in review round 2 (§8); clause 4 in review round 3
 (§9), which is also where the corpus numbers in §5 come from.
@@ -148,7 +148,7 @@ Clauses 3 and 5 were added in review round 2 (§8); clause 4 in review round 3
 function, so a slot it promoted from a sibling witness is visible to clause 7 and
 declines the drop. The drop itself is `mark_no_use`, i.e. `DEFNOUSE`: every
 deferred member of the family reads that as definitely-not-used
-(`kuna_calleearitylive::capture_partial_call` skips such trials explicitly), so
+(`unlace_calleearitylive::capture_partial_call` skips such trials explicitly), so
 none of them puts the argument back, and `plan_promotions` is aborted for that
 slot by construction rather than by accident.
 
@@ -220,7 +220,7 @@ Per-function hunk classification:
 ### What decbench actually scores
 
 The pass can in principle delete a `kind: arg` row, so it is measured rather than
-argued. On all four changed functions (`kuna decompile-all --addr <fn> --json`,
+argued. On all four changed functions (`unlace decompile-all --addr <fn> --json`,
 `variables[]` compared off vs on, automatic `vN` names normalized):
 
 * **3 of 4 are row-for-row identical** in `(kind, name-class, type)`.
@@ -245,7 +245,7 @@ fmt row was the workspace suite running underneath.
 **No — they are complementary.**
 
 * Parking the callee's own recovered prototype fixes all three `fmt` sites at once
-  and is strictly better *there*. It is also whole-binary only: `kuna decompile
+  and is strictly better *there*. It is also whole-binary only: `unlace decompile
   <one function>` (the common agent path) has no callee pass to park from.
 * grep's callee `sub_b420` is **self-recursive** (`sub_b420(*v4,a1)` inside its own
   body). A3's stated acceptance policy declines SCC members, so `protoorder` does
@@ -271,10 +271,10 @@ sole production caller is `Database::assign_default_names` (`database.rs:4238`) 
 which passes **`vn: None`** — exactly as upstream's
 `ScopeInternal::assignDefaultNames` passes `(Varnode *)0`. With no representative
 the flag-bearing branch cannot run, and the `num_entries()` branch below it
-rebuilds `flags` as `addrtied` or `0`. Measured: with `KUNA_DBG_NAME`
+rebuilds `flags` as `addrtied` or `0`. Measured: with `UNLACE_DBG_NAME`
 instrumentation on `build_default_name`, decompiling `fmt::main` under `--option
 namestyle ghidra` produces **zero** calls to it; the name `uVar9` comes from
-`kuna_default_local_name` (`p6_variables/coreaction_cleanup.rs`), the `vN` /
+`unlace_default_local_name` (`p6_variables/coreaction_cleanup.rs`), the `vN` /
 `<t>VarN` allocator inside `name_local_highs_angr`, which serves *both* namestyles
 and reads only `is_persist` / `is_addr_tied` / `is_input` / `is_constant` off the
 name representative.
@@ -303,7 +303,7 @@ the rule deleting **live** arguments at five sites, of a class the PR did not
 describe:
 
 ```
-$ kuna decompile-all .../O2/u-boot/stripped/u-boot --addr 0x60827fa4 --option argclobber on
+$ unlace decompile-all .../O2/u-boot/stripped/u-boot --addr 0x60827fa4 --option argclobber on
 -   sub_60873270("%s %s: Invalid \"bus-width\" value %u!\n",v3,v4,v1);
 +   sub_60873270("%s %s: Invalid \"bus-width\" value %u!\n",v3,v4);
 ```
@@ -360,7 +360,7 @@ order-dependent (it can only see callees whose callers were decompiled earlier i
 the run) where the callee-body probe is not. Clause 4 answers the same three
 cases the review cited — `sub_6086609c`, and both `printf` sites — from evidence
 that does not depend on decompilation order, and it is cached per image the same
-way. `kuna decompile <one function>` gets it too, where a whole-binary witness
+way. `unlace decompile <one function>` gets it too, where a whole-binary witness
 cache would be empty.
 
 ### Considered and rejected: a liveness test on the dropped value
@@ -409,10 +409,10 @@ $ cat fix2.s      # the relevant three instructions
 2: call target            # target(rdi, 5, rdx)
 $ gcc -nostdlib -static -o fix2.elf fix2.s
 
-$ kuna decompile-all fix2.elf --addr 0x401000                        # default
+$ unlace decompile-all fix2.elf --addr 0x401000                        # default
 void sub_401000(long a0,unsigned long a1) { ... sub_40102f(a0,5,a1); }
 
-$ kuna decompile-all fix2.elf --addr 0x401000 --option argclobber on # round 2
+$ unlace decompile-all fix2.elf --addr 0x401000 --option argclobber on # round 2
 void sub_401000(long a0)                { ... sub_40102f(a0,5); }
 ```
 
@@ -464,7 +464,7 @@ The three self-contained repros are checked in next to this file:
 review's `fix2.s`, the caller's own parameter) and `repro-negative-constant.s`
 (the review's `fix.s`, a constant). Each builds with
 `gcc -nostdlib -static -o x.elf x.s` and is read with
-`kuna decompile-all x.elf --addr 0x401000 [--option argclobber on]`; only the
+`unlace decompile-all x.elf --addr 0x401000 [--option argclobber on]`; only the
 first changes.
 
 **Is a 4-function option worth shipping?** The narrowness is the price of the

@@ -1,28 +1,28 @@
-# os/linux_x86_64/ — the kuna native binary goes here
+# os/linux_x86_64/ — the unlace native binary goes here
 
 This directory holds the Linux x86-64 `unlace_ghidra` binary that the extension makes
 Ghidra spawn as its decompiler process. It is a **build artifact** (gitignored): copy it
 here before building the extension zip, so `gradle buildExtension` packages it into the
-zip's `KunaDecompiler/os/linux_x86_64/` and `Application.getOSFile("KunaDecompiler",
+zip's `UnlaceDecompiler/os/linux_x86_64/` and `Application.getOSFile("UnlaceDecompiler",
 "unlace_ghidra")` can resolve it at runtime.
 
-From the kuna repo root:
+From the unlace repo root:
 
 ```bash
 cargo build --release -p unlace-ghidra
-cp target/release/unlace_ghidra integrations/ghidra/KunaDecompiler/os/linux_x86_64/
-chmod +x integrations/ghidra/KunaDecompiler/os/linux_x86_64/unlace_ghidra
+cp target/release/unlace_ghidra integrations/ghidra/UnlaceDecompiler/os/linux_x86_64/
+chmod +x integrations/ghidra/UnlaceDecompiler/os/linux_x86_64/unlace_ghidra
 ```
 
 If you skip this step the extension still builds and installs, but the plugin will show
 an error dialog (and leave the stock decompiler active) until the binary appears in the
 *installed* extension's `os/linux_x86_64/` directory or you point the
-`-Dkuna.decompiler.exe=/abs/path/to/unlace_ghidra` JVM property at a build.
+`-Dunlace.decompiler.exe=/abs/path/to/unlace_ghidra` JVM property at a build.
 
 ## Other platforms
 
 Ghidra resolves native binaries per platform from sibling directories named after the
-platform. To ship kuna for another OS/arch, cross-build (or build natively) and drop the
+platform. To ship unlace for another OS/arch, cross-build (or build natively) and drop the
 binary, with the same name, into the matching directory before zipping:
 
 | Platform | Directory | Binary name |

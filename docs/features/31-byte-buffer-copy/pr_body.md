@@ -2,11 +2,11 @@
 
 A stack-to-stack copy of a buffer whose size is not a multiple of eight loses
 the bytes in its middle. gcc copies 31 bytes with four 8-byte moves at offsets
-0, 8, 15 and 23 — so the middle two overlap on byte 15 — and kuna emits the
+0, 8, 15 and 23 — so the middle two overlap on byte 15 — and unlace emits the
 first and the last and nothing between them.
 
 ```
-$ kuna decompile 0xJam3z-Medium sub_15dc
+$ unlace decompile 0xJam3z-Medium sub_15dc
     v3 = sub_1348(v6,0x1f,v4);
     v7[0] = v6[0];          # bytes 0..7
     v10 = v9;               # bytes 23..30
@@ -53,7 +53,7 @@ same shape at 32 bytes, where nothing overlaps — is identical in both passes.
 
 `make test` PARITY OK 675/675 (no re-pin), `make test-stages` PARITY OK 746/746
 (740 → 746, none moved), `make test-cli` 119/119, `make check-spec` green,
-`kuna catalog --check` OK, workspace suite green. `decompile-all` in both arms
+`unlace catalog --check` OK, workspace suite green. `decompile-all` in both arms
 over 55 binaries: 0 differ. Speed +0.21% on the witness function (median of 5).
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

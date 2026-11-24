@@ -2,7 +2,7 @@
 
 1. Add a P3-owned option module containing the `on|off` parser and an exact
    matcher for the full modulo-256 cancellation tree.
-2. Place one `(kuna)` hook in `RuleSubCommute`'s INT_LEFT input gate. Preserve
+2. Place one `(unlace)` hook in `RuleSubCommute`'s INT_LEFT input gate. Preserve
    the INT_ZEXT/PIECE path and do not touch DIV, REM, or any later guard.
 3. Rewrite only the outer one-byte add to the independent addend; never create
    a narrowed shift. Require exact source/width/offset/coefficient equality and

@@ -1,4 +1,4 @@
-# kuna `loweredswitch tree`: a compare tree of more than sixteen cases.
+# unlace `loweredswitch tree`: a compare tree of more than sixteen cases.
 #
 # gcc -O0 lowers a sparse switch to a tree of `==` and `>` tests on the switch
 # variable with no jump table, whatever its size.  loweredswitch finds the tree

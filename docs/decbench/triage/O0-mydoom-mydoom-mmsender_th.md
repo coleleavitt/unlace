@@ -5,7 +5,7 @@ group_id: mydoom::mmsender_th
 status: feature-candidate
 tier: M
 margin: 37
-fresh_verdict: reproduces on today's build in BOTH modes — the function body runs straight past `ExitThread(0)` and swallows the whole of the next function (which kuna separately emits as `sub_40424c`, byte-identical); the call renders as `(*dat_4112c4)(0)` because kuna never binds a `call [IAT slot]` to the import symbol it already resolved
+fresh_verdict: reproduces on today's build in BOTH modes — the function body runs straight past `ExitThread(0)` and swallows the whole of the next function (which unlace separately emits as `sub_40424c`, byte-identical); the call renders as `(*dat_4112c4)(0)` because unlace never binds a `call [IAT slot]` to the import symbol it already resolved
 option_closing: null
 feature_slug: peimportcall
 scope: small
@@ -33,9 +33,9 @@ void mmsender_th(char *lpThreadParameter)
 
 Ghidra's pane is the same 14 statements and ends with
 `/* WARNING: Subroutine does not return */ ExitThread(0);`. angr, ghidra and phoenix
-all score GED 0 here; kuna scores 37. Bucket: **kuna-specific**.
+all score GED 0 here; unlace scores 37. Bucket: **unlace-specific**.
 
-**kuna (fresh, today's build, no flags — and identical under `--mode reliable`)**:
+**unlace (fresh, today's build, no flags — and identical under `--mode reliable`)**:
 
 ```c
 void sub_4041e2(int4 a0)
@@ -63,10 +63,10 @@ void sub_4041e2(int4 a0)
 
 50 LOC, 4 `if`s and **1 loop that does not exist in this function**.
 
-**The proof that this is an overrun, not a discovery difference**: kuna's *own*
+**The proof that this is an overrun, not a discovery difference**: unlace's *own*
 function list contains an entry at `0x40424c`, and `unlace decompile-all` emits it
 separately as `sub_40424c` — whose body is the trailing `while` loop above,
-statement for statement. kuna emits the same code twice.
+statement for statement. unlace emits the same code twice.
 
 ```c
 void sub_40424c(void)
@@ -90,9 +90,9 @@ mydoom is a leaked-source worm; the corpus ships no `.i` for it
 artifacts only, and `mydoom.exe` is a PE with `do-not-execute` labels). The
 source-side ground truth used here is therefore the decbench-recorded source CFG for
 `mmsender_th`: **5 nodes / 6 edges, non-degenerate** — a body with two `if`s and no
-loop, which is exactly IDA's and Ghidra's shape and is not compatible with kuna's
+loop, which is exactly IDA's and Ghidra's shape and is not compatible with unlace's
 extra `while`. The function is a thread entry point: bump a refcount, run the worker,
-drop the refcount, `ExitThread(0)`. The trailing loop kuna appends walks a linked
+drop the refcount, `ExitThread(0)`. The trailing loop unlace appends walks a linked
 list at `0x4102e0` calling `GetTickCount`/`GetProcessHeap`/`HeapFree` — a different
 routine's body.
 
@@ -106,7 +106,7 @@ function's entire body.
 
 ### Root cause (instrumented, not read)
 
-kuna's PE loader **does** resolve the import table. `unlace functions mydoom.exe --json`
+unlace's PE loader **does** resolve the import table. `unlace functions mydoom.exe --json`
 lists 149 named symbols, including exactly the right one:
 
 ```
@@ -153,7 +153,7 @@ That split is visible inside a single function. `sub_4013e0` in the same binary:
 ```
 
 Same function, same binary: the thunked imports get names, prototypes and no-return;
-the slot-called imports get `(*dat_XXXXXX)()`. kuna is internally inconsistent, which
+the slot-called imports get `(*dat_XXXXXX)()`. unlace is internally inconsistent, which
 is the same shape of evidence that carried `jumptable-callother-inject` in round 1.
 
 **Second, subordinate gap**: even once the call is bound,
@@ -168,7 +168,7 @@ counterfactual above).
 
 **P2** — Flow & Op-Graph Recovery (`decompiler/crates/unlace-decomp/src/p2_lift/`).
 The flow decision "does this call fall through" is made there, at the same seam
-`kuna_tailcalljump` / `kuna_noreturn_externmatch` already hook. The no-return name
+`unlace_tailcalljump` / `unlace_noreturn_externmatch` already hook. The no-return name
 list is a P1 (`unlace-analysis`) data file.
 
 ### Correctness value, beyond GED
@@ -222,11 +222,11 @@ functions listed above.
 
 **Slug `peimportcall`, P2, one module** — a new
 `decompiler/crates/unlace-decomp/src/p2_lift/peimportcall.rs`, built on the
-`kuna_tailcalljump` template (which already rewrites one flow-level call shape into
+`unlace_tailcalljump` template (which already rewrites one flow-level call shape into
 another at this seam).
 
 Mechanism: match a `CALLIND` whose target Varnode is an **unmodified read of a global
-at a constant address `A`** (the shape in the `print raw` dump above — in kuna's IR
+at a constant address `A`** (the shape in the `print raw` dump above — in unlace's IR
 the IAT slot read is a global Varnode, *not* a `LOAD` op, which is why an
 `INT_ZEXT`/`LOAD`-shaped matcher would miss it), and for which
 `FlowEnvironment::query_call(A)` resolves a function symbol (i.e. `A` is a registered
@@ -240,7 +240,7 @@ Owning files:
 - `p2_lift/peimportcall.rs` (new): the matcher + rewrite.
 - `p2_lift/flow.rs`: one hook at the CALLIND classification point.
 - `p0_knowledge/options.rs` + `phases.toml`: the `peimportcall on|off` row
-  (plus the hard-coded catalog counts listed in `kuna-adding-option-count-tests`).
+  (plus the hard-coded catalog counts listed in `unlace-adding-option-count-tests`).
 - `unlace-analysis/data/PeMacFunctionsThatDoNotReturn`: add the Win32 no-return names
   Ghidra ships (`ExitProcess`, `ExitThread`, `TerminateProcess`, `FatalExit`, …).
   Data-only; no code change.
@@ -263,12 +263,12 @@ should also be rescored against `O0-mydoom-mydoom-sync_visual_th`.
 
 ### One loose thread found while triaging (not this feature)
 
-kuna prints the `lock`-prefixed read-modify-write as **`LOCK(); UNLOCK();` with the
+unlace prints the `lock`-prefixed read-modify-write as **`LOCK(); UNLOCK();` with the
 body missing**:
 
 ```c
   LOCK();
-  UNLOCK();                       // kuna
+  UNLOCK();                       // unlace
 ```
 ```c
   LOCK();

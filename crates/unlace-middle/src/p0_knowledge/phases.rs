@@ -557,7 +557,7 @@ fn option_anchor(st: &UnlaceSettable) -> String {
 /// output-shaped phrases to options.
 pub fn emit_catalog_markdown() -> String {
     let mut out = String::new();
-    out.push_str("# kuna option catalog\n\n");
+    out.push_str("# unlace option catalog\n\n");
     out.push_str(
         "**Generated** by `unlace catalog --markdown` from `settableTable` in \
          `crates/unlace-decomp/phases.toml` -- do not edit by hand; \

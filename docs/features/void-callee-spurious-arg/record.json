@@ -9,9 +9,9 @@
  "default": "on",
  "div": "DIV-112",
  "touches": [
-  "decompiler/crates/kuna-decomp"
+  "decompiler/crates/unlace-decomp"
  ],
- "summary": "At an unlocked call site, a bounded decode of the callee's own body may veto a register argument the callee provably never reads, so kuna stops declaring `int f(void);` and calling `f(v3);` in the same file.",
+ "summary": "At an unlocked call site, a bounded decode of the callee's own body may veto a register argument the callee provably never reads, so unlace stops declaring `int f(void);` and calling `f(v3);` in the same file.",
  "decisions": [
   {
    "what": "the filed hypothesis STANDS",
@@ -31,7 +31,7 @@
   },
   {
    "what": "default-ON is forced by the acceptance probe",
-   "detail": "The acceptance runs plain `kuna decompile <bin> _main` with no --option, so a default-off option cannot close the need. Unlike the sibling loader-tier options, the parity corpora are NOT blind here: both are bytechunks whose callee bytes are in the chunk, the datatests caught the first design outright, and a two-pass AArch64 stage fixture pins both arms."
+   "detail": "The acceptance runs plain `unlace decompile <bin> _main` with no --option, so a default-off option cannot close the need. Unlike the sibling loader-tier options, the parity corpora are NOT blind here: both are bytechunks whose callee bytes are in the chunk, the datatests caught the first design outright, and a two-pass AArch64 stage fixture pins both arms."
   },
   {
    "what": "the ghidra-mode traffic pins move, and that is the honest cost",
@@ -39,11 +39,11 @@
   },
   {
    "what": "verify_w10_proto_unlock fails in this environment for an unrelated reason",
-   "detail": "`w10_proto_unlock_const_return_collapses_no_tied_roundtrip` compares against a C++ oracle at KUNA_DECOMP_TEST, which the repipe worker environment sets to the worktree's OWN decomp_test_dbg -- so kuna is its own oracle and the `xunknown4 promote_compare(char *` pin cannot hold. Ablated: with `option calleedeadarg off` the same run emits the same `unsigned int promote_compare(char *a0)`, so this option is not involved. The suite is green with KUNA_DECOMP_TEST unset."
+   "detail": "`w10_proto_unlock_const_return_collapses_no_tied_roundtrip` compares against a C++ oracle at UNLACE_DECOMP_TEST, which the repipe worker environment sets to the worktree's OWN decomp_test_dbg -- so unlace is its own oracle and the `xunknown4 promote_compare(char *` pin cannot hold. Ablated: with `option calleedeadarg off` the same run emits the same `unsigned int promote_compare(char *a0)`, so this option is not involved. The suite is green with UNLACE_DECOMP_TEST unset."
   }
  ],
  "collateral_sweep": {
-  "method": "kuna decompile-all --json, `--option calleedeadarg off` vs `on`, over 61 binaries (decbench O0 + O2 ELF x86-64/ARM/Cortex-M/PE, plus 22 RE-dataset crackmes incl. Mach-O arm64 and PE). Every changed line of every changed function was read and checked against the callee's disassembly.",
+  "method": "unlace decompile-all --json, `--option calleedeadarg off` vs `on`, over 61 binaries (decbench O0 + O2 ELF x86-64/ARM/Cortex-M/PE, plus 22 RE-dataset crackmes incl. Mach-O arm64 and PE). Every changed line of every changed function was read and checked against the callee's disassembly.",
   "binaries": 61,
   "functions": 24306,
   "changed_functions": 5,
@@ -63,7 +63,7 @@
   "pre_narrowing_measurement": "before the leftover-call-result condition, the same u-boot run changed 34 functions and emptied 8 argument lists, incl. do_bootm and ubifs_scan_a_node. That measurement is what produced the second condition."
  },
  "cost": {
-  "method": "interleaved min-of-N, order flipped every pair, 3 warmup pairs; `kuna decompile <bin> _main --option calleedeadarg on|off` and `kuna decompile-all od --json --option calleedeadarg on|off`",
+  "method": "interleaved min-of-N, order flipped every pair, 3 warmup pairs; `unlace decompile <bin> _main --option calleedeadarg on|off` and `unlace decompile-all od --json --option calleedeadarg on|off`",
   "witness_off_ms_min": 147.92,
   "witness_on_ms_min": 148.57,
   "witness_delta_pct_min": 0.44,
@@ -78,7 +78,7 @@
   "make test": "PARITY OK 675/675",
   "make test-stages": "PARITY OK 613/613 (610 + the 3 new calleedeadarg assertions)",
   "make check-spec": "OK",
-  "kuna catalog --check": "catalog OK",
+  "unlace catalog --check": "catalog OK",
   "acceptance": "PASS (scripts.repipe.verify --need void-callee-spurious-arg)"
  },
  "not_closed": [

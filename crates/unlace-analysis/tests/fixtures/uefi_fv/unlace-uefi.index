@@ -1,4 +1,4 @@
-kuna-uefi-index 1
+unlace-uefi-index 1
 module ReportStatusCodeRouterPei.efi 06
 module StatusCodeHandlerPei.efi 06
 module TcgMorLockSmm.efi 0a

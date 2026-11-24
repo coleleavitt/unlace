@@ -1,15 +1,15 @@
-kuna names `main` on stripped ELF and Mach-O images but never on PE: the entry is the CRT startup, and the function it calls is one more `sub_<addr>`. On the in-repo stripped MinGW fixture:
+unlace names `main` on stripped ELF and Mach-O images but never on PE: the entry is the CRT startup, and the function it calls is one more `sub_<addr>`. On the in-repo stripped MinGW fixture:
 
 ```
-$ kuna functions decompiler/crates/kuna-analysis/tests/fixtures/pe_imports_stripped.exe --summary
+$ unlace functions decompiler/crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe --summary
 entry	0x1400014f0	sub_1400014f0
 reachable from entry	70
 ...
-$ kuna decompile decompiler/crates/kuna-analysis/tests/fixtures/pe_imports_stripped.exe 0x1400011a0 --addr | grep 140001592
+$ unlace decompile decompiler/crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe 0x1400011a0 --addr | grep 140001592
   dat_14000c010 = sub_140001592(dat_14000c028,dat_14000c020);
 ```
 
-After this change the same commands give `main	0x140001592	main` in the summary and `dat_14000c010 = main(dat_14000c028,dat_14000c020);` at the call site. `kuna decompile <bin> main` and `kuna xrefs <bin> --to main` work too.
+After this change the same commands give `main	0x140001592	main` in the summary and `dat_14000c010 = main(dat_14000c028,dat_14000c020);` at the call site. `unlace decompile <bin> main` and `unlace xrefs <bin> --to main` work too.
 
 ## The fix
 
@@ -25,5 +25,5 @@ After this change the same commands give `main	0x140001592	main` in the summary 
 ## Tests
 
 - `tests/stages/pemain.toml` has two passes: off shows `sub_140001592(...)` and on shows `main(...)`. `tests/cli/pemain.json` checks the summary field.
-- New cargo tests: `kuna_pemain` unit tests (MinGW stripped vs unstripped twin, ELF/Mach-O inert), `triage_cli::summary_reports_the_pe_user_entry`, and `verify_entrymainproto::the_prototype_composes_with_pemain`.
+- New cargo tests: `unlace_pemain` unit tests (MinGW stripped vs unstripped twin, ELF/Mach-O inert), `triage_cli::summary_reports_the_pe_user_entry`, and `verify_entrymainproto::the_prototype_composes_with_pemain`.
 - Across all in-repo PE fixtures, only the four with a real CRT startup change, and each gets `main` at the right address. It also names `main` correctly on three real MSVC samples (dynamic UCRT, a Qt app, and a debug static-CRT build).

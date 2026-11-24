@@ -26,7 +26,7 @@ This is P1 program preparation / external refinement. `ActionDeindirect` already
 has the downstream behavior: a persistent global target carrying
 `Varnode::externref` is resolved against the `FunctionSymbol` registered at the
 slot address. Ghidra supplies that property through an external-reference symbol.
-kuna's PE `peimportcall` pass supplies the equivalent property-map range over IAT
+unlace's PE `peimportcall` pass supplies the equivalent property-map range over IAT
 slots, but `ObjectFormat::import_slots` returned nothing for Mach-O.
 
 The smallest compatible fix extends that existing option and loader interface.

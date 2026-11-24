@@ -2760,7 +2760,7 @@ impl Funcdata {
                         cur_flags |= traverse_flags::actionalt;
                     }
                 }
-                if std::env::var_os("KUNA_RETREC_TRACE").is_some() {
+                if std::env::var_os("UNLACE_RETREC_TRACE").is_some() {
                     eprintln!(
                         "onlyop {} vn {:#x}+{} op {:?} res {}",
                         self.get_name(),
@@ -2964,7 +2964,7 @@ impl Funcdata {
             .get(def)
             .map(|o| o.code())
             .unwrap_or(OpCode::CPUI_COPY);
-        if std::env::var_os("KUNA_RETREC_TRACE").is_some() {
+        if std::env::var_os("UNLACE_RETREC_TRACE").is_some() {
             eprintln!(
                 "ancop {} vn {:#x}+{} def {:?} offset {}",
                 self.get_name(),

@@ -6,7 +6,7 @@
 `bc4c15d826aaebeace3fec6360eb687e5662cba8745605093254931dcdb3ae1b`,
 but its C file contained only import veneers and the image entry. In particular,
 the project omitted `0x402d80` even though an explicit
-`kuna decompile <binary> --addr 0x402d80` produced a 26-line function body.
+`unlace decompile <binary> --addr 0x402d80` produced a 26-line function body.
 
 The old fast inventory had 351 executable definitions: 350 import veneers and
 the entry point. The binary has no usable PDB, exports, unwind function table, or

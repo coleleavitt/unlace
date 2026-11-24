@@ -5,8 +5,8 @@ before an MSVC cookie check. The low cell survives, but the high cell is killed
 and the return becomes an undefined `CONCAT44`:
 
 ```bash
-decompiler/target/release/kuna decompile \
-  decompiler/crates/kuna-analysis/tests/fixtures/pe_explicit_double_score_return_x86_64.exe \
+decompiler/target/release/unlace decompile \
+  decompiler/crates/unlace-analysis/tests/fixtures/pe_explicit_double_score_return_x86_64.exe \
   score \
   --assert "prototype 0x14000904f double log(double x)" \
   --assert "prototype 0x140008140 void cookie(unsigned long long value)" \

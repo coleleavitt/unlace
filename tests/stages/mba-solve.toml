@@ -1,4 +1,4 @@
-# Kuna (MBA with constant operands, shared complements, a complemented sum,
+# Unlace (MBA with constant operands, shared complements, a complemented sum,
 # a leaf plus a boolean term, bit logic alone): P3 simplification quiescence,
 # option mba (default off). Each function starts with endbr64.
 #

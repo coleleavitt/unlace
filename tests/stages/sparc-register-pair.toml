@@ -1,4 +1,4 @@
-# SPARC32 integer register pairs (kuna, no upstream issue).
+# SPARC32 integer register pairs (unlace, no upstream issue).
 # Stage: P3 heritage refinement (register pairs refined at their midpoint).
 # The pair %l4:%l5 is loaded whole by ldd on one path and set as two 32-bit
 # values on the other; after the join %l4 is a loop index and %l5 a counter.

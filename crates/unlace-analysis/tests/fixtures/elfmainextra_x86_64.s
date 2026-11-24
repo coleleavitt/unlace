@@ -1,4 +1,4 @@
-# (kuna) `elfmain` fixture -- a stripped x86-64 PIE whose `main` reads argument
+# (unlace) `elfmain` fixture -- a stripped x86-64 PIE whose `main` reads argument
 # registers PAST the third, so the locked three-parameter prototype has
 # something to take away.
 #
@@ -15,7 +15,7 @@
 # declared and the two fabrications lose their source: the forwarded `r8`
 # argument is dropped from the call, and the stored `r9` becomes a local that
 # nothing assigns.  Both shapes are pinned (tests/cli/elf-main-extra-args.json,
-# tests/stages/kuna-elfmain.toml) so the cost stays visible.
+# tests/stages/unlace-elfmain.toml) so the cost stays visible.
 #
 # Built with:
 #     gcc -nostartfiles -o elfmainextra_x86_64 elfmainextra_x86_64.s
@@ -67,7 +67,7 @@ record:
 	.size record, .-record
 
 	.section .rodata
-tag:	.asciz "kuna elfmain extra-register fixture"
+tag:	.asciz "unlace elfmain extra-register fixture"
 
 	.bss
 	.align 8

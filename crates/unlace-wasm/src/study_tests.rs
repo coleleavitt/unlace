@@ -802,7 +802,7 @@ fn data_shows_the_typed_items_around_a_global() {
     assert_eq!(to("0x4078")["name"].as_str(), Some("twice"));
     assert_eq!(to("0x4080")["name"].as_str(), Some("primes"));
     assert_eq!(to("0x4080")["offset"].as_u64(), Some(12));
-    assert_eq!(to("0x4070")["text"].as_str(), Some("kuna data tab"));
+    assert_eq!(to("0x4070")["text"].as_str(), Some("unlace data tab"));
 
     let typed = run_on(
         "globals.elf",

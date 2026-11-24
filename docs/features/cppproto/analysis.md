@@ -3,11 +3,11 @@
 ## 1. The measured symptom
 
 On a purpose-built `-g` C++ probe (namespace function, class with out-of-line
-members including a `static` one, a template instantiated twice), kuna applied
+members including a `static` one, a template instantiated twice), unlace applied
 DWARF parameter names and types to exactly the functions whose name contained no
 `::` and no `<`:
 
-| kuna signature (before) | DWARF applied? |
+| unlace signature (before) | DWARF applied? |
 |---|---|
 | `probe_virtual_call(void *s,int4 scale)` | names yes, type NO (`void *`, not `Shape *`) |
 | `probe_template_double(float8 a,float8 b)` | yes |
@@ -40,7 +40,7 @@ not what produced the `::`-or-`<` split. Reading the probe's `.debug_info`
 
 Every one of them is a subprogram DEFINITION with **no `DW_AT_name` of its own**.
 C++ splits a definition from its declaration; the name, and often the return
-type, live on the `DW_AT_specification` target. kuna's walk guards with
+type, live on the `DW_AT_specification` target. unlace's walk guards with
 
 ```rust
 if snap.declaration || snap.name.is_empty() { continue; }
@@ -64,13 +64,13 @@ Two corrections to theories that were in play:
 ### 2a. The second, independent defect: name-keyed binding
 
 `maxof<int>` **does** carry its own `DW_AT_name`, so it survived the guard — and
-still lost its prototype. `kuna functions` shows why:
+still lost its prototype. `unlace functions` shows why:
 
 ```
 0x39d0 name='maxof'  aliases=['maxof<int>', 'sub_39d0']
 ```
 
-kuna's symbol table files the demangled template name as `maxof`, so
+unlace's symbol table files the demangled template name as `maxof`, so
 `Architecture::set_function_prototype_pieces("maxof<int>")` ->
 `query_global_function` -> no match -> silent no-op. The same by-name park misses
 every qualified name for a different reason: `find_create_scope_from_symbol_name`
@@ -165,7 +165,7 @@ information, errored, or changed arity.
   untouched.
 * **`__thiscall`.** `DW_AT_object_pointer` is the attribute Ghidra's
   `ThisCallingConventionDWARFFunctionFixup` uses to select the `__thiscall`
-  model. kuna cannot register one yet (`ProtoModel::decode` is a stub), so the
+  model. unlace cannot register one yet (`ProtoModel::decode` is a stub), so the
   artificial `this` is carried as an ordinary first parameter — which is what the
   x86-64 SysV ABI does with it regardless. Noting the attribute here is the seam
   for that later work.

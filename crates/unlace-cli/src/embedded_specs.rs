@@ -194,8 +194,10 @@ mod tests {
     ];
 
     fn sandbox(tag: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("kuna_embedded_specs_{}_{tag}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "unlace_embedded_specs_{}_{tag}",
+            std::process::id()
+        ));
         let _ = fs::remove_dir_all(&dir);
         dir
     }

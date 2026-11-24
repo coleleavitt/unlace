@@ -1,4 +1,4 @@
-# kuna strict fix (P3, cleanup pool, RuleExpandLoad; no option).
+# unlace strict fix (P3, cleanup pool, RuleExpandLoad; no option).
 #
 # A LOAD narrower than its pointer's pointee printed as a read of the whole
 # field or element, truncated or masked: `(uint2)p[1]` for the two bytes at

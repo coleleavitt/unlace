@@ -1,11 +1,11 @@
 # Decompiler modes (`auto` | `reliable` | `aggressive` | `fast`)
 
-A **mode** is a named preset over kuna's runtime option surface: an ordered list
+A **mode** is a named preset over unlace's runtime option surface: an ordered list
 of `(option, value)` overrides layered on top of the shipped defaults. Modes are
 **not** catalog options (`unlace catalog` covers the per-option settable surface);
 they reference existing option names and live in one table,
 `crates/unlace-middle/src/p0_knowledge/modes.rs` (`MODE_TABLE`), applied
-by `Architecture::apply_mode` (a fan-out over `set_kuna_option`).
+by `Architecture::apply_mode` (a fan-out over `set_unlace_option`).
 
 Select a mode with `--mode <name>` on `unlace decompile`, `unlace decompile-all`,
 `unlace decompile-project`, or `unlace functions`. If the flag is omitted, these
@@ -370,7 +370,7 @@ especially tight latency budget.
 ## Measuring with modes
 
 `aggressive` and `fast` are first-class measurement levers. Run the decbench GED
-benchmark with a `kuna-aggressive` backend (or `unlace decompile-all --mode
+benchmark with a `unlace-aggressive` backend (or `unlace decompile-all --mode
 aggressive`) and compare against an explicit `--mode reliable` baseline to find
 options that net-help, which then become candidate default-on flips. The omitted-mode
 `auto` policy intentionally changes

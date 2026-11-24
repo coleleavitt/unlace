@@ -3,12 +3,12 @@ RE-friction round 2 need `strings-json-fails-report` (major, 1 instance, `scope:
 ## What was broken
 
 > **strings JSON fails to report the owning function for a directly referenced prompt**
-> `kuna strings --json --filter Password` found the string at 0x8049127 but returned
+> `unlace strings --json --filter Password` found the string at 0x8049127 but returned
 > `xrefs_count: 0` and `functions: []`, despite code directly forming its address for output.
 
 The symptom is not one string and not the `strings` surface. On the witness
 (crackmes.one `5ab77f6333c5d40ad448ca52`, *pancrackme v1.0*, i386 PIC ELF, stripped)
-**all 23** strings reported `xrefs_count: 0`, while `kuna xrefs --to <function>` answered
+**all 23** strings reported `xrefs_count: 0`, while `unlace xrefs --to <function>` answered
 normally on the same binary.
 
 The cross-reference query reads a reference out of **one instruction's p-code**: a
@@ -31,7 +31,7 @@ wrong ownership with no gate in this repo able to see it.
 
 ## The mechanism — `option picbase` (analysis tier, default **on**, DIV-104)
 
-New `decompiler/crates/kuna-analysis/src/listing/picbase.rs`, consumed by a gated seam
+New `decompiler/crates/unlace-analysis/src/listing/picbase.rs`, consumed by a gated seam
 in the existing read-only query (`listing/xrefs.rs (build)`).
 
 A deliberately tiny abstract machine over the same whole p-code the query already keeps: a
@@ -55,7 +55,7 @@ cross-checked against the image's own `_GLOBAL_OFFSET_TABLE_` (`.got.plt`/`.got`
 idiom in the program must agree on one register and one value.
 
 That module-wide half is **load-bearing, not decorative**, and it is the one thing the need
-record did not anticipate: kuna's own function inventory splits the witness's prompt routine
+record did not anticipate: unlace's own function inventory splits the witness's prompt routine
 into four entries at its `int3` traps, so the idiom that sets `ebx` up is in `sub_80489e6`
 while the `lea` that forms the prompt is in `sub_8048ace`. A purely function-local
 propagation does not close this need.
@@ -95,7 +95,7 @@ nearby-address heuristic this option is built to refuse. `make test-cli` 15/15.
 
 ## Corpus sweep (standing requirement 7)
 
-**Breadth — 460 binaries A/B'd** (`kuna strings --json` with the option on vs off): 260 crackmes
+**Breadth — 460 binaries A/B'd** (`unlace strings --json` with the option on vs off): 260 crackmes
 from the RE dataset (PE32/PE32+/ELF i386/x86-64) plus a 200-binary random sample of decbench
 ELFs across x86-64 / ARM / Cortex-M at O0 and O2.
 
@@ -103,12 +103,12 @@ ELFs across x86-64 / ARM / Cortex-M at O0 and O2.
   detection declines on any image with no `.got`/`.got.plt` and on any code that never runs
   the idiom.
 * **1 changed: the witness**, with exactly the three expected attributions and nothing else.
-* 16 could not be measured: kuna cannot load them **on either arm** (DOS `MZ`, IA-64, a
+* 16 could not be measured: unlace cannot load them **on either arm** (DOS `MZ`, IA-64, a
   format it does not recognise, one pre-existing timeout). These are unrelated loader gaps,
   identical on both sides.
 
 **Depth — every changed edge classified.** A whole-binary edge dump on the witness
-(`kuna xrefs --from` over all 49 functions, both arms):
+(`unlace xrefs --from` over all 49 functions, both arms):
 
 ```
 edges off=109  on=151   added=42   removed=0
@@ -142,22 +142,22 @@ All re-run on the rebase onto `cb357826`.
 | `make test-stages` | **PARITY OK**, 600/600 (597 -> 600 with the new `tests/stages/picbase.toml`) |
 | `make rust-test` | green — **5297 passed, 0 failed** (CI skips the workspace suite on an internal-branch PR, so this was run locally on the rebased tree; `full-ci` is set so it also runs here) |
 | `make check-spec` | OK |
-| `kuna catalog --check` | catalog OK |
+| `unlace catalog --check` | catalog OK |
 | `make test-cli` | **15/15**, including the newly promoted `tests/cli/strings-json-fails-report.json` (`main` is 14/14) |
 | `verify --need strings-json-fails-report` | **acceptance PASS** |
 | `scripts.repipe.counters` | no drift: 135 settables, tiers (31, 54, 50), 230 corpus files |
 
-Unit tests: 9 new in `kuna_picbase` (the folding, the read/write kinds, the temporary that is
+Unit tests: 9 new in `unlace_picbase` (the folding, the read/write kinds, the temporary that is
 *not* reported, the partial-write invalidation, the address floor, the return-address
 exclusion, the stack round-trip, the untainted-constant refusal, sign extension) and 5
 end-to-end in `verify_picbase.rs`. One further hidden count test needed updating:
 `option_values_live_value_present_for_41_suppressed_for_90` -> `_for_91`, since `picbase` is
-read console-side via `kuna_live_value` (like `unmappedentry`) and has no codegen
+read console-side via `unlace_live_value` (like `unmappedentry`) and has no codegen
 `live_value`.
 
 ## Notes for the reviewer
 
-* **Query surface only.** `kuna xrefs`, `kuna strings` and `decompile-all`'s xref section are
+* **Query surface only.** `unlace xrefs`, `unlace strings` and `decompile-all`'s xref section are
   the three readers of this index; it is a read-only query that commits nothing, and no
   p-code, prototype or emitted C depends on it. That is *why* `docs/baseline.json` is
   untouched — structurally, not incidentally.

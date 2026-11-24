@@ -135,7 +135,7 @@ export function parseSignature(proto) {
 }
 
 /**
- * A Rust signature as kuna prints it (`unsafe fn main(mut argc: i32, mut argv:
+ * A Rust signature as unlace prints it (`unsafe fn main(mut argc: i32, mut argv:
  * *mut *mut u8) -> i32`, attribute lines allowed) → `{ret, name, params}`, for
  * display only: edits are C declarations.
  */
@@ -189,7 +189,7 @@ export function typeSize(ctype, { bits = 64, llp64 = false, known = new Map() } 
 const RUST_SIZE = new Map([['i8', 1], ['u8', 1], ['bool', 1], ['i16', 2], ['u16', 2], ['i32', 4], ['u32', 4], ['f32', 4], ['char', 4],
   ['i64', 8], ['u64', 8], ['f64', 8], ['i128', 16], ['u128', 16]]);
 
-/** Bytes a Rust type as kuna prints it occupies (`i64`, `*mut u8`, `[u8; 40]`); null when unknown. */
+/** Bytes a Rust type as unlace prints it occupies (`i64`, `*mut u8`, `[u8; 40]`); null when unknown. */
 export function rustTypeSize(type, { bits = 64, known = new Map() } = {}) {
   const t = (type || '').trim();
   if (/^(\*(mut|const)\s|&|fn\s*\(|(unsafe\s+)?extern\b)/.test(t) || /^[iu]size$/.test(t)) return bits / 8;

@@ -2,10 +2,10 @@
 #
 # `IMAGE_LOAD_CONFIG_DIRECTORY` (data directory 10) was never read, and the
 # delay-load import directory (13) was not walked. Stage / sub-stage: P1
-# function discovery (`kuna-analysis` `loader/kuna_peloadconfig.rs` feeds the
+# function discovery (`unlace-analysis` `loader/unlace_peloadconfig.rs` feeds the
 # PE entry oracles), P1 external refinement (`loader/pe_iat.rs` names the delay
 # IAT slots and their load thunks) and P2 flow classification (option
-# `guarddispatch`, `p2_lift/kuna_guarddispatch.rs`).
+# `guarddispatch`, `p2_lift/unlace_guarddispatch.rs`).
 #
 # The XML wrapper only supplies the harness architecture; each pass clears it
 # and loads a fixture built from source in the fixtures directory (README).
@@ -65,41 +65,41 @@ commands = [
 ]
 
 [[match]]
-name = 'KUNA-PELOADCONFIG #1: the SafeSEH handlers are functions'
+name = 'UNLACE-PELOADCONFIG #1: the SafeSEH handlers are functions'
 count = 2
 regex = '0x4010[01]0 sub_4010[01]0'
 
 [[match]]
-name = 'KUNA-PELOADCONFIG #2: the security cookie slot is named'
+name = 'UNLACE-PELOADCONFIG #2: the security cookie slot is named'
 count = 1
 literal = 'return __security_cookie;'
 
 [[match]]
-name = 'KUNA-PELOADCONFIG #3: the guard stubs and op_shl, listed only by the guard function table, are functions'
+name = 'UNLACE-PELOADCONFIG #3: the guard stubs and op_shl, listed only by the guard function table, are functions'
 count = 3
 regex = '0x1400010[01]0 sub_1400010[01]0|0x140001120 sub_140001120'
 
 [[match]]
-name = 'KUNA-PELOADCONFIG #4: the delay-load thunks are named'
+name = 'UNLACE-PELOADCONFIG #4: the delay-load thunks are named'
 count = 2
 regex = '0x1400011(56 __imp_load_dl_add|62 __imp_load_dl_mul)'
 
 [[match]]
-name = 'KUNA-PELOADCONFIG #5: the guarded call calls the function pointer'
+name = 'UNLACE-PELOADCONFIG #5: the guarded call calls the function pointer'
 count = 1
 literal = 'return (*a0)(a1,a2) * 2;'
 
 [[match]]
-name = 'KUNA-PELOADCONFIG #6: the delay-loaded calls are named'
+name = 'UNLACE-PELOADCONFIG #6: the delay-loaded calls are named'
 count = 2
 regex = 'v3 = dl_add\(5,6\);|v4 = dl_mul\(7,8\);'
 
 [[match]]
-name = 'KUNA-PELOADCONFIG #7: no guard or delay IAT slot is left anonymous'
+name = 'UNLACE-PELOADCONFIG #7: no guard or delay IAT slot is left anonymous'
 count = 0
 regex = 'dat_1400030(08|20|28)'
 
 [[match]]
-name = 'KUNA-PELOADCONFIG #8: option guarddispatch off keeps the call through the named slot'
+name = 'UNLACE-PELOADCONFIG #8: option guarddispatch off keeps the call through the named slot'
 count = 1
 literal = 'v1 = (*__guard_dispatch_icall_fptr)(a1,a2);'

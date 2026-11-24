@@ -8,7 +8,7 @@
 # 128-bit integer split by `SUB168(v1,0)` / `SUB168(v1,8)`.
 #
 # Stage / sub-stage: P4 prototype recovery. The decompile drive decodes the
-# function and its direct callees (`p4_calls/kuna_swiftinfer.rs (seed)`); a
+# function and its direct callees (`p4_calls/unlace_swiftinfer.rs (seed)`); a
 # body that reads swiftself on entry for anything but saving it decompiles
 # under `__swiftcall` with the input named `swiftself`. The call-output type
 # (`TypeOpCall::getOutputLocal`) of a two-word join whose words are read apart

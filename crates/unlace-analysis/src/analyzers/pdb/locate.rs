@@ -190,7 +190,7 @@ fn download(url: &str, path: &Path, cv: &CodeViewInfo) -> Option<()> {
     let _ = std::fs::remove_file(&part);
     unlace_base::notes::say_once(
         &remote,
-        &format!("[kuna pdb] {remote}: download failed; no .pdb from the symbol server"),
+        &format!("[unlace pdb] {remote}: download failed; no .pdb from the symbol server"),
     );
     None
 }

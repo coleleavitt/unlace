@@ -1,4 +1,4 @@
-// Fixture for kuna_cppsig's PE export arm (unlace-cli/tests/msvcexport_cli.rs).
+// Fixture for unlace_cppsig's PE export arm (unlace-cli/tests/msvcexport_cli.rs).
 // Build (clang 22, lld-link 22):
 //   clang --target=i686-pc-windows-msvc -O2 -fno-asynchronous-unwind-tables -c msvcexport_pe_i386.cpp
 //   lld-link /nologo /dll /noentry /nodefaultlib /base:0x10000000 /fixed /safeseh:no /Brepro \

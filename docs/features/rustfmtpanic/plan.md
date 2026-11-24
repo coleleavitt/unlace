@@ -2,7 +2,7 @@
 
 Extend the verified Rust 1.93.0/1.93.1 formatting renderer to exact
 `core::panicking::panic_fmt` calls through one P9 `rustfmtpanic` option and module.
-This addresses angr's `test_select_macro_chooses_panic_for_panic_fmt` using Kuna's
+This addresses angr's `test_select_macro_chooses_panic_for_panic_fmt` using Unlace's
 existing template and primitive formatter proofs. Keep the default on only after
 the original 675 assertions and the five-percent speed budget pass.
 

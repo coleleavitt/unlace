@@ -31,7 +31,7 @@ fn run(args: &[&str]) -> Output {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
         panic!("unlace {:?} failed: {stderr}", args);

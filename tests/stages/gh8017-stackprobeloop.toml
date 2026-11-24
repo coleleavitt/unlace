@@ -24,7 +24,7 @@
 #   *(undefined8 *)&pxVar2[-0x1040] = ...
 #
 # Stage model: S2 stack-pointer normalization (spacebase tracking /
-# ActionStackPtrFlow).  The kuna fix is a simplification rule (group
+# ActionStackPtrFlow).  The unlace fix is a simplification rule (group
 # "analysis") that recognizes the probe loop (a 2-input spacebase MULTIEQUAL
 # whose back-edge is `PHI - page` and whose loop-exit compares `PHI - page`
 # against a stack-relative limit) and rewrites the MULTIEQUAL into the

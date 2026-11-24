@@ -33,7 +33,7 @@
   "ged_perfect_after": false,
   "ged_approximated": false,
   "ged_options": [],
-  "ged_kuna_commit": "9a7ffed9",
+  "ged_unlace_commit": "9a7ffed9",
   "ged_results_root": "/home/mahaloz/github/decbench/results/full_run",
   "ged_siblings": {
     "O2-noinline-bash-bash-shell_initialize": {
@@ -41,7 +41,7 @@
       "after": 0.0
     }
   },
-  "corpus_file_count": "decompiler/crates/kuna-base/src/xml.rs: 188 -> 189 (83 datatests + 106 stages)",
+  "corpus_file_count": "decompiler/crates/unlace-base/src/xml.rs: 188 -> 189 (83 datatests + 106 stages)",
   "stages_baseline_keys": "docs/baseline-stages.json: 375 -> 381 (re-recorded on top of #252)",
   "div": "DIV-56",
   "rebased_onto": "1b6d4db4 (#252, DIV-55) -- DIV renumbered 55 -> 56 on the merge collision"

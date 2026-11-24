@@ -9,7 +9,7 @@
 #
 # Stage / sub-stage: P1 external-refinement (`unlace-analysis`
 # `loader/elf_plt.rs` names the `.got` slots of undefined function symbols no
-# PLT stub jumps through, and `loader/kuna_peimportcall.rs` paints them
+# PLT stub jumps through, and `loader/unlace_peimportcall.rs` paints them
 # `externref`) feeding the P2/P4 deindirect seam, whose restart re-flows the
 # function with the import's no-return flag.
 #

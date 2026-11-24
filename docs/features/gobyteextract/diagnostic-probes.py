@@ -1,7 +1,7 @@
 from pathlib import Path
 import json, subprocess, re
 
-w = Path('/tmp/kuna-go-byte-extract-b848-review')
+w = Path('/tmp/unlace-go-byte-extract-b848-review')
 base = w/'baseline-breadth'
 out = w/'diagnostic-probes'
 out.mkdir(exist_ok=True)

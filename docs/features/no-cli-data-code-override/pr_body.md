@@ -1,7 +1,7 @@
 ## What was broken
 
 > `map address <addr> <typedeclaration>`, `parse line`, `type varnode`, `readonly <addr+size>`
-> and `volatile <addr+size>` all work in the console and none is reachable from `kuna`.
+> and `volatile <addr+size>` all work in the console and none is reachable from `unlace`.
 > `--option readonly on|off` is a GLOBAL toggle, not a range. `global add`/`global remove` —
 > the commands `phases.toml` names as the exposure for the `code-data-partition` subphase —
 > are `engine_unavailable` stubs.
@@ -35,10 +35,10 @@ symbols the range covers. Both surfaces were then measured emitting byte-identic
 ```bash
 # .data is writable, so the loader never calls it read-only — but nothing in this
 # program writes these eight bytes, and the agent has checked.
-kuna decompile ./fw.elf sample --assert 'readonly 0x404028+8'
+unlace decompile ./fw.elf sample --assert 'readonly 0x404028+8'
 
 # 0x50000000 is a device register. Two reads of it are two reads.
-kuna decompile ./fw.elf sample --assert 'volatile 0x50000000+4'
+unlace decompile ./fw.elf sample --assert 'volatile 0x50000000+4'
 ```
 
 | | emitted C |
@@ -71,7 +71,7 @@ directions are covered by a test that asserts the C changed.
 `tests/cli/no-cli-data-code-override.json`:
 
 ```
-kuna decompile .../assertranges_x86_64 sample --json \
+unlace decompile .../assertranges_x86_64 sample --json \
   --assert 'readonly 0x404028+8' --assert 'volatile 0x50000000+4'
 ```
 
@@ -95,7 +95,7 @@ against a measured baseline, because reviewing on "did the command return Ok" is
 `override prototype` got shipped accepted-and-inert. Including the two controls above, the
 explicit-size parse (a 4-byte range stops short of a word four bytes past its end; an 8-byte
 one reaches it), the rejection of a zero-length range, and the `global remove` → `global add`
-round trip. Plus parser and script-shape tests in `kuna-cli` (`--assert` lowering, the
+round trip. Plus parser and script-shape tests in `unlace-cli` (`--assert` lowering, the
 `Slot::Image` line landing before `read symbols`, `option readonly on` landing before the
 caller's own options, and no `option readonly` line appearing when no range is asserted).
 
@@ -107,7 +107,7 @@ caller's own options, and no `option readonly` line appearing when no range is a
 | `make test-stages` | **PARITY OK 603/603** |
 | `make rust-test` | green |
 | `make check-spec` | OK |
-| `kuna catalog --check` | catalog OK |
+| `unlace catalog --check` | catalog OK |
 | `verify --need no-cli-data-code-override` | acceptance **PASS** |
 
 No option row, no `tests/stages/` case, no catalog counters and no DIV row: a CLI surface

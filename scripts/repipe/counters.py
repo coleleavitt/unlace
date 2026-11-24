@@ -59,7 +59,7 @@ from ..atomic import atomic_text_writer
 
 CATALOG_TIMEOUT = int(os.environ.get("REPIPE_CATALOG_TIMEOUT", "300"))
 
-# kuna's own marshaling ids live in the 4000+ range; below that is the ported Ghidra table.
+# unlace's own marshaling ids live in the 4000+ range; below that is the ported Ghidra table.
 ELEMENT_ID_BASE = int(os.environ.get("REPIPE_ELEMENT_ID_BASE", "4000"))
 
 CORPUS_DIRS = ("tests/datatests", "tests/stages")
@@ -197,8 +197,8 @@ def rewrite_literal(path, pattern, expected) -> int:
 SITES = (
     ("phases-tests.fn-name-settables", REL_TESTS_RS,
      r"fn settable_count_is_(\d+)\(\)", "settables"),
-    ("phases-tests.kuna_num_settables", REL_TESTS_RS,
-     r"assert_eq!\(kuna_num_settables\(\), (\d+)\)", "settables"),
+    ("phases-tests.unlace_num_settables", REL_TESTS_RS,
+     r"assert_eq!\(unlace_num_settables\(\), (\d+)\)", "settables"),
     ("phases-tests.SETTABLE_TABLE-len", REL_TESTS_RS,
      r"assert_eq!\(SETTABLE_TABLE\.len\(\), (\d+)\)", "settables"),
     ("phases-tests.fn-name-tiers", REL_TESTS_RS,
@@ -231,11 +231,11 @@ def settables_from_phases_toml(repo=None) -> int:
     return n
 
 
-def catalog_rows(repo=None, kuna=None) -> list:
+def catalog_rows(repo=None, unlace=None) -> list:
     """The live `unlace catalog --json` rows. A capture, not a parse of the source of truth."""
-    exe = Path(kuna) if kuna else config.kuna_bin()
+    exe = Path(unlace) if unlace else config.unlace_bin()
     if not exe.exists():
-        raise DeriveError("kuna binary not built at {} (cargo build --release -p unlace-cli)".format(exe))
+        raise DeriveError("unlace binary not built at {} (cargo build --release -p unlace-cli)".format(exe))
     try:
         proc = subprocess.run([str(exe), "catalog", "--json"], cwd=str(_root(repo)),
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -270,7 +270,7 @@ _ELEMENT_ID_RX = re.compile(r'ElementId::new\(\s*"([A-Za-z0-9_]+)"\s*,\s*(\d+)\s
 
 
 def element_ids(repo=None) -> dict:
-    """Every kuna-range ElementId in the crates, so the next free one can be handed out."""
+    """Every unlace-range ElementId in the crates, so the next free one can be handed out."""
     crates = _root(repo) / "crates"
     if not crates.is_dir():
         raise DeriveError("crates dir missing: {}".format(crates))
@@ -316,7 +316,7 @@ def _bucket_expect(rows, key, val, single_opts) -> int:
 
     The script emits the full catalog once and then one `phase catalog <opt>` row per
     single-row command, so an option named in the script contributes twice. That is why
-    KUNA-CATALOG #8 pins 15 while the catalog itself carries 14 opt-in-tool rows.
+    UNLACE-CATALOG #8 pins 15 while the catalog itself carries 14 opt-in-tool rows.
     """
     def hit(row):
         if key not in row:
@@ -399,9 +399,9 @@ def catalog_buckets(rows, repo=None) -> list:
     return out
 
 
-def derive(repo=None, kuna=None) -> dict:
+def derive(repo=None, unlace=None) -> dict:
     """Measure every shared counter now, on this tree. The only source of truth in here."""
-    rows = catalog_rows(repo=repo, kuna=kuna)
+    rows = catalog_rows(repo=repo, unlace=unlace)
     tiers = dict((t, 0) for t in TIERS)
     untyped = []
     for r in rows:
@@ -440,9 +440,9 @@ def derive(repo=None, kuna=None) -> dict:
 
 # --- checking ---------------------------------------------------------------
 
-def check(derived=None, repo=None, kuna=None) -> list:
+def check(derived=None, repo=None, unlace=None) -> list:
     """Compare the derived truth against every hard-coded site. Never trusts a merged value."""
-    d = derived if derived is not None else derive(repo=repo, kuna=kuna)
+    d = derived if derived is not None else derive(repo=repo, unlace=unlace)
     out = []
 
     if d["settables_phases_toml"] != d["settables_catalog"]:
@@ -508,7 +508,7 @@ def recapture_recipe(repo=None) -> str:
     body = doc[idx:] if idx >= 0 else doc
     fences = re.findall(r"```sh\n(.*?)```", body, re.S)
     lead = ("Recapture crates/unlace-decomp/tests/fixtures/phase_catalog.json.\n"
-            "It is CAPTURED BYTES, with NO PROGRAM LOADED so kunaLiveValue returns \"\" and no\n"
+            "It is CAPTURED BYTES, with NO PROGRAM LOADED so unlaceLiveValue returns \"\" and no\n"
             "`current` field is emitted. Never hand-edit it, and never re-capture with a program\n"
             "loaded -- `current` is architecture-dependent and is not a byte contract.\n")
     if not fences:
@@ -516,13 +516,13 @@ def recapture_recipe(repo=None) -> str:
     return lead + "\n" + fences[0].rstrip() + "\n"
 
 
-def fix(derived=None, repo=None, kuna=None):
+def fix(derived=None, repo=None, unlace=None):
     """Rewrite every fixable site to the derived value; report the rest with the recipe.
 
     Returns ``(applied, remaining)``: the drifts this rewrote, and the drifts that need an
     operator (a capture, or a loose range whose correct widening is a judgement call).
     """
-    d = derived if derived is not None else derive(repo=repo, kuna=kuna)
+    d = derived if derived is not None else derive(repo=repo, unlace=unlace)
     drifts = check(derived=d, repo=repo)
     applied = []
     for site, rel, pattern, key in SITES:
@@ -573,7 +573,7 @@ def _print_derived(d) -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="python -m scripts.repipe.counters",
-        description="Re-derive kuna's shared counters and check every hard-coded site.")
+        description="Re-derive unlace's shared counters and check every hard-coded site.")
     ap.add_argument("--rederive", action="store_true",
                     help="measure now and report; read-only")
     ap.add_argument("--check", action="store_true",
@@ -583,7 +583,7 @@ def main(argv=None) -> int:
     ap.add_argument("--recipe", action="store_true",
                     help="print the phase_catalog.json recapture recipe and exit")
     ap.add_argument("--repo", default=None, help="repo root (default: config.repo_root())")
-    ap.add_argument("--kuna", default=None, help="kuna binary (default: config.kuna_bin())")
+    ap.add_argument("--unlace", default=None, help="unlace binary (default: config.unlace_bin())")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     args = ap.parse_args(argv)
 
@@ -595,7 +595,7 @@ def main(argv=None) -> int:
         return 0
 
     try:
-        d = derive(repo=args.repo, kuna=args.kuna)
+        d = derive(repo=args.repo, unlace=args.unlace)
     except DeriveError as exc:
         if args.json:
             print(json.dumps({"ok": False, "error": str(exc)}, indent=2))

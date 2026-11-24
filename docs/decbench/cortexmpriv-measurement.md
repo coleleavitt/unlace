@@ -5,8 +5,8 @@ makes the vendored ARM user op `isCurrentModePrivileged` return the constant `1`
 privilege guard `ARMTHUMBinstructions.sinc` wraps around every VERSION_7M MRS/MSR folds
 away. It ships default-OFF and ON in the `aggressive` preset.
 
-Every number here is from one kuna binary (`bb0b9c38`) invoked exactly as decbench's
-`kuna_raw` backend invokes it -- `unlace decompile-all <stripped> --json --max-fn-seconds 120`
+Every number here is from one unlace binary (`bb0b9c38`) invoked exactly as decbench's
+`unlace_raw` backend invokes it -- `unlace decompile-all <stripped> --json --max-fn-seconds 120`
 with no `--mode`, so `auto` resolves to `aggressive` under 500 KiB.
 
 **Arm naming.** `optsweep`'s *baseline* arm is the shipped defaults, which on this branch
@@ -36,7 +36,7 @@ inside the sweep.
 
 Harness controls, all clean: 30,600 unchanged bodies with **0** scoring differently; 0
 slug-only diffs; the baseline arm agrees with the tree's published per-function verdict on
-**30,612 / 31,044 (98.6%)**, the residual being kuna-build drift since the tree was scored.
+**30,612 / 31,044 (98.6%)**, the residual being unlace-build drift since the tree was scored.
 
 ## 2. DecBench sample set (250 functions): +2
 
@@ -52,7 +52,7 @@ exactly). Four change:
 | `O0-nuttx-nuttx-nxsig_find_pendingsignal` | 18 | 9 | improvement |
 
 Neither flip was perfect on any metric before, so both are genuine `overall` gains. Nothing
-regresses. Two of the 49 are unscorable in BOTH arms identically (a `CMSIS_DAP::main` kuna
+regresses. Two of the 49 are unscorable in BOTH arms identically (a `CMSIS_DAP::main` unlace
 never discovers, and a `__swrite` with no source CFG), so neither can move; the other 201
 sample-set functions live on a binary with no MRS/MSR and are unchanged by construction.
 
@@ -107,7 +107,7 @@ The synthesized body compiles at architecture bootstrap on all 15 ARM language v
 
 **98 of the 434 changed functions score WORSE on GED.** That is a property of the metric,
 not lost recovery: GED counts blocks and edges, not correctness, so deleting phantom blocks
-widens the node deficit wherever kuna's CFG is already smaller than the source's. The split
+widens the node deficit wherever unlace's CFG is already smaller than the source's. The split
 is exactly that shape — the 336 wins have a **median source CFG of 4 nodes** (the guard
 blocks were pure surplus), the 98 losses a **median of 11** (the body was already
 node-deficient).

@@ -10,7 +10,7 @@
 #
 # Stage / sub-stage: P1 environment-binding: the Mach-O import walk
 # (`macho_stubs.rs (trie_exports)`) and the dyld cache rebuild
-# (`kuna_dyldcache/xrefs.rs (Names::adopt_imports_of)`), both inside
+# (`unlace_dyldcache/xrefs.rs (Names::adopt_imports_of)`), both inside
 # `load file`, so the option is set before `load file`.
 #
 # Fixtures: the synthetic cache `dyld_cache_arm64e` (libcaller imports

@@ -1,4 +1,4 @@
-# angr test_switch_case_shared_case_nodes_b2sum_digest: kuna fails to recover the
+# angr test_switch_case_shared_case_nodes_b2sum_digest: unlace fails to recover the
 # getopt_long option-dispatch switch in coreutils b2sum's main and renders the
 # BRANCHIND as an indirect *call* (goto spaghetti), where angr recovers a real
 # 11-case switch (incl. the 132->98 "shared case node" fallthrough).
@@ -64,7 +64,7 @@ hex = 'b5d3ffff00d5ffffb8d6ffffb8d6ffffb8d6ffffb8d6ffffb8d6ffffb8d6ffffb8d6ffffb
 
 [script]
 commands = [
-    # kuna: switchsharedcase is now default-on (DIV-14); pass 1 asserts the OFF (bug-reproduced) baseline, so turn it off here. Pass 2 re-enables it.
+    # unlace: switchsharedcase is now default-on (DIV-14); pass 1 asserts the OFF (bug-reproduced) baseline, so turn it off here. Pass 2 re-enables it.
     'option switchsharedcase off',
     'lo fu main',
     'decompile',

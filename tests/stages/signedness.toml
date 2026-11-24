@@ -1,4 +1,4 @@
-# kuna `signedness`: an integer local whose every comparison is signed is
+# unlace `signedness`: an integer local whose every comparison is signed is
 # declared unsigned, and the cast machinery writes the signedness back at each
 # use.
 #
@@ -24,7 +24,7 @@
 #     1015  c3                    RET
 #
 # Stage: P9 emission, sub-stage "naming-policy" (the declaration seam, next
-# to kuna_declhightype).  P0 assertion: `option signedness
+# to unlace_declhightype).  P0 assertion: `option signedness
 # upstream|auto|prefer-signed|prefer-unsigned`.
 #
 # Pass 1 sets `option signedness upstream` explicitly - the declaration type

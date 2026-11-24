@@ -13,7 +13,7 @@
   },
   "timeout_s": 120,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "authenticate",

@@ -1,8 +1,8 @@
-# kuna GH-851: a caller that reads only the high word of a callee's 64-bit
+# unlace GH-851: a caller that reads only the high word of a callee's 64-bit
 # result printed it as a local nothing assigns, next to a bare call.
 #
 # Stage / sub-stage: P4 call output prototype (FuncCallSpecs::
-# buildOutputFromTrials, p4_calls/kuna_callretpair.rs build_partial_pair,
+# buildOutputFromTrials, p4_calls/unlace_callretpair.rs build_partial_pair,
 # always on).
 #
 # hib is `bl full; uxtb r0,r1`: r0 is overwritten unread, so only the r1

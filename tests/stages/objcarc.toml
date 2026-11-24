@@ -10,11 +10,11 @@
 # carries the same pattern through clang's outlined `objc_retain_x19()` /
 # `objc_release_x20()`, shown with no argument at all.
 #
-# Fix: `p2_lift/kuna_objcarc.rs` registers `<callfixup>` payloads (the msvcftol
+# Fix: `p2_lift/unlace_objcarc.rs` registers `<callfixup>` payloads (the msvcftol
 # mechanism) for the runtime's pass-through helpers (an incidental copy), for
 # `objc_release` (no effect), for `objc_storeStrong` (the store) and for the
 # outlined `objc_retain_x<N>`/`objc_release_x<N>`; the call-fixup installer
-# tags a Mach-O's import stubs by address. `analyzers/objc/kuna_objcruntime.rs`
+# tags a Mach-O's import stubs by address. `analyzers/objc/unlace_objcruntime.rs`
 # gives every imported runtime entry point its header prototype, so with the
 # calls shown they carry their argument and result.
 #

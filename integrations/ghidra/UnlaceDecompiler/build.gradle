@@ -1,4 +1,4 @@
-// Builds the KunaDecompiler Ghidra extension for a given Ghidra installation.
+// Builds the UnlaceDecompiler Ghidra extension for a given Ghidra installation.
 // (Modeled on GhidraBuild/Skeleton/buildTemplate.gradle from the Ghidra tree.)
 //
 // An absolute path to the Ghidra installation directory must be supplied either by setting the
@@ -41,7 +41,7 @@ task distributeExtension {
 
 // The env var wins over -P above, so a profile-exported GHIDRA_INSTALL_DIR silently
 // overrides the flag; print the resolved install to make a mis-pointed build visible.
-println "KunaDecompiler: building against Ghidra install " + ghidraInstallDir
+println "UnlaceDecompiler: building against Ghidra install " + ghidraInstallDir
 
 // Gradle 9 builds reproducible archives by default, normalizing every zip entry to
 // 0644 -- which strips the exec bit Ghidra's extension installer re-applies at

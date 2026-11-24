@@ -1,8 +1,8 @@
-# kuna feature worker — implement ONE angr-inspired feature, open ONE PR
+# unlace feature worker — implement ONE angr-inspired feature, open ONE PR
 
 You are an autonomous {{WORKER_AGENT}} running **inside an isolated git
 worktree** on branch `{{BRANCH}}`. Your entire job this session is to close **one** specific
-gap where the angr decompiler is better than kuna, by adding **one** kuna change to the
+gap where the angr decompiler is better than unlace, by adding **one** unlace change to the
 **Rust** engine (option-gated when it is a judgement call, always-on when it is a strict
 fix — hard rule 4), verifying it, and opening a PR — then stop. A human reviewer
 will resume this exact session on the PR, so leave the workspace and the per-feature record
@@ -17,37 +17,37 @@ complete and honest.
 - angr test method: `{{TEST_NAME}}`
 - Binary: `{{BINARY}}`
 - Function selector: `{{SELECTOR}}`   (arch override: `{{ARCH}}`)
-- Feature slug: `{{SLUG}}`  → new module `kuna_{{SLUG}}.rs` inside its owning phase folder under `crates/unlace-decomp/src/` (e.g. `p2_lift/kuna_{{SLUG}}.rs`), option name `{{SLUG}}` (pick a clean option name if `{{SLUG}}` is awkward), test `tests/stages/ghangr-{{SLUG}}.xml`, bundle `docs/features/{{SLUG}}/`.
+- Feature slug: `{{SLUG}}`  → new module `unlace_{{SLUG}}.rs` inside its owning phase folder under `crates/unlace-decomp/src/` (e.g. `p2_lift/unlace_{{SLUG}}.rs`), option name `{{SLUG}}` (pick a clean option name if `{{SLUG}}` is awkward), test `tests/stages/ghangr-{{SLUG}}.xml`, bundle `docs/features/{{SLUG}}/`.
 
 ## Environment (already set for this worktree)
 
-- kuna python: `{{KUNA_PY}}`  (has the angr-driving pipeline deps, NO angr itself)
-- The pipeline is run from the repo root: `{{KUNA_PY}} -m scripts.pipeline.compare ...` (it
+- unlace python: `{{UNLACE_PY}}`  (has the angr-driving pipeline deps, NO angr itself)
+- The pipeline is run from the repo root: `{{UNLACE_PY}} -m scripts.pipeline.compare ...` (it
   shells out to the angr venv).
 - The Rust `unlace` CLI is `target/release/unlace` — use it for `unlace catalog ...`.
   The parity gates are `cargo test --release -p unlace-harness --test parity`.
-- `KUNA_ROOT`, `KUNA_DECOMP_DBG`, `KUNA_SPECS` point at THIS worktree's tree
+- `UNLACE_ROOT`, `UNLACE_DECOMP_DBG`, `UNLACE_SPECS` point at THIS worktree's tree
   and binaries (each `.sla` is compiled from the worktree's `.slaspec` into the `.sla` cache on first use; nothing to build).
 - Build with `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli` (cargo; the first build of the worktree is slowest, then incremental).
 
 ## Heartbeat (do this so the pipeline can observe you)
 
 At the START of each phase below, run:
-`{{KUNA_PY}} -m scripts.pipeline.state update --worker {{WORKER_ID}} --phase <PHASE>`
+`{{UNLACE_PY}} -m scripts.pipeline.state update --worker {{WORKER_ID}} --phase <PHASE>`
 where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you abort, run
 `... update --worker {{WORKER_ID}} --status failed --note "<one line why>"`.
 
 ## Hard rules
 
 1. **Exactly one feature.** No drive-by refactors. New logic goes in
-   `crates/unlace-decomp/src/<phase folder>/kuna_{{SLUG}}.rs` (wire it into
-   `lib.rs` the way the existing `kuna_*` modules are).
+   `crates/unlace-decomp/src/<phase folder>/unlace_{{SLUG}}.rs` (wire it into
+   `lib.rs` the way the existing `unlace_*` modules are).
    Edits to the ported core files are allowed ONLY where an anchor demands it (registering the
    action/option, a flag on the architecture struct); keep them minimal, mark each with a
-   `// (kuna)` comment.
+   `// (unlace)` comment.
 2. **Never modify `docs/baseline.json`.** The loop must keep `cargo test --release -p unlace-harness --test parity datatests`
    at PARITY OK without re-pinning. (You DO regenerate `docs/baseline-stages.json` to add your new stage test.)
-3. **ElementId** in the 4000+ range — grep the existing `kuna_*.rs` sources and `phases.toml`
+3. **ElementId** in the 4000+ range — grep the existing `unlace_*.rs` sources and `phases.toml`
    for the highest id already used and pick the next free one.
 4. **Decide first whether this is a FEATURE or a FIX.** A feature is a judgement call --
    faithfulness vs readability, a speculative or destructive recovery, a speed trade, a
@@ -63,15 +63,15 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
    `crates/unlace-decomp/phases.toml` with EVERY field populated, especially:
    `source_decompiler="angr"`, `inspiration="{{TEST_NAME}}; <angr pass/class>; {{SELECTOR}}"`,
    `change_kind` ∈ correctness-fix|presentation-default|structure-recovery|opt-in-tool, plus `summary` (WHAT), — plus `tier` (transform if it restructures/duplicates/removes/inserts code; core if near-always-better rendering; analysis for prep passes) and `symptoms` (2–5 output-shaped phrases an LLM would grep for).
-   `use_when` (the angr-vs-kuna symptom = WHEN), `example` (HOW). Register the option in
-   `crates/unlace-middle/src/p0_knowledge/options.rs` (so it appears in `KUNA_OPTION_NAMES`).
+   `use_when` (the angr-vs-unlace symptom = WHEN), `example` (HOW). Register the option in
+   `crates/unlace-middle/src/p0_knowledge/options.rs` (so it appears in `UNLACE_OPTION_NAMES`).
 5. **If an existing option already covers this gap** (check `unlace catalog --json`), do NOT
    duplicate it. Record that finding in `docs/features/{{SLUG}}/record.json`, set state `--status failed
    --note "covered by <option>"`, and stop without a PR.
 6. **Measure speed — speed is critical.** Before opening the PR, record the median decompile
    wall-time of `{{SELECTOR}}` in `{{BINARY}}` with your option OFF vs ON (Phase 4 step). A feature
    that the ablation would let ship default-ON but which regresses the target beyond the speed
-   budget (default +5%, `KUNA_PIPELINE_SPEED_BUDGET_PCT`) stays **default-OFF opt-in** instead.
+   budget (default +5%, `UNLACE_PIPELINE_SPEED_BUDGET_PCT`) stays **default-OFF opt-in** instead.
    Always record the number even when within budget.
 7. **Large/multi-part features go through a draft `[PROPOSAL]` PR first — do NOT implement.**
    If closing this gap needs more than one option-gated pass — a new pass *type* or infrastructure
@@ -89,12 +89,12 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
   `crates/unlace-lift/src/p2_lift/loweredswitch.rs`, its anchors in `coreaction*.rs` /
   `universalaction.rs` / `options.rs` / `architecture.rs` / `phases.toml`, and
   `tests/stages/ghangr-loweredswitch.toml`.
-- Reproduce the gap: `{{KUNA_PY}} -m scripts.pipeline.compare --entry {{TEST_NAME}}` (read both
+- Reproduce the gap: `{{UNLACE_PY}} -m scripts.pipeline.compare --entry {{TEST_NAME}}` (read both
   decompilations and the metrics/signals). Confirm angr really is better and pin down the *one*
   concrete structural difference you will fix. Name the owning stage/sub-stage from
   the owning `docs/spec/` chapter and the real pass order in `coreaction*.rs` / `universalaction.rs`.
 - Write `docs/features/{{SLUG}}/analysis.md` (what angr does better, the exact construct, the owning stage,
-  and your hypothesis for the kuna change) and save the side-by-side as `docs/features/{{SLUG}}/angr-vs-kuna.txt`
+  and your hypothesis for the unlace change) and save the side-by-side as `docs/features/{{SLUG}}/angr-vs-unlace.txt`
   (`... compare --entry {{TEST_NAME}}` output).
 
 ### 2. design — decide the minimal feature (use a decider for judgment calls)
@@ -111,14 +111,14 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
     **draft** PR and park the opportunity:
     ```
     tools/pipeline/open_pr.sh --draft {{BRANCH}} "[PROPOSAL] angr-{{SLUG}}: <one line>" docs/features/{{SLUG}}/proposal.md
-    {{KUNA_PY}} -m scripts.pipeline.state proposal --worker {{WORKER_ID}} --opportunity "{{OPPORTUNITY_ID}}" --pr "<url>" --branch {{BRANCH}} --slug {{SLUG}}
+    {{UNLACE_PY}} -m scripts.pipeline.state proposal --worker {{WORKER_ID}} --opportunity "{{OPPORTUNITY_ID}}" --pr "<url>" --branch {{BRANCH}} --slug {{SLUG}}
     ```
     Then STOP (no further phases). A supervising session surfaces the draft PR for the user's go/no-go and,
     on approval, re-dispatches an implementation worker on this branch.
   - **If small (the default) — continue to Phase 3** exactly as below.
 
 ### 3. code — implement + register
-- Create `kuna_{{SLUG}}.rs` (an Action/Rule modeled on `loweredswitch.rs`), add a `bool`
+- Create `unlace_{{SLUG}}.rs` (an Action/Rule modeled on `loweredswitch.rs`), add a `bool`
   option flag on the architecture struct (defaulted off in its reset path), register the action in
   the `universalAction` registration (`coreaction*.rs` / `universalaction.rs`) and the option in
   `options.rs`, and add the `settableTable` row (rule 4). Gate the action to early-return when the
@@ -132,12 +132,12 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
 
 ### 4. build + test
 - `cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli`. Then write `tests/stages/ghangr-{{SLUG}}.xml`: for a feature, a two-pass `decompilertest` — pass 1 with
-  `option {{SLUG}} off` asserting the *bug* (current kuna rendering), pass 2 at default asserting the *fix*
+  `option {{SLUG}} off` asserting the *bug* (current unlace rendering), pass 2 at default asserting the *fix*
   (angr-like rendering); for a fix (rule 4), one pass asserting the fixed rendering and the absence of the bug. Use a self-contained bytechunk or the testcase binary's bytes; map/name neighbour symbols.
 - `cargo test --release -p unlace-harness --test parity stage_tests` must pass. Regenerate the stage baseline:
   `UNLACE_BLESS=1 cargo test --release -p unlace-harness --test parity stage_tests`.
 - **Measure speed (always — Hard rule 6).** With the feature working, time the target off vs on:
-  `{{KUNA_PY}} -m scripts.pipeline.timeit --option {{SLUG}} --binary {{BINARY}} --selector {{SELECTOR}} --repeat 5`
+  `{{UNLACE_PY}} -m scripts.pipeline.timeit --option {{SLUG}} --binary {{BINARY}} --selector {{SELECTOR}} --repeat 5`
   (add `--func-addr <addr>` if name selection is unreliable). Splice the printed JSON
   (`speed_off_ms`, `speed_on_ms`, `speed_delta_pct`, `speed_samples`, `speed_budget_pct`,
   `speed_within_budget`) into `docs/features/{{SLUG}}/record.json` — or pass `--record <record.json>`
@@ -177,16 +177,16 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
   `docs/features/{{SLUG}}/analysis.md`, the mechanism, the option name + how to flip it, and the
   ablation/parity result, ending with `{{WORKER_GENERATED_WITH}}`.
   Do NOT hand-write the before/after decompilation — `open_pr.sh` auto-appends a REAL captured
-  before/after (kuna with the option off vs on, on the feature's target function) + the reference
+  before/after (unlace with the option off vs on, on the feature's target function) + the reference
   rendering, generated from `record.json`. So make sure `record.json` has correct `option`, `binary`,
   `selector`, `func_addr`, `default_on`. (Commit pr_body.md too.)
 - Open the PR robustly: `tools/pipeline/open_pr.sh {{BRANCH}} "{{SLUG}}: <one line>" docs/features/{{SLUG}}/pr_body.md docs/features/{{SLUG}}/record.json`.
   This pushes the branch (SSH), generates+embeds the before/after demo, then runs `gh pr create`
   (compare-URL fallback if gh can't). The script prints the resulting URL on its last stdout line — capture it.
-- Record the URL: `{{KUNA_PY}} -m scripts.pipeline.state done --worker {{WORKER_ID}} --opportunity "{{OPPORTUNITY_ID}}" --pr "<url>"`.
+- Record the URL: `{{UNLACE_PY}} -m scripts.pipeline.state done --worker {{WORKER_ID}} --opportunity "{{OPPORTUNITY_ID}}" --pr "<url>"`.
 
 ## Definition of done
-A pushed `{{BRANCH}}` + open PR adding exactly one `kuna_{{SLUG}}.rs`, one LLM-discoverable `settableTable`
+A pushed `{{BRANCH}}` + open PR adding exactly one `unlace_{{SLUG}}.rs`, one LLM-discoverable `settableTable`
 option (provenance fields populated), one `tests/stages/ghangr-{{SLUG}}.xml` + baseline bump, the doc touches,
 and a complete `docs/features/{{SLUG}}/` bundle — with catalog/parity/stage
 gates all green — opened via `tools/pipeline/open_pr.sh` so the before/after demo is embedded.

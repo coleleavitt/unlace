@@ -88,12 +88,12 @@ pub(crate) fn apply(sub: &str, argv: &mut [String], limit: usize) {
         };
         if step.loaded {
             eprintln!(
-                "[kuna] {:#x}{stub} lies in {}; loading that image too",
+                "[unlace] {:#x}{stub} lies in {}; loading that image too",
                 step.requested, step.image
             );
         } else {
             eprintln!(
-                "[kuna] {:#x}{stub} lies in {}, which is not loaded: add it to --image or raise --follow-images (now {limit})",
+                "[unlace] {:#x}{stub} lies in {}, which is not loaded: add it to --image or raise --follow-images (now {limit})",
                 step.requested, step.image
             );
             continue;

@@ -16,7 +16,7 @@ const NAMES: &[&str] = &[
 fn records(language: &str) -> serde_json::Value {
     let binary = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
-    let facts = common::fixture("highslice_guard.kuna");
+    let facts = common::fixture("highslice_guard.unlace");
     let result = process::required_output(Command::new(binary).args([
         "decompile-all",
         &common::fixture("highslice_guard_x86_64"),
@@ -174,7 +174,7 @@ fn narrow_guards_with_empty_rust_arms_preserve_enclosing_loops() {
                 names,
                 "--assert",
             ])
-            .arg(format!("@{}", common::fixture("rust_empty_match.kuna"))),
+            .arg(format!("@{}", common::fixture("rust_empty_match.unlace"))),
     );
     let doc: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
     let functions = doc["functions"].as_array().unwrap();

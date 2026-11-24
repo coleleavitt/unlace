@@ -1,4 +1,4 @@
-/* (kuna for-loop initializer order) `parity` reads the strtoul result into `n`
+/* (unlace for-loop initializer order) `parity` reads the strtoul result into `n`
  * before the loop; the loop counts `v` down from that same result.  The
  * for-header must not take `v = strtoul(...)` as its initializer, since that
  * would print the `v & 1` read ahead of the call that produces `v`.

@@ -1,6 +1,6 @@
 # libcnames: name locals from the library calls they meet
 
-Issue #1076. kuna types the arguments of known library calls from its built-in
+Issue #1076. unlace types the arguments of known library calls from its built-in
 signature tables (`libproto`, `libcsigs`, `libctypes`, `win32sigs`), but those
 tables carry types only, so the local that holds `open()`'s result stays `v1` and
 the buffer handed to `read()` stays `v5`. IDA and Ghidra name
@@ -22,7 +22,7 @@ int copy_file(const char *from, const char *to) {
 }
 ```
 
-`gcc -O2 -fno-inline`, `kuna decompile ./two copy_file`, main:
+`gcc -O2 -fno-inline`, `unlace decompile ./two copy_file`, main:
 
 ```c
   v1 = open(a0,0);
@@ -88,7 +88,7 @@ never becomes a Symbol and never locks anything.
 
 **Stable numbering and renames.** The prototype shows the hazard: after
 `name fd src_fd`, the second local (`fd_00`) took the freed name `fd`, so a page
-directive aimed at `fd_00` would miss. Part 1 extends `kuna_stablenames` so a
+directive aimed at `fd_00` would miss. Part 1 extends `unlace_stablenames` so a
 propagated spelling is carried like a number: a local keeps the spelling the
 first decompile printed, and a name a rename vacated is not handed to another
 local. Without a directive the output is exactly the first decompile's.
@@ -123,7 +123,7 @@ Six stripped decbench binaries (O0 gzip, crontab, wc; O2 bzip2, init, login):
 | misleading | 0 of the 131; 1 elsewhere (`src` naming a buffer that is also a `strcpy` destination, the role-name rule above) |
 | locals with more than one candidate | 62: 60 synonyms (`fp`/`stream`, `p`/`ptr`, `len`/`n`), 2 contradictory roles |
 
-kuna's own DWARF-twin output names only 61 of these positions; the rest are
+unlace's own DWARF-twin output names only 61 of these positions; the rest are
 register temporaries its DWARF binding does not reach, which is why the
 comparison is against the source.
 

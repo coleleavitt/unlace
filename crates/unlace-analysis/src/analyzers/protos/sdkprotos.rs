@@ -2692,7 +2692,7 @@ mod tests {
     /// C++ tree; a kext gets `Kernel.framework` alone.
     #[test]
     fn header_set_follows_the_image() {
-        let root = std::env::temp_dir().join(format!("kuna-sdkprotos-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("unlace-sdkprotos-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         for file in [
             "System/Library/Frameworks/Alpha.framework/Headers/Alpha.h",

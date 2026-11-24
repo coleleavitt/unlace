@@ -33,7 +33,7 @@ fn shared_div3_reciprocal_recovers_the_modulo() {
             specs.to_str().unwrap(),
         ])
         .output()
-        .expect("spawn kuna");
+        .expect("spawn unlace");
     let code = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "decompile failed: {stderr}");

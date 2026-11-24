@@ -138,7 +138,7 @@ fn go_image_takes_the_golang_cspec_under_auto_and_gcc_under_off() {
         eprintln!("verify_goabi: skipping (`go` not on PATH)");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("kuna_goabi_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("unlace_goabi_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let out_bin = dir.join("go_stripped");
     if !build_go(&dir, &out_bin) {

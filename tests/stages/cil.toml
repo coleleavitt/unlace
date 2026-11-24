@@ -1,4 +1,4 @@
-# Kuna #1633: a managed .NET assembly decompiles from its CIL method
+# Unlace #1633: a managed .NET assembly decompiles from its CIL method
 # bodies. Stage: P1 environment binding (the loader picks the CIL language
 # and reads the ECMA-335 metadata) and P2 lift (CIL.slaspec, decoded under
 # the stack depth and operand class the loader paints as context).

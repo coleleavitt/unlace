@@ -897,7 +897,7 @@ mod tests {
 
         let data = &secs.iter().find(|(n, _, _)| n == ".data").unwrap().2;
         assert_eq!(data.len(), 0x2000);
-        assert!(data.starts_with(b"kuna neolite fixture payload\0"));
+        assert!(data.starts_with(b"unlace neolite fixture payload\0"));
         assert!(
             data[29..].iter().all(|&b| b == 0),
             "the zero tail is part of the stream"

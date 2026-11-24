@@ -1,6 +1,6 @@
 # funcboundflow: bound a function's fall-through at the entry of another known
-# function.  A kuna FunctionSymbol is an entry address with no extent and CALL is
-# fall-through, so a function whose last act is a `call` to a routine kuna cannot
+# function.  A unlace FunctionSymbol is an entry address with no extent and CALL is
+# fall-through, so a function whose last act is a `call` to a routine unlace cannot
 # prove no-return (here the local `fatal` spin-loop; in a stripped static binary
 # the unnamed `exit`/`abort`/`__stack_chk_fail` bodies and app `die()`/`throw`
 # wrappers) runs its flow through the compiler's inter-function alignment padding

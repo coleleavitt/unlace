@@ -1,6 +1,6 @@
 from pathlib import Path
 import datetime,hashlib,json,re
-w=Path('/tmp/kuna-rust-empty-match-db2d');r=Path('/home/mahaloz/kwt/angr-rust-empty-match');read=lambda n:json.loads((w/n).read_text());sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest();build=read('build.json');breadth=read('breadth/record.json');native=read('native-proof/record.json');assert breadth['new_cli_sha256']==native['cli_sha256']==build['new_cli_sha256']==sha(r/'decompiler/target/release/kuna')
+w=Path('/tmp/unlace-rust-empty-match-db2d');r=Path('/home/mahaloz/kwt/angr-rust-empty-match');read=lambda n:json.loads((w/n).read_text());sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest();build=read('build.json');breadth=read('breadth/record.json');native=read('native-proof/record.json');assert breadth['new_cli_sha256']==native['cli_sha256']==build['new_cli_sha256']==sha(r/'decompiler/target/release/unlace')
 pattern=re.compile(r'(=>\s*\{)\s*break;\s*(\})');normalize=lambda text:re.sub(r'\s+','',text);changes=[];unchanged=0;go_failures=[]
 for row in breadth['records']:
  assert sha(row['fixture_path'])==row['fixture_sha256']

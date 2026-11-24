@@ -24,10 +24,10 @@ def main(argv=None) -> int:
     parser.add_argument("--out", type=Path, default=common.repo_root() / "observatory")
     parser.add_argument("--only", help="comma-separated generator names", default=None)
     parser.add_argument("--render-only", action="store_true", help="rebuild pages from existing JSON")
-    parser.add_argument("--kuna", type=Path, help="built kuna binary (used by the walkthrough)")
+    parser.add_argument("--unlace", type=Path, help="built unlace binary (used by the walkthrough)")
     args = parser.parse_args(argv)
-    if args.kuna:
-        os.environ["KUNA_BIN"] = str(args.kuna)
+    if args.unlace:
+        os.environ["UNLACE_BIN"] = str(args.unlace)
 
     names = [] if args.render_only else list(GENERATORS)
     if args.only is not None:

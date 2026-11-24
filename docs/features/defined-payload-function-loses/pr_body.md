@@ -1,7 +1,7 @@
 ## The problem
 
 A callee that is called exactly once loses the argument the caller passes it.
-Every rule kuna has for reconciling an argument list needs a *sibling* call to
+Every rule unlace has for reconciling an argument list needs a *sibling* call to
 the same address to compare against, so where there is no sibling there is no
 recovery — and a thread entry point, a one-shot payload or a handler reached
 from one place never has one.
@@ -12,7 +12,7 @@ it — the `test rdi,rdi; je; call` shape that makes `Funcdata::onlyOpUse` rejec
 the trial on its `CBRANCH` descendant:
 
 ```
-$ kuna decompile calleearitybody_x86_64 caller --option calleearitybody off
+$ unlace decompile calleearitybody_x86_64 caller --option calleearitybody off
 unsigned long caller(long a0)
 {
   if (a0)
@@ -27,18 +27,18 @@ parameter and is untouched from the entry to the `CALL`, but the call renders
 with nothing:
 
 ```
-$ kuna decompile runtime.exe 0x14000b62c \
+$ unlace decompile runtime.exe 0x14000b62c \
     --define-function 0x14000b62c --define-function 0x14000ca0c=payload
   else {
     payload();
   }
 ```
 
-...while decompiling that same callee on its own recovers the parameter kuna
+...while decompiling that same callee on its own recovers the parameter unlace
 just dropped at the call:
 
 ```
-$ kuna decompile runtime.exe 0x14000ca0c --define-function 0x14000ca0c=payload
+$ unlace decompile runtime.exe 0x14000ca0c --define-function 0x14000ca0c=payload
 unsigned long long payload(unsigned int *a0)
 ```
 

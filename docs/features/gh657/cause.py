@@ -1,6 +1,6 @@
 """Attribute every default-arm change to the clause that caused it.
 
-Variant builds (KUNA_GH657_VARIANT, instrumentation reverted before commit):
+Variant builds (UNLACE_GH657_VARIANT, instrumentation reverted before commit):
   main  origin/main 520443d7
   v1    clause 1 only (tied-write barrier on the call->use span)
   v2    v1 + the call->print-point span, structural conditions only

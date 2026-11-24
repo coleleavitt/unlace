@@ -24,7 +24,7 @@ for opt in ("O0", "O2"):
               f"{g(d,'trex','steps','is_c_struct','passed')}/{g(d,'trex','steps','is_c_struct','reached')} | "
               f"{g(c,'trex','steps','c_primitive','passed')}/{g(c,'trex','steps','c_primitive','reached')} -> "
               f"{g(d,'trex','steps','c_primitive','passed')}/{g(d,'trex','steps','c_primitive','reached')} | "
-              f"{g(c,'layout','params_kuna_typed_as_a_struct')} -> {g(d,'layout','params_kuna_typed_as_a_struct')}"
+              f"{g(c,'layout','params_unlace_typed_as_a_struct')} -> {g(d,'layout','params_unlace_typed_as_a_struct')}"
               f" / {g(d,'layout','ptr_to_struct_params')} | "
               f"{g(c,'layout','layout','f1')} -> {g(d,'layout','layout','f1')} | "
               f"{g(c,'layout','nesting','tp')}/{g(c,'layout','nesting','predicted')}/{g(c,'layout','nesting','ground_truth')} -> "
@@ -38,7 +38,7 @@ for opt in ("O0", "O2"):
             a = acc[(lab, opt)]
             a[0] += g(x, 'trex', 'gt_variables')
             a[1] += g(x, 'trex', 'mean') * g(x, 'trex', 'gt_variables')
-            a[2] += g(x, 'layout', 'params_kuna_typed_as_a_struct')
+            a[2] += g(x, 'layout', 'params_unlace_typed_as_a_struct')
             a[3] += g(x, 'layout', 'ptr_to_struct_params')
 for lab in ("I", "L"):
     tp, pr, gt = acc[(lab, "nest")]

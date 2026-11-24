@@ -169,7 +169,7 @@ pub fn require_specs_dir() -> Result<PathBuf, String> {
 /// How to point unlace at a SLEIGH tree, for the failures that surface after the
 /// directory itself resolved.
 pub const SPECS_HINT: &str = "set UNLACE_SPECS to a specs/ directory (a checkout's specs/, whose .sla \
-     images compile into the .sla cache on first use, or the kuna-v<ver>-specs release archive)";
+     images compile into the .sla cache on first use, or the unlace-v<ver>-specs release archive)";
 
 /// A comma-separated rendering of a probe list, for a diagnostic.
 fn joined(dirs: &[PathBuf]) -> String {
@@ -246,7 +246,7 @@ mod tests {
     /// A scratch directory, named after the calling test so parallel cases do not
     /// collide.
     fn sandbox(tag: &str) -> PathBuf {
-        let dir = env::temp_dir().join(format!("kuna_paths_{}_{tag}", std::process::id()));
+        let dir = env::temp_dir().join(format!("unlace_paths_{}_{tag}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("create sandbox");
         dir
@@ -289,7 +289,7 @@ mod tests {
     #[test]
     fn an_extracted_archive_has_no_repo_root() {
         assert_eq!(
-            in_tree_root(Path::new("/c/kuna-v1.329-windows-x86_64")),
+            in_tree_root(Path::new("/c/unlace-v1.329-windows-x86_64")),
             None
         );
         assert_eq!(in_tree_root(Path::new("/usr/local/bin")), None);
@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn the_specs_probe_accepts_an_archive_layout() {
         let root = sandbox("specs");
-        let bindir = root.join("kuna-v1.329-linux-x86_64");
+        let bindir = root.join("unlace-v1.329-linux-x86_64");
         std::fs::create_dir_all(&bindir).expect("create the extracted binary dir");
         std::fs::create_dir_all(root.join("specs").join("Ghidra").join("Processors"))
             .expect("create the extracted specs tree");

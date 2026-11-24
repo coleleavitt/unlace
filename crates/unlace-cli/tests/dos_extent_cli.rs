@@ -76,7 +76,7 @@ fn unlace(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
-        .expect("run kuna")
+        .expect("run unlace")
 }
 
 fn run(args: &[&str]) -> (String, String) {
@@ -166,7 +166,7 @@ fn a_dos_function_ends_where_its_flow_does() {
     assert!(
         past.contains(
             "note: 0x10020 is past the end of sub_10010 at 0x10014, after the last instruction its flow reaches, \
-             and in no function kuna discovered"
+             and in no function unlace discovered"
         ),
         "{past}"
     );

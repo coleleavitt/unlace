@@ -1,12 +1,12 @@
 ## The problem
 
-`kuna disassemble` at a raw address pays for a whole-image function-discovery
+`unlace disassemble` at a raw address pays for a whole-image function-discovery
 walk before it prints a single row, so on a large binary a 40-instruction
 listing takes as long as decompiling the program would. On a 9.4 MB PE32+ whose
 `.text` is 99.4% of the file:
 
 ```
-$ time kuna disassemble ./crackme_shroud.exe 0x140001000 --addr --count 40 --json | head -3
+$ time unlace disassemble ./crackme_shroud.exe 0x140001000 --addr --count 40 --json | head -3
 {
   "binary": "./crackme_shroud.exe",
   "kind": "code",
@@ -32,10 +32,10 @@ executable byte in the image.
   reloads with the full bundle: a name only discovery invents (`sub_1190` on a
   stripped image), an address only it knows, a bare address in a data section.
   That fallback is why this is not the variant swap that breaks
-  `kuna disassemble <generated name>`.
+  `unlace disassemble <generated name>`.
 - A listing whose length is the function extent was never caller-bounded, so it
   always takes the full walk.
-- Loader tolerance notes (`[kuna] ELF section table unusable…`, the PE
+- Loader tolerance notes (`[unlace] ELF section table unusable…`, the PE
   data-directory clamp, the ET_REL report) are now said once per process per
   image. They are facts about the image, and a surface that loads it twice was
   announcing each of them twice.
@@ -45,7 +45,7 @@ executable byte in the image.
 `tests/cli/disassembling-40-instructions-takes.json` is the acceptance probe,
 repointed from its 9.4 MB dataset image to the largest in-repo fixture that
 reproduces the shape (CI has no dataset) and recalibrated on it. Two cargo
-tests in `kuna-cli`: `sub_1190` — a name only the discovery walk invents — still
+tests in `unlace-cli`: `sub_1190` — a name only the discovery walk invents — still
 resolves by both spellings, and a bounded listing is byte-identical to the one
 the walk it skipped would have produced. Three unit tests pin the three
 predicates.

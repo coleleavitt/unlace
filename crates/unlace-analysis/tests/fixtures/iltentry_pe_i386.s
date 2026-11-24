@@ -1,5 +1,5 @@
 # Stripped PE32 i386 fixture for the incremental-link table rule of thunkentry
-# (tests/stages/kuna-iltentry.toml).
+# (tests/stages/unlace-iltentry.toml).
 #
 # An MSVC /INCREMENTAL image routes every call and vtable slot through a table of
 # `jmp rel32` stubs. Here the entry calls only the first stub; the other fifteen

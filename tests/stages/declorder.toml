@@ -1,4 +1,4 @@
-# kuna `declorder`: a function with ten or more locals declares them in
+# unlace `declorder`: a function with ten or more locals declares them in
 # character order, so `v10` and `v11` print between `v1` and `v2`.
 #
 # Stage / sub-stage: P9 "naming-policy".  The P0 assertion

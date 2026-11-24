@@ -1,4 +1,4 @@
-# kuna fixture: an inner this-only call between an outer virtual call's first
+# unlace fixture: an inner this-only call between an outer virtual call's first
 # push and its call, in a function with a local frame, so the epilogue tears
 # the frame down after the callee-saved registers are restored (the MSVC /O2
 # shape of `return o->message(9, 0, v->angle(), extra)` with locals).

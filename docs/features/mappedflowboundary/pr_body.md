@@ -4,7 +4,7 @@ A mapped return is lost when another path falls off the image; JSON reports null
 
 ```sh
 python3 -c "import base64; open('edge.elf','wb').write(base64.b64decode('f0VMRgEBAQAAAAAAAAAAAAIAAwABAAAAAAABADQAAAAAAAAAAAAAADQAIAABACgAAAAAAAEAAABUAAAAAAABAAAAAQAPAAAADwAAAAUAAAABAAAAhcB1BrgHAAAAw7sFAAAA'))"
-kuna decompile edge.elf 0x10000 --addr --json
+unlace decompile edge.elf 0x10000 --addr --json
 ```
 
 ```text

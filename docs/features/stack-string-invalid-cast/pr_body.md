@@ -11,10 +11,10 @@ RE-friction round 2, need `stack-string-invalid-cast` (1 instance, challenge
 Two things are wrong at once. C has no array cast and `._0_9_` is member syntax applied to
 an array object, so the export does not recompile; and the four lines spell nothing a reader
 can use while `strings` reports `Hello, Reverse Engineer!` at that very address — a string
-kuna had *already recovered* and planted a symbol for.
+unlace had *already recovered* and planted a symbol for.
 
 ```
-$ kuna decompile practice_2_rengr _main          # before
+$ unlace decompile practice_2_rengr _main          # before
   v1[0] = (char[8])s_100003f1d._0_8_;
   v5 = s_100003f1d[8];
   v6[0] = (char[7])s_100003f1d._9_7_;
@@ -34,13 +34,13 @@ Those loads survive heritage as free **read-only memory varnodes**, never consta
 constant-input guard declines and the run falls straight through to the printer as
 partial-symbol slices.
 
-So this is a third shape of an idiom kuna already recovers twice (`stringcopy` for constant
+So this is a third shape of an idiom unlace already recovers twice (`stringcopy` for constant
 stack strings, `memsetcopy` for constant-fill runs), and it had no owner.
 
 ## Mechanism
 
 New S5 constsequence rule `RuleRodataStringCopy`
-(`decompiler/crates/kuna-decomp/src/p5_types/rodatastring.rs`), option
+(`decompiler/crates/unlace-decomp/src/p5_types/rodatastring.rs`), option
 **`rodatastring on|off`, default `on`** (DIV-113). It gathers the same-block run and claims
 it only when every step is a fact rather than an inference:
 
@@ -74,7 +74,7 @@ $ python -m scripts.repipe.verify --need stack-string-invalid-cast --json
 "transition": "closed"
 ```
 
-`a-d7fec4000cb6` wants `Hello, Reverse Engineer!` in `kuna decompile practice_2_rengr _main`:
+`a-d7fec4000cb6` wants `Hello, Reverse Engineer!` in `unlace decompile practice_2_rengr _main`:
 
 ```
   builtin_strncpy(v1,"Hello, Reverse Engineer!",0x19);
@@ -94,7 +94,7 @@ Both parity corpora are symbol-less bytechunks, so the covering-string-symbol gu
 fire in them — **their being green is not evidence here** and is reported as a no-regression
 check only. The real evidence is a whole-corpus collateral sweep.
 
-`kuna decompile-all --json`, both arms, over every binary in the RE dataset, per-function C
+`unlace decompile-all --json`, both arms, over every binary in the RE dataset, per-function C
 compared verbatim: **135 binaries, 62,131 functions, 4 changed functions (0.0064%)**. 12
 binaries fail to load whole-binary in *both* arms alike (pre-existing) and are excluded.
 Every changed line was read; all 4 are the intended recovery, and in each the byte count
@@ -131,7 +131,7 @@ single-target noise floor (`docs/features/returncopysplit/record.json` measured 
 | `make rust-test` | **green** |
 | `make check-spec` | **OK** |
 | `make test-cli` | **27/27** |
-| `kuna catalog --check` | **catalog OK** |
+| `unlace catalog --check` | **catalog OK** |
 
 One note on `make rust-test`, since CI skips it on an internal-branch PR. Adding a rule +
 option trips five hard-coded count/order asserts, all bumped here: `surface_count` 107→108,
@@ -140,8 +140,8 @@ the `list_action_decompile_oracle.txt` fixture (new `rodatastringcopy` leaf, ren
 backs both `universalaction_listing` and `verify_w8x_allowlist`. Separately,
 `verify_w10_proto_unlock::w10_proto_unlock_const_return_collapses_no_tied_roundtrip` fails in
 a repipe worktree for an **environment** reason unrelated to this change: `cpp_oracle_bin()`
-reads `KUNA_DECOMP_TEST`, which the worker sets to kuna's own release `decomp_test_dbg`, so
-the "C++ oracle" arm compares kuna against itself and kuna's DIV-6 realtypes rendering
+reads `UNLACE_DECOMP_TEST`, which the worker sets to unlace's own release `decomp_test_dbg`, so
+the "C++ oracle" arm compares unlace against itself and unlace's DIV-6 realtypes rendering
 (`unsigned int`) trips the fixture's `xunknown4` assert. Green with the variable unset, which
 is how CI runs it.
 

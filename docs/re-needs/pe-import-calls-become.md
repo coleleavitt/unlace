@@ -28,7 +28,7 @@ reject_reason: null
 Read the dialog input calls as GetDlgItemTextA, preserving their import identity.
 
 > **PE import calls become calls to raw hint/name RVAs** (major, `5ab77f6433c5d40ad448cae1`)
-> Even with peimportcall on, emitted (*(void *)0x173dc)(a0,0x68,...). Instructions load ESI from IAT slot 0x401078 and call ESI; kuna names that slot GetDlgItemTextA. The emitted constant is its on-disk hint/name RVA. Separately encountered conversion-result loss resembling already-filed bytecode-reader-return-discarded; explicit unsigned long long prototypes restored those results, so that symptom was not refiled.
+> Even with peimportcall on, emitted (*(void *)0x173dc)(a0,0x68,...). Instructions load ESI from IAT slot 0x401078 and call ESI; unlace names that slot GetDlgItemTextA. The emitted constant is its on-disk hint/name RVA. Separately encountered conversion-result loss resembling already-filed bytecode-reader-return-discarded; explicit unsigned long long prototypes restored those results, so that symptom was not refiled.
 
 ## Reproduction
 
@@ -38,7 +38,7 @@ Read the dialog input calls as GetDlgItemTextA, preserving their import identity
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x40341c",
@@ -72,7 +72,7 @@ Read the dialog input calls as GetDlgItemTextA, preserving their import identity
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "decompile",
     "{{BIN}}",
     "0x401028",
@@ -127,19 +127,19 @@ _not yet refuted_
 ## Decision log
 
 - filed by cluster.py from 1 observation(s)
-- split by captain at T_DEDUP from round 12's `wrong-output|decompile|exit_code,stdout_absent,stdout_matches` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.kuna-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
+- split by captain at T_DEDUP from round 12's `wrong-output|decompile|exit_code,stdout_absent,stdout_matches` bucket: cluster.py's signature (kind|subcommand|clause-shape) collapsed unrelated defects, so the crop was hand-partitioned one observation per need and filed via `--from-file`. See `.unlace-repipe/rounds/12/dedup/MARKER.json`; do NOT run `cluster --round 12` bare.
 - sibling of `decompiling-executable-section-iat` — shared root condition (IAT data living inside .text) but different fixes: import identity through a constant-folded call vs refusing a non-code decompile target. Kept separate.
 - round 12 REFUTER: hypothesis **upheld** (was inconclusive). UPHELD, and the cause is a SECOND SHIPPED OPTION, not the import machinery: option litpoolconst (DIV-136, default ON, P1 code-data-partition) folds the IAT read before peimportcall can bind it.
 
 MEASURED ON b9029a8f (release binaries rebuilt 05:39), arena binary crypto4.exe.
 
-The bytes settle the fold exactly. .text is the ONLY code section (VMA 0x401000, size 0x1656a, flags CONTENTS ALLOC LOAD READONLY CODE) and it holds the import descriptors (0x16cfc), the FirstThunk arrays (RVA 0x1000-0x11xx) AND the hint/name strings (0x16e00-0x172xx). At file offset 0x478 = RVA 0x1078 = VA 0x401078 the four bytes are dc 73 01 00 = 0x000173dc. kuna emits (*(void *)0x173dc)(a0,0x68,...). The emitted constant IS the slot's on-disk contents, byte for byte. That is a read-only fold of the LOAD, and once the CALLIND target is a constant, ActionDeindirect takes its constant arm, finds no function at 0x173dc, and prints the raw pointer.
+The bytes settle the fold exactly. .text is the ONLY code section (VMA 0x401000, size 0x1656a, flags CONTENTS ALLOC LOAD READONLY CODE) and it holds the import descriptors (0x16cfc), the FirstThunk arrays (RVA 0x1000-0x11xx) AND the hint/name strings (0x16e00-0x172xx). At file offset 0x478 = RVA 0x1078 = VA 0x401078 the four bytes are dc 73 01 00 = 0x000173dc. unlace emits (*(void *)0x173dc)(a0,0x68,...). The emitted constant IS the slot's on-disk contents, byte for byte. That is a read-only fold of the LOAD, and once the CALLIND target is a constant, ActionDeindirect takes its constant arm, finds no function at 0x173dc, and prints the raw pointer.
 
 THE DECISIVE ABLATION: --option litpoolconst off restores full import identity on the SAME command. Line 66 becomes v4 = GetDlgItemTextA(a0,0x68,v12,0x20), plus SendMessageA(a0,0xa1,2,0), SetBkMode(a2,1), SendMessageA(v5,0x80,1,v8) -- correct names, correct arity, correct arguments. Whole-binary census over decompile-all, 93 functions: DEFAULT = 0 named import calls and 115 folded (*(void *)0x1xxxx) calls; litpoolconst off = 19 named import calls (over a 10-name sample) and 0 folded. Not one Win32 API is named anywhere in this program at the default.
 
-WHY litpoolconst fires here and nowhere normal -- the CONTROL settles it. crates/unlace-analysis/tests/fixtures/pe_imports.exe puts its IAT in .idata at 0x14000d000 with flags CONTENTS ALLOC LOAD DATA, i.e. WRITABLE. On that binary, at the default: 0 folded indirect calls, 14 named import calls, and litpoolconst on vs off is BYTE-IDENTICAL (118744 chars both) -- the option is structurally inert because the slots are writable. Same kuna, same defaults, opposite outcome, and the only difference is the section permission. litpoolconst's warrant is "allocated, executable, non-writable, file-backed"; a PE that puts its IAT inside .text satisfies all four.
+WHY litpoolconst fires here and nowhere normal -- the CONTROL settles it. crates/unlace-analysis/tests/fixtures/pe_imports.exe puts its IAT in .idata at 0x14000d000 with flags CONTENTS ALLOC LOAD DATA, i.e. WRITABLE. On that binary, at the default: 0 folded indirect calls, 14 named import calls, and litpoolconst on vs off is BYTE-IDENTICAL (118744 chars both) -- the option is structurally inert because the slots are writable. Same unlace, same defaults, opposite outcome, and the only difference is the section permission. litpoolconst's warrant is "allocated, executable, non-writable, file-backed"; a PE that puts its IAT inside .text satisfies all four.
 
-THE SOUNDNESS HOLE, IN litpoolconst's OWN WORDS. Its summary justifies the fold as "mapped r-x, so a store to them faults and the image's copy IS the run-time value". That premise is FALSE for a PE IAT slot: the Windows loader writes every one of them at load time (that is what an Import Address Table is for), so the image's copy is provably NOT the run-time value -- it is the hint/name RVA, which is exactly the wrong number kuna prints. The same summary already names the risk: "the direction that matters on a corpus of packers and protectors, where a data section's flags are least trustworthy". This is that case.
+THE SOUNDNESS HOLE, IN litpoolconst's OWN WORDS. Its summary justifies the fold as "mapped r-x, so a store to them faults and the image's copy IS the run-time value". That premise is FALSE for a PE IAT slot: the Windows loader writes every one of them at load time (that is what an Import Address Table is for), so the image's copy is provably NOT the run-time value -- it is the hint/name RVA, which is exactly the wrong number unlace prints. The same summary already names the risk: "the direction that matters on a corpus of packers and protectors, where a data section's flags are least trustworthy". This is that case.
 
 FOUR DEAD LINES CLOSED OFF. (1) peimportcall on vs off on the probe command is BYTE-IDENTICAL, 5945 bytes each -- the option the tester was told to flip on is default-ON and does nothing on this binary, so "peimportcall is a partial fix" is false. (2) The import parsing is NOT broken: unlace functions names all 176 entries correctly, GetDlgItemTextA at 0x401078, so the INT/IAT lockstep walk succeeds. (3) It is not a single-function blind spot: 115 folded calls across the whole binary. (4) It is not PE32-vs-PE32+ -- the working control is PE32+ and the failing image PE32, but the control's litpoolconst inertness is due to section flags, not width.
 

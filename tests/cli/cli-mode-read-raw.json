@@ -2,7 +2,7 @@
   "schema": "re-probe/1",
   "kind": "cli",
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "disassemble",
     "{{BIN}}",
     "0x1000005ee-0x1000005fe",

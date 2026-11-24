@@ -1,13 +1,13 @@
 ## The problem
 
-Naming a callee tells kuna what it is, and kuna does nothing with the name. On a
+Naming a callee tells unlace what it is, and unlace does nothing with the name. On a
 stripped, statically linked i386 crackme the anti-debug state machine calls
 glibc's `ptrace`; declaring that callee and turning on both call-argument
 recovery options still prints the call with no arguments, with the four pushed
 slots stranded as raw stores on the lines above it:
 
 ```
-$ kuna decompile ./crackme sub_80483b0 --define-function 0x8048968=ptrace \
+$ unlace decompile ./crackme sub_80483b0 --define-function 0x8048968=ptrace \
       --option calleearity on --option varargstackargs on
         *(unsigned int *)((int)v14 + -4) = v12[v7];
         *(int *)((int)v14 + -8) = v5;
@@ -19,7 +19,7 @@ $ kuna decompile ./crackme sub_80483b0 --define-function 0x8048968=ptrace \
 Thirteen call sites in that one function look like that. The arity cannot come
 from the callee's body: glibc declares `long ptrace(enum __ptrace_request, ...)`
 and fetches the rest with `va_arg`, so it can only come from a signature table —
-and kuna's two tables match a name the *image* carries, which a stripped image
+and unlace's two tables match a name the *image* carries, which a stripped image
 does not.
 
 ## The fix

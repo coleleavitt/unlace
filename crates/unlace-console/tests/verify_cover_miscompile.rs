@@ -82,8 +82,10 @@ fn returned_parameter_survives_a_failed_lookup() {
         .find(|line| line.contains("lookup_service("))
         .expect("lookup_service declaration");
     let code = &c[c.find(declaration).unwrap()..];
-    let source =
-        std::env::temp_dir().join(format!("kuna-returned-parameter-{}.c", std::process::id()));
+    let source = std::env::temp_dir().join(format!(
+        "unlace-returned-parameter-{}.c",
+        std::process::id()
+    ));
     std::fs::write(
         &source,
         format!(

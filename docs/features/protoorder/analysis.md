@@ -11,22 +11,22 @@ nothing:
 
 ```console
 $ gcc -O2 -s -o po po.c    # nextbyte(FILE *f) { return fgetc(f); }  twice(void *p) { return nextbyte(p) + nextbyte(p); }
-$ kuna decompile-all ./po --option protoorder off | grep sub_1170
+$ unlace decompile-all ./po --option protoorder off | grep sub_1170
 int sub_1170(unsigned long a0)
-$ kuna decompile-all ./po | grep sub_1170
+$ unlace decompile-all ./po | grep sub_1170
 int sub_1170(FILE *a0)
 ```
 
 ## 2. The mechanism
 
-`decompile-all` orders its loop by the call graph `kuna xrefs` publishes (Tarjan
+`decompile-all` orders its loop by the call graph `unlace xrefs` publishes (Tarjan
 SCCs, callees first; output still in address order). After each function the
 module records the parameter types its recovery found, against the storage they
 were recovered in. At a later call, argument `i` takes the callee's type for
 parameter `i` when position and storage agree with the caller's own
 `FuncCallSpecs::final_input_storage`. The type is a **vote** in
 `Varnode::getLocalType`'s `type_order` fold, never a lock, so no call's arity can
-move. The spec chapter (`docs/spec/04-calls-and-prototypes.md`, *(kuna)
+move. The spec chapter (`docs/spec/04-calls-and-prototypes.md`, *(unlace)
 `protoorder`*) is the normative description; this file is the evidence.
 
 ## 3. Round 6: what the review found, and what each became
@@ -35,7 +35,7 @@ move. The spec chapter (`docs/spec/04-calls-and-prototypes.md`, *(kuna)
 |---|---|---|
 | A vote at a stack object's address split the aggregate; tail's `tail_bytes` read an unwritten `st_blksize` local | Votes refused at frame addresses, on frame memory (loaded, stored, address-taken, indexed region, struct/array symbol), and on a family that contains a frame address | fixtures `protoorder_stack{array,struct}_x86_64` split on 87723a06 and stay whole now; 0 splits, 0 unwritten, 0 read-first over the corpus (§5) |
 | "Less specific loses" was false: `(long)stderr`, `(long)argv`, `(long)&local` | The vote is never the type a cast is measured against (`declared_input_type_local`); votes refused on declared and global values | useradd `main` renders `sub_16da9(stderr)` and `sub_11de5("-R",argc,argv)` as off does |
-| `--jobs` output silently differed from serial | stderr note; `cli.md` scopes the pool contract to `--option protoorder off`; the identity test runs both fixtures with it, a new test pins the note | `kuna-cli` tests `jobs_output_is_byte_identical_to_serial`, `jobs_notes_that_the_default_callee_first_order_is_serial_only` |
+| `--jobs` output silently differed from serial | stderr note; `cli.md` scopes the pool contract to `--option protoorder off`; the identity test runs both fixtures with it, a new test pins the note | `unlace-cli` tests `jobs_output_is_byte_identical_to_serial`, `jobs_notes_that_the_default_callee_first_order_is_serial_only` |
 | A narrowed run paid for the call graph | Narrowed or single-target runs skip it unless the option is named; the note prints only then | `a_narrowed_run_orders_callees_first_only_when_asked`; §7 |
 | Return-type and bit-typed votes contaminated callers | The result vote is dropped (§6); votes refused on float disagreement and in float-class registers | expr `sub_2dfe` keeps `size_t` parameters; cf2's `fabsf` call prints `sub_80043b8(v7)` |
 | 2,166 hunks unclassified, no layout class | `corpus-diff.py`: every changed function classified, layout and use-before-def checked; `label-review.py` + `hand-labels.json` label the residue | §5 |
@@ -86,7 +86,7 @@ the one main prints for the same value through a narrow load
 | Finding | Change | Evidence |
 |---|---|---|
 | The round-9 float refusal missed truncation. On MIPS o32 and ARM softfp a caller that takes a halfword or a byte out of the word whose bits go to `h(int, float)` printed `float v1` and `*a2 = (short)((unsigned int)v1 >> 0x10)` -- a float-to-int value conversion (source 3fc0/12/c0 for bits 0x3fc01234, the printed C 0000/00/00; main prints the same statement with `unsigned int v1`). `(char)(bits >> 8)` folds to `SUBPIECE(v, 1)`, which no refusal set held | `SUBPIECE` and `PIECE` join the integer ops that refuse a float vote (`integer_but_pointer_neutral`, still neutral for a pointer vote) | fixture `protoorder_floatgpr_mipsel` rebuilt with `g20` and `g22`; probe `protoorder-types-keeps-extracted-float-bits-an-integer`; the round trip compiles them too and fails on 0ebbecb7 (`missing a2[1] = v1`, and 0000/00/00 against 3fc0/12/c0) |
-| (found here, same class) A float vote on a value the caller also stores printed the store as a value conversion. Not only a general-register ABI: on x86-64, `struct S {int i; float f;}` filled with `s->i = (int)r; s->f = x;`, kuna types `s` as `int *` and the vote printed `v1[1] = (int)v3`. ARM softfp and MIPS o32 print the same (`a2[1] = (int)v1`) | A float vote is refused when the family is stored, and when it is returned, passed to another call with no stated class, or produced by a call with no declared result -- unless that register is one the calling convention assigns to floats (`s0`, `xmm0`), which is itself the float declaration. The first version refused those three outright; over the 46 binaries that took back 20 correct hard-float votes (betaflight `v1 = 1500.0` became `v1 = 0x44bb8000`), so the float-register case agrees | fixture `protoorder_floatstore_x86_64` + probe `protoorder-types-keeps-a-stored-float-bitwise`; MIPS `g24` in the round trip; the float-register case: fixture `protoorder_floatreg_armhf.o` + probe `protoorder-types-keeps-a-float-in-a-float-register` (`1000.0`; the engine without the case printed `v1 = 0x447a0000`). Self-review sets (`fi`/`fj`/`fk`/`fr`: stores, returns, other calls, call results, phi constants, x86-64 / MIPS o32 / ARM softfp, soft and hard-float): the default differs from main only in `int` parameters from `h`'s stated `int k` and in bit-exact float literals (`h(a0,1.5005555)` for 0x3fc01234) |
+| (found here, same class) A float vote on a value the caller also stores printed the store as a value conversion. Not only a general-register ABI: on x86-64, `struct S {int i; float f;}` filled with `s->i = (int)r; s->f = x;`, unlace types `s` as `int *` and the vote printed `v1[1] = (int)v3`. ARM softfp and MIPS o32 print the same (`a2[1] = (int)v1`) | A float vote is refused when the family is stored, and when it is returned, passed to another call with no stated class, or produced by a call with no declared result -- unless that register is one the calling convention assigns to floats (`s0`, `xmm0`), which is itself the float declaration. The first version refused those three outright; over the 46 binaries that took back 20 correct hard-float votes (betaflight `v1 = 1500.0` became `v1 = 0x44bb8000`), so the float-register case agrees | fixture `protoorder_floatstore_x86_64` + probe `protoorder-types-keeps-a-stored-float-bitwise`; MIPS `g24` in the round trip; the float-register case: fixture `protoorder_floatreg_armhf.o` + probe `protoorder-types-keeps-a-float-in-a-float-register` (`1000.0`; the engine without the case printed `v1 = 0x447a0000`). Self-review sets (`fi`/`fj`/`fk`/`fr`: stores, returns, other calls, call results, phi constants, x86-64 / MIPS o32 / ARM softfp, soft and hard-float): the default differs from main only in `int` parameters from `h`'s stated `int k` and in bit-exact float literals (`h(a0,1.5005555)` for 0x3fc01234) |
 | The PR body's speed list mixed rounds (tar, e2fsck, betaflight were round-8 numbers) | All eight re-measured on the round-10 engine (§7) | `record.json` `speed.round10` |
 | (nit) u-boot's `.bss` overlays `.rel.dyn`, so a `char *` vote on a buffer there prints a relocation byte as a string literal (`sub_6087101c("\x17")`, 5 sites in 4 functions) | Not changed: the ELF's static map says those bytes are read-only data; recorded in §9 | -- |
 
@@ -333,7 +333,7 @@ and accounts for four of the eight worsened rows at that point, the
 | freertos O2 | `vQueueWaitForMessageRestricted` | `TickType_t` → `int *` | callee over-typed |
 | freertos O2 | `printi` | `int width` → `unsigned char *` | callee over-typed: `prints` recovers its width as a pointer |
 | nuttx O2 | `nxsig_timeout` | `wdparm_t` → `int *` | the ground truth is an integer the program casts to a pointer |
-| betaflight O2 | `rpmFilterApply` | `int axis` slot → `float` | kuna orders the `s0` float parameter first; the vote types that float correctly and the metric aligns it with the `int` |
+| betaflight O2 | `rpmFilterApply` | `int axis` slot → `float` | unlace orders the `s0` float parameter first; the vote types that float correctly and the metric aligns it with the `int` |
 
 ## 7. Speed
 
@@ -342,7 +342,7 @@ branch's round-12 engine, and the round-11 engine (before §3f) as a third arm,
 whole-binary `decompile-all --json`, the three rotating inside each iteration
 (order rotated and reversed every iteration), min and median of 15, three slice
 groups side by side (box load 9-41, other lanes running). `scripts.pipeline.timeit`
-cannot measure this option: it times `kuna decompile`, where the option is inert.
+cannot measure this option: it times `unlace decompile`, where the option is inert.
 
 | slice | main min / median | this branch min / median | delta min / median | vs round 11, delta min |
 |---|---|---|---|---|
@@ -407,7 +407,7 @@ recovery over-counted; `type_match` cannot see a fabricated parameter at all.
 
 - What is stated is a **caller-side fact**: the callee has already been
   decompiled when its types are recorded.
-- `kuna decompile` forks one `decomp_dbg` per function and cannot see what
+- `unlace decompile` forks one `decomp_dbg` per function and cannot see what
   another function stated, so `decompile` and `decompile-all` may disagree about
   a call's argument types (angr has the same property).
 - A callee whose own recovery is wrong about a parameter states that type, and

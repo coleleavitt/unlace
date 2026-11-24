@@ -1,9 +1,9 @@
-/* (kuna) A zero-extended 16-bit field handed to a 32-bit parameter, read
+/* (unlace) A zero-extended 16-bit field handed to a 32-bit parameter, read
  * through a pointer whose other uses type it `unsigned int *`.  `RuleExpandLoad`
  * used to widen `movzwl 0x68(%rdi)` into a 4-byte read and print the truncation
  * as `(short)a0[0x1a]`, which C sign-extends: 0x9abc arrived as 4294941372.
  * The round-trip test in unlace-cli/tests/decompile_all_cli.rs compiles `f` as
- * kuna prints it and checks the value `sink` receives.
+ * unlace prints it and checks the value `sink` receives.
  *
  * Built with:  gcc -O2 -o expandload_zext_x86_64 expandload_zext_x86_64.c
  */

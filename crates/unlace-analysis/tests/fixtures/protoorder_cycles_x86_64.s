@@ -1,4 +1,4 @@
-# (kuna) `protoorder cycles` fixture: functions in call-graph cycles, whose own
+# (unlace) `protoorder cycles` fixture: functions in call-graph cycles, whose own
 # recovered types are the only evidence their callers have.
 #
 # `strwalk` calls itself and reads its argument one byte at a time, so its own

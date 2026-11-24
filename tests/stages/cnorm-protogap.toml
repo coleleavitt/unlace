@@ -1,4 +1,4 @@
-# kuna C-surface normalization: no blank line between the function prototype
+# unlace C-surface normalization: no blank line between the function prototype
 # and the opening brace (user-reported readability issue on the angr fmt
 # corpus binary; no upstream GH issue).
 #
@@ -9,7 +9,7 @@
 #     <blank>
 #     {
 #
-# kuna flips the default to next_line (DIV-34, docs/history.md): the brace
+# unlace flips the default to next_line (DIV-34, docs/history.md): the brace
 # follows the prototype immediately.  The upstream form stays reachable via
 # the ported braceformat option.
 #

@@ -2,7 +2,7 @@
 
 ## What the `(unsigned long *)&v` residue is
 
-The round-I cast census left `(unsigned long *)&v` at 1,252 casts on the 4,815 functions kuna
+The round-I cast census left `(unsigned long *)&v` at 1,252 casts on the 4,815 functions unlace
 and IDA both emit (castbench `main-b3878d32e`, and the same 1,252 on `main-c960fb18d` after
 `globalref`), against IDA's 3, and read it as "an object read at another width". A census of every
 pointer cast whose operand is an `&` expression, by what the object behind the `&` is
@@ -13,7 +13,7 @@ pointer cast whose operand is an `&` expression, by what the object behind the `
 | the stack pointer after an `alloca` (a `char *` copied from a stack array, `// rsp`) | 1,070 | 990 | 142 | nothing: IDA prints `alloca(n)` and no push |
 | a pointer local indexed at another width (`*(unsigned int *)&v38[6]`, `v38` an `unsigned long *`) | 992 | 130 | 122 | the same count as `*(_DWORD *)(a1 + 24)` on an integer-typed base |
 | a pointer parameter indexed at another width (`*(long *)&a0[0x10]`, `a0` an `int *`) | 325 | 37 | 37 | the same: `*(long long *)(a1 + 64)` |
-| a member of a sized, fieldless libc shell (`*(char **)&stdout->field_0x28`; `stat` 49, `tm` 18, `obstack` 13, `re_pattern_buffer` 7) | 593 | 87 | 87 | `stdout->_IO_write_ptr`; kuna's `libctypes glibc` value names these and stays opt-in for its own reasons |
+| a member of a sized, fieldless libc shell (`*(char **)&stdout->field_0x28`; `stat` 49, `tm` 18, `obstack` 13, `re_pattern_buffer` 7) | 593 | 87 | 87 | `stdout->_IO_write_ptr`; unlace's `libctypes glibc` value names these and stays opt-in for its own reasons |
 | a global indexed at another width | 228 | 4 | 4 | `dword_18124` |
 | a stack local declared at another width (`(int *)&v11` into `getopt_long`/`waitpid`, `unsigned int v11`) | 63 | 0 | 0 | `&v11` with `int v11` |
 | a stack buffer read as words (`*(int *)&v17[i * 4]`, `char v17[...]`) | 27 | 1 | 1 | `v17[i]` on `int v17[...]` |
@@ -24,7 +24,7 @@ pointer cast whose operand is an `&` expression, by what the object behind the `
 The eight pointer-local casts that also drop are pushes through an alloca alias the census's
 root tracing does not follow. Only the stack-local, stack-buffer and `struct_N` rows are objects
 declared at another width than their uses, 141 casts of which 4 are `(unsigned long *)`. The pointer-index rows are a shape difference, not a count gap:
-IDA types the same bases as integers and pays one cast per access too (`diff_2_files`: kuna
+IDA types the same bases as integers and pays one cast per access too (`diff_2_files`: unlace
 `*(long *)&a0[0x10]`, IDA `*(long long *)(a1 + 64)`); the fix there is a record for the base,
 which is `structsynth`'s job. The largest row is not a type at all.
 

@@ -1,4 +1,4 @@
-# Kuna #1157 (secondary): decompiling python314.dll at 0x180099df0
+# Unlace #1157 (secondary): decompiling python314.dll at 0x180099df0
 # panicked in TransformManager::apply (index -2 into a two-lane piece array).
 # Upstream Ghidra fixed the same line as GP-7434 ("Fix for LaneDivide
 # terminator SUBPIECE trace", NationalSecurityAgency/ghidra de40b0bf5dc6).

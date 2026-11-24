@@ -33,9 +33,9 @@ fn unlace(db: Option<&Path>, args: &[&str]) -> Output {
     command
         .args(args)
         .env("SLEIGHHOME", common::repo_root().join("specs"))
-        .env_remove("kuna_fid_db");
+        .env_remove("unlace_fid_db");
     if let Some(db) = db {
-        command.env("kuna_fid_db", db);
+        command.env("unlace_fid_db", db);
     }
     command.output().unwrap()
 }
@@ -149,8 +149,8 @@ fn a_missing_unreadable_or_invalid_database_is_reported_and_the_run_succeeds() {
     for (db, status, says) in [
         (&missing, "missing", "no such file"),
         (&directory, "unreadable", "cannot be read"),
-        (&truncated, "invalid", "not a kuna .fid database"),
-        (&garbage, "invalid", "not a kuna .fid database"),
+        (&truncated, "invalid", "not a unlace .fid database"),
+        (&garbage, "invalid", "not a unlace .fid database"),
     ] {
         let (doc, stderr) = functions(Some(db));
         assert_eq!(names(&doc), ["sub_401000", "sub_401020"], "{status}");

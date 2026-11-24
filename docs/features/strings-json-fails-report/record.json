@@ -1,5 +1,5 @@
 {
-  "schema": "kuna-feature/1",
+  "schema": "unlace-feature/1",
   "slug": "strings-json-fails-report",
   "need_id": "strings-json-fails-report",
   "track": "quality",
@@ -10,8 +10,8 @@
   "div": "DIV-104",
   "phase": "P1",
   "subphase": "code-data-partition",
-  "module": "decompiler/crates/kuna-analysis/src/listing/picbase.rs",
-  "symptom": "kuna strings --json --filter Password found the string at 0x8049127 but returned xrefs_count: 0 and functions: [], despite code directly forming its address for output. All 23 strings in the image reported xrefs_count 0.",
+  "module": "decompiler/crates/unlace-analysis/src/listing/picbase.rs",
+  "symptom": "unlace strings --json --filter Password found the string at 0x8049127 but returned xrefs_count: 0 and functions: [], despite code directly forming its address for output. All 23 strings in the image reported xrefs_count 0.",
   "witness": {
     "challenge": "5ab77f6333c5d40ad448ca52",
     "binary": "pcme0 (pancrackme v1.0)",
@@ -33,11 +33,11 @@
     },
     {
       "what": "not-a-tooling-fix",
-      "detail": "kuna strings computes xrefs_count in kuna-cli/src/strings.rs, but the index it queries is built by kuna_analysis::listing::xrefs::build. The CLI surface is correct and unchanged; only the index was incomplete. No --option, no flag and no subcommand was added to the CLI."
+      "detail": "unlace strings computes xrefs_count in unlace-cli/src/strings.rs, but the index it queries is built by unlace_analysis::listing::xrefs::build. The CLI surface is correct and unchanged; only the index was incomplete. No --option, no flag and no subcommand was added to the CLI."
     },
     {
       "what": "module-wide-inheritance-is-required-not-optional",
-      "detail": "A purely function-local propagation does NOT close this need. kuna's function inventory splits the witness's prompt routine into four entries at its int3 traps (sub_80489e6 / sub_8048a0f / sub_8048ace / sub_8048c4a), so the idiom that sets ebx up is in a different entry from the lea that forms the prompt. The module-wide claim is licensed by cross-checking the recovered value against the image's own _GLOBAL_OFFSET_TABLE_ and requiring every idiom in the program to agree on one register."
+      "detail": "A purely function-local propagation does NOT close this need. unlace's function inventory splits the witness's prompt routine into four entries at its int3 traps (sub_80489e6 / sub_8048a0f / sub_8048ace / sub_8048c4a), so the idiom that sets ebx up is in a different entry from the lea that forms the prompt. The module-wide claim is licensed by cross-checking the recovered value against the image's own _GLOBAL_OFFSET_TABLE_ and requiring every idiom in the program to agree on one register."
     },
     {
       "what": "wrong-output-refutation",
@@ -54,9 +54,9 @@
   ],
   "gates": {},
   "artifacts": {
-    "module": "decompiler/crates/kuna-analysis/src/listing/picbase.rs",
-    "seam": "decompiler/crates/kuna-analysis/src/listing/xrefs.rs (build)",
-    "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/picbase_i386 (+ .s)",
+    "module": "decompiler/crates/unlace-analysis/src/listing/picbase.rs",
+    "seam": "decompiler/crates/unlace-analysis/src/listing/xrefs.rs (build)",
+    "fixture": "decompiler/crates/unlace-analysis/tests/fixtures/picbase_i386 (+ .s)",
     "cargo_gate": "decompiler/crates/console/tests/verify_picbase.rs",
     "stage_test": "tests/stages/picbase.xml",
     "promoted_probe": "tests/cli/strings-json-fails-report.json",

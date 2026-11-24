@@ -1,4 +1,4 @@
-// Fixture source for tests/stages/kuna-itaniumeh-sharedpad.toml (eh4_x86_64.elf):
+// Fixture source for tests/stages/unlace-itaniumeh-sharedpad.toml (eh4_x86_64.elf):
 //   g++ -O2 -fno-pie -no-pie -Wl,--build-id=none -o eh4_x86_64.elf eh4.cc; strip --strip-debug (g++ 15.3.0)
 // patchelf's shrinkRPath shape: calls in one try unwind to pads that only
 // load the exception registers and jump on into handler code they share.

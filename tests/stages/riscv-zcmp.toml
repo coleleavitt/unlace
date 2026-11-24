@@ -1,4 +1,4 @@
-# Kuna GH-1630: RISC-V Zcmp/Zcmt decode (cm.push, cm.pop, cm.popret,
+# Unlace GH-1630: RISC-V Zcmp/Zcmt decode (cm.push, cm.pop, cm.popret,
 # cm.popretz, cm.mvsa01, cm.mva01s, cm.jt, cm.jalt).
 #
 # Zcmp reuses the c.fsdsp encoding space, so an -Os embedded prologue
@@ -7,7 +7,7 @@
 # whatever ra held: the saves, the stack adjustment and the return were lost.
 #
 # Stage / sub-stage: P2 lift (RISC-V SLEIGH spec `riscv.zc.sinc`) plus P0
-# language selection (`loader/kuna_riscvzc.rs`): an ELF whose
+# language selection (`loader/unlace_riscvzc.rs`): an ELF whose
 # `Tag_RISCV_arch` lists zcmp or zcmt takes the `RISCV:LE:32:Zcmp` language
 # variant, whose processor spec sets the `Zcmp` context bit. A strict
 # correctness fix: no option, one pass.

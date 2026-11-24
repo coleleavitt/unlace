@@ -7,7 +7,7 @@ name: Release binaries
 # version scheme -- VERSION file = MAJOR, one past the last release tag = MINOR
 # -- lives in scripts/version.sh and docs/release.md.
 #
-# The release also ships a ready-to-install KunaDecompiler Ghidra extension
+# The release also ships a ready-to-install UnlaceDecompiler Ghidra extension
 # zip with prebuilt unlace_ghidra backends for every platform (the ghidra-ext
 # job), so airgapped users can install without cargo or network access.
 #
@@ -97,7 +97,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       # Baked into `unlace --version` via option_env! in unlace-cli.
-      KUNA_VERSION: ${{ needs.version.outputs.version }}
+      UNLACE_VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -156,7 +156,7 @@ jobs:
           cp "target/${{ matrix.target }}/release/unlace$ext" "$alone/"
           fixture="$PWD/crates/unlace-analysis/tests/fixtures/fauxware"
           cd "$alone"
-          out="$(env -u KUNA_SPECS -u SLEIGHHOME -u KUNA_ROOT ./unlace$ext decompile "$fixture" main)"
+          out="$(env -u UNLACE_SPECS -u SLEIGHHOME -u UNLACE_ROOT ./unlace$ext decompile "$fixture" main)"
           echo "$out"
           grep -q 'main(' <<<"$out"
 
@@ -205,7 +205,7 @@ jobs:
 
   # The compiled SLEIGH tree -- .sla files are platform-independent, so build
   # once. Every build job embeds it into unlace; it also ships as its own asset
-  # for KUNA_SPECS and the nightly baseline.
+  # for UNLACE_SPECS and the nightly baseline.
   specs:
     needs: version
     if: needs.version.outputs.exists == 'false'
@@ -235,7 +235,7 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  # The ready-to-install KunaDecompiler Ghidra extension: one fat zip carrying
+  # The ready-to-install UnlaceDecompiler Ghidra extension: one fat zip carrying
   # prebuilt unlace_ghidra backends for all five platforms, built with Ghidra's
   # own support/buildExtension.gradle against the pinned Ghidra release (which
   # stamps the extension version so the installer's version gate matches).
@@ -283,7 +283,7 @@ jobs:
 
       - name: Stage the per-platform unlace_ghidra binaries
         run: |
-          ext=integrations/ghidra/KunaDecompiler
+          ext=integrations/ghidra/UnlaceDecompiler
           install -D -m 755 ghidra-bins/ghidra-bin-linux-x86_64/unlace_ghidra "$ext/os/linux_x86_64/unlace_ghidra"
           install -D -m 755 ghidra-bins/ghidra-bin-linux-arm64/unlace_ghidra "$ext/os/linux_arm_64/unlace_ghidra"
           install -D -m 755 ghidra-bins/ghidra-bin-macos-x86_64/unlace_ghidra "$ext/os/mac_x86_64/unlace_ghidra"
@@ -295,7 +295,7 @@ jobs:
       # against 9.7.0 and 8.5). GHIDRA_INSTALL_DIR is passed as an env var
       # because build.gradle gives it precedence over the -P property.
       - name: Build the extension zip
-        working-directory: integrations/ghidra/KunaDecompiler
+        working-directory: integrations/ghidra/UnlaceDecompiler
         run: |
           export JAVA_HOME="$JAVA_HOME_21_X64"
           export GHIDRA_INSTALL_DIR="$GITHUB_WORKSPACE/ghidra-install/ghidra_${GHIDRA_VERSION}_PUBLIC"
@@ -306,17 +306,17 @@ jobs:
       # version gate satisfied. Then rename so the asset states both versions.
       - name: Verify the zip and stage it for release
         run: |
-          zip="$(ls integrations/ghidra/KunaDecompiler/dist/ghidra_*_KunaDecompiler.zip)"
+          zip="$(ls integrations/ghidra/UnlaceDecompiler/dist/ghidra_*_UnlaceDecompiler.zip)"
           zipinfo "$zip"
           listing="$(zipinfo "$zip")"
           for p in linux_x86_64 linux_arm_64 mac_x86_64 mac_arm_64; do
-            echo "$listing" | grep -E "^-rwxr-xr-x .* KunaDecompiler/os/$p/unlace_ghidra$"
+            echo "$listing" | grep -E "^-rwxr-xr-x .* UnlaceDecompiler/os/$p/unlace_ghidra$"
           done
-          echo "$listing" | grep -E " KunaDecompiler/os/win_x86_64/unlace_ghidra\.exe$"
-          [ "$(zipinfo -1 "$zip" | cut -d/ -f1 | sort -u)" = "KunaDecompiler" ]
-          unzip -p "$zip" KunaDecompiler/extension.properties | grep -qx "version=$GHIDRA_VERSION"
+          echo "$listing" | grep -E " UnlaceDecompiler/os/win_x86_64/unlace_ghidra\.exe$"
+          [ "$(zipinfo -1 "$zip" | cut -d/ -f1 | sort -u)" = "UnlaceDecompiler" ]
+          unzip -p "$zip" UnlaceDecompiler/extension.properties | grep -qx "version=$GHIDRA_VERSION"
           mkdir -p dist
-          cp "$zip" "dist/unlace-v${{ needs.version.outputs.version }}-KunaDecompiler-ghidra_${GHIDRA_VERSION}.zip"
+          cp "$zip" "dist/unlace-v${{ needs.version.outputs.version }}-UnlaceDecompiler-ghidra_${GHIDRA_VERSION}.zip"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -349,5 +349,5 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "unlace v$ver" \
             --generate-notes \
-            --notes "$(printf 'Each archive ships `unlace`, one self-contained binary: the decompiler console and the SLEIGH compiler are built in, and so are the compiled SLEIGH specs (unpacked once into the user cache directory on first use). `unlace-v%s-specs.tar.gz` is the same spec tree, for `KUNA_SPECS`. See docs/release.md.\n\n`unlace-v%s-KunaDecompiler-ghidra_%s.zip` is the ready-to-install KunaDecompiler extension for **Ghidra %s** (in Ghidra: File -> Install Extensions... -> `+` -> pick the zip -> restart -> enable KunaDecompilerPlugin). It bundles prebuilt `unlace_ghidra` backends for Linux x86_64/arm64, macOS x86_64/arm64, and Windows x86_64, so it installs fully airgapped: the Ghidra release zip plus this zip are the only two files needed -- no network, no Rust toolchain. The zip is version-locked to Ghidra %s; other Ghidra 12.x versions can choose "Install Anyway" at the version-mismatch dialog (compatibility unverified).' "$ver" "$ver" "$GHIDRA_VERSION" "$GHIDRA_VERSION" "$GHIDRA_VERSION")" \
+            --notes "$(printf 'Each archive ships `unlace`, one self-contained binary: the decompiler console and the SLEIGH compiler are built in, and so are the compiled SLEIGH specs (unpacked once into the user cache directory on first use). `unlace-v%s-specs.tar.gz` is the same spec tree, for `UNLACE_SPECS`. See docs/release.md.\n\n`unlace-v%s-UnlaceDecompiler-ghidra_%s.zip` is the ready-to-install UnlaceDecompiler extension for **Ghidra %s** (in Ghidra: File -> Install Extensions... -> `+` -> pick the zip -> restart -> enable UnlaceDecompilerPlugin). It bundles prebuilt `unlace_ghidra` backends for Linux x86_64/arm64, macOS x86_64/arm64, and Windows x86_64, so it installs fully airgapped: the Ghidra release zip plus this zip are the only two files needed -- no network, no Rust toolchain. The zip is version-locked to Ghidra %s; other Ghidra 12.x versions can choose "Install Anyway" at the version-mismatch dialog (compatibility unverified).' "$ver" "$ver" "$GHIDRA_VERSION" "$GHIDRA_VERSION" "$GHIDRA_VERSION")" \
             dist/*

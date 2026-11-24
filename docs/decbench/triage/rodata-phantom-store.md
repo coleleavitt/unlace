@@ -23,7 +23,7 @@ the *symptom* in that record stands, the *mechanism* does not).
 what a user gets today.
 
 ```
-$ export SLEIGHHOME=/home/mahaloz/github/kuna/specs
+$ export SLEIGHHOME=/home/mahaloz/github/unlace/specs
 $ ./decompiler/target/release/unlace decompile \
     ~/github/decbench/results/full_run/O2-noinline/iproute2/stripped/ip --addr 0x20e10
 ...
@@ -84,7 +84,7 @@ $ objdump -d ip | grep -E '# +822f0'
    21140:  66 0f 6f 05 a8 11 06 00   movdqa 0x611a8(%rip),%xmm0   # 822f0
 ```
 
-The block kuna decorates (`0x20f7f`, reached by `je 20f7f` at `0x21004`) contains no
+The block unlace decorates (`0x20f7f`, reached by `je 20f7f` at `0x21004`) contains no
 stores at all:
 
 ```
@@ -101,7 +101,7 @@ stores at all:
 ## Source
 
 `~/github/decbench/results/full_run/O2-noinline/iproute2/compiled/ipnetns.i` (ipnetns.c:883-891)
-— the path kuna decorates:
+— the path unlace decorates:
 
 ```c
    if (lock != -1) {
@@ -189,7 +189,7 @@ single phantom store**: the phantom copy's root is `u0x1000044a`, a unique, on w
 
 ## Analysis — the actual chain
 
-One structural symptom: **kuna emits a block of per-byte assignments storing into a
+One structural symptom: **unlace emits a block of per-byte assignments storing into a
 `.rodata` string literal, on a return path where the binary performs no store at all.**
 
 1. `strings` (P1 analysis tier, default ON) plants a typelocked `char[N]` at `ram:0x822f0`.
@@ -273,7 +273,7 @@ if data.obank().get(copy_op).expect("stale copy").is_return_copy() {
 The predicate already exists (`substrate/op.rs:822 is_return_copy`, set at
 `heritage.rs:1851`, preserved across `set_opcode` by the flag mask at `op.rs:489`), and
 upstream already special-cases `isReturnCopy()` in a sibling rule
-(`ruleaction.cc:3951` / kuna `ruleaction_3.rs:1900`, `RulePropagateCopy`) — so the shape of
+(`ruleaction.cc:3951` / unlace `ruleaction_3.rs:1900`, `RulePropagateCopy`) — so the shape of
 the change has precedent, it is just missing at this site. Adding it is a divergence from
 upstream `subflow.cc:2390` and therefore wants a **DIV row in `docs/history.md`**, but it
 needs **no option gate**: it can only ever delete statements that the program does not
@@ -288,7 +288,7 @@ the same three return-copies stay unsplit and print as **nothing** (step 3 above
 Belt-and-braces companion, same function, same module (catches any other producer):
 decline when the COPY's **output** is address-tied into a read-only range
 (`Varnode::is_read_only`, already used at `p2_lift/jumptable.rs:1700,2155`). Note that
-kuna already has a "read-only address is written" warning path
+unlace already has a "read-only address is written" warning path
 (`substrate/funcdata_varnode.rs:1826` in `fillin_read_only`, upstream
 `Funcdata::fillinReadOnly`), so the invariant is one Ghidra already recognizes — it is just
 gated behind `readonlypropagate`.

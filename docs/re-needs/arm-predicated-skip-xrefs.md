@@ -40,7 +40,7 @@ Seen first on production ARM executables and a shared library, where these rows 
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "xrefs",
     "{{BIN}}",
     "--to",
@@ -70,7 +70,7 @@ Seen first on production ARM executables and a shared library, where these rows 
   "kind": "cli",
   "timeout_s": 60,
   "cmd": [
-    "{{KUNA}}",
+    "{{UNLACE}}",
     "xrefs",
     "{{BIN}}",
     "--to",

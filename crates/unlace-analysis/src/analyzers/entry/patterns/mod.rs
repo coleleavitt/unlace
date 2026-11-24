@@ -718,7 +718,7 @@ mod tests {
 
     #[test]
     fn a_user_pattern_file_replaces_the_vendored_one() {
-        let dir = std::env::temp_dir().join(format!("kuna-patterns-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("unlace-patterns-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let xml = "<patternlist><patternpairs><prepatterns><data>0xc3</data></prepatterns>\
                    <postpatterns><data>0x0f 0x0b</data><funcstart/></postpatterns></patternpairs></patternlist>";

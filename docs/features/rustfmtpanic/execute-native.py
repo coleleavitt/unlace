@@ -1,9 +1,9 @@
 from pathlib import Path
 import subprocess,os,json,hashlib,re
-w=Path('/tmp/kuna-rust-panic-f874');r=Path('/home/mahaloz/kwt/angr-rust-panic-main');base=Path('/home/mahaloz/kwt/angr-rust-panic-base-f874')
+w=Path('/tmp/unlace-rust-panic-f874');r=Path('/home/mahaloz/kwt/angr-rust-panic-main');base=Path('/home/mahaloz/kwt/angr-rust-panic-base-f874')
 versions=['1.90.0','1.93.1','1.99.1']
 names=['panic_literal','panic_empty','panic_decimal','panic_signed','panic_hex','panic_reorder','panic_narrow','panic_escaped']
-prefix=(r/'decompiler/crates/kuna-analysis/tests/fixtures/rust_fmt_panic.rs').read_text().split('fn main()')[0]
+prefix=(r/'decompiler/crates/unlace-analysis/tests/fixtures/rust_fmt_panic.rs').read_text().split('fn main()')[0]
 loop='for x in (0u64..256).chain([u64::MAX, u64::MAX-1, 1<<63, (1<<63)-1, 0xffff_ffff, 0xffff, 0x123456789abcdef0]) { let x=black_box(x);'
 original='''fn main() { std::panic::set_hook(Box::new(|_| {})); capture(|| panic_literal()); capture(|| panic_empty());
 '''+loop+'''
@@ -27,7 +27,7 @@ bodies={};controls=[]
 for side,tree in [('before',base),('after',r)]:
     bodies[side]={}
     for name in names+['panic_dynamic','panic_generic','panic_float','panic_forwarded']:
-        p=subprocess.run(['taskset','-c','0-78',str(tree/'decompiler/target/release/kuna'),'decompile',str(native),name,'--language','rust'],env=os.environ|{'KUNA_SPECS':str(r/'specs')},capture_output=True,text=True,check=True)
+        p=subprocess.run(['taskset','-c','0-78',str(tree/'decompiler/target/release/unlace'),'decompile',str(native),name,'--language','rust'],env=os.environ|{'UNLACE_SPECS':str(r/'specs')},capture_output=True,text=True,check=True)
         bodies[side][name]=p.stdout;(w/f'{name}-{side}.rs').write_text(p.stdout)
     assert all('panic_fmt(' in bodies[side][name] for name in names) if side=='before' else all('panic!(' in bodies[side][name] for name in names)
 for name in ['panic_generic','panic_float','panic_forwarded']:
@@ -56,7 +56,7 @@ for version in ['1.90.0','1.99.1']:
     for name in ['panic_literal','panic_decimal','panic_hex']:
         outputs=[]
         for tree in [base,r]:
-            outputs.append(subprocess.check_output(['taskset','-c','0-78',str(tree/'decompiler/target/release/kuna'),'decompile',str(other),name,'--language','rust'],env=os.environ|{'KUNA_SPECS':str(r/'specs')}))
+            outputs.append(subprocess.check_output(['taskset','-c','0-78',str(tree/'decompiler/target/release/unlace'),'decompile',str(other),name,'--language','rust'],env=os.environ|{'UNLACE_SPECS':str(r/'specs')}))
         assert outputs[0]==outputs[1] and b'panic!(' not in outputs[1]
         controls.append(version+':'+name)
 (w/'native-execution.json').write_text(json.dumps({'producer':'1.93.1','input_sha256':hashlib.sha256(native.read_bytes()).hexdigest(),'functions':names,'inputs_per_primitive':263,'six_integer_functions':True,'all_byte_patterns_and_wide_boundaries':True,'executions':records,'refusal_controls_unchanged':controls,'payload_sha256':hashlib.sha256(oracle.stdout).hexdigest()},indent=2)+'\n')

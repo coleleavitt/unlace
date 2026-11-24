@@ -4,7 +4,7 @@ A local is declared `void` with no `*` and then used as a number. On the
 crackmes.one `crkme.exe` INT3-detection stub at `0x44ac6b`:
 
 ```
-$ kuna decompile crkme.exe 0x44ac6b --addr
+$ unlace decompile crkme.exe 0x44ac6b --addr
 int sub_44ac6b(unsigned int a0,int a1)
 {
   void *v1;
@@ -54,7 +54,7 @@ direct-call control that must stay byte-identical in both passes.
 
 `make test` PARITY OK 675/675 (0 assertions changed), `make test-stages` PARITY
 OK (692 → 698 keys, purely additive), `make rust-test` green (6,108 passed / 0
-failed), `make test-cli` 91/91, `make check-spec` OK (strict), `kuna catalog
+failed), `make test-cli` 91/91, `make check-spec` OK (strict), `unlace catalog
 --check` OK. Sweep over 274 crackmes.one images in both arms: 27 changed, 40 of
 their 30,731 functions changed, 0 functions added or removed, and no call name
 lost or gained anywhere. Speed −0.26% on the witness, −3.6% whole-binary.

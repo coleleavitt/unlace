@@ -5565,11 +5565,24 @@ moves.
   commit parks them on the architecture by function entry, and the decompile
   (`crates/unlace-middle/src/substrate/funcdata.rs (seed_dwarf_register_locals)`)
   maps each as a namelocked, typelocked local at the use point its value will
-  have after heritage: the range's start when it begins a basic block (a
-  loop-carried value's phi), otherwise the last raw write covering the storage
-  strictly before the start and at most 16 bytes earlier (the defining
-  instruction); the matching raw varnodes have their properties refreshed, as
-  for a console `type varnode`. A parameter whose location at the entry PC is a
+  have after heritage (`crates/unlace-middle/src/substrate/kuna_dwarfregbind.rs
+  (reaching_write)`): the range's start when it begins a basic block (a
+  loop-carried value's phi); otherwise the last raw write covering the storage
+  strictly before the start in the block holding it, or, when that block has
+  none, the last one in its single predecessor and so on up the chain (at most
+  64 blocks, no window in bytes: an `-O2` local is often defined well before
+  its range opens); where the chain reaches a block with several predecessors,
+  that block's phi; the entry block with no write (a function input) binds
+  nothing. Among writes at one address the one of the type's exact width wins.
+  When the reaching write is wider than the DWARF type and the type is an
+  integer, a `bool` or an enum (a `char` kept in EBP, written by
+  `movzbl` as all of EBP), the local is mapped at the write's own storage and
+  width with a same-signed integer type (`widened_metatype`), name-locked but
+  not type-locked, so the name binds and type recovery picks the width it
+  prints; a narrower pointer, float or record is not widened and stays
+  unbound. This also places a narrow local on a big-endian register at the
+  bytes the write really covers. The matching raw varnodes have their
+  properties refreshed, as for a console `type varnode`. A parameter whose location at the entry PC is a
   single register (`entry_storage`) is locked to that register when the
   default model would put some parameter of the function elsewhere and gives it
   no hidden return pointer (the commit asks the model with

@@ -150,7 +150,7 @@ fn reentered_dispatches_preserve_each_effect_and_the_callers_return() {
         serde_json::from_slice(&std::fs::read(root.join("provenance.json")).unwrap()).unwrap();
     let fixtures = manifest["fixtures"].as_array().unwrap();
     assert_eq!(fixtures.len(), 32);
-    for fixture in fixtures {
+    common::for_each_parallel(fixtures, |fixture| {
         let name = fixture["binary"].as_str().unwrap();
         let image = root.join(name);
         let abi = fixture["abi"].as_str().unwrap();
@@ -187,7 +187,7 @@ fn reentered_dispatches_preserve_each_effect_and_the_callers_return() {
                 "{name}\n{legacy}"
             );
         }
-    }
+    });
 }
 
 #[test]

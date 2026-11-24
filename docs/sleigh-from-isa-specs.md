@@ -98,13 +98,19 @@ becomes one constructor per cube.
 '^fcvt\.(s|d)\.h$=rne'`. A half bound past the half range is the infinity of its sign; a signed
 lower bound is the largest negative finite half, so only -inf clamps low.
 
+The vector extension and its crypto extensions (Zvk*) are not generated: `riscv.rvv.sinc` is
+hand-written and lifts each instruction to a user operation. Exact semantics would loop over the
+run-time `vl` with register-space pointer accesses; see `docs/spec/02-lift-and-flow.md`
+(RISC-V vector extension).
+
 `riscv.fdq.sinc` is the F/D command with `--flen 128`. `riscv.q.sinc` comes from a Q file derived
 from D: `python3 tools/sail_d_to_q.py <model> > <copy of model>/extensions/FD/qext_insts.sail`, then
 `--sail <copy of model> --files extensions/FD/qext_insts.sail --exts rv_q,rv64_q --flen 128
 --opaque-fallback --field-table LOAD_FP_Q.imm=immI,STORE_FP_Q.imm=immS --dyn-rounding rne --unbox exact
 --idiom fmv.q=copy,fneg.q=neg,fabs.q=abs --drop-display '^fcvt\.q\.(s|d|w|wu|l|lu)$=rne'`.
 At FLEN 128 a constant wider than 64 bits is built from 64-bit pieces into a local, as SLEIGH
-constants hold 64 bits. `unsigned(x) < unsigned(y)` over wider bits compares the bits unsigned,
+constants hold 64 bits, and a binary128 float bound is the exact double widened
+(`float2float(c:8)`). `unsigned(x) < unsigned(y)` over wider bits compares the bits unsigned,
 and a mask wider than 64 bits is a shift pair.
 
 `riscv.svinval.sinc` comes from `extensions/H/hext_insts.sail,extensions/Svinval/svinval_insts.sail` with

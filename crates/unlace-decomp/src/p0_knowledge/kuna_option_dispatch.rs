@@ -645,6 +645,12 @@ kuna_options! { self, p1;
     "flirt" => {
         registered!(crate::kuna_coreoptions::Flirt)
     },
+    "ruststdsigs" => {
+        let (val, msg) = <crate::kuna_ruststdsigs::RustStdSigs as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        crate::kuna_ruststdsigs::set_ruststdsigs_env(val);
+        self.kuna_options.set(val);
+        Ok(msg)
+    },
     "fidproto" => {
         registered!(crate::kuna_fidproto::Fidproto)
     },

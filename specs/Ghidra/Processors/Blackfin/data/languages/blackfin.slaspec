@@ -261,6 +261,10 @@ macro subflags(a, b, r) {
 }
 macro nzflags(r) { AZ = r == 0; AN = r s< 0; }
 macro logflags(r) { AZ = r == 0; AN = r s< 0; AC0 = 0; AC0_COPY = 0; V = 0; V_COPY = 0; }
+# the 32-bit shifts set AZ and AN, clear V and leave AC0 alone
+macro shflags(r) { AZ = r == 0; AN = r s< 0; V = 0; V_COPY = 0; }
+macro cmpflags_s(x, y) { AZ = x == y; AN = x s< y; AC0 = y <= x; AC0_COPY = AC0; }
+macro cmpflags_u(x, y) { AZ = x == y; AN = x < y; AC0 = y <= x; AC0_COPY = AC0; }
 macro packASTAT(t) {
   t = zext(AZ) | (zext(AN) << 1) | (zext(AC0_COPY) << 2) | (zext(V_COPY) << 3) | (zext(CC) << 5)
     | (zext(AQ) << 6) | (zext(RND_MOD) << 8) | (zext(AC0) << 12) | (zext(AC1) << 13)
@@ -492,11 +496,17 @@ cfy: cf_ys is cf_I=1 & cf_ys { export *[const]:4 cf_ys; }
 cfyu: dB is cf_G=0 & cf_I=0 & dB { export dB; }
 cfyu: pB is cf_G=1 & cf_I=0 & pB { export pB; }
 cfyu: cf_yu is cf_I=1 & cf_yu { export *[const]:4 cf_yu; }
-ins16: "CC = "^cfx^" == "^cfy is op5=0x01 & cf_opc=0 & cfx & cfy { CC = cfx == cfy; }
-ins16: "CC = "^cfx^" < "^cfy is op5=0x01 & cf_opc=1 & cfx & cfy { CC = cfx s< cfy; }
-ins16: "CC = "^cfx^" <= "^cfy is op5=0x01 & cf_opc=2 & cfx & cfy { CC = cfx s<= cfy; }
-ins16: "CC = "^cfx^" < "^cfyu^" (IU)" is op5=0x01 & cf_opc=3 & cfx & cfyu { CC = cfx < cfyu; }
-ins16: "CC = "^cfx^" <= "^cfyu^" (IU)" is op5=0x01 & cf_opc=4 & cfx & cfyu { CC = cfx <= cfyu; }
+# a data-register compare also sets AZ, AN and AC0 from x - y; a pointer compare only CC
+ins16: "CC = "^cfx^" == "^cfy is op5=0x01 & cf_opc=0 & cf_G=0 & cfx & cfy { cmpflags_s(cfx, cfy); CC = cfx == cfy; }
+ins16: "CC = "^cfx^" == "^cfy is op5=0x01 & cf_opc=0 & cf_G=1 & cfx & cfy { CC = cfx == cfy; }
+ins16: "CC = "^cfx^" < "^cfy is op5=0x01 & cf_opc=1 & cf_G=0 & cfx & cfy { cmpflags_s(cfx, cfy); CC = cfx s< cfy; }
+ins16: "CC = "^cfx^" < "^cfy is op5=0x01 & cf_opc=1 & cf_G=1 & cfx & cfy { CC = cfx s< cfy; }
+ins16: "CC = "^cfx^" <= "^cfy is op5=0x01 & cf_opc=2 & cf_G=0 & cfx & cfy { cmpflags_s(cfx, cfy); CC = cfx s<= cfy; }
+ins16: "CC = "^cfx^" <= "^cfy is op5=0x01 & cf_opc=2 & cf_G=1 & cfx & cfy { CC = cfx s<= cfy; }
+ins16: "CC = "^cfx^" < "^cfyu^" (IU)" is op5=0x01 & cf_opc=3 & cf_G=0 & cfx & cfyu { cmpflags_u(cfx, cfyu); CC = cfx < cfyu; }
+ins16: "CC = "^cfx^" < "^cfyu^" (IU)" is op5=0x01 & cf_opc=3 & cf_G=1 & cfx & cfyu { CC = cfx < cfyu; }
+ins16: "CC = "^cfx^" <= "^cfyu^" (IU)" is op5=0x01 & cf_opc=4 & cf_G=0 & cfx & cfyu { cmpflags_u(cfx, cfyu); CC = cfx <= cfyu; }
+ins16: "CC = "^cfx^" <= "^cfyu^" (IU)" is op5=0x01 & cf_opc=4 & cf_G=1 & cfx & cfyu { CC = cfx <= cfyu; }
 ins16: "CC = A0 == A1" is op5=0x01 & cf_opc=5 & cf_I=0 & cf_G=0 & b0_2=0 & b3_5=0 { local a:8 = sext(A0:5); local b:8 = sext(A1:5); CC = a == b; }
 ins16: "CC = A0 < A1" is op5=0x01 & cf_opc=6 & cf_I=0 & cf_G=0 & b0_2=0 & b3_5=0 { local a:8 = sext(A0:5); local b:8 = sext(A1:5); CC = a s< b; }
 ins16: "CC = A0 <= A1" is op5=0x01 & cf_opc=7 & cf_I=0 & cf_G=0 & b0_2=0 & b3_5=0 { local a:8 = sext(A0:5); local b:8 = sext(A1:5); CC = a s<= b; }
@@ -652,18 +662,26 @@ mvdst: "EMUDAT" is rm_gd=7 & rm_dst=7 { EMUDAT = MVTMP; }
 ins16: mvdst^" = "^mvsrc is op4=0x3 & mvdst & mvsrc { MVTMP = mvsrc; build mvdst; }
 
 # ---------------------------------------------------------------- ALU2op
-ins16: dA^" >>>= "^dB is op6=0x10 & a2_opc=0 & dA & dB { dA = dA s>> dB; logflags(dA); }
-ins16: dA^" >>= "^dB is op6=0x10 & a2_opc=1 & dA & dB { dA = dA >> dB; logflags(dA); }
-ins16: dA^" <<= "^dB is op6=0x10 & a2_opc=2 & dA & dB { dA = dA << dB; logflags(dA); }
+ins16: dA^" >>>= "^dB is op6=0x10 & a2_opc=0 & dA & dB { dA = dA s>> dB; shflags(dA); }
+ins16: dA^" >>= "^dB is op6=0x10 & a2_opc=1 & dA & dB { dA = dA >> dB; shflags(dA); }
+ins16: dA^" <<= "^dB is op6=0x10 & a2_opc=2 & dA & dB { dA = dA << dB; shflags(dA); }
 ins16: dA^" *= "^dB is op6=0x10 & a2_opc=3 & dA & dB { dA = dA * dB; }
-ins16: dA^" = ("^dA2^" + "^dB^") << 0x1" is op6=0x10 & a2_opc=4 & dA & dA2 & dB { local s:4 = dA + dB; addflags(dA, dB, s); dA = s << 1; }
-ins16: dA^" = ("^dA2^" + "^dB^") << 0x2" is op6=0x10 & a2_opc=5 & dA & dA2 & dB { local s:4 = dA + dB; addflags(dA, dB, s); dA = s << 2; }
+# (a + b) << n: V is the add's overflow or a shift step that changes the sign; AC0 is left alone
+macro addshflags(r, ov) { AZ = r == 0; AN = r s< 0; V = ov; V_COPY = ov; VS = VS | ov; }
+ins16: dA^" = ("^dA2^" + "^dB^") << 0x1" is op6=0x10 & a2_opc=4 & dA & dA2 & dB {
+  local s:4 = dA + dB; local ov:1 = scarry(dA, dB) || ((s ^ (s << 1)) s< 0);
+  dA = s << 1; addshflags(dA, ov);
+}
+ins16: dA^" = ("^dA2^" + "^dB^") << 0x2" is op6=0x10 & a2_opc=5 & dA & dA2 & dB {
+  local s:4 = dA + dB; local ov:1 = scarry(dA, dB) || ((s ^ (s << 1)) s< 0) || (((s << 1) ^ (s << 2)) s< 0);
+  dA = s << 2; addshflags(dA, ov);
+}
 ins16: "DIVQ ("^dA^", "^dB^")" is op6=0x10 & a2_opc=8 & dA & dB { dA = divq(dA, dB, AQ); AQ = (dA & 0x1) == 0; }
 ins16: "DIVS ("^dA^", "^dB^")" is op6=0x10 & a2_opc=9 & dA & dB { AQ = (dA s< 0) != (dB s< 0); dA = divs(dA, dB); }
-ins16: dA^" = "^dBL^" (X)" is op6=0x10 & a2_opc=10 & dA & dBL { dA = sext(dBL); nzflags(dA); }
-ins16: dA^" = "^dBL^" (Z)" is op6=0x10 & a2_opc=11 & dA & dBL { dA = zext(dBL); nzflags(dA); }
-ins16: dA^" = "^dBB^" (X)" is op6=0x10 & a2_opc=12 & dA & dBB { dA = sext(dBB); nzflags(dA); }
-ins16: dA^" = "^dBB^" (Z)" is op6=0x10 & a2_opc=13 & dA & dBB { dA = zext(dBB); nzflags(dA); }
+ins16: dA^" = "^dBL^" (X)" is op6=0x10 & a2_opc=10 & dA & dBL { dA = sext(dBL); logflags(dA); }
+ins16: dA^" = "^dBL^" (Z)" is op6=0x10 & a2_opc=11 & dA & dBL { dA = zext(dBL); logflags(dA); }
+ins16: dA^" = "^dBB^" (X)" is op6=0x10 & a2_opc=12 & dA & dBB { dA = sext(dBB); logflags(dA); }
+ins16: dA^" = "^dBB^" (Z)" is op6=0x10 & a2_opc=13 & dA & dBB { dA = zext(dBB); logflags(dA); }
 ins16: dA^" = -"^dB is op6=0x10 & a2_opc=14 & dA & dB { local z:4 = 0; local s:4 = dB; dA = -s; subflags(z, s, dA); }
 ins16: dA^" = ~"^dB is op6=0x10 & a2_opc=15 & dA & dB { dA = ~dB; logflags(dA); }
 
@@ -682,9 +700,9 @@ ins16: "CC = BITTST ("^dA^", "^lg_imm^")" is op5=0x09 & lg_opc=1 & dA & lg_imm {
 ins16: "BITSET ("^dA^", "^lg_imm^")" is op5=0x09 & lg_opc=2 & dA & lg_imm { dA = dA | (1:4 << lg_imm); logflags(dA); }
 ins16: "BITTGL ("^dA^", "^lg_imm^")" is op5=0x09 & lg_opc=3 & dA & lg_imm { dA = dA ^ (1:4 << lg_imm); logflags(dA); }
 ins16: "BITCLR ("^dA^", "^lg_imm^")" is op5=0x09 & lg_opc=4 & dA & lg_imm { dA = dA & ~(1:4 << lg_imm); logflags(dA); }
-ins16: dA^" >>>= "^lg_imm is op5=0x09 & lg_opc=5 & dA & lg_imm { dA = dA s>> lg_imm; logflags(dA); }
-ins16: dA^" >>= "^lg_imm is op5=0x09 & lg_opc=6 & dA & lg_imm { dA = dA >> lg_imm; logflags(dA); }
-ins16: dA^" <<= "^lg_imm is op5=0x09 & lg_opc=7 & dA & lg_imm { dA = dA << lg_imm; logflags(dA); }
+ins16: dA^" >>>= "^lg_imm is op5=0x09 & lg_opc=5 & dA & lg_imm { dA = dA s>> lg_imm; shflags(dA); }
+ins16: dA^" >>= "^lg_imm is op5=0x09 & lg_opc=6 & dA & lg_imm { dA = dA >> lg_imm; shflags(dA); }
+ins16: dA^" <<= "^lg_imm is op5=0x09 & lg_opc=7 & dA & lg_imm { dA = dA << lg_imm; shflags(dA); }
 
 # ---------------------------------------------------------------- COMP3op
 ins16: dC^" = "^dA^" + "^dB is op4=0x5 & c3_opc=0 & dC & dA & dB { local a:4 = dA; local b:4 = dB; dC = a + b; addflags(a, b, dC); }
@@ -1087,8 +1105,8 @@ as1: xdAL is xa_aop=0 & xdAL { export xdAL; }
 as1: xdAH is xa_aop=1 & xdAH { export xdAH; }
 as1: xdAL is xa_aop=2 & xdAL { export xdAL; }
 as1: xdAH is xa_aop=3 & xdAH { export xdAH; }
-amod: " (NS)" is xa_s=0 { }
-amod: " (S)" is xa_s=1 { }
+amod: " (NS)" is xa_s=0 { export 0:1; }
+amod: " (S)" is xa_s=1 { export 1:1; }
 
 dsp32: xdD^" = "^xdB^" + "^xdA^" (NS)" is e_op4=0xc & d_code2=2 & d_b6_8=0 & d_opc=4 & xa_aop=0 & xa_s=0 & xdD & xdB & xdA { local a:4 = xdB; local b:4 = xdA; xdD = a + b; addflags(a, b, xdD); }
 dsp32: xdD^" = "^xdB^" + "^xdA^" (S)" is e_op4=0xc & d_code2=2 & d_b6_8=0 & d_opc=4 & xa_aop=0 & xa_s=1 & xdD & xdB & xdA { local a:4 = xdB; local b:4 = xdA; local r:4 = 0; sat32(a, b, r); xdD = r; nzflags(r); }
@@ -1099,8 +1117,22 @@ dsp32: xdD^" = MAX ("^xdB^", "^xdA^")" is e_op4=0xc & d_code2=2 & d_b6_8=0 & d_o
 dsp32: xdD^" = MIN ("^xdB^", "^xdA^")" is e_op4=0xc & d_code2=2 & d_b6_8=0 & d_opc=7 & xa_aop=1 & xdD & xdB & xdA { local a:4 = xdB; local b:4 = xdA; local c:1 = b s< a; xdD = (zext(c) * b) + (zext(c == 0) * a); nzflags(xdD); }
 dsp32: xdD^" = ABS "^xdB is e_op4=0xc & d_code2=2 & d_b6_8=0 & d_opc=7 & xa_aop=2 & xdD & xdB { local a:4 = xdB; local c:1 = a s< 0; xdD = (zext(c) * (-a)) + (zext(c == 0) * a); nzflags(xdD); }
 dsp32: xdD^" = -"^xdB^amod is e_op4=0xc & d_code2=2 & d_b6_8=0 & d_opc=7 & xa_aop=3 & d_HL=0 & xdD & xdB & amod { local a:4 = xdB; xdD = -a; nzflags(xdD); }
-dsp32: d0h^" = "^as0^" + "^as1^amod is e_op4=0xc & d_code2=2 & d_b6_8=0 & d_opc=2 & d0h & as0 & as1 & amod { d0h = as0 + as1; }
-dsp32: d0h^" = "^as0^" - "^as1^amod is e_op4=0xc & d_code2=2 & d_b6_8=0 & d_opc=3 & d0h & as0 & as1 & amod { d0h = as0 - as1; }
+# a 16-bit add/subtract saturates under (S); AC0, V, VS, AN and AZ come from the halves
+macro half16(w, s, ov, d) {
+  local hi:1 = w s> 0x7fff; local lo:1 = w s< -0x8000;
+  local r:2 = (zext(s & hi) * 0x7fff) + (zext(s & lo) * 0x8000) + (zext((s & (hi | lo)) == 0) * w:2);
+  d = r; AN = r s< 0; AZ = r == 0; V = ov; V_COPY = ov; VS = VS | ov;
+}
+dsp32: d0h^" = "^as0^" + "^as1^amod is e_op4=0xc & d_code2=2 & d_b6_8=0 & d_opc=2 & d0h & as0 & as1 & amod {
+  local a:2 = as0; local b:2 = as1; local w:4 = sext(a) + sext(b);
+  AC0 = carry(a, b); AC0_COPY = AC0;
+  half16(w, amod, scarry(a, b), d0h);
+}
+dsp32: d0h^" = "^as0^" - "^as1^amod is e_op4=0xc & d_code2=2 & d_b6_8=0 & d_opc=3 & d0h & as0 & as1 & amod {
+  local a:2 = as0; local b:2 = as1; local w:4 = sext(a) - sext(b);
+  AC0 = b <= a; AC0_COPY = AC0;
+  half16(w, amod, sborrow(a, b), d0h);
+}
 dsp32: "A0 = "^xdB is e_op4=0xc & d_code2=2 & d_b6_8=0 & d_opc=9 & xa_aop=0 & xa_s=1 & xdB { A0 = sext(xdB); }
 dsp32: "A1 = "^xdB is e_op4=0xc & d_code2=2 & d_b6_8=0 & d_opc=9 & xa_aop=2 & xa_s=1 & xdB { A1 = sext(xdB); }
 dsp32: "A0.L = "^xdBL is e_op4=0xc & d_code2=2 & d_b6_8=0 & d_opc=9 & xa_aop=0 & xa_s=0 & d_HL=0 & xdBL { A0.W = (A0.W & 0xffff0000) | zext(xdBL); }

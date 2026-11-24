@@ -29,6 +29,7 @@ use unlace_lumina::hash::hex;
 use unlace_lumina::helo::{DEFAULT_PROTOCOL_VERSION, Helo, HeloResult, MAX_PROTOCOL_VERSION};
 use unlace_lumina::messages::{FuncInfo, FuncInfoAndPattern, PatternId, PushMd, codes, push_mode};
 use unlace_lumina::metadata;
+use unlace_lumina::privacy::{self, PrivacyPolicy};
 use unlace_lumina::tinfo;
 use unlace_lumina::tls::{Acceptor, ClientTls, ServerTls};
 
@@ -52,7 +53,7 @@ fn usage() {
          \x20                          [--protocol N] [--timeout SECS] [--addr A].. [--define-out FILE]\n\
          \x20                          [--assert-out FILE] [--project FILE] [--rename-named] [--json]\n\
          \x20      unlace lumina push  <binary> --server HOST:PORT [same network flags] [--addr A]..\n\
-         \x20                          [--mode override-if-better|override|keep|merge] [--hostname H] [--dry-run] [--json]\n\
+         \x20                          [--mode override-if-better|override|keep|merge] [--hostname H] [--share-policy FILE] [--dry-run] [--json]\n\
          \x20      unlace lumina serve --db FILE [--bind ADDR (default {DEFAULT_BIND})] [--tls-cert PEM --tls-key PEM] [--json]\n\
          \x20      unlace lumina serve --db FILE --add-user NAME [--admin]   (password from --password-file or ${ENV_PASSWORD})\n\
          \n\
@@ -100,6 +101,7 @@ struct Args {
     dry_run: bool,
     mode: Option<u32>,
     hostname: Option<String>,
+    share_policy: Option<String>,
     db: Option<String>,
     bind: Option<String>,
     tls_cert: Option<String>,
@@ -222,6 +224,9 @@ fn parse(sub: &str, argv: &[String]) -> Result<Args, String> {
                 a.mode = Some(parse_mode(&take_value(argv, &mut i, tok)?)?)
             }
             "--hostname" if sub == "push" => a.hostname = Some(take_value(argv, &mut i, tok)?),
+            "--share-policy" if sub == "push" => {
+                a.share_policy = Some(take_value(argv, &mut i, tok)?)
+            }
             "--db" if sub == "serve" => a.db = Some(take_value(argv, &mut i, tok)?),
             "--bind" if sub == "serve" => a.bind = Some(take_value(argv, &mut i, tok)?),
             "--tls-cert" if sub == "serve" => a.tls_cert = Some(take_value(argv, &mut i, tok)?),
@@ -657,10 +662,34 @@ fn result_name(r: Option<i32>) -> &'static str {
     }
 }
 
+/// Read a `--share-policy` file (see `unlace_lumina::privacy` for the format).
+fn load_share_policy(path: &str) -> Result<PrivacyPolicy, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("--share-policy {path}: {e}"))?;
+    PrivacyPolicy::parse(&text).map_err(|e| format!("--share-policy {path}: {e}"))
+}
+
 fn cmd_push(args: &Args) -> Result<i32, String> {
     let binary = args.binary.as_deref().ok_or("a binary is required")?;
     let inv = calcrel::hash_binary(binary, &args.addrs)?;
     let named: Vec<&calcrel::Hashed> = inv.hashed.iter().filter(|h| h.named).collect();
+    let policy = args
+        .share_policy
+        .as_deref()
+        .map(load_share_policy)
+        .transpose()?;
+    if let Some(policy) = &policy {
+        let bytes = std::fs::read(binary).map_err(|e| format!("cannot read {binary}: {e}"))?;
+        let digest = privacy::binary_sha256(&bytes);
+        if !privacy::is_sharing_allowed(policy, &digest) {
+            return Err(format!(
+                "push refused: {binary} (sha256 {digest}) is not allowed by --share-policy"
+            ));
+        }
+    }
+    let hostname = match &policy {
+        Some(p) if p.anonymize => privacy::ANONYMOUS.to_string(),
+        _ => args.hostname.clone().unwrap_or_else(|| "unlace".into()),
+    };
     let mode = args.mode.unwrap_or(push_mode::OVERRIDE_IF_BETTER);
     let base = std::path::Path::new(binary)
         .file_name()
@@ -671,7 +700,7 @@ fn cmd_push(args: &Args) -> Result<i32, String> {
         idb: format!("{base}.unlace"),
         input_path: base,
         input_md5: inv.input_md5,
-        hostname: args.hostname.clone().unwrap_or_else(|| "unlace".into()),
+        hostname,
         contents: named
             .iter()
             .map(|h| FuncInfoAndPattern {

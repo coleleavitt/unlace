@@ -490,3 +490,6 @@ mod signed_constant_width;
 
 #[path = "aggregate_padding.rs"]
 mod aggregate_padding;
+
+#[path = "programslice.rs"]
+mod programslice;

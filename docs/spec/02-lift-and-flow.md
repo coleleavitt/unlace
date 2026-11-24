@@ -4688,7 +4688,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `2650` | Signetics 2650 / 2650A / 2650B | `2650:BE:16:default` | Signetics 2650 Microprocessor manual, 2650 data sheet | `unlace-cli/tests/s2650_raw.rs` |
 | `MeP` | Toshiba MeP-c4 core, both byte orders | `MeP:BE:32:default`, `MeP:LE:32:default` | binutils `cpu/mep-core.cpu` (CGEN), GCC `mep.h` | `unlace-cli/tests/mep.rs` |
 | `V810` | NEC V810 (Virtual Boy, PC-FX) | `V810:LE:32:default` | NEC uPD70732 user's manual, Virtual Boy development manual, MAME `v810` | `unlace-cli/tests/v810.rs` |
-| `Lua` | Lua 5.4 VM bytecode (one function's code array) | `Lua:LE:32:5.4` | Lua 5.4 `lopcodes.h`/`lvm.c` (MIT), reference manual; oracle `luac5.4 -l -l` | `unlace-cli/tests/lua54.rs` |
+| `Lua` | Lua 5.1, 5.2, 5.3 and 5.4 VM bytecode (one function's code array) | `Lua:LE:32:5.1`, `Lua:LE:32:5.2`, `Lua:LE:32:5.3`, `Lua:LE:32:5.4` | each release's `lopcodes.h`/`lvm.c` (MIT), reference manual; oracle `luac -l` of 5.1.5, 5.2.4, 5.3.6, 5.4.8 | `unlace-cli/tests/lua54.rs`, `processors.toml` (`lua5x`) |
 | `CDP1802` | RCA CDP1802 COSMAC | `CDP1802:BE:16:default`, `CDP1802:BE:16:SCRT` | RCA CDP1802 data sheet, User Manual MPM-201 | `unlace-cli/tests/cdp1802_raw.rs` |
 | `IQ2000` | Vitesse IQ2000 | `iq2000:BE:32:default` | binutils CGEN `cpu/iq2000.cpu` and `cpu/iq2000m.cpu`, GCC `config/iq2000` | `unlace-cli/tests/iq2000_raw.rs` |
 | `SCMP` | National SC/MP, INS8060 SC/MP II | `SCMP:LE:16:default` | National SC/MP Technical Description, INS8060 data sheet | `unlace-cli/tests/scmp_raw.rs` |

@@ -124,7 +124,10 @@ for a halt in a block of its own, at the end of every predecessor) becomes the c
 function's own `return` stays flat after the `if` (`if (!p) fatal(); return
 p;`). A halt `funcboundflow` plants where a branch's own fall-through reached
 the next function's entry follows no call, so it does not count (taken as the
-clause, it printed an empty `if` body). When both arms or neither end in a no-return call, the tie falls through
+clause, it printed an empty `if` body). Nor does a call to `__stack_chk_fail`
+(any name containing `stack_chk_fail`): the compiler adds that check, so the
+source has no `if` whose order the tie-break could recover, and on DecBench
+O2-noinline taking that arm first made 29 functions worse and 5 better. When both arms or neither end in a no-return call, the tie falls through
 to `guardarm` or the out-index order. This is the predicate `guardarm`
 rejects for unoptimized code (`make-prime-list xalloc`); on optimized code,
 where layout no longer follows the source, it is the better signal, and it is

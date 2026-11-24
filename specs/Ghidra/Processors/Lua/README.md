@@ -1,4 +1,4 @@
-# Lua 5.4 bytecode
+# Lua 5.1, 5.2, 5.3 and 5.4 bytecode
 
 Written for unlace from the public Lua 5.4 sources (`lopcodes.h`, `lopcodes.c`, `lvm.c`,
 MIT licence) and the Lua 5.4 reference manual. No prior SLEIGH module was used.
@@ -37,8 +37,34 @@ metamethod path in the VM). `MMBIN`/`MMBINI`/`MMBINK` and `EXTRAARG` are no-ops,
 since the arithmetic user-ops already include the metamethod call and the VM skips them on
 the fast path. Only the first return value is modelled; `CALL` argument lists longer than
 8 and multi-result `VARARG` go through the generic user-ops. `K` and `U` names stop at
-index 255 (higher indexes print as addresses). Lua 5.1/5.2/5.3 and LuaJIT bytecode are
-different instruction sets and are not covered.
+index 255 (higher indexes print as addresses). LuaJIT bytecode is a different instruction set and is not covered.
 
 Oracle: `luac5.4 -l -l` (Lua 5.4.8) on the fixture sources quoted in
 `crates/unlace-cli/tests/lua54.rs`, plus a sweep decoding every opcode 0..82.
+
+## Lua 5.1, 5.2 and 5.3: `Lua:LE:32:5.1`, `Lua:LE:32:5.2`, `Lua:LE:32:5.3`
+
+`lua51.slaspec`, `lua52.slaspec` and `lua53.slaspec` decode the older PUC-Rio VMs (5.1.0-5.1.5,
+5.2.0-5.2.4, 5.3.0-5.3.6), written from each release's public `lopcodes.h` and `lvm.c` (MIT).
+They share the 5.4 module's model (registers, `K`/`U` spaces, compiler spec and user-ops).
+Their instruction word is OP(0..5) A(6..13) C(14..22) B(23..31), Bx = bits 14..31, sBx =
+Bx - 131071, Ax = bits 6..31; a B or C operand with bit 8 set is the constant `K[x & 0xff]`.
+
+Every opcode of each version decodes. Differences from 5.4 that the specs follow: `LOADBOOL`
+with a skip, `LOADNIL` up to register B (5.1) or A+B (5.2+), `GETGLOBAL`/`SETGLOBAL` (5.1, as
+`luaGetGlobal`/`luaSetGlobal`), `GETTABUP`/`SETTABUP` on `_ENV` (5.2+), RK operands on the
+arithmetic and comparison instructions, `EQ`/`LT`/`LE` with A as the expected result,
+`TEST`/`TESTSET` with C, `FORPREP` as an unconditional jump to `FORLOOP`, the 5.1
+`TFORLOOP` (call and test in one instruction) and the 5.2+ `TFORCALL`/`TFORLOOP` pair, `JMP`
+with an upvalue-closing A (5.2+), and the 5.3 integer division and bitwise instructions
+(`IDIV`, `BAND`, `BOR`, `BXOR`, `SHL`, `SHR`, `BNOT`). `CONCAT` passes every register of
+R(B)..R(C) for ranges of up to six, `VARARG` with a fixed count assigns each register.
+
+Gaps beyond 5.4's: in 5.1 the pseudo-instructions after `CLOSURE` that describe its upvalues
+are decoded as ordinary `MOVE`/`GETUPVAL` instructions (the VM skips them; their count comes
+from the prototype), and a `SETLIST` with C = 0 does not read its count from the next word.
+
+Oracle: luac 5.1.5, 5.2.4 and 5.3.6 built from the lua.org sources compiled the fixtures in
+`crates/unlace-cli/tests/fixtures/lua5x/` (`luac -l` listings), and a sweep decodes every
+opcode of each version. Tests: the `lua51_*`, `lua52_*` and `lua53_*` rows of
+`crates/unlace-cli/tests/processors.toml`.

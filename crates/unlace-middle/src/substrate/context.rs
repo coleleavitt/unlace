@@ -964,6 +964,9 @@ pub struct ArchContext {
     /// load-linked or store-conditional left without its upstream fixup (ghidra
     /// mode) remains; see `kuna_octeonops::userop_ids`.
     pub octeon_memory_userops: Vec<(u32, crate::kuna_octeonops::Effect)>,
+    /// (kuna `atomics`) The x86 lock envelope or AArch64 ordering user
+    /// operations an atomic instruction may carry; see `kuna_atomics`.
+    pub atomic_userops: crate::kuna_atomicops::AtomicUserops,
     /// (kuna) `option syscallregs`, resolved against the loader's user-space
     /// fact: does the ARM/AArch64/RISC-V/MIPS/PowerPC system-call user-op read
     /// its setup registers and write its result?  Read by
@@ -1279,6 +1282,7 @@ impl ArchContext {
             x64_syscall_memory_target: false,
             x64_syscall_userops: Vec::new(),
             octeon_memory_userops: Vec::new(),
+            atomic_userops: crate::kuna_atomicops::AtomicUserops::default(),
             syscall_regs: false,
             syscall_regs_family: None,
             syscall_regs_userops: Vec::new(),

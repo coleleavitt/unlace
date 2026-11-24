@@ -21,6 +21,8 @@ unlace-lumina.workspace = true
 # `sbom` inflates cargo-auditable dependency lists.
 flate2.workspace = true
 unlace-project.workspace = true
+# `unlace idb` and IDA databases in place of a binary.
+idb-rs.workspace = true
 # FID and FLIRT construction also read archive members.
 object = { workspace = true, features = ["archive"] }
 regex.workspace = true

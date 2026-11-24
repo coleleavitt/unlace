@@ -1,0 +1,104 @@
+# The quality-harness corpus: what `python3 -m scripts.quality build` compiles.
+# Every (unit x compiler x opt x arch) cell is one build; a cell whose compiler or
+# target is missing on this machine is skipped and listed in corpus.json.
+# See docs/quality-harness.md for every key.
+
+[matrix]
+compilers = ["gcc", "clang"]
+opts = ["O0", "O2", "Os"]
+arches = ["x86_64", "aarch64"]
+# Added to every compile; -g is always added. DWARF 5 carries call sites.
+cflags = ["-gdwarf-5", "-fno-stack-protector"]
+
+# One entry per arch: the clang target triple, the gcc driver for it (absent when
+# none is installed), and whether this machine can link for it. A cell that can
+# not link builds relocatable objects (one per source) instead of an executable.
+[arch.x86_64]
+triple = "x86_64-linux-gnu"
+gcc = "gcc"
+link = true
+host = true
+
+[arch.i686]
+triple = "i686-linux-gnu"
+gcc = "gcc"
+gcc_flags = ["-m32"]
+link = false
+
+[arch.aarch64]
+triple = "aarch64-linux-gnu"
+gcc = "aarch64-linux-gnu-gcc"
+link = false
+
+[arch.arm]
+triple = "armv7a-linux-gnueabihf"
+gcc = "arm-linux-gnueabihf-gcc"
+link = false
+
+[arch.thumb]
+triple = "thumbv7m-none-eabi"
+gcc = "arm-none-eabi-gcc"
+gcc_flags = ["-mthumb", "-mcpu=cortex-m3"]
+link = false
+
+[arch.riscv64]
+triple = "riscv64-linux-gnu"
+gcc = "riscv64-linux-gnu-gcc"
+link = false
+
+[arch.mips]
+triple = "mipsel-linux-gnu"
+gcc = "mipsel-linux-gnu-gcc"
+link = false
+
+[arch.ppc64le]
+triple = "powerpc64le-linux-gnu"
+gcc = "powerpc64le-linux-gnu-gcc"
+link = false
+
+# Synthetic programs: freestanding C (no libc headers), so every arch builds them.
+# Paths are relative to this file.
+[[program]]
+name = "synth"
+sources = ["synth/control.c", "synth/structs.c", "synth/types.c", "synth/calls.c", "synth/main.c"]
+include = ["synth"]
+cflags = ["-Wno-incompatible-library-redeclaration", "-Wno-builtin-declaration-mismatch"]
+
+# Open-source packages: fetched once (sha256-pinned), extracted under the cache,
+# and compiled source by source with the cell's flags; no build system of the
+# package is run. They need libc headers, so they build only on `host` arches
+# unless --sysroot names one. `link = "shared"` links the objects into one .so on
+# a linking arch; otherwise each object is its own corpus binary.
+[[package]]
+name = "zlib"
+url = "https://zlib.net/fossils/zlib-1.3.1.tar.gz"
+sha256 = "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
+root = "zlib-1.3.1"
+sources = ["adler32.c", "crc32.c", "deflate.c", "infback.c", "inffast.c", "inflate.c",
+           "inftrees.c", "trees.c", "zutil.c", "compress.c", "uncompr.c"]
+include = ["."]
+cflags = ["-D_LARGEFILE64_SOURCE=1"]
+link = "shared"
+
+[[package]]
+name = "lua"
+url = "https://www.lua.org/ftp/lua-5.4.7.tar.gz"
+sha256 = "9fbf5e28ef86c69858f6d3d34eccc32e911c1a28b4120ff3e84aaa70cfbf1e30"
+root = "lua-5.4.7/src"
+sources = ["lapi.c", "lcode.c", "lctype.c", "ldebug.c", "ldo.c", "ldump.c", "lfunc.c", "lgc.c",
+           "llex.c", "lmem.c", "lobject.c", "lopcodes.c", "lparser.c", "lstate.c", "lstring.c",
+           "ltable.c", "ltm.c", "lundump.c", "lvm.c", "lzio.c", "lauxlib.c", "lbaselib.c",
+           "lcorolib.c", "ldblib.c", "lmathlib.c", "lstrlib.c", "ltablib.c", "lutf8lib.c"]
+include = ["."]
+cflags = ["-DLUA_USE_LINUX"]
+link = "shared"
+
+[[package]]
+name = "sqlite"
+url = "https://www.sqlite.org/2024/sqlite-amalgamation-3460100.zip"
+sha256 = "77823cb110929c2bcb0f5d48e4833b5c59a8a6e40cdea3936b99e199dbbe5784"
+root = "sqlite-amalgamation-3460100"
+sources = ["sqlite3.c"]
+include = ["."]
+cflags = ["-DSQLITE_THREADSAFE=0", "-DSQLITE_OMIT_LOAD_EXTENSION"]
+default = false

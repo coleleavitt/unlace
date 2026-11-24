@@ -5735,7 +5735,14 @@ Nesting deeper than 2048 blocks stays opaque. `split_statements` then takes the
 tree to `statements`: each leaf holds its basic block's ops in order (a
 `BlockCopy` through the block it mirrors; a leaf of more than 2^20 ops is not
 split), and the leaf printer (`emit_basic_block_ops_in`, with the same filters
-as the block walk) prints from that list. `PrintC::ctree_rewrite` then takes it to `rewritten`:
+as the block walk) prints from that list. `PrintC::ctree_rewrite` first moves three print plans
+into the tree (`ctree_take_plans`): each `if` `switchmerge` prints as a switch
+becomes `SwitchOf`, and `emit_block` asks `switch_of`; `gotonext`'s goto types go
+onto the tree's goto statements (an if-goto's body, a goto block's jump), a goto
+block whose jump it drops loses that statement, and `emit_block_if` and
+`emit_block_goto_from` read both from the tree (`tree_goto_type`); the
+`voidtailreturn` `RETURN` is removed from the op list of the one leaf holding
+it, and the printer's own check is cleared. It then takes the tree to `rewritten`:
 every `if` that the `iteboolean` test and then the `iteregion` test (the same
 tests, in the same order, that `emit_block_if` made while printing) accept becomes
 an assignment statement (`dest = cond`, `dest = !cond`, or `dest = cond ? A : B`

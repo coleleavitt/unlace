@@ -4245,6 +4245,11 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::Rtti>()
                 .0
         }
+        "msvceh" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Msvceh>()
+                .0
+        }
         // (kuna, NOVEL) Itanium (GCC/Clang) RTTI + vtable recovery — the class
         // names, typeinfo/vtable labels and per-slot virtual-method names are
         // computed at LOAD but COMMITTED only when this gate is on. Default-OFF
@@ -7513,6 +7518,14 @@ fn commit_analysis_output(
             &end,
         );
     }
+    // (kuna `guarddispatch`) The PE load configuration's guard dispatch slots,
+    // which the flow reads to print a call through one as the call it guards.
+    let space_index = code_space.get_index();
+    let dispatch = out
+        .guard_dispatch_slots
+        .iter()
+        .map(|&addr| (space_index, addr));
+    prog.arch_mut().guard_dispatch_slots.extend(dispatch);
 
     // 2. Discovered entry points (stripped targets): name + add_function +
     //    register_symbol (the `map function` recipe).

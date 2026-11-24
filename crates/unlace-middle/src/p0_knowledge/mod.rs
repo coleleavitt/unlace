@@ -6,6 +6,7 @@
 pub mod database;
 pub mod kuna_analysisgates;
 pub mod kuna_assert;
+pub mod kuna_atomicops;
 pub mod kuna_coreoptions;
 pub mod kuna_octeonops;
 pub mod kuna_phases;

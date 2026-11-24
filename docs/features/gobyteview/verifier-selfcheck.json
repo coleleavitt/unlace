@@ -1,9 +1,0 @@
-{
-  "valid_witness": "passed",
-  "rejected_mutations": [
-    "arithmetic",
-    "offset",
-    "width",
-    "comment"
-  ]
-}

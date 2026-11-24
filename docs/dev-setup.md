@@ -112,6 +112,24 @@ baseline only for a sanctioned change, with `UNLACE_BLESS=1` on the same command
 `UNLACE_BLESS=1 cargo test -p unlace-harness --test parity datatests` (stages: `stage_tests`).
 It refuses while any assertion fails.
 
+`scripts/check_layers.py` (run by the unittest line) fails on a new module path (`crate::`,
+`super::`, `self::`) from a lower band to a higher one (middle < lift < structure < bandb < emit <
+driver; the bands are listed in the script). Invert the dependency instead of adding it to
+`scripts/layers-allowlist.txt`; that list only shrinks.
+
+To run only some files, set `UNLACE_PARITY_FILES` to a comma-separated list of paths or globs
+(`*` matches any run of characters, `/` included; `?` one character). Each is matched against a
+file's repository-relative path, its file name and its name without the extension, so
+`UNLACE_PARITY_FILES=kuna-wideslice,tests/stages/gh558-* cargo test -p unlace-harness --test
+parity stage_tests` runs three stage files. A selected run compares its assertions with the
+baseline by name and skips the check for baseline keys of files it did not run; every selected
+assertion must pass, and a corpus none of whose files match is skipped. `UNLACE_BLESS=1` refuses
+a selected run.
+
+Each run writes `target/parity-times.json`: per corpus, every file it ran with its wall time in
+milliseconds and its outcome (`pass`, `fail` or `error`), slowest first. CI uploads it as the
+`parity-times` artifact of the parity gates job.
+
 Other one-liners: `cargo test --release -p unlace-ghidra -- --include-ignored` (the ghidra-mode
 differential harness with its heavier breadth test), `bash scripts/version.sh` (the version CI
 tags with), `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna

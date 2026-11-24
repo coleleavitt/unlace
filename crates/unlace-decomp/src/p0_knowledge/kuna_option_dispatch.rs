@@ -113,6 +113,7 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "returnpair" => registered!(crate::kuna_returnpair::ReturnSingle),
+    "retpairpaths" => registered!(crate::kuna_returnuncomputed::RetPairPaths),
     "bitidioms" => registered!(crate::kuna_bitidioms::BitIdioms),
     "satmul" => registered!(crate::kuna_satmul::SatMul),
     "helperroles" => registered!(crate::kuna_helperrole::HelperRoles),
@@ -388,6 +389,7 @@ kuna_options! { self, p1;
     "itaniumeh" => registered!(crate::kuna_itaniumeh::ItaniumEh),
     "vexzeroupper" => registered!(crate::kuna_coreoptions::VexZeroUpper),
     "vectorabi" => registered!(crate::kuna_coreoptions::VectorAbi),
+    "neonintrin" => registered!(crate::kuna_neonintrin::NeonIntrin),
     "lanefuse" => registered!(crate::kuna_coreoptions::LaneFuse),
     "strcodelen" => registered!(crate::kuna_analysisgates::Strcodelen),
     "mba" => registered!(crate::kuna_mba::Mba),
@@ -475,6 +477,7 @@ kuna_options! { self, p1;
         registered!(crate::kuna_analysisgates::Machoehframe)
     },
     "ehcold" => registered!(crate::kuna_analysisgates::Ehcold),
+    "functails" => registered!(crate::kuna_analysisgates::Functails),
     "mfcmsgmap" => registered!(crate::kuna_analysisgates::Mfcmsgmap),
     "msvcptrentry" => registered!(crate::kuna_analysisgates::Msvcptrentry),
     "importvote" => registered!(crate::kuna_importvote::Importvote),
@@ -636,6 +639,9 @@ kuna_options! { self, p1;
     "aifdataveto" => {
         registered!(crate::kuna_analysisgates::Aifdataveto)
     },
+    "swiftcallers" => {
+        registered!(crate::kuna_analysisgates::Swiftcallers)
+    },
     "incrementalwalk" => {
         registered!(crate::kuna_analysisgates::Incrementalwalk)
     },
@@ -676,6 +682,7 @@ kuna_options! { self, p1;
     "calltable" => registered!(crate::kuna_analysisgates::Calltable),
     "stubbinds" => registered!(crate::kuna_analysisgates::Stubbinds),
     "thunknames" => registered!(crate::kuna_analysisgates::Thunknames),
+    "nullsubs" => registered!(crate::kuna_analysisgates::Nullsubs),
     "objc" => registered!(crate::kuna_analysisgates::Objc),
     "panicloc" => registered!(crate::kuna_analysisgates::Panicloc),
     "swiftmetadata" => registered!(crate::kuna_analysisgates::Swiftmetadata),

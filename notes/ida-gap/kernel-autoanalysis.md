@@ -107,3 +107,12 @@ database-only).
 
 Have or better, no task: discovery and bounds (#1, #2), switches (#4), argument and type propagation (#7),
 member and RTTI typing (#8, #19), `AF_PROCPTR` (#9), fixups (#13), xrefs (#21).
+
+## Done since
+
+- **#1 / #8, `functails`** (default off): a single-owner `.cold` part is its owner's, `kuna_ehcold.rs (cold_tails)`.
+  Measured end to end against IDA 9.5's own loader databases. The IDA tail chunks unlace lists as functions drop
+  from 9/51/4/18 to 2/12/0/5 on pe/elf/coff/dex.so. One function IDA keeps is lost (pe.so 0x62fe, an unaligned
+  function that only one other function jumps to). The owners print the same C as before.
+- **#5, `nullsubs`** (default off): unlace names the same 8/41/2/4 functions IDA names `nullsub_` on the four
+  loaders.

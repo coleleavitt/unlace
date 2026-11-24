@@ -565,9 +565,12 @@ pub fn kuna_dfs_back_edges(
     if !g.contains_node(start) {
         return Ok(());
     }
-    // Membership only, never iterated (C++ `set<const KunaRegionNode *>`).
-    let mut visited: FxHashSet<KunaNodeId> = FxHashSet::default();
-    let mut finished: FxHashSet<KunaNodeId> = FxHashSet::default();
+    // Membership only, never iterated (C++ `visited` and `finished`, each a
+    // `set<const KunaRegionNode *>`): one probe answers both, as every finished
+    // node was visited first.
+    const VISITED: u8 = 1;
+    const FINISHED: u8 = 2;
+    let mut state: FxHashMap<KunaNodeId, u8> = FxHashMap::default();
     struct Frame {
         node: KunaNodeId,
         children: Vec<KunaNodeId>,
@@ -581,11 +584,12 @@ pub fn kuna_dfs_back_edges(
         children: g.get_sorted_succs(pool, start)?,
         cursor: 0,
     });
+    state.insert(start, VISITED);
     while !stack.is_empty() {
         // C++ takes `frame = stack.back()` by reference, then may push (which
-        // invalidates it); we re-borrow per branch to mirror that safely.
+        // invalidates it); we re-borrow per branch to mirror that safely. A
+        // node is marked visited as it is pushed, the C++ marking it once on top.
         let node = stack.last().unwrap().node;
-        visited.insert(node);
         let (cursor, children_len) = {
             let frame = stack.last().unwrap();
             (frame.cursor, frame.children.len() as int4)
@@ -593,22 +597,23 @@ pub fn kuna_dfs_back_edges(
         if cursor < children_len {
             let child = stack.last().unwrap().children[cursor as usize];
             stack.last_mut().unwrap().cursor += 1;
-            if visited.contains(&child) {
-                if !finished.contains(&child) {
-                    res.push((node, child)); // Back edge
+            match state.get(&child) {
+                Some(&VISITED) => res.push((node, child)), // Back edge
+                Some(_) => {}
+                None => {
+                    // NOTE: push invalidates the C++ `frame`; nothing below uses it.
+                    let mut children = spare.pop().unwrap_or_default();
+                    g.get_sorted_succs_into(pool, child, &mut children)?;
+                    state.insert(child, VISITED);
+                    stack.push(Frame {
+                        node: child,
+                        children,
+                        cursor: 0,
+                    });
                 }
-            } else if !finished.contains(&child) {
-                // NOTE: push invalidates the C++ `frame`; nothing below uses it.
-                let mut children = spare.pop().unwrap_or_default();
-                g.get_sorted_succs_into(pool, child, &mut children)?;
-                stack.push(Frame {
-                    node: child,
-                    children,
-                    cursor: 0,
-                });
             }
         } else {
-            finished.insert(node);
+            state.insert(node, FINISHED);
             if let Some(frame) = stack.pop() {
                 spare.push(frame.children);
             }

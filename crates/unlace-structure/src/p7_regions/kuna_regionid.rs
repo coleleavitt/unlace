@@ -1858,39 +1858,40 @@ impl KunaRegionIdentifier {
             }
         }
 
-        // Materialize gc as an owned working graph: the dominator/slice scratch.
-        // The C++ aliases gc to `graph` when there are no head in-edges and no
-        // dummy; we keep a true separate copy and re-sync it from `graph` after a
-        // collapse on that aliased path (see `gc_differs` below), so the
-        // observable behavior — dominators built/patched over the same structure
-        // the collapse sees — is identical.
-        let mut gc_owned: KunaRegionGraph = match local_copy {
-            Some(lc) => lc,
-            None => graph.clone(),
+        // gc, the dominator/slice scratch: a copy of its own when it differs from
+        // `graph` (head in-edges cut, or a dummy end node), else `graph` itself,
+        // as the C++ aliases it, so a collapse into `graph` is what gc sees.
+        let mut gc_copy: Option<KunaRegionGraph> = match local_copy {
+            Some(lc) => Some(lc),
+            None if add_dummy => Some(graph.clone()),
+            None => None,
         };
+        macro_rules! gc {
+            () => {
+                gc_copy.as_ref().unwrap_or(&*graph)
+            };
+        }
 
         let mut dummy: Option<KunaNodeId> = None;
         if add_dummy {
             let d = self.new_node(NodeKind::Dummy, !0u64);
+            let gc = gc_copy.as_mut().ok_or_else(|| {
+                KunaError::lowlevel("kuna regionid: dummy end node without a copy")
+            })?;
             for &en in endnodes.iter() {
-                gc_owned.add_edge(&self.pool, en, d);
+                gc.add_edge(&self.pool, en, d);
             }
             endnodes.clear();
             endnodes.push(d);
             dummy = Some(d);
         }
 
-        let mut doms = KunaIncrementalDominators::new(&self.pool, &gc_owned, head, false)?;
-        let mut postdoms =
-            KunaIncrementalDominators::new(&self.pool, &gc_owned, endnodes[0], true)?;
+        let mut doms = KunaIncrementalDominators::new(&self.pool, gc!(), head, false)?;
+        let mut postdoms = KunaIncrementalDominators::new(&self.pool, gc!(), endnodes[0], true)?;
 
         let mut region_created = false;
         let mut postorder_snap: Vec<KunaNodeId> = Vec::new();
-        kuna_dfs_postorder_deterministic(&self.pool, &gc_owned, head, &mut postorder_snap)?;
-        // The C++ holds gc/graph distinct; here `graph` is the collapse target
-        // and `gc_owned` the dominance/slice scratch.  Whether the working copy
-        // differs from `graph` mirrors the C++ `gc != &graph` test.
-        let gc_differs = !head_inedges.is_empty() || add_dummy;
+        kuna_dfs_postorder_deterministic(&self.pool, gc!(), head, &mut postorder_snap)?;
 
         for &node in postorder_snap.iter() {
             if Some(node) == dummy {
@@ -1899,15 +1900,15 @@ impl KunaRegionIdentifier {
             if cyclic && node == head {
                 continue;
             }
-            if !gc_owned.contains_node(node) {
+            if !gc!().contains_node(node) {
                 continue;
             }
 
-            let out_degree = gc_owned.size_out(node)?;
+            let out_degree = gc!().size_out(node)?;
             if out_degree == 0 {
                 // RI l.780: the root of the region hierarchy should always be a
                 // region; wrap a lone, isolated non-region leaf.
-                if gc_owned.size_in(node)? == 0 && !self.pool.get(node).is_region() {
+                if gc!().size_in(node)? == 0 && !self.pool.get(node).is_region() {
                     let r = self.new_region();
                     {
                         let region = &mut self.region_pool[r.0 as usize];
@@ -1933,16 +1934,16 @@ impl KunaRegionIdentifier {
             while let Some(pdn) = postdom_node {
                 let attempt = (node, pdn);
                 if !failed_region_attempts.contains(&attempt)
-                    && self.check_region(&gc_owned, node, pdn, &mut doms)?
+                    && self.check_region(gc!(), node, pdn, &mut doms)?
                 {
                     let mut frontier: KunaNodeSet = KunaNodeSet::new();
                     frontier.insert(self.pool.key(pdn));
-                    let region = self.compute_region(&gc_owned, node, &frontier, dummy, cyclic)?;
+                    let region = self.compute_region(gc!(), node, &frontier, dummy, cyclic)?;
                     if let Some(region_id) = region {
                         // Backpatch graph_with_successors from the parent's
                         // secondary graph (RI l.809-827).
                         if let Some(sec) = secondary_graph.as_deref() {
-                            self.backpatch_secondary(region_id, sec, &gc_owned)?;
+                            self.backpatch_secondary(region_id, sec, gc!())?;
                         }
 
                         self.abstract_acyclic_region(
@@ -1963,20 +1964,11 @@ impl KunaRegionIdentifier {
                                 replaced_nodes.insert(self.pool.key(m));
                             }
                         }
-                        if gc_differs {
-                            // C++ `gc != &graph`: patch the scratch copy
-                            // explicitly (no frontier edges) via _update_graph.
-                            self.replace_region_in_graph(
-                                &mut gc_owned,
-                                region_id,
-                                &replaced_nodes,
-                            )?;
-                        } else {
-                            // C++ `gc == &graph`: the collapse above already
-                            // mutated graph, which *is* gc.  Our gc_owned is a
-                            // separate clone, so re-sync it from graph (there is
-                            // no dummy on this path, so the copy is exact).
-                            gc_owned = graph.clone();
+                        // C++ `gc != &graph`: patch the scratch copy explicitly
+                        // (no frontier edges) via _update_graph. Otherwise the
+                        // collapse above already mutated graph, which *is* gc.
+                        if let Some(gc) = gc_copy.as_mut() {
+                            self.replace_region_in_graph(gc, region_id, &replaced_nodes)?;
                         }
                         let wrapper = self.region_pool[region_id.0 as usize].wrapper.unwrap();
                         let rhead = self.region_pool[region_id.0 as usize].head.unwrap();

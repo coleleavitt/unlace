@@ -7139,7 +7139,10 @@ every other binary's pass list is byte-identical to before the pass existed):
   as the typed vftables below cut it (`kuna_msvcvtabletypes.rs (trim_overruns)`):
   the walk alone ran on into a table laid directly after the vftable, and named
   SensorService.dll's RPC server routines `Sensors::BrSensor::vfunc_4` to
-  `vfunc_14`.
+  `vfunc_14`. The `<Class>::vftable` label is installed as typed data, an array
+  of one code pointer per slot (`mod.rs (type_vftable_labels)`): as an untyped
+  label it took the `code` type, and a constructor's store of its address
+  printed as a store of the label's value (`this->__vftable = (C_vtbl *)vftable`).
 
   The pass runs at every PE load whatever its gate says (its facts are committed
   only when it is on), so its cost is paid by every command on a C++ DLL. Both of

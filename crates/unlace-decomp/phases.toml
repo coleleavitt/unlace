@@ -3023,6 +3023,25 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "vaargconst"
+values = "off|on|builtin"
+default = "off"
+destructive = false
+phase = "P4"
+subphase = "prototype-source"
+strength = "HARD"
+rewind = "P4"
+issue = "unlace-vaargconst"
+summary = "Print a SysV x86-64 va_arg on a local va_list whose offset test is a constant as va_arg(ap, T). gcc tests gp_offset (fp_offset for a double) at every va_arg, but on a va_list the function starts itself every offset on a path from va_start is a constant, so dataflow folds each test and the read becomes a plain argument-register or stack-argument read: the function keeps every argument register as a parameter (libedit history_w printed fourteen) and no va_arg is left for vaarg to find. Before heritage, kuna_vaargconst.rs matches each site (a branch comparing an offset field with the save-area limit, a register arm reading reg_save_area + offset and a memory arm loading overflow_arg_area) on a va_list with a constant gp_offset store, turns the register-arm read into va_arg(&ap, class), drops the arm's offset step and sets the branch to the register arm. vastart then folds the prologue and the prototype becomes variadic. builtin prints the call as __builtin_va_arg."
+use_when = "Off (default). Set on for x86-64 SysV variadic functions that switch over a request code and read their arguments with va_arg (libedit history_w, el_get, el_set), which otherwise print every argument register as a parameter. builtin prints gcc's __builtin_va_arg spelling."
+example = "--option vaargconst on"
+source_decompiler = "kuna"
+inspiration = "DecBench O2-noinline libedit history_w/el_get against IDA 9.5 (notes/ida-gap/ged-vs-ida.md): IDA keeps the ladders, kuna folded them to register reads"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "a variadic function prints all six argument registers and the stack arguments as parameters and no va_arg|va_list field stores such as gp_offset = 0x18 or 0x20 remain beside plain reads of rcx, r8 or r9"
+
+[[settable]]
 option = "looprotate"
 values = "on|off"
 default = "on"

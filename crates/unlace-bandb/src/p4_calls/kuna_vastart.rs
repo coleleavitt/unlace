@@ -17,7 +17,8 @@
 //! keeps its later readers. `last` is the input that carries the last named
 //! argument: the parameter at index `gp_offset/8 + (fp_offset-48)/16 - 1`,
 //! or with no prototype yet and no named float argument, the integer argument
-//! register `gp_offset/8 - 1`.
+//! register `gp_offset/8 - 1`. With `vaargconst` on, a lone 4-byte `gp_offset` write (gcc's
+//! prologue when no `va_arg` reads a double) counts, with `fp_offset` 48.
 //! The register save area loses its address-forced liveness and its local
 //! mapping (as the stack-guard strip does for the canary slot), so dead-code
 //! removes the spills. An unlocked prototype is marked variadic.
@@ -137,12 +138,19 @@ fn find(data: &Funcdata) -> Option<VaStart> {
                 (vec![op], v & 0xffff_ffff, v >> 32)
             }
             (4, Some(gp)) if gp_ok(gp) => {
-                let Some((fop, fp)) = at(x.wrapping_add(4), 4)
+                match at(x.wrapping_add(4), 4)
                     .find_map(|f| copied(data, f).filter(|&fp| fp_ok(fp)).map(|fp| (f, fp)))
-                else {
-                    continue;
-                };
-                (vec![op, fop], gp, fp)
+                {
+                    Some((fop, fp)) => (vec![op, fop], gp, fp),
+                    // gcc leaves fp_offset unwritten when no va_arg reads a double;
+                    // taken only with vaargconst on, which leaves that shape behind
+                    None if crate::kuna_vaargconst::enabled(data)
+                        && at(x.wrapping_add(4), 4).next().is_none() =>
+                    {
+                        (vec![op], gp, 48)
+                    }
+                    None => continue,
+                }
             }
             _ => continue,
         };

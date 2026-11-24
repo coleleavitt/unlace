@@ -128,6 +128,7 @@ impl Action for ActionStart {
         // gather / processing-start bookkeeping) is not in the merged tree.
         crate::kuna_alloca::rewrite_raw(data);
         crate::kuna_varargsave::strip(data);
+        crate::kuna_vaargconst::rewrite(data);
         crate::kuna_x87emptyreturn::capture(data);
         crate::kuna_x87free::annotate(data);
         0

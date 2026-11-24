@@ -9054,7 +9054,8 @@ impl PrintC {
     }
 
     /// (kuna `vaarg`) `va_arg(ap,T)`, `T` the type of the call's output; a
-    /// pointer to a `va_list` (an array type) prints `*ap`.
+    /// pointer to a `va_list` (an array type) prints `*ap`. `vaargconst builtin` spells it
+    /// `__builtin_va_arg`.
     fn push_va_arg(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
         let (Some(ap), Some(out)) = (
             fd.obank().get(op).and_then(|o| o.get_in(1)),
@@ -9083,9 +9084,16 @@ impl PrintC {
             (true, 4, false) => ("int".to_string(), String::new()),
             _ => type_name_for_decl(&ty, self.rt_ctx.clone()),
         };
+        let name = match arch
+            .kuna_options
+            .get::<crate::kuna_vaargconst::VaArgConst>()
+        {
+            crate::kuna_vaargconst::VaArgConst::Builtin => "__builtin_va_arg",
+            _ => "va_arg",
+        };
         self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
         self.push_atom(&Atom::with_op(
-            "va_arg".to_string(),
+            name.to_string(),
             TagType::OpToken,
             crate::printlanguage::SyntaxHighlight::funcname_color,
             op_key(op),

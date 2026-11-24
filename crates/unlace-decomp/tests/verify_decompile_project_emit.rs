@@ -306,6 +306,7 @@ fn recompile_prelude_and_type_definitions_render() {
         "typedef unsigned long long undefined8;\n",
         "typedef unsigned int undefined3; /* 3 bytes in the decompiler; sizeof differs */",
         "typedef struct { unsigned char b[16]; } undefined16;",
+        "#if defined(__SIZEOF_INT128__)\ntypedef unsigned __int128 undefined16;\n#else",
         "typedef struct { unsigned char b[32]; } undefined32;",
         "typedef double float8;",
     ] {

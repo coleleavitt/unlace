@@ -2366,7 +2366,13 @@ x86-64 System V and `unsigned long long` on i386, from one table.
 Three cases resist an exact answer, and each is decided rather than left to fall
 out of the table. A 1-byte integer is `signed char`/`unsigned char`, never bare
 `char` — its signedness is implementation-defined, and unlace reserves the `char`
-core type for text. `code` is Ghidra's pseudo-type for a function body and only
+core type for text. That `char` core type is itself signed, so where the target's
+plain `char` is unsigned it cannot be spelled `char` either: on AArch64 under the
+`default` compiler spec (AAPCS64; not Apple, whose ABI keeps `char` signed, nor
+`windows`), `ctypes.rs (plain_char_signed)` marks the model unsigned and a
+`char`-typed scalar, cast or array element prints `signed char`, so the emitted C
+sign-extends when it is compiled for the target (`tests/stages/aarch64-signed-char.toml`).
+A `char` reached through a pointer keeps `char`: that is how text is declared. `code` is Ghidra's pseudo-type for a function body and only
 ever reaches the output as `code *`, which becomes `void *`. And floating point
 is the one place an approximation is unavoidable: an exact width match wins, but
 a width above `double` with no exact match spells `long double`, which is how the
@@ -4219,8 +4225,13 @@ uint4;`, …; 8-byte integers always spell `long long` so the text is
 data-model independent; `bool` is covered by `#include <stdbool.h>`;
 `char`/`void` are real C and emit nothing), then the fixed Ghidra/unlace
 `undefined` family — `undefined`, `undefined1..8` (3/5/6/7 mapped to the next
-larger unsigned integer, each carrying a sizeof-divergence note) and
-`undefined16`/`undefined32` as byte-array structs. The non-printer half of
+larger unsigned integer, each carrying a sizeof-divergence note),
+`undefined16` as `unsigned __int128` where the compiler defines
+`__SIZEOF_INT128__` and otherwise a byte-array struct, and `undefined32` as a
+byte-array struct. A body computes with a 16-byte value (a function returning
+the `rdx:rax` pair ends `return *(unsigned __int128 *)v1;`, `SUB168(x,8)`
+reads one), which a struct cannot hold, so with the struct no such body
+compiled (tools/semantic `noreturn.checked_div`, `conversions.mul_hi`). The non-printer half of
 the export (section enumeration, one-instruction disassembly, raw image
 bytes, named data symbols for the `.asm`/`README.md` artifacts) lives on the
 console engine, `crates/unlace-console/src/engine.rs

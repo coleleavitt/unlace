@@ -97,13 +97,22 @@ impl TypeSpeller for CSpeller {
         if !cx.ctypes || !dt.is_core_type() {
             return None;
         }
-        crate::ctypes::core_type_spelling(
+        let spelled = crate::ctypes::core_type_spelling(
             &cx.model,
             dt.get_metatype(),
             dt.get_size(),
             dt.is_char_print(),
-        )
-        .map(Cow::Borrowed)
+        )?;
+        // The `char` core type is signed. Where plain `char` is unsigned a signed
+        // byte value must say so; a pointee keeps `char`, the spelling text has.
+        if spelled == "char"
+            && !cx.model.char_signed
+            && !under_pointer
+            && dt.get_metatype() == type_metatype::TYPE_INT
+        {
+            return Some(Cow::Borrowed("signed char"));
+        }
+        Some(Cow::Borrowed(spelled))
     }
 
     fn anonymous(&self, dt: &Rc<Datatype>) -> String {

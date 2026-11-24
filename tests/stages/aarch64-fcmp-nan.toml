@@ -1,0 +1,76 @@
+# AArch64 FCMP: an unordered compare (a NaN input) sets N=0 Z=0 C=1 V=1, and the
+# signed conditions compare N with V. The lift jumped over the ordered flag
+# writes on a NaN, RuleIgnoreNan dropped that jump as a NaN guard, and every
+# condition printed its ordered form: ge as !(a0 < a1), true for a NaN where
+# the processor's ge is false (tools/semantic floats.fcmp, fcmpcond).
+# The lift is now branchless (OV = NAN(a) || NAN(b)), and floatnegation folds
+# N == V and N != V exactly before nanignore can drop the NaN tests.
+#   gt:   fcmp d0,d1 ; cset w0,gt ; ret
+#   ge:   fcmp d0,d1 ; cset w0,ge ; ret
+#   ngt:  fcmp d0,d1 ; cset w0,le ; ret          (!(a > b))
+#   cmp3: a < b ? -1 : a > b ? 1 : a == b ? 0 : 2   (clang -O2, b.pl / b.le)
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'gt' },
+    { space = 'ram', offset = '0x10000c', name = 'ge' },
+    { space = 'ram', offset = '0x100018', name = 'ngt' },
+    { space = 'ram', offset = '0x100024', name = 'cmp3' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '''
+0020611ee0d79f1ac0035fd6 0020611ee0b79f1ac0035fd6 0020611ee0c79f1ac0035fd6
+21c0221e0020611e6500005400008012c0035fd66d00005420008052c0035fd6
+0020611ee8079f1a00791f53c0035fd6
+'''
+
+[script]
+commands = [
+    'parse line extern int4 gt(float8 a,float8 b);',
+    'parse line extern int4 ge(float8 a,float8 b);',
+    'parse line extern int4 ngt(float8 a,float8 b);',
+    'parse line extern int4 cmp3(float8 a,float4 b);',
+    'lo fu gt',
+    'decompile',
+    'print C',
+    'lo fu ge',
+    'decompile',
+    'print C',
+    'lo fu ngt',
+    'decompile',
+    'print C',
+    'lo fu cmp3',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'AArch64 FCMP NaN #1: ge is b <= a, false for a NaN'
+count = 1
+regex = 'return b <= a;'
+
+[[match]]
+name = 'AArch64 FCMP NaN #2: no condition reads as the negation of an ordered compare'
+count = 0
+regex = '!\(a <=? b\)'
+
+[[match]]
+name = 'AArch64 FCMP NaN #3: gt holds only when b < a'
+count = 1
+regex = 'return a != b && b <= a;'
+
+[[match]]
+name = 'AArch64 FCMP NaN #4: ngt (le) is !(b < a), true for a NaN'
+count = 1
+regex = 'return !\(b < a\);'
+
+[[match]]
+name = 'AArch64 FCMP NaN #5: cmp3 returns 1 only when b < a'
+count = 1
+regex = 'if \(\w+ < a\)'

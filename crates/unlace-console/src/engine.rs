@@ -2584,11 +2584,22 @@ impl ConsoleProgram {
         let num_spaces = self.arch().manage().num_spaces();
         // Clone the (name, addr) pairs so the borrow of `self.arch_mut()` below
         // does not overlap `self.symbols`.
-        let records: Vec<(String, Address)> = self
+        let mut records: Vec<(String, Address)> = self
             .symbols
             .iter()
             .map(|s| (s.name.clone(), s.addr.clone()))
             .collect();
+        // The first name of an address names its function, so put the one the
+        // inventory reports first: an ELF lists its local symbols before its
+        // global ones, and gcc's `f.localalias` would otherwise name `f`.
+        records.sort_by_cached_key(|(name, addr)| {
+            let vma = addr.get_offset();
+            (
+                vma,
+                self.is_not_declared_name(vma, name),
+                entry_name_rank(name),
+            )
+        });
         let aliases = self.function_address_aliases.clone();
         let arch = self.arch_mut();
         for (name, addr) in records {

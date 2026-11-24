@@ -372,6 +372,13 @@ Four front-ends drive one engine assembly:
   symbol-stream order. Name-keyed selection resolves aliases too
   (`crates/unlace-console/src/engine.rs (ConsoleProgram::find_entry_by_name)`),
   so collapsing the records never makes a name stop selecting its function.
+  The decompiler's own function symbol for the entry takes the same name:
+  `crates/unlace-console/src/engine.rs (ConsoleProgram::read_loader_symbols)`
+  installs one FunctionSymbol per address from the first name it meets, so it
+  visits each address's names in that rank. Before, it took symbol-stream order,
+  and an ELF lists its local symbols first: gcc's `recurse.localalias` beside
+  the global `recurse` named every call and the printed definition, which is
+  not a C identifier (`tests/stages/loader-name-localalias.toml`).
 
   A name-keyed selection that matches nothing is then retried as the ADDRESS it
   spells, when — and only when — it is a name this build would MINT there

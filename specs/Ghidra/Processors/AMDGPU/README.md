@@ -103,3 +103,11 @@ Source operand codes 235-239 (`src_shared_base`, `src_shared_limit`, `src_privat
 `aperture_register` user op (their values are set by the hardware), and GFX9 decodes
 `v_swap_b32` (VOP1 opcode 81). Found by the real-code sweep (`notes/real-code-sweep.md`):
 clang's gfx900 output reads `src_private_base` in every function that takes a stack address.
+
+## Real-code sweep fixes
+
+Kernels in `fixtures/amdgpu/real_kernels.cl` built with clang -O2/-O3 for gfx900, gfx1030 and
+gfx1100 showed four missing f64 instructions (`v_div_scale_f64`, `v_div_fmas_f64`,
+`v_div_fixup_f64`, `v_cmp_class_f64`, plus `v_cmp_class_f32` in both encodings) and gfx11's
+`s_sendmsg_rtn_b32`; they decode now. A 32-bit literal feeding a 64-bit float operand is the
+high half of the double (`7.0` is `0x401c0000`), which the specs now apply to every f64 source.

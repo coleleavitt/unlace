@@ -3898,7 +3898,10 @@ psABI passes and returns a float narrower than FLEN NaN-boxed. Only those
 upper bits are claimed, so a test of a float's own bits is never folded. The half-precision
 unboxing test reads exactly bits 16..63: the `fa0+2:6` piece, or a 6-byte `SUBPIECE` at byte 2
 of the whole boxed register (or at byte 0 of it shifted right by 16). Those 48 bits count as all
-ones, as the psABI boxes a half argument or result the same way. *Rewrite:* the
+ones, as the psABI boxes a half argument or result the same way. With 16-byte f registers
+(FLEN 128, `RISCV:LE:64:GQ`) the boxed bits are 64..127 and a `SUBPIECE` at byte 8 of the whole
+register (the double unboxing test) counts as all ones; the 12- and 14-byte float and half tests
+are wider than the 8-byte known-ones walk and stay. *Rewrite:* the
 compare becomes a `COPY` of true (`==`) or false (`!=`), and the canonical-NaN branch of the
 unboxing dies. Exact, so always on.
 

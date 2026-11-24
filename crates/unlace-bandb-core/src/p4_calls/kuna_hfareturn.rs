@@ -14,9 +14,12 @@
 //! [`keep_lower_results`] also keeps the first lane of each lower floating
 //! output entry the RETURNs read as the function's own input.
 
+use crate::context::{OpId, VarnodeId};
 use crate::dtype::type_class;
 use crate::fspec::ParamActive;
 use crate::funcdata::Funcdata;
+use unlace_base::address::Address;
+use unlace_base::space::VarnodeStorage;
 use unlace_num::opcodes::OpCode;
 
 /// The index among the model's floating output entries of the entry holding
@@ -211,4 +214,81 @@ pub fn keep_lower_results(
         active.get_trial_mut(idx).mark_active();
     }
     retire_member_fill(data, active, return_ops, &entries);
+}
+
+/// Whether each of `members` (in trial order) is the first lane of a distinct
+/// floating output entry, ascending: the members of an aggregate returned one
+/// per vector register.
+pub fn per_register_members(data: &Funcdata, members: &[(VarnodeId, Address, i32)]) -> bool {
+    if members.len() < 2 {
+        return false;
+    }
+    let proto = data.get_func_proto();
+    if !proto.has_model() {
+        return false;
+    }
+    let Some(list) = proto.model().output_list() else {
+        return false;
+    };
+    let bases: Vec<(usize, u64)> = list
+        .get_entry()
+        .iter()
+        .filter(|e| e.get_type() == type_class::TYPECLASS_FLOAT && e.get_join_record().is_none())
+        .map(|e| (e.get_space().get_index() as usize, e.get_base()))
+        .collect();
+    let mut last = None;
+    for (_, addr, _) in members {
+        let Some(space) = addr.get_space() else {
+            return false;
+        };
+        let Some(pos) = bases
+            .iter()
+            .position(|(s, b)| *s == space.get_index() as usize && *b == addr.get_offset())
+        else {
+            return false;
+        };
+        if last.is_some_and(|l| pos <= l) {
+            return false;
+        }
+        last = Some(pos);
+    }
+    true
+}
+
+/// Join `members` (least significant first) into one value at a join address
+/// with a chain of PIECEs inserted before `retop`, the way the output rules'
+/// `join_per_primitive` lays an aggregate out.
+pub fn join_members(
+    data: &mut Funcdata,
+    retop: OpId,
+    members: &[(VarnodeId, Address, i32)],
+) -> Option<VarnodeId> {
+    let manage = data.get_arch().manage.clone();
+    let at = data.obank().get(retop)?.get_addr().clone();
+    let storage = |addr: &Address, size: i32| VarnodeStorage {
+        space: addr.get_space().cloned(),
+        offset: addr.get_offset(),
+        size: size as u32,
+    };
+    let (first, rest) = members.split_first()?;
+    let mut acc = first.0;
+    let mut pieces = vec![storage(&first.1, first.2)];
+    let mut total = first.2;
+    for (vn, addr, size) in rest {
+        pieces.insert(0, storage(addr, *size));
+        total += *size;
+        let join = manage.find_add_join(&pieces, 0).ok()?;
+        let joinaddr = join.get_unified().get_addr();
+        let newop = data.new_op(2, at.clone());
+        data.op_set_opcode_code(newop, OpCode::CPUI_PIECE);
+        let out = data.new_varnode_out(total, &joinaddr, newop).ok()?;
+        if let Some(v) = data.vbank_mut().get_mut(out) {
+            v.set_write_mask();
+        }
+        data.op_insert_before(newop, retop);
+        data.op_set_input(newop, *vn, 0).ok()?;
+        data.op_set_input(newop, acc, 1).ok()?;
+        acc = out;
+    }
+    Some(acc)
 }

@@ -1944,6 +1944,36 @@ impl ActionReturnRecovery {
             let _ = data.op_set_all_input(retop, &newparam);
             return;
         }
+        // (kuna) An aggregate returned one member per vector register (AAPCS64
+        // HFA in s0, s1, s2): join the members at a join address.  See
+        // [`crate::kuna_hfareturn`].
+        {
+            let mut members = Vec::new();
+            for i in 0..active.get_num_trials() {
+                let trial = active.get_trial(i);
+                if !trial.is_used() || trial.get_slot() >= num_input {
+                    break;
+                }
+                if let Some(vn) = data
+                    .obank()
+                    .get(retop)
+                    .and_then(|o| o.get_in(trial.get_slot()))
+                {
+                    members.push((vn, trial.get_address().clone(), trial.get_size()));
+                }
+            }
+            if crate::kuna_hfareturn::per_register_members(data, &members) {
+                if let Some(joined) = crate::kuna_hfareturn::join_members(data, retop, &members) {
+                    let mut finalparam = Vec::new();
+                    if let Some(in0) = data.obank().get(retop).and_then(|o| o.get_in(0)) {
+                        finalparam.push(in0);
+                    }
+                    finalparam.push(joined);
+                    let _ = data.op_set_all_input(retop, &finalparam);
+                    return;
+                }
+            }
+        }
         // Many-piece single-container concatenation (coreaction.cc:1915-1951):
         // walk the contiguous used trials, building a PIECE chain at the earliest
         // address.  Not reached by the default x86-64 register models (which

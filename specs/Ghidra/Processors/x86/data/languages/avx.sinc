@@ -529,27 +529,27 @@ define pcodeop vcmpss_avx ;
 }
 
 # COMISD 3-186 PAGE 756 LINE 40860
-:VCOMISD XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x2F; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
+:VCOMISD XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x2F; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
 {
     fucompe(XmmReg1[0,64], XmmReg2_m64[0,64]);
 }
 
 # COMISS 3-188 PAGE 758 LINE 40938
-:VCOMISS XmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x2F; (XmmReg1 & ZmmReg1) ... & XmmReg2_m32
+:VCOMISS XmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x2F; (XmmReg1 & ZmmReg1) ... & XmmReg2_m32
 {
 	fucompe(XmmReg1[0,32], XmmReg2_m32[0,32]);
 }
 
 # CVTDQ2PD 3-228 PAGE 798 LINE 43074
 define pcodeop vcvtdq2pd_avx ;
-:VCVTDQ2PD XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0xE6; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
+:VCVTDQ2PD XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xE6; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
 {
 	local tmp:16 = vcvtdq2pd_avx( XmmReg2_m64 );
 	ZmmReg1 = zext(tmp);
 }
 
 # CVTDQ2PD 3-228 PAGE 798 LINE 43077
-:VCVTDQ2PD YmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0xE6; (YmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VCVTDQ2PD YmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xE6; (YmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:32 = vcvtdq2pd_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
@@ -557,14 +557,14 @@ define pcodeop vcvtdq2pd_avx ;
 
 # CVTDQ2PS 3-232 PAGE 802 LINE 43242
 define pcodeop vcvtdq2ps_avx ;
-:VCVTDQ2PS XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x5B; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VCVTDQ2PS XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x5B; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = vcvtdq2ps_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
 }
 
 # CVTDQ2PS 3-232 PAGE 802 LINE 43245
-:VCVTDQ2PS YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x5B; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VCVTDQ2PS YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x5B; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:32 = vcvtdq2ps_avx( YmmReg2_m256 );
 	ZmmReg1 = zext(tmp);
@@ -572,14 +572,14 @@ define pcodeop vcvtdq2ps_avx ;
 
 # CVTPD2DQ 3-235 PAGE 805 LINE 43408
 define pcodeop vcvtpd2dq_avx ;
-:VCVTPD2DQ XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_WIG); byte=0xE6; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VCVTPD2DQ XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xE6; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = vcvtpd2dq_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
 }
 
 # CVTPD2DQ 3-235 PAGE 805 LINE 43411
-:VCVTPD2DQ XmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_WIG); byte=0xE6; (XmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VCVTPD2DQ XmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F2) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xE6; (XmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:16 = vcvtpd2dq_avx( YmmReg2_m256 );
 	ZmmReg1 = zext(tmp);
@@ -587,14 +587,14 @@ define pcodeop vcvtpd2dq_avx ;
 
 # CVTPD2PS 3-240 PAGE 810 LINE 43643
 define pcodeop vcvtpd2ps_avx ;
-:VCVTPD2PS XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x5A; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VCVTPD2PS XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x5A; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = vcvtpd2ps_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
 }
 
 # CVTPD2PS 3-240 PAGE 810 LINE 43646
-:VCVTPD2PS XmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x5A; (XmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VCVTPD2PS XmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x5A; (XmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:16 = vcvtpd2ps_avx( YmmReg2_m256 );
 	ZmmReg1 = zext(tmp);
@@ -602,14 +602,14 @@ define pcodeop vcvtpd2ps_avx ;
 
 # CVTPS2DQ 3-246 PAGE 816 LINE 43927
 define pcodeop vcvtps2dq_avx ;
-:VCVTPS2DQ XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x5B; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VCVTPS2DQ XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x5B; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = vcvtps2dq_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
 }
 
 # CVTPS2DQ 3-246 PAGE 816 LINE 43930
-:VCVTPS2DQ YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x5B; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VCVTPS2DQ YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x5B; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:32 = vcvtps2dq_avx( YmmReg2_m256 );
 	ZmmReg1 = zext(tmp);
@@ -617,21 +617,21 @@ define pcodeop vcvtps2dq_avx ;
 
 # CVTPS2PD 3-249 PAGE 819 LINE 44098
 define pcodeop vcvtps2pd_avx ;
-:VCVTPS2PD XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x5A; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
+:VCVTPS2PD XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x5A; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
 {
 	local tmp:16 = vcvtps2pd_avx( XmmReg2_m64 );
 	ZmmReg1 = zext(tmp);
 }
 
 # CVTPS2PD 3-249 PAGE 819 LINE 44101
-:VCVTPS2PD YmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x5A; (YmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VCVTPS2PD YmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x5A; (YmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:32 = vcvtps2pd_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
 }
 
 # CVTSD2SI 3-253 PAGE 823 LINE 44315
-:VCVTSD2SI Reg32, XmmReg2_m64 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W0); byte=0x2D; Reg32 ... & check_Reg32_dest ... & XmmReg2_m64
+:VCVTSD2SI Reg32, XmmReg2_m64 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F2) & $(VEX_0F) & vexVVVV=0 & $(VEX_W0_COMPAT); byte=0x2D; Reg32 ... & check_Reg32_dest ... & XmmReg2_m64
 {
 	Reg32 = trunc(round(XmmReg2_m64[0,64]));
 	build check_Reg32_dest;
@@ -639,7 +639,7 @@ define pcodeop vcvtps2pd_avx ;
 
 # CVTSD2SI 3-253 PAGE 823 LINE 44317
 @ifdef IA64
-:VCVTSD2SI Reg64, XmmReg2_m64 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W1); byte=0x2D; Reg64 ... & XmmReg2_m64
+:VCVTSD2SI Reg64, XmmReg2_m64 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F2) & $(VEX_0F) & vexVVVV=0 & $(VEX_W1); byte=0x2D; Reg64 ... & XmmReg2_m64
 {
 	Reg64 = round(XmmReg2_m64[0,64]);
 }
@@ -655,7 +655,7 @@ define pcodeop vcvtps2pd_avx ;
 }
 
 # CVTSI2SD 3-257 PAGE 827 LINE 44516
-:VCVTSI2SD XmmReg1, vexVVVV_XmmReg, rm32 is $(VEX_NDS) & $(VEX_LIG) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W0) & vexVVVV_XmmReg; byte=0x2A; (XmmReg1 & ZmmReg1) ... & rm32
+:VCVTSI2SD XmmReg1, vexVVVV_XmmReg, rm32 is $(VEX_NDS) & $(VEX_LIG) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W0_COMPAT) & vexVVVV_XmmReg; byte=0x2A; (XmmReg1 & ZmmReg1) ... & rm32
 {
 	local tmp:8 = int2float(rm32);
 	XmmReg1[0,64] = tmp;
@@ -675,7 +675,7 @@ define pcodeop vcvtps2pd_avx ;
 @endif
 
 # CVTSI2SS 3-259 PAGE 829 LINE 44632
-:VCVTSI2SS XmmReg1, vexVVVV_XmmReg, rm32 is $(VEX_NDS) & $(VEX_LIG) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_W0) & vexVVVV_XmmReg; byte=0x2A; (XmmReg1 & ZmmReg1) ... & rm32
+:VCVTSI2SS XmmReg1, vexVVVV_XmmReg, rm32 is $(VEX_NDS) & $(VEX_LIG) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_W0_COMPAT) & vexVVVV_XmmReg; byte=0x2A; (XmmReg1 & ZmmReg1) ... & rm32
 {
 	local tmp:4 = int2float( rm32 );
 	XmmReg1[0,32] = tmp;
@@ -704,7 +704,7 @@ define pcodeop vcvtps2pd_avx ;
 }
 
 # CVTSS2SI 3-263 PAGE 833 LINE 44835
-:VCVTSS2SI Reg32, XmmReg2_m32         is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_W0); byte=0x2D; Reg32 ... & check_Reg32_dest ... & XmmReg2_m32
+:VCVTSS2SI Reg32, XmmReg2_m32         is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_W0_COMPAT); byte=0x2D; Reg32 ... & check_Reg32_dest ... & XmmReg2_m32
 {
 	Reg32 = trunc(round(XmmReg2_m32[0,32]));
 	build check_Reg32_dest;
@@ -712,7 +712,7 @@ define pcodeop vcvtps2pd_avx ;
 
 # CVTSS2SI 3-263 PAGE 833 LINE 44837
 @ifdef IA64
-:VCVTSS2SI Reg64, XmmReg2_m32         is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_W1); byte=0x2D; Reg64 ... & XmmReg2_m32
+:VCVTSS2SI Reg64, XmmReg2_m32         is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_W1); byte=0x2D; Reg64 ... & XmmReg2_m32
 {
 	Reg64 = trunc(round(XmmReg2_m32[0,32]));
 }
@@ -720,7 +720,7 @@ define pcodeop vcvtps2pd_avx ;
 @endif
 
 # CVTTPD2DQ 3-265 PAGE 835 LINE 44930
-:VCVTTPD2DQ XmmReg1, XmmReg2_m128     is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0xE6; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VCVTTPD2DQ XmmReg1, XmmReg2_m128     is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xE6; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = XmmReg2_m128;
 	XmmReg1[0,32] = trunc(tmp[0,64]);
@@ -731,7 +731,7 @@ define pcodeop vcvtps2pd_avx ;
 }
 
 # CVTTPD2DQ 3-265 PAGE 835 LINE 44933
-:VCVTTPD2DQ XmmReg1, YmmReg2_m256     is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0xE6; (XmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VCVTTPD2DQ XmmReg1, YmmReg2_m256     is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xE6; (XmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:32 = YmmReg2_m256;
 	XmmReg1[0,32] = trunc(tmp[0,64]);
@@ -742,7 +742,7 @@ define pcodeop vcvtps2pd_avx ;
 }
 
 # CVTTPS2DQ 3-270 PAGE 840 LINE 45163
-:VCVTTPS2DQ XmmReg1, XmmReg2_m128     is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x5B; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VCVTTPS2DQ XmmReg1, XmmReg2_m128     is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x5B; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = XmmReg2_m128;
 	XmmReg1[0,32] = trunc(tmp[0,32]);
@@ -753,7 +753,7 @@ define pcodeop vcvtps2pd_avx ;
 }
 
 # CVTTPS2DQ 3-270 PAGE 840 LINE 45166
-:VCVTTPS2DQ YmmReg1, YmmReg2_m256     is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x5B; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VCVTTPS2DQ YmmReg1, YmmReg2_m256     is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x5B; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:32 = YmmReg2_m256;
 	YmmReg1[0,32] = trunc(tmp[0,32]);
@@ -768,7 +768,7 @@ define pcodeop vcvtps2pd_avx ;
 }
 
 # CVTTSD2SI 3-274 PAGE 844 LINE 45379
-:VCVTTSD2SI Reg32, XmmReg2_m64        is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W0); byte=0x2C; Reg32 ... & check_Reg32_dest ... & XmmReg2_m64
+:VCVTTSD2SI Reg32, XmmReg2_m64        is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F2) & $(VEX_0F) & vexVVVV=0 & $(VEX_W0_COMPAT); byte=0x2C; Reg32 ... & check_Reg32_dest ... & XmmReg2_m64
 {
 	Reg32 = trunc(XmmReg2_m64[0,64]);
 	build check_Reg32_dest;
@@ -776,7 +776,7 @@ define pcodeop vcvtps2pd_avx ;
 
 # CVTTSD2SI 3-274 PAGE 844 LINE 45382
 @ifdef IA64
-:VCVTTSD2SI Reg64, XmmReg2_m64        is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W1); byte=0x2C; Reg64 ... & XmmReg2_m64
+:VCVTTSD2SI Reg64, XmmReg2_m64        is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F2) & $(VEX_0F) & vexVVVV=0 & $(VEX_W1); byte=0x2C; Reg64 ... & XmmReg2_m64
 {
 	Reg64 = trunc(XmmReg2_m64[0,64]);
 }
@@ -784,7 +784,7 @@ define pcodeop vcvtps2pd_avx ;
 @endif
 
 # CVTTSS2SI 3-276 PAGE 846 LINE 45473
-:VCVTTSS2SI Reg32, XmmReg2_m32        is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_W0); byte=0x2C; Reg32 ... & check_Reg32_dest ... & XmmReg2_m32
+:VCVTTSS2SI Reg32, XmmReg2_m32        is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_W0_COMPAT); byte=0x2C; Reg32 ... & check_Reg32_dest ... & XmmReg2_m32
 {
 	Reg32 = trunc(XmmReg2_m32[0,32]);
 	build check_Reg32_dest;
@@ -792,7 +792,7 @@ define pcodeop vcvtps2pd_avx ;
 
 # CVTTSS2SI 3-276 PAGE 846 LINE 45476
 @ifdef IA64
-:VCVTTSS2SI Reg64, XmmReg2_m32        is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_W1); byte=0x2C; Reg64 ... & XmmReg2_m32
+:VCVTTSS2SI Reg64, XmmReg2_m32        is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_W1); byte=0x2C; Reg64 ... & XmmReg2_m32
 {
 	Reg64 = trunc(XmmReg2_m32[0,32]);
 }
@@ -869,7 +869,7 @@ define pcodeop vdpps_avx ;
 
 # EXTRACTPS 3-307 PAGE 877 LINE 46978
 define pcodeop vextractps_avx ;
-:VEXTRACTPS rm32, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG); byte=0x17; XmmReg1 ... & rm32; imm8
+:VEXTRACTPS rm32, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_WIG); byte=0x17; XmmReg1 ... & rm32; imm8
 {
 	rm32 = vextractps_avx( XmmReg1, imm8:1 );
 }
@@ -949,14 +949,14 @@ define pcodeop vinsertps_avx ;
 
 # LDDQU 3-518 PAGE 1088 LINE 57123
 define pcodeop vlddqu_avx ;
-:VLDDQU XmmReg1, m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_WIG); byte=0xF0; (XmmReg1 & ZmmReg1) ... & m128
+:VLDDQU XmmReg1, m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xF0; (XmmReg1 & ZmmReg1) ... & m128
 {
 	local tmp:16 = vlddqu_avx( m128 );
 	ZmmReg1 = zext(tmp);
 }
 
 # LDDQU 3-518 PAGE 1088 LINE 57126
-:VLDDQU YmmReg1, m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_WIG); byte=0xF0; (YmmReg1 & ZmmReg1) ... & m256
+:VLDDQU YmmReg1, m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F2) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xF0; (YmmReg1 & ZmmReg1) ... & m256
 {
 	local tmp:32 = vlddqu_avx( m256 );
 	ZmmReg1 = zext(tmp);
@@ -964,7 +964,7 @@ define pcodeop vlddqu_avx ;
 
 # LDMXCSR 3-520 PAGE 1090 LINE 57208
 define pcodeop vldmxcsr_avx ;
-:VLDMXCSR m32 is $(VEX_NONE) & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0xAE; reg_opcode=2 ... & m32
+:VLDMXCSR m32 is $(VEX_NONE) & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xAE; reg_opcode=2 ... & m32
 {
 	vldmxcsr_avx( m32 );
 	# TODO missing destination or side effects
@@ -972,7 +972,7 @@ define pcodeop vldmxcsr_avx ;
 
 # MASKMOVDQU 4-8 PAGE 1128 LINE 59041
 define pcodeop vmaskmovdqu_avx ;
-:VMASKMOVDQU XmmReg1, XmmReg2 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0xF7; XmmReg1 & (mod=0x3 & XmmReg2)
+:VMASKMOVDQU XmmReg1, XmmReg2 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xF7; XmmReg1 & (mod=0x3 & XmmReg2)
 {
 	vmaskmovdqu_avx( XmmReg1, XmmReg2 );
 	# TODO missing destination or side effects
@@ -1071,35 +1071,35 @@ define pcodeop vminss_avx ;
 }
 
 # MOVD/MOVQ 4-55 PAGE 1175 LINE 61358
-:VMOVD XmmReg1, rm32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0x6E; (XmmReg1 & ZmmReg1) ... & rm32
+:VMOVD XmmReg1, rm32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_W0_COMPAT); byte=0x6E; (XmmReg1 & ZmmReg1) ... & rm32
 {
 	ZmmReg1 = zext( rm32 );
 }
 
 # MOVD/MOVQ 4-55 PAGE 1175 LINE 61360
 @ifdef IA64
-:VMOVQ XmmReg1, rm64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1); byte=0x6E; (XmmReg1 & ZmmReg1) ... & rm64
+:VMOVQ XmmReg1, rm64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_W1); byte=0x6E; (XmmReg1 & ZmmReg1) ... & rm64
 {
 	ZmmReg1 = zext( rm64 );
 }
 @endif
 
 # MOVD/MOVQ 4-55 PAGE 1175 LINE 61362
-:VMOVD rm32, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0x7E; XmmReg1 ... & rm32
+:VMOVD rm32, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_W0_COMPAT); byte=0x7E; XmmReg1 ... & rm32
 {
 	rm32 = XmmReg1 [0,32];
 }
 
 # MOVD/MOVQ 4-55 PAGE 1175 LINE 61364
 @ifdef IA64
-:VMOVQ rm64, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1); byte=0x7E; XmmReg1 ... & rm64
+:VMOVQ rm64, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_W1); byte=0x7E; XmmReg1 ... & rm64
 {
 	rm64 = XmmReg1 [0,64];
 }
 @endif
 
 # MOVDDUP 4-59 PAGE 1179 LINE 61521
-:VMOVDDUP XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_WIG); byte=0x12; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
+:VMOVDDUP XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x12; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
 {
 	local tmp:8 = XmmReg2_m64[0,64];
 	XmmReg1[0,64] = tmp;
@@ -1108,7 +1108,7 @@ define pcodeop vminss_avx ;
 }
 
 # MOVDDUP 4-59 PAGE 1179 LINE 61523
-:VMOVDDUP YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_WIG); byte=0x12; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VMOVDDUP YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F2) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x12; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:32 = YmmReg2_m256;
 	local tmp1:8 = tmp[0,64];
@@ -1121,33 +1121,33 @@ define pcodeop vminss_avx ;
 }
 
 # MOVDQU,VMOVDQU8/16/32/64 4-67 PAGE 1187 LINE 61930
-:VMOVDQU XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x6F; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VMOVDQU XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x6F; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = XmmReg2_m128;
 	ZmmReg1 = zext(tmp);
 }
 
 # MOVDQU,VMOVDQU8/16/32/64 4-67 PAGE 1187 LINE 61932
-:VMOVDQU XmmReg2_m128, XmmReg1                is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x7F; (XmmReg1 & XmmReg2_m128_extend) ... & XmmReg2_m128
+:VMOVDQU XmmReg2_m128, XmmReg1                is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x7F; (XmmReg1 & XmmReg2_m128_extend) ... & XmmReg2_m128
 {
 	XmmReg2_m128 = XmmReg1;
 	build XmmReg2_m128_extend;
 }
 
 # MOVDQU,VMOVDQU8/16/32/64 4-67 PAGE 1187 LINE 61934
-:VMOVDQU YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x6F; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VMOVDQU YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x6F; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:32 = YmmReg2_m256;
 	ZmmReg1 = zext(tmp);
 }
 
 # MOVDQU,VMOVDQU8/16/32/64 4-67 PAGE 1187 LINE 61936
-:VMOVDQU m256, YmmReg1 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x7F; YmmReg1 ... & m256
+:VMOVDQU m256, YmmReg1 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x7F; YmmReg1 ... & m256
 {
 	m256 = YmmReg1;
 }
 
-:VMOVDQU YmmReg2, YmmReg1 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x7F; YmmReg1 & (mod=3 & ZmmReg2 & YmmReg2)
+:VMOVDQU YmmReg2, YmmReg1 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x7F; YmmReg1 & (mod=3 & ZmmReg2 & YmmReg2)
 {
 	ZmmReg2 = zext( YmmReg1 );
 }
@@ -1169,7 +1169,7 @@ define pcodeop vmovhpd_avx ;
 }
 
 # MOVHPD 4-78 PAGE 1198 LINE 62489
-:VMOVHPD m64, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x17; XmmReg1 ... & m64
+:VMOVHPD m64, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x17; XmmReg1 ... & m64
 {
 	m64 = vmovhpd_avx( XmmReg1 );
 }
@@ -1183,7 +1183,7 @@ define pcodeop vmovhps_avx ;
 }
 
 # MOVHPS 4-80 PAGE 1200 LINE 62576
-:VMOVHPS m64, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x17; XmmReg1 ... & m64
+:VMOVHPS m64, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x17; XmmReg1 ... & m64
 {
 	m64 = vmovhps_avx( XmmReg1 );
 }
@@ -1205,7 +1205,7 @@ define pcodeop vmovlpd_avx ;
 }
 
 # MOVLPD 4-84 PAGE 1204 LINE 62737
-:VMOVLPD m64, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x13; XmmReg1 ... & m64
+:VMOVLPD m64, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x13; XmmReg1 ... & m64
 {
 	m64 = vmovlpd_avx( XmmReg1 );
 }
@@ -1219,21 +1219,21 @@ define pcodeop vmovlps_avx ;
 }
 
 # MOVLPS 4-86 PAGE 1206 LINE 62822
-:VMOVLPS m64, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x13; XmmReg1 ... & m64
+:VMOVLPS m64, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x13; XmmReg1 ... & m64
 {
 	m64 = vmovlps_avx( XmmReg1 );
 }
 
 # MOVMSKPD 4-88 PAGE 1208 LINE 62906
 define pcodeop vmovmskpd_avx ;
-:VMOVMSKPD Reg32, XmmReg2 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x50; Reg32 & check_Reg32_dest & (mod=0x3 & XmmReg2)
+:VMOVMSKPD Reg32, XmmReg2 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x50; Reg32 & check_Reg32_dest & (mod=0x3 & XmmReg2)
 {
 	Reg32 = vmovmskpd_avx( XmmReg2 );
 	build check_Reg32_dest;
 }
 
 # MOVMSKPD 4-88 PAGE 1208 LINE 62910
-:VMOVMSKPD Reg32, YmmReg2 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x50; Reg32 & check_Reg32_dest & (mod=0x3 & YmmReg2)
+:VMOVMSKPD Reg32, YmmReg2 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x50; Reg32 & check_Reg32_dest & (mod=0x3 & YmmReg2)
 {
 	Reg32 = vmovmskpd_avx( YmmReg2 );
 	build check_Reg32_dest;
@@ -1241,14 +1241,14 @@ define pcodeop vmovmskpd_avx ;
 
 # MOVMSKPS 4-90 PAGE 1210 LINE 62986
 define pcodeop vmovmskps_avx ;
-:VMOVMSKPS Reg32, XmmReg2 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x50; Reg32 & check_Reg32_dest & (mod=0x3 & XmmReg2)
+:VMOVMSKPS Reg32, XmmReg2 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x50; Reg32 & check_Reg32_dest & (mod=0x3 & XmmReg2)
 {
 	Reg32 = vmovmskps_avx( XmmReg2 );
 	build check_Reg32_dest;
 }
 
 # MOVMSKPS 4-90 PAGE 1210 LINE 62990
-:VMOVMSKPS Reg32, YmmReg2 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x50; Reg32 & check_Reg32_dest & (mod=0x3 & YmmReg2)
+:VMOVMSKPS Reg32, YmmReg2 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x50; Reg32 & check_Reg32_dest & (mod=0x3 & YmmReg2)
 {
 	Reg32 = vmovmskps_avx( YmmReg2 );
 	build check_Reg32_dest;
@@ -1256,7 +1256,7 @@ define pcodeop vmovmskps_avx ;
 
 # MOVNTDQA 4-92 PAGE 1212 LINE 63084
 define pcodeop vmovntdqa_avx ;
-:VMOVNTDQA XmmReg1, m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x2A; (XmmReg1 & ZmmReg1) ... & m128
+:VMOVNTDQA XmmReg1, m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x2A; (XmmReg1 & ZmmReg1) ... & m128
 {
 	local tmp:16 = vmovntdqa_avx( m128 );
 	ZmmReg1 = zext(tmp);
@@ -1264,70 +1264,70 @@ define pcodeop vmovntdqa_avx ;
 
 # MOVNTDQ 4-94 PAGE 1214 LINE 63187
 define pcodeop vmovntdq_avx ;
-:VMOVNTDQ m128, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0xE7; XmmReg1 ... & m128
+:VMOVNTDQ m128, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xE7; XmmReg1 ... & m128
 {
 	m128 = vmovntdq_avx( XmmReg1 );
 }
 
 # MOVNTDQ 4-94 PAGE 1214 LINE 63189
-:VMOVNTDQ m256, YmmReg1 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0xE7; YmmReg1 ... & m256
+:VMOVNTDQ m256, YmmReg1 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xE7; YmmReg1 ... & m256
 {
 	m256 = vmovntdq_avx( YmmReg1 );
 }
 
 # MOVNTPD 4-98 PAGE 1218 LINE 63357
 define pcodeop vmovntpd_avx ;
-:VMOVNTPD m128, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x2B; XmmReg1 ... & m128
+:VMOVNTPD m128, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x2B; XmmReg1 ... & m128
 {
 	m128 = vmovntpd_avx( XmmReg1 );
 }
 
 # MOVNTPD 4-98 PAGE 1218 LINE 63359
-:VMOVNTPD m256, YmmReg1 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x2B; YmmReg1 ... & m256
+:VMOVNTPD m256, YmmReg1 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x2B; YmmReg1 ... & m256
 {
 	m256 = vmovntpd_avx( YmmReg1 );
 }
 
 # MOVNTPS 4-100 PAGE 1220 LINE 63441
 define pcodeop vmovntps_avx ;
-:VMOVNTPS m128, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x2B; XmmReg1 ... & m128
+:VMOVNTPS m128, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x2B; XmmReg1 ... & m128
 {
 	m128 = vmovntps_avx( XmmReg1 );
 }
 
 # MOVNTPS 4-100 PAGE 1220 LINE 63443
-:VMOVNTPS m256, YmmReg1 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x2B; YmmReg1 ... & m256
+:VMOVNTPS m256, YmmReg1 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x2B; YmmReg1 ... & m256
 {
 	m256 = vmovntps_avx( YmmReg1 );
 }
 
 # MOVQ 4-103 PAGE 1223 LINE 63579
-:VMOVQ XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x7E; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
+:VMOVQ XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x7E; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
 {
 	ZmmReg1 = zext(XmmReg2_m64[0,64]);
 }
 
 # MOVQ 4-103 PAGE 1223 LINE 63585
-:VMOVQ m64, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0xD6; XmmReg1 ... & m64
+:VMOVQ m64, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xD6; XmmReg1 ... & m64
 {
 	m64 = XmmReg1[0,64];
 }
 
-:VMOVQ XmmReg2, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0xD6; XmmReg1 & (mod=3 & XmmReg2 & ZmmReg2 )
+:VMOVQ XmmReg2, XmmReg1 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xD6; XmmReg1 & (mod=3 & XmmReg2 & ZmmReg2 )
 {
 	ZmmReg2 = zext( XmmReg1[0,64] );
 }
 
 # MOVSHDUP 4-114 PAGE 1234 LINE 64126
 define pcodeop vmovshdup_avx ;
-:VMOVSHDUP XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x16; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VMOVSHDUP XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x16; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = vmovshdup_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
 }
 
 # MOVSHDUP 4-114 PAGE 1234 LINE 64128
-:VMOVSHDUP YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x16; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VMOVSHDUP YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x16; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:32 = vmovshdup_avx( YmmReg2_m256 );
 	ZmmReg1 = zext(tmp);
@@ -1335,14 +1335,14 @@ define pcodeop vmovshdup_avx ;
 
 # MOVSLDUP 4-117 PAGE 1237 LINE 64280
 define pcodeop vmovsldup_avx ;
-:VMOVSLDUP XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x12; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VMOVSLDUP XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x12; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = vmovsldup_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
 }
 
 # MOVSLDUP 4-117 PAGE 1237 LINE 64282
-:VMOVSLDUP YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x12; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VMOVSLDUP YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x12; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:32 = vmovsldup_avx( YmmReg2_m256 );
 	ZmmReg1 = zext(tmp);
@@ -1358,7 +1358,7 @@ define pcodeop vmovsldup_avx ;
 }
 
 # MOVSS 4-120 PAGE 1240 LINE 64435
-:VMOVSS XmmReg1, m32 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x10; (XmmReg1 & ZmmReg1) ... & m32
+:VMOVSS XmmReg1, m32 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x10; (XmmReg1 & ZmmReg1) ... & m32
 {
 	ZmmReg1 = zext( m32 );
 }
@@ -1372,39 +1372,39 @@ define pcodeop vmovsldup_avx ;
 }
 
 # MOVSS 4-120 PAGE 1240 LINE 64441
-:VMOVSS m32, XmmReg1 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x11; XmmReg1 ... & m32
+:VMOVSS m32, XmmReg1 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x11; XmmReg1 ... & m32
 {
 	m32 = XmmReg1[0,32];
 }
 
 # MOVUPD 4-126 PAGE 1246 LINE 64687
-:VMOVUPD XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x10; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VMOVUPD XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x10; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
     local tmp:16 = XmmReg2_m128;
 	ZmmReg1 = zext(tmp);
 }
 
 # MOVUPD 4-126 PAGE 1246 LINE 64689
-:VMOVUPD XmmReg2_m128, XmmReg1                is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x11; (XmmReg1 & XmmReg2_m128_extend) ... & XmmReg2_m128
+:VMOVUPD XmmReg2_m128, XmmReg1                is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x11; (XmmReg1 & XmmReg2_m128_extend) ... & XmmReg2_m128
 {
 	XmmReg2_m128 = XmmReg1;
 	build XmmReg2_m128_extend;
 }
 
 # MOVUPD 4-126 PAGE 1246 LINE 64691
-:VMOVUPD YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x10; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VMOVUPD YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x10; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:32 = YmmReg2_m256;
 	ZmmReg1 = zext(tmp);
 }
 
 # MOVUPD 4-126 PAGE 1246 LINE 64693
-:VMOVUPD m256, YmmReg1 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x11; YmmReg1 ... & m256
+:VMOVUPD m256, YmmReg1 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x11; YmmReg1 ... & m256
 {
 	m256 = YmmReg1;
 }
 
-:VMOVUPD YmmReg2, YmmReg1 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x11; YmmReg1 & ( mod=3 & YmmReg2 & ZmmReg2 )
+:VMOVUPD YmmReg2, YmmReg1 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x11; YmmReg1 & ( mod=3 & YmmReg2 & ZmmReg2 )
 {
 	local tmp:32 = YmmReg1;
 	ZmmReg2 = zext(tmp);
@@ -1514,7 +1514,7 @@ define pcodeop vorps_avx ;
 
 # PABSB/PABSW/PABSD/PABSQ 4-180 PAGE 1300 LINE 67302
 define pcodeop vpabsb_avx ;
-:VPABSB XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x1C; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VPABSB XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x1C; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = vpabsb_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
@@ -1522,7 +1522,7 @@ define pcodeop vpabsb_avx ;
 
 # PABSB/PABSW/PABSD/PABSQ 4-180 PAGE 1300 LINE 67305
 define pcodeop vpabsw_avx ;
-:VPABSW XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x1D; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VPABSW XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x1D; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = vpabsw_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
@@ -1530,7 +1530,7 @@ define pcodeop vpabsw_avx ;
 
 # PABSB/PABSW/PABSD/PABSQ 4-180 PAGE 1300 LINE 67308
 define pcodeop vpabsd_avx ;
-:VPABSD XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x1E; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VPABSD XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x1E; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = vpabsd_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
@@ -1714,7 +1714,7 @@ define pcodeop vpcmpeqd_avx ;
 
 # PCMPESTRI 4-253 PAGE 1373 LINE 71311
 define pcodeop vpcmpestri_avx ;
-:VPCMPESTRI XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A); byte=0x61; XmmReg1 ... & XmmReg2_m128; imm8
+:VPCMPESTRI XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0; byte=0x61; XmmReg1 ... & XmmReg2_m128; imm8
 {
 	vpcmpestri_avx( XmmReg1, XmmReg2_m128, imm8:1 );
 	# TODO missing destination or side effects
@@ -1722,7 +1722,7 @@ define pcodeop vpcmpestri_avx ;
 
 # PCMPESTRM 4-255 PAGE 1375 LINE 71395
 define pcodeop vpcmpestrm_avx ;
-:VPCMPESTRM XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A); byte=0x60; XmmReg1 ... & XmmReg2_m128; imm8
+:VPCMPESTRM XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0; byte=0x60; XmmReg1 ... & XmmReg2_m128; imm8
 {
 	vpcmpestrm_avx( XmmReg1, XmmReg2_m128, imm8:1 );
 	# TODO missing destination or side effects
@@ -1762,7 +1762,7 @@ define pcodeop vpcmpgtq_avx ;
 
 # PCMPISTRI 4-266 PAGE 1386 LINE 71966
 define pcodeop vpcmpistri_avx ;
-:VPCMPISTRI XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG); byte=0x63; XmmReg1 ... & XmmReg2_m128; imm8
+:VPCMPISTRI XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_WIG); byte=0x63; XmmReg1 ... & XmmReg2_m128; imm8
 {
 	vpcmpistri_avx( XmmReg1, XmmReg2_m128, imm8:1 );
 	# TODO missing destination or side effects
@@ -1770,7 +1770,7 @@ define pcodeop vpcmpistri_avx ;
 
 # PCMPISTRM 4-268 PAGE 1388 LINE 72052
 define pcodeop vpcmpistrm_avx ;
-:VPCMPISTRM XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG); byte=0x62; XmmReg1 ... & XmmReg2_m128; imm8
+:VPCMPISTRM XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_WIG); byte=0x62; XmmReg1 ... & XmmReg2_m128; imm8
 {
 	vpcmpistrm_avx( XmmReg1, XmmReg2_m128, imm8:1 );
 	# TODO missing destination or side effects
@@ -1778,7 +1778,7 @@ define pcodeop vpcmpistrm_avx ;
 
 # PEXTRB/PEXTRD/PEXTRQ 4-274 PAGE 1394 LINE 72322
 define pcodeop vpextrb_avx ;
-:VPEXTRB Rmr32, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x14; mod=3 & XmmReg1 & Rmr32 & check_Rmr32_dest; imm8
+:VPEXTRB Rmr32, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_WIG); byte=0x14; mod=3 & XmmReg1 & Rmr32 & check_Rmr32_dest; imm8
 {
 	local tmp8:1 = imm8;
 	local tmp = XmmReg1 >> (tmp8[0,3]*8);
@@ -1786,7 +1786,7 @@ define pcodeop vpextrb_avx ;
 	build check_Rmr32_dest;
 }
 
-:VPEXTRB m8, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x14; (XmmReg1 ... & m8); imm8
+:VPEXTRB m8, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_WIG); byte=0x14; (XmmReg1 ... & m8); imm8
 {
 	local tmp8:1 = imm8;
 	local tmp = XmmReg1 >> (tmp8[0,3]*8);
@@ -1795,14 +1795,14 @@ define pcodeop vpextrb_avx ;
 
 # PEXTRB/PEXTRD/PEXTRQ 4-274 PAGE 1394 LINE 72326
 define pcodeop vpextrd_avx ;
-:VPEXTRD Rmr32, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x16; mod=3 & XmmReg1 & Rmr32 & check_Rmr32_dest; imm8
+:VPEXTRD Rmr32, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_W0_COMPAT); byte=0x16; mod=3 & XmmReg1 & Rmr32 & check_Rmr32_dest; imm8
 {
 	local tmp = XmmReg1 >> (imm8*32);
 	Rmr32 = tmp(0);
 	build check_Rmr32_dest;
 }
 
-:VPEXTRD m32, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x16; XmmReg1 ... & m32; imm8
+:VPEXTRD m32, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_W0_COMPAT); byte=0x16; XmmReg1 ... & m32; imm8
 {
 	local tmp = XmmReg1 >> (imm8*32);
 	m32 = tmp(0);
@@ -1811,7 +1811,7 @@ define pcodeop vpextrd_avx ;
 # PEXTRB/PEXTRD/PEXTRQ 4-274 PAGE 1394 LINE 72330
 define pcodeop vpextrq_avx ;
 @ifdef IA64
-:VPEXTRQ rm64, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W1); byte=0x16; XmmReg1 ... & rm64; imm8
+:VPEXTRQ rm64, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_W1); byte=0x16; XmmReg1 ... & rm64; imm8
 {
 	rm64 = vpextrq_avx( XmmReg1, imm8:1 );
 }
@@ -1819,14 +1819,14 @@ define pcodeop vpextrq_avx ;
 
 # PEXTRW 4-277 PAGE 1397 LINE 72478
 define pcodeop vpextrw_avx ;
-:VPEXTRW Reg32, XmmReg2, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0xC5; Reg32 & check_Reg32_dest & (mod=0x3 & XmmReg2); imm8
+:VPEXTRW Reg32, XmmReg2, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xC5; Reg32 & check_Reg32_dest & (mod=0x3 & XmmReg2); imm8
 {
 	Reg32 = vpextrw_avx( XmmReg2, imm8:1 );
 	build check_Reg32_dest;
 }
 
 # PEXTRW 4-277 PAGE 1397 LINE 72483
-:VPEXTRW Reg32_m16, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x15; XmmReg1 ... & Reg32_m16; imm8
+:VPEXTRW Reg32_m16, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_WIG); byte=0x15; XmmReg1 ... & Reg32_m16; imm8
 {
 	Reg32_m16 = vpextrw_avx( XmmReg1, imm8:1 );
 	# TODO Reg64 = zext(Reg32)
@@ -1858,7 +1858,7 @@ define pcodeop vphaddsw_avx ;
 
 # PHMINPOSUW 4-286 PAGE 1406 LINE 72939
 define pcodeop vphminposuw_avx ;
-:VPHMINPOSUW XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x41; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VPHMINPOSUW XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x41; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = vphminposuw_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
@@ -1890,7 +1890,7 @@ define pcodeop vphsubsw_avx ;
 
 # PINSRB/PINSRD/PINSRQ 4-293 PAGE 1413 LINE 73321
 define pcodeop vpinsrb_avx ;
-:VPINSRB XmmReg1, vexVVVV_XmmReg, Reg32_m8, imm8 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0) & vexVVVV_XmmReg; byte=0x20; (XmmReg1 & ZmmReg1) ... & Reg32_m8; imm8
+:VPINSRB XmmReg1, vexVVVV_XmmReg, Reg32_m8, imm8 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG) & vexVVVV_XmmReg; byte=0x20; (XmmReg1 & ZmmReg1) ... & Reg32_m8; imm8
 {
 	local tmp:16 = vpinsrb_avx( vexVVVV_XmmReg, Reg32_m8, imm8:1 );
 	ZmmReg1 = zext(tmp);
@@ -1898,7 +1898,7 @@ define pcodeop vpinsrb_avx ;
 
 # PINSRB/PINSRD/PINSRQ 4-293 PAGE 1413 LINE 73324
 define pcodeop vpinsrd_avx ;
-:VPINSRD XmmReg1, vexVVVV_XmmReg, rm32, imm8 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0) & vexVVVV_XmmReg; byte=0x22; (XmmReg1 & ZmmReg1) ... & rm32; imm8
+:VPINSRD XmmReg1, vexVVVV_XmmReg, rm32, imm8 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0_COMPAT) & vexVVVV_XmmReg; byte=0x22; (XmmReg1 & ZmmReg1) ... & rm32; imm8
 {
 	local tmp:16 = vpinsrd_avx( vexVVVV_XmmReg, rm32, imm8:1 );
 	ZmmReg1 = zext(tmp);
@@ -1916,7 +1916,7 @@ define pcodeop vpinsrq_avx ;
 
 # PINSRW 4-296 PAGE 1416 LINE 73446
 define pcodeop vpinsrw_avx ;
-:VPINSRW XmmReg1, vexVVVV_XmmReg, Reg32_m16, imm8 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0) & vexVVVV_XmmReg; byte=0xC4; (XmmReg1 & ZmmReg1) ... & Reg32_m16; imm8
+:VPINSRW XmmReg1, vexVVVV_XmmReg, Reg32_m16, imm8 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG) & vexVVVV_XmmReg; byte=0xC4; (XmmReg1 & ZmmReg1) ... & Reg32_m16; imm8
 {
 	local tmp:16 = vpinsrw_avx( vexVVVV_XmmReg, Reg32_m16, imm8:1 );
 	ZmmReg1 = zext(tmp);
@@ -2036,7 +2036,7 @@ define pcodeop vpminud_avx ;
 
 # PMOVSX 4-340 PAGE 1460 LINE 75770
 define pcodeop vpmovsxbw_avx ;
-:VPMOVSXBW XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x20; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
+:VPMOVSXBW XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x20; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
 {
 	local tmp:16 = vpmovsxbw_avx( XmmReg2_m64 );
 	ZmmReg1 = zext(tmp);
@@ -2044,7 +2044,7 @@ define pcodeop vpmovsxbw_avx ;
 
 # PMOVSX 4-340 PAGE 1460 LINE 75772
 define pcodeop vpmovsxbd_avx ;
-:VPMOVSXBD XmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x21; (XmmReg1 & ZmmReg1) ... & XmmReg2_m32
+:VPMOVSXBD XmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x21; (XmmReg1 & ZmmReg1) ... & XmmReg2_m32
 {
 	local tmp:16 = vpmovsxbd_avx( XmmReg2_m32 );
 	ZmmReg1 = zext(tmp);
@@ -2052,7 +2052,7 @@ define pcodeop vpmovsxbd_avx ;
 
 # PMOVSX 4-340 PAGE 1460 LINE 75774
 define pcodeop vpmovsxbq_avx ;
-:VPMOVSXBQ XmmReg1, XmmReg2_m16 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x22; (XmmReg1 & ZmmReg1) ... & XmmReg2_m16
+:VPMOVSXBQ XmmReg1, XmmReg2_m16 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x22; (XmmReg1 & ZmmReg1) ... & XmmReg2_m16
 {
 	local tmp:16 = vpmovsxbq_avx( XmmReg2_m16 );
 	ZmmReg1 = zext(tmp);
@@ -2060,7 +2060,7 @@ define pcodeop vpmovsxbq_avx ;
 
 # PMOVSX 4-340 PAGE 1460 LINE 75776
 define pcodeop vpmovsxwd_avx ;
-:VPMOVSXWD XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x23; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
+:VPMOVSXWD XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x23; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
 {
 	local tmp:16 = vpmovsxwd_avx( XmmReg2_m64 );
 	ZmmReg1 = zext(tmp);
@@ -2068,7 +2068,7 @@ define pcodeop vpmovsxwd_avx ;
 
 # PMOVSX 4-340 PAGE 1460 LINE 75778
 define pcodeop vpmovsxwq_avx ;
-:VPMOVSXWQ XmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x24; (XmmReg1 & ZmmReg1) ... & XmmReg2_m32
+:VPMOVSXWQ XmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x24; (XmmReg1 & ZmmReg1) ... & XmmReg2_m32
 {
 	local tmp:16 = vpmovsxwq_avx( XmmReg2_m32 );
 	ZmmReg1 = zext(tmp);
@@ -2076,7 +2076,7 @@ define pcodeop vpmovsxwq_avx ;
 
 # PMOVSX 4-340 PAGE 1460 LINE 75780
 define pcodeop vpmovsxdq_avx ;
-:VPMOVSXDQ XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x25; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
+:VPMOVSXDQ XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x25; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
 {
 	local tmp:16 = vpmovsxdq_avx( XmmReg2_m64 );
 	ZmmReg1 = zext(tmp);
@@ -2084,7 +2084,7 @@ define pcodeop vpmovsxdq_avx ;
 
 # PMOVZX 4-350 PAGE 1470 LINE 76285
 define pcodeop vpmovzxbw_avx ;
-:VPMOVZXBW XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x30; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
+:VPMOVZXBW XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x30; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
 {
 	local tmp:16 = vpmovzxbw_avx( XmmReg2_m64 );
 	ZmmReg1 = zext(tmp);
@@ -2092,7 +2092,7 @@ define pcodeop vpmovzxbw_avx ;
 
 # PMOVZX 4-350 PAGE 1470 LINE 76288
 define pcodeop vpmovzxbd_avx ;
-:VPMOVZXBD XmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x31; (XmmReg1 & ZmmReg1) ... & XmmReg2_m32
+:VPMOVZXBD XmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x31; (XmmReg1 & ZmmReg1) ... & XmmReg2_m32
 {
 	local tmp:16 = vpmovzxbd_avx( XmmReg2_m32 );
 	ZmmReg1 = zext(tmp);
@@ -2100,7 +2100,7 @@ define pcodeop vpmovzxbd_avx ;
 
 # PMOVZX 4-350 PAGE 1470 LINE 76291
 define pcodeop vpmovzxbq_avx ;
-:VPMOVZXBQ XmmReg1, XmmReg2_m16 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x32; (XmmReg1 & ZmmReg1) ... & XmmReg2_m16
+:VPMOVZXBQ XmmReg1, XmmReg2_m16 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x32; (XmmReg1 & ZmmReg1) ... & XmmReg2_m16
 {
 	local tmp:16 = vpmovzxbq_avx( XmmReg2_m16 );
 	ZmmReg1 = zext(tmp);
@@ -2108,7 +2108,7 @@ define pcodeop vpmovzxbq_avx ;
 
 # PMOVZX 4-350 PAGE 1470 LINE 76294
 define pcodeop vpmovzxwd_avx ;
-:VPMOVZXWD XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x33; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
+:VPMOVZXWD XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x33; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
 {
 	local tmp:16 = vpmovzxwd_avx( XmmReg2_m64 );
 	ZmmReg1 = zext(tmp);
@@ -2116,7 +2116,7 @@ define pcodeop vpmovzxwd_avx ;
 
 # PMOVZX 4-350 PAGE 1470 LINE 76297
 define pcodeop vpmovzxwq_avx ;
-:VPMOVZXWQ XmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x34; (XmmReg1 & ZmmReg1) ... & XmmReg2_m32
+:VPMOVZXWQ XmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x34; (XmmReg1 & ZmmReg1) ... & XmmReg2_m32
 {
 	local tmp:16 = vpmovzxwq_avx( XmmReg2_m32 );
 	ZmmReg1 = zext(tmp);
@@ -2124,7 +2124,7 @@ define pcodeop vpmovzxwq_avx ;
 
 # PMOVZX 4-350 PAGE 1470 LINE 76301
 define pcodeop vpmovzxdq_avx ;
-:VPMOVZXDQ XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x35; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
+:VPMOVZXDQ XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x35; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
 {
 	local tmp:16 = vpmovzxdq_avx( XmmReg2_m64 );
 	ZmmReg1 = zext(tmp);
@@ -2212,7 +2212,7 @@ define pcodeop vpshufb_avx ;
 
 # PSHUFD 4-416 PAGE 1536 LINE 79651
 define pcodeop vpshufd_avx ;
-:VPSHUFD XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x70; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
+:VPSHUFD XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x70; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
 {
 	local tmp:16 = vpshufd_avx( XmmReg2_m128, imm8:1 );
 	ZmmReg1 = zext(tmp);
@@ -2220,7 +2220,7 @@ define pcodeop vpshufd_avx ;
 
 # PSHUFHW 4-420 PAGE 1540 LINE 79857
 define pcodeop vpshufhw_avx ;
-:VPSHUFHW XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & $(VEX_WIG); byte=0x70; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
+:VPSHUFHW XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x70; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
 {
 	local tmp:16 = vpshufhw_avx( XmmReg2_m128, imm8:1 );
 	ZmmReg1 = zext(tmp);
@@ -2228,7 +2228,7 @@ define pcodeop vpshufhw_avx ;
 
 # PSHUFLW 4-423 PAGE 1543 LINE 80032
 define pcodeop vpshuflw_avx ;
-:VPSHUFLW XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_WIG); byte=0x70; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
+:VPSHUFLW XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x70; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
 {
 	local tmp:16 = vpshuflw_avx( XmmReg2_m128, imm8:1 );
 	ZmmReg1 = zext(tmp);
@@ -2450,7 +2450,7 @@ define pcodeop vpsubusw_avx ;
 
 # PTEST 4-487 PAGE 1607 LINE 83728
 define pcodeop vptest_avx ;
-:VPTEST XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x17; XmmReg1 ... & XmmReg2_m128
+:VPTEST XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x17; XmmReg1 ... & XmmReg2_m128
 {
 	local val1 = XmmReg2_m128;
 	local val2 = XmmReg1;
@@ -2463,7 +2463,7 @@ define pcodeop vptest_avx ;
 }
 
 # PTEST 4-487 PAGE 1607 LINE 83730
-:VPTEST YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG); byte=0x17; YmmReg1 ... & YmmReg2_m256
+:VPTEST YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_WIG); byte=0x17; YmmReg1 ... & YmmReg2_m256
 {
 	local val1 = YmmReg2_m256;
 	local val2 = YmmReg1;
@@ -2548,14 +2548,14 @@ define pcodeop vpunpcklqdq_avx ;
 
 # RCPPS 4-526 PAGE 1646 LINE 85950
 define pcodeop vrcpps_avx ;
-:VRCPPS XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x53; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VRCPPS XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x53; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = vrcpps_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
 }
 
 # RCPPS 4-526 PAGE 1646 LINE 85953
-:VRCPPS YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x53; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VRCPPS YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x53; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:32 = vrcpps_avx( YmmReg2_m256 );
 	ZmmReg1 = zext(tmp);
@@ -2571,14 +2571,14 @@ define pcodeop vrcpss_avx ;
 
 # ROUNDPD 4-564 PAGE 1684 LINE 87791
 define pcodeop vroundpd_avx ;
-:VROUNDPD XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG); byte=0x09; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
+:VROUNDPD XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_WIG); byte=0x09; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
 {
 	local tmp:16 = vroundpd_avx( XmmReg2_m128, imm8:1 );
 	ZmmReg1 = zext(tmp);
 }
 
 # ROUNDPD 4-564 PAGE 1684 LINE 87795
-:VROUNDPD YmmReg1, YmmReg2_m256, imm8 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG); byte=0x09; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256; imm8
+:VROUNDPD YmmReg1, YmmReg2_m256, imm8 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_WIG); byte=0x09; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256; imm8
 {
 	local tmp:32 = vroundpd_avx( YmmReg2_m256, imm8:1 );
 	ZmmReg1 = zext(tmp);
@@ -2586,14 +2586,14 @@ define pcodeop vroundpd_avx ;
 
 # ROUNDPS 4-567 PAGE 1687 LINE 87934
 define pcodeop vroundps_avx ;
-:VROUNDPS XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG); byte=0x08; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
+:VROUNDPS XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_WIG); byte=0x08; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
 {
 	local tmp:16 = vroundps_avx( XmmReg2_m128, imm8:1 );
 	ZmmReg1 = zext(tmp);
 }
 
 # ROUNDPS 4-567 PAGE 1687 LINE 87938
-:VROUNDPS YmmReg1, YmmReg2_m256, imm8 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG); byte=0x08; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256; imm8
+:VROUNDPS YmmReg1, YmmReg2_m256, imm8 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_WIG); byte=0x08; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256; imm8
 {
 	local tmp:32 = vroundps_avx( YmmReg2_m256, imm8:1 );
 	ZmmReg1 = zext(tmp);
@@ -2617,14 +2617,14 @@ define pcodeop vroundss_avx ;
 
 # RSQRTPS 4-576 PAGE 1696 LINE 88301
 define pcodeop vrsqrtps_avx ;
-:VRSQRTPS XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x52; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VRSQRTPS XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x52; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = vrsqrtps_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
 }
 
 # RSQRTPS 4-576 PAGE 1696 LINE 88304
-:VRSQRTPS YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x52; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VRSQRTPS YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x52; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:32 = vrsqrtps_avx( YmmReg2_m256 );
 	ZmmReg1 = zext(tmp);
@@ -2670,14 +2670,14 @@ define pcodeop vshufps_avx ;
 
 # SQRTPD 4-632 PAGE 1752 LINE 91001
 define pcodeop vsqrtpd_avx ;
-:VSQRTPD XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x51; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VSQRTPD XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x51; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = vsqrtpd_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
 }
 
 # SQRTPD 4-632 PAGE 1752 LINE 91004
-:VSQRTPD YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x51; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VSQRTPD YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x51; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:32 = vsqrtpd_avx( YmmReg2_m256 );
 	ZmmReg1 = zext(tmp);
@@ -2685,14 +2685,14 @@ define pcodeop vsqrtpd_avx ;
 
 # SQRTPS 4-635 PAGE 1755 LINE 91133
 define pcodeop vsqrtps_avx ;
-:VSQRTPS XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x51; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VSQRTPS XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x51; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:16 = vsqrtps_avx( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
 }
 
 # SQRTPS 4-635 PAGE 1755 LINE 91136
-:VSQRTPS YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x51; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+:VSQRTPS YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x51; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
 {
 	local tmp:32 = vsqrtps_avx( YmmReg2_m256 );
 	ZmmReg1 = zext(tmp);
@@ -2716,7 +2716,7 @@ define pcodeop vsqrtss_avx ;
 
 # STMXCSR 4-647 PAGE 1767 LINE 91697
 define pcodeop vstmxcsr_avx ;
-:VSTMXCSR m32 is $(VEX_NONE) & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0xAE; reg_opcode=3 ... & m32
+:VSTMXCSR m32 is $(VEX_NONE) & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0xAE; reg_opcode=3 ... & m32
 {
 	m32 = vstmxcsr_avx(  );
 }
@@ -2770,7 +2770,7 @@ define pcodeop vsubps_avx ;
 }
 
 # UCOMISD 4-683 PAGE 1803 LINE 93421
-:VUCOMISD XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_WIG); byte=0x2E; XmmReg1 ... & XmmReg2_m64
+:VUCOMISD XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_66) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x2E; XmmReg1 ... & XmmReg2_m64
 {
 	val1:8 = XmmReg1[0,64];
 	val2:8 = XmmReg2_m64[0,64];
@@ -2778,7 +2778,7 @@ define pcodeop vsubps_avx ;
 }
 
 # UCOMISS 4-685 PAGE 1805 LINE 93504
-:VUCOMISS XmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_WIG); byte=0x2E; XmmReg1 ... & XmmReg2_m32
+:VUCOMISS XmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_LIG) & $(VEX_PRE_NONE) & $(VEX_0F) & vexVVVV=0 & $(VEX_WIG); byte=0x2E; XmmReg1 ... & XmmReg2_m32
 {
 	val1:4 = XmmReg1[0,32];
 	val2:4 = XmmReg2_m32[0,32];
@@ -2846,7 +2846,7 @@ define pcodeop vunpcklps_avx ;
 }
 
 # VBROADCAST 5-12 PAGE 1836 LINE 94909
-:VBROADCASTSS XmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x18; (XmmReg1 & ZmmReg1) ... & XmmReg2_m32
+:VBROADCASTSS XmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0x18; (XmmReg1 & ZmmReg1) ... & XmmReg2_m32
 {
 	local val:4 = XmmReg2_m32[0,32];
 	XmmReg1[0,32] = val;
@@ -2857,7 +2857,7 @@ define pcodeop vunpcklps_avx ;
 }
 
 # VBROADCAST 5-12 PAGE 1836 LINE 94911
-:VBROADCASTSS YmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x18; (YmmReg1 & ZmmReg1) ... & XmmReg2_m32
+:VBROADCASTSS YmmReg1, XmmReg2_m32 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0x18; (YmmReg1 & ZmmReg1) ... & XmmReg2_m32
 {
 	local val:4 = XmmReg2_m32[0,32];
 	YmmReg1[0,32] = val;
@@ -2872,7 +2872,7 @@ define pcodeop vunpcklps_avx ;
 }
 
 # VBROADCAST 5-12 PAGE 1836 LINE 94913
-:VBROADCASTSD YmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x19; (YmmReg1 & ZmmReg1) ... & XmmReg2_m64
+:VBROADCASTSD YmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0x19; (YmmReg1 & ZmmReg1) ... & XmmReg2_m64
 {
 	local val:8 = XmmReg2_m64[0,64];
 	YmmReg1[0,64] = val;
@@ -2883,7 +2883,7 @@ define pcodeop vunpcklps_avx ;
 }
 
 # VBROADCAST 5-12 PAGE 1836 LINE 94915
-:VBROADCASTF128 YmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x1A; (YmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VBROADCASTF128 YmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0x1A; (YmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local val:16 = XmmReg2_m128;
 	YmmReg1[0,128] = val;
@@ -2892,7 +2892,7 @@ define pcodeop vunpcklps_avx ;
 }
 
 # VEXTRACTF128/VEXTRACTF32x4/VEXTRACTF64x2/VEXTRACTF32x8/VEXTRACTF64x4 5-99 PAGE 1923 LINE 99102
-:VEXTRACTF128 XmmReg2_m128, YmmReg1, imm8  is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x19; (YmmReg1 & XmmReg2_m128_extend) ... & XmmReg2_m128; imm8
+:VEXTRACTF128 XmmReg2_m128, YmmReg1, imm8  is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_W0); byte=0x19; (YmmReg1 & XmmReg2_m128_extend) ... & XmmReg2_m128; imm8
 {
 	local ext:1 = (imm8:1 & 1) == 1;
 	
@@ -3006,14 +3006,14 @@ define pcodeop vpermilpd_avx ;
 }
 
 # VPERMILPD 5-371 PAGE 2195 LINE 112875
-:VPERMILPD XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x05; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
+:VPERMILPD XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_W0); byte=0x05; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
 {
 	local tmp:16 = vpermilpd_avx( XmmReg2_m128, imm8:1 );
 	ZmmReg1 = zext(tmp);
 }
 
 # VPERMILPD 5-371 PAGE 2195 LINE 112877
-:VPERMILPD YmmReg1, YmmReg2_m256, imm8 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x05; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256; imm8
+:VPERMILPD YmmReg1, YmmReg2_m256, imm8 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_W0); byte=0x05; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256; imm8
 {
 	local tmp:32 = vpermilpd_avx( YmmReg2_m256, imm8:1 );
 	ZmmReg1 = zext(tmp);
@@ -3028,7 +3028,7 @@ define pcodeop vpermilps_avx ;
 }
 
 # VPERMILPS 5-376 PAGE 2200 LINE 113161
-:VPERMILPS XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x04; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
+:VPERMILPS XmmReg1, XmmReg2_m128, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_W0); byte=0x04; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
 {
 	local tmp:16 = vpermilps_avx( XmmReg2_m128, imm8:1 );
 	ZmmReg1 = zext(tmp);
@@ -3042,7 +3042,7 @@ define pcodeop vpermilps_avx ;
 }
 
 # VPERMILPS 5-376 PAGE 2200 LINE 113167
-:VPERMILPS YmmReg1, YmmReg2_m256, imm8 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x04; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256; imm8
+:VPERMILPS YmmReg1, YmmReg2_m256, imm8 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_W0); byte=0x04; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256; imm8
 {
 	local tmp:32 = vpermilps_avx( YmmReg2_m256, imm8:1 );
 	ZmmReg1 = zext(tmp);
@@ -3050,7 +3050,7 @@ define pcodeop vpermilps_avx ;
 
 # VTESTPD/VTESTPS 5-560 PAGE 2384 LINE 122257
 define pcodeop vtestps_avx ;
-:VTESTPS XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x0E; XmmReg1 ... & XmmReg2_m128
+:VTESTPS XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0x0E; XmmReg1 ... & XmmReg2_m128
 {
 	local val1 = XmmReg2_m128;
 	local val2 = XmmReg1;
@@ -3065,7 +3065,7 @@ define pcodeop vtestps_avx ;
 }
 
 # VTESTPD/VTESTPS 5-560 PAGE 2384 LINE 122260
-:VTESTPS YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x0E; YmmReg1 ... & YmmReg2_m256
+:VTESTPS YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0x0E; YmmReg1 ... & YmmReg2_m256
 {
 	local val1 = YmmReg2_m256;
 	local val2 = YmmReg1;
@@ -3081,7 +3081,7 @@ define pcodeop vtestps_avx ;
 
 # VTESTPD/VTESTPS 5-560 PAGE 2384 LINE 122263
 define pcodeop vtestpd_avx ;
-:VTESTPD XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x0F; XmmReg1 ... & XmmReg2_m128
+:VTESTPD XmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0x0F; XmmReg1 ... & XmmReg2_m128
 {
 	local val1 = XmmReg2_m128;
 	local val2 = XmmReg1;
@@ -3096,7 +3096,7 @@ define pcodeop vtestpd_avx ;
 }
 
 # VTESTPD/VTESTPS 5-560 PAGE 2384 LINE 122266
-:VTESTPD YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x0F; YmmReg1 ... & YmmReg2_m256
+:VTESTPD YmmReg1, YmmReg2_m256 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0x0F; YmmReg1 ... & YmmReg2_m256
 {
 	local val1 = YmmReg2_m256;
 	local val2 = YmmReg1;
@@ -3162,14 +3162,14 @@ define pcodeop vtestpd_avx ;
 
 # VCVTPH2PS 5-34 PAGE 1858 LINE 95957
 define pcodeop vcvtph2ps_f16c ;
-:VCVTPH2PS XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x13; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
+:VCVTPH2PS XmmReg1, XmmReg2_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0x13; (XmmReg1 & ZmmReg1) ... & XmmReg2_m64
 {
 	local tmp:16 = vcvtph2ps_f16c( XmmReg2_m64 );
 	ZmmReg1 = zext(tmp);
 }
 
 # VCVTPH2PS 5-34 PAGE 1858 LINE 95960
-:VCVTPH2PS YmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x13; (YmmReg1 & ZmmReg1) ... & XmmReg2_m128
+:VCVTPH2PS YmmReg1, XmmReg2_m128 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0x13; (YmmReg1 & ZmmReg1) ... & XmmReg2_m128
 {
 	local tmp:32 = vcvtph2ps_f16c( XmmReg2_m128 );
 	ZmmReg1 = zext(tmp);
@@ -3177,13 +3177,13 @@ define pcodeop vcvtph2ps_f16c ;
 
 # VCVTPS2PH 5-37 PAGE 1861 LINE 96110
 define pcodeop vcvtps2ph_f16c ;
-:VCVTPS2PH XmmReg2_m64, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x1D; XmmReg1 ... & XmmReg2_m64; imm8
+:VCVTPS2PH XmmReg2_m64, XmmReg1, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_W0); byte=0x1D; XmmReg1 ... & XmmReg2_m64; imm8
 {
 	XmmReg2_m64 = vcvtps2ph_f16c( XmmReg1, imm8:1 );
 }
 
 # VCVTPS2PH 5-37 PAGE 1861 LINE 96113
-:VCVTPS2PH XmmReg2_m128, YmmReg1, imm8 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x1D; (YmmReg1 & XmmReg2_m128_extend) ... & XmmReg2_m128; imm8
+:VCVTPS2PH XmmReg2_m128, YmmReg1, imm8 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & vexVVVV=0 & $(VEX_W0); byte=0x1D; (YmmReg1 & XmmReg2_m128_extend) ... & XmmReg2_m128; imm8
 {
 	XmmReg2_m128 = vcvtps2ph_f16c( YmmReg1, imm8:1 );
 	build XmmReg2_m128_extend;

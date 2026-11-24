@@ -585,6 +585,9 @@ mod tests {
             // anyway, so preset membership would buy nothing there and has not been
             // measured on them. Flip it into the preset with that measurement.
             "lazyfuncs",
+            // `pdblines` is `dwarf_lines` for a `.pdb`: a comment per source
+            // line.
+            "pdblines",
             // `libgccsigs` costs a SPARC32 caller that returns arithmetic on
             // the `__divdi3` quotient its low word or its whole return (see its
             // catalog row), so the preset must not turn it on.
@@ -639,6 +642,9 @@ mod tests {
             // `dwarfglobaltypes` was turned off by default in its own branch after
             // landing; it has no preset sweep yet.
             "dwarfglobaltypes",
+            // `pdbtypes` landed with clang-built fixtures only; its x64 frame
+            // math has not been measured on MSVC-built images.
+            "pdbtypes",
             // Stack-address liveness can be incidental; synthetic regressions and
             // a local speed measurement do not justify a broad preset flip.
             "stackaddrargtrial",

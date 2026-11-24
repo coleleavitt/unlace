@@ -4375,6 +4375,27 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::Pdb>()
                 .0
         }
+        // (kuna) The PDB types/prototypes/locals and source-line passes: their
+        // facts exist only with a `.pdb` the `pdb` gate locates, so each needs
+        // that gate as well as its own.
+        "pdbtypes" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Pdb>()
+                .0
+                && arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_analysisgates::Pdbtypes>()
+                    .0
+        }
+        "pdblines" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Pdb>()
+                .0
+                && arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_analysisgates::Pdblines>()
+                    .0
+        }
         // (kuna) `libctypes` has NO arm on purpose and reaches this fail-open
         // default. Its gate is the load-time `KUNA_LIBCTYPES` env bridge read
         // inside the pass itself, because the pass interns its named type shells

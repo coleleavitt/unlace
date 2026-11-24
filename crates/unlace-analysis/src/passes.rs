@@ -617,13 +617,18 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // pdb on` (`engine.rs::analysis_pass_enabled` reads `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Pdb>().0`, default
     // false) AND a fingerprint-matching `.pdb` is supplied via `kuna_pdb_path`, so a
     // default run is byte-identical and bound to the real-PE path (the XML datatest
-    // oracle is untouched). Types/typed-locals/lines are the deferred PR-P2/P3.
+    // oracle is untouched). Types/typed-locals/lines are `pdbtypes`/`pdblines`.
     if format == object::BinaryFormat::Pe {
         passes.push(Box::new(crate::pdb::PdbPass));
         // S1 PDB-procedure-interior entry suppression (`pdbinterior`): the same
         // `.pdb`'s S_GPROC32/S_LPROC32 code lengths reported on `pdb_bodies`, for
         // the frameless leaves `.pdata` has no record of. Committed with `pdb`.
         passes.push(Box::new(crate::pdb::kuna_pdbinterior::PdbInteriorPass));
+        // (kuna `pdbtypes`/`pdblines`) The same `.pdb`'s types, prototypes,
+        // locals, globals and vftables, and its source lines; committed only when
+        // their gates and `pdb` are on.
+        passes.push(Box::new(crate::pdb::kuna_pdbtypes::PdbTypesPass));
+        passes.push(Box::new(crate::pdb::kuna_pdblines::PdbLinesPass));
         passes.push(Box::new(crate::kuna_cvftrace::CvfTracePass));
         passes.push(Box::new(crate::kuna_cvftrace::CvfTraceLinesPass));
     }
@@ -2644,8 +2649,15 @@ mod tests {
         let pe = ids(&passes_for(Compiler::Clang, object::BinaryFormat::Pe));
         assert!(pe.contains(&"pdb"), "PE pass set must carry the pdb pass");
         assert_eq!(
-            pe[pe.len() - 4..],
-            ["pdb", "pdbinterior", "cvftrace", "cvftrace_lines"],
+            pe[pe.len() - 6..],
+            [
+                "pdb",
+                "pdbinterior",
+                "pdbtypes",
+                "pdblines",
+                "cvftrace",
+                "cvftrace_lines"
+            ],
             "PDB metadata precedes CVF metadata"
         );
         // A PE carries BOTH the rtti and pdb metadata passes (rtti then pdb).
@@ -2669,6 +2681,10 @@ mod tests {
                 assert!(
                     !set.contains(&"pdbinterior"),
                     "{c:?}/{fmt:?} must not carry pdbinterior"
+                );
+                assert!(
+                    !set.contains(&"pdbtypes") && !set.contains(&"pdblines"),
+                    "{c:?}/{fmt:?} must not carry pdbtypes or pdblines"
                 );
                 assert!(
                     !set.contains(&"cvftrace"),

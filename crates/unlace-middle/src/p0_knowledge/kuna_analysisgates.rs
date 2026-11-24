@@ -808,12 +808,33 @@ crate::kuna_flag!(
     /// binary it is structurally absent regardless of this flag. Default-off,
     /// output-changing (it renames + adds symbols), real-binary-path only (and inert
     /// without a fingerprint-matching `.pdb`) ⇒ every parity gate is byte-identical.
-    /// Types/typed-locals/lines are the deferred PR-P2/P3 (this PR is name-level).
+    /// Types, prototypes and locals are `pdbtypes`, source lines `pdblines`.
     Pdb,
     "pdb",
     "PE PDB metadata recovery pass",
     unset: true,
     shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna `pdbtypes`) Commit the types, typed prototypes, stack and register
+    /// locals, typed globals and vftables the matched `.pdb` describes; default
+    /// **off**. Inert without `pdb` locating a fingerprint-matching `.pdb`.
+    Pdbtypes,
+    "pdbtypes",
+    "PDB types, prototypes and locals",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
+    /// (kuna `pdblines`) Commit the matched `.pdb`'s source lines as
+    /// `file:line` comments; default **off** (it adds a comment per line).
+    Pdblines,
+    "pdblines",
+    "PDB source-line comments",
+    unset: false,
+    shipped: false
 );
 
 /// (kuna `flowmode`) Paint ARM decode modes the flow proves (`on`), also past calls proven to return (`after_call`).

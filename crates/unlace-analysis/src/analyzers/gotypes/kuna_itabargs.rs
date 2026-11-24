@@ -87,10 +87,7 @@ fn call_after(listing: &Listing, at: u64, reg: &'static str) -> Option<(u64, Vec
             if insn.flow.is_indirect || insn.flow.is_computed {
                 return None;
             }
-            return match insn.flows.as_slice() {
-                [callee] => Some((*callee, held)),
-                _ => None,
-            };
+            return direct_callee(listing, next, &insn.flows).map(|callee| (callee, held));
         }
         if insn.flow.is_jump || insn.flow.is_terminal || !insn.flow.has_fallthrough {
             return None;
@@ -108,6 +105,22 @@ fn call_after(listing: &Listing, at: u64, reg: &'static str) -> Option<(u64, Vec
         next = insn.fall_through?;
     }
     None
+}
+
+/// The one target of the direct call at `at`: its single static flow, or else
+/// its single `Call` reference (the walk may list a call's fall-through among
+/// its flows).
+fn direct_callee(listing: &Listing, at: u64, flows: &[u64]) -> Option<u64> {
+    if let [callee] = flows {
+        return Some(*callee);
+    }
+    let mut calls = listing
+        .refs_from(at)
+        .iter()
+        .filter(|r| r.kind == crate::listing::RefKind::Call)
+        .map(|r| r.to);
+    let callee = calls.next()?;
+    calls.next().is_none().then_some(callee)
 }
 
 /// The destination of `MOV dst,src` when both are whole integer argument
@@ -205,14 +218,41 @@ impl AnalysisPass for GoItabArgsPass {
                 .instructions()
                 .filter(|(_, insn)| insn.mnemonic.trim() == "LEA")
                 .count();
+            let itab_leas: Vec<u64> = listing
+                .instructions()
+                .filter(|(_, insn)| insn.mnemonic.trim() == "LEA")
+                .filter(|(_, insn)| {
+                    lea_target(&insn.operands).is_some_and(|(_, t)| itabs.contains_key(&t))
+                })
+                .map(|(&at, _)| at)
+                .collect();
             eprintln!(
-                "[kuna goitabargs] instructions={} assembly={} lea={} itabs={} votes={}",
+                "[kuna goitabargs] instructions={} assembly={} lea={} itab_lea={} itabs={} votes={}",
                 listing.num_instructions(),
                 listing.has_assembly(),
                 leas,
+                itab_leas.len(),
                 itabs.len(),
                 votes.len()
             );
+            for at in itab_leas.iter().take(8) {
+                let mut next = listing.instruction_at(*at).and_then(|i| i.fall_through);
+                let mut trail = Vec::new();
+                for _ in 0..MAX_STEPS {
+                    let Some(insn) = next.and_then(|n| listing.instruction_at(n)) else {
+                        break;
+                    };
+                    trail.push(format!(
+                        "{} {} flows={:x?} call={}",
+                        insn.mnemonic, insn.operands, insn.flows, insn.flow.is_call
+                    ));
+                    if insn.flow.is_call || !insn.flow.has_fallthrough {
+                        break;
+                    }
+                    next = insn.fall_through;
+                }
+                eprintln!("[kuna goitabargs] lea {at:#x}: {}", trail.join(" ; "));
+            }
         }
         for ((callee, index), interfaces) in votes {
             if interfaces.len() != 1 {

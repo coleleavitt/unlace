@@ -2799,7 +2799,7 @@ impl JumpBasicModel {
     /// functions, while the index only ever holds `c` or `k ^ c`. Only an index
     /// a table LOAD reads qualifies: a destination selected straight between
     /// constant addresses is `constselectjump`'s decision.
-    fn narrow_boolean_selector(&mut self, fd: &Funcdata, maxtablesize: uint4) {
+    fn narrow_boolean_selector(&mut self, fd: &Funcdata, indop: OpId, maxtablesize: uint4) {
         if self.is_model2 || self.jrange().get_size() <= maxtablesize as uintb {
             return;
         }
@@ -2814,6 +2814,9 @@ impl JumpBasicModel {
             let Some(start_op) = self.path_meld.get_earliest_op(pos) else {
                 continue;
             };
+            if !self.selector_values_reach_code(fd, indop, &values, start_op, vn) {
+                continue;
+            }
             let mut exact = JumpValuesRange::new();
             exact.set_values(values);
             exact.set_start_vn(vn);
@@ -2822,6 +2825,40 @@ impl JumpBasicModel {
             self.jrange = Some(Box::new(exact));
             return;
         }
+    }
+
+    /// (kuna) Does every value of a narrowed selector emulate through the path
+    /// to a destination in the dispatch's own section? A value set read from a
+    /// stale stack constant (a slot whose call INDIRECT the jump-table partial
+    /// collapsed, still holding its 0xaaaa... filler) indexes far past the
+    /// table, and a model with that set would keep the default-path model from
+    /// bounding the table by its clamp (trustd `_nc_intersect_tree_with_subtrees`).
+    fn selector_values_reach_code(
+        &self,
+        fd: &Funcdata,
+        indop: OpId,
+        values: &[uintb],
+        start_op: OpId,
+        start_vn: VarnodeId,
+    ) -> bool {
+        let Some(at) = fd.obank().get(indop).map(|o| o.get_addr().clone()) else {
+            return false;
+        };
+        let Some(space) = at.get_space().cloned() else {
+            return false;
+        };
+        values.iter().all(|&value| {
+            let mut emul = EmulateFunction::new(fd);
+            for &(seed_vn, seed_val) in self.loop_carried_seeds.iter() {
+                emul.seed_varnode_value(seed_vn, seed_val);
+            }
+            emul.set_load_collect(true);
+            emul.emulate_path(value, &self.path_meld, start_op, start_vn)
+                .is_ok_and(|dest| {
+                    fd.get_arch()
+                        .in_section_of(&at, &Address::new(Rc::clone(&space), dest))
+                })
+        })
     }
 
     /// (kuna) The bytes the selector's map occupies, as the first and last
@@ -3403,7 +3440,7 @@ impl JumpBasicModel {
             .ok_or_else(|| KunaError::lowlevel("recoverModel: switch op has no parent block"))?;
         self.find_normalized(fd, parent, -1, matchsize, maxtablesize, indop)?;
         self.narrow_readonly_selector_domain(fd, maxtablesize);
-        self.narrow_boolean_selector(fd, maxtablesize);
+        self.narrow_boolean_selector(fd, indop, maxtablesize);
         self.skip_stranding_variable(fd, indop, matchsize, maxtablesize);
         let unbounded =
             self.jrange().get_size() > maxtablesize as uintb && !self.guard_bounds_table(fd);

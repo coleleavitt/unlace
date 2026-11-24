@@ -22,6 +22,8 @@ mod riscv_hints;
 mod riscv_vector;
 #[path = "riscv_zabha.rs"]
 mod riscv_zabha;
+#[path = "riscv_zacas.rs"]
+mod riscv_zacas;
 #[path = "riscv_zcb.rs"]
 mod riscv_zcb;
 #[path = "riscv_zcmp.rs"]

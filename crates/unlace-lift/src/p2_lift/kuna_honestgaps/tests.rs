@@ -96,3 +96,31 @@ fn the_tags_are_warning_kinds() {
         assert!(tag.bytes().all(|b| b.is_ascii_lowercase()), "{tag}");
     }
 }
+
+#[test]
+fn a_buffered_warning_is_found_by_type_address_and_text() {
+    use crate::architecture::comment_type;
+    use unlace_base::address::Address;
+    let text = withheld_prototype_text("strtod", WithheldCause::FloatConvention);
+    let at = Address::new_invalid();
+    let pending = vec![(
+        comment_type::warningheader,
+        at.clone(),
+        format!("WARNING: {text}"),
+    )];
+    assert!(is_pending(
+        &pending,
+        comment_type::warningheader,
+        &at,
+        &text
+    ));
+    assert!(!is_pending(&pending, comment_type::warning, &at, &text));
+    let other = withheld_prototype_text("sqrt", WithheldCause::FloatConvention);
+    assert!(!is_pending(
+        &pending,
+        comment_type::warningheader,
+        &at,
+        &other
+    ));
+    assert!(!is_pending(&[], comment_type::warningheader, &at, &text));
+}

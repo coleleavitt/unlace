@@ -639,6 +639,8 @@ mod tests {
         const UNEVALUATED: &[&str] = &[
             // `phiarm` (issue #20) landed without a corpus sweep.
             "phiarm",
+            // `calleesaved` (issue #20) landed without a corpus sweep.
+            "calleesaved",
             // Landed with fixture measurements only: `funcchunks` changes only FID's
             // input, `tailcallentryall` was measured on Lua and the LLVM tools, and
             "funcchunks",

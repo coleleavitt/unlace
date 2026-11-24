@@ -547,6 +547,9 @@ Three tiers:
 | one local holds a value computed and used on one branch arm and an unrelated value from the other arm | [`phiarm`](#phiarm----on--off-default-off) |
 | a variable is assigned different kinds of values on two paths that meet at a join | [`phiarm`](#phiarm----on--off-default-off) |
 | two source variables that meet only at a join print as one name | [`phiarm`](#phiarm----on--off-default-off) |
+| one local in a callee-saved register holds unrelated values around different calls | [`calleesaved`](#calleesaved----on--off-default-off) |
+| a variable kept across one call is reused for a different value kept across a later call | [`calleesaved`](#calleesaved----on--off-default-off) |
+| a pointer and a count share one declared local in rbx or x19 | [`calleesaved`](#calleesaved----on--off-default-off) |
 | an inlined callee body is spliced into the caller and should read as a call | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | want to pull a chosen region out of a function into a named pseudofunction | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | acting on an almostregion inline-candidate report by hand or with an llm | [`outline`](#outline----off----default-off-destructive-opt-in) |
@@ -2478,6 +2481,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** OFF by default: it is a judgement, not a proof. Where the source had one variable assigned on both arms and then used (`r = f(); g(r); ... use(r)`), ON prints an extra variable and an assignment `r = x;` at the end of the arm. Turn it ON when a function reuses one name for values that clearly mean different things on different paths, for example a status code on one arm and a pointer on the other meeting before a common test, or when comparing variable boundaries against DWARF. Not yet measured on a corpus; a default change needs the DecBench variable-match and declaration-count numbers.
 - **Where / provenance:** P6/merge-aggressiveness · ida · presentation-default · unlace-20
 - **Example:** `option phiarm on`
+
+### `calleesaved` -- on | off, default `off`
+
+- **Symptoms:** one local in a callee-saved register holds unrelated values around different calls; a variable kept across one call is reused for a different value kept across a later call; a pointer and a count share one declared local in rbx or x19.
+- **What it does:** Keep apart two variables that the compiler held in the same callee-saved register across different calls. A value that must survive a call lives in a register the calling convention preserves (rbx, r12-r15 on x86-64, x19-x28 on AArch64), and the compiler reuses that register for an unrelated value that must survive a later call. The two are separate SSA webs with no data flow between them, but they share the register and often the type, so Merge::mergeByDatatype (merge.cc:359-401) joins them and both print under one name. ON keys every high ActionMergeType gathers that lives wholly in one processor register which the function's own prototype model marks unaffected by calls (FuncProto::hasEffect == unaffected), and whose Cover holds a CALL strictly inside it (kuna_calleesaved.rs (span_key)); merge_by_datatype never puts two highs with the same key in one type group, so they stay two variables. Highs without a key group as before, under whichever typemerge mode is set. OFF, the default, is upstream byte-for-byte.
+- **When to flip:** OFF by default: a source variable reassigned between two calls (`p = a; f(p); p = b; g(p);`) compiles to the same two webs in the same register, and ON prints it as two variables. Turn it ON when one local declared in a callee-saved register is used for unrelated things around different calls (a buffer pointer before one call and a count after another), or when comparing variable boundaries against DWARF. Not yet measured on a corpus; a default change needs the DecBench variable-match and declaration-count numbers.
+- **Where / provenance:** P6/merge-aggressiveness · kuna · presentation-default · unlace-20
+- **Example:** `option calleesaved on`
 
 ### `outline` -- off | <fn>:<head>-<exit>[;...], default `off` (destructive opt-in)
 

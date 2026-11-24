@@ -533,6 +533,16 @@ marking (below), three passes fuse variables to reduce clutter:
   so a later forced merge trims instead and `ActionMergeCopy` does not undo the
   split. This is the copy form of Hex-Rays' `BREAK_PHI_ARM_MERGES`.
 
+  Option `calleesaved` (`kuna_calleesaved.rs (span_key)`, default off, set on
+  the merge by `coreaction_cleanup.rs (ActionMergeType)`) narrows
+  `merge_by_datatype` for register reuse across calls. Each gathered high that
+  lives wholly in one processor register the function's own prototype model
+  marks unaffected by calls (`MergeContext::storage_callee_saved`) and whose
+  Cover holds a CALL strictly inside it is keyed by that register; a type group
+  never takes a second high with a key it already holds, so two values the
+  compiler kept in one callee-saved register across different calls stay two
+  variables. Highs without a key group as before.
+
 **Explicit vs implied** — which values get a named token at all. Between the
 required and speculative groups, `coreaction_cleanup.rs (ActionMarkExplicit)`
 decides per Varnode via `coreaction_cleanup.rs (base_explicit)`: explicit

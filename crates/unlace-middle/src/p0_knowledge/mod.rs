@@ -44,6 +44,7 @@ pub mod kuna_sourcelang;
 pub mod kuna_objcivars;
 // (kuna) The Objective-C SDK header directory (`objcsdk`, load-time, env-bridged).
 pub mod kuna_objcsdk;
+pub mod kuna_sdktypes;
 // (kuna) dyld shared cache image selection + cross-image naming gates
 // (load-time, env-bridged).
 pub mod kuna_dyldcache;

@@ -51,19 +51,23 @@ pub(crate) use unlace_console::assertsyntax::parse_directive as parse_one;
 pub(crate) use unlace_console::assertsyntax::parse_directive_flag as parse_flag;
 
 /// The run's directives with the `--types` declarations ahead of the caller's
-/// own, so an `--assert` on the same function is applied last and wins.
+/// own, so an `--assert` on the same function is applied last and wins, and
+/// the `sdktypes` declarations (`Some` when that option is on) ahead of both.
 pub(crate) fn with_types(
     types: &[String],
     cpp: Option<&str>,
+    sdk: Option<Vec<Directive>>,
     assertions: Vec<Directive>,
 ) -> Result<Vec<Directive>, String> {
-    if types.is_empty() {
-        return match cpp {
-            Some(_) => Err("--types-cpp needs a --types <file.h|dir> to preprocess".into()),
-            None => Ok(assertions),
-        };
+    if types.is_empty() && cpp.is_some() && sdk.is_none() {
+        return Err(
+            "--types-cpp needs a --types <file.h|dir> or --option sdktypes to preprocess".into(),
+        );
     }
-    let mut all = unlace_console::kuna_cheader::load_types(types, cpp)?;
+    let mut all = sdk.unwrap_or_default();
+    if !types.is_empty() {
+        all.extend(unlace_console::kuna_cheader::load_types(types, cpp)?);
+    }
     all.extend(assertions);
     Ok(all)
 }

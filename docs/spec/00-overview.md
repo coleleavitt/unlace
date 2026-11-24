@@ -3081,9 +3081,43 @@ and the grammar refuses its declaration: a declaration is stated with C's
 value or not at all, because an enumerator that is off by a wrap can widen its
 enum and shift every field after it in a record. A single literal the grammar
 reads as C does is left as written; a binary literal and an enumerator name are
-replaced, since the grammar has no reading for either. kuna runs no preprocessor unless `--types-cpp <cc>`
+replaced, since the grammar has no reading for either. Clang's nullability
+qualifiers (`_Nullable`, `_Nonnull`, `_Null_unspecified` and their
+double-underscore spellings) are dropped, and a block pointer declarator
+(`void (^done)(int)`, `typedef void (^block_t)(void)`) is spelled `void *done`:
+a block is passed as a pointer to its block object, which is all a caller
+sees (`kuna_cheader.rs (block_pointers)`). kuna runs no preprocessor unless `--types-cpp <cc>`
 names one; then each header is piped through `<cc> -E` and the output is what
 is cut.
+
+(unlace `sdktypes`) **Declarations from the SDK a Mach-O was built against.**
+`--option sdktypes <SDK root>` (default off) states the SDK's C declarations on
+the same plane without the caller naming a header
+(`crates/unlace-cli/src/kuna_sdktypes.rs (directives)`). The CLI reads the
+image (the `--slice`/`--target` slice of a fat file): its architecture, its
+`LC_BUILD_VERSION` or `LC_VERSION_MIN_*` platform (else the platform the SDK's
+directory name implies), the frameworks it links and the names it imports. It
+writes a temporary header that includes the umbrella header `<F/F.h>` of each
+linked framework the SDK has, then each `usr/include` header outside `c++/`
+whose text spells an imported name before a `(`, and runs the preprocessor
+over it: the `--types-cpp` command, else `clang`, with `-E`, `-x c`,
+`-isysroot <root>` and `-target <arch>-apple-<os>` added where the command does
+not give them. When the preprocessor fails, every line of the temporary
+header its diagnostics name is left out and it runs again (at most 32 times),
+and the includes left out are named on stderr. The Objective-C `@interface`,
+`@protocol` and `@implementation` bodies and the `@class` and forward
+`@protocol` lines a C-mode run leaves in a framework's text are blanked, line
+for line, and the text goes through `kuna_cheader::load_text`, the reader
+`--types` uses: every record, enum and typedef becomes a `typedef` directive,
+and a `prototype` directive is kept only for a name the image imports. These
+directives go ahead of the `--types` ones, which go ahead of the caller's
+`--assert`s, so both still win; program-scoped directives are applied after
+the analysis commit, so a function the `objcsdk` reader also typed takes this
+declaration. Their report rows carry `--option sdktypes <file>:<line>:`; they
+are left out of `assertions[]` and stated as one stderr line (prototypes and
+types applied, declarations not read, the first of those), and like the
+`--types` rows they never fail a run. A non-Mach-O input reads nothing and
+says so.
 
 The header's directives are placed ahead of the caller's own, whatever the
 order of the flags, and program-scoped directives are applied in order, so an

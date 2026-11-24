@@ -65,6 +65,56 @@ fn bodies_linkage_blocks_and_decorations_are_dropped() {
 }
 
 #[test]
+fn nullability_and_block_pointers_are_read() {
+    let got = bodies(
+        "typedef void (^dispatch_block_t)(void);\n\
+         void dispatch_async(dispatch_queue_t _Nonnull q, dispatch_block_t block);\n\
+         void each(CFArrayRef _Nullable a, int (^ _Nonnull f)(const void *, int), int n);\n\
+         struct cb { void (^done)(int); int n; };\n",
+    );
+    assert_eq!(
+        got,
+        vec![
+            (1, typedef("typedef void *dispatch_block_t")),
+            (
+                2,
+                prototype(
+                    "dispatch_async",
+                    "void dispatch_async(dispatch_queue_t q, dispatch_block_t block)"
+                )
+            ),
+            (
+                3,
+                prototype("each", "void each(CFArrayRef a, void *f, int n)")
+            ),
+            (4, typedef("struct cb{void *done;int n;}")),
+        ]
+    );
+}
+
+#[test]
+fn load_text_keeps_the_prototypes_asked_for() {
+    let got = load_text(
+        "sdk.h",
+        "typedef long CFIndex;\nCFIndex CFArrayGetCount(void *a);\nint other(int);\n",
+        SDK_ORIGIN,
+        &|name| name == "CFArrayGetCount",
+    );
+    let raws: Vec<_> = got.iter().map(|d| d.raw.as_str()).collect();
+    assert_eq!(
+        raws,
+        vec![
+            "--option sdktypes sdk.h:1: typedef long CFIndex",
+            "--option sdktypes sdk.h:2: CFIndex CFArrayGetCount(void *a)",
+        ]
+    );
+    assert_eq!(
+        sdk_origin(raws[1]),
+        Some("sdk.h:2: CFIndex CFArrayGetCount(void *a)")
+    );
+}
+
+#[test]
 fn line_markers_reanchor_the_position() {
     let chunks = split_declarations(
         "t.h",

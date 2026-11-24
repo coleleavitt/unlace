@@ -14,6 +14,11 @@
 //! rejected declaration. Compiler decorations the grammar has no reading for
 //! (`__attribute__((..))`, `__asm__(..)`, `__extension__`, `__restrict`) are
 //! dropped; variable declarations are not facts about a type and are skipped.
+//!
+//! The same reader serves the `sdktypes` option, which hands it the
+//! preprocessed SDK headers of a Mach-O's frameworks ([`load_text`]): Clang's
+//! nullability qualifiers (`_Nullable`) are dropped and a block pointer
+//! (`void (^done)(int)`) is the object pointer the caller passes (`void *done`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -22,6 +27,9 @@ use crate::assertions::{Body, Directive};
 
 /// Prefix of [`Directive::raw`] for a declaration that came from `--types`.
 pub const ORIGIN: &str = "--types ";
+
+/// Prefix of [`Directive::raw`] for a declaration the `sdktypes` option read.
+pub const SDK_ORIGIN: &str = "--option sdktypes ";
 
 /// Largest header (after preprocessing) `--types` accepts.
 const MAX_HEADER_BYTES: u64 = 64 << 20;
@@ -37,9 +45,7 @@ struct Chunk {
 /// Load every `--types` path, in order, as directives. A directory contributes
 /// its `*.h` files in name order. `cpp` is the `--types-cpp` command.
 pub fn load_types(paths: &[String], cpp: Option<&str>) -> Result<Vec<Directive>, String> {
-    let mut out = Vec::new();
-    let mut seen = BTreeSet::new();
-    let mut known = BTreeMap::new();
+    let mut reader = Reader::new(ORIGIN);
     for path in paths {
         for file in header_files(path)? {
             let shown = file.to_string_lossy().into_owned();
@@ -47,23 +53,74 @@ pub fn load_types(paths: &[String], cpp: Option<&str>) -> Result<Vec<Directive>,
                 Some(cpp) => preprocess(cpp, &file)?,
                 None => read_header(&file)?,
             };
-            for chunk in split_declarations(&shown, &text) {
-                let Some(body) = classify(&chunk.text, &mut known) else {
-                    continue;
-                };
-                if seen.insert(body_key(&body)) {
-                    let raw = format!("{ORIGIN}{}:{}: {}", chunk.file, chunk.line, chunk.text);
-                    out.push(Directive { raw, body });
-                }
+            reader.read(&shown, &text, &|_| true);
+        }
+    }
+    Ok(reader.out)
+}
+
+/// The directives of one already-preprocessed text, raw-prefixed with
+/// `origin`. A prototype is kept only when `keep` takes its function's name;
+/// every record, enum and typedef is kept, since a kept prototype may name it.
+pub fn load_text(
+    shown: &str,
+    text: &str,
+    origin: &'static str,
+    keep: &dyn Fn(&str) -> bool,
+) -> Vec<Directive> {
+    let mut reader = Reader::new(origin);
+    reader.read(shown, text, keep);
+    reader.out
+}
+
+/// The declarations of one load, without repeats, and the enumerator values
+/// seen so far.
+struct Reader {
+    origin: &'static str,
+    out: Vec<Directive>,
+    seen: BTreeSet<String>,
+    known: BTreeMap<String, i128>,
+}
+
+impl Reader {
+    fn new(origin: &'static str) -> Self {
+        Reader {
+            origin,
+            out: Vec::new(),
+            seen: BTreeSet::new(),
+            known: BTreeMap::new(),
+        }
+    }
+
+    fn read(&mut self, shown: &str, text: &str, keep: &dyn Fn(&str) -> bool) {
+        for chunk in split_declarations(shown, text) {
+            let Some(body) = classify(&chunk.text, &mut self.known) else {
+                continue;
+            };
+            if let Body::Prototype { func, .. } = &body
+                && !keep(func)
+            {
+                continue;
+            }
+            if self.seen.insert(body_key(&body)) {
+                let raw = format!(
+                    "{}{}:{}: {}",
+                    self.origin, chunk.file, chunk.line, chunk.text
+                );
+                self.out.push(Directive { raw, body });
             }
         }
     }
-    Ok(out)
 }
 
 /// `file:line: declaration` for a directive `--types` produced.
 pub fn origin(raw: &str) -> Option<&str> {
     raw.strip_prefix(ORIGIN)
+}
+
+/// `file:line: declaration` for a directive the `sdktypes` option produced.
+pub fn sdk_origin(raw: &str) -> Option<&str> {
+    raw.strip_prefix(SDK_ORIGIN)
 }
 
 fn body_key(body: &Body) -> String {
@@ -374,7 +431,9 @@ fn undecorated(toks: &[&str]) -> Vec<String> {
                 continue;
             }
             "__extension__" | "__restrict" | "__restrict__" | "restrict" | "_Noreturn"
-            | "__inline" | "__inline__" | "__cdecl" => {}
+            | "__inline" | "__inline__" | "__cdecl" | "_Nullable" | "_Nonnull"
+            | "_Null_unspecified" | "_Nullable_result" | "__nullable" | "__nonnull"
+            | "__null_unspecified" => {}
             "__const" | "__const__" => out.push("const".into()),
             "__signed__" | "__signed" => out.push("signed".into()),
             "__volatile__" => out.push("volatile".into()),
@@ -764,6 +823,49 @@ fn fold_enumerators(inner: &[String], known: &mut BTreeMap<String, i128>, out: &
     }
 }
 
+/// Spell each block pointer declarator (`void (^done)(int)`, `typedef void
+/// (^block_t)(void)`) as the object pointer the caller passes: `void *done`.
+fn block_pointers(mut toks: Vec<String>) -> Vec<String> {
+    let mut from = 0;
+    while let Some(at) = toks
+        .get(from..)
+        .and_then(|rest| rest.windows(2).position(|w| w[0] == "(" && w[1] == "^"))
+    {
+        let caret = from + at;
+        let Some(close) = matching(&toks, caret, "(", ")") else {
+            break;
+        };
+        let end = match toks.get(close + 1).map(String::as_str) {
+            Some("(") => match matching(&toks, close + 1, "(", ")") {
+                Some(end) => end,
+                None => break,
+            },
+            _ => close,
+        };
+        let mut start = caret;
+        let mut depth = 0usize;
+        while start > 0 {
+            match toks[start - 1].as_str() {
+                ")" => depth += 1,
+                "(" if depth == 0 => break,
+                "(" => depth -= 1,
+                "," | ";" | "{" | "}" if depth == 0 => break,
+                _ => {}
+            }
+            start -= 1;
+        }
+        if start == 0 && toks.first().is_some_and(|t| t == "typedef") {
+            start = 1;
+        }
+        let mut pointer = vec!["void".to_string(), "*".to_string()];
+        pointer.extend(toks[caret + 2..close].iter().cloned());
+        let len = pointer.len();
+        toks.splice(start..=end, pointer);
+        from = start + len;
+    }
+    toks
+}
+
 /// Spell an unsized array parameter (`char *argv[]`) as the pointer it is.
 fn pointer_parameters(decl: Vec<String>) -> Vec<String> {
     let mut out: Vec<String> = Vec::with_capacity(decl.len());
@@ -784,7 +886,7 @@ fn pointer_parameters(decl: Vec<String>) -> Vec<String> {
 /// The directive body one declaration states, or `None` for a declaration that
 /// states nothing about a type or a signature (a variable).
 fn classify(text: &str, known: &mut BTreeMap<String, i128>) -> Option<Body> {
-    let toks = fold_constants(undecorated(&words(text)), known);
+    let toks = fold_constants(block_pointers(undecorated(&words(text))), known);
     if toks.first()? == "typedef" {
         return Some(Body::Typedef { decl: join(&toks) });
     }

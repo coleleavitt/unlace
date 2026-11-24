@@ -1288,7 +1288,14 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
         stored.append(&mut assertions);
         assertions = stored;
     }
-    let assertions = crate::assertdecl::with_types(&types, types_cpp.as_deref(), assertions)?;
+    let sdk = crate::kuna_sdktypes::directives(
+        &binary,
+        &options,
+        slice.as_deref(),
+        bfd_target.as_deref(),
+        types_cpp.as_deref(),
+    )?;
+    let assertions = crate::assertdecl::with_types(&types, types_cpp.as_deref(), sdk, assertions)?;
 
     // (kuna outlang, DIV-80) The auto policy -- follow the binary when the caller
     // named no language. See `decompile_all::detected_output_language`.

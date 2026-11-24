@@ -39,6 +39,7 @@ mod project_stream;
 mod rawfront;
 mod runtime_hints;
 mod rust_signatures;
+mod sbom;
 mod skill;
 mod specs;
 mod strings;
@@ -73,6 +74,7 @@ const COMMANDS: &[(&str, CommandHandler)] = &[
     ("fid", fid::run),
     ("flirt", flirt::run),
     ("rust-signatures", rust_signatures::run),
+    ("sbom", sbom::run),
     ("project", project::run),
 ];
 
@@ -188,6 +190,7 @@ fn usage() {
          unlace fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n\
          unlace flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]\n\
          unlace rust-signatures check [--manifest PATH] [--json]\n\
+         unlace sbom <binary> [--json] [--format cyclonedx|spdx] [-o FILE] [--slice ARCH]\n\
          unlace project <init|set|unset|get|list|query|export|import> ... [--json]   # the SQLite project file of overrides\n\
          unlace --version\n\
          \n\

@@ -59,6 +59,18 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna `noretfirst`) Guard clauses that end in a no-return call print first: P8's
+    /// `ruleBlockIfNoExit` breaks a tie between two terminal arms toward the arm that ends in a
+    /// no-return call, and the C syntax tree prints the arm of an `if`/`else` that never falls
+    /// through first (`kuna_ctree`).
+    Noretfirst,
+    "noretfirst",
+    "non-returning arm first",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna `postinc`) A pointer step after its dereference prints as `*p++`.
     PostIncrement,
     "postinc",

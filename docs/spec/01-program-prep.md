@@ -404,9 +404,15 @@ Five further machines are routed the same way:
 - `EM_OPENRISC` (92) and `EM_XTENSA` (94) take the language of the header's byte order.
 - `EM_CSKY` (252) selects ABIv1 when `e_flags` bits 28-31 are 1, and ABIv2 otherwise, in the
   header's byte order.
+- `EM_TI_C2000` (141) selects `tms320c28:LE:32:default` (cl2000 EABI objects).
 - `EM_CUDA` (190) selects the SASS language of the `sm_NN` in `e_flags`. The SM number is in
   bits 8-15 from ELF ABI version 8 (CUDA 12.8 ptxas), and in bits 0-7 before that. An
   architecture with no SASS language (sm_30, sm_32) still needs `--target`.
+
+(unlace) TI compilers (cl2000 and its siblings) emit every branch target inside a function as a
+`$C$L<n>` symbol typed `STT_FUNC`, local, size 0. The ELF symbol-table inventory skips these
+(`crates/unlace-analysis/src/loader/kuna_tilocallabels.rs`), so they are not decompiled as functions
+of their own.
 
 (kuna) PowerPC32 ELF APU requirements are read by
 `crates/unlace-analysis/src/loader/kuna_ppcaputarget.rs` when the

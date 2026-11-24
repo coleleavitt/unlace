@@ -13,6 +13,10 @@
 # (docs/processor-tests.md).
 
 [images]
+xtensa_esp32s3_rom_divsf3 = """
+3621005012fa5023fa7032fab042fa3051fa30546a0063fa0072fab021fa60656a3051fa3000fa6082fa60546a30086a
+d071fa60656a00846a3031fa60346a60086a6022fa60636a00246af007fae067fa60027a4020fa1df0000000
+"""
 xtensa_hifi1_rt700 = """
 3641002001a82011a83411042d031df03641001f3200c00228121df0
 """
@@ -4059,3 +4063,18 @@ expect = [
     "permlane16(permlanex16(permlane16(",
     "v1 = a7 < a6;",
 ]
+
+# ESP32-S3 ROM __divsf3 (espressif/esp-rom-elfs 20260528, esp32s3_rev0_rom.elf, Apache-2.0): the
+# FP divide steps div0.s, nexp01.s, const.s, maddn.s, mkdadj.s, addexp(m).s and divn.s.
+[[family]]
+name = "xtensa_esp32s3_rom_divsf3"
+language = "Xtensa:LE:32:esp32s3"
+base = "0x40056124"
+image = "xtensa_esp32s3_rom_divsf3"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "xtensa_esp32s3_rom_divsf3_decodes_the_divide_steps"
+address = "0x40056124"
+expect = ["div0_s(a1)", "return divn_s("]

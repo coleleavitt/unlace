@@ -6775,6 +6775,19 @@ moves.
   parameter is put in front (IDA's `func_has_stkframe_hole` test, read off the
   function's own epilogue): `_Z2mkii` reads `mk(void *rethidden,int a1,int a2)`
   instead of the shifted `mk(int a0,int a1)`.
+- **Template class spelling** (`cppclassargs`, `on|off`, default `off`;
+  `crates/unlace-analysis/src/analyzers/demangle/cppsig.rs` `this_class`). The
+  `this` of a demangled member function is typed by the class it belongs to. The
+  parse keeps two names: `class`, the bare template-stripped class (`vector`), and
+  `scope`, the whole enclosing scope (`std::vector<int, std::allocator<int> >`).
+  Off, the `this` record is the bare class, as before. On, and only when the
+  scope's last component carries template arguments, the record is named by the
+  whole scope, so each instance is its own class (`std::vector<int, std::allocator<int> >`). A non-template class, every
+  parameter type and the function name are unchanged. With `cppshortnames` on the
+  printer shortens the record name to `std::vector<int> *this`. The standard
+  container names (issue #1343, the archived `cpp_stl` recogniser) are the
+  spelling `cppshortnames` already gives; this option supplies the template
+  arguments it needs.
 - **MSVC declarations** (`msvcsig`, always on, applied only while `cppsig` is
   not `off`;
   `crates/unlace-analysis/src/analyzers/demangle/msvcsig.rs`, the

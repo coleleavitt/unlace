@@ -5095,6 +5095,29 @@ then whole. The caller's 160-byte register save area at `0(r15)` is in the
 callee's local range, because the callee's prologue stores into it.
 Exercised by `tests/stages/kuna-s390x.xml`.
 
+### x86-64 lifter fixes from differential fuzzing
+
+`tools/difffuzz` (see `docs/difffuzz.md`) runs single x86-64 instructions through the
+SLEIGH p-code and through Unicorn from the same register state; each disagreement below was
+confirmed on hardware before the spec changed.
+
+- A 32-bit register destination clears bits 63:32 in 64-bit mode. `ia.sinc`, `lockable.sinc`,
+  `avx.sinc`, `avx512.sinc`, `avx512_manual.sinc` and `rdrand.sinc` now build
+  `check_Reg32_dest` (or `check_Rmr32_dest`) for `XADD m32,r32`, `XCHG m32,r32`,
+  `MOVBE r32,m32`, `MOVMSKPS`/`MOVMSKPD`, MMX `PEXTRW`, `LSL`, `RDRAND`/`RDSEED r32`,
+  the VEX and EVEX `VCVT[T]SS2SI`/`VCVT[T]SD2SI`/`VCVT[T]S[SDH]2USI`/`VCVT[T]SH2SI`,
+  `VMOVMSKPS`/`VMOVMSKPD`, `VPEXTRW` and `KMOV[BWD] r32`; before, `lock xadd [rdi],eax`
+  left the old upper half of RAX in place.
+- `MOV r32,Sreg` and `MOV r64,Sreg` (`8C` with a register operand) zero-extend the selector
+  into the whole register; only the 16-bit form writes 16 bits.
+- `90` with a REX prefix that lacks REX.B (`44 90`, `4C 90`, ...) is `NOP`, not
+  `XCHG EAX,EAX` (which zeroed the top of RAX).
+- The hint-NOP rows `0F 18`..`0F 1F` decode with REX.W (`NOP rm64`).
+- A repeated `66` prefix changes nothing: before, the second one toggled the operand size
+  back, so `66 66 35 imm16` decoded as a 7-byte `XOR EAX,imm32`.
+- `EXTRQ xmm,xmm` reads the bit index from bits 13:8 of the control register (it read 11:6),
+  and `EXTRQ`/`INSERTQ` treat a field length of 0 as 64, as the AMD APM defines.
+
 ## 2.9 Go stack-growth prologue folding
 
 **(kuna) `option gomorestack off|auto|always`, default auto,

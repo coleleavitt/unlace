@@ -380,8 +380,7 @@ impl<'t, 'f> TpiMapper<'t, 'f> {
                         else {
                             continue;
                         };
-                        let short = t.get_name().rsplit("::").next().unwrap_or("").to_string();
-                        raw.push((offset, format!("super_{short}"), t));
+                        raw.push((offset, format!("super_{}", short_name(t.get_name())), t));
                     }
                     pdb::TypeData::VirtualFunctionTablePointer(_) => {
                         if let Some(t) = self.vftable_pointer() {
@@ -664,6 +663,40 @@ impl<'t, 'f> TpiMapper<'t, 'f> {
     }
 }
 
+/// A class name's last component as an identifier: `std::_String_alloc<std::
+/// _String_base_types<wchar_t,std::allocator<wchar_t> > >` is `_String_alloc`.
+/// Template arguments are dropped (a `::` inside them is not a scope) and any
+/// other character that cannot appear in an identifier becomes `_`.
+fn short_name(name: &str) -> String {
+    let mut depth = 0usize;
+    let mut start = 0usize;
+    let bytes = name.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'<' => depth += 1,
+            b'>' => depth = depth.saturating_sub(1),
+            b':' if depth == 0 && bytes.get(i + 1) == Some(&b':') => {
+                start = i + 2;
+                i += 1;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    let last = &name[start.min(name.len())..];
+    let base = last.split('<').next().unwrap_or(last);
+    base.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
 /// The aggregate's alignment: the widest member alignment, as a power of two no
 /// wider than the aggregate.
 fn alignment(size: int4, fields: &[TypeField], bits: &[TypeBitField]) -> int4 {
@@ -814,6 +847,19 @@ mod tests {
         );
         let flags = tpi.map(pdb::TypeIndex(0x1002)).expect("Flags maps");
         assert_eq!(flags.get_size(), 12);
+    }
+
+    #[test]
+    fn base_class_member_names() {
+        assert_eq!(short_name("geo::Shape"), "Shape");
+        assert_eq!(
+            short_name(
+                "std::_String_alloc<std::_String_base_types<wchar_t,std::allocator<wchar_t> > >"
+            ),
+            "_String_alloc"
+        );
+        assert_eq!(short_name("ns::Outer<int>::Inner"), "Inner");
+        assert_eq!(short_name("operator<"), "operator");
     }
 
     /// A member function's prototype leads with its `this` pointer.

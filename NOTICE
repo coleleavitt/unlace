@@ -78,6 +78,10 @@ specs/Ghidra/Processors/EmotionEngine vendors the PlayStation 2 Emotion Engine (
 aleph-void/ghidra-emotionengine-reloaded (https://github.com/aleph-void/ghidra-emotionengine-reloaded), a fork of chaoticgd/ghidra-emotionengine-reloaded, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/Allegrex vendors the PSP Allegrex (with VFPU) SLEIGH specification of
+aleph-void/ghidra-allegrex (https://github.com/aleph-void/ghidra-allegrex), a fork of kotcrab/ghidra-allegrex, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

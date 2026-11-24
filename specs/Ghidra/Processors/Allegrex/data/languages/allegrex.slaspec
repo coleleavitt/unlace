@@ -1,0 +1,4 @@
+@include "allegrex.sinc"
+@include "allegrexInstructions.sinc"
+@include "allegrexFloat.sinc"
+@include "allegrexVfpu.sinc"

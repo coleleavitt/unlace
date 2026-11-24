@@ -171,6 +171,7 @@ unlace_options! { self, p1;
     "objcrettype" => registered!(crate::objcrettype::ObjcRettype),
     "objcresolve" => registered!(crate::objcrettype::ObjcResolve),
     "typevote" => registered!(crate::typevote::TypeVote),
+    "lvarvote" => registered!(crate::lvarvote::LvarVote),
     "oslog" => registered!(crate::oslog::OsLogArgs),
     "tailcalljump" => registered!(crate::tailcalljump::TailCallJump),
     "tailcallframe" => registered!(crate::tailcallframe::TailCallFrame),

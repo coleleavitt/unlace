@@ -15,6 +15,7 @@ pub mod floatglobals; // (unlace) a global the program only moves through float 
 pub mod floatreg; // (unlace) a value returned in a float register is a float
 pub mod funcdata_resolveflow;
 pub mod libcfit; // (unlace) a libc aggregate vote declines where the caller reads past its end
+pub mod lvarvote; // (unlace) a local whose uses disagree takes the type most of its votes support
 pub mod ptrfromuse; // (unlace) type a dereferenced-only function input as a pointer
 pub mod stackwordtypes;
 pub mod structheadless; // (unlace) a closed function's parameter read only past its start is a record

@@ -685,6 +685,8 @@ Three tiers:
 | stack-probe calls obscure a known constant frame allocation | [`rustprobestack`](#rustprobestack----off--auto--always-default-off-destructive-opt-in) |
 | a variable declared undefined4/undefined8 although it is shifted, masked or compared | [`typevote`](#typevote----on--off-default-on) |
 | a cast back to a variable's own declared type at each read | [`typevote`](#typevote----on--off-default-on) |
+| a local is declared with a type most of its uses contradict | [`lvarvote`](#lvarvote----on--off-default-off) |
+| a local takes the most specific type one stray use proposes | [`lvarvote`](#lvarvote----on--off-default-off) |
 | an os_log call prints a stack buffer address and a byte count instead of its arguments | [`oslog`](#oslog----on--off-default-on) |
 | _os_log_impl(0x100000000,...,&v1,8) with v1 = 0x4000100 before it | [`oslog`](#oslog----on--off-default-on) |
 | the first argument of _os_log_impl or _os_log_internal is a raw image address | [`oslog`](#oslog----on--off-default-on) |
@@ -3043,6 +3045,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On (default). Flip off to see which values type inference left undefined.
 - **Where / provenance:** P5/type-propagation · unlace · presentation-default · typevote
 - **Example:** `option typevote off`
+
+### `lvarvote` -- on | off, default `off`
+
+- **Symptoms:** a local is declared with a type most of its uses contradict; a local takes the most specific type one stray use proposes.
+- **What it does:** Type a local whose reads and writes disagree by a weighted vote instead of the most specific type: each op that writes or reads the Varnode votes for its own type; an unknown type ranks behind a known one; the type most of the votes support wins (same-width integers support each other, signedness being decided separately), then the most votes, then the first vote seen. A local whose votes all agree keeps the type it had.
+- **When to flip:** Off by default (byte-identical output). Turn on to see whether a local should take the type most of its uses agree on rather than the most specific one a single stray use proposes. Only locals whose votes conflict change. Measure on decbench before any default change.
+- **Where / provenance:** P5/type-propagation · unlace · type-inference · unlace-lvarvote
+- **Example:** `option lvarvote on`
 
 ### `oslog` -- on | off, default `on`
 

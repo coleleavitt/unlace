@@ -1,6 +1,7 @@
 //! Tests for the prebuilt type library reader ([`super`]).
 
 use unlace_decomp::dtype::{TypeFactory, TypeFactoryImpl, type_metatype as meta};
+use unlace_decomp::kuna_typelib::TypeLib;
 
 use super::{BUILTIN, Library, Reader};
 use crate::grammar::DataOrg;
@@ -291,4 +292,174 @@ fn the_builtin_library_reads_whole() {
             }
         }
     }
+}
+
+fn windows(target: &str) -> Library<'static> {
+    let (_, text) = BUILTIN.iter().find(|(t, _)| *t == target).unwrap();
+    let lib = Library::parse(text).unwrap();
+    assert_eq!(lib.target, target);
+    lib
+}
+
+/// Both Windows libraries parse whole, and every x86 entry is a stdcall one
+/// whose keyword is left to the image's default model.
+#[test]
+fn the_windows_libraries_parse_and_name_their_targets() {
+    for target in ["windows x86", "windows x86_64"] {
+        let lib = windows(target);
+        let (functions, types) = lib.counts();
+        assert!(
+            functions > 7000 && types > 4000,
+            "{target}: {functions} {types}"
+        );
+        for name in [
+            "CreateFileW",
+            "ReadFile",
+            "VirtualAlloc",
+            "NtCreateFile",
+            "WSAStartup",
+        ] {
+            assert!(lib.functions.contains_key(name), "{target}: {name}");
+        }
+        assert!(
+            lib.functions
+                .values()
+                .all(|(held, text)| *held == super::Other::Same && !text.contains("__stdcall")),
+            "{target}"
+        );
+    }
+}
+
+/// The x64 Windows library declares a Win32 import with its SDK types, and a
+/// record it reaches lands at the size the SDK gives it.
+#[test]
+fn a_win32_import_reads_with_its_sdk_types() {
+    let lib = windows("windows x86_64");
+    let f = factory();
+    let mut reader = Reader::new(&lib, false, &f, ORG);
+    let create = reader.prototype("CreateFileW").unwrap();
+    assert_eq!(create.intypes.len(), 7);
+    assert_eq!(create.intypes[3].get_name(), "LPSECURITY_ATTRIBUTES");
+    assert_eq!(create.outtype.as_ref().unwrap().get_name(), "HANDLE");
+    let readfile = reader.prototype("ReadFile").unwrap();
+    assert_eq!(readfile.intypes.len(), 5);
+    let attrs = f.find_by_name("_SECURITY_ATTRIBUTES").unwrap().unwrap();
+    assert_eq!(attrs.get_size(), 24);
+    assert_eq!(
+        fields(&attrs),
+        [
+            (0, "nLength".into()),
+            (8, "lpSecurityDescriptor".into()),
+            (16, "bInheritHandle".into())
+        ]
+    );
+    let mut read = 0;
+    for name in lib.functions.keys() {
+        if reader.prototype(name).is_some() {
+            read += 1;
+        }
+    }
+    assert!(
+        read * 10 >= lib.functions.len() * 9,
+        "{read} of {}",
+        lib.functions.len()
+    );
+}
+
+/// `auto` picks the libraries IDA would load for a PE: the newest SDK or
+/// driver-kit library of the image's width, the Native API library, or
+/// `uefi` for an EFI image, from the directory or its `pc` subdirectory.
+#[test]
+fn auto_chooses_the_til_ida_would_for_a_pe() {
+    let dir = std::env::temp_dir().join(format!("kuna-tildir-{}", std::process::id()));
+    std::fs::create_dir_all(dir.join("pc")).unwrap();
+    for name in [
+        "mssdk64_win10.til",
+        "pc/mssdk64_win7.til",
+        "ntapi64_win10.til",
+        "pc/ntddk64_win81.til",
+        "pc/uefi64.til",
+    ] {
+        std::fs::write(dir.join(name), b"IDATIL").unwrap();
+    }
+    let pick = |target, subsystem| super::til_choice(&dir, target, subsystem);
+    let user = pick("windows x86_64", Some(3));
+    let native = pick("windows x86_64", Some(1));
+    let efi = pick("windows x86_64", Some(10));
+    let narrow = pick("windows x86", Some(3));
+    let linux = pick("linux x86_64", None);
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert_eq!(
+        user,
+        [dir.join("mssdk64_win10.til"), dir.join("ntapi64_win10.til")]
+    );
+    assert_eq!(
+        native,
+        [
+            dir.join("pc/ntddk64_win81.til"),
+            dir.join("ntapi64_win10.til")
+        ]
+    );
+    assert_eq!(efi, [dir.join("pc/uefi64.til")]);
+    assert!(narrow.is_empty() && linux.is_empty());
+}
+
+/// A name the image's own metadata states wins over signature guesses, and
+/// guesses that disagree name nothing.
+#[test]
+fn names_beyond_imports_take_one_agreed_name_per_address() {
+    use unlace_analysis::pass::FidMatch;
+    let m = |addr, name: &str, by_signature| FidMatch {
+        addr,
+        name: name.into(),
+        by_signature,
+    };
+    let names = super::names_beyond_imports(&[
+        m(0x10, "CreateFileW", false),
+        m(0x10, "sub_10", true),
+        m(0x20, "memcpy", true),
+        m(0x20, "memcpy", true),
+        m(0x30, "strlen", true),
+        m(0x30, "strnlen", true),
+    ]);
+    assert_eq!(
+        names,
+        [
+            (0x10, "CreateFileW".to_string()),
+            (0x20, "memcpy".to_string())
+        ]
+    );
+}
+
+/// A list of library files is read in order, and `off` reads none.
+#[test]
+fn a_list_of_files_is_read_in_order() {
+    let dir = std::env::temp_dir();
+    let a = dir.join(format!("kuna-typelib-src-a-{}.ktl", std::process::id()));
+    let b = dir.join(format!("kuna-typelib-src-b-{}.ktl", std::process::id()));
+    std::fs::write(&a, SMALL).unwrap();
+    std::fs::write(&b, "kuna-typelib 1\ntarget linux x86_64\nsource second 1\n").unwrap();
+    let choice = TypeLib::Files(vec![a.clone(), b.clone()]);
+    let read = super::library_sources(&choice, "linux x86_64", None, 8, None);
+    let off = super::library_sources(&TypeLib::Off, "linux x86_64", None, 8, None);
+    std::fs::remove_file(&a).unwrap();
+    std::fs::remove_file(&b).unwrap();
+    let (sources, note) = read.unwrap();
+    let labels: Vec<_> = sources.iter().map(|s| s.label.clone()).collect();
+    assert_eq!(labels, [a.display().to_string(), b.display().to_string()]);
+    assert!(sources[1].text.contains("source second 1"));
+    assert!(note.is_none());
+    assert!(off.unwrap().0.is_empty());
+}
+
+/// `auto` without a directory reads the built-in library of the target alone.
+#[test]
+fn auto_without_a_directory_reads_the_built_in_library() {
+    let (sources, note) =
+        super::library_sources(&TypeLib::Auto, "windows x86_64", Some(3), 8, None).unwrap();
+    assert_eq!(sources.len(), 1);
+    assert_eq!(sources[0].label, "auto");
+    assert!(note.is_none());
+    let (none, _) = super::library_sources(&TypeLib::Auto, "elf mips", None, 4, None).unwrap();
+    assert!(none.is_empty());
 }

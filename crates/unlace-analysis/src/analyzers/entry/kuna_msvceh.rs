@@ -18,7 +18,8 @@
 //! `ThrowInfo` (or zeroed with `rcx`, a rethrow) gets an instruction comment in
 //! the function `.pdata` places it in. References are image-relative on x64 and
 //! absolute on x86 ([`RefKind`]). The x64 catch side (`FuncInfo`, FH4,
-//! funclets) is [`super::kuna_msvcfuncinfo`], run from the same pass.
+//! funclets) is [`super::kuna_msvcfuncinfo`], SEH scope tables and x86 C++
+//! `FuncInfo` are [`super::kuna_msvcseh`], all run from the same pass.
 
 use object::{BinaryFormat, Object, ObjectSection, SectionKind};
 use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
@@ -126,6 +127,7 @@ pub fn collect<'a>(file: &'a object::File<'a>, bytes: &[u8]) -> AnalysisOutput {
     let code = exec_sections(file);
     let targets = throw_targets(file, bytes);
     out.merge(super::kuna_msvcfuncinfo::collect(file, bytes, &img));
+    out.merge(super::kuna_msvcseh::collect(file, bytes, &img, &code));
     let infos = find_throw_infos(&img, &rk, &text);
     if infos.is_empty() && targets.is_empty() {
         return out;
@@ -157,7 +159,7 @@ pub fn collect<'a>(file: &'a object::File<'a>, bytes: &[u8]) -> AnalysisOutput {
 }
 
 /// Every executable section as `(vma, bytes)`.
-fn exec_sections<'a>(file: &'a object::File<'a>) -> Vec<(u64, &'a [u8])> {
+pub(crate) fn exec_sections<'a>(file: &'a object::File<'a>) -> Vec<(u64, &'a [u8])> {
     let mut v = Vec::new();
     for sec in file.sections() {
         let exec = sec.kind() == SectionKind::Text
@@ -762,6 +764,63 @@ mod tests {
         assert!(is_throw_name(b"_CxxThrowException"));
         assert!(is_throw_name(b"_CxxThrowException@8"));
         assert!(!is_throw_name(b"_CxxFrameHandler3"));
+    }
+
+    /// The clang-cl fixture: three throws, a rethrow in a catch funclet, and a
+    /// try with three handlers.
+    #[test]
+    fn clang_cl_fixture() {
+        let path = format!(
+            "{}/tests/fixtures/msvceh_x64.exe",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("read {path}: {e}"));
+        let file = object::File::parse(&bytes[..]).expect("parse");
+        let out = collect(&file, &bytes);
+        let sym = |a: u64| {
+            out.symbols
+                .iter()
+                .find(|s| s.addr == a)
+                .map(|s| s.name.clone())
+                .unwrap_or_default()
+        };
+        assert!(sym(0x1_4000_2198).starts_with("ThrowInfo<") && sym(0x1_4000_2198).contains("Err"));
+        assert!(sym(0x1_4000_2200).contains("Derived"));
+        assert_eq!(sym(0x1_4000_2238), "ThrowInfo<int>");
+        let comment = |a: u64| {
+            out.comments
+                .iter()
+                .find(|c| c.addr == a)
+                .map(|c| (c.func_addr, c.text.clone()))
+        };
+        assert_eq!(
+            comment(0x1_4000_102c),
+            Some((0x1_4000_1000, "throw int".to_string()))
+        );
+        assert_eq!(
+            comment(0x1_4000_1161),
+            Some((0x1_4000_114f, "rethrow".to_string()))
+        );
+        let tries: Vec<&str> = out
+            .header_comments
+            .iter()
+            .filter(|c| c.func_addr == 0x1_4000_109f && c.text.starts_with("eh: try"))
+            .map(|c| c.text.as_str())
+            .collect();
+        assert_eq!(tries.len(), 1, "{tries:?}");
+        assert!(
+            tries[0].contains("catch (...) -> 0x14000110d"),
+            "{}",
+            tries[0]
+        );
+        assert!(
+            out.header_comments
+                .iter()
+                .any(|c| c.func_addr == 0x1_4000_10c7 && c.text.contains("handler of 0x14000109f"))
+        );
+        for f in [0x1_4000_10c7, 0x1_4000_10eb, 0x1_4000_110d, 0x1_4000_114f] {
+            assert!(out.entries.contains(&f), "{f:#x} not discovered");
+        }
     }
 
     #[test]

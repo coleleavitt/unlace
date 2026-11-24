@@ -3607,6 +3607,11 @@ impl ConsoleProgram {
                         image_path,
                     ));
                 }
+                // (kuna `com`) COM ids and interfaces; off by default, and
+                // it builds types, so it runs only when asked for.
+                if analysis_pass_enabled(self.arch(), "com") {
+                    merged.merge(unlace_analysis::passes::run_com(&bytes, self.arch()));
+                }
                 // Deferred Listing build + consumer/fast-inventory run, gated
                 // on the matching option. The call-fixup seed list is the names
                 // the load-time pass flagged resolved to addresses via the
@@ -3758,9 +3763,14 @@ impl ConsoleProgram {
         merged.context_paints.extend(input_context_paints);
         self.fid_databases = std::mem::take(&mut merged.fid_databases);
         // (kuna `typelib`) Last, so every other source of a prototype has
-        // spoken: the library declares only the imports nothing else did.
+        // spoken: the library declares only the imports, and the functions
+        // FLIRT, FID or a PDB named, that nothing else did.
         if let Some(facts) = merged.typelib.take() {
-            if let Err(message) = crate::kuna_typelib::seed(self.arch(), &facts, &mut merged) {
+            let said = match crate::kuna_typelib::seed(self.arch(), &facts, &mut merged) {
+                Ok((_, note)) => note,
+                Err(message) => Some(message),
+            };
+            if let Some(message) = said {
                 let path = self.image_path();
                 unlace_base::notes::say_once(&path, &format!("[kuna typelib] {message}"));
             }
@@ -4023,6 +4033,11 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::Cortexmscs>()
                 .0
         }
+        "com" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Com>()
+                .0
+        }
         "strings" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Strings>()
@@ -4214,6 +4229,16 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::CvfTrace>()
                 .lines
         }
+        "gopcln" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::GoPcln>()
+                .on
+        }
+        "gopcln_lines" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::GoPcln>()
+                .lines
+        }
         "addrtable" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Addrtable>()
@@ -4402,6 +4427,27 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Pdb>()
                 .0
+        }
+        // (kuna) The PDB types/prototypes/locals and source-line passes: their
+        // facts exist only with a `.pdb` the `pdb` gate locates, so each needs
+        // that gate as well as its own.
+        "pdbtypes" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Pdb>()
+                .0
+                && arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_analysisgates::Pdbtypes>()
+                    .0
+        }
+        "pdblines" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Pdb>()
+                .0
+                && arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_analysisgates::Pdblines>()
+                    .0
         }
         // (kuna) `libctypes` has NO arm on purpose and reaches this fail-open
         // default. Its gate is the load-time `KUNA_LIBCTYPES` env bridge read
@@ -8470,6 +8516,15 @@ fn commit_analysis_output(
             .set::<unlace_decomp::kuna_kalloctype::KallocTypes>(Rc::new(
                 out.kalloc_types.iter().cloned().collect(),
             ));
+    }
+    // (kuna `com`) The interface ids the engine types a COM request's
+    // out-parameter by.
+    if !out.com_interfaces.is_empty() {
+        prog.arch_mut()
+            .kuna_states
+            .set(Rc::new(unlace_decomp::kuna_comtyping::ComInterfaces(
+                out.com_interfaces.iter().cloned().collect(),
+            )));
     }
     for mut pieces in out.prototypes {
         if let Some(st) = self_types.get(&pieces.name) {

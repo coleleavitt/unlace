@@ -622,6 +622,10 @@ pub struct AnalysisOutput {
     /// `kalloc_type_view` / `kalloc_type_var_view`; the engine types a typed
     /// allocator's result by the view it is passed.
     pub kalloc_types: Vec<(u64, unlace_decomp::kuna_kalloctype::KallocView)>,
+    /// (kuna `com`) `(interface-id address, interface struct)` for every interface
+    /// id the image holds; the engine types a COM request's out-parameter by the
+    /// id it passes. Produced only by the `com` pass.
+    pub com_interfaces: Vec<(u64, std::rc::Rc<unlace_decomp::dtype::Datatype>)>,
     /// The `self` of each Objective-C method only a symbol names (a direct
     /// method): an unlocked hint on its first argument register, typed
     /// `Class *` under `objcivars`.
@@ -774,12 +778,14 @@ pub struct AnalysisOutput {
     /// Source-line annotations recovered from debug metadata, each to be
     /// installed as a `Comment::user2` so the decompiled output carries the
     /// `file:line` of the instruction. The commit boundary writes each into the
-    /// architecture's `commentdb`. Produced by the DWARF lines pass and the CVF
-    /// trace lines pass (`dwarf_lines on`, `cvftrace lines`); empty otherwise. See
+    /// architecture's `commentdb`. Produced by the DWARF lines pass, the CVF
+    /// trace lines pass and the Go pclntab passes (`dwarf_lines on`,
+    /// `cvftrace lines`, `gopcln`); empty otherwise. See
     /// [`CommentFact`].
     pub comments: Vec<CommentFact>,
     /// (kuna) Function header (plate) comments, keyed by `func_addr`. Produced
-    /// only by [`crate::entry::kuna_itaniumeh::EhNotePass`] (`ehnote`).
+    /// by [`crate::entry::kuna_itaniumeh::EhNotePass`] (`ehnote`) and the Go
+    /// source-position pass (`gopcln`).
     pub header_comments: Vec<CommentFact>,
     /// Functions the FID matcher re-identified by full-hash fingerprint, by
     /// `(addr, name)`. The commit boundary **renames** each (resolved by ADDRESS) only
@@ -1227,6 +1233,7 @@ impl AnalysisOutput {
             self.objc_classes = other.objc_classes;
         }
         self.kalloc_types.extend(other.kalloc_types);
+        self.com_interfaces.extend(other.com_interfaces);
         self.objc_self_hints.extend(other.objc_self_hints);
         self.externref.extend(other.externref);
         self.import_slot_names.extend(other.import_slot_names);
@@ -1326,6 +1333,10 @@ pub struct TypeLibFacts {
     pub imports: Vec<(String, u64)>,
     /// The imported names no function the image defines shares, sorted.
     pub named: Vec<String>,
+    /// The PE optional-header `Subsystem` (1 native, 2/3 Windows GUI/CUI,
+    /// 10..=13 EFI), which picks the IDA Windows type libraries; `None` for an
+    /// image that is not a PE.
+    pub subsystem: Option<u16>,
 }
 
 /// (kuna `formatstring static`) One printf/scanf-family call site whose format

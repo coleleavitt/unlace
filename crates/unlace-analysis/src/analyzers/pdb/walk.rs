@@ -7,8 +7,8 @@
 //! (Procedure) — resolve each to a VMA, and return `(vma, name)` pairs the
 //! [`crate::pdb::PdbPass`] turns into `out.fid_names` renames + `out.symbols`.
 //!
-//! Types/locals/lines are the deferred PR-P2/P3 (design §5): this is the NAME tier
-//! — stripped `FUN_*` → the real source name.
+//! This is the NAME tier — stripped `FUN_*` → the real source name; types, locals
+//! and lines are [`super::kuna_pdbtypes`] and [`super::kuna_pdblines`].
 //!
 //! ## Address resolution
 //!
@@ -59,7 +59,7 @@ pub fn walk_functions(pdb: &mut pdb::PDB<'_, std::fs::File>, image_base: u64) ->
 /// The `S_LPROC32`/`S_GPROC32` record kinds (plain, `_ST`, `_ID` and DPC forms),
 /// checked before a record is parsed; the `pdb` crate does not export its kind
 /// constants, and a module stream is mostly locals and ranges.
-const PROCEDURE_KINDS: [u16; 8] = [
+pub(crate) const PROCEDURE_KINDS: [u16; 8] = [
     0x100a, 0x100b, 0x110f, 0x1110, 0x1146, 0x1147, 0x1155, 0x1156,
 ];
 

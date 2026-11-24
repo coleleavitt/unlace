@@ -7,10 +7,11 @@
 //! imports at which addresses. It interns nothing and types nothing.
 //!
 //! A target is an object format, an operating system, a machine and a C
-//! library. The one target with a built-in library is an x86-64 Linux ELF
-//! dynamically linked against glibc or musl. Every other image is named by its
-//! format and machine ([`any_target`]), which no built-in library and no text
-//! library of that target matches, so only an IDA type library (`.til`), which
+//! library. Built-in libraries serve an x86-64 Linux ELF dynamically linked
+//! against glibc or musl, and an x86 or x64 PE (`windows x86`,
+//! `windows x86_64`, the Windows API). Every other image is named by its
+//! format and machine ([`any_target`]), which no built-in library matches, so
+//! only a text library of that target or an IDA type library (`.til`), which
 //! is rendered for whatever target reads it, declares its imports.
 
 use object::{Object, ObjectSection};
@@ -86,11 +87,16 @@ impl AnalysisPass for TypeLibPass {
                 .into_iter()
                 .collect();
         named.sort_unstable();
+        let subsystem = match ctx.file.format() {
+            object::BinaryFormat::Pe => crate::uefi::pe_subsystem(ctx.bytes),
+            _ => None,
+        };
         out.typelib = Some(TypeLibFacts {
             target,
             glibc,
             imports,
             named,
+            subsystem,
         });
         out
     }
@@ -119,5 +125,19 @@ mod tests {
         let file = object::File::parse(&*mips).unwrap();
         assert_eq!(target(&file), None);
         assert_eq!(any_target(&file), "elf mips");
+    }
+
+    #[test]
+    fn a_pe_is_named_for_the_built_in_windows_library() {
+        for (name, expected, subsystem) in [
+            ("importcall_pe_x86_64.exe", "windows x86_64", 3),
+            ("aifbracket_pe_i386.exe", "windows x86", 2),
+        ] {
+            let pe = fixture(name);
+            let file = object::File::parse(&*pe).unwrap();
+            assert_eq!(target(&file), None, "{name}");
+            assert_eq!(any_target(&file), expected, "{name}");
+            assert_eq!(crate::uefi::pe_subsystem(&pe), Some(subsystem), "{name}");
+        }
     }
 }

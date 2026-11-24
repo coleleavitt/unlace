@@ -490,6 +490,12 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         passes.push(Box::new(
             crate::strings::kuna_strrecords::StrRecordPass::go(),
         ));
+        // (kuna `gopcln`) Source positions and inlined calls from the pclntab:
+        // header and inline-marker comments (`gopcln on`), then per-statement
+        // `file:line` comments (`gopcln lines`). Both self-gate, so a default
+        // run reads nothing.
+        passes.push(Box::new(crate::pclntab::kuna_gopcln::GoPclnPass));
+        passes.push(Box::new(crate::pclntab::kuna_gopcln::GoPclnLinesPass));
         // (kuna `gonoreturn`) BEFORE `gopclntab`, preserving that pass's
         // appended-last contract: apply the vendored Go no-return list to the
         // pclntab's own function list, so a STRIPPED Go binary (no .symtab for
@@ -624,13 +630,18 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // pdb on` (`engine.rs::analysis_pass_enabled` reads `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Pdb>().0`, default
     // false) AND a fingerprint-matching `.pdb` is supplied via `kuna_pdb_path`, so a
     // default run is byte-identical and bound to the real-PE path (the XML datatest
-    // oracle is untouched). Types/typed-locals/lines are the deferred PR-P2/P3.
+    // oracle is untouched). Types/typed-locals/lines are `pdbtypes`/`pdblines`.
     if format == object::BinaryFormat::Pe {
         passes.push(Box::new(crate::pdb::PdbPass));
         // S1 PDB-procedure-interior entry suppression (`pdbinterior`): the same
         // `.pdb`'s S_GPROC32/S_LPROC32 code lengths reported on `pdb_bodies`, for
         // the frameless leaves `.pdata` has no record of. Committed with `pdb`.
         passes.push(Box::new(crate::pdb::kuna_pdbinterior::PdbInteriorPass));
+        // (kuna `pdbtypes`/`pdblines`) The same `.pdb`'s types, prototypes,
+        // locals, globals and vftables, and its source lines; committed only when
+        // their gates and `pdb` are on.
+        passes.push(Box::new(crate::pdb::kuna_pdbtypes::PdbTypesPass));
+        passes.push(Box::new(crate::pdb::kuna_pdblines::PdbLinesPass));
         passes.push(Box::new(crate::kuna_cvftrace::CvfTracePass));
         passes.push(Box::new(crate::kuna_cvftrace::CvfTraceLinesPass));
     }
@@ -2045,6 +2056,27 @@ pub fn run_msvc_ctors(
     out
 }
 
+/// Run the **deferred** COM markup ([`crate::com::ComPass`]) at the commit
+/// point, only when its option is on: it builds the interface types into the
+/// engine's type factory, so a run with the option off creates none. The pass
+/// declines every image that is not a PE.
+pub fn run_com(bytes: &[u8], arch: &Architecture) -> AnalysisOutput {
+    let Ok(file) = crate::loadimage_object::parse_object(bytes) else {
+        return AnalysisOutput::default();
+    };
+    let ctx = AnalysisCtx {
+        file: &file,
+        bytes,
+        image: None,
+        arch,
+        listing: None,
+        image_path: None,
+    };
+    let mut out = crate::com::ComPass.run(&ctx);
+    out.sanitize_names(symbolnamechars_mode());
+    out
+}
+
 /// Build an [`AnalysisCtx`] and run the **deferred** scalar/operand reference-markup
 /// pass ([`crate::operand_refs::OperandRefsPass`]), returning its output keyed by
 /// the pass id (`"operand_refs"`).
@@ -2513,13 +2545,14 @@ mod tests {
         }
     }
 
-    /// The Go pass set is exactly the base set plus the four Go-arm passes:
-    /// `fatstrrecords` (the string-record pass's Go arm), then `gonoreturn`
+    /// The Go pass set is exactly the base set plus the six Go-arm passes:
+    /// `fatstrrecords` (the string-record pass's Go arm), then `gopcln` and
+    /// `gopcln_lines` (source positions), then `gonoreturn`
     /// (the pclntab no-return list), then `gotypes` (the runtime-type
     /// harvest), then `gopclntab` (the function-name recovery, keeping its
     /// appended-last contract); no other compiler carries the Go-only ones.
     #[test]
-    fn go_adds_only_the_four_go_passes() {
+    fn go_adds_only_the_six_go_passes() {
         let base = ids(&passes_for(Compiler::Gcc, NON_PE));
         let go = ids(&passes_for(Compiler::Go, NON_PE));
         assert_eq!(
@@ -2544,10 +2577,20 @@ mod tests {
         );
         assert_eq!(
             go.get(go.len() - 4),
+            Some(&"gopcln_lines"),
+            "gopcln_lines precedes gonoreturn"
+        );
+        assert_eq!(
+            go.get(go.len() - 5),
+            Some(&"gopcln"),
+            "gopcln precedes gopcln_lines"
+        );
+        assert_eq!(
+            go.get(go.len() - 6),
             Some(&"fatstrrecords"),
             "the record pass opens the Go block"
         );
-        assert_eq!(go.len(), base.len() + 4, "Go adds exactly four passes");
+        assert_eq!(go.len(), base.len() + 6, "Go adds exactly six passes");
         // No non-Go compiler carries the Go-only passes.
         for c in [
             Compiler::Gcc,
@@ -2560,6 +2603,10 @@ mod tests {
             assert!(
                 !set.contains(&"gopclntab"),
                 "{c:?} must not carry gopclntab"
+            );
+            assert!(
+                !set.contains(&"gopcln") && !set.contains(&"gopcln_lines"),
+                "{c:?} must not carry gopcln"
             );
             assert!(
                 !set.contains(&"gonoreturn"),
@@ -2680,8 +2727,15 @@ mod tests {
         let pe = ids(&passes_for(Compiler::Clang, object::BinaryFormat::Pe));
         assert!(pe.contains(&"pdb"), "PE pass set must carry the pdb pass");
         assert_eq!(
-            pe[pe.len() - 4..],
-            ["pdb", "pdbinterior", "cvftrace", "cvftrace_lines"],
+            pe[pe.len() - 6..],
+            [
+                "pdb",
+                "pdbinterior",
+                "pdbtypes",
+                "pdblines",
+                "cvftrace",
+                "cvftrace_lines"
+            ],
             "PDB metadata precedes CVF metadata"
         );
         // A PE carries BOTH the rtti and pdb metadata passes (rtti then pdb).
@@ -2705,6 +2759,10 @@ mod tests {
                 assert!(
                     !set.contains(&"pdbinterior"),
                     "{c:?}/{fmt:?} must not carry pdbinterior"
+                );
+                assert!(
+                    !set.contains(&"pdbtypes") && !set.contains(&"pdblines"),
+                    "{c:?}/{fmt:?} must not carry pdbtypes or pdblines"
                 );
                 assert!(
                     !set.contains(&"cvftrace"),

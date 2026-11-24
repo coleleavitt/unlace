@@ -1,6 +1,8 @@
 # COM GUIDs and interfaces: IDA's comhelper, and a plan for unlace (2026-11-24)
 
-Deepens gap 9 of `notes/ida-gaps.md`. A Windows binary that uses COM passes 16-byte GUIDs to
+Deepens gap 9 of `notes/ida-gaps.md`.
+
+**Status:** implemented by #277, before this note, along the plan below and past it: the GUID and interface tables are built in (generated from the `windows` crate, MIT/Apache; 5,239 ids, 4,401 interfaces with typed Vtbls), so step 2 does not wait for `.til` support. Not done: runtime `clsid.cfg` input, `CoCreateInstanceEx`. A Windows binary that uses COM passes 16-byte GUIDs to
 `CoCreateInstance`/`QueryInterface` and then calls through `(*p)->lpVtbl[n]`. Without names for the
 GUIDs and types for the interfaces, every such call is `(*(code **)(*(long *)v + 0x18))(v, ...)`.
 

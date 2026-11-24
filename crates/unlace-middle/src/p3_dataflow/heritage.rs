@@ -4146,7 +4146,11 @@ impl Heritage {
         size: int4,
     ) -> Option<Vec<unlace_num::pcoderaw::VarnodeData>> {
         let proto = fd.get_func_proto();
-        if !proto.has_model() || proto.is_input_locked() || proto.possible_input_param(addr, size) {
+        if !proto.has_model()
+            || proto.is_input_locked()
+            || proto.possible_input_param(addr, size)
+            || crate::kuna_armpairparam::joined_pair(fd, addr, size)
+        {
             return None;
         }
         let pieces =

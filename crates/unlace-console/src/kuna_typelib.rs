@@ -1,6 +1,10 @@
 //! (kuna `typelib`) The prebuilt type library: a platform C library's
 //! declarations, read for the functions an image imports.
 //!
+//! Three libraries are built in: the libc of an x86-64 Linux ELF (from musl,
+//! `scripts/typelib/gen_musl.py`) and the Windows API of an x86 and an x64 PE
+//! (from IDA's Windows SDK type libraries, `scripts/typelib/gen_windows.py`).
+//!
 //! A library is one text file. Its first three lines name the format, the
 //! target and the source the entries were generated from; every entry after
 //! them is one function, one typedef or one record:
@@ -35,10 +39,12 @@
 //! factory already holds is used as it is and never redefined, so a type from
 //! the image's own debug information or from `libctypes` wins.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use unlace_analysis::pass::{AnalysisOutput, TypeLibFacts};
+use unlace_analysis::pass::{AnalysisOutput, FidMatch, TypeLibFacts};
 use unlace_base::types::int4;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, flags, type_metatype};
@@ -51,7 +57,14 @@ use crate::grammar::{DataOrg, parse_protopieces, parse_type};
 const FORMAT: &str = unlace_decomp::kuna_typelib::MAGIC;
 
 /// The libraries built into kuna, by target.
-const BUILTIN: &[(&str, &str)] = &[("linux x86_64", include_str!("../typelib/linux-x86_64.ktl"))];
+const BUILTIN: &[(&str, &str)] = &[
+    ("linux x86_64", include_str!("../typelib/linux-x86_64.ktl")),
+    ("windows x86", include_str!("../typelib/windows-x86.ktl")),
+    (
+        "windows x86_64",
+        include_str!("../typelib/windows-x86_64.ktl"),
+    ),
+];
 
 /// Largest library file `typelib <path>` reads.
 const MAX_LIBRARY_BYTES: u64 = 16 << 20;
@@ -441,26 +454,52 @@ impl<'l, 'a> Reader<'l, 'a> {
     }
 }
 
-/// The library text the option selects for `target`: the built-in one, or the
-/// file's when it names the same target. An IDA type library (`.til`) is
+/// The environment variable naming a directory of IDA type libraries (an IDA
+/// install's `til` directory, or its `til/pc`) that `auto` reads for a PE.
+pub const TIL_DIR_ENV: &str = "UNLACE_TIL_DIR";
+
+/// The Windows releases an IDA type library name may carry, newest first; the
+/// empty suffix is the oldest library of a family (`mssdk.til`, Windows XP).
+const TIL_RELEASES: &[&str] = &[
+    "_win10", "_win81", "_win8", "_win7", "_vista", "_ws03", "_xp", "_2000", "_nt", "",
+];
+
+/// The newest library of `family` (`mssdk64`, `ntddk`) in `dir` or `dir/pc`.
+fn newest_til(dir: &Path, family: &str) -> Option<PathBuf> {
+    TIL_RELEASES.iter().find_map(|release| {
+        [dir.to_path_buf(), dir.join("pc")]
+            .into_iter()
+            .map(|d| d.join(format!("{family}{release}.til")))
+            .find(|p| p.is_file())
+    })
+}
+
+/// The IDA type libraries IDA itself would load for a PE of `target` with
+/// this optional-header `subsystem`, found in `dir`: the SDK library for a
+/// user-mode image (`mssdk`), the driver kit for a native one (`ntddk`), each
+/// with the Native API library (`ntapi`), and `uefi` for an EFI image; the
+/// `64` libraries for an x64 image. Empty for any other target.
+fn til_choice(dir: &Path, target: &str, subsystem: Option<u16>) -> Vec<PathBuf> {
+    let wide = match target {
+        "windows x86" => "",
+        "windows x86_64" => "64",
+        _ => return Vec::new(),
+    };
+    let families: Vec<String> = match subsystem {
+        Some(10..=13) => vec![format!("uefi{wide}")],
+        Some(1) => vec![format!("ntddk{wide}"), format!("ntapi{wide}")],
+        _ => vec![format!("mssdk{wide}"), format!("ntapi{wide}")],
+    };
+    families
+        .iter()
+        .filter_map(|family| newest_til(dir, family))
+        .collect()
+}
+
+/// The text of the library file at `path`. An IDA type library (`.til`) is
 /// rendered as library text for `target` itself, its pointers `addr_size`
 /// bytes wide when its memory model states no width.
-fn library_text(
-    choice: &TypeLib,
-    target: &str,
-    addr_size: u8,
-) -> Result<Option<std::borrow::Cow<'static, str>>, String> {
-    let builtin = || {
-        BUILTIN
-            .iter()
-            .find(|(t, _)| *t == target)
-            .map(|(_, text)| (*text).into())
-    };
-    let path = match choice {
-        TypeLib::Off => return Ok(None),
-        TypeLib::Auto => return Ok(builtin()),
-        TypeLib::File(path) => path,
-    };
+fn file_text(path: &Path, target: &str, addr_size: u8) -> Result<String, String> {
     let shown = path.display();
     let meta = std::fs::metadata(path).map_err(|e| format!("typelib {shown}: {e}"))?;
     if is_til_file(path) {
@@ -471,9 +510,8 @@ fn library_text(
             ));
         }
         let bytes = std::fs::read(path).map_err(|e| format!("typelib {shown}: {e}"))?;
-        let text = unlace_analysis::protos::kuna_til::to_typelib(&bytes, target, addr_size)
-            .map_err(|e| format!("typelib {shown}: {e}"))?;
-        return Ok(Some(text.into()));
+        return unlace_analysis::protos::kuna_til::to_typelib(&bytes, target, addr_size)
+            .map_err(|e| format!("typelib {shown}: {e}"));
     }
     if meta.len() > MAX_LIBRARY_BYTES {
         return Err(format!(
@@ -481,12 +519,69 @@ fn library_text(
             MAX_LIBRARY_BYTES >> 20
         ));
     }
-    let text = std::fs::read_to_string(path).map_err(|e| format!("typelib {shown}: {e}"))?;
-    Ok(Some(text.into()))
+    std::fs::read_to_string(path).map_err(|e| format!("typelib {shown}: {e}"))
+}
+
+/// One library a load reads: what to call it in a message, and its text.
+struct Source {
+    label: String,
+    text: Cow<'static, str>,
+}
+
+/// The libraries the option selects for an image of `target`, in the order
+/// they are asked (the first that declares a name wins), and a note on what
+/// `auto` chose or could not read from `til_dir`. `auto` reads the
+/// libraries IDA would choose from `til_dir` for a PE, then the built-in
+/// library; a list of files reads those files, and an unreadable one is an error.
+fn library_sources(
+    choice: &TypeLib,
+    target: &str,
+    subsystem: Option<u16>,
+    addr_size: u8,
+    til_dir: Option<&Path>,
+) -> Result<(Vec<Source>, Option<String>), String> {
+    let paths = match choice {
+        TypeLib::Off => return Ok((Vec::new(), None)),
+        TypeLib::Files(paths) => paths,
+        TypeLib::Auto => {
+            let mut sources = Vec::new();
+            let mut said = Vec::new();
+            for path in til_dir.map_or_else(Vec::new, |d| til_choice(d, target, subsystem)) {
+                match file_text(&path, target, addr_size) {
+                    Ok(text) => {
+                        said.push(format!("read {}", path.display()));
+                        sources.push(Source {
+                            label: path.display().to_string(),
+                            text: text.into(),
+                        });
+                    }
+                    Err(e) => said.push(e),
+                }
+            }
+            if let Some((_, text)) = BUILTIN.iter().find(|(t, _)| *t == target) {
+                sources.push(Source {
+                    label: "auto".into(),
+                    text: (*text).into(),
+                });
+            }
+            let note = (!said.is_empty()).then(|| format!("{TIL_DIR_ENV}: {}", said.join("; ")));
+            return Ok((sources, note));
+        }
+    };
+    let sources = paths
+        .iter()
+        .map(|path| {
+            Ok(Source {
+                label: path.display().to_string(),
+                text: file_text(path, target, addr_size)?.into(),
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok((sources, None))
 }
 
 /// `true` when `path` opens with the IDA type-library header.
-fn is_til_file(path: &std::path::Path) -> bool {
+fn is_til_file(path: &Path) -> bool {
     use std::io::Read;
     let mut head = [0u8; 6];
     std::fs::File::open(path)
@@ -495,40 +590,94 @@ fn is_til_file(path: &std::path::Path) -> bool {
         && unlace_analysis::protos::kuna_til::is_til(&head)
 }
 
-/// Add the library's prototype for each import of `facts` that no earlier
-/// source in `merged` declared. Returns how many functions took one.
+/// The function names FLIRT, FID or a PDB gave, one per address: a name the
+/// image's own metadata states (`by_signature` false) when every such name at
+/// the address agrees, else a signature name when every signature name agrees.
+fn names_beyond_imports(matches: &[FidMatch]) -> Vec<(u64, String)> {
+    let mut by_addr: BTreeMap<u64, (Vec<&str>, Vec<&str>)> = BTreeMap::new();
+    for m in matches {
+        let (metadata, signature) = by_addr.entry(m.addr).or_default();
+        if m.by_signature {
+            signature.push(&m.name);
+        } else {
+            metadata.push(&m.name);
+        }
+    }
+    by_addr
+        .into_iter()
+        .filter_map(|(addr, (metadata, signature))| {
+            let names = if metadata.is_empty() {
+                signature
+            } else {
+                metadata
+            };
+            let first = *names.first()?;
+            names
+                .iter()
+                .all(|n| *n == first)
+                .then(|| (addr, first.to_string()))
+        })
+        .collect()
+}
+
+/// Add the libraries' prototype for each import of `facts`, and for each function
+/// FLIRT, FID or a PDB named, that no earlier source in `merged` declared. On a
+/// Windows image a library also replaces a `win32sigs` declaration, which spells
+/// handles and records `void *`. Returns how many functions took one, and a
+/// note on the libraries `auto` chose from `UNLACE_TIL_DIR`.
 pub fn seed(
     arch: &Architecture,
     facts: &TypeLibFacts,
     merged: &mut AnalysisOutput,
-) -> Result<usize, String> {
+) -> Result<(usize, Option<String>), String> {
     let typelib = arch
         .kuna_options
         .get::<unlace_decomp::kuna_typelib::TypeLib>();
     let (addr_size, word_size) = arch.data_org();
-    let Some(text) = library_text(&typelib, facts.target, u8::try_from(addr_size).unwrap_or(8))?
-    else {
-        return Ok(0);
-    };
-    let lib = Library::parse(&text).map_err(|e| format!("typelib {}: {e}", typelib.as_str()))?;
-    if lib.target != facts.target {
-        return Err(format!(
-            "typelib {}: the library is for {}, the image is {}",
-            typelib.as_str(),
-            lib.target,
-            facts.target
-        ));
+    let til_dir = std::env::var_os(TIL_DIR_ENV)
+        .filter(|d| !d.is_empty())
+        .map(PathBuf::from);
+    let (sources, note) = library_sources(
+        &typelib,
+        facts.target,
+        facts.subsystem,
+        u8::try_from(addr_size).unwrap_or(8),
+        til_dir.as_deref(),
+    )?;
+    if sources.is_empty() {
+        return Ok((0, note));
+    }
+    let mut libs = Vec::with_capacity(sources.len());
+    for source in &sources {
+        let lib =
+            Library::parse(&source.text).map_err(|e| format!("typelib {}: {e}", source.label))?;
+        if lib.target != facts.target {
+            return Err(format!(
+                "typelib {}: the library is for {}, the image is {}",
+                source.label, lib.target, facts.target
+            ));
+        }
+        libs.push(lib);
     }
     let org = DataOrg {
         addr_size,
         word_size,
     };
-    let mut reader = Reader::new(&lib, facts.glibc, arch.types(), org);
+    let mut readers: Vec<Reader<'_, '_>> = libs
+        .iter()
+        .map(|lib| Reader::new(lib, facts.glibc, arch.types(), org))
+        .collect();
+    let mut prototype = |name: &str| readers.iter_mut().find_map(|r| r.prototype(name));
+    let windows = facts.target.starts_with("windows ");
+    let replaceable =
+        |name: &str| windows && unlace_analysis::protos::kuna_win32sigs::declares(name);
+    let beyond = names_beyond_imports(&merged.fid_names);
     let declared: BTreeSet<&str> = merged
         .prototypes
         .iter()
         .chain(merged.prototypes_at.iter().map(|(_, pieces)| pieces))
         .map(|pieces| pieces.name.as_str())
+        .filter(|name| !replaceable(name))
         .collect();
     let mut read: BTreeMap<&str, Option<PrototypePieces>> = BTreeMap::new();
     let mut by_address = Vec::new();
@@ -538,13 +687,42 @@ pub fn seed(
         }
         let pieces = read
             .entry(name.as_str())
-            .or_insert_with(|| reader.prototype(name));
+            .or_insert_with(|| prototype(name.as_str()));
         if let Some(pieces) = pieces {
             by_address.push((*addr, pieces.clone()));
         }
     }
+    let typed: BTreeSet<u64> = merged
+        .prototypes_at
+        .iter()
+        .map(|(addr, _)| *addr)
+        .chain(facts.imports.iter().map(|(_, addr)| *addr))
+        .collect();
+    let mut named_beyond = 0;
+    for (addr, name) in &beyond {
+        if typed.contains(addr) || declared.contains(name.as_str()) {
+            continue;
+        }
+        if let Some(pieces) = prototype(name.as_str()) {
+            by_address.push((*addr, pieces));
+            named_beyond += 1;
+        }
+    }
     drop(declared);
-    let mut seeded = 0;
+    let replaced: BTreeSet<&str> = read
+        .iter()
+        .filter(|(name, pieces)| pieces.is_some() && replaceable(name))
+        .map(|(name, _)| *name)
+        .collect();
+    if !replaced.is_empty() {
+        merged
+            .prototypes
+            .retain(|pieces| !replaced.contains(pieces.name.as_str()));
+        merged
+            .prototypes_at
+            .retain(|(_, pieces)| !replaced.contains(pieces.name.as_str()));
+    }
+    let mut seeded = named_beyond;
     for (name, pieces) in read {
         let Some(pieces) = pieces else { continue };
         seeded += 1;
@@ -557,7 +735,7 @@ pub fn seed(
         }
     }
     merged.prototypes_at.extend(by_address);
-    Ok(seeded)
+    Ok((seeded, note))
 }
 
 #[cfg(test)]

@@ -4,10 +4,13 @@
 //! function with its prototype, and every record with the size, alignment and
 //! member offsets the platform's compiler gives it. `auto` reads the library
 //! built into kuna for the image's target (an x86-64 Linux ELF linked against
-//! glibc or musl; no other target has one, so the option is inert there),
-//! `off` reads none, and a path reads a library file instead of the built-in
-//! one: the text format, or an IDA type library (`.til`), which is read for an
-//! image of any target. The library is consulted when the analysis facts are committed, which
+//! glibc or musl, or an x86 or x64 PE, which reads the Windows API library; no
+//! other target has one, so the option is inert there),
+//! `off` reads none, and a path, or a `:`-separated list of paths, reads
+//! library files instead of the built-in one: the text format, or an IDA type
+//! library (`.til`), which is read for an image of any target. Under `auto` a
+//! PE also reads the IDA Windows type libraries of the directory
+//! `UNLACE_TIL_DIR` names, chosen the way IDA chooses them. The library is consulted when the analysis facts are committed, which
 //! is after the `option` lines, so the choice is an ordinary field of the
 //! [`Architecture`](crate::architecture::Architecture) and needs no load-time
 //! bridge.
@@ -29,13 +32,15 @@ pub enum TypeLib {
     Auto,
     /// No library.
     Off,
-    /// The library in this file: a text library for an image of the target it
-    /// names, or an IDA type library for any image.
-    File(PathBuf),
+    /// The libraries in these files, the first one that declares a name
+    /// winning: a text library for an image of the target it names, or an IDA
+    /// type library for any image. Spelled `a.til:b.til`.
+    Files(Vec<PathBuf>),
 }
 
 impl TypeLib {
-    /// Parse an option value. A path that is not a file is refused.
+    /// Parse an option value: `auto`, `off`, or a `:`-separated list of
+    /// library files. A path that is not a library file is refused.
     pub fn parse(value: &str) -> Result<TypeLib, String> {
         let v = value.trim();
         if v.eq_ignore_ascii_case("auto") {
@@ -44,6 +49,22 @@ impl TypeLib {
         if v.eq_ignore_ascii_case("off") {
             return Ok(TypeLib::Off);
         }
+        let paths = v
+            .split(':')
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+            .map(Self::library_file)
+            .collect::<Result<Vec<_>, _>>()?;
+        if paths.is_empty() {
+            return Err(format!(
+                "typelib: expected `auto`, `off` or a library file, got {v:?}"
+            ));
+        }
+        Ok(TypeLib::Files(paths))
+    }
+
+    /// One path of the list, refused unless it opens as a library.
+    fn library_file(v: &str) -> Result<PathBuf, String> {
         let path = PathBuf::from(v);
         if !path.is_file() {
             return Err(format!(
@@ -64,7 +85,7 @@ impl TypeLib {
                 MAGIC.trim_end()
             ));
         }
-        Ok(TypeLib::File(path))
+        Ok(path)
     }
 
     /// The value as the option spells it.
@@ -72,7 +93,11 @@ impl TypeLib {
         match self {
             TypeLib::Auto => "auto".to_string(),
             TypeLib::Off => "off".to_string(),
-            TypeLib::File(path) => path.display().to_string(),
+            TypeLib::Files(paths) => paths
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(":"),
         }
     }
 }
@@ -115,7 +140,7 @@ mod tests {
         std::fs::write(&til, b"IDATIL\x12\0\0\0").unwrap();
         let parsed = TypeLib::parse(til.to_str().unwrap());
         std::fs::remove_file(&til).unwrap();
-        assert_eq!(parsed, Ok(TypeLib::File(til.clone())));
+        assert_eq!(parsed, Ok(TypeLib::Files(vec![til.clone()])));
         let file = std::env::temp_dir().join(format!("kuna-typelib-{}.ktl", std::process::id()));
         std::fs::write(
             &file,
@@ -124,10 +149,27 @@ mod tests {
         .unwrap();
         let parsed = TypeLib::parse(file.to_str().unwrap());
         std::fs::remove_file(&file).unwrap();
-        assert_eq!(parsed, Ok(TypeLib::File(file.clone())));
+        assert_eq!(parsed, Ok(TypeLib::Files(vec![file.clone()])));
         assert_eq!(
-            TypeLib::File(file.clone()).as_str(),
+            TypeLib::Files(vec![file.clone()]).as_str(),
             file.display().to_string()
         );
+    }
+
+    #[test]
+    fn a_colon_list_names_several_libraries() {
+        let dir = std::env::temp_dir();
+        let a = dir.join(format!("kuna-typelib-list-a-{}.til", std::process::id()));
+        let b = dir.join(format!("kuna-typelib-list-b-{}.til", std::process::id()));
+        std::fs::write(&a, b"IDATIL\x12\0\0\0").unwrap();
+        std::fs::write(&b, b"IDATIL\x12\0\0\0").unwrap();
+        let list = format!("{}:{}", a.display(), b.display());
+        let parsed = TypeLib::parse(&list);
+        let bad = TypeLib::parse(&format!("{}:/nonexistent/x.til", a.display()));
+        std::fs::remove_file(&a).unwrap();
+        std::fs::remove_file(&b).unwrap();
+        assert_eq!(parsed, Ok(TypeLib::Files(vec![a.clone(), b.clone()])));
+        assert_eq!(parsed.unwrap().as_str(), list);
+        assert!(bad.is_err());
     }
 }

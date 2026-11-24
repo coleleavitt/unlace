@@ -1333,6 +1333,10 @@ pub struct TypeLibFacts {
     pub imports: Vec<(String, u64)>,
     /// The imported names no function the image defines shares, sorted.
     pub named: Vec<String>,
+    /// The PE optional-header `Subsystem` (1 native, 2/3 Windows GUI/CUI,
+    /// 10..=13 EFI), which picks the IDA Windows type libraries; `None` for an
+    /// image that is not a PE.
+    pub subsystem: Option<u16>,
 }
 
 /// (kuna `formatstring static`) One printf/scanf-family call site whose format

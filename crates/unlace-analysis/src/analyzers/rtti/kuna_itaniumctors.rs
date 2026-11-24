@@ -69,7 +69,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_decomp::fspec::{EXTRAPOP_UNKNOWN, PrototypePieces, effect_type};
+use unlace_decomp::fspec::{EXTRAPOP_UNKNOWN, ProtoModel, PrototypePieces, effect_type};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::PcodeEmit;
@@ -79,10 +79,10 @@ use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, SymFact, Sym
 
 /// How far the walk follows one candidate from its entry. A vptr store sits in
 /// the first few dozen instructions of a constructor even at `-O0`.
-const MAX_INSNS: usize = 256;
+pub(super) const MAX_INSNS: usize = 256;
 
 /// A destructor stores its vptr before anything else it does.
-const MAX_DTOR_INSNS: usize = 48;
+pub(super) const MAX_DTOR_INSNS: usize = 48;
 
 /// The constructor/destructor half of `itaniumrtti`. The vtable graph is
 /// recovered at load, before the Listing exists and before the image is attached
@@ -123,7 +123,7 @@ impl AnalysisPass for ItaniumCtorsPass {
 
 /// Does the symbol table already give the function at `addr` a name other than a
 /// placeholder, an entry-table slot or a vtable slot index?
-fn named_already(ctx: &AnalysisCtx, addr: u64) -> bool {
+pub(super) fn named_already(ctx: &AnalysisCtx, addr: u64) -> bool {
     let Some(space) = ctx.arch.manage().get_default_code_space() else {
         return false;
     };
@@ -305,7 +305,7 @@ fn constructors(
     out
 }
 
-fn owners(classes: &[ClassVtables]) -> HashMap<u64, (usize, bool)> {
+pub(super) fn owners(classes: &[ClassVtables]) -> HashMap<u64, (usize, bool)> {
     let mut m = HashMap::new();
     for (c, cls) in classes.iter().enumerate() {
         for (i, &v) in cls.vptrs.iter().enumerate() {
@@ -380,7 +380,7 @@ fn hex_literals(text: &str) -> impl Iterator<Item = u64> + '_ {
 /// The class a function's `this` stores make it a constructor or destructor of:
 /// the most-derived class whose primary vptr is stored at offset 0, provided every
 /// stored vptr belongs to it or to one of its bases.
-fn owning_class(
+pub(super) fn owning_class(
     stores: &[(u64, i64)],
     owner_of: &HashMap<u64, (usize, bool)>,
     classes: &[ClassVtables],
@@ -408,11 +408,11 @@ fn leaf(class: &str) -> &str {
     class.rsplit("::").next().unwrap_or(class)
 }
 
-fn ctor_name(class: &str) -> String {
+pub(super) fn ctor_name(class: &str) -> String {
     format!("{class}::{}", leaf(class))
 }
 
-fn dtor_name(class: &str) -> String {
+pub(super) fn dtor_name(class: &str) -> String {
     format!("{class}::~{}", leaf(class))
 }
 
@@ -427,28 +427,31 @@ type Ops = Vec<(OpCode, Option<VarnodeData>, Vec<VarnodeData>)>;
 /// whether `this` was a by-value return slot (memory reached through the second
 /// parameter, or `this` returned).
 #[derive(Default)]
-struct Walk {
-    stores: Vec<Store>,
-    calls: Vec<u64>,
+pub(super) struct Walk {
+    pub(super) stores: Vec<Store>,
+    pub(super) calls: Vec<u64>,
     trap: bool,
     second: bool,
+    /// The function returned `this` in a return register other than the one
+    /// `this` arrived in (an MSVC constructor returns `this`).
+    pub(super) returns_this: bool,
 }
 
 /// One vptr constant stored at `this + off`.
-struct Store {
-    vptr: u64,
-    off: i64,
+pub(super) struct Store {
+    pub(super) vptr: u64,
+    pub(super) off: i64,
     /// `this` was read back from the frame slot the function spilled it to.
     spilled: bool,
     /// A call came before the store on the walk.
-    after_call: bool,
+    pub(super) after_call: bool,
     /// A call or a conditional branch came before the store on the walk.
     after_branch: bool,
     /// A call that was passed `this` came before the store on the walk.
-    after_build: bool,
+    pub(super) after_build: bool,
 }
 
-fn pairs<'s>(stores: impl Iterator<Item = &'s Store>) -> Vec<(u64, i64)> {
+pub(super) fn pairs<'s>(stores: impl Iterator<Item = &'s Store>) -> Vec<(u64, i64)> {
     stores.map(|s| (s.vptr, s.off)).collect()
 }
 
@@ -479,7 +482,7 @@ struct State {
 
 /// The per-binary facts every walk shares: where `this` and the stack pointer
 /// live, what a call leaves intact, and how much a call pops.
-struct Walker<'a> {
+pub(super) struct Walker<'a> {
     ctx: &'a AnalysisCtx<'a>,
     sp: Key,
     this_reg: Option<Key>,
@@ -497,6 +500,12 @@ struct Walker<'a> {
 
 impl<'a> Walker<'a> {
     fn new(ctx: &'a AnalysisCtx<'a>) -> Option<Self> {
+        Self::with_model(ctx, ctx.arch.default_fp()?)
+    }
+
+    /// A walker whose `this` and second parameter arrive where `model` puts the
+    /// first two pointer parameters (MSVC's `__thiscall` passes `this` in ECX).
+    pub(super) fn with_model(ctx: &'a AnalysisCtx<'a>, model: &Rc<ProtoModel>) -> Option<Self> {
         let stack = ctx.arch.manage().get_stack_space()?;
         let base = stack.get_spacebase(0).ok()?;
         let sp = (
@@ -504,7 +513,6 @@ impl<'a> Walker<'a> {
             base.offset,
             base.size,
         );
-        let model = ctx.arch.default_fp()?;
         let types = ctx.arch.types();
         let (_, word_size) = ctx.arch.data_org();
         let void = types.get_type_void().ok()?;
@@ -564,7 +572,12 @@ impl<'a> Walker<'a> {
 
     /// Walk the function at `entry` along its fall-through path for at most
     /// `limit` instructions.
-    fn walk(&self, entry: u64, owner_of: &HashMap<u64, (usize, bool)>, limit: usize) -> Walk {
+    pub(super) fn walk(
+        &self,
+        entry: u64,
+        owner_of: &HashMap<u64, (usize, bool)>,
+        limit: usize,
+    ) -> Walk {
         let mut st = State::default();
         st.regs.insert(self.sp, Val::Sp(0));
         if let Some(k) = self.this_reg {
@@ -601,6 +614,11 @@ impl<'a> Walker<'a> {
                             && ins.first().and_then(key_of) == raised;
                         walk.second |= *opc == OpCode::CPUI_RETURN
                             && self.ret_reg.and_then(|k| st.regs.get(&k)) == Some(&Val::This(0));
+                        walk.returns_this |= *opc == OpCode::CPUI_RETURN
+                            && matches!(
+                                self.ret_reg.and_then(|k| st.regs.get(&k)),
+                                Some(Val::This(0) | Val::Spilled(0))
+                            );
                         leaves = !conditional;
                         conditional = true;
                     }

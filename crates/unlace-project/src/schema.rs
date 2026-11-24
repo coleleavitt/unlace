@@ -175,7 +175,7 @@ pub const DESCRIPTION: &[(&str, &[&str], &str, &[Column])] = &[
     (
         "assertions",
         &["kind", "target"],
-        "Directives stored verbatim: param, return, flow, format, readonly, volatile, register.",
+        "Directives stored verbatim: param, return, flow, format, readonly, volatile, register, noreturn.",
         &[
             ("kind", "TEXT", "The directive keyword."),
             (

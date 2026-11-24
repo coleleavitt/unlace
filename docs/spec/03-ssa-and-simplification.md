@@ -3160,6 +3160,35 @@ ARM predicated code: a `moveq`/`movne` pair ahead of the re-tested branch
 (or INT_XOR) where one operand is provably zero along the path that reaches it (the
 `MultiPredicate` zero-slot analysis) collapses to a COPY of the other operand.
 
+**Threading a join on a merged constant** (option `phithread`, default off).
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_phithread.rs (ActionPhiThread)`
+runs right after `ActionConditionalExe` in the same group. A join block J
+qualifies when it ends in a CBRANCH, holds only MULTIEQUALs followed by
+integer and boolean ops it can evaluate, and every value it defines is read
+only inside J. For each in edge whose MULTIEQUAL inputs are constants (looking
+through COPYs), `kuna_phithread.rs (decided_target)` evaluates J's ops and
+the branch (honouring the boolean flip). When the branch is decided, the edge
+is moved past J onto the taken successor T (`Funcdata::switch_edge`): J's
+MULTIEQUALs lose the edge's input (`Funcdata::op_zero_multi` collapses one
+left with a single input), and T's MULTIEQUALs gain the value they read along
+the J edge, which is defined outside J and so dominates the moved edge. An
+edge is not moved from J itself, from a BRANCHIND block, onto a block the
+predecessor already reaches, or when it would leave J with no in edge. The
+second step splits an arm A that feeds J: A holds only MULTIEQUALs, COPYs and a
+BRANCH, has two to eight predecessors and J as its only successor, and the
+value it passes into J's MULTIEQUAL comes from a MULTIEQUAL in A with a
+constant input on some edge. A is split along that edge by
+`crates/unlace-middle/src/substrate/funcdata_block.rs
+(Funcdata::node_split_through)`, the one-successor form of `node_split`: the
+clone takes the edge, flows into J, and J's MULTIEQUALs gain the clone's value
+for the new edge. The split refuses a block whose values are read outside it
+other than through the successor's MULTIEQUALs, or whose outputs are persistent
+or address-tied. The clone then passes a constant, and the thread step moves its
+edge. The action interleaves the two steps, at most 32 edits per function. This
+is Hex-Rays' `BREAK_PHI_ARM_MERGES` (hexx64 `sub_1915E0`) followed by the
+constant threading that resolves the join per path. The join's merged
+variable then disappears, along with the branch on it.
+
 **Conditional constants.** `crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionConditionalConst)` (mainloop tail, wrapper over
 `crates/unlace-bandb-base/src/p3_dataflow/condconst.rs (condconst_apply)`)
@@ -3455,6 +3484,37 @@ loop, replaces the counter's uses after the loop with `ctz(x)` (or
 `LZCOUNT(x) ^ (W - 1)`) and removes the edge into the body. The builtins are
 `BUILTIN_BSWAP`, `BUILTIN_ROTL`, `BUILTIN_BITREV`, `BUILTIN_CTZ` (unspecialised)
 and `BUILTIN_ABS`/`BUILTIN_LABS` (typed `int`/`long`).
+
+**satmul** (kuna) —
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_satmul.rs (RuleSaturatedMul)`,
+group `analysis` (`option satmul`, default off). MSVC, clang and AArch64
+compilers size `new T[n]` with a full-width multiply and replace the product by
+all-ones when it overflowed; Hex-Rays folds that with its
+`REMOVE_MUL_OVERFLOW_CHECK` rule into `saturated_mul(n, sizeof(T))`, and this rule
+does the same. It fires on an `INT_OR` and on a two-input `MULTIEQUAL`. One side
+must be the low `W` bytes of a product: `SUBPIECE(P, 0)` of a double-width
+`P = zext(a) * zext(b)` (x86 `mul` and AArch64 `umulh` lift to that `P`), or
+`a * b` / `a << k` at width `W`. Factors are compared with their zero extensions
+peeled, constants modulo `2^W`. The overflow guard is a compare the rule reads
+as `x > k` or its negation (`!=`/`==` against zero, unsigned `<`/`<=` with a
+constant on either side, `BOOL_NEGATE`): `x` is the high half `SUBPIECE(P, W)`
+of a double-width product of the same factors with `k = 0`, that product itself
+with `k = 2^W - 1`, or one factor with `k = (2^W - 1) / c` where the other factor
+is the constant `c >= 2`; these are exactly the inputs whose product does not fit
+`W` bytes. For the `INT_OR` the other side is the smeared flag `-zext(b)`
+(`INT_2COMP`, or `INT_MULT` by all-ones) of a one-byte guard that is true on
+overflow: the `seto; neg; or` and `sbb; or` lowerings. The `OR` is rewritten in
+place. For the `MULTIEQUAL` (the `cmovo` and `csinv` lowerings) the other input is
+all-ones, a constant reached through `COPY`s, and the merge block's two
+predecessors come from one `CBRANCH` (directly or through a block with a single
+edge in and out) on the guard; the all-ones slot must be the one the overflow
+outcome reaches. A `CALLOTHER` is inserted after the merge block's
+`MULTIEQUAL`s, typed unsigned at `W` bytes, and replaces every read of the
+`MULTIEQUAL`; the empty branch arm then folds away. The result is
+`CALLOTHER(BUILTIN_SATURATED_MUL, a, b)`, variable factor first, printed
+`saturated_mul(a, b)` (unspecialised). A select whose all-ones is on the
+no-overflow outcome, a threshold that is not `(2^W - 1) / c`, or a guard over
+other factors is left alone.
 
 **alloca** (kuna) — `crates/unlace-bandb-base/src/p3_dataflow/kuna_alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/kuna-alloca.xml`.
 

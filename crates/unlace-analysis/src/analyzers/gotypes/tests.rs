@@ -920,7 +920,8 @@ fn interface_methods_follow_the_descriptor_order() {
     );
     let sets = super::kuna_itabtypes::interface_method_sets(&img, &meta, &[]);
     assert_eq!(
-        sets.get("main.Shape").map(Vec::as_slice),
+        sets.get("main.Shape")
+            .map(|(methods, _)| methods.as_slice()),
         Some(["Area".to_string(), "Name".to_string()].as_slice())
     );
 }
@@ -996,4 +997,116 @@ fn itab_record_names_each_method_slot() {
         super::kuna_itabtypes::intern_record(&tf, "main.Shape", &methods),
         "re-interning keeps the completed record"
     );
+}
+
+/// [`synth_interface`] plus a named struct `main.Holder` at `types + 0`
+/// (size 24) whose field `S` at offset 0 is the `main.Shape` interface and
+/// whose field `Tag` at offset 16 is not an interface.
+fn synth_holder() -> (Vec<(u64, Vec<u8>)>, u64, u64) {
+    let (mut spans, types, etypes) = synth_interface(&["Area", "Name"]);
+    let blob = &mut spans[0].1;
+    blob[0..8].copy_from_slice(&24u64.to_le_bytes());
+    blob[20] = TFLAG_NAMED;
+    blob[23] = KIND_STRUCT;
+    blob[40..44].copy_from_slice(&0x1c0i32.to_le_bytes());
+    blob[0x1c0..0x1cd].copy_from_slice(b"\0\x0bmain.Holder");
+    blob[0x1d0..0x1d3].copy_from_slice(b"\0\x01S");
+    blob[0x1d8..0x1dd].copy_from_slice(b"\0\x03Tag");
+    blob[56..64].copy_from_slice(&(types + 0x380).to_le_bytes());
+    blob[64..72].copy_from_slice(&2u64.to_le_bytes());
+    blob[72..80].copy_from_slice(&2u64.to_le_bytes());
+    for (k, (name, typ, offset)) in [(0x1d0u64, 0x100u64, 0u64), (0x1d8, 0, 16)]
+        .into_iter()
+        .enumerate()
+    {
+        let f = 0x380 + 24 * k;
+        blob[f..f + 8].copy_from_slice(&(types + name).to_le_bytes());
+        blob[f + 8..f + 16].copy_from_slice(&(types + typ).to_le_bytes());
+        blob[f + 16..f + 24].copy_from_slice(&offset.to_le_bytes());
+    }
+    (spans, types, etypes)
+}
+
+#[test]
+fn interface_fields_name_their_interface() {
+    let (spans, types, etypes) = synth_holder();
+    let img = img_of(&spans);
+    let meta = TypeMeta {
+        types,
+        etypes,
+        offsets: vec![0],
+    };
+    let holder = read_type(&img, types, etypes, 0).expect("struct record");
+    assert_eq!(
+        super::kuna_ifacefields::interface_fields(&img, &meta, &holder, false),
+        Some(vec![(0, "main.Shape".to_string())])
+    );
+    let tf = unlace_decomp::dtype::TypeFactoryImpl::new();
+    tf.set_default_alignment_map();
+    tf.set_max_basetype_size(8);
+    tf.setup_sizes(Some(8), 8, 8);
+    tf.cache_core_types().unwrap();
+    assert_eq!(
+        super::kuna_ifacefields::register(&tf, &img, &meta, Some((1, 22))),
+        1
+    );
+    assert_eq!(
+        tf.kuna_lang_facet("main.Holder"),
+        Some(LangFacet::GoInterfaceFields {
+            fields: vec![(0, "main.Shape".to_string())]
+        })
+    );
+    // An offset past the struct's size is a corrupt record: no facet.
+    let (mut bad, types, etypes) = synth_holder();
+    bad[0].1[0x390..0x398].copy_from_slice(&99u64.to_le_bytes());
+    let img = img_of(&bad);
+    let holder = read_type(&img, types, etypes, 0).unwrap();
+    assert_eq!(
+        super::kuna_ifacefields::interface_fields(&img, &meta, &holder, false),
+        None
+    );
+}
+
+#[test]
+fn method_pieces_read_one_register_scalars() {
+    let (mut spans, types, etypes) = synth_interface(&["Area"]);
+    let blob = &mut spans[0].1;
+    // int @ +0x000: size 8, kind INT.
+    blob[0..8].copy_from_slice(&8u64.to_le_bytes());
+    blob[23] = KIND_INT;
+    blob[40..44].copy_from_slice(&0x220i32.to_le_bytes());
+    // func(int) int @ +0x1a0: InCount 1, OutCount 1, params after the counts word.
+    let f = 0x1a0usize;
+    blob[f + 23] = KIND_FUNC;
+    blob[f + 40..f + 44].copy_from_slice(&0x220i32.to_le_bytes());
+    blob[f + 48..f + 50].copy_from_slice(&1u16.to_le_bytes());
+    blob[f + 50..f + 52].copy_from_slice(&1u16.to_le_bytes());
+    blob[f + 56..f + 64].copy_from_slice(&types.to_le_bytes());
+    blob[f + 64..f + 72].copy_from_slice(&types.to_le_bytes());
+    blob[0x304..0x308].copy_from_slice(&(f as i32).to_le_bytes());
+    let img = img_of(&spans);
+    let meta = interface_meta(types, etypes);
+    let inter = read_type(&img, types, etypes, 0x100).unwrap();
+    let tf = unlace_decomp::dtype::TypeFactoryImpl::new();
+    tf.set_default_alignment_map();
+    tf.set_max_basetype_size(8);
+    tf.setup_sizes(Some(8), 8, 8);
+    tf.cache_core_types().unwrap();
+    let pieces = super::kuna_itabtypes::method_pieces(&tf, &img, &meta, &inter, 0)
+        .expect("a one-register signature");
+    assert_eq!(pieces.intypes.len(), 2, "receiver then the int");
+    assert_eq!(pieces.intypes[0].get_metatype(), type_metatype::TYPE_PTR);
+    assert_eq!(pieces.intypes[1].get_metatype(), type_metatype::TYPE_INT);
+    assert_eq!(pieces.innames, ["receiver", "a1"]);
+    let out = pieces.outtype.expect("one result");
+    assert_eq!(
+        (out.get_metatype(), out.get_size()),
+        (type_metatype::TYPE_INT, 8)
+    );
+    assert!(super::kuna_itabtypes::method_pieces(&tf, &img, &meta, &inter, 1).is_none());
+
+    let mut variadic = spans.clone();
+    variadic[0].1[f + 50..f + 52].copy_from_slice(&0x8001u16.to_le_bytes());
+    let img = img_of(&variadic);
+    assert!(super::kuna_itabtypes::method_pieces(&tf, &img, &meta, &inter, 0).is_none());
 }

@@ -3598,6 +3598,15 @@ impl ConsoleProgram {
                         image_path,
                     ));
                 }
+                // (kuna `vtabletypes`) MSVC constructors and destructors are
+                // walked through the decoder, so they are found here too.
+                if analysis_pass_enabled(self.arch(), "vtabletypes") {
+                    merged.merge(unlace_analysis::passes::run_msvc_ctors(
+                        &bytes,
+                        self.arch(),
+                        image_path,
+                    ));
+                }
                 // (kuna `com`) COM ids and interfaces; off by default, and
                 // it builds types, so it runs only when asked for.
                 if analysis_pass_enabled(self.arch(), "com") {
@@ -3754,9 +3763,14 @@ impl ConsoleProgram {
         merged.context_paints.extend(input_context_paints);
         self.fid_databases = std::mem::take(&mut merged.fid_databases);
         // (kuna `typelib`) Last, so every other source of a prototype has
-        // spoken: the library declares only the imports nothing else did.
+        // spoken: the library declares only the imports, and the functions
+        // FLIRT, FID or a PDB named, that nothing else did.
         if let Some(facts) = merged.typelib.take() {
-            if let Err(message) = crate::kuna_typelib::seed(self.arch(), &facts, &mut merged) {
+            let said = match crate::kuna_typelib::seed(self.arch(), &facts, &mut merged) {
+                Ok((_, note)) => note,
+                Err(message) => Some(message),
+            };
+            if let Some(message) = said {
                 let path = self.image_path();
                 unlace_base::notes::say_once(&path, &format!("[kuna typelib] {message}"));
             }

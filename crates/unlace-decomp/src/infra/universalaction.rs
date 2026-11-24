@@ -698,6 +698,11 @@ pub fn universal_sched_hooked(
             crate::kuna_bitidioms::RuleIntAbs::new("analysis")
         ),
         rrow!(
+            "satmul",
+            "analysis",
+            crate::kuna_satmul::RuleSaturatedMul::new("analysis")
+        ),
+        rrow!(
             "strcpychain",
             "analysis",
             crate::kuna_helperrole::RuleStrcpyChain::new("analysis")
@@ -1489,6 +1494,11 @@ pub fn universal_sched_hooked(
             act!(Box::new(crate::condexe::ActionConditionalExe::new(
                 "conditionalexe"
             ))),
+            // (kuna) option `phithread` (default off): thread a join that branches
+            // on a merged constant, splitting the arms that feed it.
+            act!(crate::kuna_phithread::ActionPhiThread::boxed(
+                "conditionalexe"
+            )),
             act!(ActionConditionalConst::boxed("analysis")),
             act!(crate::kuna_rangefold::ActionRangeFold::boxed("unreachable")),
             act!(crate::kuna_cmpmerge::ActionBranchMerge::boxed(

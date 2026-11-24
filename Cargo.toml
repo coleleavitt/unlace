@@ -31,8 +31,6 @@ undname = "2.1"
 gimli = { version = "0.33", default-features = false, features = ["read", "std"] }
 pdb = "0.8"
 flirt-sig = { version = "=0.2.1", default-features = false }
-# IDA databases (.idb/.i64): the unlace-cli front end only, never the engine or unlace-wasm.
-idb-rs = { git = "https://github.com/coleleavitt/idb-rs", rev = "9e909fdbb02d62ab260e8faac083888db9b23779" }
 unlace-base = { path = "crates/unlace-base" }
 unlace-num = { path = "crates/unlace-num" }
 unlace-sleigh = { path = "crates/unlace-sleigh" }
@@ -48,6 +46,7 @@ unlace-decomp = { path = "crates/unlace-decomp" }
 unlace-analysis = { path = "crates/unlace-analysis" }
 unlace-console = { path = "crates/unlace-console" }
 unlace-project = { path = "crates/unlace-project" }
+unlace-idb = { path = "crates/unlace-idb" }
 unlace-cli = { path = "crates/unlace-cli" }
 unlace-slacomp = { path = "crates/unlace-slacomp" }
 unlace-lumina = { path = "crates/unlace-lumina" }

@@ -20,6 +20,13 @@
 //!    name inside a directory the caller already handed us.
 //! 3. **`<image stem>.pdb` beside the image** — the sidecar convention that holds
 //!    when the recorded name has been rewritten (a renamed or repackaged binary).
+//! 4. **A symbol store** (`kuna_pdb_symsrv`, opt-in, tried only when the tiers
+//!    above found no match): `<cache>/<name>/<key>/<name>` in the SymStore
+//!    layout, the key being the GUID's hex digits and the age in hex. With a
+//!    server URL (`<cache>*<url>`) a missing file is downloaded from
+//!    `<url>/<name>/<key>/<name>` into the cache first ([`symbol_store_candidate`]),
+//!    once per process and path, by running `curl`. Nothing is fetched unless the
+//!    variable names a URL.
 //!
 //! ## The fingerprint gate (the FID full-hash-match discipline)
 //!
@@ -32,8 +39,10 @@
 //! `FUN_*`. It is also what makes the automatic tiers safe enough to run by
 //! default — a sidecar that is not this binary's cannot be applied.
 
+use std::collections::BTreeSet;
 use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Mutex;
 
 use crate::pdb::codeview::CodeViewInfo;
 
@@ -85,6 +94,105 @@ pub fn pdb_candidates(image_path: Option<&Path>, cv: &CodeViewInfo) -> Vec<PathB
         add(dir.join(sidecar));
     }
     out
+}
+
+/// The symbol-store setting: the load's `LoadOptions::pdb_symsrv`, else
+/// `kuna_pdb_symsrv`. `None` when neither names one.
+pub fn symbol_store() -> Option<String> {
+    use unlace_decomp::kuna_loadoptions::{env, scoped};
+    scoped(|o| o.pdb_symsrv.clone()).unwrap_or_else(env::pdb_symsrv)
+}
+
+/// The SymStore key of the image's `.pdb`: the GUID's 32 hex digits followed by
+/// the age in hex (RSDS), or the signature's 8 and the age (NB10).
+pub fn store_key(cv: &CodeViewInfo) -> String {
+    match cv {
+        CodeViewInfo::Rsds { age, .. } => format!(
+            "{}{age:X}",
+            cv.guid_string().unwrap_or_default().replace('-', "")
+        ),
+        CodeViewInfo::Nb10 { signature, age, .. } => format!("{signature:08X}{age:X}"),
+    }
+}
+
+/// Split a store setting into its cache directory and optional server URL:
+/// `<cache>` or `<cache>*<url>`, with an optional `srv*` prefix as in
+/// `_NT_SYMBOL_PATH`.
+pub fn parse_store(spec: &str) -> Option<(PathBuf, Option<&str>)> {
+    let spec = spec.trim();
+    let spec = spec
+        .strip_prefix("srv*")
+        .or_else(|| spec.strip_prefix("SRV*"))
+        .unwrap_or(spec);
+    let (cache, url) = match spec.split_once('*') {
+        Some((cache, url)) => (cache.trim(), Some(url.trim()).filter(|u| !u.is_empty())),
+        None => (spec, None),
+    };
+    (!cache.is_empty()).then(|| (PathBuf::from(cache), url))
+}
+
+/// Where the image's `.pdb` sits in the store at `cache`:
+/// `<cache>/<name>/<key>/<name>`. `None` when the CodeView record names no safe
+/// `.pdb` file name.
+pub fn store_path(cache: &Path, cv: &CodeViewInfo) -> Option<PathBuf> {
+    let name = recorded_pdb_name(cv.pdb_path())?;
+    Some(cache.join(name).join(store_key(cv)).join(name))
+}
+
+/// The symbol-store candidate for the image, downloaded into the cache first
+/// when a server is configured and the cache lacks it. `None` without a store
+/// setting, without a safe record name, or when the download fails.
+pub fn symbol_store_candidate(cv: &CodeViewInfo) -> Option<PathBuf> {
+    let spec = symbol_store()?;
+    let (cache, url) = parse_store(&spec)?;
+    let path = store_path(&cache, cv)?;
+    if path.is_file() {
+        return Some(path);
+    }
+    download(url?, &path, cv)?;
+    Some(path)
+}
+
+/// Fetch `<url>/<name>/<key>/<name>` to `path` with `curl`, at most once per
+/// process and path. The file is written beside its final name and renamed when
+/// complete, so a failed or interrupted fetch never leaves a partial `.pdb`.
+fn download(url: &str, path: &Path, cv: &CodeViewInfo) -> Option<()> {
+    static TRIED: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
+    if !TRIED.lock().ok()?.insert(path.to_path_buf()) {
+        return None;
+    }
+    let name = recorded_pdb_name(cv.pdb_path())?;
+    let remote = format!(
+        "{}/{name}/{}/{name}",
+        url.trim_end_matches('/'),
+        store_key(cv)
+    );
+    std::fs::create_dir_all(path.parent()?).ok()?;
+    let part = path.with_extension("pdb.part");
+    let status = std::process::Command::new("curl")
+        .args([
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--location",
+            "--max-time",
+            "300",
+            "--max-filesize",
+            "4294967296",
+            "--output",
+        ])
+        .arg(&part)
+        .arg(&remote)
+        .status();
+    if status.is_ok_and(|s| s.success()) && std::fs::rename(&part, path).is_ok() {
+        return Some(());
+    }
+    let _ = std::fs::remove_file(&part);
+    unlace_base::notes::say_once(
+        &remote,
+        &format!("[kuna pdb] {remote}: download failed; no .pdb from the symbol server"),
+    );
+    None
 }
 
 /// The safe-to-join filename inside a CodeView record's `.pdb` path, or `None`.
@@ -174,6 +282,42 @@ mod tests {
             },
             other => other,
         }
+    }
+
+    /// The SymStore key is the GUID's hex digits and the age in hex, and the
+    /// cache path nests the record's file name around it.
+    #[test]
+    fn symbol_store_layout() {
+        let cv = rsds_recording("C:\\build\\prog.pdb");
+        assert_eq!(store_key(&cv), "61AC3963FF4890244C4C44205044422E1");
+        assert_eq!(
+            store_path(Path::new("/cache"), &cv),
+            Some(PathBuf::from(
+                "/cache/prog.pdb/61AC3963FF4890244C4C44205044422E1/prog.pdb"
+            ))
+        );
+        let nb10 = CodeViewInfo::Nb10 {
+            signature: 0xBEEF,
+            age: 0x1a,
+            pdb_path: "old.pdb".into(),
+        };
+        assert_eq!(store_key(&nb10), "0000BEEF1A");
+        assert_eq!(
+            store_path(Path::new("/cache"), &rsds_recording("../")),
+            None
+        );
+    }
+
+    #[test]
+    fn symbol_store_settings() {
+        assert_eq!(parse_store("/c"), Some((PathBuf::from("/c"), None)));
+        assert_eq!(
+            parse_store("srv*/c*https://example.invalid/sym"),
+            Some((PathBuf::from("/c"), Some("https://example.invalid/sym")))
+        );
+        assert_eq!(parse_store("/c*"), Some((PathBuf::from("/c"), None)));
+        assert_eq!(parse_store("*https://x"), None);
+        assert_eq!(parse_store("  "), None);
     }
 
     #[test]

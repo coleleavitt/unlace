@@ -57,6 +57,7 @@
 //! `run_default_analyses`.
 
 pub mod codeview;
+pub(crate) mod kuna_pdbframe;
 pub mod kuna_pdbinterior;
 pub mod kuna_pdblines;
 pub(crate) mod kuna_pdbtpi;
@@ -91,67 +92,87 @@ impl AnalysisPass for PdbPass {
     }
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
-        let mut out = AnalysisOutput::default();
-
-        // PE only (belt-and-suspenders on top of the format gate in passes.rs).
-        if ctx.file.format() != object::BinaryFormat::Pe {
-            return out;
-        }
-        // 1. The PE CodeView fingerprint (the {guid, age, path} the .pdb must match).
-        //    No CodeView record ⇒ no PDB to apply.
-        let Some(cv) = codeview::extract_codeview(ctx.bytes) else {
-            return out;
-        };
-        // 2. Locate: the ordered candidate list (explicit `kuna_pdb_path`, then the
-        //    record's own filename beside the image, then `<stem>.pdb`). Empty ⇒
-        //    inert.
-        let candidates = locate::pdb_candidates(ctx.image_path, &cv);
-        if candidates.is_empty() {
-            return out;
-        }
-        // The RVA→VMA addend: the PE ImageBase. Absent (unparsable) ⇒ inert.
-        let Some(image_base) = pe_image_base(ctx.bytes) else {
-            return out;
-        };
-
-        // 3. Open each candidate in turn and apply the fingerprint gate; the first
-        //    match wins. Any failure (unreadable file, not a `.pdb`, no info
-        //    stream, or a GUID/age MISMATCH) moves on — NEVER apply a wrong/stale
-        //    PDB.
-        let Some(mut pdb) = open_fingerprint_matched(&candidates, &cv) else {
-            return out;
-        };
-
-        // 4. The fingerprint matched: walk the global symbols and emit the renames.
-        for mut f in walk::walk_functions(&mut pdb, image_base) {
-            if f.name.is_empty() {
-                continue;
-            }
-            // A public carries the decorated name (`?init@QMessageBoxPrivate@@…`);
-            // reduce it the way the loader reduces a COFF or ELF symbol.
-            if let Some(name) = crate::demangle::demangle_name(&f.name) {
-                f.name = name;
-            }
-            // The function must exist for the rename to bind, even when it is
-            // reachable ONLY through the PDB (no call edge / no funcsym). The
-            // idempotent SymFact add is a no-op when it already exists; the
-            // placeholder name it installs is what the fid_names rename overwrites.
-            out.symbols.push(SymFact {
-                addr: f.vma,
-                name: f.name.clone(),
-                kind: SymKind::Function,
-            });
-            // The label-gated rename (the FID precedent): overwrite the engine's own
-            // sub_*/FUN_* placeholder with the PDB name, never a real symbol.
-            out.fid_names.push(FidMatch {
-                addr: f.vma,
-                name: f.name,
-                by_signature: false,
-            });
-        }
-
-        out
+        guarded("pdb", || names(ctx))
     }
+}
+
+/// The function names of the matched `.pdb` (the body of [`PdbPass`]).
+fn names(ctx: &AnalysisCtx) -> AnalysisOutput {
+    let mut out = AnalysisOutput::default();
+
+    // PE only (belt-and-suspenders on top of the format gate in passes.rs).
+    if ctx.file.format() != object::BinaryFormat::Pe {
+        return out;
+    }
+    // 1. The PE CodeView fingerprint (the {guid, age, path} the .pdb must match).
+    //    No CodeView record ⇒ no PDB to apply.
+    let Some(cv) = codeview::extract_codeview(ctx.bytes) else {
+        return out;
+    };
+    // 2. Locate: the ordered candidate list (explicit `kuna_pdb_path`, then the
+    //    record's own filename beside the image, then `<stem>.pdb`; the
+    //    opt-in symbol store is tried after them).
+    let candidates = locate::pdb_candidates(ctx.image_path, &cv);
+    // The RVA→VMA addend: the PE ImageBase. Absent (unparsable) ⇒ inert.
+    let Some(image_base) = pe_image_base(ctx.bytes) else {
+        return out;
+    };
+
+    // 3. Open each candidate in turn and apply the fingerprint gate; the first
+    //    match wins. Any failure (unreadable file, not a `.pdb`, no info
+    //    stream, or a GUID/age MISMATCH) moves on — NEVER apply a wrong/stale
+    //    PDB.
+    let Some(mut pdb) = open_fingerprint_matched(&candidates, &cv) else {
+        return out;
+    };
+
+    // 4. The fingerprint matched: walk the global symbols and emit the renames.
+    for mut f in walk::walk_functions(&mut pdb, image_base) {
+        if f.name.is_empty() {
+            continue;
+        }
+        // A public carries the decorated name (`?init@QMessageBoxPrivate@@…`);
+        // reduce it the way the loader reduces a COFF or ELF symbol.
+        if let Some(name) = crate::demangle::demangle_name(&f.name) {
+            f.name = name;
+        }
+        // The function must exist for the rename to bind, even when it is
+        // reachable ONLY through the PDB (no call edge / no funcsym). The
+        // idempotent SymFact add is a no-op when it already exists; the
+        // placeholder name it installs is what the fid_names rename overwrites.
+        out.symbols.push(SymFact {
+            addr: f.vma,
+            name: f.name.clone(),
+            kind: SymKind::Function,
+        });
+        // The label-gated rename (the FID precedent): overwrite the engine's own
+        // sub_*/FUN_* placeholder with the PDB name, never a real symbol.
+        out.fid_names.push(FidMatch {
+            addr: f.vma,
+            name: f.name,
+            by_signature: false,
+        });
+    }
+
+    out
+}
+
+/// Run one PDB pass, turning a panic inside the `pdb` crate into "no PDB".
+///
+/// The `.pdb` is hostile input and the crate is not panic-free on it: an
+/// `LF_ARRAY` record whose dimension list is not followed by the end of the
+/// record trips an `assert!` in its type parser. A panic here is caught, reported
+/// once on stderr, and the pass contributes nothing. Only the crate's parsers can
+/// panic on the input, and they run between, never inside, the type factory's
+/// own updates, so unwinding out of one leaves the factory consistent.
+pub(crate) fn guarded<T: Default>(pass: &str, run: impl FnOnce() -> T) -> T {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).unwrap_or_else(|_| {
+        unlace_base::notes::say_once(
+            &format!("pdb-panic-{pass}"),
+            &format!("[kuna pdb] {pass}: the .pdb is malformed (its parser panicked); not applied"),
+        );
+        T::default()
+    })
 }
 
 /// The fingerprint-matched `.pdb` of the PE `ctx` loads, with the image base its
@@ -163,16 +184,14 @@ pub(crate) fn open_matched(ctx: &AnalysisCtx) -> Option<(pdb::PDB<'static, std::
     }
     let cv = codeview::extract_codeview(ctx.bytes)?;
     let candidates = locate::pdb_candidates(ctx.image_path, &cv);
-    if candidates.is_empty() {
-        return None;
-    }
     let image_base = pe_image_base(ctx.bytes)?;
     let pdb = open_fingerprint_matched(&candidates, &cv)?;
     Some((pdb, image_base))
 }
 
 /// Open the first candidate `.pdb` whose own `{guid, age}` matches the PE's
-/// CodeView record, or `None` when the list is exhausted.
+/// CodeView record, then the symbol-store one ([`locate::symbol_store_candidate`],
+/// fetched from a server only when one is configured), or `None`.
 ///
 /// A candidate that does not exist is silently skipped — most images have no
 /// sidecar and that is not a defect. A candidate that IS there but does not match
@@ -184,34 +203,44 @@ pub(crate) fn open_fingerprint_matched(
     candidates: &[std::path::PathBuf],
     cv: &codeview::CodeViewInfo,
 ) -> Option<pdb::PDB<'static, std::fs::File>> {
-    for path in candidates {
-        let Ok(file) = std::fs::File::open(path) else {
-            continue;
-        };
-        let Ok(mut pdb) = pdb::PDB::open(file) else {
-            continue;
-        };
-        let Ok(info) = pdb.pdb_information() else {
-            continue;
-        };
-        let guid = info.guid.to_string();
-        if locate::fingerprint_ok(cv, &guid, info.age) {
-            return Some(pdb);
-        }
-        unlace_base::notes::say_once(
-            &path.display().to_string(),
-            &format!(
-                "[kuna pdb] {}: age {} guid {} does not match the image's CodeView record \
-                 (age {} guid {}); not applied",
-                path.display(),
-                info.age,
-                guid.to_uppercase(),
-                cv.age(),
-                cv.guid_string()
-                    .unwrap_or_else(|| "<none, NB10 record>".to_string()),
-            ),
-        );
+    if let Some(pdb) = candidates
+        .iter()
+        .find_map(|path| open_if_matching(path, cv))
+    {
+        return Some(pdb);
     }
+    let stored = locate::symbol_store_candidate(cv)?;
+    if candidates.contains(&stored) {
+        return None;
+    }
+    open_if_matching(&stored, cv)
+}
+
+/// Open `path` as a `.pdb` and return it when its `{guid, age}` matches `cv`.
+fn open_if_matching(
+    path: &std::path::Path,
+    cv: &codeview::CodeViewInfo,
+) -> Option<pdb::PDB<'static, std::fs::File>> {
+    let file = std::fs::File::open(path).ok()?;
+    let mut pdb = pdb::PDB::open(file).ok()?;
+    let info = pdb.pdb_information().ok()?;
+    let guid = info.guid.to_string();
+    if locate::fingerprint_ok(cv, &guid, info.age) {
+        return Some(pdb);
+    }
+    unlace_base::notes::say_once(
+        &path.display().to_string(),
+        &format!(
+            "[kuna pdb] {}: age {} guid {} does not match the image's CodeView record \
+             (age {} guid {}); not applied",
+            path.display(),
+            info.age,
+            guid.to_uppercase(),
+            cv.age(),
+            cv.guid_string()
+                .unwrap_or_else(|| "<none, NB10 record>".to_string()),
+        ),
+    );
     None
 }
 

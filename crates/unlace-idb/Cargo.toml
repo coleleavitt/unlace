@@ -1,0 +1,17 @@
+[package]
+name = "unlace-idb"
+description = "IDA databases (.idb/.i64) read into plain values: segments and bytes, functions, names, comments, entry points and the raw type strings (a port of idb-rs's readers)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+flate2.workspace = true
+# Pure-Rust zstd (IDA 9.1+ compresses databases with it): no C build step.
+ruzstd = "0.9"
+thiserror.workspace = true
+
+[lints]
+workspace = true

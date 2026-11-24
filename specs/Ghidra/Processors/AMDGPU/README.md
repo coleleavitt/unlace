@@ -75,3 +75,11 @@ Oracle: `fixtures/amdgpu/gfx900_kernels.cl` and the four GFX9 test kernels built
 -O2 for gfx1030 and gfx1100, plus `fixtures/amdgpu/gfx1100_vopd.cl` at -O3 (four VOPD
 instructions): every function decompiles with no bad instruction and `llvm-objdump` lists no
 mnemonic the specs lack.
+
+## Aperture sources and v_swap_b32
+
+Source operand codes 235-239 (`src_shared_base`, `src_shared_limit`, `src_private_base`,
+`src_private_limit`, `src_pops_exiting_wave_id`) decode on GFX9, GFX10 and GFX11 as the
+`aperture_register` user op (their values are set by the hardware), and GFX9 decodes
+`v_swap_b32` (VOP1 opcode 81). Found by the real-code sweep (`notes/real-code-sweep.md`):
+clang's gfx900 output reads `src_private_base` in every function that takes a stack address.

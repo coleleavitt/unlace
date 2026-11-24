@@ -299,6 +299,8 @@ attach variables [ c_v3 ] [ v0 v1 v2 v3 v4 v5 v6 v7 v8 v9 v10 v11 v12 v13 v14 v1
 attach variables [ j_soff7 ] [ s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 s19 s20 s21 s22 s23 s24 s25 s26 s27 s28 s29 s30 s31 s32 s33 s34 s35 s36 s37 s38 s39 s40 s41 s42 s43 s44 s45 s46 s47 s48 s49 s50 s51 s52 s53 s54 s55 s56 s57 s58 s59 s60 s61 s62 s63 s64 s65 s66 s67 s68 s69 s70 s71 s72 s73 s74 s75 s76 s77 s78 s79 s80 s81 s82 s83 s84 s85 s86 s87 s88 s89 s90 s91 s92 s93 s94 s95 s96 s97 s98 s99 s100 s101 flat_scratch_lo flat_scratch_hi xnack_mask_lo xnack_mask_hi vcc_lo vcc_hi ttmp0 ttmp1 ttmp2 ttmp3 ttmp4 ttmp5 ttmp6 ttmp7 ttmp8 ttmp9 ttmp10 ttmp11 ttmp12 ttmp13 ttmp14 ttmp15 m0 sreg125 exec_lo exec_hi ];
 attach variables [ jsr16 ] [ s0_1 s4_5 s8_9 s12_13 s16_17 s20_21 s24_25 s28_29 s32_33 s36_37 s40_41 s44_45 s48_49 s52_53 s56_57 s60_61 s64_65 s68_69 s72_73 s76_77 s80_81 s84_85 s88_89 s92_93 s96_97 s100_101 xnack_mask ttmp0_1 ttmp4_5 ttmp8_9 ttmp12_13 m0_pair ];
 
+define pcodeop aperture_register;
+
 # Source operands: SGPRs and special registers, inline integer and float constants, SCC,
 # VCCZ/EXECZ, a 32-bit literal after the instruction word, and (9-bit fields) VGPRs.
 S32_i0: i0_lo7 is i0_h=0 & i0_lo7 { export i0_lo7; }
@@ -306,53 +308,113 @@ S32_i0: i0_c32 is i0_h=1 & i0_c32 { export *[const]:4 i0_c32; }
 S32_i0: "vccz" is i0_x=251 { t:4 = zext(vcc == 0); export t; }
 S32_i0: "execz" is i0_x=252 { t:4 = zext(exec == 0); export t; }
 S32_i0: "scc" is i0_x=253 { t:4 = zext(SCC); export t; }
+S32_i0: "src_shared_base" is i0_x=235 { t:4 = aperture_register(235:2); export t; }
+S32_i0: "src_shared_limit" is i0_x=236 { t:4 = aperture_register(236:2); export t; }
+S32_i0: "src_private_base" is i0_x=237 { t:4 = aperture_register(237:2); export t; }
+S32_i0: "src_private_limit" is i0_x=238 { t:4 = aperture_register(238:2); export t; }
+S32_i0: "src_pops_exiting_wave_id" is i0_x=239 { t:4 = aperture_register(239:2); export t; }
 S32_i0: litv is i0_x=255; litv { export *[const]:4 litv; }
 S64_i0: i0_sp is i0_h=0 & i0_sp { export i0_sp; }
 S64_i0: i0_c64 is i0_h=1 & i0_c64 { export *[const]:8 i0_c64; }
 S64_i0: "scc" is i0_x=253 { t:8 = zext(SCC); export t; }
+S64_i0: "src_shared_base" is i0_x=235 { t:8 = aperture_register(235:2); export t; }
+S64_i0: "src_shared_limit" is i0_x=236 { t:8 = aperture_register(236:2); export t; }
+S64_i0: "src_private_base" is i0_x=237 { t:8 = aperture_register(237:2); export t; }
+S64_i0: "src_private_limit" is i0_x=238 { t:8 = aperture_register(238:2); export t; }
+S64_i0: "src_pops_exiting_wave_id" is i0_x=239 { t:8 = aperture_register(239:2); export t; }
 S64_i0: litv is i0_x=255; litv { export *[const]:8 litv; }
 S32_i8: i8_lo7 is i8_h=0 & i8_lo7 { export i8_lo7; }
 S32_i8: i8_c32 is i8_h=1 & i8_c32 { export *[const]:4 i8_c32; }
 S32_i8: "vccz" is i8_x=251 { t:4 = zext(vcc == 0); export t; }
 S32_i8: "execz" is i8_x=252 { t:4 = zext(exec == 0); export t; }
 S32_i8: "scc" is i8_x=253 { t:4 = zext(SCC); export t; }
+S32_i8: "src_shared_base" is i8_x=235 { t:4 = aperture_register(235:2); export t; }
+S32_i8: "src_shared_limit" is i8_x=236 { t:4 = aperture_register(236:2); export t; }
+S32_i8: "src_private_base" is i8_x=237 { t:4 = aperture_register(237:2); export t; }
+S32_i8: "src_private_limit" is i8_x=238 { t:4 = aperture_register(238:2); export t; }
+S32_i8: "src_pops_exiting_wave_id" is i8_x=239 { t:4 = aperture_register(239:2); export t; }
 S32_i8: litv is i8_x=255; litv { export *[const]:4 litv; }
 S64_i8: i8_sp is i8_h=0 & i8_sp { export i8_sp; }
 S64_i8: i8_c64 is i8_h=1 & i8_c64 { export *[const]:8 i8_c64; }
 S64_i8: "scc" is i8_x=253 { t:8 = zext(SCC); export t; }
+S64_i8: "src_shared_base" is i8_x=235 { t:8 = aperture_register(235:2); export t; }
+S64_i8: "src_shared_limit" is i8_x=236 { t:8 = aperture_register(236:2); export t; }
+S64_i8: "src_private_base" is i8_x=237 { t:8 = aperture_register(237:2); export t; }
+S64_i8: "src_private_limit" is i8_x=238 { t:8 = aperture_register(238:2); export t; }
+S64_i8: "src_pops_exiting_wave_id" is i8_x=239 { t:8 = aperture_register(239:2); export t; }
 S64_i8: litv is i8_x=255; litv { export *[const]:8 litv; }
 S32_j0: j0_lo7 is j0_h=0 & j0_lo7 { export j0_lo7; }
 S32_j0: j0_c32 is j0_h=1 & j0_c32 { export *[const]:4 j0_c32; }
 S32_j0: "vccz" is j0_x=251 { t:4 = zext(vcc == 0); export t; }
 S32_j0: "execz" is j0_x=252 { t:4 = zext(exec == 0); export t; }
 S32_j0: "scc" is j0_x=253 { t:4 = zext(SCC); export t; }
+S32_j0: "src_shared_base" is j0_x=235 { t:4 = aperture_register(235:2); export t; }
+S32_j0: "src_shared_limit" is j0_x=236 { t:4 = aperture_register(236:2); export t; }
+S32_j0: "src_private_base" is j0_x=237 { t:4 = aperture_register(237:2); export t; }
+S32_j0: "src_private_limit" is j0_x=238 { t:4 = aperture_register(238:2); export t; }
+S32_j0: "src_pops_exiting_wave_id" is j0_x=239 { t:4 = aperture_register(239:2); export t; }
 S64_j0: j0_sp is j0_h=0 & j0_sp { export j0_sp; }
 S64_j0: j0_c64 is j0_h=1 & j0_c64 { export *[const]:8 j0_c64; }
 S64_j0: "scc" is j0_x=253 { t:8 = zext(SCC); export t; }
+S64_j0: "src_shared_base" is j0_x=235 { t:8 = aperture_register(235:2); export t; }
+S64_j0: "src_shared_limit" is j0_x=236 { t:8 = aperture_register(236:2); export t; }
+S64_j0: "src_private_base" is j0_x=237 { t:8 = aperture_register(237:2); export t; }
+S64_j0: "src_private_limit" is j0_x=238 { t:8 = aperture_register(238:2); export t; }
+S64_j0: "src_pops_exiting_wave_id" is j0_x=239 { t:8 = aperture_register(239:2); export t; }
 S32_j9: j9_lo7 is j9_h=0 & j9_lo7 { export j9_lo7; }
 S32_j9: j9_c32 is j9_h=1 & j9_c32 { export *[const]:4 j9_c32; }
 S32_j9: "vccz" is j9_x=251 { t:4 = zext(vcc == 0); export t; }
 S32_j9: "execz" is j9_x=252 { t:4 = zext(exec == 0); export t; }
 S32_j9: "scc" is j9_x=253 { t:4 = zext(SCC); export t; }
+S32_j9: "src_shared_base" is j9_x=235 { t:4 = aperture_register(235:2); export t; }
+S32_j9: "src_shared_limit" is j9_x=236 { t:4 = aperture_register(236:2); export t; }
+S32_j9: "src_private_base" is j9_x=237 { t:4 = aperture_register(237:2); export t; }
+S32_j9: "src_private_limit" is j9_x=238 { t:4 = aperture_register(238:2); export t; }
+S32_j9: "src_pops_exiting_wave_id" is j9_x=239 { t:4 = aperture_register(239:2); export t; }
 S64_j9: j9_sp is j9_h=0 & j9_sp { export j9_sp; }
 S64_j9: j9_c64 is j9_h=1 & j9_c64 { export *[const]:8 j9_c64; }
 S64_j9: "scc" is j9_x=253 { t:8 = zext(SCC); export t; }
+S64_j9: "src_shared_base" is j9_x=235 { t:8 = aperture_register(235:2); export t; }
+S64_j9: "src_shared_limit" is j9_x=236 { t:8 = aperture_register(236:2); export t; }
+S64_j9: "src_private_base" is j9_x=237 { t:8 = aperture_register(237:2); export t; }
+S64_j9: "src_private_limit" is j9_x=238 { t:8 = aperture_register(238:2); export t; }
+S64_j9: "src_pops_exiting_wave_id" is j9_x=239 { t:8 = aperture_register(239:2); export t; }
 S32_j18: j18_lo7 is j18_h=0 & j18_lo7 { export j18_lo7; }
 S32_j18: j18_c32 is j18_h=1 & j18_c32 { export *[const]:4 j18_c32; }
 S32_j18: "vccz" is j18_x=251 { t:4 = zext(vcc == 0); export t; }
 S32_j18: "execz" is j18_x=252 { t:4 = zext(exec == 0); export t; }
 S32_j18: "scc" is j18_x=253 { t:4 = zext(SCC); export t; }
+S32_j18: "src_shared_base" is j18_x=235 { t:4 = aperture_register(235:2); export t; }
+S32_j18: "src_shared_limit" is j18_x=236 { t:4 = aperture_register(236:2); export t; }
+S32_j18: "src_private_base" is j18_x=237 { t:4 = aperture_register(237:2); export t; }
+S32_j18: "src_private_limit" is j18_x=238 { t:4 = aperture_register(238:2); export t; }
+S32_j18: "src_pops_exiting_wave_id" is j18_x=239 { t:4 = aperture_register(239:2); export t; }
 S64_j18: j18_sp is j18_h=0 & j18_sp { export j18_sp; }
 S64_j18: j18_c64 is j18_h=1 & j18_c64 { export *[const]:8 j18_c64; }
 S64_j18: "scc" is j18_x=253 { t:8 = zext(SCC); export t; }
+S64_j18: "src_shared_base" is j18_x=235 { t:8 = aperture_register(235:2); export t; }
+S64_j18: "src_shared_limit" is j18_x=236 { t:8 = aperture_register(236:2); export t; }
+S64_j18: "src_private_base" is j18_x=237 { t:8 = aperture_register(237:2); export t; }
+S64_j18: "src_private_limit" is j18_x=238 { t:8 = aperture_register(238:2); export t; }
+S64_j18: "src_pops_exiting_wave_id" is j18_x=239 { t:8 = aperture_register(239:2); export t; }
 S32_j24: j24_lo7 is j24_h=0 & j24_lo7 { export j24_lo7; }
 S32_j24: j24_c32 is j24_h=1 & j24_c32 { export *[const]:4 j24_c32; }
 S32_j24: "vccz" is j24_x=251 { t:4 = zext(vcc == 0); export t; }
 S32_j24: "execz" is j24_x=252 { t:4 = zext(exec == 0); export t; }
 S32_j24: "scc" is j24_x=253 { t:4 = zext(SCC); export t; }
+S32_j24: "src_shared_base" is j24_x=235 { t:4 = aperture_register(235:2); export t; }
+S32_j24: "src_shared_limit" is j24_x=236 { t:4 = aperture_register(236:2); export t; }
+S32_j24: "src_private_base" is j24_x=237 { t:4 = aperture_register(237:2); export t; }
+S32_j24: "src_private_limit" is j24_x=238 { t:4 = aperture_register(238:2); export t; }
+S32_j24: "src_pops_exiting_wave_id" is j24_x=239 { t:4 = aperture_register(239:2); export t; }
 S64_j24: j24_sp is j24_h=0 & j24_sp { export j24_sp; }
 S64_j24: j24_c64 is j24_h=1 & j24_c64 { export *[const]:8 j24_c64; }
 S64_j24: "scc" is j24_x=253 { t:8 = zext(SCC); export t; }
+S64_j24: "src_shared_base" is j24_x=235 { t:8 = aperture_register(235:2); export t; }
+S64_j24: "src_shared_limit" is j24_x=236 { t:8 = aperture_register(236:2); export t; }
+S64_j24: "src_private_base" is j24_x=237 { t:8 = aperture_register(237:2); export t; }
+S64_j24: "src_private_limit" is j24_x=238 { t:8 = aperture_register(238:2); export t; }
+S64_j24: "src_pops_exiting_wave_id" is j24_x=239 { t:8 = aperture_register(239:2); export t; }
 V32_i0: i0_vg is i0_v=1 & i0_vg { export i0_vg; }
 V32_i0: S32_i0 is i0_v=0 ... & S32_i0 ... { export S32_i0; }
 V64_i0: i0_vp is i0_v=1 & i0_vp { export i0_vp; }
@@ -1224,6 +1286,9 @@ define pcodeop bpermute;
 :v_mov_b32 i17_vg, V32_i0 is e7=0x3f ... & vop1op=1 ... & i17_vg ... & V32_i0 ... {
   a:4 = V32_i0; d:4 = i17_vg; r:4 = 0; r = a;
   i17_vg = r;
+}
+:v_swap_b32 i17_vg, i0_vg is e7=0x3f ... & vop1op=81 ... & i17_vg ... & i0_v=1 ... & i0_vg ... {
+  t:4 = i17_vg; i17_vg = i0_vg; i0_vg = t;
 }
 :v_mov_b32_e64 i0v8, V32_j0 is e6=0x34 & vop3op=321 & i0v8 ; V32_j0 {
   a:4 = V32_j0; d:4 = i0v8; r:4 = 0; r = a;

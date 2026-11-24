@@ -5133,6 +5133,24 @@ confirmed on hardware before the spec changed.
 - `EXTRQ xmm,xmm` reads the bit index from bits 13:8 of the control register (it read 11:6),
   and `EXTRQ`/`INSERTQ` treat a field length of 0 as 64, as the AMD APM defines.
 
+### AArch64 lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz` against Unicorn and checked against the Arm ARM.
+
+- `LDRSB`/`LDRSH` into a W register (immediate, register, unscaled and unprivileged forms in
+  `AARCH64base.sinc`) sign-extend the value to 32 bits and zero-extend that into the X register;
+  before, the immediate and register forms sign-extended to 64 bits and `LDURSB`/`LDTRSB` W
+  zero-extended the byte.
+- A write to a B, H, S or D register or to a 64-bit vector arrangement clears the rest of the Z
+  register. 395 constructors in `AARCH64neon.sinc` that named `Zd` but never called
+  `zext_zb`/`zext_zh`/`zext_zs`/`zext_zd` (scalar FP arithmetic and min/max, `FMADD`/`FMSUB`,
+  `BSL`/`BIT`/`BIF`, `EXT`, the saturating, rounding and narrowing shifts, the across-lanes
+  reductions, ...) now do, as do the 41 `LD1`..`LD4` and `LD1R`..`LD4R` constructors in
+  `AARCH64ldst.sinc` with 64-bit arrangements (one `zext_zd` per loaded register).
+- The fixed-point `FCVTZU d,d,#fbits` and `FCVTZU h,h,#fbits`, `SCVTF`/`UCVTF` `.4H`/`.8H`
+  `#fbits` and scalar `URSHR d,d,#shift` decode their shift with the element size of the
+  destination (`Imm_shr_imm64`/`Imm_shr_imm16`); `fcvtzu d22,d5,#50` printed `#-0xe`.
+
 ## 2.9 Go stack-growth prologue folding
 
 **(kuna) `option gomorestack off|auto|always`, default auto,

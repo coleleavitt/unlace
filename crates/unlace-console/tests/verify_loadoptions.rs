@@ -399,6 +399,68 @@ fn an_explicit_program_ignores_a_later_environment_change() {
     );
 }
 
+/// Two loads in one process with different options: the second sees only the
+/// options it was given. The first load changes `goabi` and `sourcelang`; an
+/// explicit load with defaults and an environment load with the variables unset
+/// both see the shipped values. Then the environment names `goabi off`: the
+/// environment load reads it, and an explicit load does not.
+#[test]
+fn a_second_load_does_not_see_the_first_loads_options() {
+    let _env = ENVIRONMENT.lock().unwrap_or_else(|e| e.into_inner());
+    let go = go_image();
+    let path = go.to_str().unwrap();
+    for name in ENV_VARS {
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(name) };
+    }
+
+    let first = load(
+        &go,
+        &LoadOptions {
+            goabi: false,
+            sourcelang: Some(SourceLang::C),
+            ..LoadOptions::default()
+        },
+    );
+    assert_eq!(compiler(&first), "gcc");
+    assert_eq!(first.arch().source_lang_detected, SourceLang::C);
+
+    let second = load(&go, &LoadOptions::default());
+    assert_eq!(compiler(&second), "golang", "the first load's goabi leaked");
+    assert_eq!(second.arch().load_options().sourcelang, None);
+
+    let mut from_env = bootstrap_from_object(path, "", &[specs()]).unwrap();
+    from_env.commit_pending_analysis().unwrap();
+    assert_eq!(
+        compiler(&from_env),
+        "golang",
+        "the first load's goabi leaked"
+    );
+    assert!(from_env.arch().load_options().goabi);
+
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("UNLACE_GOABI", "off") };
+    let mut from_env_off = bootstrap_from_object(path, "", &[specs()]).unwrap();
+    from_env_off.commit_pending_analysis().unwrap();
+    assert_eq!(
+        compiler(&from_env_off),
+        "gcc",
+        "an environment load ignored UNLACE_GOABI"
+    );
+    let explicit = load(&go, &LoadOptions::default());
+    assert_eq!(
+        compiler(&explicit),
+        "golang",
+        "an explicit load read UNLACE_GOABI"
+    );
+
+    for name in ENV_VARS {
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(name) };
+    }
+    std::fs::remove_file(go).unwrap();
+}
+
 /// A `Bootstrap` without options reads the environment: its load options,
 /// and an unset ISA from `UNLACE_ARM_ISA`. With options, it reads neither, so a bad `UNLACE_ARM_ISA`
 /// cannot fail it.

@@ -194,3 +194,73 @@ check how a gate parses its variable; `enter_environment` and
 `load_options_from_env`, the fallback for a gate read outside any load scope;
 the read-only diagnostic and fault-injection variables of the inventory's
 section D. None of this was built or measured after #1081 (edit-only, per Cole).
+
+## Remaining environment use (audit, 2026-11-24)
+
+Scope: every `std::env::set_var` / `remove_var` and every `UNLACE_*` or `unlace_*`
+read in `crates/*/src`, outside the entry points and `LoadOptions`. Class: **(a)** user
+input read once at an entry point or a host path; **(b)** a debug, trace, cache or
+fault-injection switch; **(c)** option state that should move into `LoadOptions`.
+Line numbers are as of the audit branch; `rg` the name to find a moved one.
+
+### Writes outside test code
+
+| Where | Writes | Class | Disposition |
+|---|---|---|---|
+| `unlace-middle/src/p0_knowledge/ifuncfpret.rs:40` `set_ifuncfpret_env` | `UNLACE_IFUNCFPRET` | c | no production caller (tests only); removed by the audit PR that follows |
+| `unlace-middle/src/p0_knowledge/ppcapu.rs:21` `set_ppcapu_env` | `UNLACE_PPCAPU` | c | no production caller; same PR |
+| `unlace-middle/src/p0_knowledge/macho_arm64e.rs:28` `set_macho_arm64e_env` | `UNLACE_MACHO_ARM64E` | c | no production caller; same PR |
+| `unlace-middle/src/p0_knowledge/symbolnamechars.rs:168` `set_symbolnamechars_env` | `UNLACE_SYMBOLNAMECHARS` | c | called only from `symbolnamechars/tests.rs`; left, the test writes its own variable |
+| `unlace-middle/src/p0_knowledge/libctypes.rs:125` `set_libctypes_env_layout` | `UNLACE_LIBCTYPES` | c | called only from tests (here and `unlace-analysis` `protos/libctypes/tests.rs`); left |
+
+Test-module writes (`#[cfg(test)]` blocks inside `src`, not a production path):
+`unlace-analysis/src/loader/format/macho.rs:373,381,407` (`UNLACE_MACHO_ARM64E`),
+`unlace-analysis/src/analyzers/pdb/locate.rs:382-458` (`unlace_pdb_path`),
+`unlace-middle/src/p0_knowledge/goabi.rs:107-116` (`UNLACE_GOABI`),
+`unlace-middle/src/p0_knowledge/libctypes.rs:181-223`, and the `set_var` in
+`symbolnamechars/tests.rs`, `protos/libctypes/tests.rs`.
+
+### Reads of option state outside a scope (c)
+
+| Where | Reads | Class | Disposition |
+|---|---|---|---|
+| `unlace-lift/src/p1_partition/goreg.rs:73` `goroutine_register` | `UNLACE_GOVERSION` | c | shadows the `version` argument (the image's release, from `Architecture::go_version`) with the environment; the argument is used, the environment is not |
+| `unlace-console/src/engine.rs:9667` `arm_isa_from_env` | `UNLACE_ARM_ISA` | c | read by `ifacedecomp.rs:1431` (`load raw`), `bootstrap.rs:301` and the `bootstrap_from_*` helpers; no `LoadOptions` field, so moving it needs an `arm_isa` field and Bootstrap plumbing; not moved here |
+| `unlace-middle/src/p0_knowledge/objcsdk.rs:26` `sdk_path_from_env`, `unlace-analysis/src/analyzers/pdb/locate.rs:65` `pdb_path_from_env`, `unlace-middle/src/p0_knowledge/sourcelang.rs:106` `forced_from_env`, `unlace-middle/src/p0_knowledge/options.rs:624` `env_toggle` | their variables | c | environment-only readers that skip the scope; no caller in `src`, so they are dead code to delete |
+
+### Entry points and host paths (a)
+
+- CLI plumbing: `unlace-cli/src/paths.rs` (`UNLACE_SPECS`, `UNLACE_DECOMP_DBG`, `UNLACE_ENGINE`,
+  `UNLACE_ROOT`, `UNLACE_SLACOMP`), `loadtime.rs:146` (the child environment), `jobs.rs`
+  (`UNLACE_JOBS_FAULT`, test-only), `lib.rs`, `sbom.rs` (`SOURCE_DATE_EPOCH`),
+  `skill.rs`, `embedded_specs.rs`, `decompile_all.rs` and `fid.rs` (`SLEIGHHOME`).
+- Lumina credentials and server (`unlace-cli/src/lumina.rs:37-42`).
+- Host paths read at load or use: `UNLACE_TIL_DIR` (`unlace-console/src/typelib.rs:460,672`),
+  `UNLACE_DEBUG_DIRS` (`loader/elf_debuglink.rs:30`), `UNLACE_PATTERN_DIR`
+  (`analyzers/entry/patterns/mod.rs:563`), `UNLACE_SLA_CACHE`, `UNLACE_SLA_LAZY`
+  (`unlace-slacomp`, `unlace-sleigh`), `UNLACE_CGROUP_ROOT` (test-only, `substrate/hostmem.rs:8`).
+- Build identity (`unlace-console/src/buildstamp.rs:28-174`: `UNLACE_PARENT_BUILD`,
+  the source fingerprints, `UNLACE_DECOMP_DBG`).
+
+### Trace, debug, cache and fault switches (b)
+
+- `UNLACE_*_TRACE` and `UNLACE_*_DEBUG` in `unlace-middle`, `unlace-bandb*`,
+  `unlace-lift`, `unlace-emit`, `unlace-structure`, `unlace-analysis` and `unlace-console`
+  (e.g. `UNLACE_RS_DEBUG`, `UNLACE_RETREC_TRACE`, `UNLACE_FID_DEBUG`,
+  `UNLACE_FMTSTATIC_DEBUG`, `UNLACE_UEFI_DEBUG`); `UNLACE_DUMP`, `UNLACE_DUMP_XML`,
+  `UNLACE_ACTION_PROF`, `UNLACE_CHARPTR_CENSUS`, `UNLACE_ENTRY_TRACE`,
+  `UNLACE_DATATEST_TIMES`, `UNLACE_CALLWIDE_REPLAY_DIR`.
+- `UNLACE_NO_SYMBOL_SNAPSHOT_CACHE` (`unlace-middle/src/infra/architecture.rs:1079`), read once
+  when an `Architecture` is built.
+- Decode tuning and checks (`unlace-analysis/src/listing/pdecode.rs:66-76`:
+  `UNLACE_DECODE_MIN_BYTES`, `_INTERVALS`, `_SELFCHECK`, `_STATS`). `UNLACE_DECODE_JOBS`
+  is `LoadOptions::decode_jobs` and is scoped first.
+- Fault injection: `UNLACE_DECODE_FAULT` (`pdecode.rs:809`), `UNLACE_JUMPTABLE_FAULT`
+  (`unlace-lift/src/p2_lift/jumptablefault.rs`), `UNLACE_RENDER_FAULT`
+  (`unlace-emit/src/p9_emit/renderfault.rs`), `UNLACE_JOBS_FAULT` (`unlace-cli/src/jobs.rs`).
+
+### Gate fallbacks (by design)
+
+Every `*_enabled()` gate reads `scoped(...)` first and falls back to
+`loadoptions::env::*` only outside a load scope (`FALLBACKS` counts those reads for
+tests). `enter_environment` and `LoadOptions::from_env` are that fallback, not a write.

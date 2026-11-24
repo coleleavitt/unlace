@@ -87,6 +87,7 @@ pub(crate) fn hash_binary(binary: &str, only: &[u64]) -> Result<Inventory, Strin
         .as_sleigh()
         .ok_or("the loaded program's decoder is not SLEIGH")?;
     let mapped = mapped_ranges(&file);
+    let x86 = arch.archid.starts_with("x86:");
     let wanted: BTreeSet<u64> = only.iter().copied().collect();
     let mut inventory = Inventory {
         input_md5: unlace_lumina::hash::md5(&bytes),
@@ -100,7 +101,7 @@ pub(crate) fn hash_binary(binary: &str, only: &[u64]) -> Result<Inventory, Strin
             continue;
         }
         seen.insert(entry);
-        match hash_function(&listing, translate, &space, &mapped, entry) {
+        match hash_function(&listing, translate, &space, &mapped, entry, x86) {
             Ok((hash, size, instructions)) => inventory.hashed.push(Hashed {
                 entry,
                 name: func.name.clone(),
@@ -129,22 +130,52 @@ fn hash_function(
     space: &Rc<AddrSpace>,
     mapped: &[(u64, u64)],
     entry: u64,
+    x86: bool,
 ) -> Result<([u8; 16], u32, usize), &'static str> {
     let extent = unlace_analysis::fid::extent::calculate_extent(listing, entry);
-    if extent.is_empty() {
-        return Err("no_instructions");
-    }
-    let mut builder = CalcrelBuilder::new();
-    let mut size: u32 = 0;
+    let mut insns = Vec::with_capacity(extent.len());
     for insn in &extent {
         let addr = Address::new(Rc::clone(space), insn.addr);
         let mask = translate
             .instruction_mask(&addr)
             .map_err(|_| "mask_failed")?;
-        builder.push(&mask.bytes, &calcrel_mask(&mask, mapped));
-        size = size.saturating_add(insn.len);
+        insns.push((insn.len, mask));
     }
-    Ok((builder.finish(), size, extent.len()))
+    // The clip runs to the next entry, so it ends in the alignment padding IDA leaves outside the
+    // function (an align item, not part of any chunk).
+    while insns.len() > 1 && insns.last().is_some_and(|(_, m)| is_padding(&m.bytes, x86)) {
+        insns.pop();
+    }
+    if insns.is_empty() {
+        return Err("no_instructions");
+    }
+    let mut builder = CalcrelBuilder::new();
+    let mut size: u32 = 0;
+    for (len, mask) in &insns {
+        builder.push(&mask.bytes, &calcrel_mask(mask, mapped));
+        size = size.saturating_add(*len);
+    }
+    Ok((builder.finish(), size, insns.len()))
+}
+
+/// An instruction that only pads: all zero bytes, an x86 `int3` run or `nop` form (`90`, `66 90`, the
+/// `0f 1f` family behind any `66`/`2e` prefixes), or the AArch64 `nop`.
+pub(crate) fn is_padding(bytes: &[u8], x86: bool) -> bool {
+    if bytes.is_empty() || bytes.iter().all(|&b| b == 0) {
+        return !bytes.is_empty();
+    }
+    if x86 {
+        if bytes.iter().all(|&b| b == 0xCC) {
+            return true;
+        }
+        let start = bytes
+            .iter()
+            .position(|&b| b != 0x66 && b != 0x2E)
+            .unwrap_or(bytes.len());
+        let rest = &bytes[start..];
+        return rest == [0x90] || rest.starts_with(&[0x0F, 0x1F]);
+    }
+    bytes == [0x1F, 0x20, 0x03, 0xD5]
 }
 
 /// The `ev_calcrel` mask of one instruction: the value bits of every operand that names an address.
@@ -236,6 +267,21 @@ mod tests {
         }]);
         assert_eq!(calcrel_mask(&m, &[(0x40_0000, 0x50_0000)]), value_bits());
         assert_eq!(calcrel_mask(&m, &[]), vec![0; 5]);
+    }
+
+    #[test]
+    fn padding_is_recognized() {
+        assert!(is_padding(&[0xCC, 0xCC], true));
+        assert!(is_padding(&[0x90], true));
+        assert!(is_padding(
+            &[0x66, 0x2E, 0x0F, 0x1F, 0x84, 0, 0, 0, 0, 0],
+            true
+        ));
+        assert!(is_padding(&[0, 0], true));
+        assert!(is_padding(&[0x1F, 0x20, 0x03, 0xD5], false));
+        assert!(!is_padding(&[0xC3], true));
+        assert!(!is_padding(&[0x90], false));
+        assert!(!is_padding(&[], true));
     }
 
     #[test]

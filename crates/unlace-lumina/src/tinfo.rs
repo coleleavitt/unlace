@@ -3,8 +3,12 @@
 //!
 //! A type is a byte string: the low nibble of each type byte is the base type (`BT_*`), bits 4-5 its
 //! flavour (`BTMT_*`) and bits 6-7 the `const`/`volatile` modifiers. Counts and lengths use the `dt`
-//! encoding (`n + 1` in one byte below `0x80`, else two bytes), so a type string holds no NUL and the
-//! chunk is the type, a NUL, the field names (one `dt`-length-prefixed string per parameter) and a NUL.
+//! encoding (`n + 1` in one byte below `0x80`, else two bytes), so a type string holds no NUL.
+//!
+//! The chunk, as libida's `calc_func_metadata` builds it (`sub_872D00`, IDA 9.5): one byte that is 1
+//! when the type is user-defined (`AFL_USERTI`), the type string with ordinal references replaced by
+//! names (`serialize_tinfo`), then, only when a parameter has a name, a NUL and the field names (one
+//! `dt`-length-prefixed string per parameter), with no trailing NUL.
 //!
 //! A function type is `BT_FUNC`, the calling-convention byte (`cm_t`, high nibble `CM_CC_*`), the
 //! return type, the parameter count and the parameter types. Decoding refuses anything outside the
@@ -419,8 +423,14 @@ pub fn decode_func(ty: &[u8], fields: &[u8]) -> Option<FuncType> {
     Some(FuncType { cc, ret, params })
 }
 
-/// Decode an `MDK_TYPE` chunk: the type string, a NUL, the field names, a NUL.
+/// Decode an `MDK_TYPE` chunk: the user-type flag byte, the type string, and optionally a NUL and the
+/// field names. A chunk that starts directly with `BT_FUNC` (no flag byte) is read too.
 pub fn decode_type_chunk(data: &[u8]) -> Option<FuncType> {
+    let data = match data.first() {
+        Some(&b) if b & 0x0F == BT_FUNC => data,
+        Some(0 | 1) => &data[1..],
+        _ => return None,
+    };
     let (ty, rest) = match data.iter().position(|&b| b == 0) {
         Some(i) => (&data[..i], &data[i + 1..]),
         None => (data, &[][..]),
@@ -520,7 +530,8 @@ pub fn encode_type_chunk(f: &FuncType) -> Option<Vec<u8>> {
     if f.cc == CallConv::VoidArg && !f.params.is_empty() {
         return None;
     }
-    let mut out = vec![BT_FUNC, f.cc.cm()];
+    // The flag byte: a pushed prototype is a user-defined type.
+    let mut out = vec![1, BT_FUNC, f.cc.cm()];
     write_type(&mut out, &f.ret, 0)?;
     if f.cc != CallConv::VoidArg {
         write_dt(&mut out, u32::try_from(f.params.len()).ok()?)?;
@@ -528,11 +539,15 @@ pub fn encode_type_chunk(f: &FuncType) -> Option<Vec<u8>> {
             write_type(&mut out, &p.ty, 0)?;
         }
     }
-    out.push(0);
-    for p in &f.params {
-        write_pstring(&mut out, p.name.as_deref().unwrap_or(""))?;
+    if f.params
+        .iter()
+        .any(|p| p.name.as_deref().is_some_and(|n| !n.is_empty()))
+    {
+        out.push(0);
+        for p in &f.params {
+            write_pstring(&mut out, p.name.as_deref().unwrap_or(""))?;
+        }
     }
-    out.push(0);
     Some(out)
 }
 
@@ -616,12 +631,45 @@ mod tests {
             ],
         };
         let chunk = encode_type_chunk(&f).unwrap();
-        assert_eq!(chunk.iter().filter(|&&b| b == 0).count(), 2);
+        assert_eq!(chunk[0], 1, "user-type flag");
+        assert_eq!(chunk.iter().filter(|&&b| b == 0).count(), 1);
         assert_eq!(decode_type_chunk(&chunk).unwrap(), f);
         assert_eq!(
             f.declaration("QueryThing"),
             "HRESULT QueryThing(struct IUnknown *self, void *const a2, double x)"
         );
+    }
+
+    #[test]
+    fn reads_the_chunk_ida_writes() {
+        // Flag 0 (not user-defined), `int (char *)` cdecl, NUL, field "s".
+        let chunk = [
+            0,
+            BT_FUNC,
+            0x30,
+            BT_INT,
+            0x02,
+            BT_PTR,
+            BT_INT8 | BTMT_CHAR,
+            0,
+            0x02,
+            b's',
+        ];
+        let f = decode_type_chunk(&chunk).unwrap();
+        assert_eq!(f.declaration("len"), "int len(char *s)");
+        // No names: no NUL, no fields.
+        let unnamed = FuncType {
+            cc: CallConv::Cdecl,
+            ret: int(),
+            params: vec![Param {
+                ty: int(),
+                name: None,
+            }],
+        };
+        let enc = encode_type_chunk(&unnamed).unwrap();
+        assert!(!enc.contains(&0));
+        assert_eq!(decode_type_chunk(&enc).unwrap(), unnamed);
+        assert!(decode_type_chunk(&[7, BT_FUNC]).is_none());
     }
 
     #[test]

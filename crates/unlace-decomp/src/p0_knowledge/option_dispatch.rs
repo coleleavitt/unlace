@@ -117,6 +117,7 @@ unlace_options! { self, p1;
     "bitidioms" => registered!(crate::bitidioms::BitIdioms),
     "minmax" => registered!(crate::minmax::MinMax),
     "satmul" => registered!(crate::satmul::SatMul),
+    "floatidentity" => registered!(crate::floatidentity::FloatIdentity),
     "bitfieldarith" => registered!(crate::bitfieldarith::BitFieldArith),
     "helperroles" => registered!(crate::helperrole::HelperRoles),
     "dynalloca" => registered!(crate::dynalloca::DynAlloca),

@@ -733,6 +733,11 @@ pub fn universal_sched_hooked(
             crate::satmul::RuleSaturatedMul::new("analysis")
         ),
         rrow!(
+            "floatidentity",
+            "analysis",
+            crate::floatidentity::RuleFloatIdentity::new("analysis")
+        ),
+        rrow!(
             "bitfieldarith",
             "analysis",
             crate::bitfieldarith::RuleBitFieldArith::new("analysis")

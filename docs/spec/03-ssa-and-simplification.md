@@ -3609,6 +3609,17 @@ Both builtins are unspecialised. Each constant operand is printed at the result'
 size. A mask that is not a contiguous low mask, a variable shift, or a clear mask
 that differs from the insert's bit range is left alone.
 
+**floatidentity** (unlace) —
+`crates/unlace-bandb-base/src/p3_dataflow/floatidentity.rs (RuleFloatIdentity)`,
+group `analysis` (`option floatidentity`, default off). Ported from the float rules
+of the original unlace `algebraic_simplify.rs`. On a FLOAT_ADD, FLOAT_SUB, FLOAT_MULT
+or FLOAT_DIV with a constant operand, `x + +0.0` and `+0.0 + x` become `x`, `x - +0.0`
+becomes `x`, `x * 1.0`, `1.0 * x` and `x / 1.0` become `x`. A FLOAT_NEG operand folds
+exactly: `(-x) + y` becomes `y - x`, `x + (-y)` becomes `x - y` and `x - (-y)` becomes
+`x + y`. The constant folds run only where `floatquiet::can_elide` holds, so a signaling
+NaN whose quieting would be observed keeps its operation. `x + +0.0` is not exact for
+`-0.0`, which turns into `+0.0`; that is why the rule is opt-in.
+
 **alloca** (unlace) — `crates/unlace-bandb-base/src/p3_dataflow/alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word the same instruction just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). A load and a store from two instructions are not a probe: another store can change the slot between them, so the second store restores an earlier value. CPython's `r = []; ...; return r` lost its return value this way, because `STORE_FAST r` pops the slot that `LOAD_FAST r` later pushes back into. It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/alloca.toml`.
 
 **cancelbytearithmetic** (repipe `cancelling-byte-arithmetic-splits`) —

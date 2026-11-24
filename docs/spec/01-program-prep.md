@@ -9834,7 +9834,37 @@ and a count of its cleanup funclets; each catch funclet gets
 `eh: catch (std::runtime_error &) handler of 0x140001000 (try states 0-0)` and each
 cleanup funclet `eh: unwind funclet of 0x140001000 (state 2)`. Every funclet is
 also a discovered entry. The handler bodies are not spliced into the parent's
-flow, and x86 `FuncInfo` and SEH scope tables are not read.
+flow.
+
+**(kuna) SEH scope tables and x86 C++ `FuncInfo` are listed too** (`msvceh`,
+the same pass; `crates/unlace-analysis/src/analyzers/entry/kuna_msvcseh.rs (x86_scope_table)`).
+A `__try` block's filter and handler are reached only by the exception
+dispatcher, so the pseudocode shows the guarded code and nothing of `__except`
+or `__finally`. On x64 an `UNWIND_INFO` whose handler is the
+`__C_specific_handler` import carries a `SCOPE_TABLE`: a count of 1 to 64, then
+`{BeginAddress, EndAddress, HandlerAddress, JumpTarget}` RVAs. `JumpTarget` 0 is
+a `__finally` whose funclet is `HandlerAddress`; otherwise `HandlerAddress` is
+the filter funclet, or a constant filter below 0x10 or above 0xfffffff0 (1 is
+`EXCEPTION_EXECUTE_HANDLER`), and `JumpTarget` is the `__except` block inside
+the function. The function gets one header comment per record,
+`seh: __try [0x140001010, 0x140001030): __except (EXCEPTION_EXECUTE_HANDLER) -> 0x140001040; ...`,
+and each filter and `__finally` funclet gets `seh: __except filter of ...` or
+`seh: __finally funclet of ...` and is a discovered entry. On x86 the frame
+handler is installed by the prologue, so the pass scans code for
+`push -2; push table; push handler` (SEH4, after an optional
+`push ebp; mov ebp, esp`, which is then the function start), `push -1` (SEH3),
+and `push size; push table; call __SEH_prolog4`. An SEH4 table opens with four
+cookie offsets; the GS offset is -2 (none) or negative and the EH offset negative.
+Records follow (directly for SEH3): `{EnclosingLevel, Filter, Handler}`, read
+while the enclosing level is the outermost marker or a lower record and the
+filter (null for `__finally`) and the handler lie in code. Each record becomes a
+`seh (level N): ...` header comment; the blocks lie inside the function and are
+not shown. An x86 C++ function installs a handler stub instead
+(`push -1; push stub; mov eax, fs:[0]`, or `mov eax, stub; call __EH_prolog3`
+after its `push size`) whose code ends `mov eax, FuncInfo; jmp` within 48 bytes
+of its entry. That `FuncInfo` (magic checked) is decoded as on x64 with
+absolute references and 16-byte `HandlerType`s, and the function gets the same
+try-block comments, ending `the handler blocks are not shown`.
 
 **(kuna) `.pdata` interiors are not function starts either** (`pdatainterior`,
 always on, DIV-155;

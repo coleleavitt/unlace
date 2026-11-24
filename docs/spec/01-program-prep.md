@@ -5111,6 +5111,15 @@ moves.
     `EFI_PEI_PPI_DESCRIPTOR`; `NotifyPpi` does the same with
     `EFI_PEI_NOTIFY_DESCRIPTOR` and gives each callback the notify prototype
     with its PPI typed from the GUID.
+  - `SmmRegisterProtocolNotify` / `MmRegisterProtocolNotify` register an
+    `EFI_MM_NOTIFY_FN` the MM core calls once an interface is installed under
+    the GUID. A constant callback is named `<Guid>Notify` (the GUID's EDK2
+    name without its `g` and `Guid`, `Protocol_<Data1>` for an unknown one)
+    and given the prototype `EFI_STATUS(EFI_GUID *Protocol, <Interface> *Interface,
+    EFI_HANDLE Handle)`, so the interface the callback receives is typed from
+    the GUID like a `LocateProtocol` out-parameter and the walk follows it into
+    the callback. The boot-services `RegisterProtocolNotify` takes an event,
+    not a function, and is left alone.
   - A member whose prototype has an out-parameter `T **` for a known `T`
     (`EFI_SMM_BASE2_PROTOCOL.GetSmstLocation`) types what it is handed, which is
     how an SMM driver's `gSmst` is found.

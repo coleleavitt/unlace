@@ -3236,9 +3236,10 @@ little-endian rule without `reversesignif` never sets the flag, so its joins are
 exactly upstream's. A cspec whose single join entry names the pieces itself (the
 68000's `D0:D1`) never reaches the flag: its trials sort by their justified
 offset, which already puts the low half first. Two-register *parameters* are
-never joined at all (`ActionParamDouble` below is a no-op), so a `long long`
-argument prints as its two registers in the ABI's order and no order assumption
-applies there.
+joined by `ActionParamDouble` (protorecovery, below) only where `checkInputJoin`
+proves the pair is one logical parameter; a `long long` argument that stays two
+trials still prints as its two registers in the ABI's order, and no order
+assumption applies there.
 
 On those ABIs the (unlace) `bejoin` option decides the order
 (`crates/unlace-bandb-core/src/p4_calls/bejoin.rs (join_order)`):
@@ -4265,16 +4266,28 @@ between return recovery and dead-code elimination, **`ActionRestrictLocal`**
 unaffected-register save slots as not-mapped so the local-variable phase
 (chapter 06) cannot claim them.
 
-Two registered passes are **documented no-ops** in the current port, kept in
-the schedule so the materialized tree stays byte-equal to the upstream oracle
-(00 §0.6): `ActionParamDouble` (double-precision split/join of call arguments;
-its `apply` carries the transcribed upstream body as pseudocode and performs
-no rewrites — the ported `FuncCallSpecs::check_input_join`/`do_input_join`
-surface in `crates/unlace-middle/src/p4_calls/fspec.rs` waits on this
-driver) and `ActionPrototypeWarnings` (prototype-error headers; the warning
-channel exists but nothing is emitted). Failure modes: a genuinely split
-two-register argument is passed as two separate arguments, and a prototype
-whose storage assignment failed degrades silently instead of warning. Two
+`ActionParamDouble` is live (below). One registered pass is still a
+**documented no-op** in the current port, kept in the schedule so the materialized
+tree stays byte-equal to the upstream oracle (00 §0.6): `ActionPrototypeWarnings`
+(prototype-error headers; the warning channel exists but nothing is emitted).
+Failure mode: a prototype whose storage assignment failed degrades silently
+instead of warning.
+
+`ActionParamDouble` (protorecovery, `coreaction.cc:1641`) works per call spec and
+on the function's own prototype. When the call's input recovery is active, a
+stack-relative trial that a PIECE writes is split into its two pieces
+(`splitTrial`, the call's inputs reordered by endianness) once
+`checkInputSplit` accepts the split. When input recovery is inactive, the inputs
+are not locked and double-precision recovery is on, an adjacent SUBPIECE hi/lo
+input pair is joined into one whole (`checkInputJoin`, then `doInputJoin`, which
+errs on a locked prototype); the join address comes from the address manager's
+installed register lookup, and the join is skipped when none is installed. On the
+function's own prototype, a locked input list with double-precision recovery on
+marks the SUBPIECE halves of each locked primitive-whole parameter (low half at
+offset 0, high half at half the size) as precision lo/hi. The pass is a strict
+Ghidra-parity fix with no option, so it changes decompiled output for every
+function a call spec or locked parameter with such pieces reaches. A failing
+split or join is recorded as the call-mechanism failure, not panicked. Two
 S4-grouped passes live outside this folder by port history:
 `crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionDirectWrite)` — the `protorecovery_a` paint of Varnodes reachable from

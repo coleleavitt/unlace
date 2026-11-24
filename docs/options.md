@@ -36,6 +36,9 @@ Three tiers:
 | new T[n] prints as a 128-bit multiply with a SUB168 high-half test and a -1 select | [`satmul`](#satmul----on--off-default-off) |
 | operator new[] is called with -(ulong)(overflow) ORed into n * size | [`satmul`](#satmul----on--off-default-off) |
 | a cmovo or seto after a mul feeds an allocation size | [`satmul`](#satmul----on--off-default-off) |
+| a register field is extracted with a shift and an AND | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
+| a flag field is set with a clear-mask OR and a shifted insert | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
+| packed descriptor or hardware register fields print as shift and mask arithmetic | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
 | memcpy(d, s, strlen(s) + 1) is printed instead of strcpy(d, s) | [`helperroles`](#helperroles----on--off-default-on) |
 | an inlined strcpy shows as a strlen call followed by a memcpy | [`helperroles`](#helperroles----on--off-default-on) |
 | a variable-length array prints as &(&Stack[-8])[-n] | [`dynalloca`](#dynalloca----on--off-default-off) |
@@ -62,6 +65,9 @@ Three tiers:
 | a float-to-int conversion followed by clamps to -0x80000000 and 0x7fffffff | [`satconvert`](#satconvert----on--off-default-on) |
 | v = 0; if (x <= -1.0) after an unsigned conversion | [`satconvert`](#satconvert----on--off-default-on) |
 | (int)x where the clamps for NaN and overflow should not print | [`satconvert`](#satconvert----on--off-default-on) |
+| a jl or jge after cmp prints as an XOR of a sign test and an overflow test | [`sfofxor`](#sfofxor----on--off-default-off) |
+| SF != OF in a signed comparison of two registers | [`sfofxor`](#sfofxor----on--off-default-off) |
+| (a < b) ^ __OFSUB__(a, b) in a signed branch condition | [`sfofxor`](#sfofxor----on--off-default-off) |
 | a < b or a == b printed as two tests where a <= b would do | [`cmpmerge`](#cmpmerge----on--off-default-off) |
 | a0 != a1 && !(a0 < a1) on floats | [`cmpmerge`](#cmpmerge----on--off-default-off) |
 | two branches in a row test the same value against neighbouring constants and jump to one place | [`cmpmerge`](#cmpmerge----on--off-default-off) |
@@ -184,6 +190,9 @@ Three tiers:
 | a function returns the result of a call through swi(3) | [`int3pad`](#int3pad----off--warn--halt-default-warn) |
 | nothing in the C says control ran into a run of 0xcc padding bytes | [`int3pad`](#int3pad----off--warn--halt-default-warn) |
 | an anti-debug binary's clean-run path ends in an indirect call that only the disassembly explains | [`int3pad`](#int3pad----off--warn--halt-default-warn) |
+| a call to IsDebuggerPresent or ptrace prints as an ordinary call with nothing to say it is a debugger probe | [`antidebug`](#antidebug----off--warn-default-off) |
+| a timing probe such as rdtsc or QueryPerformanceCounter is indistinguishable from any other call in the C | [`antidebug`](#antidebug----off--warn-default-off) |
+| OutputDebugStringA used as a debugger test prints nothing that marks it | [`antidebug`](#antidebug----off--warn-default-off) |
 | an x86-64 syscall renders as syscall() with empty parens, with the number and every argument erased | [`x64syscall`](#x64syscall----off--on--abi-default-on) |
 | a syscall wrapper returns its own first parameter, the syscall number, instead of the syscall's result | [`x64syscall`](#x64syscall----off--on--abi-default-on) |
 | the register writes feeding a SYSCALL are all missing from the C while unlace disassemble shows them | [`x64syscall`](#x64syscall----off--on--abi-default-on) |
@@ -1196,6 +1205,9 @@ Three tiers:
 | a void * chosen between two string literals prints as &dat_<addr> | [`cstringconst`](#cstringconst----on--off-default-on) |
 | an argument of a call through an untyped function pointer is an address into __cstring | [`cstringconst`](#cstringconst----on--off-default-on) |
 | a call argument prints as the integer value of a string's address in a dylib | [`cstringconst`](#cstringconst----on--off-default-on) |
+| a global used by address prints as dat_2b080 where the string it holds says what the use is | [`stringglobalnames`](#stringglobalnames----on--off-default-off) |
+| a format string or message is only reachable as &dat_<addr> and the reader must look the bytes up | [`stringglobalnames`](#stringglobalnames----on--off-default-off) |
+| the same string global appears as dat_<addr> in one function and under its text in IDA | [`stringglobalnames`](#stringglobalnames----on--off-default-off) |
 | full-line WARNING banner comments clutter the output | [`warnstyle`](#warnstyle----inline--banner-default-inline) |
 | warning text wanted inline at the end of the statement it describes | [`warnstyle`](#warnstyle----inline--banner-default-inline) |
 | terse warning slugs unwanted; full upstream warning text needed | [`warnstyle`](#warnstyle----inline--banner-default-inline) |
@@ -1230,6 +1242,7 @@ Three tiers:
 | `long double v1; // st0  | [`x87depth`](#x87depth----on--off-default-on) |
 |  st1` is returned but never assigned | [`x87depth`](#x87depth----on--off-default-on) |
 | a caller's x87 push makes a void callee return a float | [`x87depth`](#x87depth----on--off-default-on) |
+| a value from recv or getenv reaches system or popen with no warning | [`taintcheck`](#taintcheck----on--off-default-off) |
 | a variadic function has fourteen parameters a0..a13 | [`varargsave`](#varargsave----on--off-default-off) |
 | if (al) guards stores of xmm registers in a printf wrapper | [`varargsave`](#varargsave----on--off-default-off) |
 | va_list fields are assigned 8 and 0x30 by hand | [`varargsave`](#varargsave----on--off-default-off) |
@@ -1462,6 +1475,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P9/pointer-notation · unlace · presentation-default · postinc
 - **Example:** `option postinc off`
 
+### `nonnullparam` -- on | off, default `off`
+
+- **Symptoms:** a pointer parameter is used at once with no NULL test and nothing says the caller must not pass NULL; the decompiled function gives no hint that its parameter is dereferenced on entry.
+- **What it does:** Mark a parameter the function dereferences before any branch as non-null, with a comment above its first use. A function that loads or stores through a parameter in its entry block, before any conditional branch or indirect jump, requires the caller to have passed a pointer that is not null, or the access traps. With the option on, the printer adds `/* non-null: p is dereferenced before any branch */` above the first statement that dereferences the parameter, or a copy of it made in the entry block, once per parameter. The parameter is the function prototype's input whose storage the entry-block varnode is, so a callee-saved register read on entry is not one. Only the comment is added: the printed statements and every other comment are unchanged.
+- **When to flip:** Off by default. Flip on when reading a function whose parameters are dereferenced at once, to see which pointers it assumes are valid without a NULL test. The claim assumes the dereference traps on NULL, which is not true on a target that maps address zero, so read the comment as a hint, not a proof.
+- **Where / provenance:** P9/warning-style · unlace · opt-in-tool · unlace-1345
+- **Example:** `option nonnullparam on`
+
 ### `structdefs` -- on | off, default `off`
 
 - **Symptoms:** the signature says FILE * or struct_0 * and nothing says what the fields are; a field access like f->_flags with no layout anywhere in the output; you have to run decompile-project just to read the .h for one function's struct; a synthesized struct_N appears in a parameter type with no definition.
@@ -1477,6 +1498,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Turn on to read signed byte tests and byte arithmetic the way Hex-Rays prints them (it shows 0.7 character literals per 1,000 lines on DecBench O2-noinline where unlace shows 7.4, mostly `'\0'` in signed tests). Leave off to keep every constant of a character type as a character literal, as Ghidra prints it.
 - **Where / provenance:** P9/literal-format · unlace · presentation-default · unlace-charnum
 - **Example:** `option charnum on`
+
+### `partmacro` -- on | off, default `off`
+
+- **Symptoms:** (uint1)(x >> 8) where the source reads BYTE1(x); a 16-bit part of a 32-bit value printed as a cast of a shift; LOBYTE(HIWORD(x)) where the source reads BYTE2(x).
+- **What it does:** Print a part of an integer value as the part macro that names it: LOBYTE(x), BYTE1(x) to BYTE7(x), LOWORD(x), HIWORD(x), WORD1(x) to WORD3(x), LODWORD(x) and HIDWORD(x). A truncation of a 2-, 4- or 8-byte integer to 1, 2 or 4 bytes at an aligned byte offset, and the truncation of a right shift by a whole number of bytes, print as the macro: the truncation of x >> 8 to one byte prints BYTE1(x). A nested part folds into the most direct one, so LOBYTE(HIWORD(x)) prints BYTE2(x). A part that reads past the value after folding, such as a byte of an arithmetic shift past the top, keeps its cast. Printing only; C output only, and the recompile prelude defines the macros when the option is on.
+- **When to flip:** Turn on to read byte and half-word unpacking the way IDA prints it (LOBYTE, BYTE1, HIWORD, LODWORD). Leave off to keep the plain casts and shifts, which every existing output and expected text uses.
+- **Where / provenance:** P9/part-macro · unlace · presentation-default · unlace-partmacro
+- **Example:** `option partmacro on`
 
 ### `constright` -- on | off, default `off`
 
@@ -1497,7 +1526,7 @@ The control surface: each of these can make output worse on the wrong source sha
 ### `bitidioms` -- on | off, default `on`
 
 - **Symptoms:** a byte swap prints as four masked shifts ORed together; a rotate prints as a pair of opposite shifts ORed together; bswap or rev instructions decompile to shift and mask soup; hash or crc code full of paired shifts.
-- **What it does:** Fold a byte swap or a constant rotate written out as shifts, masks and ORs into a call: bswap(x) when every leaf of an INT_OR tree moves whole bytes of the same x so that byte i lands in byte N-1-i (2, 4 or 8 bytes, each destination byte exactly once; masks, shifts and zero-extended byte pieces accepted), and rotl(x, n) for (x << n) | (x >> (W - n)) with a constant n. SLEIGH lifts bswap/rev and rol/ror into exactly that shift form, and compilers emit it for the portable C, so the decompiled C showed four masked shifts where the source said __builtin_bswap32. This is Hex-Rays' slot-filling bswap matcher and its rotate rule (it prints _byteswap_ulong and __ROL4__). It also folds the cmov/cneg lowering of x < 0 ? -x : x (a MULTIEQUAL of x and -x chosen by a sign test, checked at x = -5 and x = 5) into abs(x) / labs(x), an AArch64 rbit + clz (LZCOUNT of a full bit reversal) into ctz(x), a full bit reversal into bitreverse(x), and the loop SLEIGH lifts x86 bsf/tzcnt/bsr to into ctz(x) / LZCOUNT(x) ^ (W-1), proved by running the loop on every single-bit and several mixed sources. A rotate whose reader masks away one of its two halves is left to the shift rules (PowerPC rlwinm/rldic write shifts as rotate-and-mask).
+- **What it does:** Fold a byte swap or a constant rotate written out as shifts, masks and ORs into a call: bswap(x) when every leaf of an INT_OR tree moves whole bytes of the same x so that byte i lands in byte N-1-i (2, 4 or 8 bytes, each destination byte exactly once; masks, shifts and zero-extended byte pieces accepted), and rotl(x, n) for (x << n) | (x >> (W - n)) with a constant n. SLEIGH lifts bswap/rev and rol/ror into exactly that shift form, and compilers emit it for the portable C, so the decompiled C showed four masked shifts where the source said __builtin_bswap32. This is Hex-Rays' slot-filling bswap matcher and its rotate rule (it prints _byteswap_ulong and __ROL4__). It also folds the cmov/cneg lowering of x < 0 ? -x : x (a MULTIEQUAL of x and -x chosen by a sign test, checked at x = -5 and x = 5) into abs(x) / labs(x), also the branch-free xor and sub form (x ^ s) - s with s = x s>> (W - 1), an AArch64 rbit + clz (LZCOUNT of a full bit reversal) into ctz(x), a full bit reversal into bitreverse(x), and the loop SLEIGH lifts x86 bsf/tzcnt/bsr to into ctz(x) / LZCOUNT(x) ^ (W-1), proved by running the loop on every single-bit and several mixed sources. A rotate whose reader masks away one of its two halves is left to the shift rules (PowerPC rlwinm/rldic write shifts as rotate-and-mask).
 - **When to flip:** On (default). Flip off to see the raw shift-and-mask expressions, the cmov/cneg abs diamond and the one-instruction bsf/bsr loops, for example to check which bits a hand-written partial swap moves.
 - **Where / provenance:** P3/simplification-quiescence · unlace · presentation-default · bitidioms
 - **Example:** `--option bitidioms off`
@@ -1509,6 +1538,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off by default: it prints a helper that is not C. Turn it on for C++ code where every new T[n] prints as a 128-bit multiply, a SUB168(..., 8) != 0 test and a -1 select (or a -(ulong)(overflow) mask ORed into the product) before operator new[].
 - **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-satmul
 - **Example:** `option satmul on`
+
+### `bitfieldarith` -- on | off, default `off`
+
+- **Symptoms:** a register field is extracted with a shift and an AND; a flag field is set with a clear-mask OR and a shifted insert; packed descriptor or hardware register fields print as shift and mask arithmetic.
+- **What it does:** Recover the pure-arithmetic form of a bitfield access on a register value: (x >> s) & mask(w) as bitfield_get(x, s, w), and (x & ~(m << s)) | ((y & m) << s) as bitfield_set(x, y, s, w), for a constant s and a low mask m of w bits with s + w inside the operand. Main recovers bitfields only from struct-typed loads, stores and mapped varnodes, so packed fields in a register print as shifts and masks.
+- **When to flip:** Off by default: it prints bitfield_get and bitfield_set calls, which are not C and carry no field names. Turn it on to read register-level packing (flag words, descriptor fields, hardware registers) as one access per field instead of shift-and-mask arithmetic.
+- **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-bitfieldarith
+- **Example:** `option bitfieldarith on`
 
 ### `helperroles` -- on | off, default `on`
 
@@ -1573,6 +1610,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default: C leaves an out-of-range float-to-integer conversion undefined, so `(int)x` is what the source said, and the ladder appears only where the ISA defines the saturation. Flip off to see the ISA's exact result for NaN and out-of-range values.
 - **Where / provenance:** P3/simplification-quiescence · unlace · presentation-default · unlace-satconvert
 - **Example:** `option satconvert off`
+
+### `sfofxor` -- on | off, default `off`
+
+- **Symptoms:** a jl or jge after cmp prints as an XOR of a sign test and an overflow test; SF != OF in a signed comparison of two registers; (a < b) ^ __OFSUB__(a, b) in a signed branch condition.
+- **What it does:** Fold the x86 SF != OF signed-less idiom. When a one-byte XOR (INT_XOR or BOOL_XOR) reads the direct definitions INT_SLESS(a, b) and INT_SBORROW(a, b) with the same a and b in the same order, the XOR becomes INT_SLESS(a, b). For the sign flag as the ISA defines it (the sign of a - b) and the signed overflow of a - b, SF xor OF is exactly the signed a < b, which is what the x86 jl and jge conditions test. Strictly structural: an XOR whose operands are not that pair of definitions is never touched, and only direct definitions match (no COPY or SUBPIECE peeling). Off by default because the identity depends on the lifter's flag definitions, which must be checked before the option is trusted; the rule has not been measured against the 675 datatest assertions, the stage corpus or the speed budget.
+- **When to flip:** Turn on for x86 code where a jl or jge after a cmp prints as an XOR of a sign test and an overflow test, after checking on a sample function that the lifted SF is the sign of the subtraction. Default off: it is an identity over the flag model rather than a structural cleanup, and the flag model has not been verified against the lifter.
+- **Where / provenance:** P3/simplification-quiescence · unlace · transform · unlace-1271
+- **Example:** `option sfofxor on`
 
 ### `cmpmerge` -- on | off, default `off`
 
@@ -1798,6 +1843,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P2/flow-classification · unlace · transform · unlace-evm-internal-calls
 - **Example:** `option evmcalls on`
 
+### `evmstorage` -- on | off, default `off`
+
+- **Symptoms:** sload and sstore print as raw sload(0) and sstore(0,v1) calls; contract state reads as slot arithmetic; a mapping slot prints as an opaque keccak result.
+- **What it does:** Print an EVM storage access as a storage access instead of a raw `sload(0)` or `sstore(0,v1)` call. The EVM spec lowers `SLOAD` and `SSTORE` to the user ops `sload(slot)` and `sstore(slot, value)`, so contract state reads as slot arithmetic. With the option on, a constant slot prints as `storage[0x0]` (a fixed state variable), a slot that a `keccak256` user op computes prints as `mapping(v5)` (a mapping or dynamic-array element, the Solidity layout `keccak(key . slot)`), any other computed slot prints as `storage(v3)`, and an `sstore` prints as an assignment to the same spelling. `evmstorage.rs` reads the slot operand's def chain (at most six ops) for the hash, a dataflow test in place of the original lifter's eight-instruction SHA3 window. The hash test is a heuristic: a slot that adds a hash to an unrelated value is read as hashed, so the printed slot operand stays visible for the reader to check. Printing only; the lifted operations are unchanged.
+- **When to flip:** Off by default: the output of every corpus unit is unchanged. Turn on for a solc storage layout read by hand, to see which storage words are fixed and which are mapping elements; expect a false `mapping` where a hash feeds an arithmetic slot.
+- **Where / provenance:** P9/literal-format · unlace · presentation-default · unlace-evm-storage-slots
+- **Example:** `option evmstorage on`
+
 ### `selectmul` -- on | off, default `on`
 
 - **Symptoms:** a min or max prints as a1 * (unsigned int)(a1 < a0) + a0 * (unsigned int)(a1 >= a0); a select prints as a sum of two products with (unsigned int) casts of complementary compares; tricore sel or sat prints as multiplications by booleans.
@@ -1837,6 +1890,15 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On (`warn`) by default: it adds a comment and changes nothing else, so a decoded `int3` is named wherever one is reached. Set `halt` when reading anti-debug code whose clean-run path falls into a pad and the fabricated `return (*(void *)swi(3))();` is in the way - it is not the default because a debugger attached to the process can step past an `int3`, so ending the flow is a judgement about the pad rather than a fact about the encoding. Set `off` to restore the unannotated upstream rendering. Shape-gated on the `swi` vector 3, so `int 0x29` (Windows __fastfail, see `fastfailnoreturn`), `int 0x80` (Linux, see `linuxsyscall`) and every non-x86 language are untouched; structurally inert wherever no `int3` is decoded, and byte-identical (0/675) on the datatest corpus. The pad length is a loader read: when it fails, or when the encoding is the two-byte `INT 0x03` rather than `0xcc`, the warning is emitted without a count rather than with a guessed one.
 - **Where / provenance:** P2/flow-classification · unlace · presentation-default · GH-468
 - **Example:** `option int3pad halt`
+
+### `antidebug` -- off | warn, default `off`
+
+- **Symptoms:** a call to IsDebuggerPresent or ptrace prints as an ordinary call with nothing to say it is a debugger probe; a timing probe such as rdtsc or QueryPerformanceCounter is indistinguishable from any other call in the C; OutputDebugStringA used as a debugger test prints nothing that marks it.
+- **What it does:** Name a call to a well-known anti-debugging API, instead of letting it pass unremarked through the C. The callee is recognised by the name the flow pass recorded for a direct call: `IsDebuggerPresent`, `CheckRemoteDebuggerPresent`, `NtQueryInformationProcess`, `NtSetInformationThread` (debugger checks), `ptrace` (a self-trace), `rdtsc`, `GetTickCount`, `GetTickCount64` and `QueryPerformanceCounter` (timing probes), and `OutputDebugStringA`/`W` (a debugger-channel side effect). `warn` buffers one warning per such call site and changes nothing else: no statement, type or control-flow edge moves. The roster is the one the archived master's `anti_debug_detect` pass carried, which was declared there and never called.
+- **Use when:** Off by default: the call is a fact about the binary, but reading it as evasion is a judgement about intent, and a licence check or a cheat detector calls the same APIs. Set `warn` when triaging code you suspect of resisting a debugger, to see where the probes are before reading the logic around them. The warning is a reviewable signal that evasion logic is present, not proof that the binary is malicious. It is structurally inert on every call whose callee name is off the roster, so it has no effect on the datatest corpus, which carries no such calls under the default.
+- **Example:** `option antidebug warn`
+- **Source:** unlace; inspiration: archived master's crates/unlace-passes/src/anti_debug_detect.rs (ROADMAP Phase E.4.3), declared there but never called
+- **Change kind:** new-analysis; tier analysis; phase P2 (flow-classification); strength HINT.
 
 ### `x64syscall` -- off | on | abi, default `on`
 
@@ -2429,6 +2491,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** A function whose first action is an argument-validity check (`if (!p) return 0;`) renders as the inverted diamond `if (p != 0) { whole body } else { v = 0 } return v;`. On by default (DIV-23: the decbench ablation measured it NET-POSITIVE, +47 perfect / -576 summed GED / 158:54 improved:regressed); flip OFF to restore the upstream merged-diamond rendering. It is MORE permissive than the whole-block `returndup` gate (it fires on mixed const/variable diamonds returndup skips), but by construction it cannot cause the variable-return over-firing that reverted returndup (it splits only constant arms).
 - **Where / provenance:** P8/goto-quality · angr · structure-recovery · angr-ReturnDuplicatorHigh-peredge
 - **Example:** `option earlyreturn on`
+
+### `irreduciblesplit` -- on | off, default `off`
+
+- **Symptoms:** goto into the middle of a loop that has two entrances; a loop with two entry points rendered with goto labels; irreducible region left as goto-shaped control flow.
+- **What it does:** Make an irreducible loop region reducible before structuring, so it prints as a `while`/`do` loop instead of a `goto`. A strongly connected region of the block graph with two or more entry blocks has no natural loop header; the pass duplicates one entry block for an external predecessor (`Funcdata::node_split_through`, the primitive `returndupcalls` drives), so that predecessor enters a private copy that flows into the same successor. The region loses one entry per split and becomes a natural loop once one entry is left. The pass only takes an entry with exactly one out-edge that stays in the region, no conditional branch, no call, and no output read outside the block except through the successor's MULTIEQUALs or a merge it inserts; an entry that fails a check is skipped and the next one is tried. At most 16 splits per function, each logged (`irreduciblesplit:`). Ported from original unlace (origin/master `unlace-struct` `irreducible.rs` and `node_split.rs`), which duplicates every multi-predecessor entry block; this port is narrower on purpose because `node_split_through` is the only entry-duplication primitive main has.
+- **When to flip:** A loop with two entrances, such as a branch that jumps into the middle of a loop body from two places, renders with a `goto` into the loop where the source has one `while`. Off by default: duplicating a block copies code, so it is a judgement call. Flip on to test whether the copies recover a loop the structurer would otherwise leave goto-shaped. The effect has not been measured yet: before a default flip, measure goto count and GED on decbench cases with irreducible loops (the `irreducible` fixture and `tests/datatests` cases that print a goto into a loop). When off the pass returns at once and output is byte-identical to before.
+- **Where / provenance:** P8/goto-quality · ghidra · structure-recovery · irreduciblesplit
+- **Example:** `option irreduciblesplit on`
 
 ### `switchreturn` -- on | off, default `on`
 
@@ -3418,6 +3488,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/external-refinement · unlace · analysis-enablement · unlace-analysis-cppsig
 - **Example:** `option cppsig inferred`
 
+### `cppclassargs` -- on | off, default `off`
+
+- **Symptoms:** a this of a std container prints as a bare vector; a template class's this prints without its template arguments; vector *this where std::vector<int> *this is meant.
+- **What it does:** Keep the template arguments of a demangled C++ class name when the `this` of its member functions is typed. The demangled scope `std::vector<int, std::allocator<int> >` is stripped to the bare class `vector`, so `this` prints as `vector *`. With the option on, a template class's `this` is the whole scope as the demangler spells it (`std::vector<int, std::allocator<int> >`), a record of its own, and the printer (with `cppshortnames` on) shows `std::vector<int> *this`. A non-template class, a parameter type and the function name are unchanged. Applies to the proven and inferred tiers of `cppsig`.
+- **When to flip:** Turn on with `cppshortnames` for a C++ binary whose member functions take a std container or other class template as `this`: `std::vector<int> *this` where the default prints `vector *this`. Off by default: the template-named record is new, so a DWARF or demangled type that names the same class bare is not merged with it. Not yet measured on a corpus.
+- **Where / provenance:** P1/external-refinement · unlace · analysis-enablement · unlace-analysis-cppsig
+- **Example:** `option cppclassargs on`
+
 ### `addrtable` -- on | off, default `off`
 
 - **Symptoms:** absolute function-pointer table in rodata never recognized; indirect calls through an unrecovered address table in a stripped target.
@@ -3928,7 +4006,7 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 
 - **Symptoms:** a DXE driver entry point is named _ModuleEntryPoint, not ModuleEntryPoint; a DXE core entry has no DxeMain name or HobStart argument; a PEI core entry has no PeiCore name; a combined MM_DXE module's entry is named _ModuleEntryPoint; a combined PEIM driver or MM_DXE module has no label saying which kinds it combines.
 - **What it does:** Name a firmware module's entry point by its FFS file type, as IDA's uefi_fv loader does, when the module sits in an unpacked volume beside its unlace-uefi.index (`unlace unpack <firmware> --protocols`). A PEIM and a combined PEIM driver enter as `PeimEntryPoint(EFI_PEI_FILE_HANDLE, EFI_PEI_SERVICES **)`, the PEI core as `PeiCore(VOID *SecCoreData, VOID *PpList)`, the DXE core as `DxeMain(VOID *HobStart)`, a standalone MM module as `StandaloneMmEntryPoint(EFI_HANDLE, EFI_MM_SYSTEM_TABLE *)`, and every other module (driver, application, MM, combined MM_DXE) as `ModuleEntryPoint(EFI_HANDLE, EFI_SYSTEM_TABLE *)`. A combined file's entry gets a comment naming its FFS type (COMBINED_PEIM_DRIVER, COMBINED_MM_DXE). Without this option, a PEIM and a standalone MM module keep the names the index gives them; every other entry keeps `_ModuleEntryPoint`. Needs `uefi` on.
-- **When to flip:** Off by default. Turn it on after `unlace unpack FIRMWARE --protocols`, when you decompile the modules from the directory it wrote, to see each entry named for its phase. A module loaded alone has no FFS type, so nothing changes for it. The walk still seeds a PEI or DXE core's parameters from the phase its file type gives, so the second parameter of DxeMain or PeiCore may print with that phase's table type.
+- **When to flip:** Off by default. Turn it on after `unlace unpack FIRMWARE --protocols`, when you decompile the modules from the directory it wrote, to see each entry named for its phase. A module loaded alone has no FFS type, so nothing changes for it. With the option on, the walk seeds a core's parameters from its file type: DxeMain's HobStart and PeiCore's SecCoreData and PpList are `VOID *`, not the phase's table types. Other modules keep the phase's table types.
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · unlace-1164
 - **Example:** `option uefientry on`
 
@@ -4112,6 +4190,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **Where / provenance:** P9/string-literal-section-constant · unlace · presentation-default · unlace-cstringconst
 - **Example:** `option cstringconst off`
 
+### `stringglobalnames` -- on | off, default `off`
+
+- **Symptoms:** a global used by address prints as dat_2b080 where the string it holds says what the use is; a format string or message is only reachable as &dat_<addr> and the reader must look the bytes up; the same string global appears as dat_<addr> in one function and under its text in IDA.
+- **What it does:** Name an unnamed global whose bytes are a C string after the string, as IDA does: a global holding `"hello world"` prints as `&aHelloWorld` where unlace prints `&dat_<addr>`, and the `decompile-project` header declares it under the same name. The label capitalises the words of the text, drops every non-alphanumeric byte, and reads `aEmpty` when nothing is left. The text is the printable run from the global's address up to a NUL, at least two bytes long and holding a letter or digit, read from the loaded image. Two globals holding the same text share one name; the printer does not uniquify them, which is why the option is off by default. Inert unless the option is on, so 0/675 datatest assertions move.
+- **When to flip:** Off by default: the label is IDA's naming, not the program's, and two globals with the same text collide. Flip on when reading output next to IDA, or when a string's use site is easier to follow by its text than by its address.
+- **Where / provenance:** P9/global-string-name · ida · presentation-default · unlace-1282-string-global-names
+- **Example:** `option stringglobalnames on`
+
 ### `warnstyle` -- inline | banner, default `inline`
 
 - **Symptoms:** full-line WARNING banner comments clutter the output; warning text wanted inline at the end of the statement it describes; terse warning slugs unwanted; full upstream warning text needed; warning style needs to match upstream ghidra for diffing.
@@ -4191,6 +4277,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** On by default: 0/675 datatest assertions move. The OFF symptom is an i386 function that only calls a double-returning helper for its side effect and is printed as `long double f(...)` returning an uninitialised `v1; // st0 | st1`. Flip off for hand-written x87 code that keeps values on the stack across calls, which the System V assumptions do not describe.
 - **Where / provenance:** P4/output-prototype · unlace · correctness-fix · ida95-51
 - **Example:** `option x87depth off`
+
+### `taintcheck` -- on | off, default `off`
+
+- **Symptoms:** a value from recv or getenv reaches system or popen with no warning; an input-controlled argument to execl or execve is not flagged; a command sink fed by a network read needs a manual trace.
+- **What it does:** Report data from an input source that reaches a command-execution sink. A call to `recv`, `recvfrom`, `read`, `fread`, `fgets`, `getenv` or `gets` taints its return value. Taint flows forward over the live ops, flow-insensitively: an op with a tainted input taints its output, and each tainted value keeps the first source it traces to. A call to `system`, `popen`, `execl`, `execle`, `execlp`, `execv`, `execve` or `execvp` that takes a tainted argument gets a warning comment at the call: `taintcheck: data from recv() reaches system() as an argument (report only)`. Argument slot 0 of a CALL is the target address, so it is never counted. Memory is not tracked: a buffer an input call fills is not tainted, only the return value is a seed. The check changes no code or types, only adds warnings, and runs at the P4 prototype warnings step. Ported from the archived research decompiler's `propagate_taint` (`taint_engine.rs`) and its source/sink lists; the constant-time violation check is a separate option.
+- **When to flip:** Off by default: the check is report-only and landed without a corpus sweep, so it is not in the aggressive preset. Turn ON to list the command-execution calls in a binary that take network, environment or file input, as a first triage of an input-to-command path. A hit is a candidate for review, not a proven flow, because memory and the callee's own checks are not modelled.
+- **Where / provenance:** P4/output-prototype · unlace · opt-in-tool · unlace#1309
+- **Example:** `option taintcheck on`
 
 ### `varargsave` -- on | off, default `off`
 
@@ -4371,7 +4465,7 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 ### `contextnames` -- on | off, default `off`
 
 - **Symptoms:** loop counters print as v5, v3, v1 instead of i, j, k; the accumulator a function returns keeps a vN name; nested loops are hard to tell apart in stripped code.
-- **What it does:** Name a numbered local from its shape when no declaration names it: a loop counter after its loop's nesting depth (`i`, `j`, `k`, `m`, `n`), and the local the function returns `result`. `unlace_contextnames` finds the loops on the basic-block graph -- a back edge enters a block that dominates its source, and a loop's body is every block that reaches that source without passing the head -- and takes as a counter an integer local that the head's phi joins from outside the loop with an initial value and, on every back edge, with itself plus or minus one (through copies and casts); a pointer that walks a buffer, and a value that steps by anything else (`len -= 12`, `v += a2 * a3`), are not counters. The result is the one local that every `return` of a non-constant value returns. Both are evidence for the `libcnames` alias walk, which numbers every local exactly as with the option off and only then prints the name, so `v4` stays the same variable in every mode, a directive may name the local by either spelling, a clash takes `_2`, `_3`, ... in evidence order (a second loop at the same depth prints `i_2`), and no spelling repeats a name another variable, the scope or a callee holds. A loop counter outranks a library argument name (a counter passed as `read`'s `nbytes` stays `i`), the result of a library call outranks a loop counter (`len = strlen(s)` counted down stays `len`), and `result` is the weakest evidence; evidence an option prints is preferred to library evidence only a directive may use. Naming a local after the parameter it is passed to is upstream's `lookForFuncParamNames` for a locked callee prototype (DWARF, `--assert prototype`) and `libcnames` for the built-in library tables; this option adds neither.
+- **What it does:** Name a numbered local from its shape when no declaration names it: a loop counter after its loop's nesting depth (`i`, `j`, `k`, `m`, `n`), the local the function returns `result`, the local a counter is compared with (`len`), and a pointer a load or store indexes by a counter (`buf`). `unlace_contextnames` finds the loops on the basic-block graph -- a back edge enters a block that dominates its source, and a loop's body is every block that reaches that source without passing the head -- and takes as a counter an integer local that the head's phi joins from outside the loop with an initial value and, on every back edge, with itself plus or minus one (through copies and casts); a pointer that walks a buffer, and a value that steps by anything else (`len -= 12`, `v += a2 * a3`), are not counters. The result is the one local that every `return` of a non-constant value returns. Both are evidence for the `libcnames` alias walk, which numbers every local exactly as with the option off and only then prints the name, so `v4` stays the same variable in every mode, a directive may name the local by either spelling, a clash takes `_2`, `_3`, ... in evidence order (a second loop at the same depth prints `i_2`), and no spelling repeats a name another variable, the scope or a callee holds. A loop counter outranks a library argument name (a counter passed as `read`'s `nbytes` stays `i`), the result of a library call outranks a loop counter (`len = strlen(s)` counted down stays `len`), `result` is weaker than a loop counter, a loop bound and an array base are weaker than `result`, and a local's type is the weakest evidence of all; evidence an option prints is preferred to library evidence only a directive may use. Naming a local after the parameter it is passed to is upstream's `lookForFuncParamNames` for a locked callee prototype (DWARF, `--assert prototype`) and `libcnames` for the built-in library tables; this option adds neither.
 - **When to flip:** Turn on for readable loops in stripped code: `for (v5 = 0; ...; v5 += 1)` prints `for (i = 0; ...; i += 1)` and the accumulated return value prints `result`. Off by default because it renames locals that other features' stage assertions and CLI tests spell as `vN`.
 - **Where / provenance:** P6/naming-policy · unlace · presentation-default · contextnames
 - **Example:** `option contextnames on`
@@ -4439,6 +4533,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** On by default (DIV-7): a stack slot is declared once even when many same-named scalar HighVariables share it (e.g. x86_64/cvs main, where the per-high rendering repeats `int4 option_index; // stack - 0x3c` ~200x), including when two live ranges of the slot recovered different types and so rendered two differently-typed declarations of one name -- invalid C (DIV-52). Set OFF to restore the one-declaration-per-high rendering.
 - **Where / provenance:** P9/naming-policy · angr · presentation-default · angr-duplicate-decls
 - **Example:** `option dedupvardecls off`
+
+### `renumberlocals` -- on | off, default `off`
+
+- **Symptoms:** synthetic locals print as v7, v12 with gaps where Hex-Rays would print v1, v2; a function's default-named locals are numbered by the naming pass rather than read as a compact list.
+- **What it does:** Renumber the synthetic locals the naming pass spells v<N> from v1 in the order the printer collects them, so a function's default-named locals read v1, v2, ... with no gaps, the way Hex-Rays numbers them. Names that are not v<N> (parameters, recovered names, stack names) are unchanged, and a spelling another identifier of the function already holds is skipped. The renamed spelling is applied to every declaration and body reference of the local.
+- **When to flip:** Off by default: renumbering is a readability choice, not a fix, so the default keeps the naming pass's numbering, which records the order the decompiler met each local. Turn it on to read a function whose synthetic locals have gaps (v3, v7, v12) as a compact v1..vK list. The order is the collection order of the declarations, which tracks first appearance but is not a body walk, and a synthetic name the declaration list drops keeps its spelling. The Hex-Rays sole-returned-local rule (result) and the argument-register carrier rule are not implemented yet.
+- **Where / provenance:** P9/naming-policy · unlace · readability · hexrays-renumber-locals
+- **Example:** `option renumberlocals on`
 
 ### `vexzeroupper` -- on | off, default `on`
 

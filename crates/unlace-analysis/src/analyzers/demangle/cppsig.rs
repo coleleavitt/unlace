@@ -136,6 +136,9 @@ struct Decl {
     /// The function returns a pointer the mangling does not spell (an
     /// `operator new`).
     returns_pointer: bool,
+    /// The class is a template instance (its scope's last component carries
+    /// template arguments). Read only by the `cppclassargs` spelling.
+    template_class: bool,
 }
 
 /// Apply the demangled C++ signature to every function whose mangled symbol the
@@ -170,6 +173,11 @@ impl AnalysisPass for CppSigPass {
         let (_addr_size, word_size) = ctx.arch.data_org();
         let ptr = types.get_size_of_pointer();
         let hidden = hidden_return_entries(ctx);
+        let spell_args = ctx
+            .arch
+            .unlace_options
+            .get::<unlace_decomp::cppsig::CppClassArgs>()
+            .0;
         for (addr, decl, msvc) in &decls {
             if *msvc {
                 continue;
@@ -185,7 +193,8 @@ impl AnalysisPass for CppSigPass {
             if has_this && decl.class.is_empty() {
                 continue;
             }
-            let Some(mut pieces) = build_pieces(decl, has_this, types, ptr, word_size) else {
+            let Some(mut pieces) = build_pieces(decl, has_this, spell_args, types, ptr, word_size)
+            else {
                 continue;
             };
             if hidden.contains(addr) {
@@ -480,6 +489,7 @@ fn parse_decl(dem: &str) -> Option<Decl> {
         params.push(p.to_string());
     }
 
+    let template_class = comps.len() >= 2 && comps[comps.len() - 2].contains('<');
     Some(Decl {
         qualified,
         scope,
@@ -488,6 +498,7 @@ fn parse_decl(dem: &str) -> Option<Decl> {
         this_kind,
         class,
         returns_pointer: false,
+        template_class,
     })
 }
 
@@ -564,6 +575,7 @@ fn alloc_operator(dem: &str) -> Option<Decl> {
         this_kind: ThisKind::ProvenNone,
         class: String::new(),
         returns_pointer,
+        template_class: false,
     })
 }
 
@@ -708,6 +720,18 @@ pub(super) fn strip_template_args(s: &str) -> String {
 // Building the prototype
 // ---------------------------------------------------------------------------
 
+/// The class name a `this` of `decl` points at. With `spell_args` (the
+/// `cppclassargs` option) a template class is named by its whole scope, template
+/// arguments included (`std::vector<int, std::allocator<int> >`), so it is a
+/// record of its own; otherwise it is the bare class (`vector`).
+fn this_class(decl: &Decl, spell_args: bool) -> &str {
+    if spell_args && decl.template_class {
+        &decl.scope
+    } else {
+        &decl.class
+    }
+}
+
 /// Assemble the [`PrototypePieces`], or `None` when any declared parameter is a
 /// type this pass will not model.
 ///
@@ -719,6 +743,7 @@ pub(super) fn strip_template_args(s: &str) -> String {
 fn build_pieces(
     decl: &Decl,
     has_this: bool,
+    spell_args: bool,
     types: &dyn TypeFactory,
     ptr: int4,
     word_size: uint4,
@@ -726,7 +751,7 @@ fn build_pieces(
     let mut intypes: Vec<Rc<Datatype>> = Vec::with_capacity(decl.params.len() + 1);
     let mut innames: Vec<String> = Vec::with_capacity(decl.params.len() + 1);
     if has_this {
-        let cls = class_record(types, &decl.class)?;
+        let cls = class_record(types, this_class(decl, spell_args))?;
         intypes.push(types.get_type_pointer(ptr, cls, word_size).ok()?);
         innames.push("this".to_string());
     }

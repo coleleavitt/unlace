@@ -3675,6 +3675,13 @@ lock — is the same object every later function resolves. Chapter 05 owns the
 lattice; here it only matters that `Datatype` handles cross function boundaries
 and IR arenas do not.
 
+The structural tier of the IR verifier is `crates/unlace-middle/src/substrate/irverify.rs
+(verify_funcdata)`. It checks that the op, varnode and basic-block links agree: each output's
+definition is its op, each input is among its varnode's descendants, each descendant reads the
+varnode, and each basic block's op list is a chain whose length and tail match the block record.
+It makes no dominance or definedness claim. The scheduler does not call it yet; it is a tool for
+locating the pass that broke a link.
+
 ## 0.4 The knowledge plane (P0)
 
 P0 is everything that outlives a function's IR — the plane a restart re-reads
@@ -4160,6 +4167,14 @@ or prevent later actions from publishing. Totals belong to the current thread;
 threads and worker processes do not merge their tables when sharing an output
 path. File-write failures remain non-fatal. Rendering borrows the accumulated
 rows and sorts by descending exclusive time, then by name for ties.
+
+With `UNLACE_TIMING` set (no path needed) the same table is collected and the CLI
+prints it to stderr under a `unlace::timing per-action wall-clock` heading once the
+command has finished (`crates/unlace-middle/src/substrate/actionprof.rs`,
+`timing_report`; the `unlace` binary calls it from `crates/unlace-cli/src/lib.rs`).
+It is per action, not per pass, and covers only the thread that ran the schedules:
+worker threads and child processes are not merged in. Nothing is printed when no
+action ran. Both variables only observe; the decompiled output is unchanged.
 Time is exclusive — a group is charged only what it spends outside its children,
 so the rows sum to the schedule's wall time and a container cannot hide a leaf —
 and each row is keyed by the root variant it ran under, which is what separates a

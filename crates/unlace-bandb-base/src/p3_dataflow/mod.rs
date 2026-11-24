@@ -7,6 +7,7 @@ pub mod addcarrychain;
 pub mod addrcompare;
 pub mod alloca; // (unlace) a dynamic stack allocation becomes alloca(size)
 pub mod arraystride;
+pub mod bitfieldarith; // (unlace `bitfieldarith`) pure-arithmetic bitfield get and set
 pub mod bitidioms;
 pub mod booleanmask;
 pub mod boxedcompare;
@@ -56,7 +57,9 @@ pub mod ruleaction_2;
 pub mod ruleaction_7;
 pub mod satconvert;
 pub mod satmul;
+pub mod sccp; // (unlace `sccp`) sparse conditional constant propagation solver
 pub mod selectdiv;
+pub mod sfofxor;
 pub mod simdlane;
 pub mod spillstoreguard;
 pub mod splitstorekeep;

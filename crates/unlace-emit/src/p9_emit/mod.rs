@@ -58,6 +58,7 @@ mod gostringindex;
 mod gozerorecord;
 pub mod halfstore;
 pub mod infloopstyle;
+pub mod itaniumthrow; // (unlace `itaniumeh`) an Itanium `__cxa_throw` prints as `throw`
 pub mod javanew; // (unlace) `new T(args)` from an allocation and its <init> call
 pub mod labelstmt; // (unlace) every printed C label labels a statement
 mod lanetrace;
@@ -72,10 +73,12 @@ pub mod memberbase;
 pub mod msvcthrow;
 pub mod namedglobals;
 pub mod narrowselector; // (unlace) a switch on a narrow expression casts it to its own width
+pub mod nonnullparamhint;
 pub mod oslog;
 pub mod paramrefdecl;
 pub mod partialaccess;
 pub mod partialconcat;
+pub mod partmacro; // (unlace `partmacro`) IDA part macros (LOBYTE, BYTE1, HIWORD) for integer parts
 pub mod pointerargs; // (unlace) a scalar's address passed to a character-pointer parameter
 pub mod pointerstorecast;
 pub mod postinc; // (unlace `postinc`) `*p++` for a pointer step after its dereference
@@ -83,6 +86,7 @@ pub mod prettyprint;
 pub mod printc;
 pub mod printlanguage;
 pub mod renderfault; // (unlace) test-only: panic one function's render partway through
+pub mod renumberlocals;
 pub mod rustarrayaddr;
 pub mod rustarraydecay;
 pub mod rustarrayindex;
@@ -116,12 +120,14 @@ pub mod stackassign;
 pub mod stackbytes;
 pub mod stacklayout;
 pub mod stackmem;
+pub mod stringglobalnames; // (unlace `stringglobalnames`) string-derived names for unnamed globals
 pub mod structassign; // (unlace) a memcpy of exactly one struct between pointers to that struct prints as *d = *s
 pub mod structdefs;
 pub mod swiftstrobj; // (unlace) a Swift string object is not a pointer to the bytes it lands on
 pub mod truncarg;
 pub mod truthycond;
 pub mod typeround; // (unlace) the declared-signedness rounding decision
+pub mod typeshadow; // (unlace) the signedness vote re-derived as a constraint solve, measured not applied
 pub mod unknowncasts;
 pub mod unsignedread; // (unlace) an unsigned read of an expression C evaluates as signed casts it
 pub mod warnstyle;
@@ -137,6 +143,7 @@ pub mod callprototypes;
 pub mod gostorevalue;
 
 pub mod constantshift;
+pub mod evmstorage;
 pub mod fidproto; // (unlace) the prototype a .fid record carries, and its check against the body
 pub mod reglocals;
 pub mod selectmul; // (unlace `selectmul`) a*zext(c) + b*zext(!c) prints as c ? a : b

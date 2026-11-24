@@ -733,6 +733,9 @@ mod tests {
             // preset sweep or speed measurement needed before changing the
             // default output for every aggressive-mode decompile.
             "bytearrayc",
+            // `taintcheck` (unlace#1309) is report-only and landed unmeasured on a sweep;
+            // preset membership would add warnings to every aggressive decompile.
+            "taintcheck",
         ];
 
         let agg = mode_overrides("aggressive").unwrap();

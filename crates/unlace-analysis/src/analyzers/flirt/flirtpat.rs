@@ -19,6 +19,8 @@ use object::{Architecture, SectionKind, SymbolKind};
 
 use flirt_sig::crc16;
 
+use super::flirtbranch::near_branches;
+
 /// The leading pattern a function is keyed on in a `.pat` line and in a `.sig` group.
 type Head = [Option<u8>; PATTERN_LEN];
 
@@ -130,6 +132,19 @@ pub fn patterns_from_object(data: &[u8]) -> Result<ObjectPatterns, String> {
                 .push((sym.is_weak(), name.to_string()));
         }
     }
+    // The name a branch to each function start resolves to.
+    let callee: BTreeMap<(usize, u64), String> = starts
+        .iter()
+        .filter_map(|(&key, names)| {
+            names
+                .iter()
+                .min_by_key(|(weak, n)| {
+                    (*weak, n.len() - n.trim_start_matches('_').len(), n.clone())
+                })
+                .map(|(_, n)| (key, n.clone()))
+        })
+        .collect();
+    let bitness = x86_bitness(architecture);
     let mut out = ObjectPatterns {
         target,
         patterns: Vec::new(),
@@ -158,6 +173,7 @@ pub fn patterns_from_object(data: &[u8]) -> Result<ObjectPatterns, String> {
             }
             let mut bytes: Vec<Option<u8>> = code[start..end].iter().map(|&b| Some(b)).collect();
             let mut refs = Vec::new();
+            let fn_range = base + start as u64..base + end as u64;
             for r in relocs
                 .range(start.saturating_sub(MAX_RELAX)..end)
                 .map(|(_, r)| r)
@@ -172,6 +188,26 @@ pub fn patterns_from_object(data: &[u8]) -> Result<ObjectPatterns, String> {
                 if let (Some(name), true) = (&r.name, r.offset >= start) {
                     refs.push(((r.offset - start) as u32, name.clone()));
                 }
+            }
+            // A branch that leaves the function has a displacement that changes
+            // with the layout of a linked image, so it is variable; the callee
+            // it names is a reference.
+            if let Some(bitness) = bitness {
+                for branch in near_branches(bitness, base + start as u64, &code[start..end]) {
+                    if fn_range.contains(&branch.target) {
+                        continue;
+                    }
+                    for b in bytes.iter_mut().skip(branch.site).take(4) {
+                        *b = None;
+                    }
+                    if let Some(name) = callee.get(&(index, branch.target)) {
+                        let offset = branch.site as u32;
+                        if refs.iter().all(|(o, _)| *o != offset) {
+                            refs.push((offset, name.clone()));
+                        }
+                    }
+                }
+                refs.sort_by_key(|(offset, _)| *offset);
             }
             if bytes.iter().take(PATTERN_LEN).flatten().count() < MIN_FIXED {
                 out.short += 1;
@@ -190,6 +226,15 @@ pub fn patterns_from_object(data: &[u8]) -> Result<ObjectPatterns, String> {
         }
     }
     Ok(out)
+}
+
+/// The bitness of the x86 instruction sets the branch decoder reads.
+fn x86_bitness(architecture: Architecture) -> Option<u32> {
+    match architecture {
+        Architecture::X86_64 => Some(64),
+        Architecture::I386 => Some(32),
+        _ => None,
+    }
 }
 
 /// Most bytes before a relocated field that a relaxation rewrites.

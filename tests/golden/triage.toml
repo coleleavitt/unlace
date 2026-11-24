@@ -1,0 +1,150 @@
+# Golden triage ledger: one row per golden artifact, with a class, a reason and a next action.
+#
+# Gate against blanket re-pins. scripts/check_golden_triage.py (run by scripts/tests/test_repo_checks.py)
+# fails when a golden file has no row, a row names a missing file or replay test, a row's class is not
+# one of the four below, a row lacks a reason or next action, or a snapshot-manifest test whose status is
+# not "ok" has no [[manifest]] row (and a [[manifest]] row for an "ok" test is stale).
+#
+# Classes:
+#   exact-pass    the replay test reproduces the stored bytes exactly; a change needs a reviewed re-capture
+#   mixed         some rows match and some do not; each mismatch keeps a reason
+#   stale-golden  the stored file is out of date with the producer; re-capture only with a reason
+#   producer-bug  the stored file is right and the producer is wrong; the fix belongs in the producer
+#
+# The static checks cannot see whether a row matches. The replay test named by `consumer` does that,
+# and a row marked exact-pass that stops matching fails that test.
+
+[[golden]]
+path = "tests/golden/vectors/addrsort.csv"
+class = "exact-pass"
+consumer = "crates/unlace-base/tests/golden_addrsort.rs"
+reason = "Address comparator decisions for every ordered pair over the pinned spaces; replayed row by row against the C++ oracle's addrsort output."
+next_action = "Keep exact-line coverage; a comparator change re-captures this file only with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/float.csv"
+class = "exact-pass"
+consumer = "crates/unlace-num/tests/golden_float.rs"
+reason = "FloatFormat class, host value, unary/binary ops and truncation rows for 4- and 8-byte formats, replayed against the C++ oracle."
+next_action = "Keep exact-line coverage; a FloatFormat change re-captures this file only with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/opbehavior.csv"
+class = "exact-pass"
+consumer = "crates/unlace-num/tests/golden_opbehavior.rs"
+reason = "OpBehavior evaluation for every unary and binary opcode over the fixed edge-value inputs, replayed against the C++ oracle."
+next_action = "Keep exact-line coverage; an OpBehavior change re-captures this file only with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/boolless.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/ccmp.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/condexesub.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/floatprint.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/gh6990-returnpair.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/gh7139-x86-16-disp16-signed.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/gh8817-v850indbranch.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/gh8844-avr-rjmpwrap.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/gh8913-addcarrychain.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/gh9001-hcs12brn.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/gh9203-condexe-loopcopy.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/gp.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/lzcount.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/promotecompare.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/readvolatile.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+[[golden]]
+path = "tests/golden/vectors/lift/skipnext2.txt"
+class = "exact-pass"
+consumer = "crates/unlace-sleigh/tests/golden_lift.rs"
+reason = "Per-instruction raw p-code lift for one corpus binary, replayed byte-for-byte by the Rust SLEIGH runtime against the C++ oracle."
+next_action = "Keep the lift replay locked; a SLEIGH spec change re-captures this file with a reviewed diff."
+
+# Manifest rows: every snapshot-manifest.json test whose status is not "ok" needs one. None today.

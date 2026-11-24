@@ -6,4 +6,5 @@
 pub mod calloverlap;
 pub mod heritage;
 pub mod loadguardreads;
+pub mod programslice;
 pub mod revisitrefine;

@@ -173,7 +173,7 @@ settings, and hands them to a child process through that child's environment.
 | `UNLACE_ARM_ISA` | the ARM/Thumb decode mode of a 32-bit ARM load that names none; read once into `LoadOptions::arm_isa` at each environment-mode load, and an unrecognized value fails each load that reads it |
 
 Trace, debug and fault-injection variables (`UNLACE_*_TRACE`, `UNLACE_*_DEBUG`,
-`UNLACE_DUMP`, `UNLACE_ACTION_PROF` and the test-only ones above) are read where
+`UNLACE_DUMP`, `UNLACE_ACTION_PROF`, `UNLACE_TIMING` and the test-only ones above) are read where
 they act and are never option state.
 
 **Environment boundary.** Option variables are read at three places: the entry
@@ -246,6 +246,11 @@ flag, and exit 1 instead of spinning on.
 selection: `--no-vars` and `--omit aliases,line_mappings,variables,types` behave as they
 do there. Without `--json` both are refused, since the C text carries none of
 those collections.
+
+`--cfg-dot` replaces the C on stdout with the function's basic-block graph as Graphviz DOT
+(`digraph`, one node per basic block labelled with its index and address range, one edge
+per CFG out-edge), so `unlace decompile BIN FUNC --cfg-dot | dot -Tsvg` renders it. The same
+dump is the `cfg dot` console command. It is refused with `--json`.
 
 `--trace` adds, on stderr after the C, the `phase status` dump for the decompiled
 function: the pipeline variant, and the maturity its last pass reached with the facts
@@ -1989,6 +1994,18 @@ schedule. A streamed export (`--stream`) writes its `.c` in decompile order as
 each function finishes and `decompile-graph` decompiles one function per row, so
 neither takes the order; both produce the option-off output and say so on stderr
 when it is asked for explicitly, rather than accepting it silently.
+
+`decompile-project --per-file` writes one file per function instead of the four
+whole-program artifacts: `functions/<addr:08x>_<name>.c` (the `decompile-all`
+rendering, or a `/* FAILED: ... */` stub) and `manifest.json`, which lists `addr`,
+`name`, `file` and `status` (`ok` or `failed`) for each function. Each file is written
+as its function lands, so an interrupted export keeps the functions it finished. A
+rerun reads the manifest and decompiles only the functions that are not complete on
+disk: a missing or empty file, a failed stub and a function recorded as `failed` are
+decompiled again. Because struct synthesis and callee-first typing see only the
+functions a run decompiles, a resumed run can name a `struct_N` or type a call
+differently from a single full run; the `.h`, `.asm` and README are not written in
+this mode. `--stream`, `--progress` and `--assert` are rejected with it.
 
 ### `--option calleevote` — what every caller passes (on by default)
 
@@ -4256,6 +4273,17 @@ document hashes the whole file and records the slice's own hash as
 An unreadable or unparseable binary is exit `1` with the reason on stderr; a
 malformed command line (an unknown `--format`) is exit `2` with the usage block.
 
+## `unlace identify-packer` — ranked packer classification with evidence
+
+```sh
+unlace identify-packer ./app              # text report
+unlace identify-packer ./app --json       # one JSON object
+```
+
+A read-only, deterministic classifier. It names a packer when a section carries a known packer's section name (UPX, ASPack, Themida/WinLicense, MPRESS, Enigma, VMProtect, PEtite, FSG, NsPack, MEW), then ranks hypotheses from per-section Shannon entropy (7.0 bits/byte or more reads as compressed or encrypted), executable high-entropy sections, and whether the entry point lies in a writable section or outside `.text`/`__text`. The report lists every section with its entropy and access bits, the unsupported recovery steps, and the next commands to run. `unlace unpack` does the actual UPX, NEOLite and PKLITE unpacking.
+
+Not yet reported: TLS callbacks, and the Mach-O write bit (the section record does not carry it, so a Mach-O section is never reported writable). Nothing is unpacked or executed.
+
 ## `unlace unpack` — statically unpack a UPX-, NEOLite- or PKLITE-packed executable
 
 ```bash
@@ -5597,6 +5625,19 @@ nothing tells apart are reported as a `collision:` line and left out of the
 are written once. The exit status is 0 when the files were written, 1 when an
 input cannot be read or no function is left to write, and 2 on a usage error.
 
+## `unlace flirt inspect` — read an IDA `.sig` or `.til` file
+
+`unlace flirt inspect <file.sig|file.til> [--limit N] [--json]` prints the header
+of an IDA FLIRT signature or type library and a sample of its names, without
+matching or writing anything. The file is told apart by its magic: `IDASGN` for a
+signature, the TIL header for a type library; any other file exits 1.
+
+For a type library the view gives the title, compiler, the sizes of `int`, `bool`,
+`enum` and `long double`, the pointer size, and the counts and first names of its
+symbols and types. `--limit 0` lists every name; `--json` prints the same fields
+as one document, with `names_total` (or `symbols_total`/`types_total`) giving the
+full counts.
+
 ## `unlace lumina` — IDA's Lumina function-metadata service
 
 Lumina is IDA Pro's shared database of function metadata: a client sends a key for each function and
@@ -5669,9 +5710,15 @@ an empty metadata blob, under the chosen `--mode` (the server's override rule; d
 `override-if-better`). It sends the input's MD5, its file name (never the path), `<name>.unlace` as
 the database name and `--hostname` (default `unlace`). Exit 1 when the server refused any function.
 
+`--share-policy FILE` (opt-in; without it nothing changes) applies a sharing policy before anything is sent.
+The file has one directive per line: `sharing on|off` (default off), `anonymize on|off` (default on) and
+`allow <SHA-256 of the input, 64 hex digits>`. The push is refused, with no network use, unless `sharing on`
+and the input's SHA-256 is listed. With `anonymize on` the hostname is sent as `anonymous` instead of
+`--hostname`. The login name is still sent, since the server authorises by it; the file name is unchanged.
+
 **`serve`** runs a server over a sqlite database (created if missing), bound to `--bind` (default
 `127.0.0.1:65432`), with TLS when given `--tls-cert`/`--tls-key` (PEM). It answers `HELO`,
-`PULL_MD`, `PUSH_MD`, `GET_LUMINA_INFO` and, for administrators, `GET_LUMINA_STATS`; every other
+`PULL_MD`, `PUSH_MD`, `GET_POP`, `GET_LUMINA_INFO` and, for administrators, `SHOW_HISTORY`, `DUMP_MD` and `GET_LUMINA_STATS`; every other
 packet gets `RPC_FAIL`. With no user in the database it is open: anyone may pull and push, nobody is
 an administrator. `--add-user NAME [--admin]` adds a login (password from `--password-file` or
 `UNLACE_LUMINA_PASSWORD`) and exits; from then on every client must log in. Every push is kept in a

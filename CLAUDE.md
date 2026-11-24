@@ -114,6 +114,16 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   first use and reuse the image while the sources and the compiler are unchanged, so a pull that
   changes `specs/**/*.{slaspec,sinc}` needs no rebuild step (details in `docs/dev-setup.md`).
 
+- **Labels**: label every issue and PR you open in coleleavitt/unlace (only this repo; never
+  label issues on other projects). Use one `type:` plus every `area:` / `arch:` / `platform:`
+  that applies, and add as they fit: `impact:` (crash, panic, hang, slow, memory, wrong-output,
+  readability, flaky-test), `effort:` (easy/medium/hard), `needs:` (repro, test, bisection,
+  design, investigation, info, measurement), `status:` (has-repro, has-bisection,
+  found-by-fuzzing, found-in-wild, waiting-on-author/review, candidate-for-closing, ...),
+  `priority:P0..P3`, `size:XS..XXL`, and `ida-gap` / `ours-better` for IDA comparisons.
+  `gh label list -R coleleavitt/unlace` shows the full set with descriptions; don't invent
+  new labels without adding them there first.
+
 ## Validation
 Only prerequisite: a Rust toolchain. The repo root is the cargo workspace; every command runs
 from it, and binaries land in `target/<profile>/`. There is no Makefile. The full build recipe

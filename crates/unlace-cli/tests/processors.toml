@@ -13,6 +13,9 @@
 # (docs/processor-tests.md).
 
 [images]
+bpf_strlen = """
+b4000000ffffffff0400000001000000bf120000000000000f0200000000000071220000000000005602fbff000000009500000000000000
+"""
 xtensa_esp32s3_rom_divsf3 = """
 3621005012fa5023fa7032fab042fa3051fa30546a0063fa0072fab021fa60656a3051fa3000fa6082fa60546a30086a
 d071fa60656a00846a3031fa60346a60086a6022fa60636a00246af007fae067fa60027a4020fa1df0000000
@@ -2166,6 +2169,21 @@ test = "amdgpu_real_gfx1200_matmul_loop_decompiles"
 address = "0x0"
 expect = ["} while ("]
 
+# `fixtures/amdgpu/gfx1100_true16.cl` built with -DW64 for gfx900: f16 math through the GFX9
+# include's VOPC e32 and VOP3 16-bit forms (v_cmp_lt_f16, v_fma_f16).
+[[family]]
+name = "amdgpu_gfx900_half"
+language = "AMDGPU:LE:64:GFX9"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx900_half.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx900_half_math_decompiles"
+address = "0x0"
+expect = ["if (v2 < v3)", "(v2 * v3 + v5 + v1) - v3;"]
+
 # CDNA 2 (gfx90a, MI200): `fixtures/amdgpu/cdna_kernels.cl` at -O3. MFMA results and accumulators
 # live in AGPR tuples (a[0:15]) or VGPR tuples, read back with v_accvgpr_read_b32.
 [[family]]
@@ -4167,3 +4185,19 @@ forbid = ["halt_baddata"]
 test = "s390x_ts_lpdr_ap_decompile"
 address = "0x1000"
 expect = ["*a2 = 0xff;", "hd_ap(a3,4,a4,4);", "ABS(a1)"]
+
+# eBPF -O2 str_len (#865): the loop counter is r0, the return register, and also indexes the
+# load. Upstream's onlyOpUse refuses a return trial at that load (the function prints void);
+# option retindexuse keeps it.
+[[family]]
+name = "ebpf_retindexuse"
+language = "eBPF:LE:64:default"
+base = "0"
+image = "bpf_strlen"
+args = ["--option", "retindexuse", "on"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "ebpf_retindexuse_counter_is_returned"
+address = "0x0"
+expect = ["return "]

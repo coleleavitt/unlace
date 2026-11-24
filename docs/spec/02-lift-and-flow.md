@@ -457,6 +457,13 @@ languages, so a following `stdcx.` stores unconditionally rather than testing
 an uninitialized reservation flag. Encodings with the exclusive-access hint bit set remain
 undecoded there. This is a SLEIGH correctness repair, without an inference option.
 
+The generic 64-bit PowerPC languages (`PowerPC:BE:64:default`, `PowerPC:LE:64:default`)
+also decode `isel` (primary opcode 31, extended opcode 15 in bits 5:1). It is Power ISA 2.03
+and later, and until now only the e500/PowerQUICC III and ISA languages had it.
+`isel.sinc` holds the one constructor, and `quicciii.sinc` includes it at the place where it
+used to be defined. `RT` gets `RA|0` when the named CR bit is set, else `RB`. This is a
+SLEIGH correctness repair, without an inference option.
+
 Generic ARM `MCR`/`MRC` and `MCR2`/`MRC2` transfers pass the encoded
 `CRn` and `CRm` numbers to their opaque coprocessor intrinsics as four-byte
 constants. A32 and Thumb constructors use unattached numeric aliases of the token
@@ -1016,11 +1023,9 @@ every function with such a gap; the losses that already print (decode-failure
 halts, `funcboundflow`, budget and out-of-bounds truncation, unrecovered jump
 tables) are unchanged either way.
 
-When the generic `PowerPC:BE:64:default` or `PowerPC:LE:64:default` decoder
-fails on an aligned `isel` encoding, the halt also names the selected target
-and suggests an explicit `--target PowerPC:<endian>:64:A2ALT` for AltiVec code.
-The hint reads only the four bytes at the failure; an unreadable word, another
-opcode or another target adds no hint. It neither retries nor changes the ISA.
+A target may attach advice to a bad-instruction halt (`decode_failure_hint`); no
+target does today. The generic PowerPC64 `isel` hint went away once those
+languages decoded `isel`.
 ELF machine/class, ABI version flags and GNU vector calling-convention attributes
 do not identify a complete ISA: the A2 variants have conflicting vector encodings,
 and a matching `isel` word can also be data. The user must choose the variant

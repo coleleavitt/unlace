@@ -256,6 +256,7 @@ kuna_options! { self, p1;
     "pairparam" => registered!(crate::kuna_borrowcompare::PairParams),
     "pairbranch" => registered!(crate::kuna_borrowcompare::PairBranch),
     "armpairparam" => registered!(crate::kuna_armpairparam::ArmPairParams),
+    "retindexuse" => registered!(crate::kuna_retindexuse::RetIndexUse),
     "narrowret" => registered!(crate::kuna_narrowret::NarrowRet),
     "regsigned" => registered!(crate::kuna_regnarrow::NarrowSigned),
     "narrowext" => {
@@ -464,6 +465,8 @@ kuna_options! { self, p1;
         registered!(crate::kuna_analysisgates::Machoehframe)
     },
     "ehcold" => registered!(crate::kuna_analysisgates::Ehcold),
+    "mfcmsgmap" => registered!(crate::kuna_analysisgates::Mfcmsgmap),
+    "msvcptrentry" => registered!(crate::kuna_analysisgates::Msvcptrentry),
     "importvote" => registered!(crate::kuna_importvote::Importvote),
     "ehnote" => registered!(crate::kuna_analysisgates::Ehnote),
     "funcstart_patterns" => {

@@ -51,6 +51,7 @@ pub mod wasmlower;
 // therefore invisible.
 pub mod elf_dynseg;
 pub mod elf_plt;
+pub mod noretrules;
 // (unlace `debuglink`) separate debug files and MiniDebugInfo for stripped ELFs.
 pub mod elf_debuglink;
 // (unlace `globalref`) The sections a program's own data objects live in.

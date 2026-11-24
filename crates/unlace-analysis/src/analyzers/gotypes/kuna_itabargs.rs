@@ -127,6 +127,14 @@ fn copy_of_held(mnemonic: &str, operands: &str, held: &[&'static str]) -> Option
         .find(|reg| *reg == dest.trim())
 }
 
+/// `(destination, address)` of an `LEA` whose source the disassembly prints as
+/// an absolute address (`RCX,[0x4cfcc0]`, a RIP-relative operand resolved).
+fn lea_target(operands: &str) -> Option<(&str, u64)> {
+    let (dest, source) = operands.split_once(',')?;
+    let hex = source.trim().strip_prefix("[0x")?.strip_suffix(']')?;
+    Some((dest.trim(), u64::from_str_radix(hex, 16).ok()?))
+}
+
 /// The `(callee, register index) -> interfaces` votes of every `LEA` of a
 /// static itab in `itabs` (itab VMA to interface).
 pub(crate) fn votes(
@@ -134,27 +142,27 @@ pub(crate) fn votes(
     itabs: &BTreeMap<u64, String>,
 ) -> BTreeMap<(u64, usize), BTreeSet<String>> {
     let mut out: BTreeMap<(u64, usize), BTreeSet<String>> = BTreeMap::new();
-    for (&itab, interface) in itabs {
-        for r in listing.refs_to(itab) {
-            let Some(insn) = listing.instruction_at(r.from) else {
-                continue;
-            };
-            if insn.mnemonic.trim() != "LEA" {
-                continue;
-            }
-            let dest = insn.operands.split(',').next().unwrap_or("").trim();
-            let Some(index) = INTEGER_REGISTERS.iter().position(|reg| *reg == dest) else {
-                continue;
-            };
-            let Some((callee, held)) = call_after(listing, r.from, INTEGER_REGISTERS[index]) else {
-                continue;
-            };
-            for reg in held {
-                if let Some(index) = INTEGER_REGISTERS.iter().position(|r| *r == reg) {
-                    out.entry((callee, index))
-                        .or_default()
-                        .insert(interface.clone());
-                }
+    for (&at, insn) in listing.instructions() {
+        if insn.mnemonic.trim() != "LEA" {
+            continue;
+        }
+        let Some((dest, target)) = lea_target(&insn.operands) else {
+            continue;
+        };
+        let Some(interface) = itabs.get(&target) else {
+            continue;
+        };
+        let Some(index) = INTEGER_REGISTERS.iter().position(|reg| *reg == dest) else {
+            continue;
+        };
+        let Some((callee, held)) = call_after(listing, at, INTEGER_REGISTERS[index]) else {
+            continue;
+        };
+        for reg in held {
+            if let Some(index) = INTEGER_REGISTERS.iter().position(|r| *r == reg) {
+                out.entry((callee, index))
+                    .or_default()
+                    .insert(interface.clone());
             }
         }
     }
@@ -248,5 +256,12 @@ mod tests {
             None
         );
         assert_eq!(copy_of_held("MOV", "RAX,RBX", &["RCX"]), None);
+    }
+
+    #[test]
+    fn lea_targets_read_the_resolved_address() {
+        assert_eq!(lea_target("RCX,[0x4cfcc0]"), Some(("RCX", 0x4cfcc0)));
+        assert_eq!(lea_target("RAX,[RSP + 0x78]"), None);
+        assert_eq!(lea_target("RAX"), None);
     }
 }

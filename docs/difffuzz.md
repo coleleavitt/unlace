@@ -117,6 +117,25 @@ afterwards. The register file is unchanged.
   after the first run: UDIV/SDIV(cc) clamp an overflowing quotient (2^32-1, 2^31-1 or -2^31)
   and set icc.v; xcc of UMULcc/SMULcc/UDIVcc/SDIVcc comes from the 64-bit result. Seed 5,
   4000 encodings on sparc64: 10650 matches; seed 6, 3000 on sparc: 8251; no mismatches.
+- PA-RISC 1.1 (`--arch hppa`, `pa-risc:BE:32:default`, `--oracle qemu` with `qemu-hppa` from
+  QEMU 8.2). Capstone 5 has no PA-RISC, so candidates are decoded by a multi-target binutils
+  `objdump` (`ObjdumpDis`/`ObjdumpArch`: `$DIFFFUZZ_OBJDUMP`, default
+  `~/.local/share/difffuzz-binutils/bin/objdump`, built from binutils 2.45 with
+  `--enable-targets=all`), a batch of 4096 encodings per objdump run. binutils also decodes the
+  PA 2.0 forms, which are dropped. SAR and the carry bit go in and out through `mtsar`/`mfctl`
+  and `addi -1`/`add,c`; nullification is compared too: the epilogue's first instruction
+  complements a second free register, which keeps its input value only when the instruction
+  nullified it. Not generated: branches, system, cache/TLB, FP, coprocessor, DCOR and DS. When
+  SLEIGH traps on a ,TSV/,O overflow the case is undefined (QEMU 8.2 checks the 64-bit sign and
+  misses narrow overflows). Fixed in the PA-RISC module after the first run: the 11-bit
+  immediate took bit 11 (`im11less0`); the add and subtract conditions (=, <, <=, NUV/<<,
+  ZNV/<<=, SV, OD) are computed from the operands the instruction saves first
+  (`condA`/`condB`/`condCin`), so a target that aliases a source no longer changes them and
+  ADD,C/SUB,B/SHxADD conditions include the carry and the shift; ADD,C, ADD,CO and SUB,B carry
+  the full 33-bit sum; the unit conditions SDC/SBC/SHC are implemented; STBY stores the right
+  bytes and its ,M form modifies the base register (after the store, QEMU's reading), not the
+  source; a short-displacement store whose source is the modified base stores the old value.
+  Seeds 4 and 5, 3000 encodings each: 6205 and 6293 matches, no mismatches.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.

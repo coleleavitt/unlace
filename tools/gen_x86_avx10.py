@@ -10,7 +10,8 @@ Every non-pseudo EVEX record with a HasAVX10_2* predicate is emitted. The record
 of one instruction form (plain, merge-masked, zero-masked, broadcast, {sae} and
 {rc} variants) fold into one constructor for the register form, one for the
 memory form and one for the {sae}/{rc} register form, in the style of avx512.sinc:
-masking through the Xmm/Ymm/ZmmOpMask* tables, Disp8*N from LLVM's CD8_Scale,
+masking through the Xmm/Ymm/ZmmOpMask* tables, Disp8*N from LLVM's CD8_Scale (the
+16-bit broadcast rows FV16/HV16 are in ia.sinc),
 and one user operation per mnemonic (avx10_<mnemonic>) whose inputs are the read
 operands (the old destination first for accumulating forms). VMOVRS* are loads,
 VMOVD/VMOVW zero-extending moves, and the VCOMX/VUCOMX/VCOMISBF16 compares set
@@ -384,17 +385,7 @@ def main():
     vex_vnni(sys.argv[1], g)
     out = [HEADER, "@ifdef IA64", ""]
     out += ["define pcodeop %s;" % o for o in g.ops]
-    out += ["", "# Disp8*N for full- and half-vector memory operands with a 16-bit broadcast element.",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=0 & evexL=0 [ offs = 4; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=0 & evexL=1 [ offs = 5; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=0 & evexL=2 [ offs = 6; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=1 [ offs = 1; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=0 & evexL=0 [ offs = 3; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=0 & evexL=1 [ offs = 4; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=0 & evexL=2 [ offs = 5; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=1 [ offs = 1; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "",
-] + ['avx10CmpBf16: "VCMP%sBF16" is imm8=%d { }' % (p, i) for i, p in enumerate(CMP_PRED)] + [
+    out += [""] + ['avx10CmpBf16: "VCMP%sBF16" is imm8=%d { }' % (p, i) for i, p in enumerate(CMP_PRED)] + [
             'avx10CmpBf16: "VCMPBF16" is imm8 { }', "",
             'avx10Rc: "{rn-sae}" is evexL=0 { }', 'avx10Rc: "{rd-sae}" is evexL=1 { }',
             'avx10Rc: "{ru-sae}" is evexL=2 { }', 'avx10Rc: "{rz-sae}" is evexL=3 { }', ""]

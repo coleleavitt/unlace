@@ -81,6 +81,10 @@ xtensa_esp32s3_pie_fused = """
 x86_64_cmpccxadd = """
 4889f0c4e2e9e407c30f1f800000000031c0f20f38f83e0f94c0c3
 """
+x86_64_avx512_base = """
+62f27d487cc762f17e487f06c5f877c3c5f446c962f27d4990448f1062f1
+7e487f06c5f877c3
+"""
 
 [[family]]
 name = "blackfin"
@@ -1076,6 +1080,25 @@ expect = [
 test = "x86_enqcmd_status_is_zf"
 address = "0x10"
 expect = ["return enqcmd(a0,*a1);"]
+
+# AVX-512 base-spec fixes: VPBROADCASTD reads its GPR source, and a gather addresses through its
+# vector index (bc: vpbroadcastd zmm0, edi; ga: vpgatherdd zmm0{k1}, [rdi + 4*zmm1 + 64]).
+[[family]]
+name = "x86_64_avx512_base"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_avx512_base"
+
+[[family.function]]
+test = "x86_vpbroadcastd_reads_its_gpr"
+address = "0x0"
+expect = ["vpbroadcastd_avx512f(a0)"]
+
+[[family.function]]
+test = "x86_gather_uses_the_vector_index"
+address = "0x10"
+expect = ["ZEXT864(a0) + ZEXT864(0x40)"]   # base + disp8*4 ...
+forbid = ["a0[a3"]                         # ... not RCX as a scalar index
 
 # The eZ80 ADL-mode language decompiles a hand-assembled add/compare/store routine.
 [[family]]

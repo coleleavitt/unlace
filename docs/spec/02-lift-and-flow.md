@@ -4563,6 +4563,21 @@ Before, each was a bad instruction. The EVEX-promoted GPR forms in
 the AVX-512 scaling of whatever tuple context was current. Exercised by the
 `x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
 
+### x86 AVX-512 base-spec decode fixes (#98)
+
+Four wrong AVX-512 decodes in the Ghidra-derived tables are fixed in every x86
+language. VPBROADCASTB/W/D/Q from a GPR now read their `Rmr32`/`Rmr64` source
+(before, the operand was missing and the lift called the user operation with no
+input). The EVEX gathers and scatters address through the VSIB tables, with
+EVEX.V' selecting index registers 16-31, so `vpgatherdd zmm0{k1}, [rdi +
+4*zmm1 + 64]` lifts to the vector-indexed address (before, RCX was used as a
+scalar index). A memory broadcast prints `{1toN}`. Disp8*N is right for 16-bit
+broadcast elements: three tuple rows in `ia.sinc` (full, half and quarter
+vector with a word broadcast) give N, and the register-or-memory operand tables
+no longer evaluate `evexDisp8N` a second time, which had read tuple bits the
+first evaluation overwrote. Exercised by `unlace-cli/tests/x86_avx10.rs`
+(`base_fixes`) and the `x86_64_avx512_base` row of `processors.toml`.
+
 ### x86-64 AVX10.2 (#98)
 
 `specs/Ghidra/Processors/x86/data/languages/avx10_2.sinc` decodes AVX10.2 in

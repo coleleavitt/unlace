@@ -101,7 +101,7 @@ fn retire_member_fill(
     return_ops: &[crate::context::OpId],
     entries: &[(u64, i32)],
 ) {
-    let lane_of = |active: &ParamActive, i: usize| -> Option<(usize, bool)> {
+    let lane_of = |active: &ParamActive, i: i32| -> Option<(usize, bool)> {
         let t = active.get_trial(i);
         let off = t.get_address().get_offset();
         entries

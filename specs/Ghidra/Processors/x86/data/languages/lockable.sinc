@@ -1203,10 +1203,10 @@
     addflags(m32,Reg32);
     local tmp = m32 + Reg32;
     Reg32 = m32;
+    build check_Reg32_dest;
     m32 = tmp;
     resultflags(tmp);
     build unlock; 
-	build check_Reg32_dest;
 }
 
 @ifdef IA64
@@ -1254,8 +1254,8 @@
   local tmp = m32; 
   m32 = Reg32; 
   Reg32 = tmp; 
+  build check_Reg32_dest;
   UNLOCK(); 
-	build check_Reg32_dest;
 }
 
 @ifdef IA64

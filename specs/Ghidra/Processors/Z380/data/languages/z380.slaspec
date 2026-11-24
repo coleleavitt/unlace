@@ -1,0 +1,309 @@
+# Zilog Z380 processor specification.
+# Written for this repository (issue #98) from the Zilog Z380 Microprocessor User's
+# Manual (DC-8297-03, https://zilog.com/docs/serial/z380um.pdf): register file,
+# Native/Extended and Word/Long Word modes, decoder directives, and the opcode
+# tables of Appendices B-E. Clean-room: no other SLEIGH module for the Z380 was
+# consulted. The 8-bit flag macros follow the in-repo Ghidra Z80 module
+# (../../Z80/data/languages/z80.slaspec, Apache-2.0, Copyright National Security
+# Agency / Ghidra contributors). See ../../README.md for the model and gaps.
+
+define endian=little;
+define alignment=1;
+
+define space ram      type=ram_space      size=4 default;
+define space io       type=ram_space      size=4;
+define space register type=register_space size=1;
+
+# 32-bit registers; the Z80 16-bit pairs are their low halves.
+define register offset=0x00 size=4 [ BCX DEX HLX IXX IYX SPX PC ];
+define register offset=0x00 size=2 [ BC BCz DE DEz HL HLz IX IXz IY IYz SP SPz ];
+define register offset=0x00 size=1 [ C B _ _ E D _ _ L H _ _ IXL IXH _ _ IYL IYH _ _ ];
+define register offset=0x20 size=1 [ F A F_ A_ ];
+define register offset=0x20 size=2 [ AF AF_ ];
+define register offset=0x30 size=4 [ BCX_ DEX_ HLX_ ];
+define register offset=0x30 size=2 [ BC_ _ DE_ _ HL_ _ ];
+define register offset=0x40 size=4 [ SR ];
+define register offset=0x48 size=1 [ I R ];
+define register offset=0x50 size=1 [ S_flag Z_flag H_flag PV_flag N_flag C_flag ];
+define register offset=0x60 size=4 contextreg;
+
+
+# xm/lw: SR.XM and SR.LW (set by SETC XM / SETC LW, cleared by RESC LW).
+# ddw: 0 none, 1 DDIR W, 2 DDIR LW (this instruction only).
+# ddi: 0 none, 1 DDIR IB, 2 DDIR IW (extra immediate/address bytes).
+# pfx: 0 none, 1 DD (IX), 2 FD (IY).
+define context contextreg
+  xm  = (0,0)
+  lw  = (1,1)
+  ddw = (2,3) noflow
+  ddi = (4,5) noflow
+  pfx = (6,7) noflow
+  phase = (8,8) noflow
+;
+
+define token opbyte (8)
+  op0_8 = (0,7)
+  op6_2 = (6,7)
+  op5_3 = (5,7)
+  op3_3 = (3,5)
+  op0_3 = (0,2)
+  op0_4 = (0,3)
+  r3    = (3,5)
+  r0    = (0,2)
+  dd4   = (4,5)
+  dd4x  = (4,5)
+  ss4   = (4,5)
+  qq4   = (4,5)
+  cc3   = (3,5)
+  cc2   = (3,4)
+  bit3  = (3,5)
+  rst3  = (3,5)
+;
+
+define token data8 (8)
+  imm8  = (0,7)
+  simm8 = (0,7) signed
+  sign8 = (7,7)
+;
+
+define token data16 (16)
+  imm16  = (0,15)
+  simm16 = (0,15) signed
+;
+
+define token data24 (24)
+  imm24  = (0,23)
+  simm24 = (0,23) signed
+;
+
+define token data32 (32)
+  imm32 = (0,31)
+;
+
+attach variables [ r3 r0 ] [ B C D E H L _ A ];
+attach variables [ dd4 ] [ BC DE HL SP ];
+attach variables [ dd4x ] [ BCX DEX HLX SPX ];
+attach variables [ qq4 ] [ BC DE HL AF ];
+
+define pcodeop halt;
+define pcodeop disableInterrupts;
+define pcodeop enableInterrupts;
+define pcodeop setInterruptMode;
+define pcodeop decimalAdjust;
+define pcodeop softwareInterrupt;
+define pcodeop setLock;
+define pcodeop clearLock;
+
+macro setResultFlags(r) { Z_flag = (r == 0); S_flag = (r s< 0); }
+macro setParity(r) {
+  local t = r ^ (r >> 4); t = t ^ (t >> 2); t = t ^ (t >> 1);
+  PV_flag = ((t & 1) == 0);
+}
+macro addFlags(a, b) {
+  H_flag = (((a & 0xf) + (b & 0xf)) & 0x10) != 0;
+  C_flag = carry(a, b);
+  PV_flag = scarry(a, b);
+  N_flag = 0;
+}
+macro subFlags(a, b) {
+  H_flag = (((a & 0xf) - (b & 0xf)) & 0x10) != 0;
+  C_flag = a < b;
+  PV_flag = sborrow(a, b);
+  N_flag = 1;
+}
+macro logicFlags(r) { setResultFlags(r); setParity(r); C_flag = 0; N_flag = 0; }
+macro packF() {
+  F = (S_flag << 7) | (Z_flag << 6) | (H_flag << 4) | (PV_flag << 2) | (N_flag << 1) | C_flag;
+}
+macro unpackF() {
+  S_flag = (F & 0x80) != 0; Z_flag = (F & 0x40) != 0; H_flag = (F & 0x10) != 0;
+  PV_flag = (F & 0x04) != 0; N_flag = (F & 0x02) != 0; C_flag = (F & 0x01) != 0;
+}
+macro push16(v) { SPX = SPX - 2; *:2 SPX = v; }
+macro pop16(v) { v = *:2 SPX; SPX = SPX + 2; }
+macro push32(v) { SPX = SPX - 4; *:4 SPX = v; }
+macro pop32(v) { v = *:4 SPX; SPX = SPX + 4; }
+
+# Decoder directives (DDIR): one-instruction word/immediate-size overrides.
+:^instruction is phase=0 & op0_8=0xDD; op0_8=0xC0; instruction [ phase=1; ddw=1; ] { build instruction; }
+:^instruction is phase=0 & op0_8=0xDD; op0_8=0xC1; instruction [ phase=1; ddw=1; ddi=1; ] { build instruction; }
+:^instruction is phase=0 & op0_8=0xDD; op0_8=0xC2; instruction [ phase=1; ddw=1; ddi=2; ] { build instruction; }
+:^instruction is phase=0 & op0_8=0xDD; op0_8=0xC3; instruction [ phase=1; ddi=1; ] { build instruction; }
+:^instruction is phase=0 & op0_8=0xFD; op0_8=0xC0; instruction [ phase=1; ddw=2; ] { build instruction; }
+:^instruction is phase=0 & op0_8=0xFD; op0_8=0xC1; instruction [ phase=1; ddw=2; ddi=1; ] { build instruction; }
+:^instruction is phase=0 & op0_8=0xFD; op0_8=0xC2; instruction [ phase=1; ddw=2; ddi=2; ] { build instruction; }
+:^instruction is phase=0 & op0_8=0xFD; op0_8=0xC3; instruction [ phase=1; ddi=2; ] { build instruction; }
+
+# Immediate 16-bit address/data, widened to 24 or 32 bits by DDIR IB / IW.
+nn: imm16 is ddi=0 & imm16 { export *[const]:4 imm16; }
+nn: imm24 is ddi=1 & imm24 { export *[const]:4 imm24; }
+nn: imm32 is ddi=2 & imm32 { export *[const]:4 imm32; }
+mem8: "("^nn^")" is nn { export *[ram]:1 nn; }
+mem16: "("^nn^")" is nn { export *[ram]:2 nn; }
+mem32: "("^nn^")" is nn { export *[ram]:4 nn; }
+jt: imm16 is ddi=0 & xm=0 & imm16 { export *[ram]:1 imm16; }
+jt: imm16 is ddi=0 & xm=1 & imm16 { local a:4 = (inst_start & 0xffff0000) | imm16; export *[ram]:1 a; }
+jt: imm24 is ddi=1 & imm24 { export *[ram]:1 imm24; }
+jt: imm32 is ddi=2 & imm32 { export *[ram]:1 imm32; }
+rel: dest is simm8 [ dest = inst_next + simm8; ] { export *[ram]:1 dest; }
+
+cc: "NZ" is cc3=0 { c:1 = !Z_flag; export c; }
+cc: "Z"  is cc3=1 { c:1 = Z_flag; export c; }
+cc: "NC" is cc3=2 { c:1 = !C_flag; export c; }
+cc: "C"  is cc3=3 { c:1 = C_flag; export c; }
+cc: "PO" is cc3=4 { c:1 = !PV_flag; export c; }
+cc: "PE" is cc3=5 { c:1 = PV_flag; export c; }
+cc: "P"  is cc3=6 { c:1 = !S_flag; export c; }
+cc: "M"  is cc3=7 { c:1 = S_flag; export c; }
+jcc: "NZ" is cc2=0 { c:1 = !Z_flag; export c; }
+jcc: "Z"  is cc2=1 { c:1 = Z_flag; export c; }
+jcc: "NC" is cc2=2 { c:1 = !C_flag; export c; }
+jcc: "C"  is cc2=3 { c:1 = C_flag; export c; }
+
+# 8-bit source/destination: register or (HL).
+src8: r0 is r0 { export r0; }
+src8: "(HL)" is r0=6 { export *[ram]:1 HLX; }
+dst8: r3 is r3 { export r3; }
+dst8: "(HL)" is r3=6 { export *[ram]:1 HLX; }
+
+XY: "IX" is op0_8=0xDD { export IX; }
+XY: "IY" is op0_8=0xFD { export IY; }
+XYX: "IX" is op0_8=0xDD { export IXX; }
+XYX: "IY" is op0_8=0xFD { export IYX; }
+
+macro retNative() { local t:2 = 0; pop16(t); PC = zext(t); }
+
+with : phase=0 | phase=1 {
+
+:NOP is op0_8=0x00 { }
+:HALT is op0_8=0x76 { halt(); }
+:DI is op0_8=0xF3 { disableInterrupts(); }
+:EI is op0_8=0xFB { enableInterrupts(); }
+
+:LD dst8,src8 is op6_2=1 & dst8 & src8 { dst8 = src8; }
+:LD dst8,imm8 is op6_2=0 & dst8 & op0_3=6; imm8 { dst8 = imm8; }
+:LD "A","(BC)" is op0_8=0x0A { A = *:1 BCX; }
+:LD "A","(DE)" is op0_8=0x1A { A = *:1 DEX; }
+:LD "(BC)","A" is op0_8=0x02 { *:1 BCX = A; }
+:LD "(DE)","A" is op0_8=0x12 { *:1 DEX = A; }
+:LD "A",mem8 is op0_8=0x3A; mem8 { A = mem8; }
+:LD mem8,"A" is op0_8=0x32; mem8 { mem8 = A; }
+:LD "HL",mem16 is op0_8=0x2A & ((ddw=0 & lw=0) | ddw=1); mem16 { HL = mem16; }
+:LD mem16,"HL" is op0_8=0x22 & ((ddw=0 & lw=0) | ddw=1); mem16 { mem16 = HL; }
+:LD "HL",mem32 is op0_8=0x2A & ((ddw=0 & lw=1) | ddw=2); mem32 { HLX = mem32; }
+:LD mem32,"HL" is op0_8=0x22 & ((ddw=0 & lw=1) | ddw=2); mem32 { mem32 = HLX; }
+# Word ops: 16-bit unless SR.LW (and no DDIR W) or DDIR LW selects 32 bits.
+:LD dd4,nn is op6_2=0 & dd4 & op0_4=1 & ddw=0 & lw=0; nn { dd4 = nn:2; }
+:LD dd4,nn is op6_2=0 & dd4 & op0_4=1 & ddw=1; nn { dd4 = nn:2; }
+:LD dd4x,nn is op6_2=0 & dd4x & op0_4=1 & ddw=0 & lw=1; nn { dd4x = nn; }
+:LD dd4x,nn is op6_2=0 & dd4x & op0_4=1 & ddw=2; nn { dd4x = nn; }
+:LD "SP","HL" is op0_8=0xF9 { SP = HL; }
+
+:PUSH qq4 is op6_2=3 & qq4 & op0_4=5 & qq4=3 { packF(); push16(AF); }
+:PUSH qq4 is op6_2=3 & qq4 & op0_4=5 { push16(qq4); }
+:POP qq4 is op6_2=3 & qq4 & op0_4=1 & qq4=3 { pop16(AF); unpackF(); }
+:POP qq4 is op6_2=3 & qq4 & op0_4=1 { pop16(qq4); }
+
+:EX "DE,HL" is op0_8=0xEB { t:4 = DEX; DEX = HLX; HLX = t; }
+:EX "AF,AF'" is op0_8=0x08 { packF(); t:2 = AF; AF = AF_; AF_ = t; unpackF(); }
+:EXX is op0_8=0xD9 { t:4 = BCX; BCX = BCX_; BCX_ = t; t = DEX; DEX = DEX_; DEX_ = t; t = HLX; HLX = HLX_; HLX_ = t; }
+:EX "(SP)","HL" is op0_8=0xE3 { t:2 = *:2 SPX; *:2 SPX = HL; HL = t; }
+
+:ADD "A",src8 is op6_2=2 & op3_3=0 & src8 { local v = src8; addFlags(A, v); A = A + v; setResultFlags(A); }
+:ADC "A",src8 is op6_2=2 & op3_3=1 & src8 { local v = src8 + C_flag; addFlags(A, v); A = A + v; setResultFlags(A); }
+:SUB src8 is op6_2=2 & op3_3=2 & src8 { local v = src8; subFlags(A, v); A = A - v; setResultFlags(A); }
+:SBC "A",src8 is op6_2=2 & op3_3=3 & src8 { local v = src8 + C_flag; subFlags(A, v); A = A - v; setResultFlags(A); }
+:AND src8 is op6_2=2 & op3_3=4 & src8 { A = A & src8; logicFlags(A); H_flag = 1; }
+:XOR src8 is op6_2=2 & op3_3=5 & src8 { A = A ^ src8; logicFlags(A); H_flag = 0; }
+:OR src8 is op6_2=2 & op3_3=6 & src8 { A = A | src8; logicFlags(A); H_flag = 0; }
+:CP src8 is op6_2=2 & op3_3=7 & src8 { local v = src8; subFlags(A, v); local r = A - v; setResultFlags(r); }
+:ADD "A",imm8 is op0_8=0xC6; imm8 { addFlags(A, imm8:1); A = A + imm8; setResultFlags(A); }
+:ADC "A",imm8 is op0_8=0xCE; imm8 { local v:1 = imm8 + C_flag; addFlags(A, v); A = A + v; setResultFlags(A); }
+:SUB imm8 is op0_8=0xD6; imm8 { subFlags(A, imm8:1); A = A - imm8; setResultFlags(A); }
+:SBC "A",imm8 is op0_8=0xDE; imm8 { local v:1 = imm8 + C_flag; subFlags(A, v); A = A - v; setResultFlags(A); }
+:AND imm8 is op0_8=0xE6; imm8 { A = A & imm8; logicFlags(A); H_flag = 1; }
+:XOR imm8 is op0_8=0xEE; imm8 { A = A ^ imm8; logicFlags(A); H_flag = 0; }
+:OR imm8 is op0_8=0xF6; imm8 { A = A | imm8; logicFlags(A); H_flag = 0; }
+:CP imm8 is op0_8=0xFE; imm8 { subFlags(A, imm8:1); local r = A - imm8; setResultFlags(r); }
+
+:INC dst8 is op6_2=0 & dst8 & op0_3=4 { local v = dst8; H_flag = (v & 0xf) == 0xf; PV_flag = v == 0x7f; v = v + 1; dst8 = v; setResultFlags(v); N_flag = 0; }
+:DEC dst8 is op6_2=0 & dst8 & op0_3=5 { local v = dst8; H_flag = (v & 0xf) == 0; PV_flag = v == 0x80; v = v - 1; dst8 = v; setResultFlags(v); N_flag = 1; }
+:INC dd4 is op6_2=0 & dd4 & op0_4=3 { dd4 = dd4 + 1; }
+:DEC dd4 is op6_2=0 & dd4 & op0_4=11 { dd4 = dd4 - 1; }
+:ADD "HL",dd4 is op6_2=0 & dd4 & op0_4=9 { local v = dd4; H_flag = (((HL & 0xfff) + (v & 0xfff)) & 0x1000) != 0; C_flag = carry(HL, v); HL = HL + v; N_flag = 0; }
+
+:DAA is op0_8=0x27 { A = decimalAdjust(A, C_flag, H_flag, N_flag); setResultFlags(A); setParity(A); }
+:CPL is op0_8=0x2F { A = ~A; H_flag = 1; N_flag = 1; }
+:SCF is op0_8=0x37 { C_flag = 1; H_flag = 0; N_flag = 0; }
+:CCF is op0_8=0x3F { H_flag = C_flag; C_flag = !C_flag; N_flag = 0; }
+:RLCA is op0_8=0x07 { C_flag = (A >> 7) != 0; A = (A << 1) | (A >> 7); H_flag = 0; N_flag = 0; }
+:RRCA is op0_8=0x0F { C_flag = (A & 1) != 0; A = (A >> 1) | (A << 7); H_flag = 0; N_flag = 0; }
+:RLA is op0_8=0x17 { local c = C_flag; C_flag = (A >> 7) != 0; A = (A << 1) | c; H_flag = 0; N_flag = 0; }
+:RRA is op0_8=0x1F { local c = C_flag; C_flag = (A & 1) != 0; A = (A >> 1) | (c << 7); H_flag = 0; N_flag = 0; }
+
+:JP jt is op0_8=0xC3; jt { goto jt; }
+:JP cc,jt is op6_2=3 & cc & op0_3=2; jt { if (cc) goto jt; }
+:JP "(HL)" is op0_8=0xE9 { goto [HLX]; }
+:JR rel is op0_8=0x18; rel { goto rel; }
+:JR jcc,rel is op5_3=1 & jcc; rel { if (jcc) goto rel; }
+:DJNZ rel is op0_8=0x10; rel { B = B - 1; if (B != 0) goto rel; }
+
+:CALL jt is op0_8=0xCD & xm=0; jt { local r:2 = inst_next; push16(r); call jt; }
+:CALL jt is op0_8=0xCD & xm=1; jt { local r:4 = inst_next; push32(r); call jt; }
+:CALL cc,jt is op6_2=3 & cc & op0_3=4 & xm=0; jt { if (!cc) goto inst_next; local r:2 = inst_next; push16(r); call jt; }
+:CALL cc,jt is op6_2=3 & cc & op0_3=4 & xm=1; jt { if (!cc) goto inst_next; local r:4 = inst_next; push32(r); call jt; }
+:RET is op0_8=0xC9 & xm=0 { local t:2 = 0; pop16(t); local a:4 = zext(t); return [a]; }
+:RET is op0_8=0xC9 & xm=1 { local a:4 = 0; pop32(a); return [a]; }
+:RET cc is op6_2=3 & cc & op0_3=0 & xm=0 { if (!cc) goto inst_next; local t:2 = 0; pop16(t); local a:4 = zext(t); return [a]; }
+:RET cc is op6_2=3 & cc & op0_3=0 & xm=1 { if (!cc) goto inst_next; local a:4 = 0; pop32(a); return [a]; }
+:RST tgt is op6_2=3 & rst3 & op0_3=7 & xm=0 [ tgt = rst3 << 3; ] { local r:2 = inst_next; push16(r); call [tgt:4]; }
+:RST tgt is op6_2=3 & rst3 & op0_3=7 & xm=1 [ tgt = rst3 << 3; ] { local r:4 = inst_next; push32(r); call [tgt:4]; }
+
+:OUT "("^imm8^")","A" is op0_8=0xD3; imm8 { *[io]:1 imm8:4 = A; }
+:IN "A","("^imm8^")" is op0_8=0xDB; imm8 { A = *[io]:1 imm8:4; }
+
+# DD/FD index-register forms.
+:LD XY,imm16 is XY; op0_8=0x21 & ddi=0; imm16 { XY = imm16; }
+:LD r3,"("^XYX^simm8^")" is XYX; op6_2=1 & r3 & op0_3=6; simm8 { r3 = *:1 (XYX + simm8); }
+:LD "("^XYX^simm8^")",r0 is XYX; op6_2=1 & op3_3=6 & r0; simm8 { *:1 (XYX + simm8) = r0; }
+:LD "("^XYX^simm8^")",imm8 is XYX; op0_8=0x36; simm8; imm8 { *:1 (XYX + simm8) = imm8; }
+:ADD "A","("^XYX^simm8^")" is XYX; op0_8=0x86; simm8 { local v = *:1 (XYX + simm8); addFlags(A, v); A = A + v; setResultFlags(A); }
+:SUB "("^XYX^simm8^")" is XYX; op0_8=0x96; simm8 { local v = *:1 (XYX + simm8); subFlags(A, v); A = A - v; setResultFlags(A); }
+:CP "("^XYX^simm8^")" is XYX; op0_8=0xBE; simm8 { local v = *:1 (XYX + simm8); subFlags(A, v); local r = A - v; setResultFlags(r); }
+:PUSH XY is XY; op0_8=0xE5 { push16(XY); }
+:POP XY is XY; op0_8=0xE1 { pop16(XY); }
+:INC XY is XY; op0_8=0x23 { XY = XY + 1; }
+:DEC XY is XY; op0_8=0x2B { XY = XY - 1; }
+:JP "("^XYX^")" is XYX; op0_8=0xE9 { goto [XYX]; }
+
+# Z380 mode control.
+:SETC "LW" is op0_8=0xDD; op0_8=0xF7 [ lw=1; globalset(inst_next, lw); ] { SR = SR | 0x0100; }
+:RESC "LW" is op0_8=0xDD; op0_8=0xFF [ lw=0; globalset(inst_next, lw); ] { SR = SR & ~0x0100; }
+:SETC "XM" is op0_8=0xFD; op0_8=0xF7 [ xm=1; globalset(inst_next, xm); ] { SR = SR | 0x0200; }
+:SETC "LCK" is op0_8=0xED; op0_8=0xF7 { setLock(); }
+:RESC "LCK" is op0_8=0xED; op0_8=0xFF { clearLock(); }
+:NEG is op0_8=0xED; op0_8=0x44 { local v = A; subFlags(0:1, v); A = -v; setResultFlags(A); }
+:IM imm is op0_8=0xED; op0_8=0x46 [ imm = 0; ] { setInterruptMode(imm:1); }
+:IM imm is op0_8=0xED; op0_8=0x56 [ imm = 1; ] { setInterruptMode(imm:1); }
+:IM imm is op0_8=0xED; op0_8=0x5E [ imm = 2; ] { setInterruptMode(imm:1); }
+:RETI is op0_8=0xED; op0_8=0x4D & xm=0 { local t:2 = 0; pop16(t); local a:4 = zext(t); return [a]; }
+:RETN is op0_8=0xED; op0_8=0x45 & xm=0 { local t:2 = 0; pop16(t); local a:4 = zext(t); return [a]; }
+:LD dd4,mem16 is op0_8=0xED; op6_2=1 & dd4 & op0_4=11; mem16 { dd4 = mem16; }
+:LD mem16,dd4 is op0_8=0xED; op6_2=1 & dd4 & op0_4=3; mem16 { mem16 = dd4; }
+:SBC "HL",dd4 is op0_8=0xED; op6_2=1 & dd4 & op0_4=2 { local v = dd4 + zext(C_flag); C_flag = HL < v; PV_flag = sborrow(HL, v); HL = HL - v; Z_flag = HL == 0; S_flag = HL s< 0; N_flag = 1; }
+:ADC "HL",dd4 is op0_8=0xED; op6_2=1 & dd4 & op0_4=10 { local v = dd4 + zext(C_flag); C_flag = carry(HL, v); PV_flag = scarry(HL, v); HL = HL + v; Z_flag = HL == 0; S_flag = HL s< 0; N_flag = 0; }
+:LDIR is op0_8=0xED; op0_8=0xB0 { *:1 DEX = *:1 HLX; DEX = DEX + 1; HLX = HLX + 1; BC = BC - 1; PV_flag = BC != 0; H_flag = 0; N_flag = 0; if (BC != 0) goto inst_start; }
+
+# CB page: rotates, shifts, bit operations.
+:RLC src8 is op0_8=0xCB; op6_2=0 & op3_3=0 & src8 { local v = src8; C_flag = (v >> 7) != 0; v = (v << 1) | (v >> 7); src8 = v; logicFlags(v); C_flag = (v & 1) != 0; }
+:RRC src8 is op0_8=0xCB; op6_2=0 & op3_3=1 & src8 { local v = src8; C_flag = (v & 1) != 0; v = (v >> 1) | (v << 7); src8 = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:RL src8 is op0_8=0xCB; op6_2=0 & op3_3=2 & src8 { local v = src8; local c = C_flag; C_flag = (v >> 7) != 0; v = (v << 1) | zext(c); src8 = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:RR src8 is op0_8=0xCB; op6_2=0 & op3_3=3 & src8 { local v = src8; local c = C_flag; C_flag = (v & 1) != 0; v = (v >> 1) | (zext(c) << 7); src8 = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:SRA src8 is op0_8=0xCB; op6_2=0 & op3_3=5 & src8 { local v = src8; C_flag = (v & 1) != 0; v = v s>> 1; src8 = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:SLA src8 is op0_8=0xCB; op6_2=0 & op3_3=4 & src8 { local v = src8; C_flag = (v >> 7) != 0; v = v << 1; src8 = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:SRL src8 is op0_8=0xCB; op6_2=0 & op3_3=7 & src8 { local v = src8; C_flag = (v & 1) != 0; v = v >> 1; src8 = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:BIT bit3,src8 is op0_8=0xCB; op6_2=1 & bit3 & src8 { Z_flag = ((src8 >> bit3) & 1) == 0; H_flag = 1; N_flag = 0; }
+:RES bit3,src8 is op0_8=0xCB; op6_2=2 & bit3 & src8 { src8 = src8 & ~(1 << bit3); }
+:SET bit3,src8 is op0_8=0xCB; op6_2=3 & bit3 & src8 { src8 = src8 | (1 << bit3); }
+
+}

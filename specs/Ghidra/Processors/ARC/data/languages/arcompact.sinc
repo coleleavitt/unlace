@@ -1,0 +1,159 @@
+# ARCompact (ARC600 / ARC700): the encodings that differ from ARCv2, included by arcv2.sinc
+# under ARCOMPACT inside its `with : phase=1` block.
+
+# major 0x0e: a six-bit high register h = h[2:0] (bits 0-2) : h[5:3]... (bits 5-7 the low three)
+sH6: shl0 is sh6hi=0 & shl0 { export shl0; }
+sH6: shl1 is sh6hi=1 & shl1 { export shl1; }
+sH6: shl2 is sh6hi=2 & shl2 { export shl2; }
+sH6: shl3 is sh6hi=3 & shl3 { export shl3; }
+sH6: shl4 is sh6hi=4 & shl4 { export shl4; }
+sH6: shl5 is sh6hi=5 & shl5 { export shl5; }
+sH6: shl6 is sh6hi=6 & shl6 { export shl6; }
+sH6: shl7 is sh6hi=7 & shl7 { export shl7; }
+sH6: limm is sh6hi=7 & shlo=6 ; limm { export limm; }
+sH6: "pcl" is sh6hi=7 & shlo=7 { local t:4 = inst_start & 0xfffffffc; export t; }
+
+sH6dst: shl0 is sh6hi=0 & shl0 { export shl0; }
+sH6dst: shl1 is sh6hi=1 & shl1 { export shl1; }
+sH6dst: shl2 is sh6hi=2 & shl2 { export shl2; }
+sH6dst: shl3 is sh6hi=3 & shl3 { export shl3; }
+sH6dst: shl4 is sh6hi=4 & shl4 { export shl4; }
+sH6dst: shl5 is sh6hi=5 & shl5 { export shl5; }
+sH6dst: shl6 is sh6hi=6 & shl6 { export shl6; }
+sH6dst: shl7 is sh6hi=7 & shl7 { export shl7; }
+
+:add_s sb, sb2, sH6 is maj=0x0e ... & sh6op=0 ... & sb ... & sb2 ... & sH6 ... { sb = sb + sH6; }
+:mov_s sb, sH6 is maj=0x0e ... & sh6op=1 ... & sb ... & sH6 ... { sb = sH6; }
+:cmp_s sb, sH6 is maj=0x0e ... & sh6op=2 ... & sb ... & sH6 ... { local x:4 = sb; local y:4 = sH6; local r:4 = x - y; flagsSub(x, y); flagsZN(r); }
+:mov_s sH6dst, sb is maj=0x0e & sh6op=3 & sH6dst & sb { sH6dst = sb; }
+
+# ARCompact condition codes 0x10-0x1f name extension conditions (configured per core).
+define pcodeop extension_condition;
+cc: "" is Q=0x10 { local t:1 = extension_condition(16:1); export t; }
+cc: "" is Q=0x11 { local t:1 = extension_condition(17:1); export t; }
+cc: "" is Q=0x12 { local t:1 = extension_condition(18:1); export t; }
+cc: "" is Q=0x13 { local t:1 = extension_condition(19:1); export t; }
+cc: "" is Q=0x14 { local t:1 = extension_condition(20:1); export t; }
+cc: "" is Q=0x15 { local t:1 = extension_condition(21:1); export t; }
+cc: "" is Q=0x16 { local t:1 = extension_condition(22:1); export t; }
+cc: "" is Q=0x17 { local t:1 = extension_condition(23:1); export t; }
+cc: "" is Q=0x18 { local t:1 = extension_condition(24:1); export t; }
+cc: "" is Q=0x19 { local t:1 = extension_condition(25:1); export t; }
+cc: "" is Q=0x1a { local t:1 = extension_condition(26:1); export t; }
+cc: "" is Q=0x1b { local t:1 = extension_condition(27:1); export t; }
+cc: "" is Q=0x1c { local t:1 = extension_condition(28:1); export t; }
+cc: "" is Q=0x1d { local t:1 = extension_condition(29:1); export t; }
+cc: "" is Q=0x1e { local t:1 = extension_condition(30:1); export t; }
+cc: "" is Q=0x1f { local t:1 = extension_condition(31:1); export t; }
+
+# ---- major 0x05 (ARC600 / ARC700 extension ALU) ----
+define pcodeop divaw_step;
+define pcodeop dsp_op;
+define pcodeop dsp_flags;
+define pcodeop round16;
+
+:mul64^docc srcB, src2 is (maj=5 & sub=0x04 ; F=0) ... & docc ... & srcB ... & src2 ... { local p:8 = sext(srcB) * sext(src2); r57 = p:4; local mid:6 = p(2); r58 = mid:4; r59 = p(4); }
+:mulu64^docc srcB, src2 is (maj=5 & sub=0x05 ; F=0) ... & docc ... & srcB ... & src2 ... { local p:8 = zext(srcB) * zext(src2); r57 = p:4; local mid:6 = p(2); r58 = mid:4; r59 = p(4); }
+:divaw^docc dst, srcB, src2 is (maj=5 & sub=0x08 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = divaw_step(srcB, src2); }
+:divaw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x08 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = divaw_step(srcB, src2); local r:4 = dst; flagsZN(r); }
+:adds^docc dst, srcB, src2 is (maj=5 & sub=0x06 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local s:8 = sext(srcB) + sext(src2); local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> dst = r; }
+:adds^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x06 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local s:8 = sext(srcB) + sext(src2); local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> C = 0; V = hi || lo; flagsZN(r); dst = r; }
+:subs^docc dst, srcB, src2 is (maj=5 & sub=0x07 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local s:8 = sext(srcB) - sext(src2); local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> dst = r; }
+:subs^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x07 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local s:8 = sext(srcB) - sext(src2); local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> C = 0; V = hi || lo; flagsZN(r); dst = r; }
+:adcs^docc dst, srcB, src2 is (maj=5 & sub=0x26 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local s:8 = sext(srcB) + sext(src2) + zext(C); local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> dst = r; }
+:adcs^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x26 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local s:8 = sext(srcB) + sext(src2) + zext(C); local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> C = 0; V = hi || lo; flagsZN(r); dst = r; }
+:sbcs^docc dst, srcB, src2 is (maj=5 & sub=0x27 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local s:8 = sext(srcB) - sext(src2) - zext(C); local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> dst = r; }
+:sbcs^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x27 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local s:8 = sext(srcB) - sext(src2) - zext(C); local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> C = 0; V = hi || lo; flagsZN(r); dst = r; }
+:asls^docc dst, srcB, src2 is (maj=5 & sub=0x0a ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local x:8 = sext(srcB); local n:4 = src2; local k:8 = sext(n); local s:8 = x << (k & 63); if (k s>= 0) goto <s_dir>; s = x s>> ((0 - k) & 63); <s_dir> local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> dst = r; }
+:asls^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x0a ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:8 = sext(srcB); local n:4 = src2; local k:8 = sext(n); local s:8 = x << (k & 63); if (k s>= 0) goto <s_dir>; s = x s>> ((0 - k) & 63); <s_dir> local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> C = 0; V = hi || lo; flagsZN(r); dst = r; }
+:asrs^docc dst, srcB, src2 is (maj=5 & sub=0x0b ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local x:8 = sext(srcB); local n:4 = src2; local k:8 = sext(n); local s:8 = x s>> (k & 63); if (k s>= 0) goto <s_dir>; s = x << ((0 - k) & 63); <s_dir> local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> dst = r; }
+:asrs^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x0b ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:8 = sext(srcB); local n:4 = src2; local k:8 = sext(n); local s:8 = x s>> (k & 63); if (k s>= 0) goto <s_dir>; s = x << ((0 - k) & 63); <s_dir> local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> C = 0; V = hi || lo; flagsZN(r); dst = r; }
+:sat16 dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x02) ... & dstB ... & src2 ... { local x:4 = src2; local s:4 = x; local r:4 = s; local hi:1 = s s> 0x7fff; local lo:1 = s s< -0x8000; if (!hi) goto <s_hi>; r = 0x7fff; <s_hi> if (!lo) goto <s_lo>; r = 0xffff8000; <s_lo> dstB = r; }
+:sat16.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x02) ... & dstB ... & src2 ... { local x:4 = src2; local s:4 = x; local r:4 = s; local hi:1 = s s> 0x7fff; local lo:1 = s s< -0x8000; if (!hi) goto <s_hi>; r = 0x7fff; <s_hi> if (!lo) goto <s_lo>; r = 0xffff8000; <s_lo> V = hi || lo; flagsZN(r); dstB = r; }
+:rnd16 dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x03) ... & dstB ... & src2 ... { dstB = round16(src2); }
+:rnd16.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x03) ... & dstB ... & src2 ... { dstB = round16(src2); local r:4 = dstB; flagsZN(r); }
+:abssw dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x04) ... & dstB ... & src2 ... { local x:4 = src2; local h:2 = x:2; local v:4 = sext(h); local av:4 = v; if (v s>= 0) goto <s_abs>; av = 0 - v; <s_abs> local s:4 = av; local r:4 = s; local hi:1 = s s> 0x7fff; local lo:1 = s s< -0x8000; if (!hi) goto <s_hi>; r = 0x7fff; <s_hi> if (!lo) goto <s_lo>; r = 0xffff8000; <s_lo> dstB = r; }
+:abssw.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x04) ... & dstB ... & src2 ... { local x:4 = src2; local h:2 = x:2; local v:4 = sext(h); local av:4 = v; if (v s>= 0) goto <s_abs>; av = 0 - v; <s_abs> local s:4 = av; local r:4 = s; local hi:1 = s s> 0x7fff; local lo:1 = s s< -0x8000; if (!hi) goto <s_hi>; r = 0x7fff; <s_hi> if (!lo) goto <s_lo>; r = 0xffff8000; <s_lo> V = hi || lo; flagsZN(r); dstB = r; }
+:abss dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x05) ... & dstB ... & src2 ... { local x:4 = src2; local v:8 = sext(x); local av:8 = v; if (v s>= 0) goto <s_abs>; av = 0 - v; <s_abs> local s:8 = av; local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> dstB = r; }
+:abss.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x05) ... & dstB ... & src2 ... { local x:4 = src2; local v:8 = sext(x); local av:8 = v; if (v s>= 0) goto <s_abs>; av = 0 - v; <s_abs> local s:8 = av; local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> V = hi || lo; flagsZN(r); dstB = r; }
+:negsw dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x06) ... & dstB ... & src2 ... { local x:4 = src2; local h:2 = x:2; local v:4 = 0 - sext(h); local s:4 = v; local r:4 = s; local hi:1 = s s> 0x7fff; local lo:1 = s s< -0x8000; if (!hi) goto <s_hi>; r = 0x7fff; <s_hi> if (!lo) goto <s_lo>; r = 0xffff8000; <s_lo> dstB = r; }
+:negsw.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x06) ... & dstB ... & src2 ... { local x:4 = src2; local h:2 = x:2; local v:4 = 0 - sext(h); local s:4 = v; local r:4 = s; local hi:1 = s s> 0x7fff; local lo:1 = s s< -0x8000; if (!hi) goto <s_hi>; r = 0x7fff; <s_hi> if (!lo) goto <s_lo>; r = 0xffff8000; <s_lo> V = hi || lo; flagsZN(r); dstB = r; }
+:negs dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x07) ... & dstB ... & src2 ... { local x:4 = src2; local v:8 = 0 - sext(x); local s:8 = v; local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> dstB = r; }
+:negs.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x07) ... & dstB ... & src2 ... { local x:4 = src2; local v:8 = 0 - sext(x); local s:8 = v; local r:4 = s:4; local hi:1 = s s> 0x7fffffff; local lo:1 = s s< -0x80000000; if (!hi) goto <s_hi>; r = 0x7fffffff; <s_hi> if (!lo) goto <s_lo>; r = 0x80000000; <s_lo> V = hi || lo; flagsZN(r); dstB = r; }
+
+:minidl^docc dst, srcB, src2 is (maj=5 & sub=0x09 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(9:1, srcB, src2); }
+:minidl^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x09 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(9:1, srcB, src2); dsp_flags(9:1); }
+:muldw^docc dst, srcB, src2 is (maj=5 & sub=0x0c ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(12:1, srcB, src2); }
+:muldw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x0c ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(12:1, srcB, src2); dsp_flags(12:1); }
+:muludw^docc dst, srcB, src2 is (maj=5 & sub=0x0d ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(13:1, srcB, src2); }
+:muludw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x0d ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(13:1, srcB, src2); dsp_flags(13:1); }
+:mulrdw^docc dst, srcB, src2 is (maj=5 & sub=0x0e ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(14:1, srcB, src2); }
+:mulrdw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x0e ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(14:1, srcB, src2); dsp_flags(14:1); }
+:maxidl^docc dst, srcB, src2 is (maj=5 & sub=0x0f ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(15:1, srcB, src2); }
+:maxidl^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x0f ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(15:1, srcB, src2); dsp_flags(15:1); }
+:macdw^docc dst, srcB, src2 is (maj=5 & sub=0x10 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(16:1, srcB, src2); }
+:macdw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x10 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(16:1, srcB, src2); dsp_flags(16:1); }
+:macudw^docc dst, srcB, src2 is (maj=5 & sub=0x11 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(17:1, srcB, src2); }
+:macudw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x11 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(17:1, srcB, src2); dsp_flags(17:1); }
+:macrdw^docc dst, srcB, src2 is (maj=5 & sub=0x12 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(18:1, srcB, src2); }
+:macrdw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x12 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(18:1, srcB, src2); dsp_flags(18:1); }
+:msubdw^docc dst, srcB, src2 is (maj=5 & sub=0x14 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(20:1, srcB, src2); }
+:msubdw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x14 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(20:1, srcB, src2); dsp_flags(20:1); }
+:mult^docc dst, srcB, src2 is (maj=5 & sub=0x18 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(24:1, srcB, src2); }
+:mult^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x18 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(24:1, srcB, src2); dsp_flags(24:1); }
+:mulut^docc dst, srcB, src2 is (maj=5 & sub=0x19 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(25:1, srcB, src2); }
+:mulut^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x19 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(25:1, srcB, src2); dsp_flags(25:1); }
+:mulrt^docc dst, srcB, src2 is (maj=5 & sub=0x1a ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(26:1, srcB, src2); }
+:mulrt^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x1a ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(26:1, srcB, src2); dsp_flags(26:1); }
+:mact^docc dst, srcB, src2 is (maj=5 & sub=0x1c ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(28:1, srcB, src2); }
+:mact^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x1c ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(28:1, srcB, src2); dsp_flags(28:1); }
+:macrt^docc dst, srcB, src2 is (maj=5 & sub=0x1e ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(30:1, srcB, src2); }
+:macrt^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x1e ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(30:1, srcB, src2); dsp_flags(30:1); }
+:msubt^docc dst, srcB, src2 is (maj=5 & sub=0x20 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(32:1, srcB, src2); }
+:msubt^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x20 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(32:1, srcB, src2); dsp_flags(32:1); }
+:asldw^docc dst, srcB, src2 is (maj=5 & sub=0x21 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(33:1, srcB, src2); }
+:asldw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x21 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(33:1, srcB, src2); dsp_flags(33:1); }
+:asrdw^docc dst, srcB, src2 is (maj=5 & sub=0x22 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(34:1, srcB, src2); }
+:asrdw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x22 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(34:1, srcB, src2); dsp_flags(34:1); }
+:lsrdw^docc dst, srcB, src2 is (maj=5 & sub=0x23 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(35:1, srcB, src2); }
+:lsrdw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x23 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(35:1, srcB, src2); dsp_flags(35:1); }
+:aslsdw^docc dst, srcB, src2 is (maj=5 & sub=0x24 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(36:1, srcB, src2); }
+:aslsdw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x24 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(36:1, srcB, src2); dsp_flags(36:1); }
+:asrsdw^docc dst, srcB, src2 is (maj=5 & sub=0x25 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(37:1, srcB, src2); }
+:asrsdw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x25 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(37:1, srcB, src2); dsp_flags(37:1); }
+:addsdw^docc dst, srcB, src2 is (maj=5 & sub=0x28 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(40:1, srcB, src2); }
+:addsdw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x28 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(40:1, srcB, src2); dsp_flags(40:1); }
+:subsdw^docc dst, srcB, src2 is (maj=5 & sub=0x29 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(41:1, srcB, src2); }
+:subsdw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x29 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(41:1, srcB, src2); dsp_flags(41:1); }
+:maxabssdw^docc dst, srcB, src2 is (maj=5 & sub=0x2b ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(43:1, srcB, src2); }
+:maxabssdw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x2b ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(43:1, srcB, src2); dsp_flags(43:1); }
+:crc^docc dst, srcB, src2 is (maj=5 & sub=0x2c ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(44:1, srcB, src2); }
+:crc^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x2c ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(44:1, srcB, src2); dsp_flags(44:1); }
+:mululw^docc dst, srcB, src2 is (maj=5 & sub=0x30 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(48:1, srcB, src2); }
+:mululw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x30 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(48:1, srcB, src2); dsp_flags(48:1); }
+:mullw^docc dst, srcB, src2 is (maj=5 & sub=0x31 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(49:1, srcB, src2); }
+:mullw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x31 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(49:1, srcB, src2); dsp_flags(49:1); }
+:mulflw^docc dst, srcB, src2 is (maj=5 & sub=0x32 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(50:1, srcB, src2); }
+:mulflw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x32 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(50:1, srcB, src2); dsp_flags(50:1); }
+:maclw^docc dst, srcB, src2 is (maj=5 & sub=0x33 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(51:1, srcB, src2); }
+:maclw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x33 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(51:1, srcB, src2); dsp_flags(51:1); }
+:macflw^docc dst, srcB, src2 is (maj=5 & sub=0x34 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(52:1, srcB, src2); }
+:macflw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x34 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(52:1, srcB, src2); dsp_flags(52:1); }
+:machulw^docc dst, srcB, src2 is (maj=5 & sub=0x35 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(53:1, srcB, src2); }
+:machulw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x35 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(53:1, srcB, src2); dsp_flags(53:1); }
+:machlw^docc dst, srcB, src2 is (maj=5 & sub=0x36 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(54:1, srcB, src2); }
+:machlw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x36 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(54:1, srcB, src2); dsp_flags(54:1); }
+:machflw^docc dst, srcB, src2 is (maj=5 & sub=0x37 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(55:1, srcB, src2); }
+:machflw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x37 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(55:1, srcB, src2); dsp_flags(55:1); }
+:mulhlw^docc dst, srcB, src2 is (maj=5 & sub=0x38 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(56:1, srcB, src2); }
+:mulhlw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x38 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(56:1, srcB, src2); dsp_flags(56:1); }
+:mulhflw^docc dst, srcB, src2 is (maj=5 & sub=0x39 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(57:1, srcB, src2); }
+:mulhflw^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x39 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(57:1, srcB, src2); dsp_flags(57:1); }
+:dmulpf^docc dst, srcB, src2 is (maj=5 & sub=0x3a ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(58:1, srcB, src2); }
+:dmulpf^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x3a ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(58:1, srcB, src2); dsp_flags(58:1); }
+:dmacpf^docc dst, srcB, src2 is (maj=5 & sub=0x3b ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(59:1, srcB, src2); }
+:dmacpf^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x3b ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { dst = dsp_op(59:1, srcB, src2); dsp_flags(59:1); }
+:vbfdw dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x0a) ... & dstB ... & src2 ... { dstB = dsp_op(74:1, src2); }
+:vbfdw.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x0a) ... & dstB ... & src2 ... { dstB = dsp_op(74:1, src2); dsp_flags(74:1); }
+:fbfdw dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x0b) ... & dstB ... & src2 ... { dstB = dsp_op(75:1, src2); }
+:fbfdw.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x0b) ... & dstB ... & src2 ... { dstB = dsp_op(75:1, src2); dsp_flags(75:1); }

@@ -3352,4 +3352,111 @@ class Rl78(ObjdumpArch):
         return 0xF8000 <= a < 0xFFF00 or 0xFFFF8 <= a < 0x100000
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h(), Pru(), Cr16(), Avr(), Bfin(), Rx(), Rl78())}
+M32C_DENY = re.compile(
+    r"^(j[a-z]*(\.[swaq])?|jmp[a-z]*(\.[swaq])?|jsr[a-z]*(\.[wa])?|jsri\..|rts|reit|freit|brk|brk2|und|int|"
+    r"into|wait|enter|exitd|ldc|stc|ldctx|stctx|lde\..|ste\..|ldipl|pop.*|push.*|smov.*|sstr\..|sin\..|"
+    r"sout\..|rmpa\..|adjnz\..|sbjnz\..|fclr|fset|nop|ldintb|bm.*|sc.*|mova|\.byte|\*unknown\*)$"
+)
+M32C_GPRS = [("R0", 2), ("R1", 2), ("R2", 2), ("R3", 2), ("A0", 3), ("A1", 3), ("FB", 3), ("SB", 3)]
+
+
+class M32c(ObjdumpArch):
+    """Renesas M32C/80 (24-bit) against gdb's m32c simulator (--oracle gdbsim, dfsim_plain, ELF
+    flags EF_M32C_CPU_M32C). R0..R3, A0, A1, FB and SB of register bank 0 are compared (sim/m32c
+    numbering, include/sim/sim-m32c.h), and C, Z, S, O through FLG. Branches, calls, returns,
+    control-register moves, push/pop, string and loop instructions and the conditional stores
+    are not generated."""
+    name = "m32c"
+    lang = "M32C/80:LE:24:default"
+    elf_machine = 120
+    elf_flags = 0x78
+    # binutils' m32c decoder and sim/m32c (whose m32c.opc is its own) disagree on many
+    # lengths; sim/m32c sides with SLEIGH, so those are ref-length, not findings
+    ref_length_unreliable = True
+    text_from_sleigh = True                     # ignored() sees SLEIGH's mnemonic and operands
+    base = 0x1000
+    big = False
+    pc = "PC"
+    gprs = [(n, None) for n, _ in M32C_GPRS]
+    pc_const = None
+    flags_reg = "flg"
+    flag_bits = {"C": 0, "Z": 2, "S": 3, "O": 5}
+    deny = M32C_DENY
+    gdbsim = "m32c"
+    gdb_pc = "pc"
+    sim_regnums = dict([(n, (i, s)) for i, (n, s) in enumerate(M32C_GPRS)] + [("flg", (20, 2)), ("pc", (18, 3))])
+
+    def unicorn(self):
+        raise NotImplementedError("m32c runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("m32c", False, 8, b"\xde", 1)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(64).to_bytes(8, "little")
+
+    def sleigh_field(self, name, shift, width):
+        return "FLG", shift
+
+    def rand_reg(self, rng, bits):
+        if rng.random() < 0.4:
+            return rng.randrange(0x10000, 0xF0000)
+        return Arch.rand_reg(self, rng, bits)
+
+    def addr_ok(self, a):
+        return 0x400 <= a < 0x1000000
+
+    def ignored(self, mnemonic, operands, state):
+        ops = operands.replace(" ", "")
+        # sim/m32c runs BTST:S as a 4-byte instruction (binutils and SLEIGH: 3); its ROT.size
+        # #IMM and R1H forms call rot_op (dc, count, -1): a 1-bit rotate through C whatever the
+        # count; INDEX*/BITINDEX prefix the next instruction
+        if mnemonic.startswith(("rot.", "index", "bitindex")) or (mnemonic == "btst" and re.match(r"0x[0-7],0x[0-9a-f]+$", ops)):
+            return {"*"}
+        # MOV.size:S #IMM, A0/A1: sim/m32c sets S and Z from the wrong width (set_sz (imm, w + 1))
+        if re.match(r"mov\.[wl]:s", mnemonic) and re.search(r",a[01]$", ops):
+            return {"S", "Z"}
+        # DIV*: a zero divisor or a quotient that does not fit leaves the results undefined;
+        # sim/m32c's signed div_op sign-extends the dividend from the divisor's width; JSR
+        # pushes through an unset stack pointer
+        if mnemonic.startswith("div") and (state.get("FLG") & 0x20 or not mnemonic.startswith("divu")):
+            return {"*"}
+        if mnemonic.startswith("jsr"):
+            return {"*"}
+        # SHANC/SHLNC leave O alone; sim/m32c's shift_op clears it. A count beyond 32 is not
+        # defined, and into A0/A1 the language sets no S/Z while sim/m32c does
+        if mnemonic.startswith(("shanc", "shlnc")):
+            m = re.match(r"#(-?0x[0-9a-f]+|-?\d+),", ops)
+            if m and abs(int(m.group(1), 0)) > 32:
+                return {"*"}
+            return {"O", "S", "Z"} if re.search(r",a[01]$", ops) else {"O"}
+        # SCcnd: sim/m32c's condition for GE/LT disagrees with the S ^ O of the manual
+        if mnemonic.startswith("sc"):
+            return {"*"}
+        out = set()
+        # a shift by R1H = 0: sim/m32c's shift_op still clears C
+        if mnemonic.startswith(("sha", "shl")) and ops.startswith("r1h,"):
+            n = (state.get("R1") >> 8) & 0xFF
+            n = n - 0x100 if n & 0x80 else n
+            w = {"b": 8, "w": 16, "l": 32}[mnemonic[4]]
+            if n == 0 or not -w < n < w or ops.endswith((",r1h", ",r1", ",r3r1")):
+                return {"*"}
+        # sim/m32c's shift_op sets O for SHL too; the manual's SHL leaves it alone
+        if mnemonic.startswith("shl"):
+            out.add("O")
+        # its 32-bit MATH_OP works in int: the carry and overflow of a .L add/subtract are wrong
+        if re.match(r"(add|sub|cmp|adc|sbb)\.l|addx|subx|cmpx", mnemonic):
+            out |= {"C", "O"}
+            if re.search(r",(a[01]|sp)$", ops):
+                out |= {"S", "Z"}               # and the 24-bit An result's sign is bit 23 there
+        # MUL.B/MULU.B into R0H/R1H: sim/m32c writes the byte, not R2/R3
+        if mnemonic.startswith(("mul.b", "mulu.b")) and re.search(r",r[01]h$", ops):
+            return {"*"}
+        if mnemonic == "xchg.w" and re.match(r"a[01],a[01]$", ops):
+            return {"*"}
+        return out
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h(), Pru(), Cr16(), Avr(), Bfin(), Rx(), Rl78(), M32c())}

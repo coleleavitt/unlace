@@ -290,6 +290,19 @@ afterwards. The register file is unchanged.
     clears them), odd SP adjustments (SP bit 0 is fixed), stores to CS/ES/PMC, odd word addresses,
     binutils' ES:-prefixed forms it prints without ES: and its 61 x1 [HL+B] reading. Seed 8, 2500
     encodings: 4257 matches; the language needed no fix.
+  - M32C/80 (`--arch m32c`, `M32C/80:LE:24:default`, ELF flags EF_M32C_CPU_M32C, dfsim_plain):
+    bank-0 R0..R3, A0, A1, FB, SB and C, Z, S, O of FLG. binutils' m32c decoder and sim/m32c (its own
+    m32c.opc) disagree on many lengths and sim/m32c sides with SLEIGH, so a length disagreement is
+    `ref-length` (arch flag `ref_length_unreliable`) and `ignored()` reads SLEIGH's text
+    (`text_from_sleigh`). Fixed in `M16C_80.slaspec` (M16C/80 and M32C/80): OR used AND in every
+    form but :S and AND.W:S used OR; CMP.size:S src,R0 took S/Z from src - R0; the subtract carry
+    was a signed compare; SBB subtracted C instead of ~C and its carry/overflow tests were wrong,
+    ADC/ADDX's overflow ORed the two steps; SHA's left-shift O was inverted and its right shift
+    set O; DIV/DIVX tested the quotient's fit one bit too high and DIVU signed. sim/m32c bugs,
+    ignored: ROT (`rot_op (dc, count, -1)`), BTST:S (4 bytes), the 32-bit C/O of MATH_OP (int
+    arithmetic), signed DIV (dividend sign-extended from the divisor's width), SHL's O, MOV:S #imm
+    to An flags, MUL.B into R0H/R1H, SCcnd, shifts by R1H = 0 or into R1. Seed 11, 1500 encodings:
+    2350 matches, no mismatches.
   - The simulators that cache decoded instructions (the CGEN ones) do not notice code rewritten
     at an address they ran, so a different instruction at a used address starts a fresh
     simulator. MCORE and MSP430 are not wired: sim/mcore's single step leaves PC elsewhere, and

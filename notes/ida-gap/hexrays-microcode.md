@@ -6,6 +6,8 @@ allocation, call-argument recovery, type derivation at microcode level. The name
 `notes/ida-hexrays-rules.md` and the module-level gaps in `notes/ida-gaps.md` /
 `notes/ida-module-survey.md`; they are not repeated here, only referenced.
 
+Deepened by [hexrays-microcode-deep.md](hexrays-microcode-deep.md) (2026-11-24): the optimizer strings, option keys and the rows the table above does not cover.
+
 Method. IDA side: function names/addresses from `~/SiteResearch/ida-pro/hexx64.sqlite`
 (`select text from pseudocode where ea=...`) and the derived string index
 (`derived/ida-links.sqlite`, `select text, group_concat(distinct func_name) from string_users where mod='hexx64' and text like '%...%' group by text`).

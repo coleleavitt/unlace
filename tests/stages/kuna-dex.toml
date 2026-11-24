@@ -64,7 +64,7 @@ commands = [
 [[match]]
 name = 'dexmodel #1: off leaves the constant pool unresolved'
 count = 1
-literal = 'v1 = new(UNKNOWNREF);'
+literal = 'v2 = new(UNKNOWNREF);'
 
 [[match]]
 name = 'dexmodel #2: off loses the signature and its parameter'
@@ -79,7 +79,7 @@ literal = 'switchAssist('
 [[match]]
 name = 'dexmodel #4: the string literal comes from the pool'
 count = 1
-literal = 'v1 = v1.append("Hello, ");'
+literal = 'v1 = ref.append("Hello, ");'
 
 [[match]]
 name = 'dexmodel #5: an instance call names its object and method'

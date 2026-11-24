@@ -306,8 +306,9 @@ absolute code-pointer tables and admits an indirect-only target only after the
 established AIF fingerprint and valid-subroutine checks corroborate it. On
 non-ARM objects, tables above 256 slots are ignored; large candidate sets
 require two independent table references and validate at most 4096 targets.
-ARM uses the established Thumb-pointer prologue oracle. The pointer-derived
-roots are not recursively expanded. This supplies real project bodies without
+ARM uses the established Thumb-pointer prologue oracle. The walk resumes from the
+pointer-derived roots and the entries the load-time passes committed, so their
+direct callees are found too. This supplies real project bodies without
 the full prologue corpus or byte-by-byte undefined-gap walk.
 
 The tradeoff remains deliberate. With `listing=off`, ordinary Listing consumers
@@ -316,6 +317,19 @@ function-start patterns and AIF disabled, functions that are neither directly
 reachable nor represented by an accepted pointer table can remain absent. An
 MSVC `/INCREMENTAL` image is the exception: its incremental-link table lists every
 stub and the body behind it as entries in every mode (`thunkentry`).
+
+On a 32-bit x86 PE the file front ends keep `funcstart_patterns` on under `fast`
+(`decompile_all.rs (is_i386_pe)`), and an explicit `--option funcstart_patterns off`
+still wins. MSVC links its CRT and MFC code function after function, with no
+padding, and nothing references many of those functions, so neither the
+rooted walk nor a pointer table reaches them. On PEGRP32F.dll (5.7 MB, so
+`auto` resolves to `fast`) measured against IDA 9.5, the patterns reduce the
+missing IDA function starts from 389 to 213 and add 6 functions IDA does not
+list, with discovery time unchanged (3.5 s vs 3.7 s). Holley.exe (29 MB) gains
+387 IDA starts. Its 282 new starts that IDA does not list include real
+unreferenced `push ebp; mov ebp,esp` functions that IDA left unexplored.
+`unlace modes` and the console's `mode fast` still list the five overrides
+above; the exception belongs to the file front end, which knows the format.
 Loader symbols, architecture context, import naming, explicit function/address
 selection, and all shipped per-function transforms remain active.
 

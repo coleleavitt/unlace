@@ -1134,21 +1134,43 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   at VMA 0: the faithful loader maps whichever sorts first and every symbol
   collapses onto address 0, so with MSVC function-level linking (`/Gy`, one COMDAT
   `.text` per function — the default for real builds) all but one function
-  disappear. `crates/unlace-analysis/src/loader/reloc_object.rs (RelocLayout)`
-  reproduces angr CLE's relocatable backend for both: lay each memory-resident,
+  disappear. A Mach-O `MH_OBJECT` places its sections one after another from 0, so
+  it maps, but none of its relocations is applied: an arm64 `.o` decompiled to an
+  empty body, its flow ending at an unrelocated `bl`, and an x86-64 one read its
+  globals at junk addresses. `crates/unlace-analysis/src/loader/reloc_object.rs (RelocLayout)`
+  reproduces angr CLE's relocatable backend for all three: lay each memory-resident,
   non-empty section out above `0x400000` (`RELOC_BASE`, matching CLE so addresses
   line up with angr's), apply the relocations, rebase defined symbols, and bind
   each undefined extern to a synthetic call target in an extern area above the
   sections so calls render by name (an extern reached by a plain data relocation
-  on the operand of an x86 `call`/`jmp`/`jcc` or an MSP430 `call #imm` counts as
-  code too, so i386 and MSP430 libcalls are named) (the next 4 KiB page plus one; on a 16-bit
+  on the operand of an x86 `call`/`jmp`/`jcc`, an MSP430 `call #imm` or an m68k
+  `jsr`/`jmp` (xxx).L or `bsr.l` counts as code too, so i386, MSP430 and m68k
+  libcalls are named) (the next 4 KiB page plus one; on a 16-bit
   machine the next 16 bytes, so AVR's 4 KiB `rcall` still reaches every libcall). A section header's size is a claim the file
   need not back, so the layout allocates zero-fill only for data — `SHT_NOBITS`
   storage and a data extent past the end of the file — and at most 256 MiB of it
   per object (`reloc_object.rs (ZERO_FILL_LIMIT)`); code is laid out at the bytes
   the file holds, because absent bytes are not instructions. A section cut short
   this way is laid out at its reduced size, one left with no bytes is dropped,
-  and each is named on the loader's diagnostic line. The analyzer tier's
+  and each is named on the loader's diagnostic line. A Mach-O object takes every section but
+  the `S_ATTR_DEBUG` ones (`__DWARF`, `__LD,__compact_unwind`). Its symbols hold
+  addresses in the object's own layout, so their section offsets are taken
+  against the section's `addr`, and the assembler's `ltmp`/`l_`/`L` labels name
+  no function. `reloc_apply.rs (classify_macho)` reads the relocation by its
+  `r_type`: ARM64 `BRANCH26` (a call when the word is `bl`), `PAGE21`, `PAGEOFF12`
+  (`add`, or a load/store scaled by its access size, which the one type does not
+  say), `GOT_LOAD_PAGE21`/`PAGEOFF12` and `TLVP_LOAD_*` through a synthetic slot,
+  `POINTER_TO_GOT`, `UNSIGNED`, and an arm64e `AUTHENTICATED_POINTER` written as its
+  plain target; x86-64 `GOT_LOAD`, `GOT` and `TLV` through a slot and
+  `SIGNED_{1,2,4}`, the rest by their generic kinds. An `ARM64_RELOC_ADDEND` is the
+  addend of the relocation it precedes. `reloc_object.rs (macho_target)` adjusts the
+  target value. A section target (`r_extern = 0`) keeps the referent's pre-link
+  address in the field, so the value is the section's move, plus for a
+  PC-relative field the place's pre-link address. A `SUBTRACTOR` pair is the minuend
+  less the subtrahend. An x86-64 `SIGNED_k` field already holds the addend less
+  `k`, which `object` subtracts again, so `k` is added back. The rebased view
+  writes the laid-out `addr` into each `section_64` and moves each `N_SECT`
+  symbol's `n_value` with its section (`kuna_relocrebase.rs (patch_macho)`). The analyzer tier's
   rebased view (`kuna_relocrebase.rs (rebased_view)`) writes the same reduced
   sizes into its section headers, so no pass scans the declared extent. COMMON symbols instead reserve their
   full size (ELF `st_size`, COFF symbol value), using the ELF alignment carried
@@ -1397,7 +1419,10 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   `9_X`, `7_X` are reported unsupported and leave the field untouched.
   AVR (unlace#757, little-endian 16-bit words) covers `13_PCREL` (`rjmp`/
   `rcall`) and `7_PCREL` (`brbs`/`brbc`), the word displacement from the next
-  instruction; the nine `LDI` forms (`LO8`/`HI8`/`HH8` of `S + A`, of its
+  instruction (an `rjmp`/`rcall` whose ends both lie in the first 8 KiB wraps at
+  4 KiW, as a device with at most 8 KiB of flash does and the 16-bit-PC avr8
+  language's `rel12addr` models, so an -O0 object's libcalls past 4 KiB are
+  reached; unlace#976); the nine `LDI` forms (`LO8`/`HI8`/`HH8` of `S + A`, of its
   negation, or of the word address `(S + A) >> 1`) into `ldi`'s split K; `CALL`
   (the 22-bit word address of `call`/`jmp`); and `16_PM`. AMDGPU (`EM_AMDGPU`,
   no object architecture, told apart by `e_machine`) covers the 32-bit literal
@@ -15333,3 +15358,5 @@ candidate, while preserving PE/Mach-O import slots inside executable sections an
 caller-declared-entry precedence.
 
 (kuna) **`__eh_frame` FDE starts on Mach-O** (`crates/unlace-analysis/src/analyzers/entry/kuna_machoehframe.rs (MachoEhFrameStartsPass)`, option `machoehframe`, default-on). A Mach-O describes most functions' unwinding in `__unwind_info` and falls back to a DWARF FDE in `__TEXT,__eh_frame` for a function the compact encoding cannot describe (a variable stack adjustment, an unusual register save). Each FDE's `pcBegin` is a function start, exactly as on ELF, where the always-on discovery already reads `.eh_frame` (oracle 3); the pass runs that same walk (`scan_eh_frame_starts`, now accepting a Mach-O's `__eh_frame`) and keeps the starts that lie in an executable section and carry no symbol. Like `__unwind_info` the section lives in `__TEXT` and survives the strip of `LC_FUNCTION_STARTS`; unlike it, every FDE is a real function start with no folding, and the pass is cheap, so it is on by default, as IDA's Mach-O loader runs its `eh_frame` parse on every load. On an image that keeps `LC_FUNCTION_STARTS` it adds nothing.
+
+(kuna) **`LC_DATA_IN_CODE` runs are data to the Listing** (`crates/unlace-analysis/src/loader/kuna_machodataincode.rs (data_in_code_ranges)`, always on). clang lays an x86-64 switch's jump table and a Thumb `tbb`/`tbh` table into `__text` after the dispatch, and ARM literal pools between functions, and records each run as a `data_in_code_entry` (`offset`, `length`, `kind` 1 to 5: data, 8/16/32-bit jump table, absolute 32-bit jump table). The Listing build cuts those ranges out of the executable ranges the walk decodes (`listing/mod.rs`), so a table's bytes are neither decoded as instructions nor reach the gap and prologue sweeps; the jump-table readers take their own executable ranges and still read the tables. In a linked image `offset` is a file offset from the Mach-O header and is placed through the section holding it; in an `MH_OBJECT` it is a pre-link address. A table with an entry of any other kind is ignored whole (a dyld-cache image's `dataoff` names another sub-cache file).

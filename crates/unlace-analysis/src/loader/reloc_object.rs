@@ -406,6 +406,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         architecture,
         Architecture::Mips | Architecture::Mips64 | Architecture::Mips64_N32
     ) && file.format() == object::BinaryFormat::Elf;
+    let macho = file.format() == object::BinaryFormat::MachO;
     let mut gp: Option<kuna_mipsreloc::Gp> = None;
     let mut got_entries = 0;
     if mips {
@@ -506,7 +507,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         .filter_map(|l| file.section_by_index(l.index).ok())
         .flat_map(|sec| sec.relocations().collect::<Vec<_>>())
         .filter(|(_, reloc)| {
-            reloc_apply::classify_elf(architecture, machine, reloc)
+            classify_reloc(file, architecture, machine, reloc, None)
                 .is_ok_and(|spec| spec.is_some_and(|s| s.via_got()))
         })
         .count() as u64;
@@ -684,7 +685,12 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             // A word-addressed object counts r_offset in its address unit.
             let offset = offset.wrapping_mul(unit);
             let r_type = kuna_mipsreloc::r_type_of(&reloc);
-            let spec = match reloc_apply::classify_elf(architecture, machine, &reloc) {
+            let insn = laid[li]
+                .data
+                .get(offset as usize..)
+                .and_then(|b| b.get(..4))
+                .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+            let spec = match classify_reloc(file, architecture, machine, &reloc, insn) {
                 Ok(Some(spec)) => spec,
                 Ok(None) => continue,
                 Err(reason) => {
@@ -802,6 +808,35 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
                 continue;
             };
             let place = sec_vma.wrapping_add(offset);
+            let target = if macho {
+                match macho_target(
+                    file,
+                    &sec,
+                    offset,
+                    &reloc,
+                    target,
+                    &vma_of,
+                    &mut extern_of,
+                    &mut extern_order,
+                    &mut extern_cursor,
+                    &mut common_allocator,
+                    architecture,
+                ) {
+                    Some(t) => t,
+                    None => {
+                        diagnostics.record(
+                            architecture,
+                            r_type,
+                            RelocationFailure::UnresolvedTarget,
+                            sec_vma,
+                            offset,
+                        );
+                        continue;
+                    }
+                }
+            } else {
+                target
+            };
             let symbol = if spec.is_riscv_pcrel_lo() {
                 match riscv_hi.get(&target.address) {
                     Some(value) => *value as u64,
@@ -863,6 +898,9 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             Ok(n) if !n.is_empty() => n.to_vec(),
             _ => continue,
         };
+        if macho && is_macho_temp_label(&name) {
+            continue;
+        }
         // An ELFv1 function symbol names its descriptor; the function is the
         // code the descriptor points at.
         let (vma, sec_idx, offset) = if Some(sec_idx) == opd_index {
@@ -878,7 +916,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             opd_descriptors.push((base.wrapping_add(sym.address()), entry));
             (entry, code.index, entry - code.vma)
         } else {
-            let offset = sym.address().wrapping_mul(unit);
+            let offset = symbol_offset(file, &sym, sec_idx).wrapping_mul(unit);
             (base.wrapping_add(offset), sec_idx, offset)
         };
         let section_name = file
@@ -1124,7 +1162,7 @@ fn resolve_symbol(
     match sym.section() {
         SymbolSection::Section(sec_idx) => {
             vma_of.get(&sec_idx).map(|base| ResolvedRelocationTarget {
-                address: base.wrapping_add(sym.address().wrapping_mul(unit)),
+                address: base.wrapping_add(symbol_offset(file, &sym, sec_idx).wrapping_mul(unit)),
                 thumb: (architecture == Architecture::Arm && sym.kind() == SymbolKind::Text)
                     .then(|| sym.address() & 1 != 0),
             })
@@ -1256,7 +1294,8 @@ fn relocation_name(architecture: Architecture, r_type: u32) -> &'static str {
 /// opcode in front of it, where the relocation type itself is a plain data
 /// form? x86 calls an extern through `R_386_PC32`/`R_X86_64_PC32` on the rel32
 /// of `call` (E8), `jmp` (E9) or `jcc` (0F 8x); MSP430 through
-/// `R_MSP430_16_BYTE` on `call #imm` (`12b0`). Such an extern is code and gets
+/// `R_MSP430_16_BYTE` on `call #imm` (`12b0`); m68k through `R_68K_32` on
+/// `jsr`/`jmp` (xxx).L (`4eb9`/`4ef9`) or `R_68K_PC32` on `bsr.l` (`61ff`). Such an extern is code and gets
 /// its name, as a PLT-relative one does.
 fn field_is_branch_operand(
     architecture: Architecture,
@@ -1270,6 +1309,13 @@ fn field_is_branch_operand(
                 || (off >= 2 && data[off - 2] == 0x0f && data[off - 1] & 0xf0 == 0x80)
         }
         Architecture::Msp430 if width == 2 && off >= 2 => data[off - 2..off] == [0xb0, 0x12],
+        // m68k `jsr`/`jmp` (xxx).L and `bsr.l` with their 32-bit operand.
+        Architecture::M68k if width == 4 && off >= 2 => {
+            matches!(
+                data[off - 2..off],
+                [0x4e, 0xb9] | [0x4e, 0xf9] | [0x61, 0xff]
+            )
+        }
         _ => false,
     }
 }
@@ -1282,6 +1328,126 @@ fn elf_machine(file: &object::File) -> Option<u16> {
         object::File::Elf64(elf) => Some(elf.elf_header().e_machine(elf.endian())),
         _ => None,
     }
+}
+
+/// Classify a relocation of `file`: by its Mach-O `r_type` (with the
+/// instruction word at the place, `insn`) in a Mach-O object, by the ELF rules
+/// otherwise.
+fn classify_reloc(
+    file: &object::File,
+    architecture: Architecture,
+    machine: Option<u16>,
+    reloc: &object::Relocation,
+    insn: Option<u32>,
+) -> Result<Option<reloc_apply::RelocationSpec>, RelocationFailure> {
+    if file.format() == object::BinaryFormat::MachO {
+        reloc_apply::classify_macho(architecture, reloc, insn)
+    } else {
+        reloc_apply::classify_elf(architecture, machine, reloc)
+    }
+}
+
+/// A defined symbol's offset in its section. ELF and COFF record that; a
+/// Mach-O object records the address in its own pre-link layout, where each
+/// section sits at its `addr`.
+fn symbol_offset<'data>(
+    file: &object::File<'data>,
+    sym: &impl ObjectSymbol<'data>,
+    sec_idx: SectionIndex,
+) -> u64 {
+    if file.format() != object::BinaryFormat::MachO {
+        return sym.address();
+    }
+    let base = file.section_by_index(sec_idx).map_or(0, |s| s.address());
+    sym.address().wrapping_sub(base)
+}
+
+/// An assembler-local label of a Mach-O object (`ltmp0`, `l_.str`, `L…`):
+/// the section-start and literal markers `as` emits, never a function.
+fn is_macho_temp_label(name: &[u8]) -> bool {
+    name.starts_with(b"ltmp") || name.starts_with(b"l_") || name.starts_with(b"L")
+}
+
+/// The value a Mach-O relocation is computed from, in the S + A - P sense the
+/// field writers use.
+///
+/// - A section target (`r_extern = 0`) keeps the referent's pre-link address in
+///   the field, so `S` is the section's move (laid-out VMA less its pre-link
+///   `addr`), and for a PC-relative one, whose field is a pre-link
+///   displacement, also the place's pre-link address less the addend `object`
+///   folds the instruction's end into.
+/// - `object` subtracts the trailing immediate's size from an x86-64
+///   `SIGNED_{1,2,4}` addend, but the field already holds the addend less that
+///   size (`movb $1, _flag(%rip)` carries -1 for a zero addend), so the size is
+///   added back.
+/// - A `SUBTRACTOR` pair's value is the minuend less the subtrahend: against an
+///   extern minuend the field holds the addend; against a section minuend it holds
+///   the difference of the pre-link addresses, so the subtrahend's move is taken
+///   away instead.
+#[allow(clippy::too_many_arguments)]
+fn macho_target(
+    file: &object::File,
+    sec: &object::Section,
+    offset: u64,
+    reloc: &object::Relocation,
+    target: ResolvedRelocationTarget,
+    vma_of: &HashMap<SectionIndex, u64>,
+    extern_of: &mut HashMap<SymbolIndex, u64>,
+    extern_order: &mut Vec<(SymbolIndex, u64)>,
+    extern_cursor: &mut u64,
+    common_allocator: &mut super::kuna_commonalloc::CommonAllocator,
+    architecture: Architecture,
+) -> Option<ResolvedRelocationTarget> {
+    let RelocationFlags::MachO {
+        r_type, r_pcrel, ..
+    } = reloc.flags()
+    else {
+        return Some(target);
+    };
+    let mut address = target.address;
+    let section_target = match reloc.target() {
+        RelocationTarget::Section(sidx) => {
+            let pre = file.section_by_index(sidx).ok()?.address();
+            address = vma_of.get(&sidx)?.wrapping_sub(pre);
+            if r_pcrel {
+                let place = sec.address().wrapping_add(offset);
+                address = address
+                    .wrapping_add(place)
+                    .wrapping_sub(reloc.addend() as u64);
+            }
+            true
+        }
+        _ => false,
+    };
+    if architecture == Architecture::X86_64 && !section_target {
+        address = address.wrapping_add(match r_type {
+            object::macho::X86_64_RELOC_SIGNED_1 => 1,
+            object::macho::X86_64_RELOC_SIGNED_2 => 2,
+            object::macho::X86_64_RELOC_SIGNED_4 => 4,
+            _ => 0,
+        });
+    }
+    if let Some(sub) = reloc.subtractor() {
+        let new = resolve_symbol(
+            file,
+            sub,
+            vma_of,
+            extern_of,
+            extern_order,
+            extern_cursor,
+            common_allocator,
+            architecture,
+        )?
+        .address;
+        address = address.wrapping_sub(new);
+        if section_target {
+            address = address.wrapping_add(file.symbol_by_index(sub).ok()?.address());
+        }
+    }
+    Some(ResolvedRelocationTarget {
+        address,
+        thumb: target.thumb,
+    })
 }
 
 fn align_up(value: u64, align: u64) -> u64 {
@@ -1538,6 +1704,22 @@ mod tests {
             "mov #imm"
         );
         assert!(!field_is_branch_operand(Architecture::Aarch64, &call, 2, 4));
+        assert!(field_is_branch_operand(
+            Architecture::M68k,
+            &[0x4e, 0xb9, 0, 0, 0, 0],
+            2,
+            4
+        ));
+        assert!(field_is_branch_operand(
+            Architecture::M68k,
+            &[0x61, 0xff, 0, 0, 0, 0],
+            2,
+            4
+        ));
+        assert!(
+            !field_is_branch_operand(Architecture::M68k, &[0x20, 0x3c, 0, 0, 0, 0], 2, 4),
+            "move.l #imm"
+        );
     }
 
     #[test]
@@ -2910,5 +3092,174 @@ mod tests {
         let view = crate::loader::kuna_relocrebase::rebased_view(&file, &bytes).unwrap();
         let seen = object::File::parse(&*view.bytes).unwrap();
         assert_eq!(seen.section_by_name(".text").unwrap().size(), 0);
+    }
+
+    /// The laid-out bytes of `layout` at `vma`.
+    fn bytes_at(layout: &RelocLayout, vma: u64, n: usize) -> Vec<u8> {
+        let (base, data) = layout
+            .segments
+            .iter()
+            .find(|(base, data)| *base <= vma && vma + n as u64 <= base + data.len() as u64)
+            .unwrap_or_else(|| panic!("{vma:#x} is not laid out"));
+        let at = (vma - base) as usize;
+        data[at..at + n].to_vec()
+    }
+
+    fn word_at(layout: &RelocLayout, vma: u64) -> u32 {
+        u32::from_le_bytes(bytes_at(layout, vma, 4).try_into().unwrap())
+    }
+
+    fn quad_at(layout: &RelocLayout, vma: u64) -> u64 {
+        u64::from_le_bytes(bytes_at(layout, vma, 8).try_into().unwrap())
+    }
+
+    fn named(layout: &RelocLayout, name: &str) -> u64 {
+        layout
+            .symbol_info
+            .iter()
+            .find(|s| s.name == name)
+            .unwrap_or_else(|| panic!("no symbol {name}"))
+            .vma
+    }
+
+    fn section(layout: &RelocLayout, name: &str) -> u64 {
+        layout
+            .section_info
+            .iter()
+            .find(|s| s.name == name)
+            .unwrap_or_else(|| panic!("no section {name}"))
+            .vma
+    }
+
+    fn extern_of(file: &object::File, layout: &RelocLayout, name: &str) -> u64 {
+        let sym = file
+            .symbols()
+            .find(|s| s.name() == Ok(name))
+            .unwrap_or_else(|| panic!("no symbol {name}"));
+        layout.extern_addr[&sym.index()]
+    }
+
+    /// AArch64 `adrp` + low-12 pair: the address the two instructions form.
+    fn adrp_pair(layout: &RelocLayout, at: u64, scale: u32) -> u64 {
+        let adrp = word_at(layout, at);
+        let lo = word_at(layout, at + 4);
+        let immlo = u64::from((adrp >> 29) & 3);
+        let immhi = u64::from((adrp >> 5) & 0x7_ffff);
+        let page = ((immhi << 2 | immlo) << 12) as i64;
+        let page = ((page << 31) >> 31) as u64;
+        let imm = u64::from((lo >> 10) & 0xfff) << scale;
+        (at & !0xfff).wrapping_add(page).wrapping_add(imm)
+    }
+
+    fn branch26(layout: &RelocLayout, at: u64) -> u64 {
+        let insn = word_at(layout, at);
+        let imm = (((insn & 0x03ff_ffff) << 6) as i32 >> 4) as i64;
+        at.wrapping_add(imm as u64)
+    }
+
+    /// A Mach-O `MH_OBJECT` (`clang -target arm64-apple-macos12 -c` of
+    /// `tests/fixtures/macho_reloc_arm64.s`) lays out like an ELF `.o`: every
+    /// ARM64 relocation form reaches the right target, `ARM64_RELOC_ADDEND` and
+    /// `SUBTRACTOR` pairs included, the GOT loads go through a synthetic slot,
+    /// symbols move with their sections and the assembler's `ltmp` labels are
+    /// not functions.
+    #[test]
+    fn macho_arm64_object_relocations_are_applied() {
+        let bytes = include_bytes!("../../tests/fixtures/macho_reloc_arm64.o");
+        let file = object::File::parse(&bytes[..]).unwrap();
+        let fmt = crate::loader::format::detect(&file).unwrap();
+        assert!(fmt.relocatable_layout(&file));
+        let layout = layout_relocatable(&file, fmt.as_ref());
+        let f = named(&layout, "_f");
+        assert_eq!(f, section(&layout, "__text"));
+        assert!(
+            !layout
+                .symbol_info
+                .iter()
+                .any(|s| s.name.starts_with("ltmp"))
+        );
+        let cstring = section(&layout, "__cstring");
+        let data = section(&layout, "__data");
+        assert_eq!(
+            adrp_pair(&layout, f + 0x8, 0),
+            cstring,
+            "adrp/add of l_.str"
+        );
+        assert_eq!(
+            branch26(&layout, f + 0x10),
+            extern_of(&file, &layout, "_puts")
+        );
+        let slot = adrp_pair(&layout, f + 0x14, 3);
+        assert_eq!(
+            quad_at(&layout, slot),
+            extern_of(&file, &layout, "_g"),
+            "GOT slot"
+        );
+        assert_eq!(adrp_pair(&layout, f + 0x20, 2), data, "_counter store");
+        let table = data + 8;
+        assert_eq!(
+            adrp_pair(&layout, f + 0x28, 3),
+            table + 16,
+            "_table+16 (ADDEND)"
+        );
+        assert_eq!(
+            branch26(&layout, f + 0x34),
+            extern_of(&file, &layout, "_tail")
+        );
+        assert_eq!(quad_at(&layout, table), f);
+        assert_eq!(
+            quad_at(&layout, table + 8),
+            data.wrapping_sub(f),
+            "_counter - _f"
+        );
+        assert_eq!(quad_at(&layout, table + 16), f + 8);
+    }
+
+    /// The x86-64 twin (`tests/fixtures/macho_reloc_x86_64.s`): `SIGNED` against a
+    /// section (`L_.str`), `SIGNED_1` behind an immediate, `BRANCH`, `GOT_LOAD`,
+    /// a `SUBTRACTOR` pair and a section-relative `UNSIGNED` word.
+    #[test]
+    fn macho_x86_64_object_relocations_are_applied() {
+        let bytes = include_bytes!("../../tests/fixtures/macho_reloc_x86_64.o");
+        let file = object::File::parse(&bytes[..]).unwrap();
+        let fmt = crate::loader::format::detect(&file).unwrap();
+        let layout = layout_relocatable(&file, fmt.as_ref());
+        let f = named(&layout, "_f");
+        let cstring = section(&layout, "__cstring");
+        let rel = |at: u64, end: u64| end.wrapping_add(word_at(&layout, at) as i32 as i64 as u64);
+        assert_eq!(rel(f + 0x7, f + 0xb), cstring, "leaq L_.str(%rip)");
+        assert_eq!(rel(f + 0xc, f + 0x10), extern_of(&file, &layout, "_puts"));
+        let slot = rel(f + 0x13, f + 0x17);
+        assert_eq!(
+            quad_at(&layout, slot),
+            extern_of(&file, &layout, "_g"),
+            "GOT slot"
+        );
+        let counter = named_data(&file, &layout, "_counter");
+        assert_eq!(rel(f + 0x1b, f + 0x1f), counter);
+        assert_eq!(
+            rel(f + 0x21, f + 0x26),
+            named_data(&file, &layout, "_flag"),
+            "SIGNED_1"
+        );
+        assert_eq!(rel(f + 0x28, f + 0x2c), extern_of(&file, &layout, "_tail"));
+        let table = named_data(&file, &layout, "_table");
+        assert_eq!(quad_at(&layout, table), f);
+        assert_eq!(
+            quad_at(&layout, table + 8),
+            counter.wrapping_sub(f),
+            "_counter - _f"
+        );
+        assert_eq!(quad_at(&layout, table + 16), cstring, "L_.str by section");
+    }
+
+    /// A defined data symbol's laid-out address: its section's VMA plus its
+    /// offset in the section.
+    fn named_data(file: &object::File, layout: &RelocLayout, name: &str) -> u64 {
+        let sym = file.symbols().find(|s| s.name() == Ok(name)).unwrap();
+        let SymbolSection::Section(index) = sym.section() else {
+            panic!("{name} is not defined");
+        };
+        layout.section_vma[&index] + symbol_offset(file, &sym, index)
     }
 }

@@ -1,0 +1,123 @@
+# Moxie (moxielogic.org): 16 32-bit registers, 16-bit instruction words, some
+# followed by a 16-bit offset or a 32-bit immediate in data byte order.
+# Written from the Moxie architecture documentation and the binutils opcode table.
+
+define space ram type=ram_space size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0 size=4 [ fp sp r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 ];
+define register offset=0x40 size=4 [ pc cmpa cmpb ];
+
+define token instr(16)
+  op8  = (8,15)
+  top1 = (15,15)
+  top2 = (14,15)
+  f2op = (12,13)
+  f2ra = (8,11)
+  f3op = (10,13)
+  f3off = (0,9) signed
+  ra   = (4,7)
+  rb   = (0,3)
+  v8   = (0,7)
+;
+define token imm32tok(32) imm32 = (0,31);
+define token imm16tok(16) simm16 = (0,15) signed;
+
+attach variables [ ra rb f2ra ] [ fp sp r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 ];
+
+define pcodeop software_interrupt;
+define pcodeop breakpoint;
+define pcodeop get_special_register;
+define pcodeop set_special_register;
+
+macro pushframe(ret) {
+  sp = sp - 4;
+  sp = sp - 4;
+  *:4 sp = ret;
+  sp = sp - 4;
+  *:4 sp = fp;
+  fp = sp;
+}
+
+abs32: imm32 is imm32 { export *:4 imm32; }
+abs16: imm32 is imm32 { export *:2 imm32; }
+abs8: imm32 is imm32 { export *:1 imm32; }
+target: imm32 is imm32 { export *:4 imm32; }
+rel: reloc is f3off [ reloc = inst_start + 2 + (f3off << 1); ] { export *:4 reloc; }
+
+:ldi.l ra, imm32 is op8=0x01 & ra; imm32 { ra = imm32; }
+:mov ra, rb is op8=0x02 & ra & rb { ra = rb; }
+:jsra target is op8=0x03; target { local ret:4 = inst_next; pushframe(ret); call target; }
+:ret is op8=0x04 {
+  sp = fp;
+  fp = *:4 sp;
+  local dest:4 = *:4 (sp + 4);
+  sp = sp + 12;
+  return [dest];
+}
+:add ra, rb is op8=0x05 & ra & rb { ra = ra + rb; }
+:push ra, rb is op8=0x06 & ra & rb { ra = ra - 4; *:4 ra = rb; }
+:pop ra, rb is op8=0x07 & ra & rb { rb = *:4 ra; ra = ra + 4; }
+:lda.l ra, abs32 is op8=0x08 & ra; abs32 { ra = abs32; }
+:sta.l abs32, ra is op8=0x09 & ra; abs32 { abs32 = ra; }
+:ld.l ra, (rb) is op8=0x0a & ra & rb { ra = *:4 rb; }
+:st.l (ra), rb is op8=0x0b & ra & rb { *:4 ra = rb; }
+:ldo.l ra, simm16(rb) is op8=0x0c & ra & rb; simm16 { ra = *:4 (rb + simm16); }
+:sto.l simm16(ra), rb is op8=0x0d & ra & rb; simm16 { *:4 (ra + simm16) = rb; }
+:cmp ra, rb is op8=0x0e & ra & rb { cmpa = ra; cmpb = rb; }
+:nop is op8=0x0f { }
+:sex.b ra, rb is op8=0x10 & ra & rb { ra = sext(rb:1); }
+:sex.s ra, rb is op8=0x11 & ra & rb { ra = sext(rb:2); }
+:zex.b ra, rb is op8=0x12 & ra & rb { ra = zext(rb:1); }
+:zex.s ra, rb is op8=0x13 & ra & rb { ra = zext(rb:2); }
+:umul.x ra, rb is op8=0x14 & ra & rb { local p:8 = zext(ra) * zext(rb); ra = p(4); }
+:mul.x ra, rb is op8=0x15 & ra & rb { local p:8 = sext(ra) * sext(rb); ra = p(4); }
+:jsr ra is op8=0x19 & ra { local dest:4 = ra; local ret:4 = inst_next; pushframe(ret); call [dest]; }
+:jmpa target is op8=0x1a; target { goto target; }
+:ldi.b ra, imm32 is op8=0x1b & ra; imm32 { ra = imm32; }
+:ld.b ra, (rb) is op8=0x1c & ra & rb { ra = zext(*:1 rb); }
+:lda.b ra, abs8 is op8=0x1d & ra; abs8 { ra = zext(abs8); }
+:st.b (ra), rb is op8=0x1e & ra & rb { *:1 ra = rb:1; }
+:sta.b abs8, ra is op8=0x1f & ra; abs8 { abs8 = ra:1; }
+:ldi.s ra, imm32 is op8=0x20 & ra; imm32 { ra = imm32; }
+:ld.s ra, (rb) is op8=0x21 & ra & rb { ra = zext(*:2 rb); }
+:lda.s ra, abs16 is op8=0x22 & ra; abs16 { ra = zext(abs16); }
+:st.s (ra), rb is op8=0x23 & ra & rb { *:2 ra = rb:2; }
+:sta.s abs16, ra is op8=0x24 & ra; abs16 { abs16 = ra:2; }
+:jmp ra is op8=0x25 & ra { goto [ra]; }
+:and ra, rb is op8=0x26 & ra & rb { ra = ra & rb; }
+:lshr ra, rb is op8=0x27 & ra & rb { ra = ra >> rb; }
+:ashl ra, rb is op8=0x28 & ra & rb { ra = ra << rb; }
+:sub ra, rb is op8=0x29 & ra & rb { ra = ra - rb; }
+:neg ra, rb is op8=0x2a & ra & rb { ra = -rb; }
+:or ra, rb is op8=0x2b & ra & rb { ra = ra | rb; }
+:not ra, rb is op8=0x2c & ra & rb { ra = ~rb; }
+:ashr ra, rb is op8=0x2d & ra & rb { ra = ra s>> rb; }
+:xor ra, rb is op8=0x2e & ra & rb { ra = ra ^ rb; }
+:mul ra, rb is op8=0x2f & ra & rb { ra = ra * rb; }
+:swi imm32 is op8=0x30; imm32 { software_interrupt(imm32:4); }
+:div ra, rb is op8=0x31 & ra & rb { ra = ra s/ rb; }
+:udiv ra, rb is op8=0x32 & ra & rb { ra = ra / rb; }
+:mod ra, rb is op8=0x33 & ra & rb { ra = ra s% rb; }
+:umod ra, rb is op8=0x34 & ra & rb { ra = ra % rb; }
+:brk is op8=0x35 { breakpoint(); }
+:ldo.b ra, simm16(rb) is op8=0x36 & ra & rb; simm16 { ra = zext(*:1 (rb + simm16)); }
+:sto.b simm16(ra), rb is op8=0x37 & ra & rb; simm16 { *:1 (ra + simm16) = rb:1; }
+:ldo.s ra, simm16(rb) is op8=0x38 & ra & rb; simm16 { ra = zext(*:2 (rb + simm16)); }
+:sto.s simm16(ra), rb is op8=0x39 & ra & rb; simm16 { *:2 (ra + simm16) = rb:2; }
+
+:inc f2ra, v8 is top2=2 & f2op=0 & f2ra & v8 { f2ra = f2ra + v8; }
+:dec f2ra, v8 is top2=2 & f2op=1 & f2ra & v8 { f2ra = f2ra - v8; }
+:gsr f2ra, v8 is top2=2 & f2op=2 & f2ra & v8 { f2ra = get_special_register(v8:1); }
+:ssr f2ra, v8 is top2=2 & f2op=3 & f2ra & v8 { set_special_register(v8:1, f2ra); }
+
+:beq rel is top2=3 & f3op=0 & rel { if (cmpa == cmpb) goto rel; }
+:bne rel is top2=3 & f3op=1 & rel { if (cmpa != cmpb) goto rel; }
+:blt rel is top2=3 & f3op=2 & rel { if (cmpa s< cmpb) goto rel; }
+:bgt rel is top2=3 & f3op=3 & rel { if (cmpa s> cmpb) goto rel; }
+:bltu rel is top2=3 & f3op=4 & rel { if (cmpa < cmpb) goto rel; }
+:bgtu rel is top2=3 & f3op=5 & rel { if (cmpa > cmpb) goto rel; }
+:bge rel is top2=3 & f3op=6 & rel { if (cmpa s>= cmpb) goto rel; }
+:ble rel is top2=3 & f3op=7 & rel { if (cmpa s<= cmpb) goto rel; }
+:bgeu rel is top2=3 & f3op=8 & rel { if (cmpa >= cmpb) goto rel; }
+:bleu rel is top2=3 & f3op=9 & rel { if (cmpa <= cmpb) goto rel; }

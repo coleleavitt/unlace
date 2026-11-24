@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="visium"
+    endian="big"
+    size="32"
+    variant="default"
+    version="1.0"
+    slafile="visium.sla"
+    processorspec="visium.pspec"
+    id="visium:BE:32:default">
+    <description>Visium GR5/GR6</description>
+    <compiler name="default" spec="visium.cspec" id="default"/>
+    <external_name tool="gnu" name="visium"/>
+  </language>
+</language_definitions>

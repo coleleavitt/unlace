@@ -36,6 +36,20 @@
 //! IDA 9.5's gooMBA (goomba.so 0x3eb60) runs the same truth-table step but proves
 //! every candidate with z3; the syntactic linearity check is what makes the proof
 //! unnecessary here.
+//!
+//! **Nonlinear MBA.** An arithmetic op read by a bitwise op is a leaf above, so
+//! `((2 * x | c1) - x) + c2 ^ c3`, which is `x ^ c`, has no linear reading. When
+//! the tree has such an op, it is collected once more with those ops and the ops
+//! of several readers inlined and its constants kept as numbers (at most three
+//! leaves). Its candidates are the linear MBA that agrees with it on the 0/1
+//! points, the same for the tree xor its value at zero (then xor-ed back), and
+//! for one leaf `x | c` and `x & c`. None is equal by construction, so each
+//! needs a proof, the job z3 does in gooMBA: every op but a product of two terms
+//! is a bit-serial circuit whose next bit depends on its operands' current bits
+//! and a small carry (a multiply by a constant also keeps the last bits of its
+//! operand). Both sides run side by side from bit 0 up while the set of carry
+//! states some input reaches is followed exactly, so finding no reachable state
+//! where their bits differ is a proof at the full width ([`prove_equal`]).
 
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -54,6 +68,12 @@ const MAX_NODES: usize = 48;
 /// Smallest tree of bitwise ops alone that is looked at, and its most leaves.
 const MIN_BITWISE_OPS: usize = 3;
 const MAX_BITWISE_LEAVES: usize = 3;
+/// Most leaves of a nonlinear tree: its proof tries `2^n` inputs at every bit.
+const MAX_NONLINEAR_LEAVES: usize = 3;
+/// Widest constant multiplier (or negated multiplier) the proof runs bit by bit.
+const MAX_MUL_BITS: u32 = 16;
+/// Most reachable carry states the proof follows before it gives up.
+const MAX_STATES: usize = 1024;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Expr {
@@ -880,6 +900,11 @@ struct Collector<'a> {
     /// Ops of the tree that lie under an op with several readers. They stay
     /// when another reader keeps that op, so a rewrite may not count on them.
     shared_ops: usize,
+    /// The nonlinear reading: arithmetic under a bitwise op and every op with
+    /// several readers inlined, constants kept as numbers.
+    deep: bool,
+    /// An arithmetic op read by a bitwise op was inlined.
+    mixed: bool,
 }
 
 impl Collector<'_> {
@@ -915,7 +940,7 @@ impl Collector<'_> {
             return None;
         }
         if v.is_constant() {
-            return if under {
+            return if under && !self.deep {
                 self.const_leaf(v.get_offset())
             } else {
                 Some(Expr::Const(v.get_offset()))
@@ -925,16 +950,18 @@ impl Collector<'_> {
         let code = def
             .and_then(|op| self.data.obank().get(op))
             .map(|o| o.code());
+        let deep = self.deep;
         let Some((op, code)) = def
             .zip(code)
-            .filter(|&(_, c)| is_candidate(c) && !(under && is_arith(c)))
+            .filter(|&(_, c)| is_candidate(c) && (deep || !(under && is_arith(c))))
         else {
             return self.leaf(LeafRef::Vn(vn));
         };
+        self.mixed |= under && is_arith(code);
         let lone = self.data.lone_descend(vn).is_some();
         if !lone {
             // A shared sum stays a leaf: its own tree is simplified at its op.
-            if is_arith(code) {
+            if is_arith(code) && !deep {
                 return self.leaf(LeafRef::Vn(vn));
             }
             self.shared = true;
@@ -1071,6 +1098,8 @@ fn rewrite(
         seen: Vec::new(),
         in_shared: false,
         shared_ops: 0,
+        deep: false,
+        mixed: false,
     };
     let expr = col.op(op, code, false);
     let shared = col.shared;
@@ -1123,6 +1152,257 @@ fn rewrite(
         }),
         shared,
     )
+}
+
+/// One gate of a bit-serial circuit; its operands are earlier gates.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Gate {
+    Leaf(usize),
+    Const(u64),
+    Not(usize),
+    And(usize, usize),
+    Or(usize, usize),
+    Xor(usize, usize),
+    /// `a + b`; the state slot holds the carry.
+    Add(usize, usize, usize),
+    /// `a - b`; the state slot holds the borrow.
+    Sub(usize, usize, usize),
+    /// `a * c` for a constant `c`; the first slot holds the last bits of `a`,
+    /// the second the carry.
+    Mul(usize, u64, usize),
+}
+
+/// Expressions as circuits evaluated one bit at a time from the least
+/// significant end: every op of [`Expr`] but a product of two terms gives its
+/// next bit from its operands' current bits and a small state. Equal gates
+/// over equal operands are built once, so the two sides of a proof share the
+/// state of what they have in common.
+#[derive(Default)]
+struct Circuit {
+    gates: Vec<Gate>,
+    slots: usize,
+    /// Each gate (state slots given as 0) to its index.
+    index: std::collections::BTreeMap<Gate, usize>,
+}
+
+fn bit_len(c: u64) -> u32 {
+    u64::BITS - c.leading_zeros()
+}
+
+impl Circuit {
+    /// The index of `g`, built with its state slots unless an equal gate is.
+    fn gate(&mut self, g: Gate) -> usize {
+        if let Some(&i) = self.index.get(&g) {
+            return i;
+        }
+        let mut slot = |k: usize| {
+            self.slots += k;
+            self.slots - k
+        };
+        let built = match g {
+            Gate::Add(a, b, _) => Gate::Add(a, b, slot(1)),
+            Gate::Sub(a, b, _) => Gate::Sub(a, b, slot(1)),
+            Gate::Mul(a, c, _) => Gate::Mul(a, c, slot(2)),
+            g => g,
+        };
+        self.gates.push(built);
+        self.index.insert(g, self.gates.len() - 1);
+        self.gates.len() - 1
+    }
+
+    /// The gate computing `e`, or `None` for a product of two terms or a
+    /// multiplier too wide.
+    fn add(&mut self, e: &Expr, mask: u64) -> Option<usize> {
+        let g = match e {
+            Expr::Leaf(i) => Gate::Leaf(*i),
+            Expr::Const(c) => Gate::Const(*c & mask),
+            Expr::Not(a) => Gate::Not(self.add(a, mask)?),
+            Expr::And(a, b)
+            | Expr::Or(a, b)
+            | Expr::Xor(a, b)
+            | Expr::Add(a, b)
+            | Expr::Sub(a, b) => {
+                let (a, b) = (self.add(a, mask)?, self.add(b, mask)?);
+                let (lo, hi) = (a.min(b), a.max(b));
+                match e {
+                    Expr::And(..) => Gate::And(lo, hi),
+                    Expr::Or(..) => Gate::Or(lo, hi),
+                    Expr::Xor(..) => Gate::Xor(lo, hi),
+                    Expr::Add(..) => Gate::Add(lo, hi, 0),
+                    _ => Gate::Sub(a, b, 0),
+                }
+            }
+            Expr::Neg(a) => {
+                let a = self.add(a, mask)?;
+                Gate::Sub(self.gate(Gate::Const(0)), a, 0)
+            }
+            Expr::Mul(a, c) => {
+                let a = self.add(a, mask)?;
+                let (c, neg) = (*c & mask, c.wrapping_neg() & mask);
+                if bit_len(c) <= MAX_MUL_BITS {
+                    Gate::Mul(a, c, 0)
+                } else if bit_len(neg) <= MAX_MUL_BITS {
+                    let m = self.gate(Gate::Mul(a, neg, 0));
+                    Gate::Sub(self.gate(Gate::Const(0)), m, 0)
+                } else {
+                    return None;
+                }
+            }
+            Expr::Prod(..) => return None,
+        };
+        Some(self.gate(g))
+    }
+
+    /// The bit of every gate at bit `pos` for the leaf bits `inp` (bit `i`
+    /// is leaf `i`), advancing the state `st`.
+    fn step(&self, st: &mut [u32], inp: usize, pos: u32, val: &mut Vec<u32>) {
+        val.clear();
+        for g in &self.gates {
+            let v = match *g {
+                Gate::Leaf(i) => ((inp >> i) & 1) as u32,
+                Gate::Const(c) => ((c >> pos) & 1) as u32,
+                Gate::Not(a) => 1 ^ val[a],
+                Gate::And(a, b) => val[a] & val[b],
+                Gate::Or(a, b) => val[a] | val[b],
+                Gate::Xor(a, b) => val[a] ^ val[b],
+                Gate::Add(a, b, s) => {
+                    let t = val[a] + val[b] + st[s];
+                    st[s] = t >> 1;
+                    t & 1
+                }
+                Gate::Sub(a, b, s) => {
+                    let t = i64::from(val[a]) - i64::from(val[b]) - i64::from(st[s]);
+                    st[s] = u32::from(t < 0);
+                    (t & 1) as u32
+                }
+                Gate::Mul(a, c, s) => {
+                    let (hist, cur) = (st[s], val[a]);
+                    let mut t = st[s + 1] + (c & 1) as u32 * cur;
+                    for j in 1..bit_len(c) {
+                        t += ((c >> j) & 1) as u32 & (hist >> (j - 1));
+                    }
+                    let keep = bit_len(c).saturating_sub(1);
+                    st[s] = ((hist << 1) | cur) & ((1u32 << keep) - 1);
+                    st[s + 1] = t >> 1;
+                    t & 1
+                }
+            };
+            val.push(v);
+        }
+    }
+}
+
+/// Are `a` and `b` equal for every value of their `n` leaves at `bits`
+/// bits? Both circuits run side by side from bit 0 up while the set of carry
+/// states that some input prefix reaches is followed exactly, so `Some(true)`
+/// is a proof and `Some(false)` a reachable state where the bits differ.
+/// `None`: a product of two terms, a multiplier too wide, or more than
+/// [`MAX_STATES`] states.
+fn prove_equal(a: &Expr, b: &Expr, n: usize, bits: u32) -> Option<bool> {
+    let mask = if bits >= 64 {
+        u64::MAX
+    } else {
+        (1u64 << bits) - 1
+    };
+    let mut c = Circuit::default();
+    let (ra, rb) = (c.add(a, mask)?, c.add(b, mask)?);
+    let mut states = std::collections::BTreeSet::from([vec![0u32; c.slots]]);
+    let mut val = Vec::with_capacity(c.gates.len());
+    for pos in 0..bits {
+        let mut next = std::collections::BTreeSet::new();
+        for st in &states {
+            for inp in 0..1usize << n {
+                let mut s = st.clone();
+                c.step(&mut s, inp, pos, &mut val);
+                if val[ra] != val[rb] {
+                    return Some(false);
+                }
+                next.insert(s);
+                if next.len() > MAX_STATES {
+                    return None;
+                }
+            }
+        }
+        states = next;
+    }
+    Some(true)
+}
+
+/// `e ^ k`, folded when `k` is zero or `e` a constant.
+fn xor_const(e: Expr, k: u64) -> Expr {
+    if k == 0 {
+        return e;
+    }
+    match e {
+        Expr::Const(c) => Expr::Const(c ^ k),
+        e => Expr::Xor(Box::new(e), Box::new(Expr::Const(k))),
+    }
+}
+
+/// A smaller expression than the nonlinear tree `f` of `n` leaves (fewer
+/// than `budget` ops), proven equal at `bits` bits. The candidates: the
+/// linear MBA that agrees with `f` on the 0/1 points, the same for `f ^ k`
+/// xor-ed back with `k = f(0)`, and for one leaf `x | f(0)` and
+/// `x & f(-1)`. The cheapest that agrees on random inputs and that
+/// [`prove_equal`] proves stands.
+fn nonlinear_simplify(f: &Expr, n: usize, bits: u32, budget: usize) -> Option<Expr> {
+    let mask = if bits >= 64 {
+        u64::MAX
+    } else {
+        (1u64 << bits) - 1
+    };
+    let k = f.eval(&[0; MAX_LEAVES], mask);
+    let keyed = Expr::Xor(Box::new(f.clone()), Box::new(Expr::Const(k)));
+    let mut cands = vec![
+        simplify(f, n, mask),
+        xor_const(simplify(&keyed, n, mask), k),
+    ];
+    if n == 1 {
+        let ones = f.eval(&[mask; MAX_LEAVES], mask);
+        cands.push(Expr::Or(Box::new(Expr::Leaf(0)), Box::new(Expr::Const(k))));
+        cands.push(Expr::And(
+            Box::new(Expr::Leaf(0)),
+            Box::new(Expr::Const(ones)),
+        ));
+    }
+    cands.sort_by_key(Expr::ops);
+    cands
+        .into_iter()
+        .filter(|c| c.ops() < budget)
+        .find(|c| agree(f, c, n, mask) && prove_equal(f, c, n, bits) == Some(true))
+}
+
+/// The nonlinear path: the tree under `op` collected again with arithmetic
+/// under bitwise ops and ops of several readers inlined and constants kept as
+/// numbers, tried only when such an arithmetic op was met.
+fn rewrite_nonlinear(data: &Funcdata, op: OpId, code: OpCode, size: int4) -> Option<Rewrite> {
+    let mut col = Collector {
+        data,
+        size,
+        leaves: Vec::new(),
+        nodes: 0,
+        inline_shared: true,
+        shared: false,
+        bitwise: false,
+        not_arith: false,
+        seen: Vec::new(),
+        in_shared: false,
+        shared_ops: 0,
+        deep: true,
+        mixed: false,
+    };
+    let expr = col.op(op, code, false)?;
+    let n = col.leaves.len();
+    if !col.mixed || n == 0 || n > MAX_NONLINEAR_LEAVES {
+        return None;
+    }
+    let budget = expr.ops().saturating_sub(col.shared_ops);
+    let simple = nonlinear_simplify(&expr, n, 8 * size as u32, budget)?;
+    Some(Rewrite {
+        simple,
+        leaves: col.leaves,
+        seen: col.seen,
+    })
 }
 
 fn mask_of(size: int4) -> u64 {
@@ -1251,12 +1531,16 @@ impl Rule for RuleMbaSimplify {
         // `^ v0` over the whole sum) must not hide a linear tree below it.
         // Each rewrite strictly lowers the op count, so this terminates.
         let rw = match rewrite(data, op, code, size, false) {
-            (Some(rw), _) => rw,
-            (None, true) => match rewrite(data, op, code, size, true).0 {
+            (Some(rw), _) => Some(rw),
+            (None, true) => rewrite(data, op, code, size, true).0,
+            (None, false) => None,
+        };
+        let rw = match rw {
+            Some(rw) => rw,
+            None => match rewrite_nonlinear(data, op, code, size) {
                 Some(rw) => rw,
                 None => return 0,
             },
-            (None, false) => return 0,
         };
         let res = emit(data, op, &rw.simple, &rw, size);
         let copy = crate::context::TypeOp::new(OpCode::CPUI_COPY, 0, "COPY");
@@ -1489,6 +1773,112 @@ mod tests {
     fn bitwise_over_arithmetic_is_not_a_polynomial() {
         let f = Expr::Prod(Box::new(Expr::And(Box::new(Expr::Add(x(), y())), x())), y());
         assert!(to_poly(&f, 2, u64::MAX).is_none());
+    }
+
+    fn c(v: u64) -> Box<Expr> {
+        Box::new(Expr::Const(v))
+    }
+
+    #[test]
+    fn proof_accepts_an_identity_and_refutes_a_near_miss() {
+        let f = Expr::Add(
+            Box::new(Expr::Xor(x(), y())),
+            Box::new(Expr::Mul(and(x(), y()), 2)),
+        );
+        assert_eq!(prove_equal(&f, &Expr::Add(x(), y()), 2, 64), Some(true));
+        assert_eq!(prove_equal(&f, &Expr::Xor(x(), y()), 2, 64), Some(false));
+        // A multiply by -1 runs as the negation of a multiply by 1.
+        assert_eq!(
+            prove_equal(&Expr::Mul(x(), u64::MAX), &Expr::Neg(x()), 1, 64),
+            Some(true)
+        );
+        assert_eq!(
+            prove_equal(&Expr::Prod(x(), y()), &Expr::Prod(y(), x()), 2, 64),
+            None
+        );
+    }
+
+    #[test]
+    fn proof_confirms_linear_simplifications() {
+        let mut st = 5u64;
+        for n in 1..=2usize {
+            for _ in 0..30 {
+                let terms: Vec<(Expr, u64)> = (1..1usize << n)
+                    .map(|s| (conj(s), splitmix(&mut st) % 4))
+                    .collect();
+                let f = sum(terms, splitmix(&mut st) % 3, u64::MAX);
+                let s = simplify(&f, n, u64::MAX);
+                assert_eq!(prove_equal(&f, &s, n, 64), Some(true), "{f:?} -> {s:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn shifted_leaf_under_or_hides_an_xor_key() {
+        // ((2x | 0x6c36fd7a) - x) + 0xc9e48143 ^ 0xf8c05b04 == x ^ 0xcedb25b9
+        // (Apple CoreADI, x86-64 Android build)
+        let f = Expr::Xor(
+            Box::new(Expr::Add(
+                Box::new(Expr::Sub(
+                    Box::new(Expr::Or(Box::new(Expr::Mul(x(), 2)), c(0x6c36fd7a))),
+                    x(),
+                )),
+                c(0xc9e48143),
+            )),
+            c(0xf8c05b04),
+        );
+        let s = nonlinear_simplify(&f, 1, 32, f.ops()).expect("proven");
+        assert_eq!(s, Expr::Xor(x(), c(0xcedb25b9)));
+    }
+
+    #[test]
+    fn chained_masked_doubles_hide_an_xor_key() {
+        // v = ((2x & 0xff9fb7f8) ^ 0xd5101720) + (x ^ 0x1547f06d);
+        // (v - ((2v + 0x604808) & 0x4cc9184e)) + 0x2694b02b == x ^ 0xcceca7b6
+        let v = || {
+            Box::new(Expr::Add(
+                Box::new(Expr::Xor(
+                    and(Box::new(Expr::Mul(x(), 2)), c(0xff9fb7f8)),
+                    c(0xd5101720),
+                )),
+                Box::new(Expr::Xor(x(), c(0x1547f06d))),
+            ))
+        };
+        let f = Expr::Add(
+            Box::new(Expr::Sub(
+                v(),
+                and(
+                    Box::new(Expr::Add(Box::new(Expr::Mul(v(), 2)), c(0x604808))),
+                    c(0x4cc9184e),
+                ),
+            )),
+            c(0x2694b02b),
+        );
+        let s = nonlinear_simplify(&f, 1, 32, f.ops()).expect("proven");
+        assert_eq!(s, Expr::Xor(x(), c(0xcceca7b6)));
+    }
+
+    #[test]
+    fn negated_sum_of_ors_is_an_xor_key() {
+        // -((~x | 0x4cee331d) + (x | 0xb311cce2)) - 2 ^ 0x53a5c4e9 == x ^ 0x1f4bf7f4
+        let f = Expr::Xor(
+            Box::new(Expr::Sub(
+                Box::new(Expr::Neg(Box::new(Expr::Add(
+                    Box::new(Expr::Or(Box::new(Expr::Not(x())), c(0x4cee331d))),
+                    Box::new(Expr::Or(x(), c(0xb311cce2))),
+                )))),
+                c(2),
+            )),
+            c(0x53a5c4e9),
+        );
+        let s = nonlinear_simplify(&f, 1, 32, f.ops()).expect("proven");
+        assert_eq!(s, Expr::Xor(x(), c(0x1f4bf7f4)));
+    }
+
+    #[test]
+    fn nonlinear_tree_without_a_smaller_form_is_left() {
+        let f = Expr::Xor(Box::new(Expr::Add(x(), c(5))), c(3));
+        assert_eq!(nonlinear_simplify(&f, 1, 64, f.ops()), None);
     }
 
     #[test]

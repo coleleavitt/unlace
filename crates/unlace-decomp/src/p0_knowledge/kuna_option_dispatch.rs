@@ -250,6 +250,7 @@ kuna_options! { self, p1;
     "narrowargs" => registered!(crate::kuna_narrowargs::NarrowArgs),
     "regnarrow" => registered!(crate::kuna_regnarrow::NarrowLocals),
     "pairparam" => registered!(crate::kuna_borrowcompare::PairParams),
+    "pairbranch" => registered!(crate::kuna_borrowcompare::PairBranch),
     "armpairparam" => registered!(crate::kuna_armpairparam::ArmPairParams),
     "narrowret" => registered!(crate::kuna_narrowret::NarrowRet),
     "regsigned" => registered!(crate::kuna_regnarrow::NarrowSigned),
@@ -288,6 +289,8 @@ kuna_options! { self, p1;
     "regionedgeorder" => registered!(crate::region_structurer::RegionEdgeOrder),
     "outline" => registered!(crate::kuna_outline::OutlineOption),
     "condfold" => registered!(crate::kuna_condfold::CondFold),
+    "orchainbool" => registered!(crate::kuna_orchainbool::OrchainBool),
+    "orchainlive" => registered!(crate::kuna_orchain::OrchainLive),
     "implweight" => registered!(crate::coreaction_cleanup::ImplWeight),
     "condstmts" => registered!(crate::kuna_condstmts::CondStmts),
     "gotoreduce" => registered!(crate::kuna_gotoreduce::GotoReduceMode),
@@ -419,6 +422,7 @@ kuna_options! { self, p1;
     "uefi" => registered!(crate::kuna_analysisgates::Uefi),
     "cortexmscs" => registered!(crate::kuna_analysisgates::Cortexmscs),
     "com" => registered!(crate::kuna_analysisgates::Com),
+    "comcfg" => registered!(crate::kuna_comcfg::ComCfg),
     "strings" => registered!(crate::kuna_analysisgates::Strings),
     "widestrings" => {
         registered!(crate::kuna_analysisgates::Widestrings)
@@ -542,6 +546,14 @@ kuna_options! { self, p1;
     "goitabcalls" => registered!(crate::kuna_goitabcalls::GoItabCalls),
     "cppsig" => registered!(crate::kuna_cppsig::CppSigMode),
     "dwarfglobaltypes" => registered!(crate::kuna_analysisgates::Dwarfglobaltypes),
+    "dwarfdecls" => registered!(crate::kuna_analysisgates::Dwarfdecls),
+    "dwarfenumtypedef" => {
+        let (val, msg) = <crate::kuna_analysisgates::DwarfEnumTypedef as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("KUNA_DWARFENUMTYPEDEF", if val.0 { "on" } else { "off" }) };
+        self.kuna_options.set(val);
+        Ok(msg)
+    },
     "dwarfscopes" => {
         let (val, msg) = <crate::kuna_analysisgates::DwarfScopes as crate::kuna_optionset::KunaOption>::parse(p1)?;
         // FIXME: Audit that the environment access only happens in single-threaded code.
@@ -576,6 +588,7 @@ kuna_options! { self, p1;
     "fid" => registered!(crate::kuna_analysisgates::Fid),
     "rtti" => registered!(crate::kuna_analysisgates::Rtti),
     "msvceh" => registered!(crate::kuna_analysisgates::Msvceh),
+    "delphi" => registered!(crate::kuna_analysisgates::Delphi),
     "itaniumrtti" => {
         registered!(crate::kuna_analysisgates::Itaniumrtti)
     },
@@ -651,6 +664,7 @@ kuna_options! { self, p1;
     "iokitclasses" => registered!(crate::kuna_analysisgates::IokitClasses),
     "xnutables" => registered!(crate::kuna_analysisgates::Xnutables),
     "osclassinfo" => registered!(crate::kuna_analysisgates::Osclassinfo),
+    "dextrpc" => registered!(crate::kuna_analysisgates::Dextrpc),
     "swiftcall" => registered!(crate::kuna_swiftcall::Swiftcall),
     "swiftruntime" => registered!(crate::kuna_analysisgates::Swiftruntime),
     "typelib" => registered!(crate::kuna_typelib::TypeLib),

@@ -378,6 +378,25 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna) `dwarfdecls`: type an import's calls by its DWARF declaration.
+    Dwarfdecls,
+    "dwarfdecls",
+    "DWARF declarations of imports",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
+    /// (kuna) `dwarfenumtypedef`: an anonymous DWARF enum takes its typedef's name; the
+    /// loader reads `KUNA_DWARFENUMTYPEDEF`.
+    DwarfEnumTypedef,
+    "dwarfenumtypedef",
+    "DWARF anonymous enums named by their typedef",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna) Gate the address-table pass (`addrtable`); default **off** (matches
     /// Ghidra `AddressTableAnalyzer.setDefaultEnablement(false)`).
     Addrtable,
@@ -536,6 +555,16 @@ crate::kuna_flag!(
     Msvceh,
     "msvceh",
     "MSVC C++ exception metadata",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
+    /// (kuna) Read Borland/Delphi RTTI: VMTs, class and method names, type info
+    /// and interface tables (option `delphi`). See `unlace_analysis::delphi`.
+    Delphi,
+    "delphi",
+    "Borland/Delphi RTTI",
     unset: false,
     shipped: false
 );
@@ -798,6 +827,16 @@ crate::kuna_flag!(
     "DriverKit __osclassinfo class records",
     unset: false,
     shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna) `dextrpc`: DriverKit IORPC dispatch prototypes, message ids and
+    /// class layouts, read inside the `osclassinfo` pass (default off).
+    Dextrpc,
+    "dextrpc",
+    "DriverKit IORPC dispatch types",
+    unset: false,
+    shipped: false
 );
 
 crate::kuna_flag!(

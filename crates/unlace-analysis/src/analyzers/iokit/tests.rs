@@ -405,3 +405,83 @@ fn cxx_facts_type_the_classes_and_their_members() {
         ]
     );
 }
+
+#[test]
+fn classifies_driverkit_rpc_symbols() {
+    use kuna_dextrpc::{RpcSymbol, classify};
+    assert_eq!(
+        classify("_ZN12AppleUSBFTDI9_DispatchEPS_5IORPC"),
+        Some(RpcSymbol::StaticDispatch("AppleUSBFTDI"))
+    );
+    assert_eq!(
+        classify("_ZN21AppleUSBFTDIMetaClass8DispatchE5IORPC"),
+        Some(RpcSymbol::Dispatch("AppleUSBFTDIMetaClass"))
+    );
+    assert_eq!(
+        classify("_ZN12IOUserSerial20HwProgramUART_InvokeE5IORPCP15OSMetaClassBasePFiS2_jhhhE"),
+        Some(RpcSymbol::Invoke(3))
+    );
+    assert_eq!(
+        classify(
+            "_ZN21IOTimerDispatchSource20TimerOccurred_InvokeE5IORPCP15OSMetaClassBasePFvS2_P8OSActionyEPK11OSMetaClass"
+        ),
+        Some(RpcSymbol::Invoke(4))
+    );
+    assert_eq!(
+        classify("_ZN12AppleUSBFTDI10Start_ImplEP9IOService"),
+        Some(RpcSymbol::Member("AppleUSBFTDI"))
+    );
+    assert_eq!(
+        classify("_ZN12AppleUSBFTDI4initEv"),
+        Some(RpcSymbol::Member("AppleUSBFTDI"))
+    );
+    assert_eq!(
+        classify("_ZN12AppleUserECM9Stop_ImplEP9IOService_block_invoke"),
+        None
+    );
+    assert_eq!(classify("_ZN15IODispatchQueue6CreateEPKcyyPPS_"), None);
+    assert_eq!(classify("_ZThn24_N12AppleUSBFTDI4initEv"), None);
+    assert_eq!(classify("_ZN99Short"), None);
+}
+
+#[test]
+fn reads_driverkit_method_tables() {
+    use kuna_dextrpc::{RpcMethod, rpc_methods};
+    fn put(d: &mut [u8], at: usize, v: u32) {
+        d[at..at + 4].copy_from_slice(&v.to_le_bytes());
+    }
+    let mut d = vec![0u8; 0x180];
+    for (at, v) in [
+        (0xc4, 0x20),
+        (0xc8, 0x138),
+        (0xcc, 0),
+        (0xd0, 0x158),
+        (0xd4, 1),
+        (0xd8, 0x158),
+        (0xdc, 10),
+        (0xe0, 0x159),
+        (0xe4, 1),
+        (0xe8, 0x169),
+    ] {
+        put(&mut d, at, v);
+    }
+    d[0x138..0x140].copy_from_slice(&0x1111u64.to_le_bytes());
+    d[0x140..0x148].copy_from_slice(&0x2222u64.to_le_bytes());
+    d[0x150..0x158].copy_from_slice(&1u64.to_le_bytes());
+    d[0x159..0x162].copy_from_slice(b"\x03Foo\x04_Bar");
+    assert_eq!(
+        rpc_methods(&d),
+        [
+            RpcMethod {
+                name: "Foo".into(),
+                msgid: 0x1111
+            },
+            RpcMethod {
+                name: "_Bar".into(),
+                msgid: 0x2222
+            },
+        ]
+    );
+    put(&mut d, 0xc4, 0x30);
+    assert!(rpc_methods(&d).is_empty());
+}

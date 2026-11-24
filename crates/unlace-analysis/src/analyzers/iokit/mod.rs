@@ -23,6 +23,7 @@
 
 mod a64;
 mod cxx;
+pub mod kuna_dextrpc;
 pub mod osclassinfo;
 mod tables;
 

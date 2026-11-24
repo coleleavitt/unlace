@@ -14,9 +14,11 @@ pub struct AtomicUserops {
     pub lock: Option<(u32, u32)>,
     pub ordering: Vec<u32>,
     pub unmarked: bool,
-    /// AArch64 `ExclusiveMonitorPass` and `ExclusiveMonitorsStatus`, which a
-    /// store-exclusive lifts to (`llscfold`).
-    pub monitor: Option<(u32, u32)>,
+    /// The user operation a store-exclusive tests the monitor with and the one
+    /// that yields its status, if the status is not a plain constant
+    /// (`llscfold`): AArch64 `ExclusiveMonitorPass` and
+    /// `ExclusiveMonitorsStatus`, ARM `hasExclusiveAccess` alone.
+    pub monitor: Option<(u32, Option<u32>)>,
 }
 
 impl AtomicUserops {
@@ -38,12 +40,21 @@ impl AtomicUserops {
                 .into_iter()
                 .filter_map(index)
                 .collect();
-            let monitor = index(b"ExclusiveMonitorPass").zip(index(b"ExclusiveMonitorsStatus"));
+            let monitor = index(b"ExclusiveMonitorPass")
+                .zip(index(b"ExclusiveMonitorsStatus"))
+                .map(|(pass, status)| (pass, Some(status)));
             return AtomicUserops {
                 lock: None,
                 ordering,
                 unmarked: true,
                 monitor,
+            };
+        }
+        if archid.starts_with("ARM:") {
+            return AtomicUserops {
+                ordering: index(b"ExclusiveAccess").into_iter().collect(),
+                monitor: index(b"hasExclusiveAccess").map(|pass| (pass, None)),
+                ..AtomicUserops::default()
             };
         }
         if archid.starts_with("RISCV:") {
@@ -58,6 +69,12 @@ impl AtomicUserops {
     /// Whether this language has atomic instructions `kuna_atomics` recognizes.
     pub fn enabled(&self) -> bool {
         self.lock.is_some() || self.unmarked
+    }
+
+    /// Whether atomic builtins can appear at all: from single instructions or
+    /// from folded load/store-exclusive loops (ARM has only the latter).
+    pub fn builtins(&self) -> bool {
+        self.enabled() || self.monitor.is_some()
     }
 }
 
@@ -182,5 +199,11 @@ mod tests {
             ..AtomicUserops::default()
         };
         assert!(x86.enabled());
+        let arm = AtomicUserops {
+            monitor: Some((3, None)),
+            ..AtomicUserops::default()
+        };
+        assert!(!arm.enabled());
+        assert!(arm.builtins());
     }
 }

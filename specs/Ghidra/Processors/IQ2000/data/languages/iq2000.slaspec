@@ -1,0 +1,172 @@
+# Vitesse IQ2000: a big-endian 32-bit MIPS-I-like core for network processors, with
+# one branch delay slot, "likely" branches, bit and byte-lane branches and
+# rotate/mask operations. Written from the IQ2000 CGEN description in binutils
+# (cpu/iq2000.cpu, cpu/iq2000m.cpu: fields and RTL semantics) and GCC config/iq2000.
+
+define endian=big;
+define alignment=4;
+
+define space ram type=ram_space size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0 size=4 [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31 ];
+define register offset=0x100 size=4 [ pc ];
+
+define token instr(32)
+  op     = (26,31)
+  rs     = (21,25)
+  rt     = (16,20)
+  rd     = (11,15)
+  rsv    = (21,25)
+  rtv    = (16,20)
+  rdv    = (11,15)
+  shamt  = (6,10)
+  func   = (0,5)
+  imm16  = (0,15)
+  simm16 = (0,15) signed
+  rsrvd  = (16,25)
+  mask4  = (6,9)
+  b10    = (10,10)
+  b5     = (5,5)
+  maskl  = (0,4)
+  excode = (6,25)
+;
+
+attach variables [ rs rt rd ] [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31 ];
+
+define pcodeop syscall;
+define pcodeop breakpoint;
+define pcodeop sleep;
+define pcodeop context_branch;
+define pcodeop jump_context;
+define pcodeop coprocessor;
+
+RS: rs is rs & rsv=0 { export 0:4; }
+RS: rs is rs { export rs; }
+RT: rt is rt & rtv=0 { export 0:4; }
+RT: rt is rt { export rt; }
+
+SIMM: simm16 is simm16 { export *[const]:4 simm16; }
+UIMM: imm16 is imm16 { export *[const]:4 imm16; }
+MEM: simm16(RS) is simm16 & RS { local addr:4 = RS + simm16; export addr; }
+REL: dest is simm16 [ dest = inst_start + 4 + simm16 * 4; ] { export *:4 dest; }
+JT: dest is imm16 [ dest = (inst_start & 0xf0000000) | (imm16 << 2); ] { export *:4 dest; }
+
+# Arithmetic and logic
+:add rd, RS, RT is op=0 & func=32 & shamt=0 & rd & RS & RT { rd = RS + RT; }
+:addu rd, RS, RT is op=0 & func=33 & shamt=0 & rd & RS & RT { rd = RS + RT; }
+:sub rd, RS, RT is op=0 & func=34 & shamt=0 & rd & RS & RT { rd = RS - RT; }
+:subu rd, RS, RT is op=0 & func=35 & shamt=0 & rd & RS & RT { rd = RS - RT; }
+:and rd, RS, RT is op=0 & func=36 & shamt=0 & rd & RS & RT { rd = RS & RT; }
+:or rd, RS, RT is op=0 & func=37 & shamt=0 & rd & RS & RT { rd = RS | RT; }
+:move rd, RS is op=0 & func=37 & shamt=0 & rd & RS & rtv=0 { rd = RS; }
+:xor rd, RS, RT is op=0 & func=38 & shamt=0 & rd & RS & RT { rd = RS ^ RT; }
+:nor rd, RS, RT is op=0 & func=39 & shamt=0 & rd & RS & RT { rd = ~(RS | RT); }
+:slt rd, RS, RT is op=0 & func=42 & shamt=0 & rd & RS & RT { rd = zext(RS s< RT); }
+:sltu rd, RS, RT is op=0 & func=43 & shamt=0 & rd & RS & RT { rd = zext(RS < RT); }
+:ado16 rd, RS, RT is op=0 & func=41 & shamt=0 & rd & RS & RT {
+  local lo:2 = RS:2 + RT:2;
+  local hi:2 = RS(2) + RT(2);
+  rd = (zext(hi) << 16) | zext(lo);
+}
+MRGM: lanemask is mask4 [ lanemask = ((mask4 & 1) * 0xff) | (((mask4 >> 1) & 1) * 0xff00) | (((mask4 >> 2) & 1) * 0xff0000) | (((mask4 >> 3) & 1) * 0xff000000); ] { export *[const]:4 lanemask; }
+:mrgb rd, RS, RT, MRGM is op=0 & func=45 & b10=0 & rd & RS & RT & MRGM {
+  local m:4 = MRGM;
+  rd = (RS & ~m) | (RT & m);
+}
+
+:nop is op=0 & func=0 & rsv=0 & rtv=0 & rdv=0 & shamt=0 { }
+:sll rd, RT, shamt is op=0 & func=0 & rsv=0 & rd & RT & shamt { rd = RT << shamt; }
+:srl rd, RT, shamt is op=0 & func=2 & rsv=0 & rd & RT & shamt { rd = RT >> shamt; }
+:sra rd, RT, shamt is op=0 & func=3 & rsv=0 & rd & RT & shamt { rd = RT s>> shamt; }
+:sllv rd, RT, RS is op=0 & func=4 & shamt=0 & rd & RT & RS { rd = RT << (RS & 31); }
+:srlv rd, RT, RS is op=0 & func=6 & shamt=0 & rd & RT & RS { rd = RT >> (RS & 31); }
+:srav rd, RT, RS is op=0 & func=7 & shamt=0 & rd & RT & RS { rd = RT s>> (RS & 31); }
+:slmv rd, RT, RS, shamt is op=0 & func=1 & rd & RT & RS & shamt { rd = (RT << shamt) & (0xffffffff >> (RS & 31)); }
+:srmv rd, RT, RS, shamt is op=0 & func=5 & rd & RT & RS & shamt { rd = (RT >> shamt) & (0xffffffff << (RS & 31)); }
+:ram rd, RT, shamt, maskl, rsv is op=39 & b5=0 & rd & RT & shamt & maskl & rsv {
+  local r:4 = (RT >> shamt) | (RT << ((32 - shamt) & 31));
+  rd = r & (0xffffffff >> maskl) & (0xffffffff << rsv);
+}
+
+:addi rt, RS, SIMM is op=8 & rt & RS & SIMM { rt = RS + SIMM; }
+:addiu rt, RS, SIMM is op=9 & rt & RS & SIMM { rt = RS + SIMM; }
+:li rt, SIMM is op=9 & rt & rsv=0 & SIMM { rt = SIMM; }
+:slti rt, RS, SIMM is op=10 & rt & RS & SIMM { rt = zext(RS s< SIMM); }
+:sltiu rt, RS, SIMM is op=11 & rt & RS & SIMM { rt = zext(RS < SIMM); }
+:andi rt, RS, UIMM is op=12 & rt & RS & UIMM { rt = RS & UIMM; }
+:ori rt, RS, UIMM is op=13 & rt & RS & UIMM { rt = RS | UIMM; }
+:xori rt, RS, UIMM is op=14 & rt & RS & UIMM { rt = RS ^ UIMM; }
+:lui rt, imm16 is op=15 & rsv=0 & rt & imm16 { rt = imm16 << 16; }
+:andoi rt, RS, SIMM is op=44 & rt & RS & SIMM { rt = RS & (0xffff0000 | (SIMM & 0xffff)); }
+:andoui rt, RS, imm16 is op=63 & rt & RS & imm16 { rt = RS & ((imm16 << 16) | 0xffff); }
+:orui rt, RS, imm16 is op=47 & rt & RS & imm16 { rt = RS | (imm16 << 16); }
+
+# Loads and stores
+:lb rt, MEM is op=32 & rt & MEM { rt = sext(*:1 MEM); }
+:lh rt, MEM is op=33 & rt & MEM { rt = sext(*:2 MEM); }
+:lw rt, MEM is op=35 & rt & MEM { rt = *:4 MEM; }
+:lbu rt, MEM is op=36 & rt & MEM { rt = zext(*:1 MEM); }
+:lhu rt, MEM is op=37 & rt & MEM { rt = zext(*:2 MEM); }
+:sb RT, MEM is op=40 & RT & MEM { *:1 MEM = RT:1; }
+:sh RT, MEM is op=41 & RT & MEM { *:2 MEM = RT:2; }
+:sw RT, MEM is op=43 & RT & MEM { *:4 MEM = RT; }
+
+RTNEXT: rtn is rtv [ rtn = (rtv + 1) * 4; ] { export *[register]:4 rtn; }
+:ldw rt, MEM is op=48 & rt & RTNEXT & MEM { local a:4 = MEM & ~3; RTNEXT = *:4 a; rt = *:4 (a + 4); }
+:sdw RT, MEM is op=56 & RT & RTNEXT & MEM { local a:4 = MEM & ~3; *:4 (a + 4) = RT; *:4 a = RTNEXT; }
+
+# Jumps and branches (one delay slot; likely forms annul the slot when not taken)
+:j JT is op=2 & rsrvd=0 & JT { delayslot(1); goto JT; }
+:jal JT is op=3 & rsrvd=0 & JT { r31 = inst_next; delayslot(1); call JT; }
+:jr RS is op=0 & func=8 & rtv=0 & rdv=0 & shamt=0 & RS { local t = RS; delayslot(1); goto [t]; }
+:jr RS is op=0 & func=8 & rsv=31 & rtv=0 & rdv=0 & shamt=0 & RS { delayslot(1); return [r31]; }
+:jalr rd, RS is op=0 & func=9 & rtv=0 & shamt=0 & rd & RS { local t = RS; rd = inst_next; delayslot(1); call [t]; }
+:jcr RS is op=0 & func=10 & rtv=0 & rdv=0 & shamt=0 & RS { local t = RS; delayslot(1); jump_context(t); goto [t]; }
+:syscall is op=0 & func=12 & excode { syscall(excode:4); }
+:break is op=0 & func=13 & rsv=0 & rtv=0 & rdv=0 & shamt=0 { breakpoint(); }
+:sleep is op=0 & func=14 & excode { sleep(excode:4); }
+
+:b REL is op=4 & rsv=0 & rtv=0 & REL { delayslot(1); goto REL; }
+:beq RS, RT, REL is op=4 & RS & RT & REL { local c = RS == RT; delayslot(1); if (c) goto REL; }
+:bne RS, RT, REL is op=5 & RS & RT & REL { local c = RS != RT; delayslot(1); if (c) goto REL; }
+:blez RS, REL is op=6 & rtv=0 & RS & REL { local c = RS s<= 0; delayslot(1); if (c) goto REL; }
+:bgtz RS, REL is op=7 & rtv=0 & RS & REL { local c = RS s> 0; delayslot(1); if (c) goto REL; }
+:beql RS, RT, REL is op=20 & RS & RT & REL { if (RS != RT) goto inst_next; delayslot(1); goto REL; }
+:bnel RS, RT, REL is op=21 & RS & RT & REL { if (RS == RT) goto inst_next; delayslot(1); goto REL; }
+:blezl RS, REL is op=22 & rtv=0 & RS & REL { if (RS s> 0) goto inst_next; delayslot(1); goto REL; }
+:bgtzl RS, REL is op=23 & rtv=0 & RS & REL { if (RS s<= 0) goto inst_next; delayslot(1); goto REL; }
+
+LANE: "0" is op=24 { export 0xff:4; }
+LANE: "1" is op=25 { export 0xff00:4; }
+LANE: "2" is op=26 { export 0xff0000:4; }
+LANE: "3" is op=27 { export 0xff000000:4; }
+:bmb^LANE RS, RT, REL is (op=24 | op=25 | op=26 | op=27) & LANE & RS & RT & REL { local c = (RS & LANE) == (RT & LANE); delayslot(1); if (c) goto REL; }
+:bmb RS, RT, REL is op=45 & RS & RT & REL {
+  local x = RS ^ RT;
+  local c = ((x & 0xff) == 0) || ((x & 0xff00) == 0) || ((x & 0xff0000) == 0) || ((x & 0xff000000) == 0);
+  delayslot(1);
+  if (c) goto REL;
+}
+:bbi RS(rtv), REL is op=28 & RS & rtv & REL { local c = ((RS >> rtv) & 1) != 0; delayslot(1); if (c) goto REL; }
+:bbin RS(rtv), REL is op=30 & RS & rtv & REL { local c = ((RS >> rtv) & 1) == 0; delayslot(1); if (c) goto REL; }
+:bbv RS, RT, REL is op=29 & RS & RT & REL { local c = ((RS >> (RT & 31)) & 1) != 0; delayslot(1); if (c) goto REL; }
+:bbvn RS, RT, REL is op=31 & RS & RT & REL { local c = ((RS >> (RT & 31)) & 1) == 0; delayslot(1); if (c) goto REL; }
+
+# REGIMM (op 1): the sub-opcode is in rt
+:bltz RS, REL is op=1 & rtv=0 & RS & REL { local c = RS s< 0; delayslot(1); if (c) goto REL; }
+:bgez RS, REL is op=1 & rtv=1 & RS & REL { local c = RS s>= 0; delayslot(1); if (c) goto REL; }
+:bltzl RS, REL is op=1 & rtv=2 & RS & REL { if (RS s>= 0) goto inst_next; delayslot(1); goto REL; }
+:bgezl RS, REL is op=1 & rtv=3 & RS & REL { if (RS s< 0) goto inst_next; delayslot(1); goto REL; }
+:bctxt RS, REL is op=1 & rtv=6 & RS & REL { context_branch(RS); delayslot(1); goto REL; }
+:bltzal RS, REL is op=1 & rtv=16 & RS & REL { local c = RS s< 0; r31 = inst_next; delayslot(1); if (!c) goto inst_next; call REL; }
+:bgezal RS, REL is op=1 & rtv=17 & RS & REL { local c = RS s>= 0; r31 = inst_next; delayslot(1); if (!c) goto inst_next; call REL; }
+:bal REL is op=1 & rtv=17 & rsv=0 & REL { r31 = inst_next; delayslot(1); call REL; }
+:bltzall RS, REL is op=1 & rtv=18 & RS & REL { if (RS s>= 0) goto inst_next; r31 = inst_next; delayslot(1); call REL; }
+:bgezall RS, REL is op=1 & rtv=19 & RS & REL { if (RS s< 0) goto inst_next; r31 = inst_next; delayslot(1); call REL; }
+
+# Coprocessor instructions (DMA, lookup, SRAM, context): one opaque user-op each
+:cop0 imm16 is op=16 & imm16 { coprocessor(0:1); }
+:cop1 imm16 is op=17 & imm16 { coprocessor(1:1); }
+:cop2 imm16 is op=18 & imm16 { coprocessor(2:1); }
+:cop3 imm16 is op=19 & imm16 { coprocessor(3:1); }

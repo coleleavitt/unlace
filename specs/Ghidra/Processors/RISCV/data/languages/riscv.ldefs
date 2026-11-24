@@ -66,4 +66,32 @@
     <external_name tool="qemu_system" name="qemu-system-riscv32"/>
   </language>
 
+  <language processor="RISCV"
+            endian="little"
+            size="64"
+            variant="XThead"
+            version="1.4"
+            slafile="riscv.lp64d.xthead.sla"
+            processorspec="RV64.pspec"
+            id="RISCV:LE:64:XThead">
+    <description>RISC-V 64 little with the T-Head vendor extensions (XThead*)</description>
+    <compiler name="gcc" spec="riscv64-fp.cspec" id="gcc"/>
+    <external_name tool="DWARF.register.mapping.file" name="riscv64.dwarf"/>
+    <external_name tool="gnu" name="riscv:rv64"/>
+  </language>
+
+  <language processor="RISCV"
+            endian="little"
+            size="32"
+            variant="XThead"
+            version="1.4"
+            slafile="riscv.ilp32d.xthead.sla"
+            processorspec="RV32.pspec"
+            id="RISCV:LE:32:XThead">
+    <description>RISC-V 32 little with the T-Head vendor extensions (XThead*)</description>
+    <compiler name="gcc" spec="riscv32-fp.cspec" id="gcc"/>
+    <external_name tool="DWARF.register.mapping.file" name="riscv32.dwarf"/>
+    <external_name tool="gnu" name="riscv:rv32"/>
+  </language>
+
 </language_definitions>

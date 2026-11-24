@@ -89,5 +89,36 @@ class SlaRegsTests(unittest.TestCase):
             self.assertEqual(preprocess(p).split(), ["yes"])
 
 
+class ArmHarnessTests(unittest.TestCase):
+    def test_thumb_entry_and_exit(self):
+        import struct
+        from qemu_backend import ThumbHarness
+        h = ThumbHarness()
+        pro = h.prologue(0x400000)
+        self.assertEqual(struct.unpack_from("<2I", pro, len(pro) - 8), (0xE51FF004, 0x400001))
+        # bx pc must sit on a word address: PC reads as its address + 4 and A32 code follows
+        self.assertEqual(h.epilogue_at([], 1, 0x400004)[:4], bytes.fromhex("7847c046"))
+        self.assertEqual(h.epilogue_at([], 1, 0x400002)[:6], bytes.fromhex("c0467847c046"))
+
+    def test_qemu_dir_list(self):
+        import os
+        import tempfile
+        from qemu_backend import qemu_path
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            exe = os.path.join(b, "qemu-difffuzz-test")
+            with open(exe, "w") as f:
+                f.write("#!/bin/sh\n")
+            os.chmod(exe, 0o755)
+            old = os.environ.get("DIFFFUZZ_QEMU_DIR")
+            os.environ["DIFFFUZZ_QEMU_DIR"] = a + os.pathsep + b
+            try:
+                self.assertEqual(qemu_path("qemu-difffuzz-test"), exe)
+            finally:
+                if old is None:
+                    del os.environ["DIFFFUZZ_QEMU_DIR"]
+                else:
+                    os.environ["DIFFFUZZ_QEMU_DIR"] = old
+
+
 if __name__ == "__main__":
     unittest.main()

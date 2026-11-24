@@ -7,8 +7,9 @@
 //! process environment variables set by the `unlace` CLI before loading (the
 //! loadtime pattern). The CLI's `--image NAME` sets
 //! [`DYLDIMAGE_ENV`] for every subcommand; the console's `option dyldimage NAME`
-//! before `load file` sets the same variable, and is accepted before any image
-//! is loaded, since choosing the first image is its purpose.
+//! before `load file` sets the console's load options for its next load, and is
+//! accepted before any image is loaded, since choosing the first image is its
+//! purpose.
 
 use unlace_base::error::UnlaceResult;
 
@@ -47,40 +48,44 @@ pub fn selected_image() -> Option<String> {
         .unwrap_or_else(crate::loadoptions::env::dyldimage)
 }
 
-/// Apply `option dyldimage|dyldcrossrefs VALUE`, or `None` for another option.
-/// Neither needs a loaded image: the next `load file` reads both.
-pub fn set_option(name: &str, value: &str) -> Option<UnlaceResult<String>> {
+/// Apply `option dyldimage|dyldcrossrefs VALUE` to the options the next load
+/// reads, or `None` for another option. Neither needs a loaded image.
+pub fn set_option(
+    options: &mut crate::loadoptions::LoadOptions,
+    name: &str,
+    value: &str,
+) -> Option<UnlaceResult<String>> {
     Some(match name {
-        "dyldimage" => Ok(set_dyldimage(value)),
-        "dyldcrossrefs" => set_dyldcrossrefs(value),
+        "dyldimage" => {
+            options.dyldimage = image_name(value).map(str::to_string);
+            Ok(dyldimage_message(value))
+        }
+        "dyldcrossrefs" => crate::options::on_or_off(value).map(|on| {
+            options.dyldcrossrefs = on;
+            dyldcrossrefs_text(on)
+        }),
         _ => return None,
     })
 }
 
-/// Apply `option dyldimage VALUE`.
-pub fn set_dyldimage(value: &str) -> String {
+/// The confirmation of `option dyldimage VALUE`.
+pub fn dyldimage_message(value: &str) -> String {
     match image_name(value) {
-        Some(image) => {
-            set_dyldimage_env(image);
-            format!("dyld shared cache image set to {image}")
-        }
-        None => {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            unsafe { std::env::remove_var(DYLDIMAGE_ENV) };
-            "dyld shared cache image selection cleared".to_string()
-        }
+        Some(image) => format!("dyld shared cache image set to {image}"),
+        None => "dyld shared cache image selection cleared".to_string(),
     }
 }
 
-/// Apply `option dyldcrossrefs VALUE`.
-pub fn set_dyldcrossrefs(value: &str) -> UnlaceResult<String> {
-    crate::options::on_or_off(value).map(|on| {
-        set_dyldcrossrefs_env(on);
-        format!(
-            "dyld shared cache cross-image reference naming turned {}",
-            if on { "on" } else { "off" }
-        )
-    })
+/// The confirmation of `option dyldcrossrefs VALUE`, or its parse error.
+pub fn dyldcrossrefs_message(value: &str) -> UnlaceResult<String> {
+    crate::options::on_or_off(value).map(dyldcrossrefs_text)
+}
+
+fn dyldcrossrefs_text(on: bool) -> String {
+    format!(
+        "dyld shared cache cross-image reference naming turned {}",
+        if on { "on" } else { "off" }
+    )
 }
 
 #[cfg(test)]
@@ -108,7 +113,16 @@ mod tests {
         assert_eq!(image_name(" CoreFoundation "), Some("CoreFoundation"));
         assert_eq!(image_name("none"), None);
         assert_eq!(image_name("  "), None);
-        assert!(set_option("dyldcrossrefs", "maybe").unwrap().is_err());
-        assert!(set_option("dynrelocs", "on").is_none());
+        let mut options = crate::loadoptions::LoadOptions::default();
+        assert!(
+            set_option(&mut options, "dyldcrossrefs", "maybe")
+                .unwrap()
+                .is_err()
+        );
+        assert!(set_option(&mut options, "dynrelocs", "on").is_none());
+        set_option(&mut options, "dyldimage", "libfoo.dylib")
+            .unwrap()
+            .unwrap();
+        assert_eq!(options.dyldimage.as_deref(), Some("libfoo.dylib"));
     }
 }

@@ -15050,8 +15050,16 @@ the RETURN only for a callee that ran `restore` in its delay slot, and reading
 the last op alone made every SPARC call a terminal one, so any function with
 three callers in a linked image was concluded no-return. For its *successor* only **positive** evidence counts: the successor
 is data (outside every executable range, so the compiler emitted nothing there to
-fall into), or the successor is another function's entry (the compiler left the
-caller no tail at all). The legacy tally had a third arm ahead of those two — the
+fall into), the successor is an x86 `int3` (MSVC, and clang and rustc targeting
+Windows, plant the trap after a call that does not return: `call
+__CxxThrowException@8; int3`), or the successor is another function's entry (the
+compiler left the caller no tail at all). The promotion rule skips an `int3` in
+the caller's body rather than reading its lifted RETURN as a returning path, and
+`noreturn_propagate` skips a trailing `int3` as padding when it locates the last
+real instruction, so a static-CRT `_Xlen` (`call __CxxThrowException@8; int3`)
+is concluded no-return once its callee is. On SLABHIDDevice.dll (i386 MSVC, no
+symbols, default `auto` mode, so the Listing is built) this names
+`__CxxThrowException@8` and the helpers that only throw. The legacy tally had a third arm ahead of those two — the
 successor is not a decoded instruction start.
 
 That third arm is a statement about unlace, not about the program. The Listing walk

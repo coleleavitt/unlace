@@ -187,6 +187,11 @@ fn last_act_is_terminal_call(listing: &Listing, entry: u64, terminal: &BTreeSet<
     let mut has_terminal_call = false;
     let outside = |t: u64| t < entry || next.is_some_and(|n| t >= n);
     for (&vma, insn) in listing.instructions_in_range(entry, next) {
+        // An `int3` trap (lifted as a call through the vector and a RETURN) is
+        // where control never arrives, not a returning path.
+        if discstrict::is_int3(insn) {
+            continue;
+        }
         // (b) Any returning path disqualifies the function from this rule.
         if insn.flow.is_terminal {
             return false;

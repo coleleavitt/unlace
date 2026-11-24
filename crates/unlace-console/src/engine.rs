@@ -5017,7 +5017,9 @@ pub fn bootstrap_program(
     arch_id: &str,
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).xml_image(binaryimage, arch_id)
+    Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
+        .xml_image(binaryimage, arch_id)
 }
 
 /// The XML bootstrap behind [`bootstrap_program`].
@@ -5390,6 +5392,7 @@ pub fn bootstrap_from_raw(
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .arm_isa(isa)
         .raw(path, base, entries)
@@ -5408,6 +5411,7 @@ pub fn bootstrap_from_raw_segments(
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .arm_isa(isa)
         .raw_segments(path, runs, entries)
@@ -5618,6 +5622,7 @@ pub fn bootstrap_from_image_with_isa(
     isa: Option<ArmIsa>,
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .arm_isa(isa)
         .image(path)
@@ -5723,6 +5728,7 @@ pub fn bootstrap_from_wasm_bytes(
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .wasm_bytes(path, bytes)
 }
@@ -5916,6 +5922,7 @@ pub fn bootstrap_from_mz_bytes(
     isa: Option<ArmIsa>,
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .arm_isa(isa)
         .mz_bytes(path, bytes)
@@ -6016,7 +6023,11 @@ pub fn bootstrap_from_image(
     target: &str,
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).target(target).image(path)
+    Bootstrap::new(spec_roots)
+        .target(target)
+        .arm_isa(arm_isa_from_env()?)
+        .options(&LoadOptions::from_env_for_load())
+        .image(path)
 }
 
 /// Whether the file at `path` opens as a UEFI TE, reading only the bytes the
@@ -6082,6 +6093,7 @@ pub fn bootstrap_from_dex_bytes(
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .dex_bytes(path, bytes)
 }
@@ -6242,6 +6254,7 @@ pub fn bootstrap_from_te(
     isa: Option<ArmIsa>,
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .arm_isa(isa)
         .te(path)
@@ -6268,6 +6281,7 @@ pub fn bootstrap_from_te_bytes(
     isa: Option<ArmIsa>,
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .arm_isa(isa)
         .te_bytes(path, bytes)
@@ -9457,7 +9471,9 @@ pub fn bootstrap_from_root(
     root: &Rc<Element>,
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).xml_root(root)
+    Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
+        .xml_root(root)
 }
 
 /// The arch id and `<binaryimage>` a parsed XML document root names.
@@ -9569,7 +9585,16 @@ pub fn bootstrap_from_file(
     target: &str,
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).target(target).file(path)
+    // An unreadable ARM ISA variable keeps the environment-mode load, which
+    // reports it only for an input that reads it.
+    let Ok(isa) = arm_isa_from_env() else {
+        return Bootstrap::new(spec_roots).target(target).file(path);
+    };
+    Bootstrap::new(spec_roots)
+        .target(target)
+        .arm_isa(isa)
+        .options(&LoadOptions::from_env_for_load())
+        .file(path)
 }
 
 /// What [`bootstrap_from_file`] found at a path, by its leading bytes.

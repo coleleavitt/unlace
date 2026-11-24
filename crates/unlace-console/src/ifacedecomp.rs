@@ -117,6 +117,10 @@ pub struct IfaceDecompData {
     /// process global).  Set by the binary at startup from `-s`/`SLEIGHHOME`; read
     /// by `load file` to resolve the architecture.
     pub spec_roots: Vec<String>,
+    /// (unlace) The load-time options the next `load file` / `load raw` reads:
+    /// the environment's, read at the first load ([`Self::next_load_options`]),
+    /// then the loaded program's after each `option` ([`Self::keep_load_options`]).
+    pub load_options: Option<unlace_decomp::loadoptions::LoadOptions>,
     /// C++ `CallGraph *cgraph`: present once `callgraph build`/`load` has run.
     /// (The real `CallGraph` is a separate W9 item; this marks allocation so the
     /// `"No callgraph present"` guard is faithful.)
@@ -265,6 +269,25 @@ impl IfaceData for IfaceDecompData {
 }
 
 impl IfaceDecompData {
+    /// The load-time options the next load reads: [`Self::load_options`], read
+    /// from the environment the first time.
+    pub fn next_load_options(&mut self) -> unlace_decomp::loadoptions::LoadOptions {
+        self.load_options
+            .get_or_insert_with(unlace_decomp::loadoptions::LoadOptions::from_env_for_load)
+            .clone()
+    }
+
+    /// Keep the loaded program's load-time options for the next load, after an
+    /// `option` command changed them; the Go release stays the next image's.
+    pub fn keep_load_options(&mut self) {
+        if let Some(conf) = &self.conf {
+            self.load_options = Some(unlace_decomp::loadoptions::LoadOptions {
+                go_version: None,
+                ..conf.arch().load_options().clone()
+            });
+        }
+    }
+
     /// C++ `IfaceDecompData::abortFunction(ostream &s)`.
     ///
     /// Called when a command throws a low-level engine error: clear any analysis
@@ -1137,10 +1160,13 @@ decomp_command!(
         if dcp.conf.is_none() {
             s.skip_ws();
             let value = s.read_token();
-            let Some(res) = unlace_decomp::dyldcache::set_option(&optname, &value) else {
+            let mut options = dcp.next_load_options();
+            let Some(res) = unlace_decomp::dyldcache::set_option(&mut options, &optname, &value)
+            else {
                 return Err(IfaceError::execution("No load image present"));
             };
             let res = res.map_err(|e| IfaceError::execution(e.explain().to_string()))?;
+            dcp.load_options = Some(options);
             status.out(&format!("{res}\n"));
             return Ok(());
         }
@@ -1176,6 +1202,7 @@ decomp_command!(
                 .set_unlace_option(&optname, &p1)
                 .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
             prog.callwide_changed();
+            dcp.keep_load_options();
             status.out(&format!("{res}\n"));
             return Ok(());
         }
@@ -1195,6 +1222,7 @@ decomp_command!(
             .set(prog.arch_mut(), id, &p1, &p2, &p3)
             .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
         prog.callwide_changed();
+        dcp.keep_load_options();
         status.out(&format!("{res}\n"));
         Ok(())
     }
@@ -1298,12 +1326,12 @@ decomp_command!(
             }
         }
         // Read the spec roots off the shared data (set by the binary at startup).
-        let spec_roots = {
+        let (spec_roots, options) = {
             let dcp = dcp_mut(status)?;
-            dcp.spec_roots.clone()
+            (dcp.spec_roots.clone(), dcp.next_load_options())
         };
         // capa->buildArchitecture + conf->init(store) (the bootstrap chain).
-        match console_load_file(&filename, &target, &spec_roots) {
+        match console_load_file(&filename, &target, &spec_roots, &options) {
             Ok(prog) => {
                 // *status->optr << filename << " successfully loaded: " << desc;
                 let desc = prog.description().to_string();
@@ -1323,34 +1351,28 @@ decomp_command!(
     }
 );
 
-/// The load-time options a console load reads: the environment as it stands at
-/// the load, which is what every gate of an environment-mode load reads, with
-/// the Go release left to the image as an environment-mode load leaves it.
-fn console_load_options() -> unlace_decomp::loadoptions::LoadOptions {
-    unlace_decomp::loadoptions::LoadOptions::from_env_for_load()
-}
-
-/// `load file`: [`bootstrap_from_file`] with [`console_load_options`] and the
-/// ARM ISA of [`ARM_ISA_ENV`](crate::engine::ARM_ISA_ENV). An unreadable ISA
-/// variable keeps the environment-mode load, which reports it only for an input
-/// that reads it.
+/// `load file`: [`bootstrap_from_file`] with the console's load options
+/// ([`IfaceDecompData::next_load_options`]) and the ARM ISA of
+/// [`ARM_ISA_ENV`](crate::engine::ARM_ISA_ENV). An unreadable ISA variable keeps
+/// the environment-mode load, which reports it only for an input that reads it.
 fn console_load_file(
     path: &str,
     target: &str,
     spec_roots: &[String],
+    options: &unlace_decomp::loadoptions::LoadOptions,
 ) -> unlace_base::error::UnlaceResult<ConsoleProgram> {
     let Ok(isa) = crate::engine::arm_isa_from_env() else {
         return bootstrap_from_file(path, target, spec_roots);
     };
-    let options = console_load_options();
     crate::engine::Bootstrap::new(spec_roots)
         .target(target)
         .arm_isa(isa)
-        .options(&options)
+        .options(options)
         .file(path)
 }
 
-/// `load raw`: [`bootstrap_from_raw`](crate::engine::bootstrap_from_raw) with [`console_load_options`].
+/// `load raw`: [`bootstrap_from_raw`](crate::engine::bootstrap_from_raw) with the
+/// console's load options.
 fn console_load_raw(
     path: &str,
     target: &str,
@@ -1358,12 +1380,12 @@ fn console_load_raw(
     entries: &[u64],
     isa: Option<ArmIsa>,
     spec_roots: &[String],
+    options: &unlace_decomp::loadoptions::LoadOptions,
 ) -> unlace_base::error::UnlaceResult<ConsoleProgram> {
-    let options = console_load_options();
     crate::engine::Bootstrap::new(spec_roots)
         .target(target)
         .arm_isa(isa)
-        .options(&options)
+        .options(options)
         .raw(path, base, entries)
 }
 
@@ -1419,24 +1441,34 @@ decomp_command!(
             }
         }
         let spec_roots = dcp_mut(status)?.spec_roots.clone();
+        let options = dcp_mut(status)?.next_load_options();
         // A language id can contain spaces (`x86:LE:16:Real Mode`), which a
         // console token cannot: `_` stands for a space when the id as written
         // has no specification.
-        let loaded = console_load_raw(&filename, &target, base, &entries, isa, &spec_roots)
-            .or_else(|e| {
-                if target.contains('_') {
-                    console_load_raw(
-                        &filename,
-                        &target.replace('_', " "),
-                        base,
-                        &entries,
-                        isa,
-                        &spec_roots,
-                    )
-                } else {
-                    Err(e)
-                }
-            });
+        let loaded = console_load_raw(
+            &filename,
+            &target,
+            base,
+            &entries,
+            isa,
+            &spec_roots,
+            &options,
+        )
+        .or_else(|e| {
+            if target.contains('_') {
+                console_load_raw(
+                    &filename,
+                    &target.replace('_', " "),
+                    base,
+                    &entries,
+                    isa,
+                    &spec_roots,
+                    &options,
+                )
+            } else {
+                Err(e)
+            }
+        });
         match loaded {
             Ok(prog) => {
                 let desc = prog.description().to_string();

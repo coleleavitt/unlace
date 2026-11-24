@@ -212,7 +212,6 @@ unlace_options! { self, p1;
     "goabi" => {
         let (on, msg) = <crate::goabi::GoAbi as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().goabi = on.0;
-        crate::goabi::set_goabi_env(on.0);
         self.unlace_options.set(on);
         Ok(msg)
     },
@@ -220,7 +219,6 @@ unlace_options! { self, p1;
     "sourcelang" => {
         let (forced, msg) = <crate::sourcelang::SourceLangForced as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().sourcelang = forced.0;
-        crate::sourcelang::set_sourcelang_env(forced.0);
         self.unlace_options.set(forced);
         Ok(msg)
     },
@@ -438,7 +436,6 @@ unlace_options! { self, p1;
     "libctypes" => {
         let (layout, msg) = <crate::libctypes::LibcTypesLayout as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().libctypes = layout;
-        crate::libctypes::set_libctypes_env_layout(layout);
         self.unlace_options.set(layout);
         Ok(msg)
     },
@@ -474,7 +471,6 @@ unlace_options! { self, p1;
     "exporttrie" => {
         let val = on_or_off(p1)?;
         self.load_options_mut().exporttrie = val;
-        crate::exporttrie::set_exporttrie_env(val);
         Ok(format!("Mach-O export-trie naming turned {}", if val { "on" } else { "off" }))
     },
     "machobinds" => registered!(crate::analysisgates::Machobinds),
@@ -506,68 +502,60 @@ unlace_options! { self, p1;
             .ok_or_else(|| UnlaceError::parse("Expected ppc32picimports off|on|abi"))?;
         self.analysis_ppc32picimports = mode;
         self.load_options_mut().ppc32picimports = mode;
-        mode.set_env();
         Ok(format!("PPC32 PIC import recovery {}", mode.as_str()))
     },
     "ppcapu" => {
         let (val, msg) = <crate::ppcapu::PpcApu as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().ppcapu = val.0;
-        crate::ppcapu::set_ppcapu_env(val.0);
         self.unlace_options.set(val);
         Ok(msg)
     },
     "delphiabi" => {
         let (val, msg) = <crate::delphiabi::DelphiAbi as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().delphiabi = val.0;
-        crate::delphiabi::set_delphiabi_env(val.0);
         self.unlace_options.set(val);
         Ok(msg)
     },
     "ifuncfpret" => {
         let (val, msg) = <crate::ifuncfpret::IfuncFpRet as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().ifuncfpret = val.0;
-        crate::ifuncfpret::set_ifuncfpret_env(val.0);
         self.unlace_options.set(val);
         Ok(msg)
     },
     "kernelcache" => {
         let (choice, msg) = crate::kernelcache::parse_kernelcache(p1)?;
-        crate::kernelcache::set_kernelcache_env(&choice);
         self.load_options_mut().kernelcache = choice;
         Ok(msg)
     },
     "kernelcache-boot" => {
         let (choice, msg) = crate::kernelcacheboot::parse_kernelcache_boot(p1)?;
-        crate::kernelcacheboot::set_kernelcache_boot_env(&choice);
         self.load_options_mut().kernelcache_boot = choice;
         Ok(msg)
     },
     "dyldimage" => {
         self.load_options_mut().dyldimage =
             crate::dyldcache::image_name(p1).map(str::to_string);
-        Ok(crate::dyldcache::set_dyldimage(p1))
+        Ok(crate::dyldcache::dyldimage_message(p1))
     },
     "debuglink" => {
         let (val, msg) = <crate::debuglink::DebugLink as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().debuglink = val.0;
-        crate::debuglink::set_debuglink_env(val.0);
         self.unlace_options.set(val);
         Ok(msg)
     },
     "cil" => {
-        let msg = crate::cil::set_cil(p1)?;
+        let msg = crate::cil::cil_message(p1)?;
         self.load_options_mut().cil = crate::options::on_or_off(p1)?;
         Ok(msg)
     },
     "dyldcrossrefs" => {
-        let msg = crate::dyldcache::set_dyldcrossrefs(p1)?;
+        let msg = crate::dyldcache::dyldcrossrefs_message(p1)?;
         self.load_options_mut().dyldcrossrefs = crate::options::on_or_off(p1)?;
         Ok(msg)
     },
     "symbolnamechars" => {
         let (mode, msg) = <crate::symbolnamechars::NameChars as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().symbolnamechars = mode;
-        crate::symbolnamechars::set_symbolnamechars_env(mode);
         self.unlace_options.set(mode);
         Ok(msg)
     },
@@ -586,16 +574,12 @@ unlace_options! { self, p1;
     "dwarfenumtypedef" => {
         let (val, msg) = <crate::analysisgates::DwarfEnumTypedef as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().dwarfenumtypedef = val.0;
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var("UNLACE_DWARFENUMTYPEDEF", if val.0 { "on" } else { "off" }) };
         self.unlace_options.set(val);
         Ok(msg)
     },
     "dwarfscopes" => {
         let (val, msg) = <crate::analysisgates::DwarfScopes as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().dwarfscopes = val.0;
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var("UNLACE_DWARFSCOPES", if val.0 { "on" } else { "off" }) };
         self.unlace_options.set(val);
         Ok(msg)
     },
@@ -661,7 +645,6 @@ unlace_options! { self, p1;
     "nameladder" => {
         let (val, msg) = <crate::analysisgates::Nameladder as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().nameladder = val.0;
-        self.load_options().export_env("nameladder");
         self.unlace_options.set(val);
         Ok(msg)
     },
@@ -671,7 +654,6 @@ unlace_options! { self, p1;
     "ruststdsigs" => {
         let (val, msg) = <crate::ruststdsigs::RustStdSigs as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().ruststdsigs = val;
-        crate::ruststdsigs::set_ruststdsigs_env(val);
         self.unlace_options.set(val);
         Ok(msg)
     },
@@ -681,7 +663,6 @@ unlace_options! { self, p1;
     "codestrings" => {
         let (val, msg) = <crate::analysisgates::Codestrings as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().codestrings = val.0;
-        self.load_options().export_env("codestrings");
         self.unlace_options.set(val);
         Ok(msg)
     },
@@ -701,7 +682,6 @@ unlace_options! { self, p1;
     "swifttypes" => {
         let (val, msg) = <crate::analysisgates::Swifttypes as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().swifttypes = val.0;
-        self.load_options().export_env("swifttypes");
         self.unlace_options.set(val);
         Ok(msg)
     },
@@ -709,7 +689,6 @@ unlace_options! { self, p1;
     "objcivars" => {
         let (val, msg) = <crate::objcivars::ObjcIvars as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().objcivars = val.0;
-        crate::objcivars::set_objcivars_env(val.0);
         self.unlace_options.set(val);
         Ok(msg)
     },
@@ -717,7 +696,6 @@ unlace_options! { self, p1;
     "valuewitness" => registered!(crate::valuewitness::Valuewitness),
     "objcsdk" => {
         let path = crate::objcsdk::parse_option_value(p1).map_err(UnlaceError::parse)?;
-        crate::objcsdk::set_objcsdk_env(path.as_deref().and_then(|p| p.to_str()));
         self.load_options_mut().objcsdk = path.clone();
         Ok(match path {
             Some(p) => format!("Objective-C signatures read from {}", p.display()),
@@ -750,7 +728,6 @@ unlace_options! { self, p1;
     "macho-arm64e" => {
         let (val, msg) = <crate::macho_arm64e::MachoArm64e as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().macho_arm64e = val.0;
-        crate::macho_arm64e::set_macho_arm64e_env(val.0);
         self.unlace_options.set(val);
         Ok(msg)
     },

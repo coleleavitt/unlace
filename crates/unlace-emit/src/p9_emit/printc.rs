@@ -5728,6 +5728,33 @@ impl PrintC {
         Some((pad, other, Some(tru)))
     }
 
+    /// (unlace `itaniumeh`) The `try` form of the `if` `blk` on an exceptional edge: its
+    /// condition block, the arm that runs inside the `try` (printed after the `catch` it
+    /// would read as code the handler falls into), the landing pad and the arm the edge
+    /// enters. The arm that starts at a pad is the handler; else the pad of the call the edge
+    /// follows names it (`eh_if_arms`).
+    pub(super) fn eh_try_match(
+        &self,
+        fd: &Funcdata,
+        blk: BlockId,
+    ) -> Option<(BlockId, Option<BlockId>, u64, BlockId)> {
+        let block = fd.sblocks_ref().block(blk);
+        if self.lang().kw_open_curly != "{" || block.get_size() < 2 || !self.is_eh_if(fd, blk) {
+            return None;
+        }
+        let cond = block.get_block(0);
+        let tru = block.get_block(1);
+        let other = (block.get_size() == 3).then(|| block.get_block(2));
+        if let Some(pad) = self.eh_pad_start(fd, tru) {
+            return Some((cond, other, pad, tru));
+        }
+        if let Some((other, pad)) = other.and_then(|o| Some((o, self.eh_pad_start(fd, o)?))) {
+            return Some((cond, Some(tru), pad, other));
+        }
+        let (pad, handler, normal) = self.eh_if_arms(fd, blk)?;
+        Some((cond, normal, pad, handler))
+    }
+
     /// (unlace `itaniumeh`) Is `blk` an `if` whose condition is an
     /// `eh_unwinding()` exceptional edge?
     fn is_eh_if(&self, fd: &Funcdata, blk: BlockId) -> bool {
@@ -5876,7 +5903,8 @@ impl PrintC {
     }
 
     /// The blocks of `list`, the children of `blk` (all of them, or the rest
-    /// of a switch arm), printed in sequence.
+    /// of a switch arm), printed in sequence: through the statements the C syntax
+    /// tree built from them when it holds one for each block.
     fn emit_block_list(
         &mut self,
         fd: &Funcdata,
@@ -5884,9 +5912,43 @@ impl PrintC {
         blk: BlockId,
         list: &[BlockId],
     ) {
+        let items: Option<Vec<crate::ctree::StmtId>> = self
+            .ctree
+            .as_ref()
+            .and_then(|tree| list.iter().map(|&b| tree.node_for(b)).collect());
+        self.emit_list_items(fd, arch, blk, list, items.as_deref());
+    }
+
+    /// One element of a list printed by [`emit_list_items`](Self::emit_list_items): the tree
+    /// statement `items[k]` when given, else the block `list[k]`.
+    fn emit_list_item(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        list: &[BlockId],
+        items: Option<&[crate::ctree::StmtId]>,
+        k: usize,
+    ) {
+        match items.and_then(|items| items.get(k)) {
+            Some(&id) => self.emit_ctree_arm(fd, arch, id),
+            None => self.emit_block(fd, arch, list[k]),
+        }
+    }
+
+    /// C++ `PrintC::emitBlockLs` (printc.cc:2925) over the blocks `list` of `blk`, each
+    /// printed from the tree statement `items` holds for it (one per block) when given.
+    pub(super) fn emit_list_items(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        blk: BlockId,
+        list: &[BlockId],
+        items: Option<&[crate::ctree::StmtId]>,
+    ) {
+        let items = items.filter(|items| items.len() == list.len());
         if self.context.is_set(modifiers::ONLY_BRANCH) {
-            if let Some(&last) = list.last() {
-                self.emit_block(fd, arch, last);
+            if !list.is_empty() {
+                self.emit_list_item(fd, arch, list, items, list.len() - 1);
             }
             return;
         }
@@ -5911,9 +5973,9 @@ impl PrintC {
                 let pad = self.eh_pad_start(fd, list[k + 1]).expect("pad");
                 self.context.push_mod();
                 self.context.set_mod(modifiers::NO_BRANCH);
-                for &b in &list[..k] {
+                for j in 0..k {
                     let id = self.emit.begin_block(0);
-                    self.emit_block(fd, arch, b);
+                    self.emit_list_item(fd, arch, list, items, j);
                     self.emit.end_block(id);
                 }
                 self.context.pop_mod();
@@ -5944,8 +6006,8 @@ impl PrintC {
                 return;
             }
         }
-        if self.java_catches.is_some() && self.list_has_java_try(fd, &list) {
-            self.emit_block_ls_java_try(fd, arch, &list);
+        if self.java_catches.is_some() && self.list_has_java_try(fd, list) {
+            self.emit_block_ls_java_try(fd, arch, list);
             return;
         }
         let id1 = self.emit.begin_block(0);
@@ -5958,7 +6020,7 @@ impl PrintC {
         // renders `abort(); abort();`.  The datatest corpus never produces a
         // size-1 `Ls`, so this only surfaced under the unlace structuring passes.
         if n == 1 {
-            self.emit_block(fd, arch, list[0]);
+            self.emit_list_item(fd, arch, list, items, 0);
             self.emit.end_block(id1);
             return;
         }
@@ -5967,18 +6029,18 @@ impl PrintC {
         if !self.is_flat() {
             self.context.set_mod(modifiers::NO_BRANCH);
         }
-        self.emit_block(fd, arch, list[0]);
+        self.emit_list_item(fd, arch, list, items, 0);
         self.emit.end_block(id1);
         // Middle blocks: no_branch.
-        for &subbl in list.iter().take(n.saturating_sub(1)).skip(1) {
+        for j in 1..n.saturating_sub(1) {
             let id2 = self.emit.begin_block(0);
-            self.emit_block(fd, arch, subbl);
+            self.emit_list_item(fd, arch, list, items, j);
             self.emit.end_block(id2);
         }
         self.context.pop_mod();
         // Final block: caller's branch state.
         let id3 = self.emit.begin_block(0);
-        self.emit_block(fd, arch, list[n - 1]);
+        self.emit_list_item(fd, arch, list, items, n - 1);
         self.emit.end_block(id3);
     }
 
@@ -6029,29 +6091,11 @@ impl PrintC {
             }
             return;
         }
-        // (unlace `itaniumeh`) `if (eh_unwinding()) { pad } [else { normal }]`.
-        if self.lang().kw_open_curly == "{"
-            && fd.sblocks_ref().block(blk).get_size() >= 2
-            && self.is_eh_if(fd, blk)
-        {
-            let cond = fd.sblocks_ref().block(blk).get_block(0);
-            let tru = fd.sblocks_ref().block(blk).get_block(1);
-            let other = (fd.sblocks_ref().block(blk).get_size() == 3)
-                .then(|| fd.sblocks_ref().block(blk).get_block(2));
-            // The normal arm goes inside the `try`: printed after the `catch`
-            // it would read as code the handler falls into.
-            if let Some(pad) = self.eh_pad_start(fd, tru) {
-                self.emit_eh_try(fd, arch, cond, other, pad, &[tru], false);
-                return;
-            }
-            if let Some((other, pad)) = other.and_then(|o| Some((o, self.eh_pad_start(fd, o)?))) {
-                self.emit_eh_try(fd, arch, cond, Some(tru), pad, &[other], false);
-                return;
-            }
-            if let Some((pad, handler, normal)) = self.eh_if_arms(fd, blk) {
-                self.emit_eh_try(fd, arch, cond, normal, pad, &[handler], false);
-                return;
-            }
+        // (unlace `itaniumeh`) `if (eh_unwinding()) { pad } [else { normal }]`: the `Try`
+        // statement the tree made of it (`ctree_rewrite`).
+        if let Some((cond, normal, pad, handler)) = self.try_form(fd, blk) {
+            self.emit_eh_try(fd, arch, cond, normal, pad, &[handler], false);
+            return;
         }
         match self.ite_form(fd, arch, blk) {
             Some(ctreeprint::IteForm::Bool(m)) => {

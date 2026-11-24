@@ -1455,10 +1455,8 @@ impl Architecture {
     /// the `currentaction` option toggles accumulate for the session), and
     /// `commentstyle`, a recorded-no-op printer stub with no state to reset.
     pub fn reset_wire_defaults(&mut self) {
-        // The load-time PPC32 PIC mode is program and process state, so a wire
-        // reset clears both.
+        // The load-time PPC32 PIC mode is program state, so a wire reset clears it.
         self.load_options_mut().ppc32picimports = crate::ppc32picimports::Mode::Off;
-        crate::ppc32picimports::Mode::Off.set_env();
         self.reset_defaults();
         self.print.reset_wire_defaults();
     }

@@ -416,6 +416,7 @@ impl FunctionTestCollection {
     pub fn clear(&mut self) {
         if let Some(dcp) = self.dcp_mut() {
             dcp.clear_architecture();
+            dcp.load_options = None;
         }
         self.commands.clear();
         self.expected_errors.clear();

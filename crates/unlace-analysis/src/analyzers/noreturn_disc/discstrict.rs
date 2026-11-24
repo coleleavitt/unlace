@@ -58,16 +58,24 @@
 //! list) already covers the padding-tail wrapper shape that motivated the tally.
 
 use crate::listing::Listing;
+use crate::listing::model::Insn;
 
 /// Does the fall-through address `fall` of a call to `callee` carry POSITIVE
 /// evidence that the callee never returns?
 ///
-/// True when the successor is data (outside every executable range) or is another
-/// function's entry. A successor that merely failed to decode is NOT evidence —
-/// that is the GH-312 narrowing; see the module docs.
+/// True when the successor is data (outside every executable range), is an x86
+/// `int3` trap (MSVC, and clang and rustc targeting Windows, plant one after a
+/// call that does not return), or is another function's entry. A successor that
+/// merely failed to decode is NOT evidence — that is the GH-312 narrowing; see the
+/// module docs.
 pub(super) fn successor_is_positive_evidence(listing: &Listing, fall: u64, callee: u64) -> bool {
-    if listing.is_data(fall) {
+    if listing.is_data(fall) || listing.instruction_at(fall).is_some_and(is_int3) {
         return true;
     }
     fall != callee && listing.function_at(fall).is_some()
+}
+
+/// Is `insn` the x86 `int3` breakpoint trap?
+pub fn is_int3(insn: &Insn) -> bool {
+    insn.mnemonic.as_str().trim().eq_ignore_ascii_case("INT3")
 }

@@ -2172,8 +2172,8 @@ body (issue #1288); the note sends a PKLITE file to `unlace unpack`. Surfaces th
 need an `object::File` refuse an `MZ` input with a capability error, as they do
 a TE.
 
-(unlace) **PS-X EXE, N64 ROM, a.out, Amiga hunk, PEF and NE executables and
-OMF objects and libraries load from their own headers.** These containers hold code for processors unlace
+(unlace) **PS-X EXE, N64 ROM, a.out, Amiga hunk, PEF and NE executables,
+OMF objects and libraries, and Android boot images load from their own headers.** These containers hold code for processors unlace
 decodes, but the `object` crate reads none of them, so each was refused as an
 unknown format and had to be mapped by hand as a headerless image, which for
 the three relocatable ones is also wrong: a flat mapping leaves every
@@ -2252,6 +2252,15 @@ relocation program) is skipped and reported on stderr rather than guessed.
   of the first hunk, which must be code. An overlay tree ends the load with a
   note; a library or object unit (`HUNK_UNIT`) is not claimed. The language is
   `68000:BE:32:default`.
+- **Android boot image** (`androidboot.rs`): the `ANDROID!` magic, AOSP header
+  versions 0 to 2. The kernel is the module, based at `kernel_addr` and entered
+  at its first byte; its size is bounded by the module limit and it must fit the
+  32-bit address space. The language comes from the kernel's own header: an
+  arm64 `Image` (`ARM\x64` at 0x38) is `AARCH64:LE:64:v8A`, an ARM `zImage`
+  (0x016f2818 at 0x24) is `ARM:LE:32:v7`, and any other kernel is refused. The
+  ramdisk and second-stage loader are not mapped; each is named in a note. The
+  command line is not surfaced. A page size that is not a power of two, or a
+  kernel or ramdisk that runs past the file, is refused.
 - **PEF** (`pef.rs`): the tag `Joy!peff` with architecture `pwpc`; a CFM-68K
   fragment is refused. Each instantiated section (code, data,
   pattern-initialized data, constant) is placed in header order from
@@ -3042,6 +3051,8 @@ the image maps itself (a section linked into the Peripheral region, or a raw
 image based there) is left out, since its contents are the image's own. Only
 accesses whose address the decompiler resolves are affected: a register
 reached through a pointer held in a structure or passed as an argument is not.
+
+(unlace) **A Lua `luac` chunk parses into its prototype tree.** (#1263, first step: the container only. No option: nothing loads it yet, so no output changes.) `crates/unlace-analysis/src/loader/format/lua.rs (LuaChunk::parse)` reads a chunk of Lua 5.1 to 5.4 into plain tables: the header and its byte order, every prototype in dump order with its source name (NULL means the enclosing function's), line-defined range, parameters, vararg flag and stack size, the raw instruction words, the constant pool (nil, boolean, integer, float and raw-byte string), upvalue descriptors (5.2 and later), nested prototypes, and the debug lines, 5.4 absolute line anchors, locals and upvalue names. Each release's field order and tag values follow its own dumper; 5.3 writes float as tag 3 and integer as 0x13, the reverse of 5.4. Every count is checked against the bytes left before anything is stored, nesting stops at 200 levels, and a truncated or malformed chunk is an error. A 5.2 header carries no byte-order mark, so a big-endian 5.2 chunk is read as little-endian; 5.3 and 5.4 chunks take their byte order from `LUAC_INT`. Decoding the instructions and naming the functions from the parsed tree are the next steps.
 
 ## 1.3 Loader markup
 
@@ -5480,9 +5491,10 @@ moves.
   file's entry also carries a comment naming its kinds (`module kind
   COMBINED_PEIM_DRIVER`, `module kind COMBINED_MM_DXE`). Without this option, a PEIM
   and a standalone MM module keep the names the index gives them (see below), and every other entry keeps
-  `_ModuleEntryPoint`. The walk still
-  seeds a PEI or DXE core's parameters from the phase the index's kind gives
-  (PEI or DXE), so only the entry's name and prototype follow the file type.
+  `_ModuleEntryPoint`. With the option on, the walk also
+  seeds a core's parameters from its file type: a DXE core's HobStart and a PEI
+  core's SecCoreData and PpList are `VOID *`. Other modules keep the phase's
+  table types (PEI or DXE).
 
   The pass then follows the service tables through the code
   (`crates/unlace-analysis/src/analyzers/uefi/flow.rs (Walk)`). It
@@ -6540,6 +6552,14 @@ moves.
   member is brought to `msvc_demangler`'s (`dtor` is `destructor`) so a member
   reads the same whichever crate demangled it.
 
+  **Lambda closures** (`crates/unlace-analysis/src/analyzers/demangle/lambda.rs`,
+  `is_lambda_symbol`) are flagged, not renamed. A closure type's `operator()` is
+  recognised from three signals, any one enough: the Itanium closure-type name
+  `Ul <sig> E [digits] _` (the `Ul` at a nested-name, substitution or length
+  boundary), clang's `$_<n>` source name (in the mangled form, or at the start of
+  a demangled component), and libiberty's `{lambda(...)#N}` text. The flag is
+  metadata only; it changes no emitted name.
+
   **(unlace, docs/multilang.md) Swift names demangle through a pure-Rust
   demangler written for unlace** (`crates/unlace-analysis/src/analyzers/demangle/swift.rs
   (demangle_swift_name)`, with the parser in `swift/parse.rs`, the
@@ -7307,9 +7327,11 @@ every other binary's pass list is byte-identical to before the pass existed):
   `uncommontype.pkgPath` (`type:internal/poll.FD`, where the name record
   holds `poll.FD`), and a pointer, slice, array or map spelling is rebuilt
   from its elements' so the qualifier reaches it (`type:*internal/poll.FD`,
-  `type:[]io/fs.DirEntry`); a func or chan type, an anonymous struct and a
-  map type's own `pkgPath` (its record changed size with the swiss-table
-  maps) keep the record's spelling. A pointer record genuinely starts with
+  `type:[]io/fs.DirEntry`); a func or chan type and an anonymous struct keep the
+  record's spelling. A named map type's `pkgPath` is read past its map record,
+  whose size follows the Go version: the swiss-table record from go1.24
+  (`GoImage::swiss_maps`, set from the build-info version), the old buckets
+  record before (`GoImage::map_record`). A pointer record genuinely starts with
   `*`; an extra-star name was already stripped by the record reader. The
   `gonewtype` client maps the symbol back to the interned record by
   dropping the directory part of a named type's own qualifier, before any
@@ -7896,7 +7918,11 @@ every other binary's pass list is byte-identical to before the pass existed):
   image's mapped bytes (16 MiB at least), charged per record and per string
   byte; a string read stops scanning where the budget left runs out, so a
   crafted section of one unterminated run costs no more than the budget
-  (`crates/unlace-analysis/src/analyzers/objc/sections.rs (read_cstr)`).
+  (`crates/unlace-analysis/src/analyzers/objc/sections.rs (read_cstr)`). A selector
+  spelled as a Swift-mangled name (`$s` or `_$s` prefix) is shown in the demangler's
+  name-only form (`main.hello()`), the form Swift class names take; a name outside
+  the demangler's coverage stays raw
+  (`crates/unlace-analysis/src/analyzers/objc/methods.rs (display_selector)`).
 
   Code never touches a selector string or a `class_t` directly, so naming those
   alone leaves every send unreadable: `objc_msgSend(obj, sel)` loads `sel` from a
@@ -9650,6 +9676,13 @@ both
   names are IDA scripts, not functions) and one whose header file-type mask
   excludes the binary's format are never loaded, so pointing the variable at all
   of a `sig/` tree loads only the libraries that can apply.
+  The applicable files are applied in an order that puts the C runtime of the image's compiler first:
+  a `.comment` record that names GCC or clang (`GCC: (GNU) 15.2.0`, `clang version 18.1.3`; not
+  an image with a `rustc version` record) selects the files whose name or header library name
+  is that compiler's runtime (libgcc, libstdc++; compiler-rt, libc++) (`analyzers/flirt/cruntime.rs`).
+  The order does not change the arbitration, which scores candidates rather than taking the first. When
+  signature files were given and none is that runtime, the pass reports the compiler and its release on stderr.
+  A signature header records no release, so a release mismatch inside the family is not reported.
   With `flirttil on` (default off) the type libraries that the `ids` and `idsnames` files
   beside the applicable signatures name are read as sources of the `typelib` option: a line
   `<signature> <library>` autoloads `<library>.til`, from beside the `.sig` or from
@@ -9664,7 +9697,11 @@ both
   there: a branch or call target or, on x86, the address its 32-bit field encodes
   (an `ifunc` resolver references its implementations with `lea`, which the Listing
   records as no flow). A module with a reference is accepted only when the
-  reference's target already carries that name, so matching runs up to three
+  reference's target already carries that name, or when the target is not named
+  yet and its own bytes match a reference-free signature of that name (the callee's
+  own signature, `callee_named`; a callee discovery never created, reached only
+  by a tail `jmp`, resolves this way). Such a target counts as an agreeing site
+  in the arbitration below. Matching runs up to three
   rounds and names found in one round satisfy references in the next.
   The version-11 reference sites decide the rest. A module that lies wholly inside
   the trie prefix has no CRC to tell it apart, so it is dropped when one of its

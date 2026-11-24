@@ -2509,6 +2509,8 @@ define pcodeop InstructionCacheBlockLockSetX;
 	D = tmp;
 }
 
+# SPE2 reuses these VA-form encodings (OP=4, XO 48/49/51) for evdot*aaw (#98)
+@ifndef SPE2
 :maddhd D,A,B,C			is $(NOTVLE) & OP=4 & D & A & B & C & XOP_0_5=48 {
 	tmpa:16 = sext(A);
 	tmpb:16 = sext(B);
@@ -2532,6 +2534,8 @@ define pcodeop InstructionCacheBlockLockSetX;
 	tmpp:16 = (tmpa * tmpb) + tmpc;
 	D = tmpp:8;
 }
+@endif
+
 
 :mcrxrx CRFD			is $(NOTVLE) & OP=31 & BITS_11_22=0 & BIT_0=0 & XOP_1_10=576 & CRFD {
 	CRFD = (xer_ov << 3) | (xer_ov32 << 2) | (xer_ca << 1) | (xer_ca32);

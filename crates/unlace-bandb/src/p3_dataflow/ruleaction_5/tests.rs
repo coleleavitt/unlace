@@ -707,6 +707,80 @@ fn sless2zero_negative_rhs_const_nonzero() {
     assert_eq!(rule.apply_op(op, &mut fd), 0);
 }
 
+/// `zext(a < b) << 31` as a 4-byte varnode: (shift output, bool).
+fn mk_zext_bool_shift(fd: &mut Funcdata) -> (VarnodeId, VarnodeId) {
+    let cmp = mk_op(fd, 2, 0x80, OpCode::CPUI_INT_LESS);
+    let a = mk_input(fd, 0x10, 4);
+    let b = mk_input(fd, 0x14, 4);
+    fd.op_set_input(cmp, a, 0).unwrap();
+    fd.op_set_input(cmp, b, 1).unwrap();
+    let bvn = mk_vn(fd, 0x30, 1);
+    set_def(fd, bvn, cmp);
+    let zext = mk_op(fd, 1, 0x84, OpCode::CPUI_INT_ZEXT);
+    fd.op_set_input(zext, bvn, 0).unwrap();
+    let zvn = mk_vn(fd, 0x34, 4);
+    set_def(fd, zvn, zext);
+    let shl = mk_op(fd, 2, 0x88, OpCode::CPUI_INT_LEFT);
+    let sa = mk_const(fd, 31, 4);
+    fd.op_set_input(shl, zvn, 0).unwrap();
+    fd.op_set_input(shl, sa, 1).unwrap();
+    let svn = mk_vn(fd, 0x38, 4);
+    set_def(fd, svn, shl);
+    (svn, bvn)
+}
+
+#[test]
+fn sless2zero_minus1_zext_bool_shift_negates() {
+    // -1 s< (zext(bool) << 31)  =>  !bool
+    let mut fd = build_fd();
+    let (svn, bvn) = mk_zext_bool_shift(&mut fd);
+    let op = mk_op(&mut fd, 2, 0x100, OpCode::CPUI_INT_SLESS);
+    let m1 = mk_const(&mut fd, 0xffff_ffff, 4);
+    fd.op_set_input(op, m1, 0).unwrap();
+    fd.op_set_input(op, svn, 1).unwrap();
+    let mut rule = RuleSLess2Zero::new("analysis");
+    assert_eq!(rule.apply_op(op, &mut fd), 1);
+    assert_eq!(code_of(&fd, op), OpCode::CPUI_BOOL_NEGATE);
+    assert_eq!(fd.obank().get(op).unwrap().num_input(), 1);
+    assert_eq!(fd.obank().get(op).unwrap().get_in(0), Some(bvn));
+}
+
+#[test]
+fn sless2zero_zext_bool_shift_below_zero_copies() {
+    // (zext(bool) << 31) s< 0  =>  bool
+    let mut fd = build_fd();
+    let (svn, bvn) = mk_zext_bool_shift(&mut fd);
+    let op = mk_op(&mut fd, 2, 0x100, OpCode::CPUI_INT_SLESS);
+    let zero = mk_const(&mut fd, 0, 4);
+    fd.op_set_input(op, svn, 0).unwrap();
+    fd.op_set_input(op, zero, 1).unwrap();
+    let mut rule = RuleSLess2Zero::new("analysis");
+    assert_eq!(rule.apply_op(op, &mut fd), 1);
+    assert_eq!(code_of(&fd, op), OpCode::CPUI_COPY);
+    assert_eq!(fd.obank().get(op).unwrap().num_input(), 1);
+    assert_eq!(fd.obank().get(op).unwrap().get_in(0), Some(bvn));
+}
+
+#[test]
+fn sless2zero_shift_of_non_bool_declines() {
+    // (w << 31) s< 0 with w an ordinary input is left alone.
+    let mut fd = build_fd();
+    let shl = mk_op(&mut fd, 2, 0x88, OpCode::CPUI_INT_LEFT);
+    let w = mk_input(&mut fd, 0x10, 4);
+    let sa = mk_const(&mut fd, 31, 4);
+    fd.op_set_input(shl, w, 0).unwrap();
+    fd.op_set_input(shl, sa, 1).unwrap();
+    let svn = mk_vn(&mut fd, 0x38, 4);
+    set_def(&mut fd, svn, shl);
+    let op = mk_op(&mut fd, 2, 0x100, OpCode::CPUI_INT_SLESS);
+    let zero = mk_const(&mut fd, 0, 4);
+    fd.op_set_input(op, svn, 0).unwrap();
+    fd.op_set_input(op, zero, 1).unwrap();
+    let mut rule = RuleSLess2Zero::new("analysis");
+    assert_eq!(rule.apply_op(op, &mut fd), 0);
+    assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_SLESS);
+}
+
 // =============================================================================
 // RuleEqual2Zero
 // =============================================================================

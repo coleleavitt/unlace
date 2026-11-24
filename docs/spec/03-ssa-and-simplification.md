@@ -1749,6 +1749,20 @@ bounded boolean fan-out first, before dropping guards could hide the proof.
 Thus ordinary UCOMISS conditions keep their ordered forms without granting
 an unguarded MINSS comparison a false complement.
 
+**A float compare read back through a flag's sign bit.** ARM VFP compares in
+`FloatVectorCompare` pack their four results into FPSCR bits 31..28, and
+`vmrs APSR_nzcv, fpscr` copies them into the flags, so `bpl` after
+`vcmp a, b` tests the sign of `zext(a < b) << 31` and printed as
+`0 <= (int)((unsigned int)(a < b) << 0x1f)`. `RuleSLess2Zero`
+(`crates/unlace-bandb/src/p3_dataflow/ruleaction_5.rs`) already rewrote
+`-1 s< (bool << #8*sz-1)` to `!bool`; it now also looks through one
+`INT_ZEXT` of a 1-byte boolean to find that bool, and rewrites the mirror form
+`(bool << #8*sz-1) s< 0` to `bool`, so the test prints as `!(a < b)` or
+`a < b`. Both rewrites are exact identities (bit 0 of the zero-extended
+bool is the only bit the shift keeps), so this is a strict fix with no option.
+A shifted value that is not a boolean (the `lsls r, #31; bmi` bit-0 test) is
+left as it was.
+
 A guard matches an operand when both are the same value, or when both are
 reads of one location by one instruction: two LOADs through one pointer, or
 two not-yet-heritaged reads of one memory varnode, provided no op of that

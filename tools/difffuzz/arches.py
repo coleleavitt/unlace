@@ -2296,7 +2296,7 @@ class SlotDis(BinutilsDis):
         for (off, text), nxt in zip(lines, lines[1:] + [(None, None)]):
             if off % self.width:
                 continue
-            if not text or text.startswith(("(bad)", "bad", ".word", ".long", ".byte", ".short", "#", "*unknown*")):
+            if not text or text.startswith(("(bad)", "bad", ".word", ".long", ".byte", ".short", "#", "*unknown*", "unknown")):
                 continue
             n = (nxt[0] if nxt[0] is not None else off + self.width) - off
             mn, ops = (re.split(r"\s+", text, maxsplit=1) + [""])[:2]
@@ -2521,4 +2521,58 @@ class V850(ObjdumpArch):
         return cand["mnemonic"] in ("mac", "macu")
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850())}
+MN10300_DENY = re.compile(
+    r"^(b[a-z]*|l[a-z]{2}|jmp|call[a-z]*|ret[a-z]*|rti|trap|syscall|udf.*|nop|rets|retf|jsr|"
+    r"getx|putx|mulq.*|mulqu.*|sat.*)$"
+)
+
+
+class Mn10300(ObjdumpArch):
+    """Matsushita MN10300 (little endian) against gdb's mn10300 simulator (--oracle gdbsim). The
+    simulator has memory below 1 MiB, so the instruction sits at 0x10000. Z, N, C and V are
+    compared through PSW. Branches, calls, returns, loops and traps are not generated."""
+    name = "mn10300"
+    lang = "mn10300:LE:32:mn10300"
+    elf_machine = 89
+    base = 0x10000
+    big = False
+    pc = "PC"
+    gprs = [(n, None) for n in ["D0", "D1", "D2", "D3", "A0", "A1", "A2", "A3", "SP", "MDR", "LIR", "LAR"]]
+    pc_const = None
+    flags_reg = "psw"
+    flag_bits = {"ZF": 0, "NF": 1, "CF": 2, "VF": 3}
+    deny = MN10300_DENY
+    gdbsim = "mn10300"
+    gdb_pc = "pc"
+
+    def unicorn(self):
+        raise NotImplementedError("mn10300 runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("mn10300", False, 16, b"\xcb", 1)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(56).to_bytes(7, "little")
+
+    def gdb_reg(self, n):
+        return n.lower()
+
+    def rand_reg(self, rng, bits):
+        if rng.random() < 0.35:
+            return rng.randrange(0x20000, 0xF0000) & ~3
+        return Arch.rand_reg(self, rng, bits)
+
+    def addr_ok(self, a):
+        return a < 0x100000
+
+    def ignored(self, mnemonic, operands, state):
+        # DIV/DIVU leave the registers undefined on overflow (V set); sim/mn10300 only tests a
+        # zero divisor and truncates the quotient
+        if mnemonic in ("div", "divu") and state.get("VF"):
+            return {"*"}
+        return set()
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300())}

@@ -2060,11 +2060,14 @@ instructions an optimized file may contain (`loadimage_dex.rs (dex_language)`).
 A version-027 **VDEX** (Android 12 and later) lists its sections in its header;
 the DEX section holds one DEX file per checksum, each 4-byte aligned after the
 previous one's `file_size`, and runs to the section's end so a compact DEX file's
-shared data stays reachable. An **OAT** file is an ELF whose `oatdata` dynamic
+shared data stays reachable. Each entry must carry a DEX or compact DEX magic,
+and a VDEX of any version other than 027 is refused as `Unsupported VDEX version`. An **OAT** file is an ELF whose `oatdata` dynamic
 symbol starts with `oat\n` and a version; up to Android 7 it embeds the DEX
 files, which are found by their own headers (a DEX magic on a 4-byte boundary
 whose header size, endian tag and file size hold up), since the `OatDexFile`
-records that locate them change with every OAT version. Every form is
+records that locate them change with every OAT version. An OAT whose `oatdata`
+holds no DEX file is refused (`Could not locate DEX file inside the OAT file`),
+not read as an empty image. Every form is
 synthesized from `tests/stages/fixtures/dex/hello.dex` and `tries.dex` by
 `tests/stages/fixtures/dex/containers.py`.
 

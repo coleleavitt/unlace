@@ -8,6 +8,7 @@ pub mod double;
 pub mod funcdata_union;
 pub mod kuna_borrowcompare; // (kuna) a branchless two-word borrow compare folds to one double-precision compare
 pub mod kuna_codescalar;
+pub mod kuna_comtyping; // (kuna) a COM request's out-parameter holds the interface its id argument names
 pub mod kuna_fatstr; // (kuna) length-carried (ptr,len) string literals (docs/multilang.md W3/W4)
 pub mod kuna_fieldtype; // (kuna) a synthesized field some access holds as a pointer is declared as that pointer
 pub mod kuna_gonewtype; // (kuna) type a runtime.newobject result from its descriptor argument (docs/multilang.md, Go pack)

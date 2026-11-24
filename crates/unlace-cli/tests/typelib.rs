@@ -1,5 +1,6 @@
 //! `typelib`: the prebuilt type library declares the libc imports of an
-//! x86-64 Linux image that no built-in table declares.
+//! x86-64 Linux image, and the Windows API imports of a PE, that no built-in
+//! table declares.
 //!
 //! `fixtures/typelib_x86_64` is `typelib_x86_64.c` built with
 //! `gcc -O1 -fno-inline -o typelib_x86_64 typelib_x86_64.c` (no debug info).
@@ -108,16 +109,22 @@ fn a_declared_callback_slot_still_declares_its_callback() {
 
 #[test]
 fn an_image_of_another_target_is_unchanged() {
-    for name in [
-        "pe_imports.exe",
-        "libctypes_mips32_glibc_le32",
-        "libctypes_widths_i386",
-    ] {
+    for name in ["libctypes_mips32_glibc_le32", "libctypes_widths_i386"] {
         let image = fixture(name);
         let auto = kuna(&["decompile-all", &image]);
         let off = kuna(&["decompile-all", &image, "--option", "typelib", "off"]);
         assert_eq!(auto, off, "{name}");
     }
+}
+
+/// A PE reads the built-in Windows API library for its pointer width without
+/// a complaint: the library parses and names the image's own target.
+#[test]
+fn a_pe_reads_the_built_in_windows_library() {
+    let image = fixture("pe_imports.exe");
+    let (_, stderr, code) = common::run_kuna(&["decompile-all", &image]);
+    assert_eq!(code, 0, "{stderr}");
+    assert!(!stderr.contains("[kuna typelib]"), "{stderr}");
 }
 
 /// One IDA type-library entry (format 0x12, 32-bit ordinal).

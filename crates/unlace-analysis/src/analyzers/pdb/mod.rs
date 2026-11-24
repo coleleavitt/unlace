@@ -18,6 +18,11 @@
 //!   (the FID full-hash-match discipline — never apply a wrong/stale PDB).
 //! - [`walk`] — **PR-P1**: the global symbol-stream walk (`S_PUB32`/`S_GPROC32`
 //!   → function name + VMA) through the `pdb` crate.
+//! - [`kuna_pdbtpi`] — the TPI type stream mapped onto kuna datatypes.
+//! - [`kuna_pdbtypes`] — (`pdbtypes`) typed prototypes, stack and register
+//!   locals, typed globals and vftables from the module and global streams.
+//! - [`kuna_pdblines`] — (`pdblines`) `file:line` comments from the C13 line
+//!   programs.
 //!
 //! ## The pass ([`PdbPass`], the headline)
 //!
@@ -34,8 +39,10 @@
 //!      placeholder rename, the FID precedent) + `out.symbols` (so the function
 //!      exists for the rename to bind even when reached only through the metadata).
 //!
-//! Types/typed locals/lines are the deferred PR-P2/P3 — this PR is the NAME level:
-//! stripped `FUN_*` → the real name.
+//! This pass is the NAME level: stripped `FUN_*` → the real name. Types,
+//! prototypes, locals, globals and vftables are [`kuna_pdbtypes`] (`pdbtypes`),
+//! source lines [`kuna_pdblines`] (`pdblines`); both open the same
+//! fingerprint-matched `.pdb` through [`open_matched`].
 //!
 //! ## Gating + parity safety
 //!
@@ -51,6 +58,9 @@
 
 pub mod codeview;
 pub mod kuna_pdbinterior;
+pub mod kuna_pdblines;
+pub(crate) mod kuna_pdbtpi;
+pub mod kuna_pdbtypes;
 pub mod locate;
 pub mod walk;
 
@@ -142,6 +152,23 @@ impl AnalysisPass for PdbPass {
 
         out
     }
+}
+
+/// The fingerprint-matched `.pdb` of the PE `ctx` loads, with the image base its
+/// RVAs are relative to; `None` on a non-PE image, without a CodeView record, or
+/// when no candidate matches.
+pub(crate) fn open_matched(ctx: &AnalysisCtx) -> Option<(pdb::PDB<'static, std::fs::File>, u64)> {
+    if ctx.file.format() != object::BinaryFormat::Pe {
+        return None;
+    }
+    let cv = codeview::extract_codeview(ctx.bytes)?;
+    let candidates = locate::pdb_candidates(ctx.image_path, &cv);
+    if candidates.is_empty() {
+        return None;
+    }
+    let image_base = pe_image_base(ctx.bytes)?;
+    let pdb = open_fingerprint_matched(&candidates, &cv)?;
+    Some((pdb, image_base))
 }
 
 /// Open the first candidate `.pdb` whose own `{guid, age}` matches the PE's

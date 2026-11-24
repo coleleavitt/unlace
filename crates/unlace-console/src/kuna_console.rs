@@ -738,6 +738,16 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             (true, false) => "on",
             (true, true) => "lines",
         },
+        "gopcln" => {
+            let g = conf
+                .kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::GoPcln>();
+            match (g.on, g.lines) {
+                (false, _) => "off",
+                (true, false) => "on",
+                (true, true) => "lines",
+            }
+        }
         "elfmain" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Elfmain>()

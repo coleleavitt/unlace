@@ -93,6 +93,7 @@ real ELF parser.
 | `pe_pdata_arm64.exe` | hand-assembled ARM64 PE32+ (1.5 KB; generator `pe_pdata_arm64.py`) with four functions and four 8-byte ARM `{BeginAddress, UnwindData}` `.pdata` records | The machine-dependent `.pdata` record stride (ungated). Read at the x64 stride of 12 the 32-byte directory yields two entries, one of them only because record 0 sits at offset 0; at the ARM stride all four functions are discovered |
 | `pdb_prog.exe` + `pdb_prog.pdb` (+ `pdb_prog_mismatch.pdb`) | x86-64 Windows PE built `-g -gcodeview` with its matching `.pdb`, source `pdb_prog.c` | PE PDB metadata recovery (`s1_pdb`, default-on since DIV-129): a stripped `FUN_<addr>` → its real name `pdb_demo_compute` from the PDB `S_PUB32`/`S_GPROC32` stream, gated by the GUID/age fingerprint check. The `.pdb` is vendored **beside** the `.exe` and the EXE's CodeView record names it, so the sidecar search finds it with no `kuna_pdb_path` (which still works for a `.pdb` kept elsewhere). `pdb_prog_mismatch.pdb` (a different content-hash GUID) drives the negative gate (mismatch → no rename), copied to the sidecar name in a scratch directory. VMA/GUID pinned below |
 | `pdb_cpp.exe` + `pdb_cpp.pdb` | x86-64 Windows PE (2.5 KB) built from `pdb_cpp.cpp` as freestanding MSVC-ABI C++, with its matching `.pdb` | PDB C++ names: every function is named only by a decorated `S_PUB32` public (`??0Box@app@@QEAA@H@Z`), which the pass demangles into its namespace (`app::Box::Box`); the `??_G` scalar deleting destructor reads `app::Box::scalar_deleting_destructor`, and the two `operator delete` overloads (`0x140001030`, `0x140001040`) stay two listed functions. Recipe below |
+| `pdb_types_x86_64.exe` + `pdb_types_x86_64.pdb`, `pdb_types_i386.exe` + `pdb_types_i386.pdb` | x86-64 and i386 Windows PEs built `/Od /Z7` by clang-cl from `pdb_types.cpp` (freestanding MSVC-ABI C++), each with its matching `.pdb` | PDB types, prototypes, locals and lines (`pdbtypes`, `pdblines`): a struct with a self pointer, a union, an enum, a class pair with a vftable, stack and register locals, globals. Recipe below |
 | `importcall_pe_x86_64.exe` | hand-assembled PE32+/x86-64 (1.5 KB; generator `importcall_pe_x86_64.py`) whose entry passes the exported `worker_proc` to `CreateThread` and closes the handle, both through KERNEL32 IAT slots | Ghidra mode's import-slot resolution: the ghidra-sim oracle answers each slot as Java does (a one-byte `<externrefsymbol>`, then the function from getExternalRef), and the call must print as the import and `worker_proc` by name (`unlace-ghidra/tests/ghidra_sim_e2e.rs`) |
 | `callfixup_pe_x86_64.exe` | hand-assembled PE32+/x86-64 (1.5 KB; generator `callfixup_pe_x86_64.py`) whose entry calls the exported `__chkstk`, then makes a Control Flow Guard virtual call through a read-only `__guard_dispatch_icall_fptr` slot holding the exported `_guard_dispatch_icall_nop` | Ghidra mode's call-fixups: with the host's `<inject>` tags both helper calls are replaced, and the guarded call prints as the virtual call it dispatches (`unlace-ghidra/tests/ghidra_sim_e2e.rs`) |
 | `homeslot_pe_x86_64.exe` | hand-assembled PE32+/x86-64 (1.5 KB; generator `homeslot_pe_x86_64.py`) whose entry stores the exported `worker_proc` into the home slot at entry `rsp+0x18` and passes the slot's address to the exported `consume` | Ghidra mode with a declared callee: the store survives `calleeprotostack` because the slot's address escapes (`unlace-ghidra/tests/ghidra_sim_e2e.rs`; the bytes also back `tests/stages/kuna-calleeprotostack-homeslot.xml`) |
@@ -2592,6 +2593,31 @@ GUID (raw 16 bytes) = `63 39 AC 61 48 FF 24 90 4C 4C 44 20 50 44 42 2E`
 form), Age = `1`, PDBFileName = `pdb_min.pdb`. The GUID is content-hash-derived, so
 **a rebuild produces a different GUID** — pin the checked-in binary's values as
 test consts (re-read with `llvm-readobj` if you ever rebuild it).
+
+## PDB types, prototypes, locals and lines (`pdbtypes`, `pdblines`)
+
+`pdb_types_x86_64.exe`/`.pdb` and `pdb_types_i386.exe`/`.pdb` are one source,
+`pdb_types.cpp`, built twice at `/Od` so every parameter and local has a
+frame-relative def-range (x64: RSP-based, `S_FRAMEPROC` frame 40 in
+`rect_area`; i386: an EBP frame). `/Brepro`, `-ffile-compilation-dir=.` and
+`/pdbsourcepath:C:\src` keep build-machine paths out of both files:
+
+```sh
+for t in x86_64:x86_64-pc-windows-msvc i386:i686-pc-windows-msvc; do
+  a=${t%%:*}; tgt=${t#*:}
+  clang-cl --target=$tgt /Od /Z7 /GS- /GR- /EHs-c- /Brepro -fno-builtin \
+      -ffile-compilation-dir=. /c pdb_types.cpp /Fopdb_types_$a.obj
+  lld-link /Brepro /pdbsourcepath:C:\\src /entry:mainCRTStartup /subsystem:console \
+      /nodefaultlib /debug /pdbaltpath:pdb_types_$a.pdb /out:pdb_types_$a.exe \
+      /pdb:pdb_types_$a.pdb pdb_types_$a.obj
+done
+```
+
+Pinned (`llvm-pdbutil dump --types --symbols`): x64 ImageBase `0x140000000`,
+`rect_area` at `0x140001020`; TPI `0x1002` is the forward reference to
+`geo::Rect` (32 bytes), `0x1008` `geo::Color`, `0x1009` `geo::Word`, `0x1016`
+`geo::Square`, `0x101B` `geo::Shape`, `0x101F` `geo::Square::area`'s type,
+`0x1005` `rect_area`'s. The i386 `add_std` is `__stdcall`.
 
 ## PE + matching PDB — the PDB-consuming pass (s1_pdb PR-P1)
 

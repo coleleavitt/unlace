@@ -258,6 +258,8 @@ Three tiers:
 | a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters | [`pairparam`](#pairparam----on--off-default-on) |
 | a long long parameter on 32-bit ARM prints as two int parameters in r0 and r1 or r2 and r3 | [`armpairparam`](#armpairparam----on--off-default-off) |
 | a 64-bit compare on 32-bit ARM prints as an SBORROW4 or CONCAT44 chain over two register parameters | [`armpairparam`](#armpairparam----on--off-default-off) |
+| a long long compare on i386 prints as branches over four int parameters that compare the high words before the low words | [`pairbranch`](#pairbranch----on--off-default-off) |
+| a long long equality prints as a0 == a2 && a1 == a3 over four int parameters | [`pairbranch`](#pairbranch----on--off-default-off) |
 | a signed char loaded with ldrsb is declared int | [`regsigned`](#regsigned----on--off-default-off) |
 | a short counter prints as int with (int)(short) casts at every use | [`regsigned`](#regsigned----on--off-default-off) |
 | an int local prints as long on x86-64 though every value is a movsxd | [`regsigned`](#regsigned----on--off-default-off) |
@@ -634,6 +636,12 @@ Three tiers:
 | nested if per call result where the source has one if (a && b && c) | [`condcallpush`](#condcallpush----on--off-default-on) |
 | an x86 test of a call result is not folded into the && chain with its neighbours | [`condcallpush`](#condcallpush----on--off-default-on) |
 | condfold on and --mode aggressive do not fold a chain of call-result tests | [`condcallpush`](#condcallpush----on--off-default-on) |
+| an if condition assigns a call result with a comma operand where the source wrote a separate statement and guard | [`orchainlive`](#orchainlive----on--off-default-off) |
+| guard clauses returning the same constant print as one && chain | [`orchainlive`](#orchainlive----on--off-default-off) |
+| guard clauses returning the same error constant print as one && /  | [`orchainbool`](#orchainbool----on--off-default-off) |
+|  | [`orchainbool`](#orchainbool----on--off-default-off) |
+|  chain | [`orchainbool`](#orchainbool----on--off-default-off) |
+| a null check and an unrelated field test are folded into one condition before a shared return -1 | [`orchainbool`](#orchainbool----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -1026,6 +1034,10 @@ Three tiers:
 | a global described by DWARF as a struct renders as raw offsets off its address | [`dwarfglobaltypes`](#dwarfglobaltypes----on--off-default-off) |
 | a DWARF-typed pointer global is a long or undefined8 | [`dwarfglobaltypes`](#dwarfglobaltypes----on--off-default-off) |
 | a -g binary's globals have names but not types | [`dwarfglobaltypes`](#dwarfglobaltypes----on--off-default-off) |
+| a call to a library function passes 1 where the header names an enum member | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
+| an import declared in the binary's DWARF still has an inferred prototype | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
+| a call to an import drops an argument or passes CONCAT44 garbage in a -g binary | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
+| enum constants print as numbers in calls to a shared library | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
 | a __thread variable reads as *(int *)(v1 + -0x10) with v1 an fs_offset | [`tlsnames`](#tlsnames----on--off-default-on) |
 | thread-local variables of an executable have no names although .symtab has STT_TLS symbols | [`tlsnames`](#tlsnames----on--off-default-on) |
 | the TLS block is not modelled | [`tlsnames`](#tlsnames----on--off-default-on) |
@@ -1913,6 +1925,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
 - **Example:** `option armpairparam on`
 
+### `pairbranch` -- on | off, default `off`
+
+- **Symptoms:** a long long compare on i386 prints as branches over four int parameters that compare the high words before the low words; a long long equality prints as a0 == a2 && a1 == a3 over four int parameters.
+- **What it does:** Join two adjacent input words into one 8-byte parameter when a 64-bit compare split across branches links them: an unsigned low-word compare with an ordered high-word compare in the one or two single-entry blocks above it (MSVC's cmp hi; jl; jg; cmp lo; jb), or a low-word equality with a high-word equality in the block directly above or below it.
+- **When to flip:** Off by default: two separate int parameters compared lexicographically or pairwise (if (x1 == x2 && y1 == y2) over adjacent parameters) compile to the same branches, so the join is a reading, not a fact. Turn it on for i386 MSVC binaries or ARM32 code with 64-bit arithmetic where a long long parameter prints as two int parameters and its compare as a chain of branches over the two words (a1 < a3, else a1 == a3 and a0 < a2; or a0 == a2 && a1 == a3). pairparam must be on; on 32-bit ARM register pairs also need armpairparam. A pair of zero tests is never joined, and neither is an equality with constants.
+- **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
+- **Example:** `option pairbranch on`
+
 ### `regsigned` -- on | off, default `off`
 
 - **Symptoms:** a signed char loaded with ldrsb is declared int; a short counter prints as int with (int)(short) casts at every use; an int local prints as long on x86-64 though every value is a movsxd.
@@ -2729,6 +2749,22 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P8/goto-quality · kuna · structure-recovery · unlace-10-andorchain
 - **Example:** `option condcallpush off`
 
+### `orchainlive` -- on | off, default `off`
+
+- **Symptoms:** an if condition assigns a call result with a comma operand where the source wrote a separate statement and guard; guard clauses returning the same constant print as one && chain.
+- **What it does:** Narrow the short-circuit protection that stops `returndup` from splitting a shared constant return (`kuna_orchain.rs`, DIV-69): an operand block that computes a value read outside it (a call's result kept in a variable, `v1 = lseek64(fd,0,1)`) does not count as a fold the split would destroy. Such an operand is a statement the source wrote before its own guard (`offset = LSEEK(...); if (offset == -1) return -1;`), not part of a boolean expression, so the shared return is split and each test prints as its own early return instead of one chain with a comma operand (`if ((A || B) && (v1 = lseek64(...), v1 != -1))`). Operands that only test values keep the protection.
+- **When to flip:** Turn on when guard clauses that return the same constant print as one `&&`/`||` chain whose operand assigns a call result used later. Leave off to keep the DIV-69 protection for every fold.
+- **Where / provenance:** P8/goto-quality · kuna · structure-recovery · unlace-10-andorchain
+- **Example:** `option orchainlive on`
+
+### `orchainbool` -- on | off, default `off`
+
+- **Symptoms:** guard clauses returning the same error constant print as one && / ; ;  chain; a null check and an unrelated field test are folded into one condition before a shared return -1.
+- **What it does:** Limit the short-circuit protection of `returndup` (`kuna_orchain.rs`, DIV-69) to shared returns of 0 or 1. The protection keeps a shared constant-return block whole when `rule_block_or` could fold through it, which is right for the operand chain of a boolean expression (`return a || (b && c);`). A shared return of any other constant (`return -1`) is the exit of guard clauses the source wrote one by one (`if (!p) return -1; if (p->mode != R && p->mode != W) return -1;`). With this option such a block (its returned value is constants only, at least one of them neither 0 nor 1) does not stop `returndup` from splitting, so the guards print as early returns instead of one `&&`/`||` chain over unrelated tests.
+- **When to flip:** Turn on when guard clauses that return the same non-boolean constant (-1, an error code) print as one chain `if ((p) && (p->x == K || p->x == L)) {...} return -1;`. Leave off to keep the DIV-69 protection for every shared constant return.
+- **Where / provenance:** P8/goto-quality · kuna · structure-recovery · unlace-10-andorchain
+- **Example:** `option orchainbool on`
+
 ## Analysis & loader passes
 
 Program-prep enablement: what is discovered, decoded, and named before any function is decompiled.
@@ -3532,6 +3568,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** Off by default: a decompile-project export does not yet declare a typed global with its DWARF type in the generated header, so the exported body would read fields of an untyped object, and four workspace tests that pin global rendering move. Turn on for reading: the globals of a -g binary print with their source types (cfg.port, modes[i]). Leave off when exporting a project.
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida95-59
 - **Example:** `option dwarfglobaltypes off`
+
+### `dwarfdecls` -- on | off, default `off`
+
+- **Symptoms:** a call to a library function passes 1 where the header names an enum member; an import declared in the binary's DWARF still has an inferred prototype; a call to an import drops an argument or passes CONCAT44 garbage in a -g binary; enum constants print as numbers in calls to a shared library.
+- **What it does:** Type the calls to an import by the DWARF declaration of it. A unit that calls a function another module defines carries a declaration-only DW_TAG_subprogram (DW_AT_declaration, no DW_AT_low_pc) with the return and parameter types its header gave the compiler; the DWARF pass skipped every such DIE, so an import no library signature knows was called with untyped arguments and an inferred arity (gnutls_bye(v3,1), gnutls_deinit() with its argument lost). On, a declaration is kept when its name (the linkage name if it has one) is an ELF import with PLT entries, the file has no DWARF definition of it, it is prototyped (a K&R declaration says nothing about parameters), and every unit that declares it agrees on the return type, the parameter types and the variadic slot; it is built with the definition arm's type mapper and placed at each PLT entry of the import. The commit adds it only where no other prototype fact names the import or sits at that entry, so a libc or Win32 signature, a type library and a DWARF definition keep precedence. An enum-typed parameter then prints its constant arguments as members (GNUTLS_SHUT_WR), the Hex-Rays AUTOCONV_TO_ENUM case; a pointer parameter types the object passed. ELF only (the import map is the PLT); inert on an image without DWARF.
+- **When to flip:** Off by default while it is measured: it changes the output of every -g ELF that calls a library no signature pass knows. Turn on to read such a binary with its library calls typed as the headers declared them. Leave off to see what the binary alone gives, or when a header the program was built against does not match the library it loads.
+- **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida-hexrays-rules-6
+- **Example:** `option dwarfdecls on`
 
 ### `tlsnames` -- on | off, default `on`
 

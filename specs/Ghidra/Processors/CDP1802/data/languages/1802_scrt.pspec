@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+  <programcounter register="PC"/>
+  <context_data>
+    <context_set space="ram">
+      <set name="xctx" val="2"/>
+      <set name="scrt" val="1"/>
+    </context_set>
+  </context_data>
+  <default_symbols>
+    <symbol name="RESET" address="ram:0000" entry="true"/>
+  </default_symbols>
+</processor_spec>

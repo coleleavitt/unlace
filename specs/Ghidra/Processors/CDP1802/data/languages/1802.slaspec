@@ -1,0 +1,157 @@
+# SLEIGH specification for the RCA CDP1802 COSMAC
+#
+# Written from the RCA CDP1802 data sheet and the RCA "User Manual for the
+# CDP1802 COSMAC Microprocessor" (MPM-201). Sixteen 16-bit registers R0-RF,
+# the 8-bit accumulator D, DF, Q, IE, T and the program-counter and data
+# designators P and X. The program counter R(P) is the separate PC register;
+# X is decode context (set by SEX and followed along the flow, default 2), so
+# R(X) memory operands name the register directly. SEP n is modelled as an
+# indirect call through Rn. The SCRT variant (context bit scrt, language
+# 1802:BE:16:SCRT) reads the RCA Standard Call and Return Technique instead:
+# SEP R4 followed by an inline address is a call to that address and SEP R5 is
+# a return through R6.
+
+define endian=big;
+define alignment=1;
+
+define space ram      type=ram_space      size=2 default;
+define space io       type=ram_space      size=1;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=2 [ R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 RA RB RC RD RE RF ];
+define register offset=0x00 size=1 [ R0H R0L R1H R1L R2H R2L R3H R3L R4H R4L R5H R5L R6H R6L R7H R7L R8H R8L R9H R9L RAH RAL RBH RBL RCH RCL RDH RDL REH REL RFH RFL ];
+define register offset=0x20 size=1 [ D DF Q IE T P ];
+define register offset=0x30 size=2 [ PC ];
+define register offset=0x40 size=4 [ contextreg ];
+
+define context contextreg
+	xctx = (0,3)
+	xreg = (0,3)
+	scrt = (4,4) noflow
+;
+
+define token op8 (8)
+	op   = (0,7)
+	opI  = (4,7)
+	opN  = (0,3)
+	rn   = (0,3)
+	rnL  = (0,3)
+	rnH  = (0,3)
+	nz3  = (0,2)
+;
+
+define token b8 (8)
+	imm8 = (0,7)
+;
+
+define token b16 (16)
+	imm16 = (0,15)
+;
+
+attach variables [ rn xreg ] [ R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 RA RB RC RD RE RF ];
+attach variables [ rnL ] [ R0L R1L R2L R3L R4L R5L R6L R7L R8L R9L RAL RBL RCL RDL REL RFL ];
+attach variables [ rnH ] [ R0H R1H R2H R3H R4H R5H R6H R7H R8H R9H RAH RBH RCH RDH REH RFH ];
+
+define pcodeop idle;
+define pcodeop ef_flag;
+
+macro addTo(a, b, ci) {
+	local s:2 = zext(a) + zext(b) + zext(ci);
+	DF = (s >> 8) != 0;
+	D = s:1;
+}
+
+# D = a - b - bi, DF = 1 when there is no borrow
+macro subTo(a, b, bi) {
+	local s:2 = zext(a) - zext(b) - zext(bi);
+	DF = (s >> 8) == 0;
+	D = s:1;
+}
+
+sb: a is imm8 [ a = ((inst_start + 1) & 0xFF00) | imm8; ] { export *:1 a; }
+lb: imm16 is imm16 { export *:1 imm16; }
+skip1: a is op [ a = inst_start + 2; ] { export *:1 a; }
+skip2: a is op [ a = inst_start + 3; ] { export *:1 a; }
+
+:IDL is op=0x00 { idle(); }
+:LDN rn is opI=0x0 & rn & opN!=0 { D = *:1 rn; }
+:INC rn is opI=0x1 & rn { rn = rn + 1; }
+:DEC rn is opI=0x2 & rn { rn = rn - 1; }
+:LDA rn is opI=0x4 & rn { D = *:1 rn; rn = rn + 1; }
+:STR rn is opI=0x5 & rn { *:1 rn = D; }
+:GLO rn is opI=0x8 & rn & rnL { D = rnL; }
+:GHI rn is opI=0x9 & rn & rnH { D = rnH; }
+:PLO rn is opI=0xA & rn & rnL { rnL = D; }
+:PHI rn is opI=0xB & rn & rnH { rnH = D; }
+:SEX rn is opI=0xE & rn & opN [ xctx = opN; globalset(inst_next, xctx); ] { }
+:SEP rn is opI=0xD & rn & scrt=0 { call [rn]; }
+:SEP rn is opI=0xD & rn & scrt=1 & opN!=4 & opN!=5 { call [rn]; }
+:CALL lb is op=0xD4 & scrt=1 ; lb { call lb; }
+:RETN is op=0xD5 & scrt=1 { return [R6]; }
+:BR sb is op=0x30 ; sb { goto sb; }
+:BQ sb is op=0x31 ; sb { if (Q == 1) goto sb; }
+:BZ sb is op=0x32 ; sb { if (D == 0) goto sb; }
+:BDF sb is op=0x33 ; sb { if (DF == 1) goto sb; }
+:B1 sb is op=0x34 ; sb { local e:1 = ef_flag(1:1); if (e != 0) goto sb; }
+:B2 sb is op=0x35 ; sb { local e:1 = ef_flag(2:1); if (e != 0) goto sb; }
+:B3 sb is op=0x36 ; sb { local e:1 = ef_flag(3:1); if (e != 0) goto sb; }
+:B4 sb is op=0x37 ; sb { local e:1 = ef_flag(4:1); if (e != 0) goto sb; }
+:BNQ sb is op=0x39 ; sb { if (Q == 0) goto sb; }
+:BNZ sb is op=0x3A ; sb { if (D != 0) goto sb; }
+:BNF sb is op=0x3B ; sb { if (DF == 0) goto sb; }
+:BN1 sb is op=0x3C ; sb { local e:1 = ef_flag(1:1); if (e == 0) goto sb; }
+:BN2 sb is op=0x3D ; sb { local e:1 = ef_flag(2:1); if (e == 0) goto sb; }
+:BN3 sb is op=0x3E ; sb { local e:1 = ef_flag(3:1); if (e == 0) goto sb; }
+:BN4 sb is op=0x3F ; sb { local e:1 = ef_flag(4:1); if (e == 0) goto sb; }
+:SKP is op=0x38 & skip1 { goto skip1; }
+:LBR lb is op=0xC0 ; lb { goto lb; }
+:LBQ lb is op=0xC1 ; lb { if (Q == 1) goto lb; }
+:LBZ lb is op=0xC2 ; lb { if (D == 0) goto lb; }
+:LBDF lb is op=0xC3 ; lb { if (DF == 1) goto lb; }
+:LBNQ lb is op=0xC9 ; lb { if (Q == 0) goto lb; }
+:LBNZ lb is op=0xCA ; lb { if (D != 0) goto lb; }
+:LBNF lb is op=0xCB ; lb { if (DF == 0) goto lb; }
+:NOP is op=0xC4 { }
+:LSNQ is op=0xC5 & skip2 { if (Q == 0) goto skip2; }
+:LSNZ is op=0xC6 & skip2 { if (D != 0) goto skip2; }
+:LSNF is op=0xC7 & skip2 { if (DF == 0) goto skip2; }
+:LSIE is op=0xCC & skip2 { if (IE == 1) goto skip2; }
+:LSQ is op=0xCD & skip2 { if (Q == 1) goto skip2; }
+:LSZ is op=0xCE & skip2 { if (D == 0) goto skip2; }
+:LSDF is op=0xCF & skip2 { if (DF == 1) goto skip2; }
+:LSKP is op=0xC8 & skip2 { goto skip2; }
+:IRX is op=0x60 & xreg { xreg = xreg + 1; }
+:OUT nz3 is opI=0x6 & opN>=1 & opN<=7 & nz3 & xreg { local p:1 = nz3; *[io]:1 p = *:1 xreg; xreg = xreg + 1; }
+:INP nz3 is opI=0x6 & opN>=9 & nz3 & xreg { local p:1 = nz3; D = *[io]:1 p; *:1 xreg = D; }
+:RET is op=0x70 & xreg { local v:1 = *:1 xreg; xreg = xreg + 1; IE = 1; P = v & 0xF; local o:2 = zext(v & 0xF) * 2; local t:2 = *[register]:2 o; return [t]; }
+:DIS is op=0x71 & xreg { local v:1 = *:1 xreg; xreg = xreg + 1; IE = 0; P = v & 0xF; local o:2 = zext(v & 0xF) * 2; local t:2 = *[register]:2 o; return [t]; }
+:LDXA is op=0x72 & xreg { D = *:1 xreg; xreg = xreg + 1; }
+:STXD is op=0x73 & xreg { *:1 xreg = D; xreg = xreg - 1; }
+:ADC is op=0x74 & xreg { local m:1 = *:1 xreg; addTo(m, D, DF); }
+:SDB is op=0x75 & xreg { local m:1 = *:1 xreg; local bi:1 = DF ^ 1; subTo(m, D, bi); }
+:SHRC is op=0x76 { local c:1 = D & 1; D = (D >> 1) | (DF << 7); DF = c; }
+:SMB is op=0x77 & xreg { local m:1 = *:1 xreg; local bi:1 = DF ^ 1; subTo(D, m, bi); }
+:SAV is op=0x78 & xreg { *:1 xreg = T; }
+:MARK is op=0x79 & xreg { T = (xreg:1 << 4) | P; *:1 R2 = T; R2 = R2 - 1; }
+:REQ is op=0x7A { Q = 0; }
+:SEQ is op=0x7B { Q = 1; }
+:ADCI "#"^imm8 is op=0x7C ; imm8 { local m:1 = imm8; addTo(m, D, DF); }
+:SDBI "#"^imm8 is op=0x7D ; imm8 { local m:1 = imm8; local bi:1 = DF ^ 1; subTo(m, D, bi); }
+:SHLC is op=0x7E { local c:1 = D >> 7; D = (D << 1) | DF; DF = c; }
+:SMBI "#"^imm8 is op=0x7F ; imm8 { local m:1 = imm8; local bi:1 = DF ^ 1; subTo(D, m, bi); }
+:LDX is op=0xF0 & xreg { D = *:1 xreg; }
+:OR is op=0xF1 & xreg { D = D | *:1 xreg; }
+:AND is op=0xF2 & xreg { D = D & *:1 xreg; }
+:XOR is op=0xF3 & xreg { D = D ^ *:1 xreg; }
+:ADD is op=0xF4 & xreg { local m:1 = *:1 xreg; local z:1 = 0; addTo(m, D, z); }
+:SD is op=0xF5 & xreg { local m:1 = *:1 xreg; local z:1 = 0; subTo(m, D, z); }
+:SHR is op=0xF6 { DF = D & 1; D = D >> 1; }
+:SM is op=0xF7 & xreg { local m:1 = *:1 xreg; local z:1 = 0; subTo(D, m, z); }
+:LDI "#"^imm8 is op=0xF8 ; imm8 { D = imm8; }
+:ORI "#"^imm8 is op=0xF9 ; imm8 { D = D | imm8; }
+:ANI "#"^imm8 is op=0xFA ; imm8 { D = D & imm8; }
+:XRI "#"^imm8 is op=0xFB ; imm8 { D = D ^ imm8; }
+:ADI "#"^imm8 is op=0xFC ; imm8 { local m:1 = imm8; local z:1 = 0; addTo(m, D, z); }
+:SDI "#"^imm8 is op=0xFD ; imm8 { local m:1 = imm8; local z:1 = 0; subTo(m, D, z); }
+:SHL is op=0xFE { DF = D >> 7; D = D << 1; }
+:SMI "#"^imm8 is op=0xFF ; imm8 { local m:1 = imm8; local z:1 = 0; subTo(D, m, z); }

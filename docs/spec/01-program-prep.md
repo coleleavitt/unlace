@@ -5312,7 +5312,9 @@ moves.
   which types the out-parameter of a COM request by the id it passes (chapter
   05). The imported `ole32` requests (`CoCreateInstance`, `CoGetClassObject`,
   `CoGetObject`, `CoGetInterfaceAndReleaseStream`, `CoGetObjectContext`,
-  `CoGetCallContext`, `OleCreate`) get their prototypes by import address,
+  `CoGetCallContext`, `OleCreate`, and the four that fill a `MULTI_QI` array:
+  `CoCreateInstanceEx`, `CoCreateInstanceFromApp`,
+  `CoGetInstanceFromIStorage`, `CoGetInstanceFromFile`) get their prototypes by import address,
   so the out-parameter is an argument at every call even where the call site
   alone would not place it (the fifth argument of `CoCreateInstance` on x86-64
   is on the stack). The pass builds types, so it runs at the analysis commit
@@ -5329,6 +5331,18 @@ moves.
   as `CLSID_<Class>`. The media, device and printing namespaces are left
   out. The model is IDA 9.5's `comhelper` plugin, which names a GUID from
   `clsid.cfg` and applies the `<Interface>Vtbl` type its type library holds.
+  The option `comcfg`
+  (`crates/unlace-middle/src/p0_knowledge/kuna_comcfg.rs (ComCfg)`, default
+  `off`) names a file in that `clsid.cfg` format, one
+  `guid {00000000-0000-0000-C000-000000000046} IUnknown` line per id and `;`
+  starting a comment, read at the commit
+  (`crates/unlace-analysis/src/analyzers/com/mod.rs (parse_clsid_cfg)`, at
+  most 64 MiB): each id the built-in table lacks is named after its line,
+  spaces and other characters made `_`, and a bare name the interface table
+  holds (`IShellLinkW`) is read as `IID_IShellLinkW`, so its interface is
+  built like a built-in id's. An id both hold keeps the built-in name; a
+  malformed line is skipped. IDA 9.5's own `clsid.cfg` holds 16,117 ids, 13,674
+  of them not in the built-in table.
 - **(kuna) Declared names** (`declaredlibcproto`,
   `crates/unlace-analysis/src/analyzers/protos/mod.rs (declared_libc_prototype)`,
   consulted from `crates/unlace-console/src/engine.rs (ConsoleProgram::declare_function)`):
@@ -5716,7 +5730,18 @@ moves.
   drops the untyped entry for those addresses and maps the typed one,
   typelocked and namelocked, first among the typed data facts, so
   `cfg._12_4_ + cfg._8_4_` reads `cfg.flags + cfg.port` and
-  `*(char **)&modes[i * 8L]` reads `modes[i]`. (kuna) When neither `.comment`
+  `*(char **)&modes[i * 8L]` reads `modes[i]`. (kuna `dwarfdecls`, default off) A
+  declaration-only `DW_TAG_subprogram` (`DW_AT_declaration`, no `DW_AT_low_pc`) is kept
+  when its linkage name, or else its name, is an ELF import with PLT entries, no DWARF
+  definition of it exists in the file, it is prototyped, and every unit declaring it
+  agrees on return type, parameter types and variadic slot
+  (`dwarf/kuna_dwarfdecls.rs`); it is emitted at each PLT entry
+  (`pass.rs (AnalysisOutput::dwarf_decl_prototypes)`), and with the option on the
+  commit adds it to the address-keyed prototypes where no by-name prototype names the
+  import and no address-keyed one sits at that entry, so library signatures, type
+  libraries and DWARF definitions keep precedence. Calls to the import then take its
+  types: an enum parameter prints a constant argument as its member
+  (`gnutls_bye(s,GNUTLS_SHUT_WR)`). (kuna) When neither `.comment`
   nor the other signals name the toolchain, ELF and Mach-O detection falls back
   to the debug info (`analyzers/sourcelang/kuna_dwarfproducer.rs (dwarf_compiler)`):
   the first 16 compile units' `DW_AT_language` (Rust, Go, Swift) or

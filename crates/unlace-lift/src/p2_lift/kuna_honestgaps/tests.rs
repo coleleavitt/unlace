@@ -29,7 +29,7 @@ fn an_explain_without_an_address_keeps_the_line() {
 fn unbound_local_names_the_local_and_its_start() {
     assert_eq!(
         unbound_debug_local_text("count", 0x401a2c),
-        "debuginfo: DWARF local count (range from 0x401a2c) not bound: no write of its register found there"
+        "debuginfo: DWARF local count (range from 0x401a2c) not bound: no write of its register reaches it"
     );
 }
 

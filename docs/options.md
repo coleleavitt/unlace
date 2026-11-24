@@ -209,6 +209,8 @@ Three tiers:
 | two object views of one frame address become unrelated local variables | [`stackviews`](#stackviews----on--off-default-off) |
 | spurious uninitialized local (xStack_N) returned after storing through a pointer to a local | [`stackalias`](#stackalias----on--off-default-off-destructive-opt-in) |
 | store through a take-address-of-local pointer dropped as dead so the later read is garbage | [`stackalias`](#stackalias----on--off-default-off-destructive-opt-in) |
+| every function-pointer call in a /guard:cf PE prints as (*__guard_dispatch_icall_fptr)(...) | [`guarddispatch`](#guarddispatch----on--off-default-on) |
+| indirect call target dropped and the dispatch slot called instead | [`guarddispatch`](#guarddispatch----on--off-default-on) |
 | bogus (*pcVar1)() indirect call after calling a struct-returning function on sparc | [`sparcstructret`](#sparcstructret----on--off-default-on) |
 | function tail dropped after a sparc call followed by unimp | [`sparcstructret`](#sparcstructret----on--off-default-on) |
 | switch rendered as nested if/else-if compare tree over one variable | [`loweredswitch`](#loweredswitch----on--off--linear--tree--all-default-on) |
@@ -1239,6 +1241,9 @@ Three tiers:
 | case N: goto label_X; next to default: label_X: | [`switchmerge`](#switchmerge----on--off-default-on) |
 | output printed with option ctree on differs from the same function printed with it off | [`ctree`](#ctree----on--off-default-off) |
 | a C-level cleanup needs the printed statement tree rather than the structured block graph | [`ctree`](#ctree----on--off-default-off) |
+| a debug build shows a generic register name where the DWARF information names a local | [`honestgaps`](#honestgaps----on--off-default-off) |
+| a function with unimplemented instructions says so in its header but not where | [`honestgaps`](#honestgaps----on--off-default-off) |
+| the real-binary harness cannot tell which functions lost information | [`honestgaps`](#honestgaps----on--off-default-off) |
 
 ## Toggleable transforms
 
@@ -1715,6 +1720,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Set on PER FUNCTION when a take-address-of-local + store-through-pointer returns a spurious uninitialized local (xStack_*); DESTRUCTIVE as a global default (conservatively pins stack stores live, suppressing legitimate dead-store removal).
 - **Where / provenance:** P6/alias-facets · ghidra-upstream · opt-in-tool · GH-8500
 - **Example:** `option stackalias on`
+
+### `guarddispatch` -- on | off, default `on`
+
+- **Symptoms:** every function-pointer call in a /guard:cf PE prints as (*__guard_dispatch_icall_fptr)(...); indirect call target dropped and the dispatch slot called instead.
+- **What it does:** Print a call through a Control Flow Guard dispatch slot as the indirect call it guards.
+- **When to flip:** On by default: an image built with Control Flow Guard calls a function pointer as `mov rax, target; call [__guard_dispatch_icall_fptr]`, and the dispatch routine validates `rax` and jumps to it. On, a CALLIND whose target its instruction loads from a dispatch slot the PE load configuration names (`__guard_dispatch_icall_fptr`, `__guard_xfg_dispatch_icall_fptr`) calls the target register `rax` instead (x86-64 only), so `(*__guard_dispatch_icall_fptr)(a, b)` becomes `(*f)(a, b)`. The guard check itself is not shown. Only a PE with a load configuration fills the slot set, so it is inert everywhere else (0/675). Flip off to see the call through the dispatch slot as the instructions state it.
+- **Where / provenance:** P2/flow-classification · kuna · presentation-default · kuna-pe-loadconfig
+- **Example:** `option guarddispatch off`
 
 ### `sparcstructret` -- on | off, default `on`
 
@@ -3899,6 +3912,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Leave it off. Turn it on to check the tree printer against the block printer on a binary (nothing should change), or while moving a C-level cleanup into the tree. It is a migration switch: once the tree path is the only printer, the option goes away.
 - **Where / provenance:** P9/brace-form · kuna · opt-in-tool · kuna-ctree
 - **Example:** `option ctree on`
+
+### `honestgaps` -- on | off, default `off`
+
+- **Symptoms:** a debug build shows a generic register name where the DWARF information names a local; a function with unimplemented instructions says so in its header but not where; the real-binary harness cannot tell which functions lost information.
+- **What it does:** Name in the output the losses the decompile otherwise drops without a word, each as a warning comment at the site that --json lists under its own kind. An instruction SLEIGH decodes but has no p-code for, stepped over as a no-op under the ignoreunimplemented policy, gets `notmodelled: <insn> has no p-code semantics; stepped over as a no-op` at its address (before, one header line said the function ignored unimplemented instructions, never which). A DWARF register local that no write of its register reaching its range can carry, which the decompile drops so its name never appears, gets a header line `debuginfo: DWARF local <name> (range from 0x...) not bound: no write of its register reaches it`. Losses that already print (decode-failure halts, funcboundflow and instruction-budget truncation, out-of-bounds flow, unrecovered jump tables) are unchanged.
+- **When to flip:** Turn on when auditing how much of a binary the output can be trusted for: with --json each record lists these sites in warnings and the document totals every warning kind in warning_kinds. Leave off for the upstream text.
+- **Where / provenance:** P2/decode-error-policy · kuna · opt-in-tool · unlace-33-honestgaps
+- **Example:** `option honestgaps on`
 
 ## Programmatic use
 

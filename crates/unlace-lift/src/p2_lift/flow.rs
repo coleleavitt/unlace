@@ -365,6 +365,18 @@ pub trait FlowEnvironment {
         (None, None)
     }
 
+    /// (kuna `guarddispatch`) The register holding the real target, when the
+    /// CALLIND `op` calls through a Control Flow Guard dispatch slot. See
+    /// [`kuna_guarddispatch`](crate::kuna_guarddispatch). The default shell
+    /// reports `None`.
+    fn guard_dispatch_target(
+        &self,
+        _fd: &Funcdata,
+        _op: OpId,
+    ) -> Option<unlace_num::pcoderaw::VarnodeData> {
+        None
+    }
+
     /// (kuna `--assert callee`) Did the caller state where the indirect jump at
     /// `site` goes? See [`kuna_calleeoverride`](crate::kuna_calleeoverride).
     fn stated_callee_site(&self, _fd: &Funcdata, _site: &Address) -> bool {
@@ -3976,6 +3988,14 @@ truncating the fall-through here"
             return self.check_for_flow_modification(op, &entry);
         }
 
+        if let Some(reg) = self.env.guard_dispatch_target(&self.data, op) {
+            let addr = Address::new(
+                reg.space.expect("guarddispatch: register without a space"),
+                reg.offset,
+            );
+            let target = self.data.new_varnode(reg.size as int4, &addr, None);
+            self.data.op_set_input(op, target, 0)?;
+        }
         self.build_call_specs(op, Address::default(), true)?;
         self.qlst_count += 1;
         // (kuna `fastfailnoreturn`) A Windows `int 0x29` lifts to `intloc =

@@ -133,6 +133,7 @@ kuna_options! { self, p1;
     "v850indirectbranch" => registered!(crate::kuna_v850indbranch::V850IndirectBranch),
     "ptrauthtrap" => registered!(crate::kuna_coreoptions::PtrauthTrap),
     "relronoreturn" => registered!(crate::decompile_drive::RelroNoreturn),
+    "guarddispatch" => registered!(crate::kuna_guarddispatch::GuardDispatch),
     "outlinedinline" => registered!(crate::flow::OutlinedInline),
     "calleeretpurge" => registered!(crate::kuna_calleeretpurge::CalleeRetPurge),
     "stackexitanchor" => registered!(crate::kuna_stackexitanchor::StackExitAnchor),

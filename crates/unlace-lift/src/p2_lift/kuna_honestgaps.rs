@@ -12,8 +12,8 @@
 //! * `notmodelled`: under the `ignoreunimplemented` policy an instruction
 //!   SLEIGH decodes but has no p-code for is stepped over as a no-op; only one
 //!   header line said so for the whole function, never which instruction.
-//! * `debuginfo`: a DWARF register local whose register has no write within 16
-//!   bytes before its range starts is dropped by
+//! * `debuginfo`: a DWARF register local with no write of its register that
+//!   reaches its range and can carry its type is dropped by
 //!   `Funcdata::seed_dwarf_register_locals`, so the name the debug
 //!   information gave simply does not appear.
 //!
@@ -60,10 +60,10 @@ pub fn instruction_name(explain: &str) -> String {
 }
 
 /// The header warning for a DWARF register local that was not bound: no write
-/// of its register was found where its range starts.
+/// of its register reaching its range could carry it.
 pub fn unbound_debug_local_text(name: &str, start: u64) -> String {
     format!(
-        "debuginfo: DWARF local {name} (range from 0x{start:x}) not bound: no write of its register found there"
+        "debuginfo: DWARF local {name} (range from 0x{start:x}) not bound: no write of its register reaches it"
     )
 }
 

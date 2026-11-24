@@ -46,6 +46,7 @@ unlace-decomp = { path = "crates/unlace-decomp" }
 unlace-analysis = { path = "crates/unlace-analysis" }
 unlace-console = { path = "crates/unlace-console" }
 unlace-project = { path = "crates/unlace-project" }
+unlace-cli = { path = "crates/unlace-cli" }
 unlace-slacomp = { path = "crates/unlace-slacomp" }
 unlace-decomp-dylib = { path = "crates/unlace-decomp-dylib" }
 

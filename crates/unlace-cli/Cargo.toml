@@ -46,6 +46,12 @@ unlace-slacomp.workspace = true
 [lints]
 workspace = true
 
+# The command line as a library, so the `unlace` embedding crate reuses its code paths.
+[lib]
+name = "unlace_cli"
+path = "src/lib.rs"
+doctest = false
+
 [[bin]]
 name = "unlace"
 path = "src/main.rs"

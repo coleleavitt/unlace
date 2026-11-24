@@ -1,0 +1,297 @@
+//! The in-process surface the `unlace` embedding crate wraps: one load, then any
+//! number of single-function decompiles.
+//!
+//! A [`Request`] is lowered to the CLI's own argument list and parsed by
+//! [`decompile_all::parse_args`], then loaded by [`decompile_all::load_program`]
+//! and decompiled and serialized by the same functions `unlace decompile --json`
+//! runs, so mode presets, option precedence, the output-language policy,
+//! `--define-function`, `--assert` and the JSON document resolve exactly as they
+//! do on the command line. The stable interface is the `unlace` crate, not this
+//! module.
+
+use std::collections::BTreeSet;
+
+use unlace_console::engine::{ConsoleProgram, EntrySelector, FunctionEntry};
+
+use crate::decompile_all::{self, Args, DriverDefaults};
+use crate::funcdecl::Declared;
+
+/// A load request, in the command line's terms.
+#[derive(Clone, Debug, Default)]
+pub struct Request {
+    /// The input file.
+    pub binary: String,
+    /// A headerless image: the file's bytes are code at `base`.
+    pub raw: Option<Raw>,
+    /// `--define-function` values (`start[-end][=name]`).
+    pub functions: Vec<String>,
+    /// `--assert` directives.
+    pub assertions: Vec<String>,
+    /// `--option NAME VALUE` pairs, applied in order.
+    pub options: Vec<(String, String)>,
+    /// `--language`.
+    pub language: Option<String>,
+    /// `--mode`.
+    pub mode: Option<String>,
+    /// `--target`: the SLEIGH language id.
+    pub target: Option<String>,
+    /// `--slice`.
+    pub slice: Option<String>,
+    /// `--sleighpath`.
+    pub sleighpath: Option<String>,
+    /// `--isa`.
+    pub isa: Option<String>,
+    /// `--max-fn-seconds`.
+    pub max_fn_seconds: Option<u64>,
+    /// `--max-fn-memory`, in MiB.
+    pub max_fn_memory: Option<u64>,
+    /// `--omit` keys.
+    pub omit: Vec<String>,
+}
+
+/// `--raw-image --base BASE --entry E...`.
+#[derive(Clone, Debug, Default)]
+pub struct Raw {
+    /// The address of the file's first byte, in the target's address units.
+    pub base: u64,
+    /// Where code starts (`--entry`), in the target's address units.
+    pub entries: Vec<u64>,
+}
+
+impl Request {
+    /// The argument list `unlace decompile --json` would be given for this load,
+    /// without a function selection.
+    pub fn argv(&self) -> Vec<String> {
+        let binary = if self.binary.starts_with('-') {
+            format!("./{}", self.binary)
+        } else {
+            self.binary.clone()
+        };
+        let mut argv = vec![binary, "--json".to_string()];
+        if let Some(raw) = &self.raw {
+            argv.push("--raw-image".to_string());
+            push(&mut argv, "--base", format!("{:#x}", raw.base));
+            for entry in &raw.entries {
+                push(&mut argv, "--entry", format!("{entry:#x}"));
+            }
+        }
+        for (flag, value) in [
+            ("--target", &self.target),
+            ("--slice", &self.slice),
+            ("--sleighpath", &self.sleighpath),
+            ("--isa", &self.isa),
+            ("--mode", &self.mode),
+            ("--language", &self.language),
+        ] {
+            if let Some(value) = value {
+                push(&mut argv, flag, value.clone());
+            }
+        }
+        for function in &self.functions {
+            push(&mut argv, "--define-function", function.clone());
+        }
+        for directive in &self.assertions {
+            push(&mut argv, "--assert", directive.clone());
+        }
+        for (name, value) in &self.options {
+            argv.extend(["--option".to_string(), name.clone(), value.clone()]);
+        }
+        if let Some(seconds) = self.max_fn_seconds {
+            push(&mut argv, "--max-fn-seconds", seconds.to_string());
+        }
+        if let Some(mib) = self.max_fn_memory {
+            push(&mut argv, "--max-fn-memory", mib.to_string());
+        }
+        if !self.omit.is_empty() {
+            push(&mut argv, "--omit", self.omit.join(","));
+        }
+        argv
+    }
+}
+
+fn push(argv: &mut Vec<String>, flag: &str, value: String) {
+    argv.push(flag.to_string());
+    argv.push(value);
+}
+
+/// Why a load failed.
+#[derive(Clone, Debug)]
+pub enum LoadError {
+    /// The request does not parse as a command line (a bad option, a bad
+    /// `--define-function` or `--assert`, a raw image without a target).
+    Arguments(String),
+    /// The input did not load.
+    Load(String),
+}
+
+/// One function the load knows.
+#[derive(Clone, Debug)]
+pub struct Entry {
+    /// The most informative name at the entry.
+    pub name: String,
+    /// The entry address, in the target's address units.
+    pub address: u64,
+    /// The byte extent (an upper bound; `0` when it cannot be measured).
+    pub size: u64,
+    /// Every other name the entry carries.
+    pub aliases: Vec<String>,
+    /// Whether the entry has a body to decompile (not an import slot).
+    pub executable: bool,
+}
+
+/// One function's decompile.
+#[derive(Clone, Debug)]
+pub struct Output {
+    /// The `unlace decompile --json` document for the function.
+    pub document: String,
+    /// The function's name.
+    pub name: String,
+    /// The function's address, in the target's address units.
+    pub address: u64,
+    /// The rendered body; `None` when the decompile failed.
+    pub code: Option<String>,
+    /// Why the run failed, worded as `unlace decompile` reports it.
+    pub error: Option<String>,
+    /// The prototype line (`<ret> <name>(<params>);`).
+    pub prototype: Option<String>,
+    /// The analysis warnings the body carries as comments.
+    pub warnings: Vec<String>,
+}
+
+/// Which function to decompile.
+#[derive(Clone, Debug)]
+pub enum Selector {
+    /// An entry address, in the target's address units (`--addr`).
+    Address(u64),
+    /// A name or alias (`--functions`).
+    Name(String),
+}
+
+/// A loaded program and the arguments it was loaded with.
+pub struct Session {
+    args: Args,
+    prog: ConsoleProgram,
+    declared: Declared,
+}
+
+/// Parse and load `request` once.
+pub fn load(request: &Request) -> Result<Session, LoadError> {
+    let args =
+        decompile_all::parse_args(&request.argv(), "decompile").map_err(LoadError::Arguments)?;
+    let prog =
+        decompile_all::load_program(&args, DriverDefaults::Decompile).map_err(LoadError::Load)?;
+    let declared = Declared::of(&prog);
+    Ok(Session {
+        args,
+        prog,
+        declared,
+    })
+}
+
+impl Session {
+    /// The SLEIGH language id the program was loaded with.
+    pub fn architecture(&self) -> &str {
+        &self.prog.arch().archid
+    }
+
+    /// The function inventory, one record per entry address, address-ordered
+    /// (`unlace functions`).
+    pub fn functions(&self) -> Vec<Entry> {
+        let executable: BTreeSet<u64> = self
+            .prog
+            .function_entries_executable()
+            .iter()
+            .map(|entry| entry.addr.get_offset())
+            .collect();
+        self.prog
+            .function_entries_canonical()
+            .into_iter()
+            .map(|entry| {
+                let byte = entry.addr.get_offset();
+                Entry {
+                    address: self.prog.output_code_offset(byte),
+                    executable: executable.contains(&byte),
+                    name: entry.name,
+                    size: entry.size,
+                    aliases: entry.aliases,
+                }
+            })
+            .collect()
+    }
+
+    /// The addresses `unlace decompile-all` decompiles, in its order.
+    pub fn executable(&self) -> Vec<u64> {
+        self.prog
+            .function_entries_executable()
+            .iter()
+            .map(|entry| self.prog.output_code_offset(entry.addr.get_offset()))
+            .collect()
+    }
+
+    /// Decompile one function, as `unlace decompile <selector> --json` does over
+    /// this load.
+    pub fn decompile(&mut self, selector: &Selector) -> Result<Output, String> {
+        let entry = self.resolve(selector)?;
+        let interior = crate::interior::of_targets(&self.prog, std::slice::from_ref(&entry));
+        let mut funcs = decompile_all::decompile_entries_with(
+            &mut self.prog,
+            &self.args,
+            vec![entry],
+            false,
+            true,
+            true,
+        );
+        if funcs.is_empty() {
+            return Err("the decompiler returned no record".to_string());
+        }
+        let function = funcs.swap_remove(0);
+        let assertions = self.prog.assertion_outcomes();
+        let mut failure = function.error.as_ref().map(|reason| {
+            format!(
+                "decompilation failed for {} in {}: {reason}",
+                function.name, self.args.binary
+            )
+        });
+        if failure.is_none() && decompile_all::any_refused_assertion(&assertions) {
+            failure = Some(format!(
+                "--assert directive refused by the pipeline in {}",
+                self.args.binary
+            ));
+        }
+        let document = decompile_all::render_result_json(
+            &self.args.binary,
+            std::slice::from_ref(&function),
+            &self.args.options,
+            failure.as_deref(),
+            &assertions,
+            &interior,
+            &self.declared,
+            self.args.omit,
+        );
+        let warnings = function.warnings.iter().map(|w| w.message()).collect();
+        Ok(Output {
+            document,
+            name: function.name,
+            address: function.address,
+            code: function.code,
+            error: failure,
+            prototype: function.proto,
+            warnings,
+        })
+    }
+
+    fn resolve(&self, selector: &Selector) -> Result<FunctionEntry, String> {
+        let selector = match selector {
+            Selector::Address(address) if self.args.raw_image => EntrySelector::Numeric(
+                self.prog
+                    .input_code_offset(*address)
+                    .map_err(|e| e.explain().to_string())?,
+            ),
+            Selector::Address(address) => EntrySelector::Numeric(*address),
+            Selector::Name(name) => EntrySelector::Name(name.clone()),
+        };
+        self.prog
+            .resolve_body_entry(&selector)
+            .map_err(|e| e.to_string())
+    }
+}

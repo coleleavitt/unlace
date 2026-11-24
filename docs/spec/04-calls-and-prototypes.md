@@ -10507,6 +10507,20 @@ or `objc_retainAutoreleasedReturnValue(..)` before
 `URL._bridgeToObjectiveC()`, whose `self` is in `x20`). `tests/stages/kuna-callresultuse-runtime.toml`
 pins both ends.
 
+In every mode, off included, a RETURN takes the result of a run-time helper
+with no effect but its result (`kuna_callresultuse.rs (pure_helper)`: the
+RTABI32 and libgcc arithmetic, comparison and conversion routines
+`kuna_armfloatreturn.rs (base_pcs_helper)` names, not the memory helpers, the
+unaligned accessors, the flag-setting comparisons or `__aeabi_read_tp`) as its
+return value when, at every live RETURN and on every path, the value is that
+result in the first result register and nothing reads it but the RETURNs
+(`kuna_callresultuse.rs (pure_helper_result)`). A compiler drops a call to
+such a helper whose result is unused, at `-O0` too, so `bl __aeabi_fadd; pop
+{r4,pc}` is `return a + b;` and never `a + b;`: without debug information a
+soft-float `float scale(float v, int n)` returned `void` and dropped the
+`__aeabi_fadd` result. A result the function also tests is used there and
+keeps the strict reading below.
+
 So the hand-off is heritaged at all, `kuna_callresultuse.rs (plant)` gives
 the RETURNs a read of that register the way `voidret` plants the storage a
 caller reads, when the function makes a call, its output is not locked,

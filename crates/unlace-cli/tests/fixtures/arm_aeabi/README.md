@@ -13,3 +13,5 @@ The first three are soft-float (the A-profile ones state a VFPv3 FPU, `-mfloat-a
 floating-point operation is a call to an `__aeabi_*` helper. The last is hard-float on a
 single-precision FPU: its `double` operations call the helpers, passing the values in core
 registers (`vmov r0, r1, d0`).
+
+The `-nodebug.o` objects are the first three with `llvm-objcopy --strip-debug`.

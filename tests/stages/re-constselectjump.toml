@@ -1,0 +1,71 @@
+# RE-friction need conditional-indirect-branches-hide: a dispatch whose two
+# destinations are constants selected by a conditional move hides the whole
+# body behind the branch.
+#
+# csjmp picks between two code addresses with CMOVZ and jumps through the
+# register:
+#     401000  TEST  RDI,RDI
+#     401003  MOV   R8,0x401030
+#     40100d  MOV   R9,0x401020
+#     401017  CMOVZ R9,R8
+#     40101b  JMP   R9
+#     401020  MOV RAX,RSI ; ADD RAX,1 ; RET
+#     401030  MOV RAX,RSI ; SUB RAX,1 ; RET
+#
+# SLEIGH lifts the CMOVZ to a real conditional branch, so at the BRANCHIND the
+# destination is a MULTIEQUAL of the two constants.  Both jump-table models
+# (JumpBasic and its default-path extension) are value-range models and
+# JumpBasic::isprune stops at any marker op, so the MULTIEQUAL output becomes
+# the normalized switch variable with nothing to bound it.  Recovery is
+# declined, FlowInfo::truncateIndirectJump rewrites the BRANCHIND to a CALLIND
+# with a "Treating indirect jump as call" warning, and neither arm is ever
+# decoded.
+#
+# Stage model: S2 "switch-model" sub-stage; the destination set is recovered as
+# data and never promoted into the CFG.  Fix surface = a default-off ArchOption
+# (constselectjump) that, when both value-range models fail, walks the
+# MULTIEQUAL/COPY web behind the BRANCHIND and installs a fixed jump-table
+# model over the constant destination set.
+#
+# Pass 1 (default, option off): assertion #1 proves the bug reproduces; the
+# dispatch renders as a computed call through a code pointer and both arms are
+# missing.
+# Pass 2 (option constselectjump on): assertions #2 and #3 prove the table is
+# recovered as a switch and both arms are decoded.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'csjmp' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '4885ff49b8301040000000000049b920104000000000004d0f44c841ffe190904889f04883c001c30f1f8400000000004889f04883e801c3'
+
+[script]
+commands = [
+    'lo fu csjmp',
+    'decompile',
+    'print C',
+    'option constselectjump on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CONSTSELECTJUMP #1: the selected destination renders as a computed call (bug reproduced)'
+count = 1
+literal = '(*v1)()'
+
+[[match]]
+name = 'CONSTSELECTJUMP #2: constselectjump on recovers the constant destination set as a switch'
+count = 1
+literal = 'case 0x401030:'
+
+[[match]]
+name = 'CONSTSELECTJUMP #3: both arms behind the branch are decoded'
+count = 1
+literal = 'return a1 + 1;'

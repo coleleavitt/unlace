@@ -1,0 +1,80 @@
+# structsynth: an access inside a wider access's bytes is not a field.
+#
+# Source shape (hand-assembled, no prologue, so the parameter arrives in RDI
+# with nothing declaring its type):
+#
+#     void overlap(void *p) {
+#         unsigned long lo = *(unsigned long *)p;       // offset 0, 8 bytes
+#         int           hi = *(int *)((char *)p + 4);   // offset 4, 4 bytes
+#         *(unsigned long *)((char *)p + 8) = lo + hi;  // offset 8, 8 bytes
+#     }
+#
+#     48 8b 07        mov    rax,[rdi]
+#     48 63 4f 04     movsxd rcx,[rdi+4]
+#     48 01 c8        add    rax,rcx
+#     48 89 47 08     mov    [rdi+8],rax
+#     c3              ret
+#
+# The offset-4 read lands inside the 8 bytes the offset-0 read already claims,
+# so it is not a field.  A structure that declared one anyway,
+# `{int8 field_0x0; int4 field_0x4; int8 field_0x8;}`, is a different program
+# once a compiler reads the exported header back: `field_0x8` lands at
+# offset 16, and the body that names the fields and the header that declares
+# them no longer describe the same object.  The interior access renders as a
+# cast off the field that contains it instead.
+#
+# With `option structsynth off` (assert #1): the two 8-byte accesses are raw pointer arithmetic.
+#
+# With `option structsynth param` (asserts 2 to 5): offsets 0 and 8 are the
+# layout, offset 4 is not in it, and the offset-4 read is a cast off the
+# offset-0 field.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'overlap' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '488b0748634f044801c848894708c3'
+
+[script]
+commands = [
+    'lo fu overlap',
+    'option structsynth off',
+    'decompile',
+    'print C',
+    'option structsynth param',
+    'decompile',
+    'print C',
+    'print C types',
+    'quit',
+]
+
+[[match]]
+name = 'STRUCTSYNTH-OVERLAP #1: off leaves the offset-8 store as raw pointer arithmetic'
+count = 1
+literal = 'a0[1] = *a0'
+
+[[match]]
+name = 'STRUCTSYNTH-OVERLAP #2: the parameter is retyped to the synthesized structure'
+count = 1
+literal = 'struct_0 *a0'
+
+[[match]]
+name = 'STRUCTSYNTH-OVERLAP #3: offset 0 is an 8-byte field'
+count = 1
+literal = 'int8 field_0x0;'
+
+[[match]]
+name = 'STRUCTSYNTH-OVERLAP #4: offset 8 is an 8-byte field'
+count = 1
+literal = 'int8 field_0x8;'
+
+[[match]]
+name = 'STRUCTSYNTH-OVERLAP #5: the interior read is a cast off field_0x0, not a field of its own'
+count = 0
+literal = 'field_0x4'

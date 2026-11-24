@@ -4060,9 +4060,12 @@ prototype, a `long long` parameter on i386 or 32-bit ARM is recovered as two
 carry `c` (`INT_LESS`, `INT_LESSEQUAL`, `INT_CARRY`) when one of its operands is
 an unlocked input, the input word directly above it (same size, next address
 in the space's byte order) is an unlocked input too, the function writes
-neither word (a compiler that reuses an argument slot, or a call that may
-change it, leaves 4-byte writes that a joined parameter could only print as
-partial stores into it), the prototype model accepts the two words as one
+neither word (a compiler that reuses an argument slot leaves 4-byte writes
+that a joined parameter could only print as partial stores into it; a call's
+possible effect on the slot, an INDIRECT whose value reaches only further
+INDIRECTs and MULTIEQUALs and is never read, is not a write, so a function
+that calls an unprototyped function, whose stack effects cover the caller's
+argument words, can still be paired), the prototype model accepts the two words as one
 parameter (`possible_input_param` on the joined
 storage: a stack slot, not two separate argument registers such as ARM's r0
 and r1, which only a declared prototype or option `armpairparam` (chapter 4) can join), and that word appears with coefficient +-1 in the same

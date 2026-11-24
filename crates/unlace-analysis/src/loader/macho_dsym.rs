@@ -20,11 +20,14 @@ const MAX_DSYM_BYTES: u64 = 1 << 30;
 /// Enclosing directories tried for a bundle, the binary's own included.
 const BUNDLE_DEPTH: usize = 3;
 
+/// `*.dSYM` bundles read beside a kernel extension.
+const MAX_SIBLINGS: usize = 64;
+
 /// The dSYM DWARF file of `image`, with the thin Mach-O bytes of the slice that
 /// carries the image's UUID.
 pub fn find_dsym(file: &object::File, image: &Path) -> Option<(PathBuf, Vec<u8>)> {
     let want = file.mach_uuid().ok().flatten()?;
-    for path in candidates(image) {
+    for path in candidates(image).into_iter().chain(kext_siblings(image)) {
         let Ok(meta) = std::fs::metadata(&path) else {
             continue;
         };
@@ -39,6 +42,43 @@ pub fn find_dsym(file: &object::File, image: &Path) -> Option<(PathBuf, Vec<u8>)
         }
     }
     None
+}
+
+/// The `*.dSYM` bundles beside the innermost `*.kext` enclosing `image`, read
+/// in name order, at most `MAX_SIBLINGS` of them. A kernel extension's dSYM is
+/// often named for its bundle identifier rather than the binary, so the name
+/// test above misses it; the UUID check still decides.
+fn kext_siblings(image: &Path) -> Vec<PathBuf> {
+    let mut dir = image.parent();
+    for _ in 0..BUNDLE_DEPTH {
+        let Some(d) = dir else { break };
+        if d.extension().is_some_and(|e| e == "kext") {
+            let Some(parent) = d.parent() else {
+                break;
+            };
+            let Ok(read) = std::fs::read_dir(parent) else {
+                break;
+            };
+            let mut bundles: Vec<PathBuf> = read
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| p.extension().is_some_and(|e| e == "dSYM"))
+                .collect();
+            bundles.sort();
+            let mut out = Vec::new();
+            for bundle in bundles.iter().take(MAX_SIBLINGS) {
+                let Ok(files) = std::fs::read_dir(bundle.join("Contents/Resources/DWARF")) else {
+                    continue;
+                };
+                let mut paths: Vec<PathBuf> =
+                    files.filter_map(|e| e.ok().map(|e| e.path())).collect();
+                paths.sort();
+                out.extend(paths);
+            }
+            return out;
+        }
+        dir = d.parent();
+    }
+    Vec::new()
 }
 
 /// The DWARF file a dSYM for `image` would hold, tried in search order.
@@ -110,6 +150,12 @@ mod tests {
         assert!(c.contains(&PathBuf::from(
             "/s/Toyota.dSYM/Contents/Resources/DWARF/Toyota"
         )));
+    }
+
+    #[test]
+    fn siblings_are_only_read_beside_a_kext() {
+        assert!(kext_siblings(Path::new("/s/Toyota")).is_empty());
+        assert!(kext_siblings(Path::new("/s/Foo.framework/Versions/A/Foo")).is_empty());
     }
 
     #[test]

@@ -325,3 +325,14 @@ fn statements_may_follow_an_export() {
     );
     assert_compiled(result, &destination);
 }
+
+#[test]
+fn a_space_may_be_named_by_a_keyword() {
+    let scratch = tempfile::tempdir().unwrap();
+    let (result, destination) = compile_body(
+        scratch.path(),
+        "define space local type=ram_space size=4;\n\
+         :inst is op=5 { local sa:4 = r1; *[local]:4 sa = r0; }\n",
+    );
+    assert_compiled(result, &destination);
+}

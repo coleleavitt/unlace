@@ -27,7 +27,7 @@
 use unlace_base::error::{KunaError, KunaResult};
 
 use crate::slgh_compile::SleighCompile;
-use crate::slghscan::{ScannerHost, SleighScanner, Token, TokenKind, TokenValue};
+use crate::slghscan::{ScannerHost, SleighScanner, SymbolTokenKind, Token, TokenKind, TokenValue};
 
 /// `actionon == 0`: parsing a pattern (the `actionon` global, slghparse.y:26).
 pub const ACTIONON_PATTERN: i32 = 0;
@@ -2064,7 +2064,7 @@ impl SleighParser {
         match self.peek(d)? {
             TokenKind::Char1(b'[') => {
                 self.next(d)?;
-                let space = self.expect_symbol(d, TokenKind::SpaceSym)?;
+                let space = self.space_symbol(d)?;
                 self.expect(d, TokenKind::Char1(b']'))?;
                 if self.peek(d)? == TokenKind::Char1(b':') {
                     self.next(d)?;
@@ -2101,7 +2101,7 @@ impl SleighParser {
                 let v = self.expect_integer(d)?;
                 if self.peek(d)? == TokenKind::Char1(b'[') {
                     self.next(d)?;
-                    let space = self.expect_symbol(d, TokenKind::SpaceSym)?;
+                    let space = self.space_symbol(d)?;
                     self.expect(d, TokenKind::Char1(b']'))?;
                     d.trace("jumpdest/INTEGER[SPACE]");
                     Ok(d.jumpdest_integer_space(v, space))
@@ -2532,6 +2532,19 @@ impl SleighParser {
     }
 
     /// Consume a token of the given `*SYM` kind and resolve it to a `SymId`.
+    /// A SPACESYM, or a semantic keyword naming a space (`*[local]` where the spec
+    /// defines `space local`): Ghidra's Java grammar reads a keyword as an
+    /// identifier there (`identifier: strict_id | key_as_id`).
+    fn space_symbol(&mut self, d: &mut dyn ParseDriver) -> KunaResult<SymId> {
+        if let Some(name) = keyword_text(self.peek(d)?) {
+            if d.as_host().find_symbol_kind(name) == Some(SymbolTokenKind::Space) {
+                self.next(d)?;
+                return Ok(d.resolve_symbol(name));
+            }
+        }
+        self.expect_symbol(d, TokenKind::SpaceSym)
+    }
+
     fn expect_symbol(&mut self, d: &mut dyn ParseDriver, kind: TokenKind) -> KunaResult<SymId> {
         let tok = self.expect(d, kind)?;
         Ok(self.sym_from_token(d, &tok))
@@ -2556,6 +2569,23 @@ impl SleighParser {
 // ---------------------------------------------------------------------------
 // free helpers
 // ---------------------------------------------------------------------------
+
+/// The spelling of a semantic-section statement keyword.
+fn keyword_text(kind: TokenKind) -> Option<&'static [u8]> {
+    let text: &'static [u8] = match kind {
+        TokenKind::LocalKey => b"local",
+        TokenKind::IfKey => b"if",
+        TokenKind::GotoKey => b"goto",
+        TokenKind::CallKey => b"call",
+        TokenKind::ReturnKey => b"return",
+        TokenKind::DelayslotKey => b"delayslot",
+        TokenKind::CrossbuildKey => b"crossbuild",
+        TokenKind::ExportKey => b"export",
+        TokenKind::BuildKey => b"build",
+        _ => return None,
+    };
+    Some(text)
+}
 
 /// Extract a `STRING`/`SYMBOLSTRING` token's bytes.
 fn token_str(tok: &Token) -> KunaResult<Vec<u8>> {

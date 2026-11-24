@@ -30,28 +30,42 @@ Language: `Z380:LE:32:default` (little-endian, 32-bit linear address space, 4 Gi
 - Decoder directives `DD C0` (W), `DD C1` (IB,W), `DD C2` (IW,W), `DD C3` (IB),
   `FD C0` (LW), `FD C1` (IB,LW), `FD C2` (IW,LW), `FD C3` (IW): they apply to the
   next instruction only; IB widens a 16-bit immediate/address to 24 bits, IW to 32 bits;
-  W/LW override SR.LW for word loads (LD dd,nn, LD HL,(nn), LD (nn),HL).
+  W/LW override SR.LW for word loads and stack ops (LD dd,nn, LD HL,(nn), LD (nn),HL,
+  LDW, PUSH/POP BC/DE/HL/IX/IY, EX (SP),HL, EXTS).
 - Z80 base page: 8-bit loads, LD (BC)/(DE)/(nn), 16-bit loads, PUSH/POP, EX, EXX, the
   eight ALU operations on A (register, (HL), immediate), INC/DEC, ADD HL,dd, the
   accumulator rotates, DAA (user-op), CPL, SCF, CCF, JP/JR/DJNZ/CALL/RET/RST with
   conditions, DI/EI/HALT, IN A,(n)/OUT (n),A; IX/IY forms for loads, ALU (IX+d) and
   INC/DEC; ED page: NEG, IM, RETI, RETN, LD dd,(nn), LD (nn),dd, ADC/SBC HL,dd, LDIR;
-  CB page: RLC, RRC, RL, RR, SLA, SRA, SRL, BIT, RES, SET; Z380 SETC/RESC LW, SETC XM, SETC/RESC LCK.
+  CB page: RLC, RRC, RL, RR, SLA, SRA, SRL, BIT, RES, SET, and CB 30-37 EX r,r'; Z380 SETC/RESC LW, SETC XM, SETC/RESC LCK.
+- ED page additions: EX A,r / EX A,(HL) (ED 07-3F), IN r,(C), OUT (C),r, OUT (C),n,
+  LDI/LDD/LDDR, CPI/CPD/CPIR/CPDR, INI/IND/INIR/INDR, OUTI/OUTD/OTIR/OTDR, RLD/RRD,
+  LD A,I / LD A,R / LD I,A / LD R,A.
+- Z380-only: SWAP BC/DE/HL/IX/IY, EXTS A, EXTSW HL, MULTW/MULTUW/DIVUW (register, IX/IY,
+  immediate and (IX/IY+d)), the word ALU ADDW/SUBW/ANDW/XORW/ORW/CPW on HL with BC/DE/HL,
+  an immediate, IX/IY and (IX/IY+d), CALR and CALR cc with 8/16/24-bit displacements
+  (ED/DD/FD CD, C4-FC), JR/JR cc/DJNZ with 16-bit (DD) and 24-bit (FD) displacements,
+  LDW (BC)/(DE)/(HL),nn, EXALL, EXXX, EXXY, LDCTL HL,SR / SR,HL / SR,A / SR,n, PUSH/POP SR,
+  BTEST and MTEST (user-ops).
+- DDCB/FDCB rotates, shifts, BIT/RES/SET and MULTW/MULTUW/DIVUW on (IX/IY+d), with the
+  displacement widened to 16 bits by DDIR IB and 24 bits by DDIR IW.
 - Flags: carry, half carry, overflow/parity and sign/zero for the 8-bit ALU (Z80 rules),
   carry/half carry for ADD HL, full flags for ADC/SBC HL.
 - Calling convention (`z380.cspec`): register based (HL/BC/DE in, A or HL out), 2-byte
-  return address (Native mode).
+  return address (Native mode). CALL/CALR/RST push, and RET pops, a 4-byte return
+  address when `xm` is set.
 
 ## Gaps
 
-- Not decoded yet: CB 30-37 (EX A,r on the Z380, not SLL), IN r,(C)/OUT (C),r,
-  LDI/LDD/LDDR/CPI/CPIR/CPD/CPDR/INI/OUTI blocks, RLD/RRD, LD A,I/R, and the Z380-only
-  instructions (SWAP, EXTS, MULTW/MULTUW, DIVUW, CALR, JP/CALL (IX+d), LDW (IR),nn,
-  EXALL/EXXX/EXXY, IN0/OUT0, the (SP+d) and 16-bit displacement DDCB/FDCB forms, the
-  CPW/ADDW/SUBW word ALU, BTEST, register bank selection SELECT/SETC/RESC beyond LW/XM/LCK).
-- Long Word mode is applied to the word loads listed above only; PUSH/POP, CALL/RET
-  and EX are always 16-bit (Extended-mode 32-bit stack frames are not modelled), and
-  in Extended mode a 16-bit JP/CALL target keeps the upper 16 bits of the current PC.
+- Not decoded yet: JP/CALL (IX+d), IN0/OUT0/TST/TSTIO, the (SP+d) and DDCB word loads
+  (LD rr,(IX+d), LD (SP+d),rr), the word rotates/shifts (RLCW..SRLW), the LDIW/LDIRW/INIW
+  word block forms, EX BC,BC' (ED CB 30-35), LDW I,HL / LDW HL,I, LD with IXU/IYU, SELECT
+  and the DI/EI mask forms.
+- The Long Word mode bit makes the word loads, LDW, PUSH/POP and EX (SP),HL 32-bit; the
+  block instructions keep a 16-bit BC count and the word ALU stays 16-bit, as Appendix C
+  marks them. LDCTL to SR does not update the `xm`/`lw` context (only SETC/RESC do).
+  RETI/RETN are decoded in Native mode only. In Extended mode a 16-bit JP/CALL target keeps
+  the upper 16 bits of the current PC.
 - HALT, DI/EI, IM and DAA are user-ops.
 
 ## Test vectors
@@ -72,6 +86,11 @@ Appendix C and checked with `unlace decompile --raw-image --target Z380:LE:32:de
 | `DD C1 32 00 00 01` | `DDIR IB,W` + `LD (010000H),A` | 24-bit address |
 | `DD F7` .. `2A`/`22` .. `DD FF` | `SETC LW`, `LD HL,(nn)`, `RESC LW` | 32-bit word move |
 | `CB 46` / `28 03` / `CD 00 20` / `10 F6` / `C0` | `BIT`, `JR Z`, `CALL`, `DJNZ`, `RET NZ` | branches |
+| `ED 84` / `ED CB 90` / `ED 86 34 12` | `ADDW HL,BC` / `MULTW HL,BC` / `ADDW HL,1234H` | (HL+BC)*BC signed, +1234H |
+| `ED 07` / `DD CB 05 06` / `ED A0` / `ED 6F` | `EX A,B` / `RLC (IX+5)` / `LDI` / `RLD` | swap, rotate, copy, digit rotate |
+| `DD CD 02 00` | `CALR` (16-bit) | call to inst_next+2 |
+| `CB 30` / `ED 78` / `ED 79` / `ED 3E` / `ED 75` / `DD 18 00 00` | `EX B,B'`, `IN A,(C)`, `OUT (C),A`, `SWAP HL`, `EXTSW`, `JR` (16-bit) | decode and data flow |
+| `DD F7` / `C5` | `SETC LW` / `PUSH BC` | 4-byte push in Long Word mode |
 
 The CLI test `crates/unlace-cli/tests/z380_raw.rs` decompiles
 `crates/unlace-cli/tests/fixtures/z380/add_store.bin` (listing in `add_store.s`) to

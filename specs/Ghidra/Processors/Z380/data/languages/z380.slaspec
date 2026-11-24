@@ -22,6 +22,8 @@ define register offset=0x20 size=1 [ F A F_ A_ ];
 define register offset=0x20 size=2 [ AF AF_ ];
 define register offset=0x30 size=4 [ BCX_ DEX_ HLX_ ];
 define register offset=0x30 size=2 [ BC_ _ DE_ _ HL_ _ ];
+define register offset=0x30 size=1 [ C_ B_ _ _ E_ D_ _ _ L_ H_ ];
+define register offset=0x70 size=4 [ IXX_ IYX_ ];
 define register offset=0x40 size=4 [ SR ];
 define register offset=0x48 size=1 [ I R ];
 define register offset=0x50 size=1 [ S_flag Z_flag H_flag PV_flag N_flag C_flag ];
@@ -58,6 +60,9 @@ define token opbyte (8)
   cc2   = (3,4)
   bit3  = (3,5)
   rst3  = (3,5)
+  ra3   = (0,2)
+  wr2   = (0,1)
+  op2_1 = (2,2)
 ;
 
 define token data8 (8)
@@ -84,6 +89,8 @@ attach variables [ r3 r0 ] [ B C D E H L _ A ];
 attach variables [ dd4 ] [ BC DE HL SP ];
 attach variables [ dd4x ] [ BCX DEX HLX SPX ];
 attach variables [ qq4 ] [ BC DE HL AF ];
+attach variables [ ra3 ] [ B_ C_ D_ E_ H_ L_ _ A_ ];
+attach variables [ wr2 ] [ BC DE _ HL ];
 
 define pcodeop halt;
 define pcodeop disableInterrupts;
@@ -93,6 +100,9 @@ define pcodeop decimalAdjust;
 define pcodeop softwareInterrupt;
 define pcodeop setLock;
 define pcodeop clearLock;
+define pcodeop bankTest;
+define pcodeop modeTest;
+define pcodeop refreshCounter;
 
 macro setResultFlags(r) { Z_flag = (r == 0); S_flag = (r s< 0); }
 macro setParity(r) {
@@ -200,14 +210,17 @@ with : phase=0 | phase=1 {
 :LD "SP","HL" is op0_8=0xF9 { SP = HL; }
 
 :PUSH qq4 is op6_2=3 & qq4 & op0_4=5 & qq4=3 { packF(); push16(AF); }
-:PUSH qq4 is op6_2=3 & qq4 & op0_4=5 { push16(qq4); }
+:PUSH qq4 is op6_2=3 & qq4 & op0_4=5 & ((ddw=0 & lw=0) | ddw=1) { push16(qq4); }
+:PUSH dd4x is op6_2=3 & dd4x & op0_4=5 & (dd4x=0 | dd4x=1 | dd4x=2) & ((ddw=0 & lw=1) | ddw=2) { push32(dd4x); }
 :POP qq4 is op6_2=3 & qq4 & op0_4=1 & qq4=3 { pop16(AF); unpackF(); }
-:POP qq4 is op6_2=3 & qq4 & op0_4=1 { pop16(qq4); }
+:POP qq4 is op6_2=3 & qq4 & op0_4=1 & ((ddw=0 & lw=0) | ddw=1) { pop16(qq4); }
+:POP dd4x is op6_2=3 & dd4x & op0_4=1 & (dd4x=0 | dd4x=1 | dd4x=2) & ((ddw=0 & lw=1) | ddw=2) { pop32(dd4x); }
 
 :EX "DE,HL" is op0_8=0xEB { t:4 = DEX; DEX = HLX; HLX = t; }
 :EX "AF,AF'" is op0_8=0x08 { packF(); t:2 = AF; AF = AF_; AF_ = t; unpackF(); }
 :EXX is op0_8=0xD9 { t:4 = BCX; BCX = BCX_; BCX_ = t; t = DEX; DEX = DEX_; DEX_ = t; t = HLX; HLX = HLX_; HLX_ = t; }
-:EX "(SP)","HL" is op0_8=0xE3 { t:2 = *:2 SPX; *:2 SPX = HL; HL = t; }
+:EX "(SP)","HL" is op0_8=0xE3 & ((ddw=0 & lw=0) | ddw=1) { t:2 = *:2 SPX; *:2 SPX = HL; HL = t; }
+:EX "(SP)","HL" is op0_8=0xE3 & ((ddw=0 & lw=1) | ddw=2) { t:4 = *:4 SPX; *:4 SPX = HLX; HLX = t; }
 
 :ADD "A",src8 is op6_2=2 & op3_3=0 & src8 { local v = src8; addFlags(A, v); A = A + v; setResultFlags(A); }
 :ADC "A",src8 is op6_2=2 & op3_3=1 & src8 { local v = src8 + C_flag; addFlags(A, v); A = A + v; setResultFlags(A); }
@@ -270,8 +283,10 @@ with : phase=0 | phase=1 {
 :ADD "A","("^XYX^simm8^")" is XYX; op0_8=0x86; simm8 { local v = *:1 (XYX + simm8); addFlags(A, v); A = A + v; setResultFlags(A); }
 :SUB "("^XYX^simm8^")" is XYX; op0_8=0x96; simm8 { local v = *:1 (XYX + simm8); subFlags(A, v); A = A - v; setResultFlags(A); }
 :CP "("^XYX^simm8^")" is XYX; op0_8=0xBE; simm8 { local v = *:1 (XYX + simm8); subFlags(A, v); local r = A - v; setResultFlags(r); }
-:PUSH XY is XY; op0_8=0xE5 { push16(XY); }
-:POP XY is XY; op0_8=0xE1 { pop16(XY); }
+:PUSH XY is XY; op0_8=0xE5 & ((ddw=0 & lw=0) | ddw=1) { push16(XY); }
+:POP XY is XY; op0_8=0xE1 & ((ddw=0 & lw=0) | ddw=1) { pop16(XY); }
+:PUSH XYX is XYX; op0_8=0xE5 & ((ddw=0 & lw=1) | ddw=2) { push32(XYX); }
+:POP XYX is XYX; op0_8=0xE1 & ((ddw=0 & lw=1) | ddw=2) { pop32(XYX); }
 :INC XY is XY; op0_8=0x23 { XY = XY + 1; }
 :DEC XY is XY; op0_8=0x2B { XY = XY - 1; }
 :JP "("^XYX^")" is XYX; op0_8=0xE9 { goto [XYX]; }
@@ -306,4 +321,177 @@ with : phase=0 | phase=1 {
 :RES bit3,src8 is op0_8=0xCB; op6_2=2 & bit3 & src8 { src8 = src8 & ~(1 << bit3); }
 :SET bit3,src8 is op0_8=0xCB; op6_2=3 & bit3 & src8 { src8 = src8 | (1 << bit3); }
 
+
 }
+
+xdisp: simm8 is ddi=0 & simm8 { export *[const]:4 simm8; }
+xdisp: simm16 is ddi=1 & simm16 { export *[const]:4 simm16; }
+xdisp: simm24 is ddi=2 & simm24 { export *[const]:4 simm24; }
+
+# Word ALU (Appendix C: ED 84-BF, DD/FD 87-BF, DD/FD C6-FE), 16-bit on HL.
+wsrc: wr2 is wr2 & (wr2=0 | wr2=1 | wr2=3) { export wr2; }
+wimm: imm16 is imm16 { export *[const]:2 imm16; }
+macro addW(a, b) { H_flag = (((a & 0xfff) + (b & 0xfff)) & 0x1000) != 0; C_flag = carry(a, b); PV_flag = scarry(a, b); N_flag = 0; }
+macro subW(a, b) { H_flag = (((a & 0xfff) - (b & 0xfff)) & 0x1000) != 0; C_flag = a < b; PV_flag = sborrow(a, b); N_flag = 1; }
+macro wResult(r) { Z_flag = (r == 0); S_flag = (r s< 0); }
+macro wLogic(r) { wResult(r); PV_flag = 0; C_flag = 0; N_flag = 0; }
+
+:ADDW "HL",wsrc is op0_8=0xED; op6_2=2 & op3_3=0 & op2_1=1 & wsrc { local v = wsrc; addW(HL, v); HL = HL + v; wResult(HL); }
+:ADDW "HL",wimm is op0_8=0xED; op6_2=2 & op3_3=0 & op2_1=1 & wr2=2; wimm { local v = wimm; addW(HL, v); HL = HL + v; wResult(HL); }
+:SUBW "HL",wsrc is op0_8=0xED; op6_2=2 & op3_3=2 & op2_1=1 & wsrc { local v = wsrc; subW(HL, v); HL = HL - v; wResult(HL); }
+:SUBW "HL",wimm is op0_8=0xED; op6_2=2 & op3_3=2 & op2_1=1 & wr2=2; wimm { local v = wimm; subW(HL, v); HL = HL - v; wResult(HL); }
+:ANDW "HL",wsrc is op0_8=0xED; op6_2=2 & op3_3=4 & op2_1=1 & wsrc { HL = HL & wsrc; wLogic(HL); H_flag = 1; }
+:ANDW "HL",wimm is op0_8=0xED; op6_2=2 & op3_3=4 & op2_1=1 & wr2=2; wimm { HL = HL & wimm; wLogic(HL); H_flag = 1; }
+:XORW "HL",wsrc is op0_8=0xED; op6_2=2 & op3_3=5 & op2_1=1 & wsrc { HL = HL ^ wsrc; wLogic(HL); H_flag = 0; }
+:XORW "HL",wimm is op0_8=0xED; op6_2=2 & op3_3=5 & op2_1=1 & wr2=2; wimm { HL = HL ^ wimm; wLogic(HL); H_flag = 0; }
+:ORW "HL",wsrc is op0_8=0xED; op6_2=2 & op3_3=6 & op2_1=1 & wsrc { HL = HL | wsrc; wLogic(HL); H_flag = 0; }
+:ORW "HL",wimm is op0_8=0xED; op6_2=2 & op3_3=6 & op2_1=1 & wr2=2; wimm { HL = HL | wimm; wLogic(HL); H_flag = 0; }
+:CPW "HL",wsrc is op0_8=0xED; op6_2=2 & op3_3=7 & op2_1=1 & wsrc { local v = wsrc; subW(HL, v); local r = HL - v; wResult(r); }
+:CPW "HL",wimm is op0_8=0xED; op6_2=2 & op3_3=7 & op2_1=1 & wr2=2; wimm { local v = wimm; subW(HL, v); local r = HL - v; wResult(r); }
+:ADDW "HL",XY is XY; op0_8=0x87 { local v = XY; addW(HL, v); HL = HL + v; wResult(HL); }
+:SUBW "HL",XY is XY; op0_8=0x97 { local v = XY; subW(HL, v); HL = HL - v; wResult(HL); }
+:ANDW "HL",XY is XY; op0_8=0xA7 { HL = HL & XY; wLogic(HL); H_flag = 1; }
+:XORW "HL",XY is XY; op0_8=0xAF { HL = HL ^ XY; wLogic(HL); H_flag = 0; }
+:ORW "HL",XY is XY; op0_8=0xB7 { HL = HL | XY; wLogic(HL); H_flag = 0; }
+:CPW "HL",XY is XY; op0_8=0xBF { local v = XY; subW(HL, v); local r = HL - v; wResult(r); }
+:ADDW "HL","("^XYX^xdisp^")" is XYX; op0_8=0xC6; xdisp { local v = *:2 (XYX + xdisp); addW(HL, v); HL = HL + v; wResult(HL); }
+:SUBW "HL","("^XYX^xdisp^")" is XYX; op0_8=0xD6; xdisp { local v = *:2 (XYX + xdisp); subW(HL, v); HL = HL - v; wResult(HL); }
+:ANDW "HL","("^XYX^xdisp^")" is XYX; op0_8=0xE6; xdisp { HL = HL & *:2 (XYX + xdisp); wLogic(HL); H_flag = 1; }
+:XORW "HL","("^XYX^xdisp^")" is XYX; op0_8=0xEE; xdisp { HL = HL ^ *:2 (XYX + xdisp); wLogic(HL); H_flag = 0; }
+:ORW "HL","("^XYX^xdisp^")" is XYX; op0_8=0xF6; xdisp { HL = HL | *:2 (XYX + xdisp); wLogic(HL); H_flag = 0; }
+:CPW "HL","("^XYX^xdisp^")" is XYX; op0_8=0xFE; xdisp { local v = *:2 (XYX + xdisp); subW(HL, v); local r = HL - v; wResult(r); }
+
+# Multiply / divide (ED CB 90-BF, DD/FD CB d 92/9A/BA).
+msrc: wr2 is op2_1=0 & wr2 & (wr2=0 | wr2=1 | wr2=3) { export wr2; }
+msrc: "IX" is op2_1=1 & op0_3=4 { export IX; }
+msrc: "IY" is op2_1=1 & op0_3=5 { export IY; }
+:MULTW "HL",msrc is op0_8=0xED; op0_8=0xCB; op6_2=2 & op3_3=2 & msrc { HLX = sext(HL) * sext(msrc); }
+:MULTW "HL",wimm is op0_8=0xED; op0_8=0xCB; op6_2=2 & op3_3=2 & op0_3=7; wimm { HLX = sext(HL) * sext(wimm); }
+:MULTUW "HL",msrc is op0_8=0xED; op0_8=0xCB; op6_2=2 & op3_3=3 & msrc { HLX = zext(HL) * zext(msrc); }
+:MULTUW "HL",wimm is op0_8=0xED; op0_8=0xCB; op6_2=2 & op3_3=3 & op0_3=7; wimm { HLX = zext(HL) * zext(wimm); }
+:DIVUW "HL",msrc is op0_8=0xED; op0_8=0xCB; op6_2=2 & op3_3=7 & msrc { local d:4 = zext(msrc); local n:4 = zext(HL); local q:4 = n / d; local m:4 = n % d; HLX = (m << 16) | (q & 0xffff); }
+:DIVUW "HL",wimm is op0_8=0xED; op0_8=0xCB; op6_2=2 & op3_3=7 & op0_3=7; wimm { local d:4 = zext(wimm); local n:4 = zext(HL); local q:4 = n / d; local m:4 = n % d; HLX = (m << 16) | (q & 0xffff); }
+
+# Sign extension and SWAP.
+:EXTS "A" is op0_8=0xED; op0_8=0x65 & ((ddw=0 & lw=0) | ddw=1) { HL = sext(A); }
+:EXTS "A" is op0_8=0xED; op0_8=0x65 & ((ddw=0 & lw=1) | ddw=2) { HLX = sext(A); }
+:EXTSW "HL" is op0_8=0xED; op0_8=0x75 { HLX = sext(HL); }
+:SWAP dd4x is op0_8=0xED; op6_2=0 & dd4x & op0_4=14 & (dd4x=0 | dd4x=1) { dd4x = (dd4x << 16) | (dd4x >> 16); }
+:SWAP "HL" is op0_8=0xED; op0_8=0x3E { HLX = (HLX << 16) | (HLX >> 16); }
+:SWAP XYX is XYX; op0_8=0x3E { XYX = (XYX << 16) | (XYX >> 16); }
+
+# EX A,r (ED 07-3F) and EX r,r' (CB 30-37).
+:EX "A",dst8 is op0_8=0xED; op6_2=0 & dst8 & op0_3=7 { local t = A; A = dst8; dst8 = t; }
+:EX r0,ra3 is op0_8=0xCB; op6_2=0 & op3_3=6 & r0 & ra3 & (op0_3=0 | op0_3=1 | op0_3=2 | op0_3=3 | op0_3=4 | op0_3=5 | op0_3=7) { local t = r0; r0 = ra3; ra3 = t; }
+:EXALL is op0_8=0xED; op0_8=0xD9 { t:4 = BCX; BCX = BCX_; BCX_ = t; t = DEX; DEX = DEX_; DEX_ = t; t = HLX; HLX = HLX_; HLX_ = t; t = IXX; IXX = IXX_; IXX_ = t; t = IYX; IYX = IYX_; IYX_ = t; }
+:EXXX is op0_8=0xDD; op0_8=0xD9 { t:4 = IXX; IXX = IXX_; IXX_ = t; }
+:EXXY is op0_8=0xFD; op0_8=0xD9 { t:4 = IYX; IYX = IYX_; IYX_ = t; }
+
+# I/O through C, block transfer/compare/I/O, RLD/RRD, I/R.
+:IN r3,"(C)" is op0_8=0xED; op6_2=1 & r3 & op0_3=0 & (op3_3=0 | op3_3=1 | op3_3=2 | op3_3=3 | op3_3=4 | op3_3=5 | op3_3=7) { r3 = *[io]:1 BCX; setResultFlags(r3); setParity(r3); H_flag = 0; N_flag = 0; }
+:OUT "(C)",r3 is op0_8=0xED; op6_2=1 & r3 & op0_3=1 & (op3_3=0 | op3_3=1 | op3_3=2 | op3_3=3 | op3_3=4 | op3_3=5 | op3_3=7) { *[io]:1 BCX = r3; }
+:OUT "(C)",imm8 is op0_8=0xED; op0_8=0x71; imm8 { *[io]:1 BCX = imm8:1; }
+:LDI is op0_8=0xED; op0_8=0xA0 { *:1 DEX = *:1 HLX; DEX = DEX + 1; HLX = HLX + 1; BC = BC - 1; PV_flag = BC != 0; H_flag = 0; N_flag = 0; }
+:LDD is op0_8=0xED; op0_8=0xA8 { *:1 DEX = *:1 HLX; DEX = DEX - 1; HLX = HLX - 1; BC = BC - 1; PV_flag = BC != 0; H_flag = 0; N_flag = 0; }
+:LDDR is op0_8=0xED; op0_8=0xB8 { *:1 DEX = *:1 HLX; DEX = DEX - 1; HLX = HLX - 1; BC = BC - 1; PV_flag = BC != 0; H_flag = 0; N_flag = 0; if (BC != 0) goto inst_start; }
+macro cpStep(v) { local r:1 = A - v; H_flag = ((A & 0xf) - (v & 0xf)) > 0xf; setResultFlags(r); BC = BC - 1; PV_flag = BC != 0; N_flag = 1; }
+:CPI is op0_8=0xED; op0_8=0xA1 { local v = *:1 HLX; HLX = HLX + 1; cpStep(v); }
+:CPD is op0_8=0xED; op0_8=0xA9 { local v = *:1 HLX; HLX = HLX - 1; cpStep(v); }
+:CPIR is op0_8=0xED; op0_8=0xB1 { local v = *:1 HLX; HLX = HLX + 1; cpStep(v); if (PV_flag && !Z_flag) goto inst_start; }
+:CPDR is op0_8=0xED; op0_8=0xB9 { local v = *:1 HLX; HLX = HLX - 1; cpStep(v); if (PV_flag && !Z_flag) goto inst_start; }
+:INI is op0_8=0xED; op0_8=0xA2 { *:1 HLX = *[io]:1 BCX; HLX = HLX + 1; B = B - 1; Z_flag = B == 0; N_flag = 1; }
+:IND is op0_8=0xED; op0_8=0xAA { *:1 HLX = *[io]:1 BCX; HLX = HLX - 1; B = B - 1; Z_flag = B == 0; N_flag = 1; }
+:INIR is op0_8=0xED; op0_8=0xB2 { *:1 HLX = *[io]:1 BCX; HLX = HLX + 1; B = B - 1; Z_flag = B == 0; N_flag = 1; if (B != 0) goto inst_start; }
+:INDR is op0_8=0xED; op0_8=0xBA { *:1 HLX = *[io]:1 BCX; HLX = HLX - 1; B = B - 1; Z_flag = B == 0; N_flag = 1; if (B != 0) goto inst_start; }
+:OUTI is op0_8=0xED; op0_8=0xA3 { B = B - 1; *[io]:1 BCX = *:1 HLX; HLX = HLX + 1; Z_flag = B == 0; N_flag = 1; }
+:OUTD is op0_8=0xED; op0_8=0xAB { B = B - 1; *[io]:1 BCX = *:1 HLX; HLX = HLX - 1; Z_flag = B == 0; N_flag = 1; }
+:OTIR is op0_8=0xED; op0_8=0xB3 { B = B - 1; *[io]:1 BCX = *:1 HLX; HLX = HLX + 1; Z_flag = B == 0; N_flag = 1; if (B != 0) goto inst_start; }
+:OTDR is op0_8=0xED; op0_8=0xBB { B = B - 1; *[io]:1 BCX = *:1 HLX; HLX = HLX - 1; Z_flag = B == 0; N_flag = 1; if (B != 0) goto inst_start; }
+:RLD is op0_8=0xED; op0_8=0x6F { local m = *:1 HLX; local n = (m << 4) | (A & 0xf); A = (A & 0xf0) | (m >> 4); *:1 HLX = n; setResultFlags(A); setParity(A); H_flag = 0; N_flag = 0; }
+:RRD is op0_8=0xED; op0_8=0x67 { local m = *:1 HLX; local n = (A << 4) | (m >> 4); A = (A & 0xf0) | (m & 0xf); *:1 HLX = n; setResultFlags(A); setParity(A); H_flag = 0; N_flag = 0; }
+:LD "A","I" is op0_8=0xED; op0_8=0x57 { A = I; setResultFlags(A); H_flag = 0; N_flag = 0; }
+:LD "A","R" is op0_8=0xED; op0_8=0x5F { A = refreshCounter(); setResultFlags(A); H_flag = 0; N_flag = 0; }
+:LD "I","A" is op0_8=0xED; op0_8=0x47 { I = A; }
+:LD "R","A" is op0_8=0xED; op0_8=0x4F { R = A; }
+
+# LDW (rr),nn (ED 06/16/36), Long Word aware.
+ldwp: "(BC)" is op0_8=0x06 { export BCX; }
+ldwp: "(DE)" is op0_8=0x16 { export DEX; }
+ldwp: "(HL)" is op0_8=0x36 { export HLX; }
+:LDW ldwp,nn is op0_8=0xED; ldwp & ((ddw=0 & lw=0) | ddw=1); nn { *:2 ldwp = nn:2; }
+:LDW ldwp,nn is op0_8=0xED; ldwp & ((ddw=0 & lw=1) | ddw=2); nn { *:4 ldwp = nn; }
+
+# Status register.
+:LDCTL "HL","SR" is op0_8=0xED; op0_8=0xC0 { HLX = SR; }
+:LDCTL "SR","HL" is op0_8=0xED; op0_8=0xC8 { SR = HLX; }
+:LDCTL "SR","A" is op0_8=0xDD; op0_8=0xC8 { SR = (SR & 0xffffff00) | zext(A); }
+:LDCTL "SR",imm8 is op0_8=0xDD; op0_8=0xCA; imm8 { SR = (SR & 0xffffff00) | imm8; }
+:PUSH "SR" is op0_8=0xED; op0_8=0xC5 { push32(SR); }
+:POP "SR" is op0_8=0xED; op0_8=0xC1 { pop32(SR); }
+:BTEST is op0_8=0xED; op0_8=0xCF { bankTest(); }
+:MTEST is op0_8=0xDD; op0_8=0xCF { modeTest(); }
+
+# Relative branches with 16/24-bit displacements and CALR.
+rel16: dest is simm16 [ dest = inst_next + simm16; ] { export *[ram]:1 dest; }
+rel24: dest is simm24 [ dest = inst_next + simm24; ] { export *[ram]:1 dest; }
+:JR rel16 is op0_8=0xDD; op0_8=0x18; rel16 { goto rel16; }
+:JR rel24 is op0_8=0xFD; op0_8=0x18; rel24 { goto rel24; }
+:JR jcc,rel16 is op0_8=0xDD; op5_3=1 & jcc; rel16 { if (jcc) goto rel16; }
+:JR jcc,rel24 is op0_8=0xFD; op5_3=1 & jcc; rel24 { if (jcc) goto rel24; }
+:DJNZ rel16 is op0_8=0xDD; op0_8=0x10; rel16 { B = B - 1; if (B != 0) goto rel16; }
+:DJNZ rel24 is op0_8=0xFD; op0_8=0x10; rel24 { B = B - 1; if (B != 0) goto rel24; }
+
+:CALR rel is op0_8=0xED; op0_8=0xCD & xm=0; rel { local r:2 = inst_next; push16(r); call rel; }
+:CALR rel is op0_8=0xED; op0_8=0xCD & xm=1; rel { local r:4 = inst_next; push32(r); call rel; }
+:CALR rel16 is op0_8=0xDD; op0_8=0xCD & xm=0; rel16 { local r:2 = inst_next; push16(r); call rel16; }
+:CALR rel16 is op0_8=0xDD; op0_8=0xCD & xm=1; rel16 { local r:4 = inst_next; push32(r); call rel16; }
+:CALR rel24 is op0_8=0xFD; op0_8=0xCD & xm=0; rel24 { local r:2 = inst_next; push16(r); call rel24; }
+:CALR rel24 is op0_8=0xFD; op0_8=0xCD & xm=1; rel24 { local r:4 = inst_next; push32(r); call rel24; }
+:CALR cc,rel is op0_8=0xED; op6_2=3 & cc & op0_3=4 & xm=0; rel { if (!cc) goto inst_next; local r:2 = inst_next; push16(r); call rel; }
+:CALR cc,rel is op0_8=0xED; op6_2=3 & cc & op0_3=4 & xm=1; rel { if (!cc) goto inst_next; local r:4 = inst_next; push32(r); call rel; }
+:CALR cc,rel16 is op0_8=0xDD; op6_2=3 & cc & op0_3=4 & xm=0; rel16 { if (!cc) goto inst_next; local r:2 = inst_next; push16(r); call rel16; }
+:CALR cc,rel16 is op0_8=0xDD; op6_2=3 & cc & op0_3=4 & xm=1; rel16 { if (!cc) goto inst_next; local r:4 = inst_next; push32(r); call rel16; }
+:CALR cc,rel24 is op0_8=0xFD; op6_2=3 & cc & op0_3=4 & xm=0; rel24 { if (!cc) goto inst_next; local r:2 = inst_next; push16(r); call rel24; }
+:CALR cc,rel24 is op0_8=0xFD; op6_2=3 & cc & op0_3=4 & xm=1; rel24 { if (!cc) goto inst_next; local r:4 = inst_next; push32(r); call rel24; }
+
+# DDCB/FDCB: displacement widened by DDIR IB/IW (Appendix C "I" column).
+:RLC "("^XYX^simm8^")" is XYX; op0_8=0xCB & ddi=0; simm8; op0_8=0x06 { local a = XYX + simm8; local v = *:1 a; C_flag = (v >> 7) != 0; v = (v << 1) | (v >> 7); *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:RLC "("^XYX^simm16^")" is XYX; op0_8=0xCB & ddi=1; simm16; op0_8=0x06 { local a = XYX + simm16; local v = *:1 a; C_flag = (v >> 7) != 0; v = (v << 1) | (v >> 7); *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:RLC "("^XYX^simm24^")" is XYX; op0_8=0xCB & ddi=2; simm24; op0_8=0x06 { local a = XYX + simm24; local v = *:1 a; C_flag = (v >> 7) != 0; v = (v << 1) | (v >> 7); *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:RRC "("^XYX^simm8^")" is XYX; op0_8=0xCB & ddi=0; simm8; op0_8=0x0E { local a = XYX + simm8; local v = *:1 a; C_flag = (v & 1) != 0; v = (v >> 1) | (v << 7); *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:RRC "("^XYX^simm16^")" is XYX; op0_8=0xCB & ddi=1; simm16; op0_8=0x0E { local a = XYX + simm16; local v = *:1 a; C_flag = (v & 1) != 0; v = (v >> 1) | (v << 7); *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:RRC "("^XYX^simm24^")" is XYX; op0_8=0xCB & ddi=2; simm24; op0_8=0x0E { local a = XYX + simm24; local v = *:1 a; C_flag = (v & 1) != 0; v = (v >> 1) | (v << 7); *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:RL "("^XYX^simm8^")" is XYX; op0_8=0xCB & ddi=0; simm8; op0_8=0x16 { local a = XYX + simm8; local v = *:1 a; local c = C_flag; C_flag = (v >> 7) != 0; v = (v << 1) | zext(c); *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:RL "("^XYX^simm16^")" is XYX; op0_8=0xCB & ddi=1; simm16; op0_8=0x16 { local a = XYX + simm16; local v = *:1 a; local c = C_flag; C_flag = (v >> 7) != 0; v = (v << 1) | zext(c); *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:RL "("^XYX^simm24^")" is XYX; op0_8=0xCB & ddi=2; simm24; op0_8=0x16 { local a = XYX + simm24; local v = *:1 a; local c = C_flag; C_flag = (v >> 7) != 0; v = (v << 1) | zext(c); *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:RR "("^XYX^simm8^")" is XYX; op0_8=0xCB & ddi=0; simm8; op0_8=0x1E { local a = XYX + simm8; local v = *:1 a; local c = C_flag; C_flag = (v & 1) != 0; v = (v >> 1) | (zext(c) << 7); *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:RR "("^XYX^simm16^")" is XYX; op0_8=0xCB & ddi=1; simm16; op0_8=0x1E { local a = XYX + simm16; local v = *:1 a; local c = C_flag; C_flag = (v & 1) != 0; v = (v >> 1) | (zext(c) << 7); *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:RR "("^XYX^simm24^")" is XYX; op0_8=0xCB & ddi=2; simm24; op0_8=0x1E { local a = XYX + simm24; local v = *:1 a; local c = C_flag; C_flag = (v & 1) != 0; v = (v >> 1) | (zext(c) << 7); *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:SLA "("^XYX^simm8^")" is XYX; op0_8=0xCB & ddi=0; simm8; op0_8=0x26 { local a = XYX + simm8; local v = *:1 a; C_flag = (v >> 7) != 0; v = v << 1; *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:SLA "("^XYX^simm16^")" is XYX; op0_8=0xCB & ddi=1; simm16; op0_8=0x26 { local a = XYX + simm16; local v = *:1 a; C_flag = (v >> 7) != 0; v = v << 1; *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:SLA "("^XYX^simm24^")" is XYX; op0_8=0xCB & ddi=2; simm24; op0_8=0x26 { local a = XYX + simm24; local v = *:1 a; C_flag = (v >> 7) != 0; v = v << 1; *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:SRA "("^XYX^simm8^")" is XYX; op0_8=0xCB & ddi=0; simm8; op0_8=0x2E { local a = XYX + simm8; local v = *:1 a; C_flag = (v & 1) != 0; v = v s>> 1; *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:SRA "("^XYX^simm16^")" is XYX; op0_8=0xCB & ddi=1; simm16; op0_8=0x2E { local a = XYX + simm16; local v = *:1 a; C_flag = (v & 1) != 0; v = v s>> 1; *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:SRA "("^XYX^simm24^")" is XYX; op0_8=0xCB & ddi=2; simm24; op0_8=0x2E { local a = XYX + simm24; local v = *:1 a; C_flag = (v & 1) != 0; v = v s>> 1; *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:SRL "("^XYX^simm8^")" is XYX; op0_8=0xCB & ddi=0; simm8; op0_8=0x3E { local a = XYX + simm8; local v = *:1 a; C_flag = (v & 1) != 0; v = v >> 1; *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:SRL "("^XYX^simm16^")" is XYX; op0_8=0xCB & ddi=1; simm16; op0_8=0x3E { local a = XYX + simm16; local v = *:1 a; C_flag = (v & 1) != 0; v = v >> 1; *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:SRL "("^XYX^simm24^")" is XYX; op0_8=0xCB & ddi=2; simm24; op0_8=0x3E { local a = XYX + simm24; local v = *:1 a; C_flag = (v & 1) != 0; v = v >> 1; *:1 a = v; setResultFlags(v); setParity(v); H_flag = 0; N_flag = 0; }
+:BIT bit3,"("^XYX^simm8^")" is XYX; op0_8=0xCB & ddi=0; simm8; op6_2=1 & bit3 & op0_3=6 { local v = *:1 (XYX + simm8); Z_flag = ((v >> bit3) & 1) == 0; H_flag = 1; N_flag = 0; }
+:BIT bit3,"("^XYX^simm16^")" is XYX; op0_8=0xCB & ddi=1; simm16; op6_2=1 & bit3 & op0_3=6 { local v = *:1 (XYX + simm16); Z_flag = ((v >> bit3) & 1) == 0; H_flag = 1; N_flag = 0; }
+:BIT bit3,"("^XYX^simm24^")" is XYX; op0_8=0xCB & ddi=2; simm24; op6_2=1 & bit3 & op0_3=6 { local v = *:1 (XYX + simm24); Z_flag = ((v >> bit3) & 1) == 0; H_flag = 1; N_flag = 0; }
+:RES bit3,"("^XYX^simm8^")" is XYX; op0_8=0xCB & ddi=0; simm8; op6_2=2 & bit3 & op0_3=6 { local a = XYX + simm8; *:1 a = *:1 a & ~(1 << bit3); }
+:RES bit3,"("^XYX^simm16^")" is XYX; op0_8=0xCB & ddi=1; simm16; op6_2=2 & bit3 & op0_3=6 { local a = XYX + simm16; *:1 a = *:1 a & ~(1 << bit3); }
+:RES bit3,"("^XYX^simm24^")" is XYX; op0_8=0xCB & ddi=2; simm24; op6_2=2 & bit3 & op0_3=6 { local a = XYX + simm24; *:1 a = *:1 a & ~(1 << bit3); }
+:SET bit3,"("^XYX^simm8^")" is XYX; op0_8=0xCB & ddi=0; simm8; op6_2=3 & bit3 & op0_3=6 { local a = XYX + simm8; *:1 a = *:1 a | (1 << bit3); }
+:SET bit3,"("^XYX^simm16^")" is XYX; op0_8=0xCB & ddi=1; simm16; op6_2=3 & bit3 & op0_3=6 { local a = XYX + simm16; *:1 a = *:1 a | (1 << bit3); }
+:SET bit3,"("^XYX^simm24^")" is XYX; op0_8=0xCB & ddi=2; simm24; op6_2=3 & bit3 & op0_3=6 { local a = XYX + simm24; *:1 a = *:1 a | (1 << bit3); }
+:MULTW "HL","("^XYX^simm8^")" is XYX; op0_8=0xCB & ddi=0; simm8; op0_8=0x92 { HLX = sext(HL) * sext(*:2 (XYX + simm8)); }
+:MULTW "HL","("^XYX^simm16^")" is XYX; op0_8=0xCB & ddi=1; simm16; op0_8=0x92 { HLX = sext(HL) * sext(*:2 (XYX + simm16)); }
+:MULTW "HL","("^XYX^simm24^")" is XYX; op0_8=0xCB & ddi=2; simm24; op0_8=0x92 { HLX = sext(HL) * sext(*:2 (XYX + simm24)); }
+:MULTUW "HL","("^XYX^simm8^")" is XYX; op0_8=0xCB & ddi=0; simm8; op0_8=0x9A { HLX = zext(HL) * zext(*:2 (XYX + simm8)); }
+:MULTUW "HL","("^XYX^simm16^")" is XYX; op0_8=0xCB & ddi=1; simm16; op0_8=0x9A { HLX = zext(HL) * zext(*:2 (XYX + simm16)); }
+:MULTUW "HL","("^XYX^simm24^")" is XYX; op0_8=0xCB & ddi=2; simm24; op0_8=0x9A { HLX = zext(HL) * zext(*:2 (XYX + simm24)); }
+:DIVUW "HL","("^XYX^simm8^")" is XYX; op0_8=0xCB & ddi=0; simm8; op0_8=0xBA { local d:4 = zext(*:2 (XYX + simm8)); local n:4 = zext(HL); HLX = ((n % d) << 16) | ((n / d) & 0xffff); }
+:DIVUW "HL","("^XYX^simm16^")" is XYX; op0_8=0xCB & ddi=1; simm16; op0_8=0xBA { local d:4 = zext(*:2 (XYX + simm16)); local n:4 = zext(HL); HLX = ((n % d) << 16) | ((n / d) & 0xffff); }
+:DIVUW "HL","("^XYX^simm24^")" is XYX; op0_8=0xCB & ddi=2; simm24; op0_8=0xBA { local d:4 = zext(*:2 (XYX + simm24)); local n:4 = zext(HL); HLX = ((n % d) << 16) | ((n / d) & 0xffff); }
+

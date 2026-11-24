@@ -4251,6 +4251,21 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `SH` | Renesas SuperH SH-2E/SH-3/SH-3E/SH-4A | `sh3:BE:32:default`, `sh3:LE:32:default`, `sh3e:BE:32:default`, `sh3e:LE:32:default`, `sh2e:BE:32:default` | aleph-void/ghidra-sh (fork of will07c5/ghidra-sh) @ `31c6ca03e9`, MIT |
 <!-- vendor-rows -->
 
+### Native processor modules (#98)
+
+These processor directories hold SLEIGH specifications written for unlace from
+public ISA documentation (vendor manuals and datasheets), not vendored from a
+community module; each directory's README names its sources, what the p-code
+models and the known gaps. Each language is compiled by `slacomp` and is
+covered by the vendored-language count in
+`unlace-sleigh/tests/verify_context_commits.rs`; a CLI test under
+`unlace-cli/tests/` decompiles a small raw image with `--raw-image --target`.
+
+| Directory | Processors | Languages | Sources | Test |
+|---|---|---|---|---|
+| `4004` | Intel 4004 / 4040 | `4004:LE:16:default` | Intel MCS-4 and MCS-40 Users Manuals | `unlace-cli/tests/i4004_raw.rs` |
+<!-- native-rows -->
+
 ### WDC 65816 (#98)
 
 `specs/Ghidra/Processors/65816` vendors the SLEIGH specification of

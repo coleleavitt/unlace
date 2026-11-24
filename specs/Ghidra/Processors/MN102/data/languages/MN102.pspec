@@ -1,0 +1,376 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+
+  <programcounter register="PC"/>
+  <data_space space="ram"/>
+
+  <volatile outputop="write_volatile" inputop="read_volatile">
+    <range space="ram" first="0x00FC00" last="0x00FFFF"/>
+  </volatile>
+  
+  <default_symbols>
+    <symbol name="entry" address="0x080000" entry="true" />
+    <symbol name="interrupt" address="0x080008" entry="true" />
+    <!-- Internal control registers -->
+    <symbol name="CPUM" address="0xFC00" />
+    <symbol name="EFCR" address="0xFC08" />
+    <symbol name="IAGR" address="0xFC0E" />
+    <!-- Interrupt Control Registers - all 8-bit only access -->
+    <symbol name="NMICR" address="0xFC40" />
+    <symbol name="WDICR" address="0xFC42" />
+    <symbol name="UNICR" address="0xFC44" />
+    <symbol name="EIICR" address="0xFC46" />
+    <symbol name="IQ0ICL" address="0xFC50" />
+    <symbol name="IQ0ICH" address="0xFC51" />
+    <symbol name="TM0UICL" address="0xFC52" />
+    <symbol name="TM0UICH" address="0xFC53" />
+    <symbol name="TM8UICL" address="0xFC54" />
+    <symbol name="TM8UICH" address="0xFC55" />
+    <symbol name="TM8AICL" address="0xFC56" />
+    <symbol name="TM8AICH" address="0xFC57" />
+    <symbol name="IQ1ICL" address="0xFC58" />
+    <symbol name="IQ1ICH" address="0xFC59" />
+    <symbol name="TM1UICL" address="0xFC5A" />
+    <symbol name="TM1UICH" address="0xFC5B" />
+    <symbol name="TM8BICL" address="0xFC5C" />
+    <symbol name="TM8BICH" address="0xFC5D" />
+    <symbol name="TM9UICL" address="0xFC5E" />
+    <symbol name="TM9UICH" address="0xFC5F" />
+    <symbol name="IQ2ICL" address="0xFC60" />
+    <symbol name="IQ2ICH" address="0xFC61" />
+    <symbol name="TM2UICL" address="0xFC62" />
+    <symbol name="TM2UICH" address="0xFC63" />
+    <symbol name="TM9AICL" address="0xFC64" />
+    <symbol name="TM9AICH" address="0xFC65" />
+    <symbol name="TM9BICL" address="0xFC66" />
+    <symbol name="TM9BICH" address="0xFC67" />
+    <symbol name="IQ3ICL" address="0xFC68" />
+    <symbol name="IQ3ICH" address="0xFC69" />
+    <symbol name="TM3UICL" address="0xFC6A" />
+    <symbol name="TM3UICH" address="0xFC6B" />
+    <symbol name="TM10UICL" address="0xFC6C" />
+    <symbol name="TM10UICH" address="0xFC6D" />
+    <symbol name="TM10AICL" address="0xFC6E" />
+    <symbol name="TM10AICH" address="0xFC6F" />
+    <symbol name="IQ4ICL" address="0xFC70" />
+    <symbol name="IQ4ICH" address="0xFC71" />
+    <symbol name="TM4UICL" address="0xFC72" />
+    <symbol name="TM4UICH" address="0xFC73" />
+    <symbol name="TM10BICL" address="0xFC74" />
+    <symbol name="TM10BICH" address="0xFC75" />
+    <symbol name="TM11UICL" address="0xFC76" />
+    <symbol name="TM11UICH" address="0xFC77" />
+    <symbol name="KIICL" address="0xFC78" />
+    <symbol name="KIICH" address="0xFC79" />
+    <symbol name="TM5UICL" address="0xFC7A" />
+    <symbol name="TM5UICH" address="0xFC7B" />
+    <symbol name="TM11AICL" address="0xFC7C" />
+    <symbol name="TM11AICH" address="0xFC7D" />
+    <symbol name="TM11BICL" address="0xFC7E" />
+    <symbol name="TM11BICH" address="0xFC7F" />
+    <symbol name="ADICL" address="0xFC80" />
+    <symbol name="ADICH" address="0xFC81" />
+    <symbol name="TM6UICL" address="0xFC82" />
+    <symbol name="TM6UICH" address="0xFC83" />
+    <symbol name="TM12UICL" address="0xFC84" />
+    <symbol name="TM12UICH" address="0xFC85" />
+    <symbol name="TM12AICL" address="0xFC86" />
+    <symbol name="TM12AICH" address="0xFC87" />
+    <symbol name="TM7UICL" address="0xFC88" />
+    <symbol name="TM7UICH" address="0xFC89" />
+    <symbol name="TM12BICL" address="0xFC8A" />
+    <symbol name="TM12BICH" address="0xFC8B" />
+    <!-- nothing for 0xFC8C-0xFC8F -->
+    <symbol name="SC0TICL" address="0xFC90" />
+    <symbol name="SC0TICH" address="0xFC91" />
+    <symbol name="SC0RICL" address="0xFC92" />
+    <symbol name="SC0RICH" address="0xFC93" />
+    <symbol name="SC1TICL" address="0xFC94" />
+    <symbol name="SC1TICH" address="0xFC95" />
+    <symbol name="SC1RICL" address="0xFC96" />
+    <symbol name="SC1RICH" address="0xFC97" />
+    <symbol name="SC2TICL" address="0xFC98" />
+    <symbol name="SC2TICH" address="0xFC99" />
+    <symbol name="SC2RICL" address="0xFC9A" />
+    <symbol name="SC2RICH" address="0xFC9B" />
+    <symbol name="SC3TICL" address="0xFC9C" />
+    <symbol name="SC3TICH" address="0xFC9D" />
+    <symbol name="SC3RICL" address="0xFC9E" />
+    <symbol name="SC3RICH" address="0xFC9F" />
+    <symbol name="SC4TICL" address="0xFCA0" />
+    <symbol name="SC4TICH" address="0xFCA1" />
+    <symbol name="SC4RICL" address="0xFCA2" />
+    <symbol name="SC4RICH" address="0xFCA3" />
+    <symbol name="ETC0ICL" address="0xFCA4" />
+    <symbol name="ETC0ICH" address="0xFCA5" />
+    <symbol name="ETC1ICL" address="0xFCA6" />
+    <symbol name="ETC1ICH" address="0xFCA7" />
+    <symbol name="AT0ICL" address="0xFCA8" />
+    <symbol name="AT0ICH" address="0xFCA9" />
+    <symbol name="AT1ICL" address="0xFCAA" />
+    <symbol name="AT1ICH" address="0xFCAB" />
+    <symbol name="AT2ICL" address="0xFCAC" />
+    <symbol name="AT2ICH" address="0xFCAD" />
+    <symbol name="AT3ICL" address="0xFCAE" />
+    <symbol name="AT3ICH" address="0xFCAF" />
+    <!-- These have 16-bit access (or rather no access listed) -->
+    <symbol name="IRQTRG" address="0xFCB0" />
+    <symbol name="KEYTRG" address="0xFCB2" />
+    <symbol name="KEYCTR" address="0xFCB4" />
+    <symbol name="WDREG" address="0xFCB6" />
+    <!-- System Control -->
+    <symbol name="SYSCTL" address="0xFCD0" />
+    <symbol name="ADB0L" address="0xFCD2" /> <!-- 16 or 24 bit access -->
+    <symbol name="ADB0H" address="0xFCD4" />
+    <symbol name="ADB1L" address="0xFCD6" /> <!-- 16 or 24 bit access -->
+    <symbol name="ADB1H" address="0xFCD8" />
+    <symbol name="ADBCTL" address="0xFCDA" /> <!-- 8-bit access -->
+    <!-- ATC -->
+    <symbol name="AT0CTR"  address="0xFD00" /> <!-- 16-bit access -->
+    <symbol name="AT0CNT"  address="0xFD02" /> <!-- 16-bit access -->
+    <symbol name="AT0SRCL" address="0xFD04" /> <!-- 16 or 24 bit access -->
+    <symbol name="AT0SRCH" address="0xFD06" />
+    <symbol name="AT0DSTL" address="0xFD08" /> <!-- 16 or 24 bit access -->
+    <symbol name="AT0DSTH" address="0xFD0A" /> <!-- 16 or 24 bit access -->
+    <symbol name="AT1CTR"  address="0xFD10" /> <!-- 16-bit access -->
+    <symbol name="AT1CNT"  address="0xFD12" /> <!-- 16-bit access -->
+    <symbol name="AT1SRCL" address="0xFD14" /> <!-- 16 or 24 bit access -->
+    <symbol name="AT1SRCH" address="0xFD16" />
+    <symbol name="AT1DSTL" address="0xFD18" /> <!-- 16 or 24 bit access -->
+    <symbol name="AT1DSTH" address="0xFD1A" /> <!-- 16 or 24 bit access -->
+    <symbol name="AT2CTR"  address="0xFD20" /> <!-- 16-bit access -->
+    <symbol name="AT2CNT"  address="0xFD22" /> <!-- 16-bit access -->
+    <symbol name="AT2SRCL" address="0xFD24" /> <!-- 16 or 24 bit access -->
+    <symbol name="AT2SRCH" address="0xFD26" />
+    <symbol name="AT2DSTL" address="0xFD28" /> <!-- 16 or 24 bit access -->
+    <symbol name="AT2DSTH" address="0xFD2A" /> <!-- 16 or 24 bit access -->
+    <symbol name="AT3CTR"  address="0xFD30" /> <!-- 16-bit access -->
+    <symbol name="AT3CNT"  address="0xFD32" /> <!-- 16-bit access -->
+    <symbol name="AT3SRCL" address="0xFD34" /> <!-- 16 or 24 bit access -->
+    <symbol name="AT3SRCH" address="0xFD36" />
+    <symbol name="AT3DSTL" address="0xFD38" /> <!-- 16 or 24 bit access -->
+    <symbol name="AT3DSTH" address="0xFD3A" /> <!-- 16 or 24 bit access -->
+    <!-- ETC -->
+    <symbol name="ET0CTR"  address="0xFD40" /> <!-- 16-bit access -->
+    <symbol name="ET0CNT"  address="0xFD42" /> <!-- 16-bit access -->
+    <symbol name="ET0SRCL" address="0xFD44" /> <!-- 16 or 24 bit access -->
+    <symbol name="ET0SRCH" address="0xFD46" />
+    <symbol name="ET0DSTL" address="0xFD48" /> <!-- 16 or 24 bit access -->
+    <symbol name="ET0DSTH" address="0xFD4A" /> <!-- 16 or 24 bit access -->
+    <symbol name="ET1CTR"  address="0xFD50" /> <!-- 16-bit access -->
+    <symbol name="ET1CNT"  address="0xFD52" /> <!-- 16-bit access -->
+    <symbol name="ET1SRCL" address="0xFD54" /> <!-- 16 or 24 bit access -->
+    <symbol name="ET1SRCH" address="0xFD56" />
+    <symbol name="ET1DSTL" address="0xFD58" /> <!-- 16 or 24 bit access -->
+    <symbol name="ET1DSTH" address="0xFD5A" /> <!-- 16 or 24 bit access -->
+    <!-- Serial Interface -->
+    <symbol name="SC0CTR" address="0xFD80" />
+    <symbol name="SC0TRB" address="0xFD82" /> <!-- 8-bit access -->
+    <symbol name="SC0STR" address="0xFD83" /> <!-- 8-bit access -->
+    <symbol name="SC1CTR" address="0xFD88" />
+    <symbol name="SC1TRB" address="0xFD8A" /> <!-- 8-bit access -->
+    <symbol name="SC1STR" address="0xFD8B" /> <!-- 8-bit access -->
+    <symbol name="SC2CTR" address="0xFD90" />
+    <symbol name="SC2TRB" address="0xFD92" /> <!-- 8-bit access -->
+    <symbol name="SC2STR" address="0xFD93" /> <!-- 8-bit access -->
+    <symbol name="SC3CTR" address="0xFD98" />
+    <symbol name="SC3TRB" address="0xFD9A" /> <!-- 8-bit access -->
+    <symbol name="SC3STR" address="0xFD9B" /> <!-- 8-bit access -->
+    <symbol name="SC4CTR" address="0xFDA0" />
+    <symbol name="SC4TRB" address="0xFDA2" /> <!-- 8-bit access -->
+    <symbol name="SC4STR" address="0xFDA3" /> <!-- 8-bit access -->
+    <!-- 8-bit timers - 8-bit access only -->
+    <symbol name="TM0BC" address="0xFE00" />
+    <symbol name="TM0BR" address="0xFE10" />
+    <symbol name="TM0MD" address="0xFE20" />
+    <symbol name="TM1BC" address="0xFE01" />
+    <symbol name="TM1BR" address="0xFE11" />
+    <symbol name="TM1MD" address="0xFE21" />
+    <symbol name="TM2BC" address="0xFE02" />
+    <symbol name="TM2BR" address="0xFE12" />
+    <symbol name="TM2MD" address="0xFE22" />
+    <symbol name="TM3BC" address="0xFE03" />
+    <symbol name="TM3BR" address="0xFE13" />
+    <symbol name="TM3MD" address="0xFE23" />
+    <symbol name="TM4BC" address="0xFE04" />
+    <symbol name="TM4BR" address="0xFE14" />
+    <symbol name="TM4MD" address="0xFE24" />
+    <symbol name="TM5BC" address="0xFE05" />
+    <symbol name="TM5BR" address="0xFE15" />
+    <symbol name="TM5MD" address="0xFE25" />
+    <symbol name="TM6BC" address="0xFE06" />
+    <symbol name="TM6BR" address="0xFE16" />
+    <symbol name="TM6MD" address="0xFE26" />
+    <symbol name="TM7BC" address="0xFE07" />
+    <symbol name="TM7BR" address="0xFE17" />
+    <symbol name="TM7MD" address="0xFE27" />
+    <symbol name="TM13BC" address="0xFE08" />
+    <symbol name="TM13BR" address="0xFE18" />
+    <symbol name="TM13MD" address="0xFE28" />
+    <symbol name="TM13CA" address="0xFE0A" />
+    <symbol name="TM13CB" address="0xFE1A" />
+    <symbol name="TM14BC" address="0xFE09" />
+    <symbol name="TM14BR" address="0xFE19" />
+    <symbol name="TM14MD" address="0xFE29" />
+    <symbol name="TM14CA" address="0xFE0B" />
+    <symbol name="TM14CB" address="0xFE1B" />
+    <!-- 16-bit Timers -->
+    <symbol name="TM8MD"  address="0xFE80" />
+    <symbol name="TM8BC"  address="0xFE82" />
+    <symbol name="TM8CA"  address="0xFE84" />
+    <symbol name="TM8CAX" address="0xFE86" /> <!-- internal buffer -->
+    <symbol name="TM8CB"  address="0xFE88" />
+    <symbol name="TM8CBX" address="0xFE8A" />
+    <symbol name="TM8MD2" address="0xFE8E" /> <!-- 8-bit access -->
+    <symbol name="TM9MD"  address="0xFE90" />
+    <symbol name="TM9BC"  address="0xFE92" />
+    <symbol name="TM9CA"  address="0xFE94" />
+    <symbol name="TM9CAX" address="0xFE96" /> <!-- internal buffer -->
+    <symbol name="TM9CB"  address="0xFE98" />
+    <symbol name="TM9CBX" address="0xFE9A" />
+    <symbol name="TM9MD2" address="0xFE9E" /> <!-- 8-bit access -->
+    <symbol name="TM10MD"  address="0xFEA0" />
+    <symbol name="TM10BC"  address="0xFEA2" />
+    <symbol name="TM10CA"  address="0xFEA4" />
+    <symbol name="TM10CAX" address="0xFEA6" /> <!-- internal buffer -->
+    <symbol name="TM10CB"  address="0xFEA8" />
+    <symbol name="TM10CBX" address="0xFEAA" />
+    <symbol name="TM10MD2" address="0xFEAE" /> <!-- 8-bit access -->
+    <symbol name="TM11MD"  address="0xFEB0" />
+    <symbol name="TM11BC"  address="0xFEB2" />
+    <symbol name="TM11CA"  address="0xFEB4" />
+    <symbol name="TM11CAX" address="0xFEB6" /> <!-- internal buffer -->
+    <symbol name="TM11CB"  address="0xFEB8" />
+    <symbol name="TM11CBX" address="0xFEBA" />
+    <symbol name="TM12MD"  address="0xFEC0" />
+    <symbol name="TM12BC"  address="0xFEC2" />
+    <symbol name="TM12CA"  address="0xFEC4" />
+    <symbol name="TM12CAX" address="0xFEC6" /> <!-- internal buffer -->
+    <symbol name="TM12CB"  address="0xFEC8" />
+    <symbol name="TM12CBX" address="0xFECA" />
+    <symbol name="TM15MD"  address="0xFED0" />
+    <symbol name="TM15BC"  address="0xFED2" />
+    <symbol name="TM15CA"  address="0xFED4" />
+    <!-- AD Converter -->
+    <symbol name="ANCTR" address="0xFF00" />
+    <symbol name="AN0BUF" address="0xFF08" />
+    <symbol name="AN1BUF" address="0xFF0A" />
+    <symbol name="AN2BUF" address="0xFF0C" />
+    <symbol name="AN3BUF" address="0xFF0E" />
+    <symbol name="AN4BUF" address="0xFF10" />
+    <symbol name="AN5BUF" address="0xFF12" />
+    <symbol name="AN6BUF" address="0xFF14" />
+    <symbol name="AN7BUF" address="0xFF16" />
+    <!-- CPU Memory Control - 16-bit access -->
+    <symbol name="EXWMD" address="0xFF80" />
+    <symbol name="MEMMD1" address="0xFF82" />
+    <symbol name="MEMMD2" address="0xFF84" />
+    <symbol name="REEDGE" address="0xFF86" />
+    <symbol name="WEEDGE" address="0xFF88" />
+    <symbol name="ALEEDGE" address="0xFF8A" />
+    <symbol name="MPXADR" address="0xFF8C" />
+    <symbol name="DRAMMD1" address="0xFF90" />
+    <symbol name="DRAMMD2" address="0xFF92" />
+    <!-- Port Control - 8-bit access -->
+    <symbol name="P0PLU" address="0xFFB0" />
+    <symbol name="P0OUT" address="0xFFC0" />
+    <symbol name="P0IN"  address="0xFFD0" />
+    <symbol name="P0DIR" address="0xFFE0" />
+    <symbol name="P0MD"  address="0xFFF0" />
+    <symbol name="P1PLU" address="0xFFB1" />
+    <symbol name="P1OUT" address="0xFFC1" />
+    <symbol name="P1IN"  address="0xFFD1" />
+    <symbol name="P1DIR" address="0xFFE1" />
+    <symbol name="P1LMD" address="0xFFF2" />
+    <symbol name="P1HMD" address="0xFFF3" />
+    <symbol name="P2PLU" address="0xFFB2" />
+    <symbol name="P2OUT" address="0xFFC2" />
+    <symbol name="P2IN"  address="0xFFD2" />
+    <symbol name="P2DIR" address="0xFFE2" />
+    <symbol name="P2MD"  address="0xFFF1" />
+    <symbol name="P3PLU" address="0xFFB3" />
+    <symbol name="P3OUT" address="0xFFC3" />
+    <symbol name="P3IN"  address="0xFFD3" />
+    <symbol name="P3DIR" address="0xFFE3" />
+    <symbol name="P3LMD" address="0xFFF4" />
+    <symbol name="P3HMD" address="0xFFF5" />
+    <symbol name="P4PLU" address="0xFFB4" />
+    <symbol name="P4OUT" address="0xFFC4" />
+    <symbol name="P4IN"  address="0xFFD4" />
+    <symbol name="P4DIR" address="0xFFE4" />
+    <symbol name="P4LMD" address="0xFFF6" />
+    <symbol name="P4HMD" address="0xFFF7" />
+    <symbol name="P5PLU" address="0xFFB5" />
+    <symbol name="P5OUT" address="0xFFC5" />
+    <symbol name="P5IN"  address="0xFFD5" />
+    <symbol name="P5DIR" address="0xFFE5" />
+    <symbol name="P5LMD" address="0xFFF8" />
+    <symbol name="P5HMD" address="0xFFF9" />
+    <symbol name="P6PLU" address="0xFFB6" />
+    <symbol name="P6OUT" address="0xFFC6" />
+    <symbol name="P6IN"  address="0xFFD6" />
+    <symbol name="P6DIR" address="0xFFE6" />
+    <symbol name="P6MD"  address="0xFFFF" />
+    <symbol name="P7PLU" address="0xFFB7" />
+    <symbol name="P7OUT" address="0xFFC7" />
+    <symbol name="P7IN"  address="0xFFD7" />
+    <symbol name="P7DIR" address="0xFFE7" />
+    <symbol name="P7LMD" address="0xFFFA" />
+    <symbol name="P7HMD" address="0xFFFB" />
+    <symbol name="P8PLU" address="0xFFB8" />
+    <symbol name="P8OUT" address="0xFFC8" />
+    <symbol name="P8IN"  address="0xFFD8" />
+    <symbol name="P8DIR" address="0xFFE8" />
+    <symbol name="P8LMD" address="0xFFFC" />
+    <symbol name="P8MMD" address="0xFFFD" />
+    <symbol name="P8HMD" address="0xFFFE" />
+    <symbol name="P9PLU" address="0xFFB9" />
+    <symbol name="P9OUT" address="0xFFC9" />
+    <symbol name="P9IN"  address="0xFFD9" />
+    <symbol name="P9DIR" address="0xFFE9" />
+    <symbol name="P9LMD" address="0xFFEC" />
+    <symbol name="P9HMD" address="0xFFED" />
+    <symbol name="PAPLU" address="0xFFBA" />
+    <symbol name="PAOUT" address="0xFFCA" />
+    <symbol name="PAIN"  address="0xFFDA" />
+    <symbol name="PADIR" address="0xFFEA" />
+    <symbol name="PAMD"  address="0xFFDC" />
+    <symbol name="PBPLU" address="0xFFBB" />
+    <symbol name="PBOUT" address="0xFFCB" />
+    <symbol name="PBIN"  address="0xFFDB" />
+    <symbol name="PBDIR" address="0xFFEB" />
+    <symbol name="PBMD"  address="0xFFDD" />
+    <symbol name="PBSWL" address="0xFFBC" /> <!-- 16 bits, no access noted -->
+    <symbol name="PBSWH" address="0xFFBE" /> <!-- 8 bits, no access noted -->
+    <symbol name="LBSWL" address="0xFFCC" /> <!-- 16 bits, no access noted -->
+    <symbol name="LBSWH" address="0xFFCE" /> <!-- 16 bits, no access noted -->
+  </default_symbols>
+  
+  <default_memory_blocks>
+    <memory_block name="ioregs" start_address="0x00FC00" length="0x400" mode="rw" initialized="false" />
+    <memory_block name="intram" start_address="0x008000" length="0x1000" mode="rw" initialized="false" /> <!-- length varies by processor -->
+    <!--<memory_block name="introm" start_address="0x080000" length="0x20000" mode="rx" />--> <!-- length varies by processor -->
+  </default_memory_blocks>
+
+  <register_data>
+    <register name="D0" group="DATA" />
+    <register name="D1" group="DATA" />
+    <register name="D2" group="DATA" />
+    <register name="D3" group="DATA" />
+    <register name="A0" group="ADDRESS" />
+    <register name="A1" group="ADDRESS" />
+    <register name="A2" group="ADDRESS" />
+    <register name="A3" group="ADDRESS" />
+    <register name="MDR" group="DATA" />
+    <register name="PSW" group="FLAGS" />
+    <register name="ZF" group="FLAGS" />
+    <register name="NF" group="FLAGS" />
+    <register name="CF" group="FLAGS" />
+    <register name="VF" group="FLAGS" />
+    <register name="ZX" group="FLAGS" />
+    <register name="NX" group="FLAGS" />
+    <register name="CX" group="FLAGS" />
+    <register name="VX" group="FLAGS" />
+  </register_data>
+</processor_spec>

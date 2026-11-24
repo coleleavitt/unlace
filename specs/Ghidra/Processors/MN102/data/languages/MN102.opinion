@@ -1,0 +1,7 @@
+<opinions>
+    <!-- e_machine 90 (EM_MN10200) and 0xdead (EM_CYGNUS_MN10200), binutils include/elf/common.h -->
+    <constraint loader="Executable and Linking Format (ELF)" compilerSpecID="default">
+        <constraint primary="90" processor="MN102" endian="little" size="24" variant="default"/>
+        <constraint primary="57005" processor="MN102" endian="little" size="24" variant="default"/>
+    </constraint>
+</opinions>

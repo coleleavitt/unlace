@@ -84,7 +84,7 @@ impl Ledger {
             let agree = stores
                 .iter()
                 .all(|(s, t)| s == size && type_key(t) == type_key(first));
-            if std::env::var_os("KUNA_STORETYPE_TRACE").is_some() {
+            if unlace_base::env::var_os("UNLACE_STORETYPE_TRACE").is_some() {
                 let keys: Vec<_> = stores.iter().map(|(s, t)| (s, type_key(t).1)).collect();
                 eprintln!("[storetype] {addr:#x} agree={agree} {keys:?}");
             }

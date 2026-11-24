@@ -384,7 +384,7 @@ pub const CUT: u8 = u8::MAX;
 /// extent) and why, and each call site what extent it was given.
 fn debug_on() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KUNA_CALLEEPURGE_DEBUG").is_some())
+    *ON.get_or_init(|| unlace_base::env::var_os("UNLACE_CALLEEPURGE_DEBUG").is_some())
 }
 
 /// Print one `KUNA_CALLEEPURGE_DEBUG` line, built only when the trace is on.

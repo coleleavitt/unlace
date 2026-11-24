@@ -793,7 +793,12 @@ pub fn parse(filename: &str, bytes: &[u8]) -> KunaResult<RetroImage> {
             4 => slot[0] = slot[0].wrapping_add((offset_value >> 8) as u8),
             1 | 5 => add16(slot, offset_value),
             9 | 13 => add32(slot, offset_value),
-            2 if !wide => add16(slot, u64::from(paragraph)),
+            2 if !wide => {
+                add16(slot, u64::from(paragraph));
+                if let Ref::External(external) = fixup.target {
+                    far_slots.push(addresses[external]);
+                }
+            }
             3 if !wide => {
                 add16(&mut slot[..2], offset_value);
                 add16(&mut slot[2..4], u64::from(paragraph));

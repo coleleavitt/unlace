@@ -38,6 +38,172 @@ const USAGE: &str = "usage: unlace idb <info|list|import> <db.i64|db.idb> ...\n\
   compiler,input,image_base,segments,counts,errors}; list {kind,records}; import {project,binary,\n\
   stored,counts,skipped}. --jsonl prints one record per line.";
 
+/// Does the file at `path` start like an IDA database?
+pub(crate) fn is_database_file(path: &str) -> bool {
+    use std::io::Read;
+    let mut magic = [0u8; 4];
+    std::fs::File::open(path)
+        .and_then(|mut f| f.read_exact(&mut magic))
+        .is_ok()
+        && Database::is_database(&magic)
+}
+
+/// The database at `path` with its bytes, read once per process: a direct load parses it
+/// for its arguments, its name lookups and its segments.
+fn cached(path: &str) -> Result<std::sync::Arc<Database>, String> {
+    use std::sync::{Arc, Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<BTreeMap<String, Arc<Database>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    if let Some(db) = cache.lock().ok().and_then(|c| c.get(path).cloned()) {
+        return Ok(db);
+    }
+    let db = Arc::new(open(path, true)?);
+    if let Ok(mut c) = cache.lock() {
+        c.insert(path.to_string(), Arc::clone(&db));
+    }
+    Ok(db)
+}
+
+/// The entry of the function called `name` (its IDA name, or that name spelled as a C
+/// identifier).
+fn find_function(db: &Database, name: &str) -> Option<u64> {
+    db.functions
+        .iter()
+        .find(|f| f.name == name)
+        .or_else(|| db.functions.iter().find(|f| c_identifier(&f.name) == name))
+        .map(|f| f.start)
+}
+
+/// `decompile <db> <name>`: the function's entry as the `0x` address a raw load selects by.
+pub(crate) fn function_address(path: &str, name: &str) -> Result<String, String> {
+    let db = cached(path)?;
+    find_function(&db, name)
+        .map(hex)
+        .ok_or_else(|| format!("{path}: the database has no function named {name:?}"))
+}
+
+/// Rewrite the arguments of a command given a database in place of a binary into a raw
+/// load of its segments: `--raw-image --target --base`, `--entry` per function (not for
+/// `decompile`, which selects one), `--functions` names as `--addr`es, and the knowledge
+/// as `--assert @FILE` (a temporary file pushed onto `temp`). Arguments that already say
+/// `--raw-image` (a `--jobs` worker's) are left alone.
+pub(crate) fn prepare_args(
+    sub: &str,
+    args: &mut Vec<String>,
+    temp: &mut Vec<PathBuf>,
+) -> Result<(), String> {
+    let Some(path) = args.first().cloned() else {
+        return Ok(());
+    };
+    if args.iter().any(|a| a == "--raw-image") {
+        return Ok(());
+    }
+    let db = cached(&path)?;
+    let value = |args: &[String], flag: &str| {
+        args.iter()
+            .position(|a| a == flag)
+            .and_then(|i| args.get(i + 1))
+            .cloned()
+    };
+    let target = match value(args.as_slice(), "--target") {
+        Some(target) => target,
+        None => {
+            let target = sleigh_target(&db.info.processor, db.info.bitness, db.info.big_endian)
+                .ok_or_else(|| {
+                    format!(
+                        "{path}: unlace has no SLEIGH target for IDA processor {:?}; pass --target",
+                        db.info.processor
+                    )
+                })?;
+            args.extend(["--target".to_string(), target.clone()]);
+            target
+        }
+    };
+    let base = db
+        .memory
+        .first()
+        .map(|run| run.start)
+        .or_else(|| db.segments.first().map(|s| s.start))
+        .ok_or_else(|| format!("{path}: the database maps no segment"))?;
+    args.push("--raw-image".to_string());
+    args.extend(["--base".to_string(), hex(base)]);
+    if let Some(i) = args.iter().position(|a| a == "--functions")
+        && let Some(names) = args.get(i + 1).cloned()
+    {
+        args.drain(i..i + 2);
+        for name in names.split(',').map(str::trim).filter(|n| !n.is_empty()) {
+            let address = find_function(&db, name)
+                .ok_or_else(|| format!("{path}: the database has no function named {name:?}"))?;
+            args.extend(["--addr".to_string(), hex(address)]);
+        }
+    }
+    let seeded = args.iter().any(|a| a == "--entry" || a == "--addr");
+    if sub != "decompile" && !seeded {
+        for f in &db.functions {
+            args.extend(["--entry".to_string(), hex(f.start)]);
+        }
+    }
+    let selection = Selection {
+        types: true,
+        comments: false,
+    };
+    let k = knowledge(&db, Some(&target), selection);
+    if !k.directives.is_empty() {
+        let stem = Path::new(&path)
+            .file_name()
+            .map_or("db".into(), |n| n.to_string_lossy().to_string());
+        let file =
+            std::env::temp_dir().join(format!("kuna-idb-{}-{stem}.assert", std::process::id()));
+        let mut text = k.directives.join("\n");
+        text.push('\n');
+        std::fs::write(&file, text).map_err(|e| format!("{}: {e}", file.display()))?;
+        args.extend(["--assert".to_string(), format!("@{}", file.display())]);
+        temp.push(file);
+    }
+    eprintln!(
+        "[kuna idb] {path}: {} {}-bit as {target}, {} segments, {} functions, {} directives",
+        db.info.processor,
+        db.info.bitness,
+        db.memory.len(),
+        db.functions.len(),
+        k.directives.len()
+    );
+    Ok(())
+}
+
+/// What a raw load of a database maps and marks: its segments as `(address, bytes,
+/// section flags)` runs, and the entries of the functions IDA marked no-return.
+pub(crate) struct RawLoad {
+    pub(crate) runs: Vec<(u64, Vec<u8>, u32)>,
+    pub(crate) noreturn: Vec<u64>,
+}
+
+/// The raw load of the database at `path`, or `None` when it is not a database.
+pub(crate) fn raw_load(path: &str) -> Result<Option<RawLoad>, String> {
+    if !is_database_file(path) {
+        return Ok(None);
+    }
+    let db = cached(path)?;
+    let runs = db
+        .memory
+        .iter()
+        .map(|run| {
+            (
+                run.start,
+                run.bytes.clone(),
+                crate::embed::segment_flags(run.perms.execute, run.perms.write),
+            )
+        })
+        .collect();
+    let noreturn = db
+        .functions
+        .iter()
+        .filter(|f| f.no_return)
+        .map(|f| f.start)
+        .collect();
+    Ok(Some(RawLoad { runs, noreturn }))
+}
+
 /// Read the database at `path`, with its segment bytes when `memory` is set.
 pub(crate) fn open(path: &str, memory: bool) -> Result<Database, String> {
     Database::open(path, Load { memory }).map_err(|e| format!("{path}: {e:#}"))

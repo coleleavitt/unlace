@@ -215,7 +215,7 @@ fn usage() {
          (with --stream, workers run with structsynth off).\n\
          Progress goes to\n\
          stderr, and peak memory is roughly N times one worker's RSS.\n\
-         --per-file writes one file per function into functions/ and manifest.json; a rerun\n\
+         --per-file writes one file per function into functions/ and manifest.toml; a rerun\n\
          decompiles only the functions not complete on disk. Not with --stream, --progress or --assert.\n\
          --stream writes the folder as the run goes instead of at the end: the entry\n\
          point and what it calls are written first, index.jsonl announces each\n\

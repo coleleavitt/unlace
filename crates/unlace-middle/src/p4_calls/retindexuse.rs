@@ -15,6 +15,10 @@
 //! RETURN trial. A 64-bit address built as two 32-bit halves (SASS
 //! `IADD3`/`IMAD.X` into a register pair, read back as one `PIECE`) is
 //! followed through its low half, and a `COPY` on the way is looked through.
+//! An operand computed from constants only (SASS `IMAD.MOV` adds `RZ * RZ`)
+//! counts as a constant offset, and a walked operand that is a `PIECE` the
+//! walk reached through its high half only is a base pointer's high word, so
+//! neither makes a load an index use.
 //! The shipped default `bpf` applies it on eBPF only, where a
 //! measurement of BPF, SASS, x86-64 and Thumb-2 builds of the same C (#865)
 //! found only right returns gained; elsewhere a scratch register that indexes
@@ -125,13 +129,86 @@ fn index_only_load(data: &Funcdata, opmatch: OpId, op: OpId, vn: VarnodeId) -> b
         let (Some(a), Some(b)) = (o.get_in(0), o.get_in(1)) else {
             return false;
         };
-        let constant = |x: VarnodeId| vbank.get(x).is_some_and(|v| v.is_constant());
+        let constant = |x: VarnodeId| constant_expr(data, x, 4);
         let marked = |x: VarnodeId| vbank.get(x).is_some_and(|v| v.is_mark());
         match (constant(a), constant(b)) {
             (false, true) => addr = a,
             (true, false) => addr = b,
-            (false, false) => return marked(a) != marked(b),
+            (false, false) => {
+                let index = if marked(a) { a } else { b };
+                return marked(a) != marked(b) && !high_word_only(data, index);
+            }
             (true, true) => return false,
+        }
+    }
+    false
+}
+
+/// Whether `vn` is a constant, or an arithmetic op over constants only
+/// (SASS `IMAD.MOV R6, RZ, RZ, R5` adds `RZ * RZ` to `R5`), at most
+/// `depth` ops deep.
+fn constant_expr(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
+    if v.is_constant() {
+        return true;
+    }
+    if depth == 0 {
+        return false;
+    }
+    let Some(o) = v.get_def().and_then(|d| data.obank().get(d)) else {
+        return false;
+    };
+    if !matches!(
+        o.code(),
+        OpCode::CPUI_COPY
+            | OpCode::CPUI_INT_ADD
+            | OpCode::CPUI_INT_SUB
+            | OpCode::CPUI_INT_MULT
+            | OpCode::CPUI_INT_AND
+            | OpCode::CPUI_INT_OR
+            | OpCode::CPUI_INT_XOR
+            | OpCode::CPUI_INT_LEFT
+            | OpCode::CPUI_INT_ZEXT
+            | OpCode::CPUI_INT_SEXT
+            | OpCode::CPUI_INT_2COMP
+            | OpCode::CPUI_INT_NEGATE
+    ) {
+        return false;
+    }
+    (0..o.num_input()).all(|i| {
+        o.get_in(i)
+            .is_some_and(|x| constant_expr(data, x, depth - 1))
+    })
+}
+
+/// Whether the walked operand `vn` of an address add is, through `COPY`s, a
+/// `PIECE` the walk reached through its high half only: the returned value
+/// is then the high word of the base pointer, not an index.
+fn high_word_only(data: &Funcdata, vn: VarnodeId) -> bool {
+    let vbank = data.vbank();
+    let mut cur = vn;
+    for _ in 0..4 {
+        let Some(o) = vbank
+            .get(cur)
+            .and_then(|v| v.get_def())
+            .and_then(|d| data.obank().get(d))
+        else {
+            return false;
+        };
+        match o.code() {
+            OpCode::CPUI_COPY => match o.get_in(0) {
+                Some(x) => cur = x,
+                None => return false,
+            },
+            OpCode::CPUI_PIECE => {
+                return !o
+                    .get_in(1)
+                    .and_then(|lo| vbank.get(lo))
+                    .is_some_and(|lo| lo.is_mark());
+            }
+            _ => return false,
         }
     }
     false

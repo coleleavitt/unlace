@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+  <programcounter register="PC"/>
+  <volatile outputop="write_volatile" inputop="read_volatile">
+    <range space="ram" first="0x01" last="0x3f"/>
+  </volatile>
+  <default_symbols>
+    <symbol name="HRESET" address="code:0x000" entry="true"/>
+    <symbol name="SYSERR" address="code:0x001" entry="true"/>
+    <symbol name="WDT" address="code:0x003" entry="true"/>
+    <symbol name="PORTA_INT" address="code:0x006" entry="true"/>
+    <symbol name="PORTB_INT" address="code:0x007" entry="true"/>
+    <symbol name="TIMER_EEP" address="code:0x00f" entry="true"/>
+    <symbol name="RS" address="ram:0x00"/>
+    <symbol name="PORTA" address="ram:0x01"/>
+    <symbol name="PORTB" address="ram:0x02"/>
+    <symbol name="TCTL" address="ram:0x04"/>
+    <symbol name="TWRK" address="ram:0x05"/>
+    <symbol name="PCFGA" address="ram:0x19"/>
+    <symbol name="PCFGB" address="ram:0x1a"/>
+    <symbol name="WDCTL" address="ram:0x1d"/>
+    <symbol name="EECTL" address="ram:0x38"/>
+    <symbol name="EEADRL" address="ram:0x39"/>
+    <symbol name="EEADRH" address="ram:0x3a"/>
+    <symbol name="EEDATA" address="ram:0x3f"/>
+  </default_symbols>
+  <default_memory_blocks>
+    <memory_block name="DATA" start_address="ram:0x00" length="0x100" initialized="false"/>
+  </default_memory_blocks>
+</processor_spec>

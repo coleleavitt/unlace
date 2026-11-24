@@ -328,6 +328,10 @@ jobs:
   release:
     needs: [version, build, specs, ghidra-ext]
     runs-on: ubuntu-latest
+    # id-token: write lets cosign request the keyless Sigstore certificate.
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -338,6 +342,19 @@ jobs:
           pattern: unlace-*
           path: dist
           merge-multiple: true
+
+      # SHA256SUMS over every asset in dist/, then a keyless Sigstore signature
+      # over the sums (cosign sign-blob, identity = this workflow's run). Verify
+      # with the steps in docs/release.md, "Verifying a download".
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Checksum and sign the release assets
+        run: |
+          cd dist
+          sha256sum -- $(ls -1) > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          cosign sign-blob --yes SHA256SUMS --output-signature SHA256SUMS.sig --output-certificate SHA256SUMS.cert
+          ls -l
 
       - name: Create tag + GitHub Release
         env:

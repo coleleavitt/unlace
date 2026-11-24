@@ -5291,7 +5291,10 @@ truncating the fall-through here"
     }
 
     /// Convert a BRANCHIND that could not be recovered into a call or return
-    /// (C++ `FlowInfo::truncateIndirectJump`, `flow.cc:745`).
+    /// (C++ `FlowInfo::truncateIndirectJump`, `flow.cc:745`). When the call
+    /// resolves to a no-return callee, `setup_callind_specs` has already planted
+    /// the halt after it, so no artificial return follows (upstream adds one
+    /// anyway, which prints a dead `return;` after the no-return tail call).
     fn truncate_indirect_jump(&mut self, op: OpId, mode: RecoveryMode) -> KunaResult<()> {
         if mode == RecoveryMode::FailReturn {
             self.data.op_set_opcode_code(op, OpCode::CPUI_RETURN);
@@ -5300,7 +5303,7 @@ truncating the fall-through here"
             return Ok(());
         }
         self.data.op_set_opcode_code(op, OpCode::CPUI_CALLIND);
-        self.setup_callind_specs(op)?;
+        let halted = self.setup_callind_specs(op)?;
         // The no-return / thunk fc bookkeeping (fc->setBadJumpTable / setNoReturn /
         // setInternal) is the W4 FuncCallSpecs surface -- STUB(W4); the op-code
         // change to CALLIND is the load-bearing CFG effect.
@@ -5322,6 +5325,9 @@ truncating the fall-through here"
                 // fc->setBadJumpTable(true) is the STUB(W4) FuncCallSpecs surface.
                 self.data.warning("Treating indirect jump as call", &addr);
             }
+        }
+        if halted {
+            return Ok(());
         }
         let truncop = self.artificial_halt(&addr, return_type)?;
         self.data.op_dead_insert_after(truncop, op);

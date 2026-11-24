@@ -451,6 +451,8 @@ mod partial_global_load_guard;
 #[path = "passthrough_own_return.rs"]
 mod passthrough_own_return;
 
+#[path = "noreturn_tailjump_cli.rs"]
+mod noreturn_tailjump_cli;
 #[path = "pltlocal_cli.rs"]
 mod pltlocal_cli;
 

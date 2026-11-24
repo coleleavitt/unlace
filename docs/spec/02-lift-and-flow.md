@@ -2497,7 +2497,14 @@ Failure demotes: `flow.rs (FlowInfo::truncate_indirect_jump)` rewrites the
 BRANCHIND to a RETURN (`fail_return`, warning `"Treating indirect jump as
 return"`) or to a CALLIND with an artificial RETURN after it (`fail_normal`,
 warning `"Treating indirect jump as call"`; `fail_thunk` silently; a
-CALLOTHER-computed target additionally marks the halt no-return) (unreachable today: nothing produces the CALLOTHER failure, see above). This is the
+CALLOTHER-computed target additionally marks the halt no-return) (unreachable today: nothing produces the CALLOTHER failure, see above).
+(kuna, #421) When the demoted CALLIND resolves to a no-return callee — an
+indirect-call override `ActionDeindirect` planted on the previous pass, an IAT
+or GOT import slot, a stated callee — the call-spec setup has already put the
+no-return halt after it, and no artificial RETURN is added. Upstream adds one
+anyway, so a thunk `jmp [__imp_ExitProcess]` or a body ending in a tail jump to
+`_CxxThrowException` printed a dead `return;` after the `// no-return` call.
+This is the
 failure mode every rescue below is fighting for: one unbounded table turns a
 switch into an opaque computed call.
 

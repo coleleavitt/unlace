@@ -4211,6 +4211,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `SuperFX` | SuperFX (GSU) | `SuperFX:LE:24:default` | aleph-void/ghidra-superfx (fork of ChekeEdd/ghidra-superfx) @ `98dd7bcd85`, BSD-3-Clause |
 | `TMS320C24x` | TI TMS320C24x | `TMS320c24x:LE:16:default`, `TMS320c24x:BE:16:default` | aleph-void/ghidra-tms320c24x (fork of banksy-git/ghidra-tms320c24x) @ `0bcad2a490`, Apache-2.0 |
 | `TMS320C54x` | TI TMS320C54x | `TMS320C54x:BE:16:default` | aleph-void/ghidra-tms320c54x (fork of gabtremblay/ghidra-tms320c54x) @ `bef69d7c53`, Apache-2.0 |
+| `unSP` | Sunplus unSP | `unsp:LE:16:default` | aleph-void/ghidra-unSP (fork of SamuelWAnderson45/ghidra-unSP) @ `a609027c50`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

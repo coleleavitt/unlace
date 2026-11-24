@@ -800,7 +800,7 @@ fn spell(ct: &Datatype) -> String {
 
 /// Is the decision trace on (`KUNA_CALLEEVOTE_TRACE=1`)?
 pub fn trace() -> bool {
-    std::env::var("KUNA_CALLEEVOTE_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
+    unlace_base::env::var("UNLACE_CALLEEVOTE_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }
 
 /// Copy onto `data` what its callers stated and whether its callers are all

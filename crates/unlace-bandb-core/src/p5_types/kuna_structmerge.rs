@@ -355,7 +355,7 @@ pub fn merge(
 /// stderr under `KUNA_STRUCTMERGE_TRACE=1`.
 #[doc(hidden)]
 pub fn trace_mint_failed(name: &str, want: &Layout) {
-    if std::env::var_os("KUNA_STRUCTMERGE_TRACE").is_none() {
+    if unlace_base::env::var_os("UNLACE_STRUCTMERGE_TRACE").is_none() {
         return;
     }
     eprintln!(
@@ -371,7 +371,7 @@ pub fn trace_mint_failed(name: &str, want: &Layout) {
 /// freshly measured layout, how many claims the two agree on, and what came of
 /// it. Silent, and free, when the variable is not set.
 fn trace(ct: &Datatype, want: &Layout, shared: usize, verdict: &str) {
-    if std::env::var_os("KUNA_STRUCTMERGE_TRACE").is_none() {
+    if unlace_base::env::var_os("UNLACE_STRUCTMERGE_TRACE").is_none() {
         return;
     }
     eprintln!(

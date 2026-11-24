@@ -262,6 +262,22 @@ class Pcode:
             i += 1
         return rd({'space': 'register', 'offset': regoff(A0), 'size': rsz})
 
+def run_qemu(a, tmp, ws, vecs):
+    tests = [w for w in ws for _ in vecs]
+    owner = [(w, x, y) for w in ws for x, y in vecs]
+    code = harness(tests, 0)
+    data_addr = (BASE + len(code) + 0x1fff) & ~0xfff
+    code = harness(tests, data_addr)
+    data = b''.join(struct.pack('<QQQ', x, y, 0) for _, x, y in owner)
+    prog = os.path.join(tmp, 'qemu1.elf')
+    with open(prog, 'wb') as f:
+        f.write(elf(code, 64, data, data_addr))
+    os.chmod(prog, 0o755)
+    p = subprocess.run([a.qemu, '-cpu', a.cpu, prog], capture_output=True)
+    if p.returncode != 0 or len(p.stdout) != len(data):
+        return None
+    return [struct.unpack_from('<Q', p.stdout, 24 * j + 16)[0] for j in range(len(owner))]
+
 def raw_pcode(path, unl, spec, n):
     """Each word's p-code; a word that does not decode ends a listing, so the
     next listing starts after it."""
@@ -331,11 +347,16 @@ def semantics(a):
         open(prog, 'wb').write(elf(code, 64, data, data_addr))
         os.chmod(prog, 0o755)
         p = subprocess.run([a.qemu, '-cpu', a.cpu, prog], capture_output=True)
-        if p.returncode != 0 or len(p.stdout) != len(data):
-            print('qemu failed: exit %s, %d bytes' % (p.returncode, len(p.stdout)), p.stderr[:400])
-            return 1
-        for j, (w, x, y) in enumerate(owner):
-            oracle.setdefault(w, []).append(struct.unpack_from('<Q', p.stdout, 24 * j + 16)[0])
+        if p.returncode == 0 and len(p.stdout) == len(data):
+            for j, (w, x, y) in enumerate(owner):
+                oracle.setdefault(w, []).append(struct.unpack_from('<Q', p.stdout, 24 * j + 16)[0])
+        else:
+            # some word traps (a reserved encoding QEMU rejects): run each
+            # word on its own and leave the trapping ones without a reference
+            for n, w in words:
+                got = run_qemu(a, tmp, [w], vecs)
+                if got is not None:
+                    oracle[w] = got
     report = {}
     names = dict((w, n) for n, w in words)
     for k in specs:
@@ -348,6 +369,9 @@ def semantics(a):
                 continue
             if 'opaque' in got:
                 opaque += 1
+                continue
+            if oracle is not None and w not in oracle:
+                unchecked += 1
                 continue
             want = oracle[w] if oracle else None
             if want is None:

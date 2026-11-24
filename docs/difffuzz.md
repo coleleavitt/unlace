@@ -206,6 +206,9 @@ afterwards. The register file is unchanged.
     MULHI multiplies the sign-extended halfword of reg1; SATADD/SATSUB/SATSUBR/SATSUBI saturate
     (`__saturate` was an empty pcodeop) and S/Z follow the saturated value. Seed 3, 3000
     encodings: 6663 matches.
+    The V850E2 step divisions (SDIVN/SDIVUN/SDIVHN/SDIVHUN, and DIVN/DIVUN/DIVHN/DIVHUN below 32 steps)
+    decode but are pcodeops (`unmodeled`): sim/v850 has OP_ functions for the SDIV forms in
+    simops.c, but v850.igen never dispatches them (they stop with SIGILL), so there is no oracle.
   - MN10300 (`--arch mn10300`, `mn10300:LE:32:mn10300`): the simulator has memory below 1 MiB, so the
     instruction sits at 0x10000; Z, N, C, V go through PSW. DIV/DIVU are undefined on overflow
     (sim/mn10300 only tests a zero divisor). Fixed in `mn103_base.sinc`: the register forms of

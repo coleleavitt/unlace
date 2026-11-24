@@ -1,19 +1,19 @@
 //! IDA databases (`.idb`, `.i64`) as a source of knowledge and of bytes.
 //!
-//! `unlace idb info|list|import` read one with `idb-rs`; [`knowledge`] turns its
+//! `unlace idb info|list|import` read one with `unlace-idb`, whose type strings unlace's TIL
+//! reader (`kuna_til`) renders as C; [`knowledge`] turns its
 //! functions, names, prototypes, local types and comments into `--assert`
 //! directives, so a project file, a direct decompile of the database and the
 //! `unlace` crate's `from_idb` all reach the engine through the existing
-//! `function` / `prototype` / `typedef` / `comment` path. IDA's C spellings
-//! (`unsigned __int8`, `_DWORD`, `__cdecl`, `__attribute__((...))`, C++-style
-//! tag references) are rewritten into the grammar the engine parses; a
-//! prototype with a register-located (`__usercall`) signature is left out.
+//! `function` / `prototype` / `typedef` / `comment` path. A type C cannot spell
+//! (a register-located `__usercall` signature) is left out.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use idb_rs::database::{CommentKind, Database, Function, Load};
 use serde_json::{Value, json};
+use unlace_analysis::protos::kuna_til;
+use unlace_idb::{CommentKind, Database, Function, Load, LocalType};
 use unlace_project::{BinaryIdentity, Project};
 
 use crate::args::take_value;
@@ -147,7 +147,7 @@ pub(crate) fn prepare_args(
         types: true,
         comments: false,
     };
-    let k = knowledge(&db, Some(&target), selection);
+    let k = knowledge(&db, selection);
     if !k.directives.is_empty() {
         let stem = Path::new(&path)
             .file_name()
@@ -206,7 +206,9 @@ pub(crate) fn raw_load(path: &str) -> Result<Option<RawLoad>, String> {
 
 /// Read the database at `path`, with its segment bytes when `memory` is set.
 pub(crate) fn open(path: &str, memory: bool) -> Result<Database, String> {
-    Database::open(path, Load { memory }).map_err(|e| format!("{path}: {e:#}"))
+    let mut db = Database::open(path, Load { memory }).map_err(|e| format!("{path}: {e}"))?;
+    render_types(&mut db);
+    Ok(db)
 }
 
 /// The SLEIGH language id for a database's processor, or `None` when unlace has no
@@ -280,7 +282,8 @@ pub(crate) struct Selection {
 /// A database's knowledge as directives.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Knowledge {
-    /// `typedef`s first, then `function`, `prototype` and `comment` directives.
+    /// `typedef`s first, then `function` (each with its `noreturn`), `prototype` and
+    /// `comment` directives.
     pub(crate) directives: Vec<String>,
     /// Entries of functions IDA marked no-return.
     pub(crate) noreturn: Vec<u64>,
@@ -289,16 +292,63 @@ pub(crate) struct Knowledge {
     pub(crate) counts: BTreeMap<&'static str, usize>,
 }
 
-/// Turn a database into directives for `target` (a SLEIGH id; the calling
-/// conventions `__stdcall`/`__fastcall`/`__thiscall` are kept only for 32-bit x86).
-pub(crate) fn knowledge(db: &Database, target: Option<&str>, selection: Selection) -> Knowledge {
-    let keep_cc = target.is_some_and(|t| t.starts_with("x86:LE:32"));
-    let tags = Tags::of(db);
+/// Decode the database's type strings with unlace's TIL reader
+/// (`unlace_analysis::protos::kuna_til`): the local types from its type library section,
+/// and each function's prototype, named by its C identifier.
+fn render_types(db: &mut Database) {
+    let ptr_size = u8::try_from(db.info.bitness / 8).unwrap_or(8);
+    let til = db
+        .til
+        .as_deref()
+        .and_then(|bytes| kuna_til::Til::parse(bytes).ok())
+        .unwrap_or_else(|| kuna_til::Til {
+            header: kuna_til::Header {
+                format: 0x12,
+                flags: 0,
+                title: String::new(),
+                compiler: 0,
+                size_int: db.info.size_int,
+                size_bool: db.info.size_bool,
+                size_enum: db.info.size_enum,
+                size_long_double: 0,
+                ptr_size: 0,
+            },
+            symbols: Vec::new(),
+            types: Vec::new(),
+            aliases: BTreeMap::new(),
+        });
+    db.types = kuna_til::c_declarations(&til, ptr_size)
+        .into_iter()
+        .map(|(ordinal, name, declaration)| LocalType {
+            ordinal,
+            name,
+            declaration,
+        })
+        .collect();
+    for f in &mut db.functions {
+        if let Some(info) = &f.type_info {
+            f.prototype = kuna_til::declare_type_string(
+                &til,
+                &info.type_bytes,
+                &info.fields,
+                &c_identifier(&f.name),
+                ptr_size,
+            );
+        }
+    }
+}
+
+fn bump(counts: &mut BTreeMap<&'static str, usize>, what: &'static str) {
+    *counts.entry(what).or_insert(0) += 1;
+}
+
+/// Turn a database into directives: its local types, functions (entries, extents,
+/// names), prototypes and, when selected, comments.
+pub(crate) fn knowledge(db: &Database, selection: Selection) -> Knowledge {
     let mut k = Knowledge::default();
     if selection.types {
         for ty in &db.types {
-            let decl = tags.qualify(&sanitize_c(&ty.declaration, keep_cc));
-            let decl = decl.trim().trim_end_matches(';').trim();
+            let decl = ty.declaration.trim().trim_end_matches(';').trim();
             if decl.is_empty() {
                 continue;
             }
@@ -315,21 +365,23 @@ pub(crate) fn knowledge(db: &Database, target: Option<&str>, selection: Selectio
             ));
         bump(&mut k.counts, "functions");
         if f.no_return {
+            k.directives.push(format!("noreturn {:#x}", f.start));
             k.noreturn.push(f.start);
             bump(&mut k.counts, "noreturn");
         }
     }
     for f in &db.functions {
-        match prototype(f, keep_cc, &tags) {
-            Ok(Some(decl)) => {
-                k.directives
-                    .push(format!("prototype {:#x} {decl}", f.start));
+        match (&f.prototype, &f.type_info) {
+            (Some(decl), _) => {
+                let decl = decl.trim().trim_end_matches(';').trim();
+                k.directives.push(format!("prototype {:#x} {decl}", f.start));
                 bump(&mut k.counts, "prototypes");
             }
-            Ok(None) => {}
-            Err(why) => k
-                .skipped
-                .push((format!("prototype {:#x}", f.start), why.to_string())),
+            (None, Some(_)) => k.skipped.push((
+                format!("prototype {:#x}", f.start),
+                "a type C cannot spell here (register-located arguments, a type the database does not define)".to_string(),
+            )),
+            (None, None) => {}
         }
     }
     if selection.comments {
@@ -341,31 +393,9 @@ pub(crate) fn knowledge(db: &Database, target: Option<&str>, selection: Selectio
     k
 }
 
-fn bump(counts: &mut BTreeMap<&'static str, usize>, what: &'static str) {
-    *counts.entry(what).or_insert(0) += 1;
-}
-
 /// A name the `function START=NAME` form carries whole.
 fn usable_name(name: &str) -> bool {
     !name.is_empty() && !name.contains(|c: char| c.is_whitespace() || c == '#')
-}
-
-/// The function's prototype in the engine's grammar, named by a C identifier.
-fn prototype(f: &Function, keep_cc: bool, tags: &Tags) -> Result<Option<String>, &'static str> {
-    let Some(decl) = &f.prototype else {
-        return Ok(None);
-    };
-    if decl.contains("__usercall") || decl.contains("__userpurge") || decl.contains("@<") {
-        return Err("register-located arguments (__usercall)");
-    }
-    let mut decl = tags.qualify(&sanitize_c(decl, keep_cc));
-    let ident = c_identifier(&f.name);
-    if ident != f.name
-        && let Some(at) = decl.find(&format!("{}(", f.name))
-    {
-        decl.replace_range(at..at + f.name.len(), &ident);
-    }
-    Ok(Some(decl.trim().trim_end_matches(';').trim().to_string()))
 }
 
 /// `name` with every character C does not allow in an identifier replaced by `_`.
@@ -439,244 +469,6 @@ fn is_identifier(text: &str) -> bool {
     !text.is_empty()
         && !text.starts_with(|c: char| c.is_ascii_digit())
         && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-}
-
-/// The tag names of the database's local `struct`/`union`/`enum` types that no typedef
-/// also names: IDA prints a reference to one C++-style, without its keyword.
-struct Tags {
-    keyword: BTreeMap<String, &'static str>,
-}
-
-impl Tags {
-    fn of(db: &Database) -> Self {
-        let mut keyword = BTreeMap::new();
-        let mut typedefs = BTreeSet::new();
-        for ty in &db.types {
-            let decl = ty.declaration.trim_start();
-            let kind = ["struct", "union", "enum"]
-                .into_iter()
-                .find(|k| decl.starts_with(&format!("{k} ")));
-            match kind {
-                Some(k) => {
-                    keyword.insert(ty.name.clone(), k);
-                }
-                None => {
-                    typedefs.insert(ty.name.clone());
-                }
-            }
-        }
-        keyword.retain(|name, _| !typedefs.contains(name));
-        Self { keyword }
-    }
-
-    /// Put the keyword in front of a bare tag used as a type (followed by a declarator,
-    /// a `*` or a `&`, not by `;`, `,`, `)` or `[`).
-    fn qualify(&self, text: &str) -> String {
-        if self.keyword.is_empty() {
-            return text.to_string();
-        }
-        let tokens = tokenize(text);
-        let mut out = String::with_capacity(text.len() + 16);
-        let mut prev_word: Option<&str> = None;
-        for (i, tok) in tokens.iter().enumerate() {
-            if let Token::Word(w) = tok
-                && let Some(k) = self.keyword.get(*w)
-                && !matches!(prev_word, Some("struct" | "union" | "enum"))
-                && used_as_type(&tokens[i + 1..])
-            {
-                out.push_str(k);
-                out.push(' ');
-            }
-            match tok {
-                Token::Word(w) => {
-                    prev_word = Some(*w);
-                    out.push_str(w);
-                }
-                Token::Other(s) => {
-                    if !s.trim().is_empty() {
-                        prev_word = None;
-                    }
-                    out.push_str(s);
-                }
-            }
-        }
-        out
-    }
-}
-
-fn used_as_type(rest: &[Token<'_>]) -> bool {
-    for tok in rest {
-        match tok {
-            Token::Word(_) => return true,
-            Token::Other(s) => {
-                let s = s.trim_start();
-                if s.is_empty() {
-                    continue;
-                }
-                return s.starts_with('*') || s.starts_with('&') || s.starts_with('(');
-            }
-        }
-    }
-    false
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Token<'a> {
-    Word(&'a str),
-    Other(&'a str),
-}
-
-fn tokenize(text: &str) -> Vec<Token<'_>> {
-    let mut out = Vec::new();
-    let mut start = 0;
-    let mut word = None::<bool>;
-    for (i, c) in text.char_indices() {
-        let is_word = c.is_ascii_alphanumeric() || c == '_' || c == '$';
-        match word {
-            Some(w) if w == is_word => {}
-            Some(w) => {
-                let piece = &text[start..i];
-                out.push(if w {
-                    Token::Word(piece)
-                } else {
-                    Token::Other(piece)
-                });
-                start = i;
-                word = Some(is_word);
-            }
-            None => word = Some(is_word),
-        }
-    }
-    if let Some(w) = word {
-        let piece = &text[start..];
-        out.push(if w {
-            Token::Word(piece)
-        } else {
-            Token::Other(piece)
-        });
-    }
-    out
-}
-
-/// IDA's C spellings in the engine's: sized integers and `_DWORD`-style placeholders
-/// become `int1`..`uint8`, attributes and IDA-only qualifiers are dropped, and the
-/// calling conventions too unless `keep_cc`.
-pub(crate) fn sanitize_c(text: &str, keep_cc: bool) -> String {
-    let text = strip_balanced(
-        &strip_balanced(text, "__attribute__", '(', ')'),
-        "__spoils",
-        '<',
-        '>',
-    );
-    let tokens = tokenize(&text);
-    let mut out = String::with_capacity(text.len());
-    let mut i = 0;
-    while i < tokens.len() {
-        let tok = tokens[i];
-        let Token::Word(w) = tok else {
-            if let Token::Other(s) = tok {
-                out.push_str(s);
-            }
-            i += 1;
-            continue;
-        };
-        if (w == "unsigned" || w == "signed")
-            && let Some((next, j)) = next_word(&tokens, i + 1)
-            && let Some(bytes) = sized_int(next)
-        {
-            let prefix = if w == "unsigned" { "uint" } else { "int" };
-            out.push_str(&format!("{prefix}{bytes}"));
-            i = j + 1;
-            continue;
-        }
-        let replacement = match w {
-            "__noreturn" | "__cdecl" | "__hidden" | "__struct_ptr" | "__cppobj" | "__unaligned"
-            | "__ptr32" | "__ptr64" | "__near" | "__far" | "__huge" | "__pascal" | "__high"
-            | "__return_ptr" | "__restrict" | "__shifted" => Some(""),
-            "__fastcall" | "__stdcall" | "__thiscall" if !keep_cc => Some(""),
-            "_BYTE" => Some("uint1"),
-            "_WORD" => Some("uint2"),
-            "_DWORD" => Some("uint4"),
-            "_QWORD" => Some("uint8"),
-            "_BOOL1" => Some("bool"),
-            "_BOOL2" => Some("int2"),
-            "_BOOL4" => Some("int4"),
-            "_BOOL8" => Some("int8"),
-            "_UNKNOWN" => Some("xunknown1"),
-            _ => None,
-        };
-        match (replacement, sized_int(w)) {
-            (Some(r), _) => out.push_str(r),
-            (None, Some(bytes)) => out.push_str(&format!("int{bytes}")),
-            (None, None) => out.push_str(w),
-        }
-        i += 1;
-    }
-    let mut squeezed = String::with_capacity(out.len());
-    for c in out.chars() {
-        if c == ' ' && (squeezed.ends_with(' ') || squeezed.ends_with('(')) {
-            continue;
-        }
-        squeezed.push(c);
-    }
-    squeezed
-        .replace(" )", ")")
-        .replace(" ,", ",")
-        .trim()
-        .to_string()
-}
-
-fn next_word<'a>(tokens: &[Token<'a>], from: usize) -> Option<(&'a str, usize)> {
-    for (j, tok) in tokens.iter().enumerate().skip(from) {
-        match tok {
-            Token::Word(w) => return Some((*w, j)),
-            Token::Other(s) if s.trim().is_empty() => {}
-            Token::Other(_) => return None,
-        }
-    }
-    None
-}
-
-fn sized_int(word: &str) -> Option<u32> {
-    match word {
-        "__int8" => Some(1),
-        "__int16" => Some(2),
-        "__int32" => Some(4),
-        "__int64" => Some(8),
-        _ => None,
-    }
-}
-
-/// Remove every `keyword<open>...<close>` (nested brackets balanced) from `text`.
-fn strip_balanced(text: &str, keyword: &str, open: char, close: char) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(at) = rest.find(keyword) {
-        out.push_str(&rest[..at]);
-        let after = &rest[at + keyword.len()..];
-        let trimmed = after.trim_start();
-        if !trimmed.starts_with(open) {
-            out.push_str(keyword);
-            rest = after;
-            continue;
-        }
-        let mut depth = 0usize;
-        let mut end = trimmed.len();
-        for (i, c) in trimmed.char_indices() {
-            if c == open {
-                depth += 1;
-            } else if c == close {
-                depth -= 1;
-                if depth == 0 {
-                    end = i + c.len_utf8();
-                    break;
-                }
-            }
-        }
-        rest = &trimmed[end..];
-    }
-    out.push_str(rest);
-    out
 }
 
 pub fn run(argv: &[String]) -> i32 {
@@ -858,7 +650,7 @@ fn info_text(v: &Value) -> String {
     out
 }
 
-fn segment_json(s: &idb_rs::database::Segment) -> Value {
+fn segment_json(s: &unlace_idb::Segment) -> Value {
     json!({
         "start": hex(s.start),
         "end": hex(s.end),
@@ -1012,7 +804,7 @@ fn import(
 ) -> Result<Value, String> {
     let (path, mut p, identity) = project_for(db_path, db, project, binary, force)?;
     let target = sleigh_target(&db.info.processor, db.info.bitness, db.info.big_endian);
-    let k = knowledge(db, target.as_deref(), selection);
+    let k = knowledge(db, selection);
     let mut skipped: Vec<Value> = k
         .skipped
         .iter()

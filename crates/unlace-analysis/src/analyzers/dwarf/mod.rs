@@ -129,6 +129,7 @@ mod kuna_dwarflocation;
 pub mod kuna_dwarfscopes;
 use kuna_dwarfscopes::FrameBase;
 pub(crate) mod kuna_dwarfcomplex;
+mod kuna_dwarfdecls;
 mod kuna_dwarflinkage;
 mod kuna_dwarfsignatures;
 pub mod kuna_godwarfsig;
@@ -1403,6 +1404,7 @@ impl DwarfPass {
         let go_target =
             ctx.file.is_little_endian() && ctx.file.architecture() == object::Architecture::X86_64;
         let mut go_facts = kuna_godwarfsig::Facts::default();
+        let mut decls = kuna_dwarfdecls::Decls::default();
         let mut units = dwarf.units();
         while let Ok(Some(header)) = units.next() {
             let Ok(unit) = dwarf.unit(header) else {
@@ -1426,6 +1428,9 @@ impl DwarfPass {
             for snap in dies.values() {
                 match snap.tag {
                     gimli::DW_TAG_subprogram => {
+                        if signatures && !linkage_imports.is_empty() {
+                            decls.note(snap, &dies, types, word_size, &linkage_imports);
+                        }
                         // Defined function only: DW_AT_low_pc present and not a
                         // declaration-only DIE (DWARFFunction.read body-ranges guard).
                         let Some(low_pc) = snap.low_pc else { continue };
@@ -1610,6 +1615,7 @@ impl DwarfPass {
         if !go_facts.is_empty() {
             out.go_dwarf.push(go_facts);
         }
+        decls.finish(&linkage_imports, &mut out.dwarf_decl_prototypes);
         let arch = ctx.file.architecture();
         for list in [&mut out.dwarf_reg_locals, &mut out.dwarf_param_regs] {
             list.retain_mut(

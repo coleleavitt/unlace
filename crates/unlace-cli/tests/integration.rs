@@ -6,6 +6,8 @@ mod c28x_raw;
 #[path = "chip8.rs"]
 mod chip8;
 mod common;
+#[path = "hexagon_hmx.rs"]
+mod hexagon_hmx;
 #[path = "m32r_raw.rs"]
 mod m32r_raw;
 #[path = "ft32_raw.rs"]
@@ -16,8 +18,12 @@ mod huc6280;
 mod kr1878_raw;
 #[path = "m6800_family.rs"]
 mod m6800_family;
+#[path = "mep.rs"]
+mod mep;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
+#[path = "nios2_raw.rs"]
+mod nios2_raw;
 #[path = "pdp11_raw.rs"]
 mod pdp11_raw;
 #[path = "moxie_raw.rs"]

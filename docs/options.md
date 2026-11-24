@@ -1028,6 +1028,10 @@ Three tiers:
 | a global described by DWARF as a struct renders as raw offsets off its address | [`dwarfglobaltypes`](#dwarfglobaltypes----on--off-default-off) |
 | a DWARF-typed pointer global is a long or undefined8 | [`dwarfglobaltypes`](#dwarfglobaltypes----on--off-default-off) |
 | a -g binary's globals have names but not types | [`dwarfglobaltypes`](#dwarfglobaltypes----on--off-default-off) |
+| a call to a library function passes 1 where the header names an enum member | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
+| an import declared in the binary's DWARF still has an inferred prototype | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
+| a call to an import drops an argument or passes CONCAT44 garbage in a -g binary | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
+| enum constants print as numbers in calls to a shared library | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
 | a __thread variable reads as *(int *)(v1 + -0x10) with v1 an fs_offset | [`tlsnames`](#tlsnames----on--off-default-on) |
 | thread-local variables of an executable have no names although .symtab has STT_TLS symbols | [`tlsnames`](#tlsnames----on--off-default-on) |
 | the TLS block is not modelled | [`tlsnames`](#tlsnames----on--off-default-on) |
@@ -3542,6 +3546,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** Off by default: a decompile-project export does not yet declare a typed global with its DWARF type in the generated header, so the exported body would read fields of an untyped object, and four workspace tests that pin global rendering move. Turn on for reading: the globals of a -g binary print with their source types (cfg.port, modes[i]). Leave off when exporting a project.
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida95-59
 - **Example:** `option dwarfglobaltypes off`
+
+### `dwarfdecls` -- on | off, default `off`
+
+- **Symptoms:** a call to a library function passes 1 where the header names an enum member; an import declared in the binary's DWARF still has an inferred prototype; a call to an import drops an argument or passes CONCAT44 garbage in a -g binary; enum constants print as numbers in calls to a shared library.
+- **What it does:** Type the calls to an import by the DWARF declaration of it. A unit that calls a function another module defines carries a declaration-only DW_TAG_subprogram (DW_AT_declaration, no DW_AT_low_pc) with the return and parameter types its header gave the compiler; the DWARF pass skipped every such DIE, so an import no library signature knows was called with untyped arguments and an inferred arity (gnutls_bye(v3,1), gnutls_deinit() with its argument lost). On, a declaration is kept when its name (the linkage name if it has one) is an ELF import with PLT entries, the file has no DWARF definition of it, it is prototyped (a K&R declaration says nothing about parameters), and every unit that declares it agrees on the return type, the parameter types and the variadic slot; it is built with the definition arm's type mapper and placed at each PLT entry of the import. The commit adds it only where no other prototype fact names the import or sits at that entry, so a libc or Win32 signature, a type library and a DWARF definition keep precedence. An enum-typed parameter then prints its constant arguments as members (GNUTLS_SHUT_WR), the Hex-Rays AUTOCONV_TO_ENUM case; a pointer parameter types the object passed. ELF only (the import map is the PLT); inert on an image without DWARF.
+- **When to flip:** Off by default while it is measured: it changes the output of every -g ELF that calls a library no signature pass knows. Turn on to read such a binary with its library calls typed as the headers declared them. Leave off to see what the binary alone gives, or when a header the program was built against does not match the library it loads.
+- **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida-hexrays-rules-6
+- **Example:** `option dwarfdecls on`
 
 ### `tlsnames` -- on | off, default `on`
 

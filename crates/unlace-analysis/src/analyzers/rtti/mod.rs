@@ -34,7 +34,10 @@
 //! MSVC metadata carries the class name but not per-method names, so the slot index is
 //! the disambiguator), and marks the slot array read-only ([`AnalysisOutput::readonly`]).
 //! So the virtual dispatch — `(**(code **)*plVar1)()`, an unnamed `DAT_*` vtable slot
-//! before — now resolves to a named function (`Box::vfunc_0` = `Box::area`).
+//! before — now resolves to a named function (`Box::vfunc_0` = `Box::area`). The
+//! slots are those of the vftable as `vtabletypes` cuts it
+//! (`kuna_msvcvtabletypes.rs (trim_overruns)`): a walk that ran on into the table
+//! laid after the vftable (an RPC server's dispatch table) named its routines too.
 //!
 //! The slot-index name is `vfunc_<i>` and NOT `vftable_<i>`: a routine must not be named
 //! after the data object that points at it. Under multiple inheritance an MSVC class
@@ -172,12 +175,20 @@ fn emit_classes(
     out: &mut AnalysisOutput,
 ) {
     let (cols, meta_slots) = find_cols(img, rk, tds);
+    // The vftables cut where a walk ran into the table after them
+    // (`kuna_msvcvtabletypes.rs (trim_overruns)`), by first slot.
+    let cut: FxHashMap<u64, Vec<u64>> =
+        kuna_msvcvtabletypes::recover_from(img, rk, text, &cols, &meta_slots)
+            .into_values()
+            .flat_map(|c| c.tables)
+            .map(|t| (t.vt.base, t.vt.slots))
+            .collect();
     for col in &cols {
         let slots = meta_slots
             .get(&col.addr)
             .map(Vec::as_slice)
             .unwrap_or_default();
-        emit_for_col(img, rk, text, col, slots, out);
+        emit_for_col(img, rk, text, col, slots, &cut, out);
     }
 }
 
@@ -306,6 +317,7 @@ fn emit_for_col(
     text: &TextRanges,
     col: &CompleteObjectLocator,
     meta_slots: &[u64],
+    cut: &FxHashMap<u64, Vec<u64>>,
     out: &mut AnalysisOutput,
 ) {
     // The COL's own class name (RTTI0 it points at).
@@ -344,7 +356,14 @@ fn emit_for_col(
         // R3: walk the vftable's slots, naming each virtual-method function
         // `<Class>::vfunc_<i>` and marking the slot array read-only. The virtual
         // dispatch (an unnamed `DAT_*` slot before) now resolves to a named function.
-        if let Some(vt) = walk_vftable(img, rk, text, vftable_base) {
+        let vt = match cut.get(&vftable_base) {
+            Some(slots) if !slots.is_empty() => Some(vftable::VfTable {
+                base: vftable_base,
+                slots: slots.clone(),
+            }),
+            _ => walk_vftable(img, rk, text, vftable_base),
+        };
+        if let Some(vt) = vt {
             emit_vftable_methods(&self_class, &vt, rk, out);
         }
     }

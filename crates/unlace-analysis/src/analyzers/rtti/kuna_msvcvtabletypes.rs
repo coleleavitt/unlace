@@ -32,7 +32,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use object::read::{Object, ObjectSymbol};
 use object::{BinaryFormat, SymbolKind};
 
-use unlace_decomp::kuna_fasthash::FxHashSet;
+use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
 use unlace_decomp::kuna_vtabletypes::{VtableClass, VtableSlot};
 
 use crate::demangle::demangle_rtti_class_name;
@@ -40,8 +40,8 @@ use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 use super::kuna_vtabletypes::{VtableFacts, VtableObject, is_identifier, struct_name};
 use super::models::{
-    BaseClassDescriptor, ClassHierarchyDescriptor, ImageBytes, TypeDescriptor,
-    read_base_class_array,
+    BaseClassDescriptor, ClassHierarchyDescriptor, CompleteObjectLocator, ImageBytes,
+    TypeDescriptor, read_base_class_array,
 };
 use super::refkind::RefKind;
 use super::vftable::{TextRanges, VfTable, walk_vftable};
@@ -110,10 +110,9 @@ pub(super) struct Class {
 
 /// Every class the image's CompleteObjectLocators name or list as a base.
 pub(super) fn recover(img: &ImageBytes, rk: &RefKind, text: &TextRanges) -> BTreeMap<u64, Class> {
-    let mut classes: BTreeMap<u64, Class> = BTreeMap::new();
     let descriptors = super::find_type_descriptors(img, rk);
     let Some(type_info) = super::pick_common_type_info_vftable(&descriptors) else {
-        return classes;
+        return BTreeMap::new();
     };
     let mut tds: Vec<&TypeDescriptor> = descriptors
         .iter()
@@ -122,7 +121,20 @@ pub(super) fn recover(img: &ImageBytes, rk: &RefKind, text: &TextRanges) -> BTre
     tds.sort_by_key(|td| td.addr);
     tds.dedup_by_key(|td| td.addr);
     let (cols, meta_slots) = super::find_cols(img, rk, &tds);
-    for col in &cols {
+    recover_from(img, rk, text, &cols, &meta_slots)
+}
+
+/// [`recover`] over CompleteObjectLocators already found, and the meta slots
+/// before their vftables.
+pub(super) fn recover_from(
+    img: &ImageBytes,
+    rk: &RefKind,
+    text: &TextRanges,
+    cols: &[CompleteObjectLocator],
+    meta_slots: &FxHashMap<u64, Vec<u64>>,
+) -> BTreeMap<u64, Class> {
+    let mut classes: BTreeMap<u64, Class> = BTreeMap::new();
+    for col in cols {
         let Some(name) = class_name(img, rk, col.p_type_descriptor) else {
             continue;
         };

@@ -37,7 +37,7 @@
 //! | `ActionLateDoNothing` | `"latedonothing"` | `0` | partial (flags realized, surgery STUB) |
 //! | `ActionRedundBranch` | `"redundbranch"` | `0` | partial (splice realized, removeBranch STUB) |
 //! | `ActionDeterminedBranch` | `"determinedbranch"` | `0` | realized (detect + `removeBranch`) |
-//! | `ActionNormalizeSetup` | `"normalizesetup"` | `rule_onceperfunc` | realized `reset`, STUB body (W4 proto) |
+//! | `ActionNormalizeSetup` | `"normalizesetup"` | `rule_onceperfunc` | realized (`reset` + prototype lock strip in `apply`) |
 //!
 //! **The boundary** is the next class, [`ActionDeadCode`] (`coreaction.hh:565`,
 //! `name() == "deadcode"`).  Its `apply` body needs `FuncCallSpecs` /
@@ -62,9 +62,8 @@
 //! * Varnode loc-set iteration `beginLoc`/`endLoc`, `getHeritagePass`, and the
 //!   replace primitives `fillinReadOnly`/`replaceVolatile`/
 //!   `totalReplaceConstant` (W3-vn / W4).
-//! * Prototype / injection surface `getFuncProto().*`, `getArch()->context`,
-//!   `pcodeinjectlib`, `doLiveInject` (W4 — `FuncProto` is an empty `Default`
-//!   placeholder in `substrate/context.rs`).
+//! * Injection surface `getArch()->context`, `pcodeinjectlib`, `doLiveInject`
+//!   (W4).
 //!
 //! Where a primitive is **realized** the body calls it and is exercised by a
 //! test.  Where it is **stubbed** the body transcribes the C++ structure and
@@ -1155,17 +1154,24 @@ impl Action for ActionNormalizeSetup {
     fn reset(&mut self, data: &mut Funcdata) {
         data.set_normalization(true);
     }
-    fn apply(&mut self, _data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+    fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:4801
         //   FuncProto &fp(data.getFuncProto());
         //   fp.clearInput();
         //   fp.setModelLock(false);   // forces model re-evaluation
         //   fp.setOutputLock(false);
         //   return 0;
-        // STUB(W4): FuncProto is an empty Default placeholder in substrate/context.rs;
-        // clearInput / setModelLock / setOutputLock are W4 prototype surfaces.
-        // The realized `reset` already flips the function into normalization mode;
-        // the lock-stripping is deferred to the prototype wave (no change count).
+        // A prototype with no symbol store (no setScope) has no input parameters and
+        // no output type lock, so only the model lock is dropped there.
+        let fp = data.get_func_proto_mut();
+        let has_store = fp.has_store();
+        if has_store {
+            fp.clear_input();
+        }
+        fp.set_model_lock(false);
+        if has_store {
+            fp.set_output_lock(false);
+        }
         0
     }
 }

@@ -1,0 +1,583 @@
+# Rabbit 2000 / Rabbit 3000 (R3000A) processor specification.
+# Written for this repository from the Rabbit 2000/3000 Instruction Reference
+# Manual (019-0098); see ../../README.md for sources, model and gaps.
+
+define endian=little;
+define alignment=1;
+
+define space ram      type=ram_space      size=2 default;
+define space io       type=ram_space      size=2;
+define space ioe      type=ram_space      size=2;
+define space phys     type=ram_space      size=3;
+define space register type=register_space size=1;
+
+define register offset=0x00 size=1 [ F A C B E D L H ];
+define register offset=0x00 size=2 [ AF BC DE HL ];
+define register offset=0x10 size=1 [ F_ A_ C_ B_ E_ D_ L_ H_ ];
+define register offset=0x10 size=2 [ AF_ BC_ DE_ HL_ ];
+define register offset=0x20 size=2 [ PC SP IX IY ];
+define register offset=0x30 size=1 [ XPC IP IIR EIR SU ];
+define register offset=0x38 size=1 [ S_flag Z_flag LV_flag C_flag ];
+define register offset=0x40 size=4 contextreg;
+
+# pfx: 0 none, 1 DD (IX), 2 FD (IY); ioflag: 0 memory, 1 IOI, 2 IOE; altd: ALTD prefix seen.
+define context contextreg
+  pfx    = (0,1)
+  ioflag = (2,3)
+  altd   = (4,4)
+;
+
+define token opbyte (8)
+  op0_8 = (0,7)
+  op6_2 = (6,7)
+  op5_3 = (5,7)
+  op3_3 = (3,5)
+  op0_3 = (0,2)
+  op0_4 = (0,3)
+  r3    = (3,5)
+  r0    = (0,2)
+  ar3   = (3,5)
+  ar0   = (0,2)
+  dd4   = (4,5)
+  ss4   = (4,5)
+  add4  = (4,5)
+  zz4   = (4,5)
+  azz4  = (4,5)
+  cc3   = (3,4)
+  f3    = (3,5)
+  bit3  = (3,5)
+  v3    = (3,5)
+;
+
+define token data8 (8)
+  imm8  = (0,7)
+  simm8 = (0,7) signed
+  sign8 = (7,7)
+;
+
+define token data16 (16)
+  imm16 = (0,15)
+;
+
+attach variables [ r3 r0 ]   [ B C D E H L _ A ];
+attach variables [ ar3 ar0 ] [ B_ C_ D_ E_ H_ L_ _ A_ ];
+attach variables [ dd4 ss4 ] [ BC DE HL SP ];
+attach variables [ add4 ]    [ BC_ DE_ HL_ _ ];
+attach variables [ zz4 ]     [ BC DE HL AF ];
+attach variables [ azz4 ]    [ BC_ DE_ HL_ AF_ ];
+
+define pcodeop idet;
+define pcodeop syscall;
+define pcodeop uma;
+define pcodeop ums;
+
+@define NP "pfx=0 & "
+
+################################################################
+# Macros
+################################################################
+
+macro packF() {
+  F = (S_flag << 7) | (Z_flag << 6) | (LV_flag << 2) | C_flag;
+}
+
+macro unpackF() {
+  S_flag = (F >> 7) & 1;
+  Z_flag = (F >> 6) & 1;
+  LV_flag = (F >> 2) & 1;
+  C_flag = F & 1;
+}
+
+macro resultFlags(r) {
+  S_flag = r s< 0;
+  Z_flag = r == 0;
+}
+
+macro logic8(r) {
+  resultFlags(r);
+  LV_flag = (r & 0xF0) != 0;
+  C_flag = 0;
+}
+
+macro logic16(r) {
+  resultFlags(r);
+  LV_flag = (r & 0xF000) != 0;
+  C_flag = 0;
+}
+
+macro rotFlags8(r) {
+  resultFlags(r);
+  LV_flag = (r & 0xF0) != 0;
+}
+
+macro rotFlags16(r) {
+  resultFlags(r);
+  LV_flag = (r & 0xF000) != 0;
+}
+
+macro add8(d, a, b) {
+  local x:1 = a;
+  local y:1 = b;
+  local r:1 = x + y;
+  C_flag = carry(x, y);
+  LV_flag = scarry(x, y);
+  resultFlags(r);
+  d = r;
+}
+
+macro adc8(d, a, b) {
+  local x:1 = a;
+  local y:1 = b;
+  local c:1 = C_flag;
+  local t:1 = x + y;
+  local r:1 = t + c;
+  C_flag = carry(x, y) || carry(t, c);
+  LV_flag = scarry(x, y) ^^ scarry(t, c);
+  resultFlags(r);
+  d = r;
+}
+
+macro sub8(d, a, b) {
+  local x:1 = a;
+  local y:1 = b;
+  local r:1 = x - y;
+  C_flag = x < y;
+  LV_flag = sborrow(x, y);
+  resultFlags(r);
+  d = r;
+}
+
+macro sbc8(d, a, b) {
+  local x:1 = a;
+  local y:1 = b;
+  local c:1 = C_flag;
+  local t:1 = x - y;
+  local r:1 = t - c;
+  C_flag = (x < y) || (t < c);
+  LV_flag = sborrow(x, y) ^^ sborrow(t, c);
+  resultFlags(r);
+  d = r;
+}
+
+macro cp8(a, b) {
+  local x:1 = a;
+  local y:1 = b;
+  local r:1 = x - y;
+  C_flag = x < y;
+  LV_flag = sborrow(x, y);
+  resultFlags(r);
+}
+
+macro adc16(d, a, b) {
+  local x:2 = a;
+  local y:2 = b;
+  local c:2 = zext(C_flag);
+  local t:2 = x + y;
+  local r:2 = t + c;
+  C_flag = carry(x, y) || carry(t, c);
+  LV_flag = scarry(x, y) ^^ scarry(t, c);
+  resultFlags(r);
+  d = r;
+}
+
+macro sbc16(d, a, b) {
+  local x:2 = a;
+  local y:2 = b;
+  local c:2 = zext(C_flag);
+  local t:2 = x - y;
+  local r:2 = t - c;
+  C_flag = (x < y) || (t < c);
+  LV_flag = sborrow(x, y) ^^ sborrow(t, c);
+  resultFlags(r);
+  d = r;
+}
+
+macro push16(v) {
+  SP = SP - 2;
+  *:2 SP = v;
+}
+
+macro pop16(v) {
+  v = *:2 SP;
+  SP = SP + 2;
+}
+
+macro push8(v) {
+  SP = SP - 1;
+  *:1 SP = v;
+}
+
+macro pop8(v) {
+  v = *:1 SP;
+  SP = SP + 1;
+}
+
+################################################################
+# Operand subtables
+################################################################
+
+dA: "A"  is altd=0 { export A; }
+dA: "A'" is altd=1 { export A_; }
+dB: "B"  is altd=0 { export B; }
+dB: "B'" is altd=1 { export B_; }
+dDE: "DE"  is altd=0 { export DE; }
+dDE: "DE'" is altd=1 { export DE_; }
+dHL: "HL"  is altd=0 { export HL; }
+dHL: "HL'" is altd=1 { export HL_; }
+
+dR3: r3      is altd=0 & r3 { export r3; }
+dR3: r3^"'"  is altd=1 & r3 & ar3 { export ar3; }
+dR0: r0      is altd=0 & r0 { export r0; }
+dR0: r0^"'"  is altd=1 & r0 & ar0 { export ar0; }
+
+# HL, or IX / IY under a DD / FD prefix
+sHLx: "HL" is pfx=0 { export HL; }
+sHLx: "IX" is pfx=1 { export IX; }
+sHLx: "IY" is pfx=2 { export IY; }
+dHLx: "HL"  is pfx=0 & altd=0 { export HL; }
+dHLx: "HL'" is pfx=0 & altd=1 { export HL_; }
+dHLx: "IX"  is pfx=1 { export IX; }
+dHLx: "IY"  is pfx=2 { export IY; }
+sXY: "IX" is pfx=1 { export IX; }
+sXY: "IY" is pfx=2 { export IY; }
+
+sSSx: ss4  is pfx=0 & ss4 { export ss4; }
+sSSx: ss4  is pfx=1 & ss4 { export ss4; }
+sSSx: "IX" is pfx=1 & ss4=2 { export IX; }
+sSSx: ss4  is pfx=2 & ss4 { export ss4; }
+sSSx: "IY" is pfx=2 & ss4=2 { export IY; }
+
+dDDx: dd4      is pfx=0 & altd=0 & dd4 { export dd4; }
+dDDx: dd4^"'"  is pfx=0 & altd=1 & dd4 & add4 { export add4; }
+dDDx: "SP"     is pfx=0 & altd=1 & dd4=3 { export SP; }
+dDDx: "IX"     is pfx=1 & dd4=2 { export IX; }
+dDDx: "IY"     is pfx=2 & dd4=2 { export IY; }
+
+sZZx: zz4  is pfx=0 & zz4 { export zz4; }
+sZZx: "IX" is pfx=1 & zz4=2 { export IX; }
+sZZx: "IY" is pfx=2 & zz4=2 { export IY; }
+dZZx: zz4      is pfx=0 & altd=0 & zz4 { export zz4; }
+dZZx: zz4^"'"  is pfx=0 & altd=1 & zz4 & azz4 { export azz4; }
+dZZx: "IX"     is pfx=1 & zz4=2 { export IX; }
+dZZx: "IY"     is pfx=2 & zz4=2 { export IY; }
+
+sdisp: "+"^simm8 is sign8=0 & simm8 { export *[const]:2 simm8; }
+sdisp: simm8     is sign8=1 & simm8 { export *[const]:2 simm8; }
+
+# (HL), or (IX+d) / (IY+d) under a DD / FD prefix
+aHL: "(HL)"            is pfx=0 { export HL; }
+aHL: "(IX"^sdisp^")"   is pfx=1 & sdisp { local a:2 = IX + sdisp; export a; }
+aHL: "(IY"^sdisp^")"   is pfx=2 & sdisp { local a:2 = IY + sdisp; export a; }
+
+# the LD HL,(IX+d) / LD (IX+d),HL family: no prefix means IX, DD means HL
+aXd: "(IX"^sdisp^")"   is pfx=0 & sdisp { local a:2 = IX + sdisp; export a; }
+aXd: "(HL"^sdisp^")"   is pfx=1 & sdisp { local a:2 = HL + sdisp; export a; }
+aXd: "(IY"^sdisp^")"   is pfx=2 & sdisp { local a:2 = IY + sdisp; export a; }
+
+aAbs: "("^imm16^")" is imm16 { export *[const]:2 imm16; }
+aBC: "(BC)" is epsilon { export BC; }
+aDE: "(DE)" is epsilon { export DE; }
+
+# memory operands, redirected to the internal (IOI) or external (IOE) I/O space by a prefix
+mHL1: aHL         is ioflag=0 & aHL { export *[ram]:1 aHL; }
+mHL1: "ioi "^aHL  is ioflag=1 & aHL { export *[io]:1 aHL; }
+mHL1: "ioe "^aHL  is ioflag=2 & aHL { export *[ioe]:1 aHL; }
+# CB page: (HL) carries no displacement; (IX+d) / (IY+d) put d before the opcode byte
+cbHL: "(HL)"       is pfx=0 & ioflag=0 { export *[ram]:1 HL; }
+cbHL: "ioi (HL)"   is pfx=0 & ioflag=1 { export *[io]:1 HL; }
+cbHL: "ioe (HL)"   is pfx=0 & ioflag=2 { export *[ioe]:1 HL; }
+cbXY: "(IX"^sdisp^")" is pfx=1 & ioflag=0 & sdisp { local a:2 = IX + sdisp; export *[ram]:1 a; }
+cbXY: "(IY"^sdisp^")" is pfx=2 & ioflag=0 & sdisp { local a:2 = IY + sdisp; export *[ram]:1 a; }
+cbXY: "ioi (IX"^sdisp^")" is pfx=1 & ioflag=1 & sdisp { local a:2 = IX + sdisp; export *[io]:1 a; }
+cbXY: "ioi (IY"^sdisp^")" is pfx=2 & ioflag=1 & sdisp { local a:2 = IY + sdisp; export *[io]:1 a; }
+cbXY: "ioe (IX"^sdisp^")" is pfx=1 & ioflag=2 & sdisp { local a:2 = IX + sdisp; export *[ioe]:1 a; }
+cbXY: "ioe (IY"^sdisp^")" is pfx=2 & ioflag=2 & sdisp { local a:2 = IY + sdisp; export *[ioe]:1 a; }
+
+mXd2: aXd         is ioflag=0 & aXd { export *[ram]:2 aXd; }
+mXd2: "ioi "^aXd  is ioflag=1 & aXd { export *[io]:2 aXd; }
+mXd2: "ioe "^aXd  is ioflag=2 & aXd { export *[ioe]:2 aXd; }
+mAbs1: aAbs         is ioflag=0 & aAbs { export *[ram]:1 aAbs; }
+mAbs1: "ioi "^aAbs  is ioflag=1 & aAbs { export *[io]:1 aAbs; }
+mAbs1: "ioe "^aAbs  is ioflag=2 & aAbs { export *[ioe]:1 aAbs; }
+mAbs2: aAbs         is ioflag=0 & aAbs { export *[ram]:2 aAbs; }
+mAbs2: "ioi "^aAbs  is ioflag=1 & aAbs { export *[io]:2 aAbs; }
+mAbs2: "ioe "^aAbs  is ioflag=2 & aAbs { export *[ioe]:2 aAbs; }
+mBC1: aBC         is ioflag=0 & aBC { export *[ram]:1 aBC; }
+mBC1: "ioi "^aBC  is ioflag=1 & aBC { export *[io]:1 aBC; }
+mBC1: "ioe "^aBC  is ioflag=2 & aBC { export *[ioe]:1 aBC; }
+mDE1: aDE         is ioflag=0 & aDE { export *[ram]:1 aDE; }
+mDE1: "ioi "^aDE  is ioflag=1 & aDE { export *[io]:1 aDE; }
+mDE1: "ioe "^aDE  is ioflag=2 & aDE { export *[ioe]:1 aDE; }
+
+cc: "NZ" is cc3=0 { local t:1 = Z_flag == 0; export t; }
+cc: "Z"  is cc3=1 { local t:1 = Z_flag != 0; export t; }
+cc: "NC" is cc3=2 { local t:1 = C_flag == 0; export t; }
+cc: "C"  is cc3=3 { local t:1 = C_flag != 0; export t; }
+
+fcc: "NZ" is f3=0 { local t:1 = Z_flag == 0; export t; }
+fcc: "Z"  is f3=1 { local t:1 = Z_flag != 0; export t; }
+fcc: "NC" is f3=2 { local t:1 = C_flag == 0; export t; }
+fcc: "C"  is f3=3 { local t:1 = C_flag != 0; export t; }
+fcc: "LZ" is f3=4 { local t:1 = LV_flag == 0; export t; }
+fcc: "LO" is f3=5 { local t:1 = LV_flag != 0; export t; }
+fcc: "P"  is f3=6 { local t:1 = S_flag == 0; export t; }
+fcc: "M"  is f3=7 { local t:1 = S_flag != 0; export t; }
+
+rel8: reloc is simm8 [ reloc = inst_next + simm8; ] { export *[ram]:1 reloc; }
+abs16: imm16 is imm16 { export *[ram]:1 imm16; }
+
+rstn: "10" is v3=2 { export 0x20:2; }
+rstn: "18" is v3=3 { export 0x30:2; }
+rstn: "20" is v3=4 { export 0x40:2; }
+rstn: "28" is v3=5 { export 0x50:2; }
+rstn: "38" is v3=7 { export 0x70:2; }
+
+################################################################
+# Prefixes: ALTD, IOI, IOE, DD (IX), FD (IY)
+################################################################
+
+:^instruction is pfx=0 & altd=0 & op0_8=0x76 ; instruction [ altd=1; ] { build instruction; }
+:^instruction is pfx=0 & ioflag=0 & op0_8=0xD3 ; instruction [ ioflag=1; ] { build instruction; }
+:^instruction is pfx=0 & ioflag=0 & op0_8=0xDB ; instruction [ ioflag=2; ] { build instruction; }
+:^instruction is pfx=0 & op0_8=0xDD ; instruction [ pfx=1; ] { build instruction; }
+:^instruction is pfx=0 & op0_8=0xFD ; instruction [ pfx=2; ] { build instruction; }
+
+################################################################
+# 8-bit loads
+################################################################
+
+:LD dR3,r0 is $(NP) op6_2=1 & dR3 & r0 { dR3 = r0; }
+:LD dR3,cbHL is op6_2=1 & dR3 & op0_3=6 & cbHL { dR3 = cbHL; }
+:LD dR3,cbXY is op6_2=1 & dR3 & op0_3=6 ; cbXY { dR3 = cbXY; }
+:LD cbHL,r0 is op6_2=1 & op3_3=6 & r0 & cbHL { cbHL = r0; }
+:LD cbXY,r0 is op6_2=1 & op3_3=6 & r0 ; cbXY { cbXY = r0; }
+:LD dR3,imm8 is $(NP) op6_2=0 & dR3 & op0_3=6 ; imm8 { dR3 = imm8; }
+:LD cbHL,imm8 is op0_8=0x36 & cbHL ; imm8 { cbHL = imm8; }
+:LD cbXY,imm8 is op0_8=0x36 ; cbXY ; imm8 { cbXY = imm8; }
+:LD dA,mBC1 is $(NP) op0_8=0x0A & dA & mBC1 { dA = mBC1; }
+:LD dA,mDE1 is $(NP) op0_8=0x1A & dA & mDE1 { dA = mDE1; }
+:LD mBC1,"A" is $(NP) op0_8=0x02 & mBC1 { mBC1 = A; }
+:LD mDE1,"A" is $(NP) op0_8=0x12 & mDE1 { mDE1 = A; }
+:LD dA,mAbs1 is $(NP) op0_8=0x3A & dA ; mAbs1 { dA = mAbs1; }
+:LD mAbs1,"A" is $(NP) op0_8=0x32 ; mAbs1 { mAbs1 = A; }
+
+:LD "EIR","A" is $(NP) op0_8=0xED ; op0_8=0x47 { EIR = A; }
+:LD "IIR","A" is $(NP) op0_8=0xED ; op0_8=0x4F { IIR = A; }
+:LD dA,"EIR" is $(NP) op0_8=0xED ; op0_8=0x57 & dA { resultFlags(EIR); dA = EIR; }
+:LD dA,"IIR" is $(NP) op0_8=0xED ; op0_8=0x5F & dA { resultFlags(IIR); dA = IIR; }
+:LD "XPC","A" is $(NP) op0_8=0xED ; op0_8=0x67 { XPC = A; }
+:LD dA,"XPC" is $(NP) op0_8=0xED ; op0_8=0x77 & dA { dA = XPC; }
+
+################################################################
+# 16-bit loads
+################################################################
+
+:LD dDDx,imm16 is op6_2=0 & op0_4=1 & dDDx ; imm16 { dDDx = imm16; }
+:LD mAbs2,sHLx is op0_8=0x22 & sHLx ; mAbs2 { mAbs2 = sHLx; }
+:LD dHLx,mAbs2 is op0_8=0x2A & dHLx ; mAbs2 { dHLx = mAbs2; }
+:LD mAbs2,ss4 is $(NP) op0_8=0xED ; op6_2=1 & op0_4=3 & ss4 ; mAbs2 { mAbs2 = ss4; }
+:LD dDDx,mAbs2 is $(NP) op0_8=0xED ; op6_2=1 & op0_4=0xB & dDDx ; mAbs2 { dDDx = mAbs2; }
+:LD "SP",sHLx is op0_8=0xF9 & sHLx { SP = sHLx; }
+:LD dHLx,"(SP+"^imm8^")" is op0_8=0xC4 & dHLx ; imm8 { local a:2 = SP + imm8; dHLx = *[ram]:2 a; }
+:LD "(SP+"^imm8^")",sHLx is op0_8=0xD4 & sHLx ; imm8 { local a:2 = SP + imm8; *[ram]:2 a = sHLx; }
+:LD dHL,mXd2 is op0_8=0xE4 & dHL ; mXd2 { dHL = mXd2; }
+:LD mXd2,"HL" is op0_8=0xF4 ; mXd2 { mXd2 = HL; }
+:LD dHL,sXY is op0_8=0x7C & dHL & sXY { dHL = sXY; }
+:LD sXY,"HL" is op0_8=0x7D & sXY { sXY = HL; }
+:LD add4,"BC" is $(NP) op0_8=0xED ; op6_2=1 & op0_4=9 & add4 { add4 = BC; }
+:LD add4,"DE" is $(NP) op0_8=0xED ; op6_2=1 & op0_4=1 & add4 { add4 = DE; }
+
+:PUSH "AF" is $(NP) op0_8=0xF5 { packF(); push16(AF); }
+:PUSH sZZx is op6_2=3 & op0_4=5 & sZZx { push16(sZZx); }
+:POP "AF" is $(NP) altd=0 & op0_8=0xF1 { pop16(AF); unpackF(); }
+:POP "AF'" is $(NP) altd=1 & op0_8=0xF1 { pop16(AF_); }
+:POP dZZx is op6_2=3 & op0_4=1 & dZZx { pop16(dZZx); }
+:PUSH "IP" is $(NP) op0_8=0xED ; op0_8=0x76 { push8(IP); }
+:POP "IP" is $(NP) op0_8=0xED ; op0_8=0x7E { pop8(IP); }
+
+:EX "(SP)","HL" is $(NP) op0_8=0xED ; op0_8=0x54 & altd=0 { local t:2 = *[ram]:2 SP; *[ram]:2 SP = HL; HL = t; }
+:EX "(SP)","HL'" is $(NP) op0_8=0xED ; op0_8=0x54 & altd=1 { local t:2 = *[ram]:2 SP; *[ram]:2 SP = HL; HL_ = t; }
+:EX "(SP)",sXY is op0_8=0xE3 & sXY { local t:2 = *[ram]:2 SP; *[ram]:2 SP = sXY; sXY = t; }
+:EX "DE'","HL" is $(NP) altd=0 & op0_8=0xE3 { local t:2 = DE_; DE_ = HL; HL = t; }
+:EX "DE'","HL'" is $(NP) altd=1 & op0_8=0xE3 { local t:2 = DE_; DE_ = HL_; HL_ = t; }
+:EX "DE","HL" is $(NP) altd=0 & op0_8=0xEB { local t:2 = DE; DE = HL; HL = t; }
+:EX "DE","HL'" is $(NP) altd=1 & op0_8=0xEB { local t:2 = DE; DE = HL_; HL_ = t; }
+:EX "AF","AF'" is $(NP) op0_8=0x08 { packF(); local t:2 = AF; AF = AF_; AF_ = t; unpackF(); }
+:EXX is $(NP) op0_8=0xD9 {
+  local t:2 = BC; BC = BC_; BC_ = t;
+  t = DE; DE = DE_; DE_ = t;
+  t = HL; HL = HL_; HL_ = t;
+}
+
+################################################################
+# 8-bit arithmetic and logic
+################################################################
+:ADD dA,r0 is $(NP) op6_2=2 & op3_3=0 & r0 & dA { add8(dA, A, r0); }
+:ADD dA,cbHL is op6_2=2 & op3_3=0 & op0_3=6 & dA & cbHL { add8(dA, A, cbHL); }
+:ADD dA,cbXY is op6_2=2 & op3_3=0 & op0_3=6 & dA ; cbXY { add8(dA, A, cbXY); }
+:ADD dA,imm8 is $(NP) op6_2=3 & op3_3=0 & op0_3=6 & dA ; imm8 { add8(dA, A, imm8:1); }
+:ADC dA,r0 is $(NP) op6_2=2 & op3_3=1 & r0 & dA { adc8(dA, A, r0); }
+:ADC dA,cbHL is op6_2=2 & op3_3=1 & op0_3=6 & dA & cbHL { adc8(dA, A, cbHL); }
+:ADC dA,cbXY is op6_2=2 & op3_3=1 & op0_3=6 & dA ; cbXY { adc8(dA, A, cbXY); }
+:ADC dA,imm8 is $(NP) op6_2=3 & op3_3=1 & op0_3=6 & dA ; imm8 { adc8(dA, A, imm8:1); }
+:SUB r0 is $(NP) op6_2=2 & op3_3=2 & r0 & dA { sub8(dA, A, r0); }
+:SUB cbHL is op6_2=2 & op3_3=2 & op0_3=6 & dA & cbHL { sub8(dA, A, cbHL); }
+:SUB cbXY is op6_2=2 & op3_3=2 & op0_3=6 & dA ; cbXY { sub8(dA, A, cbXY); }
+:SUB imm8 is $(NP) op6_2=3 & op3_3=2 & op0_3=6 & dA ; imm8 { sub8(dA, A, imm8:1); }
+:SBC dA,r0 is $(NP) op6_2=2 & op3_3=3 & r0 & dA { sbc8(dA, A, r0); }
+:SBC dA,cbHL is op6_2=2 & op3_3=3 & op0_3=6 & dA & cbHL { sbc8(dA, A, cbHL); }
+:SBC dA,cbXY is op6_2=2 & op3_3=3 & op0_3=6 & dA ; cbXY { sbc8(dA, A, cbXY); }
+:SBC dA,imm8 is $(NP) op6_2=3 & op3_3=3 & op0_3=6 & dA ; imm8 { sbc8(dA, A, imm8:1); }
+:AND r0 is $(NP) op6_2=2 & op3_3=4 & r0 & dA { local r:1 = A & r0; logic8(r); dA = r; }
+:AND cbHL is op6_2=2 & op3_3=4 & op0_3=6 & dA & cbHL { local r:1 = A & cbHL; logic8(r); dA = r; }
+:AND cbXY is op6_2=2 & op3_3=4 & op0_3=6 & dA ; cbXY { local r:1 = A & cbXY; logic8(r); dA = r; }
+:AND imm8 is $(NP) op6_2=3 & op3_3=4 & op0_3=6 & dA ; imm8 { local r:1 = A & imm8:1; logic8(r); dA = r; }
+:XOR r0 is $(NP) op6_2=2 & op3_3=5 & r0 & dA { local r:1 = A ^ r0; logic8(r); dA = r; }
+:XOR cbHL is op6_2=2 & op3_3=5 & op0_3=6 & dA & cbHL { local r:1 = A ^ cbHL; logic8(r); dA = r; }
+:XOR cbXY is op6_2=2 & op3_3=5 & op0_3=6 & dA ; cbXY { local r:1 = A ^ cbXY; logic8(r); dA = r; }
+:XOR imm8 is $(NP) op6_2=3 & op3_3=5 & op0_3=6 & dA ; imm8 { local r:1 = A ^ imm8:1; logic8(r); dA = r; }
+:OR r0 is $(NP) op6_2=2 & op3_3=6 & r0 & dA { local r:1 = A | r0; logic8(r); dA = r; }
+:OR cbHL is op6_2=2 & op3_3=6 & op0_3=6 & dA & cbHL { local r:1 = A | cbHL; logic8(r); dA = r; }
+:OR cbXY is op6_2=2 & op3_3=6 & op0_3=6 & dA ; cbXY { local r:1 = A | cbXY; logic8(r); dA = r; }
+:OR imm8 is $(NP) op6_2=3 & op3_3=6 & op0_3=6 & dA ; imm8 { local r:1 = A | imm8:1; logic8(r); dA = r; }
+:CP r0 is $(NP) op6_2=2 & op3_3=7 & r0 & dA { cp8(A, r0); }
+:CP cbHL is op6_2=2 & op3_3=7 & op0_3=6 & dA & cbHL { cp8(A, cbHL); }
+:CP cbXY is op6_2=2 & op3_3=7 & op0_3=6 & dA ; cbXY { cp8(A, cbXY); }
+:CP imm8 is $(NP) op6_2=3 & op3_3=7 & op0_3=6 & dA ; imm8 { cp8(A, imm8:1); }
+
+:INC dR3 is $(NP) op6_2=0 & dR3 & r3 & op0_3=4 { local r:1 = r3 + 1; LV_flag = scarry(r3, 1:1); resultFlags(r); dR3 = r; }
+:DEC dR3 is $(NP) op6_2=0 & dR3 & r3 & op0_3=5 { local r:1 = r3 - 1; LV_flag = sborrow(r3, 1:1); resultFlags(r); dR3 = r; }
+:INC cbHL is op0_8=0x34 & cbHL { local v:1 = cbHL; local r:1 = v + 1; LV_flag = scarry(v, 1:1); resultFlags(r); cbHL = r; }
+:INC cbXY is op0_8=0x34 ; cbXY { local v:1 = cbXY; local r:1 = v + 1; LV_flag = scarry(v, 1:1); resultFlags(r); cbXY = r; }
+:DEC cbHL is op0_8=0x35 & cbHL { local v:1 = cbHL; local r:1 = v - 1; LV_flag = sborrow(v, 1:1); resultFlags(r); cbHL = r; }
+:DEC cbXY is op0_8=0x35 ; cbXY { local v:1 = cbXY; local r:1 = v - 1; LV_flag = sborrow(v, 1:1); resultFlags(r); cbXY = r; }
+:NEG dA is $(NP) op0_8=0xED ; op0_8=0x44 & dA { sub8(dA, 0:1, A); }
+:CPL dA is $(NP) op0_8=0x2F & dA { dA = ~A; }
+:RLCA is $(NP) op0_8=0x07 & dA { C_flag = A >> 7; dA = (A << 1) | (A >> 7); }
+:RRCA is $(NP) op0_8=0x0F & dA { C_flag = A & 1; dA = (A >> 1) | (A << 7); }
+:RLA is $(NP) op0_8=0x17 & dA { local c:1 = C_flag; C_flag = A >> 7; dA = (A << 1) | c; }
+:RRA is $(NP) op0_8=0x1F & dA { local c:1 = C_flag; C_flag = A & 1; dA = (A >> 1) | (c << 7); }
+:SCF is $(NP) op0_8=0x37 { C_flag = 1; }
+:CCF is $(NP) op0_8=0x3F { C_flag = !C_flag; }
+
+################################################################
+# 16-bit arithmetic and logic
+################################################################
+
+:ADD dHLx,sSSx is op6_2=0 & op0_4=9 & dHLx & sHLx & sSSx { local a:2 = sHLx; local b:2 = sSSx; C_flag = carry(a, b); dHLx = a + b; }
+:ADC dHL,ss4 is $(NP) op0_8=0xED ; op6_2=1 & op0_4=0xA & ss4 & dHL { adc16(dHL, HL, ss4); }
+:SBC dHL,ss4 is $(NP) op0_8=0xED ; op6_2=1 & op0_4=2 & ss4 & dHL { sbc16(dHL, HL, ss4); }
+:ADD "SP",simm8 is $(NP) op0_8=0x27 ; simm8 { local d:2 = simm8; C_flag = carry(SP, d); SP = SP + d; }
+:INC dDDx is op6_2=0 & op0_4=3 & dDDx & sSSx { dDDx = sSSx + 1; }
+:DEC dDDx is op6_2=0 & op0_4=0xB & dDDx & sSSx { dDDx = sSSx - 1; }
+:AND dHLx,"DE" is op0_8=0xDC & dHLx & sHLx { local r:2 = sHLx & DE; logic16(r); dHLx = r; }
+:OR dHLx,"DE" is op0_8=0xEC & dHLx & sHLx { local r:2 = sHLx | DE; logic16(r); dHLx = r; }
+:BOOL dHLx is op0_8=0xCC & dHLx & sHLx { local r:2 = zext(sHLx != 0); resultFlags(r); LV_flag = 0; C_flag = 0; dHLx = r; }
+:RR dHLx is op0_8=0xFC & dHLx & sHLx { local v:2 = sHLx; local r:2 = (v >> 1) | (zext(C_flag) << 15); C_flag = v:1 & 1; rotFlags16(r); dHLx = r; }
+:RL dDE is $(NP) op0_8=0xF3 & dDE { local v:2 = DE; local r:2 = (v << 1) | zext(C_flag); local hb:1 = v(1); C_flag = hb >> 7; rotFlags16(r); dDE = r; }
+:RR dDE is $(NP) op0_8=0xFB & dDE { local v:2 = DE; local r:2 = (v >> 1) | (zext(C_flag) << 15); C_flag = v:1 & 1; rotFlags16(r); dDE = r; }
+:MUL is $(NP) op0_8=0xF7 { local p:4 = sext(BC) * sext(DE); HL = p(2); BC = p:2; }
+
+################################################################
+# Rotates, shifts and bit operations (CB page)
+################################################################
+:RLC dR0 is $(NP) op0_8=0xCB ; op6_2=0 & op3_3=0 & dR0 & r0 { local v:1 = r0; C_flag = v >> 7; local r:1 = (v << 1) | (v >> 7); rotFlags8(r); dR0 = r; }
+:RLC cbHL is op0_8=0xCB & cbHL ; op6_2=0 & op3_3=0 & op0_3=6 { local v:1 = cbHL; C_flag = v >> 7; local r:1 = (v << 1) | (v >> 7); rotFlags8(r); cbHL = r; }
+:RLC cbXY is op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=0 & op0_3=6 { local v:1 = cbXY; C_flag = v >> 7; local r:1 = (v << 1) | (v >> 7); rotFlags8(r); cbXY = r; }
+:RRC dR0 is $(NP) op0_8=0xCB ; op6_2=0 & op3_3=1 & dR0 & r0 { local v:1 = r0; C_flag = v & 1; local r:1 = (v >> 1) | (v << 7); rotFlags8(r); dR0 = r; }
+:RRC cbHL is op0_8=0xCB & cbHL ; op6_2=0 & op3_3=1 & op0_3=6 { local v:1 = cbHL; C_flag = v & 1; local r:1 = (v >> 1) | (v << 7); rotFlags8(r); cbHL = r; }
+:RRC cbXY is op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=1 & op0_3=6 { local v:1 = cbXY; C_flag = v & 1; local r:1 = (v >> 1) | (v << 7); rotFlags8(r); cbXY = r; }
+:RL dR0 is $(NP) op0_8=0xCB ; op6_2=0 & op3_3=2 & dR0 & r0 { local v:1 = r0; local c:1 = C_flag; C_flag = v >> 7; local r:1 = (v << 1) | c; rotFlags8(r); dR0 = r; }
+:RL cbHL is op0_8=0xCB & cbHL ; op6_2=0 & op3_3=2 & op0_3=6 { local v:1 = cbHL; local c:1 = C_flag; C_flag = v >> 7; local r:1 = (v << 1) | c; rotFlags8(r); cbHL = r; }
+:RL cbXY is op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=2 & op0_3=6 { local v:1 = cbXY; local c:1 = C_flag; C_flag = v >> 7; local r:1 = (v << 1) | c; rotFlags8(r); cbXY = r; }
+:RR dR0 is $(NP) op0_8=0xCB ; op6_2=0 & op3_3=3 & dR0 & r0 { local v:1 = r0; local c:1 = C_flag; C_flag = v & 1; local r:1 = (v >> 1) | (c << 7); rotFlags8(r); dR0 = r; }
+:RR cbHL is op0_8=0xCB & cbHL ; op6_2=0 & op3_3=3 & op0_3=6 { local v:1 = cbHL; local c:1 = C_flag; C_flag = v & 1; local r:1 = (v >> 1) | (c << 7); rotFlags8(r); cbHL = r; }
+:RR cbXY is op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=3 & op0_3=6 { local v:1 = cbXY; local c:1 = C_flag; C_flag = v & 1; local r:1 = (v >> 1) | (c << 7); rotFlags8(r); cbXY = r; }
+:SLA dR0 is $(NP) op0_8=0xCB ; op6_2=0 & op3_3=4 & dR0 & r0 { local v:1 = r0; C_flag = v >> 7; local r:1 = v << 1; rotFlags8(r); dR0 = r; }
+:SLA cbHL is op0_8=0xCB & cbHL ; op6_2=0 & op3_3=4 & op0_3=6 { local v:1 = cbHL; C_flag = v >> 7; local r:1 = v << 1; rotFlags8(r); cbHL = r; }
+:SLA cbXY is op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=4 & op0_3=6 { local v:1 = cbXY; C_flag = v >> 7; local r:1 = v << 1; rotFlags8(r); cbXY = r; }
+:SRA dR0 is $(NP) op0_8=0xCB ; op6_2=0 & op3_3=5 & dR0 & r0 { local v:1 = r0; C_flag = v & 1; local r:1 = v s>> 1; rotFlags8(r); dR0 = r; }
+:SRA cbHL is op0_8=0xCB & cbHL ; op6_2=0 & op3_3=5 & op0_3=6 { local v:1 = cbHL; C_flag = v & 1; local r:1 = v s>> 1; rotFlags8(r); cbHL = r; }
+:SRA cbXY is op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=5 & op0_3=6 { local v:1 = cbXY; C_flag = v & 1; local r:1 = v s>> 1; rotFlags8(r); cbXY = r; }
+:SRL dR0 is $(NP) op0_8=0xCB ; op6_2=0 & op3_3=7 & dR0 & r0 { local v:1 = r0; C_flag = v & 1; local r:1 = v >> 1; rotFlags8(r); dR0 = r; }
+:SRL cbHL is op0_8=0xCB & cbHL ; op6_2=0 & op3_3=7 & op0_3=6 { local v:1 = cbHL; C_flag = v & 1; local r:1 = v >> 1; rotFlags8(r); cbHL = r; }
+:SRL cbXY is op0_8=0xCB ; cbXY ; op6_2=0 & op3_3=7 & op0_3=6 { local v:1 = cbXY; C_flag = v & 1; local r:1 = v >> 1; rotFlags8(r); cbXY = r; }
+
+:BIT bit3,r0 is $(NP) op0_8=0xCB ; op6_2=1 & bit3 & r0 { Z_flag = ((r0 >> bit3) & 1) == 0; }
+:BIT bit3,cbHL is op0_8=0xCB & cbHL ; op6_2=1 & bit3 & op0_3=6 { Z_flag = ((cbHL >> bit3) & 1) == 0; }
+:BIT bit3,cbXY is op0_8=0xCB ; cbXY ; op6_2=1 & bit3 & op0_3=6 { Z_flag = ((cbXY >> bit3) & 1) == 0; }
+:RES bit3,dR0 is $(NP) op0_8=0xCB ; op6_2=2 & bit3 & dR0 & r0 { dR0 = r0 & ~(1 << bit3); }
+:RES bit3,cbHL is op0_8=0xCB & cbHL ; op6_2=2 & bit3 & op0_3=6 { cbHL = cbHL & ~(1 << bit3); }
+:RES bit3,cbXY is op0_8=0xCB ; cbXY ; op6_2=2 & bit3 & op0_3=6 { cbXY = cbXY & ~(1 << bit3); }
+:SET bit3,dR0 is $(NP) op0_8=0xCB ; op6_2=3 & bit3 & dR0 & r0 { dR0 = r0 | (1 << bit3); }
+:SET bit3,cbHL is op0_8=0xCB & cbHL ; op6_2=3 & bit3 & op0_3=6 { cbHL = cbHL | (1 << bit3); }
+:SET bit3,cbXY is op0_8=0xCB ; cbXY ; op6_2=3 & bit3 & op0_3=6 { cbXY = cbXY | (1 << bit3); }
+
+################################################################
+# Control flow
+################################################################
+
+:JP abs16 is $(NP) op0_8=0xC3 ; abs16 { goto abs16; }
+:JP fcc,abs16 is $(NP) op6_2=3 & fcc & op0_3=2 ; abs16 { if (fcc) goto abs16; }
+:JP "("^sHLx^")" is op0_8=0xE9 & sHLx { goto [sHLx]; }
+:JR rel8 is $(NP) op0_8=0x18 ; rel8 { goto rel8; }
+:JR cc,rel8 is $(NP) op5_3=1 & cc & op0_3=0 ; rel8 { if (cc) goto rel8; }
+:DJNZ rel8 is $(NP) op0_8=0x10 & dB ; rel8 { local b:1 = B - 1; dB = b; if (b != 0) goto rel8; }
+:CALL abs16 is $(NP) op0_8=0xCD ; abs16 { push16(&:2 inst_next); call abs16; }
+:RET is $(NP) op0_8=0xC9 { local t:2 = 0; pop16(t); return [t]; }
+:RET fcc is $(NP) op6_2=3 & fcc & op0_3=0 { if (!fcc) goto inst_next; local t:2 = 0; pop16(t); return [t]; }
+:RST rstn is $(NP) op6_2=3 & op0_3=7 & rstn { push16(&:2 inst_next); local t:2 = (zext(IIR) << 8) | rstn; call [t]; }
+:LJP imm8,abs16 is $(NP) op0_8=0xC7 ; abs16 ; imm8 { XPC = imm8; goto abs16; }
+:LCALL imm8,abs16 is $(NP) op0_8=0xCF ; abs16 ; imm8 { push8(XPC); push16(&:2 inst_next); XPC = imm8; call abs16; }
+:LRET is $(NP) op0_8=0xED ; op0_8=0x45 { local t:2 = 0; pop16(t); pop8(XPC); return [t]; }
+:RETI is $(NP) op0_8=0xED ; op0_8=0x4D { pop8(IP); local t:2 = 0; pop16(t); return [t]; }
+
+################################################################
+# Interrupt priority, block moves, physical loads
+################################################################
+
+:IPSET "0" is $(NP) op0_8=0xED ; op0_8=0x46 { IP = (IP << 2) | 0; }
+:IPSET "1" is $(NP) op0_8=0xED ; op0_8=0x56 { IP = (IP << 2) | 1; }
+:IPSET "2" is $(NP) op0_8=0xED ; op0_8=0x4E { IP = (IP << 2) | 2; }
+:IPSET "3" is $(NP) op0_8=0xED ; op0_8=0x5E { IP = (IP << 2) | 3; }
+:IPRES is $(NP) op0_8=0xED ; op0_8=0x5D { IP = (IP >> 2) | (IP << 6); }
+
+:LDI is $(NP) op0_8=0xED ; op0_8=0xA0 & mDE1 { mDE1 = *[ram]:1 HL; BC = BC - 1; DE = DE + 1; HL = HL + 1; LV_flag = BC != 0; }
+:LDD is $(NP) op0_8=0xED ; op0_8=0xA8 & mDE1 { mDE1 = *[ram]:1 HL; BC = BC - 1; DE = DE - 1; HL = HL - 1; LV_flag = BC != 0; }
+:LDIR is $(NP) op0_8=0xED ; op0_8=0xB0 & mDE1 { mDE1 = *[ram]:1 HL; BC = BC - 1; DE = DE + 1; HL = HL + 1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:LDDR is $(NP) op0_8=0xED ; op0_8=0xB8 & mDE1 { mDE1 = *[ram]:1 HL; BC = BC - 1; DE = DE - 1; HL = HL - 1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+
+physAddr: is epsilon { local p:3 = zext(A & 0x0F); p = p << 16; export p; }
+
+:LDP "(HL)","HL" is $(NP) op0_8=0xED ; op0_8=0x64 & physAddr { local a:3 = physAddr | zext(HL); *[phys]:2 a = HL; }
+:LDP "("^sXY^")","HL" is op0_8=0x64 & sXY & physAddr { local a:3 = physAddr | zext(sXY); *[phys]:2 a = HL; }
+:LDP "("^imm16^")","HL" is $(NP) op0_8=0xED ; op0_8=0x65 & physAddr ; imm16 { local a:3 = physAddr | imm16; *[phys]:2 a = HL; }
+:LDP "("^imm16^")",sXY is op0_8=0x65 & sXY & physAddr ; imm16 { local a:3 = physAddr | imm16; *[phys]:2 a = sXY; }
+:LDP "HL","(HL)" is $(NP) op0_8=0xED ; op0_8=0x6C & physAddr { local a:3 = physAddr | zext(HL); HL = *[phys]:2 a; }
+:LDP "HL","("^sXY^")" is op0_8=0x6C & sXY & physAddr { local a:3 = physAddr | zext(sXY); HL = *[phys]:2 a; }
+:LDP "HL","("^imm16^")" is $(NP) op0_8=0xED ; op0_8=0x6D & physAddr ; imm16 { local a:3 = physAddr | imm16; HL = *[phys]:2 a; }
+:LDP sXY,"("^imm16^")" is op0_8=0x6D & sXY & physAddr ; imm16 { local a:3 = physAddr | imm16; sXY = *[phys]:2 a; }
+
+################################################################
+# Rabbit 3000A additions
+################################################################
+
+@ifdef R3000A
+:IDET is $(NP) op0_8=0x5B { idet(); }
+:LDISR is $(NP) op0_8=0xED ; op0_8=0x90 & mDE1 { mDE1 = *[ram]:1 HL; BC = BC - 1; HL = HL + 1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:LDDSR is $(NP) op0_8=0xED ; op0_8=0x98 & mDE1 { mDE1 = *[ram]:1 HL; BC = BC - 1; HL = HL - 1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:LSIR is $(NP) op0_8=0xED ; op0_8=0xF0 & mHL1 { *[ram]:1 DE = mHL1; BC = BC - 1; DE = DE + 1; HL = HL + 1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:LSDR is $(NP) op0_8=0xED ; op0_8=0xF8 & mHL1 { *[ram]:1 DE = mHL1; BC = BC - 1; DE = DE - 1; HL = HL - 1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:LSIDR is $(NP) op0_8=0xED ; op0_8=0xD0 & mHL1 { *[ram]:1 DE = mHL1; BC = BC - 1; DE = DE + 1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:LSDDR is $(NP) op0_8=0xED ; op0_8=0xD8 & mHL1 { *[ram]:1 DE = mHL1; BC = BC - 1; DE = DE - 1; LV_flag = BC != 0; if (BC != 0) goto inst_start; }
+:UMA is $(NP) op0_8=0xED ; op0_8=0xC0 { C_flag = uma(BC, DE, HL, IX, IY, C_flag); BC = 0; }
+:UMS is $(NP) op0_8=0xED ; op0_8=0xC8 { C_flag = ums(BC, DE, HL, IX, IY, C_flag); BC = 0; }
+:RDMODE is $(NP) op0_8=0xED ; op0_8=0x7F { C_flag = SU & 1; }
+:SETUSR is $(NP) op0_8=0xED ; op0_8=0x6F { SU = (SU << 2) | 1; }
+:SURES is $(NP) op0_8=0xED ; op0_8=0x7D { SU = (SU >> 2) | (SU << 6); }
+:PUSH "SU" is $(NP) op0_8=0xED ; op0_8=0x66 { push8(SU); }
+:POP "SU" is $(NP) op0_8=0xED ; op0_8=0x6E { pop8(SU); }
+:SYSCALL is $(NP) op0_8=0xED ; op0_8=0x75 { push16(&:2 inst_next); syscall(); }
+@endif
+
+:NOP is $(NP) op0_8=0x00 { }

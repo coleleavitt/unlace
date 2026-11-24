@@ -23,7 +23,10 @@ fn tlcs90_add_store_compare_decompiles() {
     let lower = stdout.to_lowercase();
     assert!(!lower.contains("unimplemented"), "{stdout}");
     assert!(!lower.contains("bad instruction"), "{stdout}");
-    assert!(lower.contains("8000"), "the store to 8000 survives: {stdout}");
+    assert!(
+        lower.contains("8000"),
+        "the store to 8000 survives: {stdout}"
+    );
     assert!(stdout.contains("return 5"), "{stdout}");
     assert!(stdout.contains("return 0"), "{stdout}");
 }

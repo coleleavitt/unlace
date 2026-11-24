@@ -1,0 +1,295 @@
+# Lanai (Google/Myricom Lanai v11): big-endian, 32 32-bit registers (r0 reads 0, r1 reads
+# all ones, r2 is the pc), fixed 32-bit instructions, condition flags Z N V C set only by the
+# ".f" forms, conditional ALU operations and a hardware select, one delay slot after a branch
+# or an ALU write to pc and two after a load into pc. Written from the LLVM Lanai backend
+# (LanaiInstrFormats.td carries the ISA manual's format descriptions; LanaiInstrInfo.td,
+# LanaiCallingConv.td, LanaiAsmPrinter.cpp for the call sequence).
+
+define endian=big;
+define alignment=4;
+
+define space ram type=ram_space size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0 size=4 [ r0 r1 pc r3 sp fp r6 r7 rv r9 rr1 rr2 r12 r13 r14 rca r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31 ];
+define register offset=0x100 size=1 [ fZ fN fV fC ];
+define register offset=0x200 size=4 [ contextreg ];
+
+define context contextreg
+  iscall = (0,0) noflow
+;
+
+define token instr(32)
+  op4    = (28,31)
+  opmsb  = (31,31)
+  aaa    = (28,30)
+  rd     = (23,27)
+  rdv    = (23,27)
+  rs1    = (18,22)
+  rs1v   = (18,22)
+  msb5   = (18,22)
+  fbit   = (17,17)
+  pbit   = (17,17)
+  hbit   = (16,16)
+  qbit   = (16,16)
+  imm16  = (0,15)
+  simm16 = (0,15) signed
+  sgn16  = (15,15)
+  rs2    = (11,15)
+  rs2v   = (11,15)
+  bbb    = (8,10)
+  jjjjj  = (3,7)
+  jhi    = (6,7)
+  ddd    = (0,2)
+  yl     = (1,2)
+  ebit   = (0,0)
+  brc    = (25,27)
+  b24    = (24,24)
+  b23    = (23,23)
+  addr23 = (2,24)
+  b1     = (1,1)
+  bri    = (0,0)
+  sbr14  = (2,15) signed
+  sp17   = (15,17)
+  sp17hi = (16,17)
+  ys     = (14,14)
+  ss     = (13,13)
+  se     = (12,12)
+  spp    = (11,11)
+  spq    = (10,10)
+  simm10 = (0,9) signed
+  spop   = (0,2)
+  spz    = (3,16)
+;
+
+attach variables [ rd rs1 rs2 ] [ r0 r1 pc r3 sp fp r6 r7 rv r9 rr1 rr2 r12 r13 r14 rca r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31 ];
+
+define pcodeop software_interrupt;
+
+# Register reads: r0 is 0, r1 is all ones, pc reads as the address of the instruction.
+S1: rs1 is rs1 & rs1v=0 { export 0:4; }
+S1: rs1 is rs1 & rs1v=1 { export 0xffffffff:4; }
+S1: rs1 is rs1 & rs1v=2 { local t:4 = inst_start; export t; }
+S1: rs1 is rs1 { export rs1; }
+S2: rs2 is rs2 & rs2v=0 { export 0:4; }
+S2: rs2 is rs2 & rs2v=1 { export 0xffffffff:4; }
+S2: rs2 is rs2 & rs2v=2 { local t:4 = inst_start; export t; }
+S2: rs2 is rs2 { export rs2; }
+SD: rd is rd & rdv=0 { export 0:4; }
+SD: rd is rd & rdv=1 { export 0xffffffff:4; }
+SD: rd is rd & rdv=2 { local t:4 = inst_start; export t; }
+SD: rd is rd { export rd; }
+
+BRC: "t" is brc=0 & bri=0 { local c:1 = 1:1; export c; }
+BRC: "f" is brc=0 & bri=1 { local c:1 = 0:1; export c; }
+BRC: "hi" is brc=1 & bri=0 { local c:1 = fC && !fZ; export c; }
+BRC: "ls" is brc=1 & bri=1 { local c:1 = !fC || fZ; export c; }
+BRC: "cc" is brc=2 & bri=0 { local c:1 = !fC; export c; }
+BRC: "cs" is brc=2 & bri=1 { local c:1 = fC; export c; }
+BRC: "ne" is brc=3 & bri=0 { local c:1 = !fZ; export c; }
+BRC: "eq" is brc=3 & bri=1 { local c:1 = fZ; export c; }
+BRC: "vc" is brc=4 & bri=0 { local c:1 = !fV; export c; }
+BRC: "vs" is brc=4 & bri=1 { local c:1 = fV; export c; }
+BRC: "pl" is brc=5 & bri=0 { local c:1 = !fN; export c; }
+BRC: "mi" is brc=5 & bri=1 { local c:1 = fN; export c; }
+BRC: "ge" is brc=6 & bri=0 { local c:1 = fN == fV; export c; }
+BRC: "lt" is brc=6 & bri=1 { local c:1 = fN != fV; export c; }
+BRC: "gt" is brc=7 & bri=0 { local c:1 = !fZ && (fN == fV); export c; }
+BRC: "le" is brc=7 & bri=1 { local c:1 = fZ || (fN != fV); export c; }
+RRC: "" is ddd=0 & hbit=0 { local c:1 = 1:1; export c; }
+RRC: ".f" is ddd=0 & hbit=1 { local c:1 = 0:1; export c; }
+RRC: ".hi" is ddd=1 & hbit=0 { local c:1 = fC && !fZ; export c; }
+RRC: ".ls" is ddd=1 & hbit=1 { local c:1 = !fC || fZ; export c; }
+RRC: ".cc" is ddd=2 & hbit=0 { local c:1 = !fC; export c; }
+RRC: ".cs" is ddd=2 & hbit=1 { local c:1 = fC; export c; }
+RRC: ".ne" is ddd=3 & hbit=0 { local c:1 = !fZ; export c; }
+RRC: ".eq" is ddd=3 & hbit=1 { local c:1 = fZ; export c; }
+RRC: ".vc" is ddd=4 & hbit=0 { local c:1 = !fV; export c; }
+RRC: ".vs" is ddd=4 & hbit=1 { local c:1 = fV; export c; }
+RRC: ".pl" is ddd=5 & hbit=0 { local c:1 = !fN; export c; }
+RRC: ".mi" is ddd=5 & hbit=1 { local c:1 = fN; export c; }
+RRC: ".ge" is ddd=6 & hbit=0 { local c:1 = fN == fV; export c; }
+RRC: ".lt" is ddd=6 & hbit=1 { local c:1 = fN != fV; export c; }
+RRC: ".gt" is ddd=7 & hbit=0 { local c:1 = !fZ && (fN == fV); export c; }
+RRC: ".le" is ddd=7 & hbit=1 { local c:1 = fZ || (fN != fV); export c; }
+SELC: "t" is ddd=0 & hbit=0 { local c:1 = 1:1; export c; }
+SELC: "f" is ddd=0 & hbit=1 { local c:1 = 0:1; export c; }
+SELC: "hi" is ddd=1 & hbit=0 { local c:1 = fC && !fZ; export c; }
+SELC: "ls" is ddd=1 & hbit=1 { local c:1 = !fC || fZ; export c; }
+SELC: "cc" is ddd=2 & hbit=0 { local c:1 = !fC; export c; }
+SELC: "cs" is ddd=2 & hbit=1 { local c:1 = fC; export c; }
+SELC: "ne" is ddd=3 & hbit=0 { local c:1 = !fZ; export c; }
+SELC: "eq" is ddd=3 & hbit=1 { local c:1 = fZ; export c; }
+SELC: "vc" is ddd=4 & hbit=0 { local c:1 = !fV; export c; }
+SELC: "vs" is ddd=4 & hbit=1 { local c:1 = fV; export c; }
+SELC: "pl" is ddd=5 & hbit=0 { local c:1 = !fN; export c; }
+SELC: "mi" is ddd=5 & hbit=1 { local c:1 = fN; export c; }
+SELC: "ge" is ddd=6 & hbit=0 { local c:1 = fN == fV; export c; }
+SELC: "lt" is ddd=6 & hbit=1 { local c:1 = fN != fV; export c; }
+SELC: "gt" is ddd=7 & hbit=0 { local c:1 = !fZ && (fN == fV); export c; }
+SELC: "le" is ddd=7 & hbit=1 { local c:1 = fZ || (fN != fV); export c; }
+
+FS: ""   is fbit=0 { }
+FS: ".f" is fbit=1 { }
+
+macro logicflags(r) { fZ = r == 0; fN = r s< 0; fV = 0; }
+
+# The RI constant: zero-extended into the low (H=0) or high (H=1) half; and fills the other
+# half with ones.
+RIK: imm16 is aaa=4 & hbit=0 & imm16 { local k:4 = 0xffff0000 | imm16; export k; }
+RIK: imm16 is aaa=4 & hbit=1 & imm16 { local k:4 = (imm16 << 16) | 0xffff; export k; }
+RIK: imm16 is hbit=0 & imm16 { local k:4 = imm16; export k; }
+RIK: imm16 is hbit=1 & imm16 { local k:4 = imm16 << 16; export k; }
+
+# Register-immediate operations: they export the result and set the flags when F=1.
+RI: "add"^FS S1, RIK is aaa=0 & FS & fbit=0 & S1 & RIK { local r:4 = S1 + RIK; export r; }
+RI: "add"^FS S1, RIK is aaa=0 & FS & fbit=1 & S1 & RIK { local r:4 = S1 + RIK; fC = carry(S1, RIK); fV = scarry(S1, RIK); fZ = r == 0; fN = r s< 0; export r; }
+RI: "addc"^FS S1, RIK is aaa=1 & FS & fbit=0 & S1 & RIK { local r:4 = S1 + RIK + zext(fC); export r; }
+RI: "addc"^FS S1, RIK is aaa=1 & FS & fbit=1 & S1 & RIK { local a:4 = S1; local t:4 = a + RIK; local r:4 = t + zext(fC); fC = carry(a, RIK) || carry(t, zext(fC)); fV = ((a ^ r) & (RIK ^ r)) s< 0; fZ = r == 0; fN = r s< 0; export r; }
+RI: "sub"^FS S1, RIK is aaa=2 & FS & fbit=0 & S1 & RIK { local r:4 = S1 - RIK; export r; }
+RI: "sub"^FS S1, RIK is aaa=2 & FS & fbit=1 & S1 & RIK { local r:4 = S1 - RIK; fC = !(S1 < RIK); fV = sborrow(S1, RIK); fZ = r == 0; fN = r s< 0; export r; }
+RI: "subb"^FS S1, RIK is aaa=3 & FS & fbit=0 & S1 & RIK { local r:4 = S1 + ~RIK + zext(fC); export r; }
+RI: "subb"^FS S1, RIK is aaa=3 & FS & fbit=1 & S1 & RIK { local a:4 = S1; local nb:4 = ~RIK; local t:4 = a + nb; local r:4 = t + zext(fC); fC = carry(a, nb) || carry(t, zext(fC)); fV = ((a ^ r) & (nb ^ r)) s< 0; fZ = r == 0; fN = r s< 0; export r; }
+RI: "and"^FS S1, RIK is aaa=4 & FS & fbit=0 & S1 & RIK { local r:4 = S1 & RIK; export r; }
+RI: "and"^FS S1, RIK is aaa=4 & FS & fbit=1 & S1 & RIK { local r:4 = S1 & RIK; logicflags(r); fC = 0; export r; }
+RI: "or"^FS S1, RIK is aaa=5 & FS & fbit=0 & S1 & RIK { local r:4 = S1 | RIK; export r; }
+RI: "or"^FS S1, RIK is aaa=5 & FS & fbit=1 & S1 & RIK { local r:4 = S1 | RIK; logicflags(r); fC = 0; export r; }
+RI: "xor"^FS S1, RIK is aaa=6 & FS & fbit=0 & S1 & RIK { local r:4 = S1 ^ RIK; export r; }
+RI: "xor"^FS S1, RIK is aaa=6 & FS & fbit=1 & S1 & RIK { local r:4 = S1 ^ RIK; logicflags(r); fC = 0; export r; }
+# Shifts by a sign-extended constant: positive is left, negative right; H picks arithmetic.
+RI: "sh"^FS S1, simm16 is aaa=7 & FS & fbit=0 & hbit=0 & sgn16=0 & S1 & simm16 { local r:4 = S1 << simm16; export r; }
+RI: "sh"^FS S1, simm16 is aaa=7 & FS & fbit=1 & hbit=0 & sgn16=0 & S1 & simm16 { local a:4 = S1; local r:4 = a << simm16; logicflags(r); local sh:4 = 32 - simm16; fC = ((a >> sh) & 1) != 0; export r; }
+RI: "sh"^FS S1, simm16 is aaa=7 & FS & fbit=0 & hbit=0 & sgn16=1 & S1 & simm16 { local r:4 = S1 >> (0 - simm16); export r; }
+RI: "sh"^FS S1, simm16 is aaa=7 & FS & fbit=1 & hbit=0 & sgn16=1 & S1 & simm16 { local r:4 = S1 >> (0 - simm16); logicflags(r); fC = 0; export r; }
+RI: "sha"^FS S1, simm16 is aaa=7 & FS & fbit=0 & hbit=1 & sgn16=0 & S1 & simm16 { local r:4 = S1 << simm16; export r; }
+RI: "sha"^FS S1, simm16 is aaa=7 & FS & fbit=1 & hbit=1 & sgn16=0 & S1 & simm16 { local a:4 = S1; local r:4 = a << simm16; logicflags(r); local sh:4 = 32 - simm16; fC = ((a >> sh) & 1) != 0; export r; }
+RI: "sha"^FS S1, simm16 is aaa=7 & FS & fbit=0 & hbit=1 & sgn16=1 & S1 & simm16 { local r:4 = S1 s>> (0 - simm16); export r; }
+RI: "sha"^FS S1, simm16 is aaa=7 & FS & fbit=1 & hbit=1 & sgn16=1 & S1 & simm16 { local r:4 = S1 s>> (0 - simm16); logicflags(r); fC = 0; export r; }
+
+# Shift by a register: its two's-complement value picks the direction.
+macro dynshift(r, a, n, arith) {
+  local left:4 = a << n;
+  local neg:4 = 0 - n;
+  local lr:4 = a >> neg;
+  local ar:4 = a s>> neg;
+  local right:4 = (zext(arith == 0) * lr) + (zext(arith != 0) * ar);
+  r = (zext(n s>= 0) * left) + (zext(n s< 0) * right);
+}
+
+# Register-register operations (JJJJJ selects the special operation when BBB = 111).
+RR: "add"^FS^RRC S1, S2 is bbb=0 & FS & RRC & fbit=0 & S1 & S2 { local r:4 = S1 + S2; export r; }
+RR: "add"^FS^RRC S1, S2 is bbb=0 & FS & RRC & fbit=1 & S1 & S2 { local r:4 = S1 + S2; fC = carry(S1, S2); fV = scarry(S1, S2); fZ = r == 0; fN = r s< 0; export r; }
+RR: "addc"^FS^RRC S1, S2 is bbb=1 & FS & RRC & fbit=0 & S1 & S2 { local r:4 = S1 + S2 + zext(fC); export r; }
+RR: "addc"^FS^RRC S1, S2 is bbb=1 & FS & RRC & fbit=1 & S1 & S2 { local a:4 = S1; local b:4 = S2; local t:4 = a + b; local r:4 = t + zext(fC); fC = carry(a, b) || carry(t, zext(fC)); fV = ((a ^ r) & (b ^ r)) s< 0; fZ = r == 0; fN = r s< 0; export r; }
+RR: "sub"^FS^RRC S1, S2 is bbb=2 & FS & RRC & fbit=0 & S1 & S2 { local r:4 = S1 - S2; export r; }
+RR: "sub"^FS^RRC S1, S2 is bbb=2 & FS & RRC & fbit=1 & S1 & S2 { local r:4 = S1 - S2; fC = !(S1 < S2); fV = sborrow(S1, S2); fZ = r == 0; fN = r s< 0; export r; }
+RR: "subb"^FS^RRC S1, S2 is bbb=3 & FS & RRC & fbit=0 & S1 & S2 { local r:4 = S1 + ~S2 + zext(fC); export r; }
+RR: "subb"^FS^RRC S1, S2 is bbb=3 & FS & RRC & fbit=1 & S1 & S2 { local a:4 = S1; local nb:4 = ~S2; local t:4 = a + nb; local r:4 = t + zext(fC); fC = carry(a, nb) || carry(t, zext(fC)); fV = ((a ^ r) & (nb ^ r)) s< 0; fZ = r == 0; fN = r s< 0; export r; }
+RR: "and"^FS^RRC S1, S2 is bbb=4 & FS & RRC & fbit=0 & S1 & S2 { local r:4 = S1 & S2; export r; }
+RR: "and"^FS^RRC S1, S2 is bbb=4 & FS & RRC & fbit=1 & S1 & S2 { local r:4 = S1 & S2; logicflags(r); export r; }
+RR: "or"^FS^RRC S1, S2 is bbb=5 & FS & RRC & fbit=0 & S1 & S2 { local r:4 = S1 | S2; export r; }
+RR: "or"^FS^RRC S1, S2 is bbb=5 & FS & RRC & fbit=1 & S1 & S2 { local r:4 = S1 | S2; logicflags(r); export r; }
+RR: "xor"^FS^RRC S1, S2 is bbb=6 & FS & RRC & fbit=0 & S1 & S2 { local r:4 = S1 ^ S2; export r; }
+RR: "xor"^FS^RRC S1, S2 is bbb=6 & FS & RRC & fbit=1 & S1 & S2 { local r:4 = S1 ^ S2; logicflags(r); export r; }
+RR: "sh"^FS^RRC S1, S2 is bbb=7 & jhi=2 & FS & RRC & fbit=0 & S1 & S2 { local r:4 = 0; dynshift(r, S1, S2, 0:1); export r; }
+RR: "sh"^FS^RRC S1, S2 is bbb=7 & jhi=2 & FS & RRC & fbit=1 & S1 & S2 { local r:4 = 0; local a:4 = S1; local n:4 = S2; dynshift(r, a, n, 0:1); logicflags(r); fC = (n s> 0) && (n s< 32) && (((a >> (32 - n)) & 1) != 0); export r; }
+RR: "sha"^FS^RRC S1, S2 is bbb=7 & jhi=3 & FS & RRC & fbit=0 & S1 & S2 { local r:4 = 0; dynshift(r, S1, S2, 1:1); export r; }
+RR: "sha"^FS^RRC S1, S2 is bbb=7 & jhi=3 & FS & RRC & fbit=1 & S1 & S2 { local r:4 = 0; local a:4 = S1; local n:4 = S2; dynshift(r, a, n, 1:1); logicflags(r); fC = (n s> 0) && (n s< 32) && (((a >> (32 - n)) & 1) != 0); export r; }
+
+# The ALU-in-address of RRM (no flags).
+AOP: S1 "+" S2 is bbb=0 & S1 & S2 { local r:4 = S1 + S2; export r; }
+AOP: S1 "+c" S2 is bbb=1 & S1 & S2 { local r:4 = S1 + S2 + zext(fC); export r; }
+AOP: S1 "-" S2 is bbb=2 & S1 & S2 { local r:4 = S1 - S2; export r; }
+AOP: S1 "-b" S2 is bbb=3 & S1 & S2 { local r:4 = S1 + ~S2 + zext(fC); export r; }
+AOP: S1 "&" S2 is bbb=4 & S1 & S2 { local r:4 = S1 & S2; export r; }
+AOP: S1 "|" S2 is bbb=5 & S1 & S2 { local r:4 = S1 | S2; export r; }
+AOP: S1 "^" S2 is bbb=6 & S1 & S2 { local r:4 = S1 ^ S2; export r; }
+AOP: S1 "sh" S2 is bbb=7 & jhi=2 & S1 & S2 { local r:4 = 0; dynshift(r, S1, S2, 0:1); export r; }
+AOP: S1 "sha" S2 is bbb=7 & jhi=3 & S1 & S2 { local r:4 = 0; dynshift(r, S1, S2, 1:1); export r; }
+
+# Effective addresses. PQ: 00 Rs1; 01 Rs1 then Rs1 += k; 10 Rs1 + k; 11 Rs1 += k first.
+EA: "["^S1^"]" is pbit=0 & qbit=0 & S1 { local ea:4 = S1; export ea; }
+EA: "["^rs1^" "^simm16^"++]" is pbit=0 & qbit=1 & rs1 & S1 & simm16 { local ea:4 = S1; rs1 = S1 + simm16; export ea; }
+EA: simm16^"["^S1^"]" is pbit=1 & qbit=0 & S1 & simm16 { local ea:4 = S1 + simm16; export ea; }
+EA: "["^simm16^" ++"^rs1^"]" is pbit=1 & qbit=1 & rs1 & S1 & simm16 { local ea:4 = S1 + simm16; rs1 = ea; export ea; }
+
+EAR: "["^S1^"]" is pbit=0 & qbit=0 & S1 { local ea:4 = S1; export ea; }
+EAR: "["^rs1^" "^AOP^"++]" is pbit=0 & qbit=1 & rs1 & S1 & AOP { local ea:4 = S1; rs1 = AOP; export ea; }
+EAR: "["^AOP^"]" is pbit=1 & qbit=0 & AOP { local ea:4 = AOP; export ea; }
+EAR: "[++"^AOP^"]" is pbit=1 & qbit=1 & rs1 & AOP { local ea:4 = AOP; rs1 = ea; export ea; }
+
+EAS: "["^S1^"]" is spp=0 & spq=0 & S1 { local ea:4 = S1; export ea; }
+EAS: "["^rs1^" "^simm10^"++]" is spp=0 & spq=1 & rs1 & S1 & simm10 { local ea:4 = S1; rs1 = S1 + simm10; export ea; }
+EAS: simm10^"["^S1^"]" is spp=1 & spq=0 & S1 & simm10 { local ea:4 = S1 + simm10; export ea; }
+EAS: "["^simm10^" ++"^rs1^"]" is spp=1 & spq=1 & rs1 & S1 & simm10 { local ea:4 = S1 + simm10; rs1 = ea; export ea; }
+
+BRT: dest is addr23 [ dest = addr23 << 2; ] { export *[ram]:4 dest; }
+BRRT: dest is sbr14 [ dest = inst_start + (sbr14 << 2); ] { export *[ram]:4 dest; }
+SLSA: addr is msb5 & imm16 [ addr = (msb5 << 16) | imm16; ] { export *[ram]:4 addr; }
+SLIK: k is msb5 & imm16 [ k = (msb5 << 16) | imm16; ] { export *[const]:4 k; }
+
+# The call sequence: "add pc, 0x10, rca; st rca, [--sp]; bt f" (or "add rX, r0, pc") makes the
+# branch two words on a call.
+CALLMARK: cm is imm16 [ cm = inst_start + 8; iscall = 1; globalset(cm, iscall); ] { }
+
+################################################################
+# Register-immediate
+:^RI, rd is opmsb=0 & RI & rd & rdv=15 & rs1v=2 & aaa=0 & fbit=0 & hbit=0 & imm16=0x10 & CALLMARK { rd = RI; }
+:^RI, rd is opmsb=0 & RI & rd { rd = RI; }
+:^RI, pc is opmsb=0 & RI & rdv=2 & pc { local t:4 = RI; delayslot(1); goto [t]; }
+
+# Register-register (conditionally executed)
+:^RR, rd is op4=0xc & RR & RRC & rd { if (!RRC) goto <skip>; rd = RR; <skip> }
+:^RR, rd is op4=0xc & RR & rd & ddd=0 & hbit=0 { rd = RR; }
+:"sel."^SELC S1, S2, rd is op4=0xc & bbb=7 & jjjjj=0 & SELC & S1 & S2 & rd { local a:4 = S1; local b:4 = S2; rd = (zext(SELC) * a) + (zext(!SELC) * b); }
+:^RR, pc is op4=0xc & RR & RRC & rdv=2 & pc { local c:1 = RRC; local t:4 = RR; delayslot(1); if (!c) goto <skip>; goto [t]; <skip> }
+:^RR, pc is op4=0xc & RR & RRC & rdv=2 & pc & iscall=1 { local c:1 = RRC; local t:4 = RR; delayslot(1); if (!c) goto <skip>; call [t]; <skip> }
+
+# Register-memory (word)
+:ld EA, rd is op4=0x8 & EA & rd { rd = *[ram]:4 EA; }
+:ld EA, pc is op4=0x8 & EA & rdv=2 & pc { local t:4 = *[ram]:4 EA; delayslot(8); goto [t]; }
+:ld EA, pc is op4=0x8 & EA & rdv=2 & pc & rs1v=5 & pbit=1 & qbit=0 & imm16=0xfffc { local t:4 = *[ram]:4 EA; delayslot(8); return [t]; }
+:st SD, EA is op4=0x9 & EA & SD { local v:4 = SD; *[ram]:4 EA = v; }
+
+# Register-register-memory: YL 01 word, 00 half, 10 byte; E zero-extends.
+:ld EAR, rd   is op4=0xa & EAR & rd & yl=1 & ebit=0 { rd = *[ram]:4 EAR; }
+:uld EAR, rd  is op4=0xa & EAR & rd & yl=1 & ebit=1 { rd = *[ram]:4 EAR; }
+:ld.h EAR, rd  is op4=0xa & EAR & rd & yl=0 & ebit=0 { rd = sext(*[ram]:2 EAR); }
+:uld.h EAR, rd is op4=0xa & EAR & rd & yl=0 & ebit=1 { rd = zext(*[ram]:2 EAR); }
+:ld.b EAR, rd  is op4=0xa & EAR & rd & yl=2 & ebit=0 { rd = sext(*[ram]:1 EAR); }
+:uld.b EAR, rd is op4=0xa & EAR & rd & yl=2 & ebit=1 { rd = zext(*[ram]:1 EAR); }
+:ld EAR, pc   is op4=0xa & EAR & rdv=2 & pc & yl=1 & ebit=0 { local t:4 = *[ram]:4 EAR; delayslot(8); goto [t]; }
+:st SD, EAR   is op4=0xb & EAR & SD & yl=1 { local v:4 = SD; *[ram]:4 EAR = v; }
+:st.h SD, EAR is op4=0xb & EAR & SD & yl=0 { local v:4 = SD; *[ram]:2 EAR = v:2; }
+:st.b SD, EAR is op4=0xb & EAR & SD & yl=2 { local v:4 = SD; *[ram]:1 EAR = v:1; }
+
+# Population count, leading and trailing zeros
+:popc S1, rd is op4=0xd & S1 & rd & spop=1 & fbit=0 { rd = popcount(S1); }
+:popc.f S1, rd is op4=0xd & S1 & rd & spop=1 & fbit=1 { local r:4 = popcount(S1); rd = r; logicflags(r); fC = 0; }
+:leadz S1, rd is op4=0xd & S1 & rd & spop=2 & fbit=0 { rd = lzcount(S1); }
+:leadz.f S1, rd is op4=0xd & S1 & rd & spop=2 & fbit=1 { local r:4 = lzcount(S1); rd = r; logicflags(r); fC = 0; }
+:trailz S1, rd is op4=0xd & S1 & rd & spop=3 & fbit=0 {
+  local v:4 = S1; local low:4 = v & (0 - v); local lz:4 = lzcount(low); local r:4 = (zext(low == 0) * 32) + (zext(low != 0) * (31 - lz)); rd = r;
+}
+:trailz.f S1, rd is op4=0xd & S1 & rd & spop=3 & fbit=1 {
+  local v:4 = S1; local low:4 = v & (0 - v); local lz:4 = lzcount(low); local r:4 = (zext(low == 0) * 32) + (zext(low != 0) * (31 - lz)); rd = r; logicflags(r); fC = 0;
+}
+
+# Branches (absolute, word aligned) and branches relative to the branch
+:b^BRC BRT is op4=0xe & BRC & b1=0 & BRT { local c:1 = BRC; delayslot(1); if (c) goto BRT; }
+:bt BRT is op4=0xe & brc=0 & bri=0 & b1=0 & BRT { delayslot(1); goto BRT; }
+:bt BRT is op4=0xe & brc=0 & bri=0 & b1=0 & BRT & iscall=1 { delayslot(1); call BRT; }
+:b^BRC^".r" BRRT is op4=0xe & BRC & b24=1 & b1=1 & BRRT { local c:1 = BRC; delayslot(1); if (c) goto BRRT; }
+:s^BRC rs1 is op4=0xe & BRC & b24=0 & b1=1 & rs1 { rs1 = zext(BRC); }
+
+# Special load/store, load immediate, part-word load/store
+:ld SLSA, rd is op4=0xf & fbit=0 & hbit=0 & SLSA & rd { rd = SLSA; }
+:ld SLSA, pc is op4=0xf & fbit=0 & hbit=0 & SLSA & rdv=2 & pc { local t:4 = SLSA; delayslot(8); goto [t]; }
+:st SD, SLSA is op4=0xf & fbit=0 & hbit=1 & SLSA & SD { SLSA = SD; }
+:mov SLIK, rd is op4=0xf & fbit=1 & hbit=0 & SLIK & rd { rd = SLIK; }
+:ld.h EAS, rd  is op4=0xf & sp17=6 & ys=0 & ss=0 & se=0 & EAS & rd { rd = sext(*[ram]:2 EAS); }
+:uld.h EAS, rd is op4=0xf & sp17=6 & ys=0 & ss=0 & se=1 & EAS & rd { rd = zext(*[ram]:2 EAS); }
+:ld.b EAS, rd  is op4=0xf & sp17=6 & ys=1 & ss=0 & se=0 & EAS & rd { rd = sext(*[ram]:1 EAS); }
+:uld.b EAS, rd is op4=0xf & sp17=6 & ys=1 & ss=0 & se=1 & EAS & rd { rd = zext(*[ram]:1 EAS); }
+:st.h SD, EAS is op4=0xf & sp17=6 & ys=0 & ss=1 & EAS & SD { local v:4 = SD; *[ram]:2 EAS = v:2; }
+:st.b SD, EAS is op4=0xf & sp17=6 & ys=1 & ss=1 & EAS & SD { local v:4 = SD; *[ram]:1 EAS = v:1; }

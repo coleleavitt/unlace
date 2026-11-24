@@ -3189,6 +3189,20 @@ is Hex-Rays' `BREAK_PHI_ARM_MERGES` (hexx64 `sub_1915E0`) followed by the
 constant threading that resolves the join per path. The join's merged
 variable then disappears, along with the branch on it.
 
+The value `ranges` also threads on value ranges, Hex-Rays' `BACKPROP_CC` (hexx64
+`sub_18F960`). J then needs no MULTIEQUAL. When an edge's inputs are not
+constants and J's CBRANCH reduces (through BOOL_NEGATEs) to a comparison of
+one value X against a constant, `kuna_phithread.rs (decided_by_range)` takes
+the value X has on that edge (the MULTIEQUAL input when J merges X, else X
+itself) and looks for a conditional branch on the same value (through COPYs, of
+the same size) that ends the predecessor or a block above it along a chain of
+single-predecessor blocks, at most four blocks deep. The branch outcome on the
+path into J gives X's range there as a `CircleRange` (`pull_back_binary` of
+the comparison). When that range lies inside the set of values for which J's
+condition is true, or inside the set for which it is false, the edge is moved
+exactly as in the constant case: `if (x == 3) { .. } if (x > 0)` sends the
+first arm straight to the second test's true branch.
+
 **Conditional constants.** `crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionConditionalConst)` (mainloop tail, wrapper over
 `crates/unlace-bandb-base/src/p3_dataflow/condconst.rs (condconst_apply)`)

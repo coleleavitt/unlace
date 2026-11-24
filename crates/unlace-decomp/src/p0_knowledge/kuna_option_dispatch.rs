@@ -489,6 +489,12 @@ kuna_options! { self, p1;
         self.kuna_options.set(val);
         Ok(msg)
     },
+    "delphiabi" => {
+        let (val, msg) = <crate::kuna_delphiabi::DelphiAbi as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        crate::kuna_delphiabi::set_delphiabi_env(val.0);
+        self.kuna_options.set(val);
+        Ok(msg)
+    },
     "ifuncfpret" => {
         let (val, msg) = <crate::kuna_ifuncfpret::IfuncFpRet as crate::kuna_optionset::KunaOption>::parse(p1)?;
         self.load_options_mut().ifuncfpret = val.0;

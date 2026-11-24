@@ -45,7 +45,10 @@ fn mep_sum_loop_decompiles() {
 #[test]
 fn mep_displacement_loads_and_stores_decompile() {
     let out = decompile("store_be.bin", "MeP:BE:32:default");
-    assert!(out.contains("((unsigned int *)a0)[1] = 0x12345678;"), "{out}");
+    assert!(
+        out.contains("((unsigned int *)a0)[1] = 0x12345678;"),
+        "{out}"
+    );
     assert!(out.contains("return (((int *)a0)[2] + a1) * 4;"), "{out}");
 }
 

@@ -27,6 +27,9 @@ fn kr1878_add_compare_store_decompiles() {
         stdout.contains("dat_40 = dat_41 + 8"),
         "window A at 0x40 folds the add: {stdout}"
     );
-    assert!(stdout.contains("0x10 <= "), "the borrow test survives: {stdout}");
+    assert!(
+        stdout.contains("0x10 <= "),
+        "the borrow test survives: {stdout}"
+    );
     assert!(stdout.contains("dat_42 = 7"), "the store to 0x42: {stdout}");
 }

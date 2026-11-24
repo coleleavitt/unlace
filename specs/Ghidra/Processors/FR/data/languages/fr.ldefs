@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="FR"
+            endian="big"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="fr.sla"
+            processorspec="fr.pspec"
+            id="FR:BE:32:default">
+    <description>Fujitsu FR family (FR30, FR60, FR80) integer instruction set</description>
+    <compiler name="default" spec="fr.cspec" id="default"/>
+    <external_name tool="gnu" name="fr30"/>
+  </language>
+</language_definitions>

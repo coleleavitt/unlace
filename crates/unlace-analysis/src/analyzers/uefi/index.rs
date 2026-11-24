@@ -185,6 +185,18 @@ impl Index {
         })
     }
 
+    /// The entry-point name a file type gives a module whose phase prototype
+    /// names it: a PEIM is `PeimEntryPoint`, a standalone MM module is
+    /// `StandaloneMmEntryPoint`. Other types keep `_ModuleEntryPoint`.
+    pub(super) fn entry_name(&self, image: &Path) -> Option<&'static str> {
+        let file = image.file_name()?.to_str()?;
+        match self.modules.get(file)? {
+            0x06 => Some("PeimEntryPoint"),
+            0x0e => Some("StandaloneMmEntryPoint"),
+            _ => None,
+        }
+    }
+
     /// The structs the index describes, by the GUID they are installed under.
     pub(super) fn foreign(&self) -> Foreign {
         let mut out = Foreign::new();
@@ -282,6 +294,11 @@ mod tests {
         let index = Index::parse(&text).expect("parses");
         assert_eq!(index.kind_of(Path::new("/x/B.efi")), Some(Kind::Pei));
         assert_eq!(index.kind_of(Path::new("/x/A.efi")), Some(Kind::Dxe));
+        assert_eq!(
+            index.entry_name(Path::new("/x/B.efi")),
+            Some("PeimEntryPoint")
+        );
+        assert_eq!(index.entry_name(Path::new("/x/A.efi")), None);
         assert_eq!(index.foreign()[&guid].1.len(), 2);
         let note = index
             .installer_note(&guid, Some(Path::new("/x/B.efi")))

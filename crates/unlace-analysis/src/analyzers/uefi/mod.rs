@@ -186,13 +186,12 @@ impl AnalysisPass for UefiPass {
             }
         }
         if entry != 0 {
-            function_fact(
-                &mut out,
-                &efi,
-                entry,
-                "_ModuleEntryPoint",
-                Some(kind.entry_decl()),
-            );
+            let entry_name = volume
+                .as_ref()
+                .zip(ctx.image_path)
+                .and_then(|(v, p)| v.entry_name(p))
+                .unwrap_or("_ModuleEntryPoint");
+            function_fact(&mut out, &efi, entry, entry_name, Some(kind.entry_decl()));
         }
 
         let mut claimed: Vec<(u64, u64)> = Vec::new();

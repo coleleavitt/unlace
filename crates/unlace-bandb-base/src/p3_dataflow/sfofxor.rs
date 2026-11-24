@@ -21,7 +21,7 @@ crate::unlace_flag!(
     "sfofxor",
     "fold the SF xor OF signed-less idiom to INT_SLESS",
     unset: false,
-    shipped: false,
+    shipped: false
 );
 
 /// Fold `INT_XOR(INT_SLESS(a, b), INT_SBORROW(a, b))` (or the BOOL_XOR form) to `INT_SLESS(a, b)`.

@@ -47,12 +47,27 @@ fn compile_one(slaspec: &str, sla_out: &str, opts: &CompileOptions) -> i32 {
         opts.case_sensitive_register_names,
         opts.debug_output,
     );
-    match compiler.run_compilation(slaspec, sla_out) {
+    let code = match compiler.run_compilation(slaspec, sla_out) {
         Ok(code) => code,
         Err(e) => {
             eprintln!("Unrecoverable error: {}", e.explain());
             2
         }
+    };
+    if code == 0 && !Path::new(sla_out).exists() {
+        eprintln!("No output produced: {sla_out} was not written");
+        return 2;
+    }
+    code
+}
+
+/// The process exit status for a compiler result: 0 only for 0, and any other
+/// value (negative, or past 255, which `as u8` would wrap to 0) a failure.
+fn exit_status(code: i32) -> ExitCode {
+    match code {
+        0 => ExitCode::SUCCESS,
+        1..=255 => ExitCode::from(code as u8),
+        _ => ExitCode::from(2),
     }
 }
 
@@ -153,13 +168,24 @@ pub fn main(argv: Vec<String>) -> ExitCode {
         let mut slaspecs: Vec<String> = Vec::new();
         find_sla_specs(&mut slaspecs, &dir, SLASPECEXT);
         println!("Compiling {} slaspec files in {}", slaspecs.len(), dir);
+        let mut failed: Vec<&str> = Vec::new();
         for spec in &slaspecs {
             let sla = format!("{}{}", &spec[..spec.len() - SLASPECEXT.len()], SLAEXT);
             println!("Compiling {spec}:");
-            let res = compile_one(spec, &sla, &opts);
-            if res != 0 {
-                retval = res;
+            if compile_one(spec, &sla, &opts) != 0 {
+                failed.push(spec);
             }
+        }
+        if !failed.is_empty() {
+            eprintln!(
+                "{} of {} slaspec files failed to compile:",
+                failed.len(),
+                slaspecs.len()
+            );
+            for spec in &failed {
+                eprintln!("  {spec}");
+            }
+            retval = 2;
         }
     } else {
         // Single-file mode (slgh_compile.cc:4047-4090).
@@ -190,7 +216,7 @@ pub fn main(argv: Vec<String>) -> ExitCode {
         retval = compile_one(&slaspec, &sla_out, &opts);
     }
 
-    ExitCode::from(retval as u8)
+    exit_status(retval)
 }
 
 /// Recursively collect every `*.slaspec` under `dir` (`findSlaSpecs`,

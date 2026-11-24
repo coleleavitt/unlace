@@ -211,3 +211,54 @@ fn xml_output_matches_pinned_ghidra_in_single_and_recursive_modes() {
         assert_eq!(produced, include_str!("golden/xml_ops.xml"));
     }
 }
+
+fn write_redefinition_spec(directory: &Path) {
+    fs::create_dir_all(directory).unwrap();
+    fs::write(
+        directory.join("redefined.slaspec"),
+        "define endian = little;\n\
+         define alignment = 1;\n\
+         define space ram type=ram_space size=4 default;\n\
+         define space register type=register_space size=4;\n\
+         define register offset=0 size=4 r0;\n\
+         define register offset=4 size=4 r0;\n\
+         define token instr8(8) op=(0,7);\n\
+         :nop is op=0 { r0=0; }\n",
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_symbol_redefinition_fails_with_no_output() {
+    let scratch = tempfile::tempdir().unwrap();
+    write_redefinition_spec(scratch.path());
+    let destination = scratch.path().join("redefined.sla");
+    let result = compile(&[&scratch.path().join("redefined.slaspec"), &destination]);
+    assert!(
+        !result.status.success(),
+        "a redefinition must fail: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(!destination.exists());
+}
+
+#[test]
+fn recursive_mode_counts_failed_specs_and_exits_non_zero() {
+    let scratch = tempfile::tempdir().unwrap();
+    write_spec(&scratch.path().join("good"), "data_le_64.slaspec");
+    write_redefinition_spec(&scratch.path().join("bad"));
+    let result = Command::new(env!("CARGO_BIN_EXE_slacomp"))
+        .arg("-a")
+        .arg(scratch.path())
+        .output()
+        .expect("run slacomp -a");
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert_eq!(result.status.code(), Some(2), "{stderr}");
+    assert!(
+        stderr.contains("1 of 2 slaspec files failed to compile:"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("redefined.slaspec"), "{stderr}");
+    assert!(scratch.path().join("good/data_le_64.sla").exists());
+    assert!(!scratch.path().join("bad/redefined.sla").exists());
+}

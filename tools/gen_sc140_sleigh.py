@@ -704,6 +704,8 @@ def semantics(mn, syntax, ops, v, size, unit, agu):
             return None
         return guard('LC%d = %s;' % (n, conv(src[0], src[1], 4, False))), '', None, \
             'lfm = lfm | %d; slf = %d; globalset(inst_next, lfm); globalset(inst_next, slf);' % (1 << n, lp.group(1) == 'DOENSH')
+    if mn in ('CONT', 'CONTD') and 'label' in v:
+        return 'CNTF = PRED;', '', None, 'cnt = 1; cntd = %d; brtgt = %s;' % (mn == 'CONTD', EXPR[v['label'][0]])
     if mn == 'SKIPLS' and 'label' in v:
         return 'BC = ALC s<= 0;', '', (BR_COND, 0, v['label'][0])
     if mn == 'BREAK' and 'label' in v:
@@ -842,7 +844,8 @@ def emit_loops():
     loop or at a one-set short loop, LPMARKB two sets before the last of a long loop or at the
     first set of a two-set short loop.  A mark that ends the iteration later is carried as
     noflow context (lpb1 to the next set, then lpend with lpk and lpsa), so the back edge is a
-    direct branch after the last set of the loop."""
+    direct branch after the last set of the loop.  CONT/CONTD (cnt) branch to their label when
+    the count runs out and back to the start otherwise."""
     def back(k, tgt, clear):
         ctx = ''
         if clear:
@@ -858,6 +861,12 @@ def emit_loops():
           ' globalset(inst_next, lpk); globalset(inst_next, lpsa); ] { }' % (free, k))
         w('LOOP: is %s & lpa=0 & lpb=1 & slf=0 [ lpb1 = 1; lpk = %d; lpsa = sa%d; globalset(inst_next, lpb1);'
           ' globalset(inst_next, lpk); globalset(inst_next, lpsa); ] { }' % (free, k, k))
+    for k in range(4):
+        for dl in (0, 1):
+            w('LOOP: is cnt=1 & cntd=%d & lpend=0 & lpb1=0 & lpa=0 & lpb=0 & %s & SAK%d & BTGT [ lfm = lfm & %d;'
+              ' slf = 0; globalset(BTGT, lfm); globalset(BTGT, slf); ] { if (!CNTF) goto inst_next; %s'
+              'if (LC%d s<= 1) goto <out>; LC%d = LC%d - 1; goto SAK%d; <out> LC%d = 0; goto BTGT; }'
+              % (dl, ACTIVE[k], k, 15 & ~(1 << k), 'delayslot(1); ' if dl else '', k, k, k, k, k))
     w('LOOP: is lpend=0 & lpb1=1 [ lpend = 1; globalset(inst_next, lpend); globalset(inst_next, lpk);'
       ' globalset(inst_next, lpsa); ] { }')
     w('LOOP: is epsilon { }')
@@ -902,7 +911,7 @@ def main():
     w('define register offset=0x100 size=4 [ %s ];' % ' '.join(RREGS))
     w('define register offset=0x100 size=2 [ %s ];' % ' '.join('R%dL R%dH' % (i, i) for i in range(16)))
     w('define register offset=0x200 size=4 [ %s ];' % ' '.join(CTRL32))
-    w('define register offset=0x300 size=1 [ T BC Tn %s ];' % ' '.join('TT1_%d' % k for k in range(SLOTS)))
+    w('define register offset=0x300 size=1 [ T BC Tn %s CNTF ];' % ' '.join('TT1_%d' % k for k in range(SLOTS)))
     w('define register offset=0x400 size=8 [ %s ];' % ' '.join('TT8_%d' % k for k in range(SLOTS)))
     w('define register offset=0x480 size=4 [ %s BRT ];' % ' '.join('TT4_%d' % k for k in range(SLOTS)))
     w('define register offset=0x4c0 size=2 [ %s ];' % ' '.join('TT2_%d' % k for k in range(SLOTS)))
@@ -912,7 +921,7 @@ def main():
     for n, a, b, *nf in [('brtgt', 0, 31), ('pfx', 32, 32), ('rem', 33, 35), ('slast', 36, 36), ('ccc', 37, 39),
                     ('pe', 40, 51), ('ph', 52, 53), ('pl', 54, 55), ('di', 56, 57), ('ai', 58, 58), ('x1', 59, 59),
                     ('x2', 60, 60), ('x3', 61, 61), ('pos3', 64, 66), ('pr', 67, 68), ('brk', 69, 71), ('brd', 72, 72),
-                    ('lpa', 73, 73), ('lpb', 74, 74), ('lfm', 76, 79), ('lf3', 76, 76), ('lf2', 77, 77), ('lf1', 78, 78),
+                    ('lpa', 73, 73), ('lpb', 74, 74), ('cnt', 75, 75), ('cntd', 83, 83), ('lfm', 76, 79), ('lf3', 76, 76), ('lf2', 77, 77), ('lf1', 78, 78),
                     ('lf0', 79, 79), ('slf', 80, 80), ('lpend', 81, 81, 1), ('lpb1', 82, 82, 1), ('lpk', 84, 85, 1),
                     ('lpsa', 96, 127, 1), ('sa0', 128, 159), ('sa1', 160, 191), ('sa2', 192, 223), ('sa3', 224, 255)]:
         w('  %s = (%d,%d)%s' % (n, a, b, ' noflow' if nf else ''))

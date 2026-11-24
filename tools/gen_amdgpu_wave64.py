@@ -18,6 +18,7 @@ CARRY_DST = ('v_add_co_u32_e64', 'v_sub_co_u32_e64', 'v_subrev_co_u32_e64', 'v_a
              'v_sub_co_ci_u32_e64', 'v_subrev_co_ci_u32_e64', 'v_mad_u64_u32', 'v_mad_i64_i32',
              'v_div_scale_f32', 'v_div_scale_f64')
 VOPC_E64 = re.compile(r'v_cmpx?_\w+_e64$')
+REGTABLE = re.compile(r'^\w+: "[^"]*" is \w+=\d+ \{ export \w+; \}$')
 EXEC32 = re.compile(r's_\w+_(saveexec|wrexec)_b32$')
 
 
@@ -41,6 +42,9 @@ def widen(lines, extra):
             continue
         if line.startswith('define ') or line.startswith('attach ') or re.match(r'^\s+\w+ = \(', line):
             out.append(line)
+            continue
+        if REGTABLE.match(line):
+            out.append(line)    # an operand table naming one SGPR or VGPR per field value
             continue
         if line.startswith('#'):
             if len(out) < 9:

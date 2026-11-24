@@ -226,6 +226,9 @@ pub(super) struct Recovery {
     pub(super) typeinfos: Vec<TypeInfo>,
     pub(super) subs: Vec<SubVtable>,
     pub(super) rk: RefKind,
+    /// `(typeinfo, vptr)` of each primary vtable whose first two slots are null
+    /// ([`null_dtor_pair`]): an abstract class's, as GCC emits it.
+    pub(super) null_dtors: Vec<(u64, u64)>,
 }
 
 /// Discover, decode and walk the image's typeinfo objects and vtables, or
@@ -289,12 +292,13 @@ pub(super) fn recover(ctx: &AnalysisCtx) -> Option<Recovery> {
         None => relocated_slots(ctx.file),
         Some(m) => m.named_binds.iter().map(|(va, ..)| *va).collect(),
     };
-    let subs = recover_subvtables(&img, &rk, &text, &relocated, &typeinfos);
+    let (subs, null_dtors) = recover_vtables(&img, &rk, &text, &relocated, &typeinfos);
     resolve_virtual_bases(&img, &rk, &mut typeinfos, &subs);
     Some(Recovery {
         typeinfos,
         subs,
         rk,
+        null_dtors,
     })
 }
 
@@ -417,13 +421,20 @@ impl MachoSlots {
 /// ([`super::kuna_itaniumctors`]) reads them; empty on an image without the
 /// Itanium graph.
 pub(super) fn recovered_classes(ctx: &AnalysisCtx) -> Vec<ClassVtables> {
-    recover(ctx).map_or_else(Vec::new, |rec| class_vtables(&rec.typeinfos, &rec.subs))
+    recover(ctx).map_or_else(Vec::new, |rec| {
+        class_vtables(&rec.typeinfos, &rec.subs, &rec.null_dtors)
+    })
 }
 
 /// Each recovered class's vptr values and primary slot targets, with its bases as
 /// indices into the same list — the input the constructor/destructor recovery
 /// reads.
-fn class_vtables(typeinfos: &[TypeInfo], subs: &[SubVtable]) -> Vec<ClassVtables> {
+fn class_vtables(
+    typeinfos: &[TypeInfo],
+    subs: &[SubVtable],
+    null_dtors: &[(u64, u64)],
+) -> Vec<ClassVtables> {
+    let null_vptr: HashMap<u64, u64> = null_dtors.iter().copied().collect();
     let by_addr: HashMap<u64, &TypeInfo> = typeinfos.iter().map(|t| (t.addr, t)).collect();
     let index: HashMap<u64, usize> = typeinfos
         .iter()
@@ -440,6 +451,11 @@ fn class_vtables(typeinfos: &[TypeInfo], subs: &[SubVtable]) -> Vec<ClassVtables
                 .filter(|s| s.offset_to_top == 0)
                 .map(|s| s.slots.clone())
                 .unwrap_or_default();
+            let null = null_vptr.get(&ti.addr).copied();
+            let mut vptrs: Vec<u64> = own.iter().map(|s| s.first_slot).collect();
+            if let Some(v) = null.filter(|_| primary_slots.is_empty()) {
+                vptrs.insert(0, v);
+            }
             ClassVtables {
                 name: ti.class.clone(),
                 ancestors: ancestors_of(ti.addr, &by_addr)
@@ -447,7 +463,8 @@ fn class_vtables(typeinfos: &[TypeInfo], subs: &[SubVtable]) -> Vec<ClassVtables
                     .filter_map(|a| index.get(a).copied())
                     .collect(),
                 primary_slots,
-                vptrs: own.iter().map(|s| s.first_slot).collect(),
+                vptrs,
+                null_dtor_pair: null.is_some(),
             }
         })
         .collect()
@@ -725,9 +742,22 @@ fn recover_subvtables(
     relocated: &HashSet<u64>,
     typeinfos: &[TypeInfo],
 ) -> Vec<SubVtable> {
+    recover_vtables(img, rk, text, relocated, typeinfos).0
+}
+
+/// [`recover_subvtables`], plus `(typeinfo, vptr)` of every primary vtable that
+/// walks to no slot because its first two are null ([`null_dtor_pair`]).
+fn recover_vtables(
+    img: &ImageBytes,
+    rk: &RefKind,
+    text: &TextRanges,
+    relocated: &HashSet<u64>,
+    typeinfos: &[TypeInfo],
+) -> (Vec<SubVtable>, Vec<(u64, u64)>) {
     let ptr = rk.ptr_size() as u64;
     let by_addr: HashMap<u64, &TypeInfo> = typeinfos.iter().map(|t| (t.addr, t)).collect();
     let mut out = Vec::new();
+    let mut null_dtors = Vec::new();
 
     for slot in img.scan_ptr_slots(rk, &by_addr.keys().copied().collect()) {
         let (ti_slot, ti_addr) = slot;
@@ -755,6 +785,9 @@ fn recover_subvtables(
         let first_slot = ti_slot + ptr;
         let slots = walk_slots(img, rk, text, relocated, first_slot);
         if !slots.iter().any(|s| s.is_some()) {
+            if offset_to_top == 0 && null_dtor_pair(img, rk, text, relocated, first_slot) {
+                null_dtors.push((ti_addr, first_slot));
+            }
             continue;
         }
         out.push(SubVtable {
@@ -766,7 +799,39 @@ fn recover_subvtables(
         });
     }
     out.sort_by_key(|s| s.header);
-    out
+    null_dtors.sort_unstable();
+    null_dtors.dedup();
+    (out, null_dtors)
+}
+
+/// Whether the primary vtable at `first_slot` starts with two null slots, neither
+/// one the dynamic loader fills, followed by a method (code or an imported
+/// slot such as `__cxa_pure_virtual`). GCC writes the complete and deleting
+/// destructor slots of an abstract class as 0: its vtable is only installed
+/// while a derived object is being built or destroyed, when neither is called
+/// through it. The pair is where every class derived from it keeps its
+/// destructors.
+fn null_dtor_pair(
+    img: &ImageBytes,
+    rk: &RefKind,
+    text: &TextRanges,
+    relocated: &HashSet<u64>,
+    first_slot: u64,
+) -> bool {
+    let ptr = rk.ptr_size() as u64;
+    let null = |at: u64| read_ptr(img, rk, at) == Some(0) && !relocated.contains(&at);
+    let (Some(second), Some(third)) =
+        (first_slot.checked_add(ptr), first_slot.checked_add(2 * ptr))
+    else {
+        return false;
+    };
+    null(first_slot)
+        && null(second)
+        && match read_ptr(img, rk, third) {
+            Some(0) => relocated.contains(&third),
+            Some(w) => text.contains(w),
+            None => false,
+        }
 }
 
 /// Walk a sub-vtable's slots from `first_slot`, bounded at the first word that is

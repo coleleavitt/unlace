@@ -1,0 +1,12 @@
+@define ENDIAN "little"
+@define XTENSA_NO_FP ""
+@include "xtensaArch.sinc"
+@include "xtensa_hifi4_rt700_defs.sinc"
+@include "xtensaMain.sinc"
+
+with : phase=1 {
+
+@include "xtensaInstructions.sinc"
+@include "xtensa_hifi4_rt700.sinc"
+
+}

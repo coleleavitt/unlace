@@ -1,0 +1,12 @@
+@define ENDIAN "little"
+@define XTENSA_NO_FP ""
+@include "xtensaArch.sinc"
+@include "xtensa_hifi5_mt8196_defs.sinc"
+@include "xtensaMain.sinc"
+
+with : phase=1 {
+
+@include "xtensaInstructions.sinc"
+@include "xtensa_hifi5_mt8196.sinc"
+
+}

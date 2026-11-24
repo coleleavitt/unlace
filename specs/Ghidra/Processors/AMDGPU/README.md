@@ -69,7 +69,10 @@ cache-control instructions new in these generations (`s_clause`, `s_delay_alu`,
 `s_waitcnt_*cnt`, `s_inst_prefetch`, ...) decode as no-ops.
 
 Gaps beyond GFX9's: on gfx10, VOP3P (packed math), MIMG and the dot operations are not decoded;
-on both, the export and LDS-direct instructions are not. gfx11's true16 forms, VOP3P,
+on both, the export and LDS-direct instructions are not. The VOP3-only `v_add_co_u32`,
+`v_sub_co_u32` and `v_subrev_co_u32` print without an `_e64` suffix, as LLVM does, and
+`v_permlane16_b32`/`v_permlanex16_b32` are the `permlane16`/`permlanex16` user-ops on the old
+destination, the source and both lane-select SGPRs. gfx11's true16 forms, VOP3P,
 WMMA and MIMG come from the generated includes below.
 
 Oracle: `fixtures/amdgpu/gfx900_kernels.cl` and the four GFX9 test kernels built with clang
@@ -112,9 +115,9 @@ constructors to the base spec (the probe skips opcodes the base already decodes 
 prints a half for them); then rerun `gen_amdgpu_wave64.py`.
 
 Oracle: the probe encodings against `llvm-objdump`. Of the 436 valid VOP3 encodings (destination
-field 0x7e, which `v_cmpx` requires), 430 print
-the same mnemonic (the rest: `v_mqsad_u32_u8` and `v_permlane16/x16_b32`, not decoded, and the
-base spec's `v_add/sub/subrev_co_u32_e64` spelling), and 132 of the 133 that name a half print
+field 0x7e, which `v_cmpx` requires), all but `v_mqsad_u32_u8` print the same mnemonic (when
+this was first measured, 430 did: `v_permlane16/x16_b32` and the `v_add/sub/subrev_co_u32`
+suffix were fixed later), and 132 of the 133 that name a half print
 the same text (the other is the probe's VGPR as a `v_cndmask_b16` mask); of the 496 VOPC, VOP1
 and VOP2 encodings with halves, all but `v_swap_b16` and the base spec's `v_mov_b16`/`v_not_b16`
 spelling print the same text; all 34 VOP3P encodings print the same mnemonic; and 3,632 MIMG
@@ -127,11 +130,50 @@ decompile with no bad instruction.
 Gaps: `v_mqsad_u32_u8` (128-bit sources), `v_swap_b16`, `v_permlane16/x16_b32`, the clamp and
 output modifiers, and NSA forms of the BVH queries.
 
-## Wave64: `AMDGPU:LE:64:GFX10-W64` and `AMDGPU:LE:64:GFX11-W64`
+## RDNA 4: `AMDGPU:LE:64:GFX12` and `AMDGPU:LE:64:GFX12-W64`
+
+`amdgcn_gfx12.slaspec` (gfx1200/gfx1201) is generated from the GFX11 spec by
+`tools/gen_amdgpu_gfx12.py`; `tools/regen_amdgpu_gfx12.sh` reruns the whole chain (the probes, the
+generators and the wave64 spec) with LLVM 22 on PATH. Edit the GFX11 spec or a generator, never the
+output. `tools/amdgpu_gfx12_probe.py map` lists, for every opcode of the formats GFX12 keeps (SOP1,
+SOP2, SOPC, SOPK, SOPP, VOP1, VOP2, VOPC, VOP3, VOP3P, the VOPD halves, DS), LLVM's GFX11 and GFX12
+mnemonics. Each GFX11 constructor is kept, renamed (`s_add_co_u32`, `v_mad_co_u64_u32`,
+`s_wait_alu`, `v_dual_max_num_f32`), moved to the opcode of its GFX12 name (`v_max_f32` becomes
+`v_max_num_f32`, `v_add_f64` the VOP2-encoded `v_add_f64_e64`, `v_pk_max_f16` `v_pk_max_num_f16`)
+or dropped (`v_cmp_f/t`, `s_cmpk_*`, `s_waitcnt_*`, `s_barrier`). The generator adds the float
+SALU (`s_add_f32`, `s_cmp_lt_f32`, `s_cvt_f32_i32`, ...), `s_add/sub_nc_u64`, `s_mul_u64`, the split
+wait counters (no-ops), the barrier instructions and the VOP2 f64 operations. The includes:
+
+- `amdgcn_gfx12_valu.sinc`: `gen_amdgpu_gfx11_valu.py` run on the gfx1200 probe tables: the
+  true16 forms and the new VOP3 operations (`v_minimum/maximum*`, `v_*_num_*`, `v_minimummaximum`,
+  `v_s_exp/log/rcp/rsq/sqrt`, `v_permlane*_var`, the fp8/bf8 conversions as user-ops).
+- `amdgcn_gfx12_vop3p.sinc`: `gen_amdgpu_gfx11_vop3p.py --gfx12`: the packed operations at their
+  GFX12 opcodes and the WMMA and SWMMAC operations with the tile sizes `probe wmma` reads.
+- `amdgcn_gfx12_mem.sinc` (`tools/gen_amdgpu_gfx12_mem.py`): the new memory encodings: SMEM
+  (24-bit signed offset, soffset), VGLOBAL/VFLAT/VSCRATCH and VBUFFER (96-bit, th/scope cache
+  policy), VIMAGE and VSAMPLE (every address in its own field, the last one a tuple). Loads, stores
+  and integer atomics are p-code: a multi-dword scalar load writes each SGPR, and a buffer address
+  adds the resource base (low 48 bits), soffset, the offen VGPR and the idxen VGPR times the
+  resource stride. Image operations and float or packed atomics are user-ops.
+
+Oracle: the probe encodings against `llvm-objdump --mcpu=gfx1200 --mattr=+real-true16`. Every VIMAGE
+and VSAMPLE encoding that `llvm-mc` assembles back (419 and 1,357) prints the same text, as do all
+VFLAT encodings and most VGLOBAL (226/254), VSCRATCH (88/96), VBUFFER (256/356) and SMEM (64/88)
+ones (offsets print in hex). For the kept formats the GFX12 spec matches as many probe encodings as
+the GFX11 spec does against gfx1100 (the base spec's spellings differ from LLVM's, as on GFX11). The
+fixture kernels (`real_kernels.cl`, `gfx1200_true16.cl` in wave32 and wave64, `gfx1100_image.ll`)
+built for gfx1200 list no undecoded instruction and the same mnemonic as `llvm-objdump` at every
+address, and decompile with no bad instruction.
+
+Gaps: the d16 format buffer accesses, `global_load/store_block`, `*_addtid_b32`, `global_load_tr_*`,
+`s_atc_probe*`, operand display of the `s_prefetch_*` hints, `image_msaa_load`, the BVH queries,
+`v_swap_b16` and the GFX11 gaps above.
+
+## Wave64: `AMDGPU:LE:64:GFX10-W64`, `GFX11-W64` and `GFX12-W64`
 
 RDNA runs either wave size; the wave size of a kernel is in its kernel descriptor, not in the
 ELF header, so wave64 code (`clang -mwavefrontsize64`, and much compute code) picks these
-languages explicitly. `amdgcn_gfx10_w64.slaspec` and `amdgcn_gfx11_w64.slaspec` are generated
+languages explicitly. `amdgcn_gfx10_w64.slaspec`, `amdgcn_gfx11_w64.slaspec` and `amdgcn_gfx12_w64.slaspec` are generated
 from the wave32 specs by `tools/gen_amdgpu_wave64.py`; edit the wave32 spec and regenerate. The
 encodings are identical; the generator widens every lane mask: VCC and EXEC are SGPR pairs
 (VOPC e32 and the e32 carry and `v_cndmask` forms write or read `vcc`, `v_cmpx` writes `exec`),

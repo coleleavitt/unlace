@@ -16,6 +16,8 @@
 :stey c_fsA,XBD6 is c_op8=0xed & c_opl=0x66 & c_fsA & XBD6 { *:4 XBD6 = c_fsA; }
 :ldgr b_fE,b_rF is b_op16=0xb3c1 & b_fE & b_rF { b_fE = b_rF; }
 :lgdr b_rE,b_fF is b_op16=0xb3cd & b_rE & b_fF { b_rE = b_fF; }
+:lder b_fE,b_fsF is b_op16=0xb324 & b_fE & b_fsF { b_fE = zext(b_fsF) << 32; }
+:lde c_fA,XBDE6 is c_op8=0xed & c_opl=0x24 & c_fA & XBDE6 { local v:4 = *:4 XBDE6; c_fA = zext(v) << 32; }
 :ldebr b_fE,b_fsF is b_op16=0xb304 & b_fE & b_fsF { b_fE = float2float(b_fsF); }
 :ldeb c_fA,XBDE6 is c_op8=0xed & c_opl=0x04 & c_fA & XBDE6 { local v:4 = *:4 XBDE6; c_fA = float2float(v); }
 :ledbr b_fsE,b_fF is b_op16=0xb344 & b_fsE & b_fF { b_fsE = float2float(b_fF); }

@@ -13,9 +13,10 @@
 //! high word first on big-endian) and writing its result to r0 or r0:r1, so
 //! `return __aeabi_dadd(a,b);` prints `return a + b;`.
 //!
-//! A judgement, so off by default: the fold assumes the image's helpers are the
-//! IEEE ones (a library built for flush-to-zero or another rounding mode
-//! computes something else), and a conversion to an unsigned integer is read as
+//! On by default: RTABI32 requires the helpers to be the IEEE 754 round-to-nearest
+//! ones, so on a conforming image the fold changes no value; the option stays for
+//! a firmware that links its own non-IEEE helpers under the AEABI names. A
+//! conversion to an unsigned integer is read as
 //! the signed conversion to a wider integer, exact over the range the C cast is
 //! defined on. The conversions with no such reading (`d2ulz`, `f2ulz`, `ul2d`,
 //! `ul2f`) keep the call, as do the flag-returning `cdcmp`/`cfcmp` forms.
@@ -100,15 +101,55 @@ fn fixups(big_endian: bool) -> Vec<(String, String)> {
     out
 }
 
+/// The libgcc soft-float routine each helper is the same function as (libgcc's
+/// ARM `ieee754-df.S`/`ieee754-sf.S` define the two names at one address, and
+/// `__aeabi_d2lz`/`__aeabi_f2lz` call `__fixdfdi`/`__fixsfdi`). A static image
+/// names the function by whichever symbol the symbol table lists first, and
+/// newlib calls the libgcc names directly. The libgcc comparisons (`__eqdf2`,
+/// `__ltdf2`, ...) return a three-way result, not the helpers' 1 or 0, and keep
+/// their calls.
+const LIBGCC: &[(&str, &str)] = &[
+    ("dadd", "__adddf3"),
+    ("dsub", "__subdf3"),
+    ("dmul", "__muldf3"),
+    ("ddiv", "__divdf3"),
+    ("fadd", "__addsf3"),
+    ("fsub", "__subsf3"),
+    ("fmul", "__mulsf3"),
+    ("fdiv", "__divsf3"),
+    ("d2iz", "__fixdfsi"),
+    ("d2uiz", "__fixunsdfsi"),
+    ("d2lz", "__fixdfdi"),
+    ("f2iz", "__fixsfsi"),
+    ("f2uiz", "__fixunssfsi"),
+    ("f2lz", "__fixsfdi"),
+    ("d2f", "__truncdfsf2"),
+    ("f2d", "__extendsfdf2"),
+    ("i2d", "__floatsidf"),
+    ("ui2d", "__floatunsidf"),
+    ("l2d", "__floatdidf"),
+    ("i2f", "__floatsisf"),
+    ("ui2f", "__floatunsisf"),
+    ("l2f", "__floatdisf"),
+];
+
 /// The synthesized `<callfixup>` elements for one byte order, each targeting
-/// `__aeabi_<helper>` and its one-more-underscore spelling, as
+/// `__aeabi_<helper>`, the libgcc routine it is ([`LIBGCC`]), and the
+/// one-more-underscore spelling of each, as
 /// [`crate::kuna_arithhelpers::payload_xml`] does.
 pub fn payload_xml(big_endian: bool) -> Vec<String> {
     fixups(big_endian)
         .into_iter()
         .map(|(name, body)| {
+            let aeabi = format!("__aeabi_{name}");
+            let libgcc = LIBGCC.iter().filter(|(h, _)| *h == name).map(|(_, l)| l.to_string());
+            let targets: String = std::iter::once(aeabi)
+                .chain(libgcc)
+                .flat_map(|t| [format!("_{t}"), t])
+                .map(|t| format!("<target name=\"{t}\"/>"))
+                .collect();
             format!(
-                "<callfixup name=\"{FIXUP_PREFIX}{name}\"><target name=\"__aeabi_{name}\"/><target name=\"___aeabi_{name}\"/><pcode><body><![CDATA[{body}]]></body></pcode></callfixup>"
+                "<callfixup name=\"{FIXUP_PREFIX}{name}\">{targets}<pcode><body><![CDATA[{body}]]></body></pcode></callfixup>"
             )
         })
         .collect()
@@ -122,7 +163,7 @@ crate::kuna_flag!(
     "aeabifloat",
     "AEABI floating-point helper call-fixups",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 #[cfg(test)]
@@ -144,6 +185,22 @@ mod tests {
                     .all(|n| !n.ends_with("ulz") && !n.starts_with("ul2"))
             );
         }
+    }
+
+    #[test]
+    fn a_helper_also_targets_the_libgcc_routine_it_is() {
+        let dmul = payload_xml(false)
+            .into_iter()
+            .find(|x| x.contains("kuna_aeabifloat_dmul"))
+            .unwrap();
+        for t in ["__aeabi_dmul", "___aeabi_dmul", "__muldf3", "___muldf3"] {
+            assert!(dmul.contains(&format!("<target name=\"{t}\"/>")), "{dmul}");
+        }
+        assert!(
+            super::LIBGCC
+                .iter()
+                .all(|(h, _)| fixups(false).iter().any(|(n, _)| n == h))
+        );
     }
 
     #[test]

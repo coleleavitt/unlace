@@ -25,7 +25,7 @@
 //! zero is a record field, where a function reached through a pointer takes the
 //! generic `void *` its contract declares (`fields`).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -162,6 +162,9 @@ pub struct Ledger {
     pub closed: HashSet<(int4, uintb)>,
     /// Function key -> the statement the body the driver kept was printed with.
     applied: HashMap<(int4, uintb), Rc<CallerTypes>>,
+    /// Caller offset -> the callees whose `sites` may hold a call it made, so
+    /// replacing or forgetting a caller's calls visits only those lists.
+    called_by: BTreeMap<uintb, BTreeSet<(int4, uintb)>>,
 }
 
 impl Ledger {
@@ -174,8 +177,15 @@ impl Ledger {
         self.own.remove(&key);
         self.stated.remove(&key);
         self.applied.remove(&key);
-        for sites in self.sites.values_mut() {
-            sites.retain(|s| s.caller != key.1);
+        self.drop_calls_of(key.1);
+    }
+
+    /// Remove every recorded call made by the function at offset `caller`.
+    fn drop_calls_of(&mut self, caller: uintb) {
+        for callee in self.called_by.remove(&caller).unwrap_or_default() {
+            if let Some(sites) = self.sites.get_mut(&callee) {
+                sites.retain(|s| s.caller != caller);
+            }
         }
     }
 
@@ -475,11 +485,10 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &mut Funcdata) {
         ));
     }
     let ledger = arch.kuna_tables.get_mut::<crate::kuna_calleevote::Ledger>();
-    for sites in ledger.sites.values_mut() {
-        sites.retain(|s| s.caller != me.1);
-    }
+    ledger.drop_calls_of(me.1);
     for (callee, site) in calls {
         if let Some(k) = key_of(&callee) {
+            ledger.called_by.entry(site.caller).or_default().insert(k);
             ledger.sites.entry(k).or_default().push(site);
         }
     }

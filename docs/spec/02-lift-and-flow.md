@@ -16,7 +16,7 @@ and effects refuse. Flow overrides do not acquire a record. The record is
 cleared on restart and cannot authorize a later rendering without the final
 whole-function SSA proof described in chapter 09.
 
-**(kuna) Atomic instructions — `option atomics auto|msvc|gcc|off`, default off,
+**(kuna) Atomic instructions — `option atomics auto|msvc|gcc|off`, default `auto` (measured in unlace#581),
 `crates/unlace-lift/src/p2_lift/kuna_atomics.rs (rewrite)`.**
 SLEIGH lifts an x86 `lock`-prefixed read-modify-write as `LOCK()`, a load, an
 update, a store and `UNLOCK()`; an AArch64 LSE atomic (`ldadd`, `ldclr`,
@@ -126,7 +126,7 @@ spells no 16-byte intrinsic with these operands (`_InterlockedCompareExchange128
 returns a flag and writes the old value through a pointer), so the 16-byte forms
 keep the GCC name under every spelling.
 
-**(kuna) Load/store-exclusive loops — `option llscfold`, default off,
+**(kuna) Load/store-exclusive loops — `option llscfold`, default on (unlace#581; it acts only with `atomics`),
 `crates/unlace-lift/src/p2_lift/kuna_atomics.rs (ActionLlscLoop)`.**
 Without LSE, AArch64 code (and all ARMv6+/Thumb-2 code) updates memory with a retry loop: `ldaxr w8, [x0];
 add w9, w8, w1; stlxr w10, w9, [x0]; cbnz w10, loop`. The store-exclusive
@@ -157,6 +157,20 @@ anything but `clrex`. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
 monitor's pass and status become the constants 1 and 0, and the STORE a dead
 copy; dead-branch removal then deletes the back edge. A compare-exchange that
 fails stores nothing, as the loop did, and keeps its exit (with its `clrex`).
+
+clang rotates an ARM and Thumb compare-exchange: `ldrex r0, [r0]; cmp r0, r1;
+bne fail; dmb ish; L: strex r3, r2, [r12]; cbz r3, done; ldrex r0, [r12]; cmp
+r0, r1; beq L; fail: clrex`. The store-exclusive block then has two
+predecessors: the head (directly or through one block, here the `dmb`) and a
+reload block that the status test falls into and that branches back to it or
+to the head's failure exit
+(`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (rotated_blocks)`). The head,
+the block between and the store-exclusive's blocks fold as above, and the
+reload block must repeat the head: evaluated from the state the loop body
+leaves, its one load-exclusive reads the head's address, it reads neither
+monitor output, and it branches back exactly when the reloaded value equals
+the head's expected value (`reload_matches`). The status test then always
+leaves the loop and the reload block is dead.
 
 On ARM and Thumb, `strex rd, rt, [rn]` lifts to `access = hasExclusiveAccess(rn);
 rd = 1; if (!access) goto next; rd = 0; *rn = rt`, with no status user
@@ -674,7 +688,7 @@ replace its address-to-op record and make earlier return edges target the later
 predecessor's body. In a switch with a return-only entry and a last case sharing
 that `RET`, this incorrectly moves the last case's write after the switch and
 executes it for the return-only entry and out-of-range selectors as well.
-`tests/stages/kuna-switch-return-paths.xml` and the CLI native round trip pin
+`tests/stages/kuna-switch-return-paths.toml` and the CLI native round trip pin
 this join across both structurers and the return-duplication settings.
 
 Continuing quietly would be the wrong contract for a *declared* bound, because the
@@ -1553,7 +1567,7 @@ decompiles. A nested drive (a callee being decompiled for its contract),
 `protoorder off` and `tailcalljump direct|off` keep the copied-in body.
 `tests/stages/kuna-gottailcall.toml` pins the extern arm, with
 an unmapped non-function and a jump to the function's own code as controls,
-`tests/stages/kuna-xnutables.xml` (#15) and `tests/stages/kuna-veneer-tailcall.xml`
+`tests/stages/kuna-xnutables.toml` (#15) and `tests/stages/kuna-veneer-tailcall.toml`
 (#10) the single-function arm, and
 `tests/cli/gottailcall-*.json` pin the callee-first arm on an x86-64
 `-fno-plt` library and a MIPS PIC object.
@@ -1943,7 +1957,7 @@ naming the pad does not depend on asserting that the process dies there. `option
 int3pad off` restores the unannotated rendering. Exercised by
 `tests/stages/kuna-int3pad.toml`.
 
-**(kuna) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-lift/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; kuna does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/kuna-trapaftercall.xml`.
+**(kuna) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-lift/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; kuna does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/kuna-trapaftercall.toml`.
 
 **(kuna) A retpoline thunk is an indirect call — `option retpolinethunk`, default on, `crates/unlace-lift/src/p2_lift/kuna_retpolinethunk.rs (thunk_register)`.** `-mretpoline` (clang) and `-mindirect-branch=thunk` (gcc) compile each indirect call into a direct call to a per-register thunk, `call 1f; 2: pause; lfence; jmp 2b; 1: mov %reg,(%rsp); ret`, which returns into the target the register holds. The cspecs model it as the `x86_indirect_thunk_<reg>` call-fixups, which the call-fixup installer tags onto functions by gcc's thunk name only; clang names its thunks `__llvm_retpoline_<reg>`, and a stripped image names neither. When the flow builder asks for a direct callee's inject id and the callee has none, the decompile driver (`decompile_drive.rs (query_call_inject_id)`) reads the callee's first bytes: an `E8` call over the `F3 90 0F AE E8 EB F9` spin to a `[REX] 89 /r 24` store of a register over the return address followed by `C3`. The register picks the `x86_indirect_thunk_<reg>` fixup, which is then injected like any other call-fixup. x86 language ids only; a register the cspec has no fixup for keeps the plain call. Exercised by `tests/stages/kuna-retpolinethunk.toml`.
 
@@ -2105,7 +2119,7 @@ read and written under both: the number is in it by definition, and the output i
 the half that retires the false return. Inert on every language but x86-64 —
 `RAX` and all six argument registers must resolve at eight bytes and the default
 code space must be eight bytes wide — and on any function with no `SYSCALL`.
-Exercised by `tests/stages/kuna-x64syscall.xml`, whose functions include the
+Exercised by `tests/stages/kuna-x64syscall.toml`, whose functions include the
 register witness, a no-`SYSCALL` control, a split-block wrapper that separates
 `on` from `abi`, and a saved pointer value across a buffer-writing system call.
 `crates/unlace-cli/tests/x64_syscall_memory.rs` compares native code
@@ -2281,7 +2295,7 @@ return guards for that register. On MIPS, every call in a function with a
 caveat as for the result register.
 `option syscallregs off` restores the vendored zero-effect `CALLOTHER`.
 
-Exercised by `tests/stages/kuna-syscallregs-arm.xml`, `-aarch64.xml`,
+Exercised by `tests/stages/kuna-syscallregs-arm.toml`, `-aarch64.xml`,
 `-riscv.xml`, `-mips.xml` and `-ppc.xml`, each with the pair or number witness
 under `on`, a use of the result after the call, a barrier `CALLOTHER` as the
 control, and a pass under the default `auto` that keeps the vendored model on a
@@ -2289,7 +2303,7 @@ byte chunk. The ARM test adds a call whose result is discarded, a call followed
 by a use of the kept `r1`, and a call that writes `r1` but not `r0`; the RISC-V
 test adds a loop that passes `a1`/`a2` through and keeps scratch values in
 `a3`/`a4`, none of which takes an argument position.
-`tests/stages/kuna-syscallregs-mips-a3.xml` (a clang `movz` and a gcc branch on
+`tests/stages/kuna-syscallregs-mips-a3.toml` (a clang `movz` and a gcc branch on
 `a3`, the latter followed by a call while `a3` still holds the flag) and
 `-ppc-cr0.xml` (an `mfcr` and a `bns` test, and a compare of the result as the
 control) check the error flag under `on` and the phantom parameter or the
@@ -2299,7 +2313,7 @@ a `reboot` after a call whose `a3` is not read;
 the PowerPC test adds a flag that each branch sets and that is saved across a
 call after the join. In `-mips.xml`, `number` makes a `write` (4004) with two
 registers set, so it also passes the kernel the `a2` its caller left.
-`tests/stages/kuna-syscallregs-cortexm.xml` is the bare-metal control: FreeRTOS's
+`tests/stages/kuna-syscallregs-cortexm.toml` is the bare-metal control: FreeRTOS's
 `xPortRaisePrivilege` keeps its returned `r0` under `auto` and `off`.
 `crates/unlace-cli/tests/syscall_regs_cli.rs` loads the ARM witness as
 an object with and without a GNU ABI-tag note: the note turns the default on.
@@ -4273,6 +4287,16 @@ bits before the shift. `sha` sets C to the OR of the bits shifted out (the top
 `count` bits left, the low `-count` bits right); `shas` leaves C alone. The 64-bit
 (E register) multiply-accumulate forms set V from the add's signed overflow (unsigned
 carry for `madds.u`). Checked with `tools/difffuzz` against Unicorn.
+
+The q-format 16x16 multiplies (`mul.q`/`mulr.q`/`madd(r)(s).q`/`msub(r)(s).q` on the U/L
+halves) multiply in 32 bits; they truncated the product to 16 bits, and the rounding forms
+cleared the result (`zext(res[16,16] << 16)`). The 64-bit (E register) `madd`, `msub`, `mul`
+families, plain, `.u`, saturating and `.q`, extend the operands before multiplying (they
+truncated the 32x32 product), take V from the 64-bit add's signed overflow (unsigned carry or
+borrow for `.u`) instead of bit 63, and saturate on it; `msubs.u` multiplies (it subtracted).
+The 32-bit `msub.q`/`msubs.q` (32x32 and 32x16) subtract at full precision and then drop the
+low bits, as `madd.q` does, so the result is `D[d] - ceil(product)` rather than
+`D[d] - floor(product)`, matching Unicorn's TriCore core.
 ### AArch64 SVE2 and SVE2.1 (#98)
 
 `specs/Ghidra/Processors/AARCH64/data/languages/AARCH64_sve2.sinc` decodes
@@ -4319,6 +4343,18 @@ crossbuild instruction"), an existing engine gap that is not HMX-specific.
 Exercised by `unlace-cli/tests/hexagon_hmx.rs`: probe rows for all ten
 encodings against LLVM's syntax and a raw image with one instruction per
 packet. Notes in `specs/Ghidra/Processors/Hexagon/README.md`.
+
+### AArch64 SMSTART/SMSTOP text
+
+`smstart`/`smstop` (`AARCH64base.sinc`) print as LLVM does: `smstart`, `smstart sm`, `smstart za`
+(they printed `smstart {}`, `smstart {SM}`). Their p-code is unchanged.
+
+### AArch64 RMIF
+
+`rmif xn,#shift,#mask` (`AARCH64base.sinc`) rotates `xn` right by `shift` and copies bits
+3..0 of the result into N, Z, C and V where `mask` has a 1; the `set_NZCV` macro
+(`AARCH64instructions.sinc`) now leaves the other flags unchanged (it used to copy N into
+them), and the source is rotated, not shifted. Found by `tools/difffuzz --oracle qemu`.
 
 ### AArch64 SVE matrix multiply and BFloat16 (#98)
 
@@ -4625,6 +4661,15 @@ Before, each was a bad instruction. The EVEX-promoted GPR forms in
 the AVX-512 scaling of whatever tuple context was current. Exercised by the
 `x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
 
+### x86 MOV DRn mod and VFPCLASSPH/SH display (#98)
+
+`MOV DRn, r64` decodes whatever ModRM.mod holds (the SDM says the field is ignored), as the
+other debug- and control-register moves did; before, `0f 23` with mod != 3 was a bad
+instruction. `vfpclassph`/`vfpclasssh` print their class mask as an immediate, as `vfpclassps`
+and LLVM do. `66 0f 52/53` and `extrq` with ModRM.reg != 0 stay undecoded: both manuals leave them
+undefined and the difffuzz reference raises #UD. Exercised by the `x86_64_movdr_mod` row of
+`unlace-cli/tests/processors.toml`.
+
 ### x86 AVX-512 {sae} and embedded rounding (#98)
 
 An EVEX register form with EVEX.b=1 is 512 bits wide (or scalar), and its L'L field is the
@@ -4732,12 +4777,12 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `EVM` | Ethereum Virtual Machine bytecode, Cancun opcode set | `EVM:BE:32:Cancun` | Ethereum Yellow Paper appendix H, evm.codes opcode reference, EIPs 145/1153/3855/4844/5656/7516 | `unlace-cli/tests/evm.rs` |
 | `Rabbit` | Rabbit Semiconductor Rabbit 2000 / 3000A / 4000 / 5000 / 6000 | `Rabbit2000:LE:16:default`, `Rabbit3000:LE:16:default`, `Rabbit4000:LE:16:default`, `Rabbit6000:LE:16:default` | Rabbit 2000/3000 Instruction Reference Manual and Rabbit Family Instruction Reference (019-0098), Rabbit 6000 instruction spreadsheet, Rabbit User's Manuals, Dynamic C docs; 4000/6000 checked against z88dk's r4k/r6k tables | `unlace-cli/tests/processors.toml` (`rabbit`, `rabbit4000`) |
 | `Lanai` | Lanai v11 (Myricom, Google) | `lanai:BE:32:default` | LLVM Lanai backend (`LanaiInstrFormats.td` format descriptions, `LanaiInstrInfo.td`, `LanaiCallingConv.td`) | `unlace-cli/tests/processors.toml` (`lanai`) |
-| `META` | Imagination Technologies META (Meta 1.1, 1.2, 2.1), GP instructions | `META:LE:32:default` | binutils `include/opcode/metag.h` and `opcodes/metag-dis.c` field layouts, Linux `arch/metag` ABI; checked against `metag-linux-gnu-objdump` | `unlace-cli/tests/meta_raw.rs` |
+| `META` | Imagination Technologies META (Meta 1.1, 1.2, 2.1): GP, FPU and DSP instructions | `META:LE:32:default` | binutils `include/opcode/metag.h` and `opcodes/metag-dis.c` field layouts, Linux `arch/metag` ABI; checked against `metag-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`meta`, `meta_fpu`, `meta_dsp`) |
 | `S1C` | Epson S1C17 and S1C33000 cores | `S1C17:LE:24:default`, `S1C33:LE:32:default` | Epson S1C17 Core Manual Rev. 1.2, S1C33000 Core CPU Manual, S1C17 Startup Manual, S1C33 Application Note | `unlace-cli/tests/s1c_raw.rs` |
 | `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/processors.toml` (`st20`) |
 | `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`tilegx`) |
 | `TILEPRO` | Tilera TILEPro (TILEPro32/TILEPro64, TILE64), parallel X/Y-mode bundles | `TILEPRO:LE:32:default` | TILEPro ISA reference (UG120); encodings generated from the binutils `tilepro` opcode table by `tools/gen_tilepro_sleigh.py`; checked against `tilepro-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`tilepro`) |
-| `CSKY` | C-SKY ABIv2 (CK801-CK860), integer ISA, both byte orders | `CSKY:LE:32:v2`, `CSKY:BE:32:v2` | C-SKY V2 instruction set manual; encodings from the binutils `csky-opc.h` table; checked against `csky-elf-objdump` | `unlace-cli/tests/processors.toml` (`csky`) |
+| `CSKY` | C-SKY ABIv2 (CK801-CK860): integer ISA, FPUv2, FPUv3, VDSP | `CSKY:LE:32:v2`, `CSKY:BE:32:v2`, `CSKY:LE:32:ck810v`, `CSKY:LE:32:ck860` | C-SKY V2 instruction set manual; encodings from the binutils `csky-opc.h` table (FPU and VDSP generated by `tools/gen_csky_ext_sleigh.py`); checked against `csky-elf-objdump` | `unlace-cli/tests/processors.toml` (`csky`, `csky_fpuv2`, `csky_fpuv3`, `csky_vdsp`) |
 | `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/processors.toml` (`v60*`) |
 | `PowerPC` (Gekko) | IBM Gekko / Broadway (PowerPC 750CL) paired singles | `PowerPC:BE:32:Gekko` | IBM PowerPC 750CL User's Manual (paired-single chapter); checked against `powerpc-elf-objdump -M gekko` 2.43.1 | `unlace-cli/tests/ppc_gekko.rs` |
 | `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
@@ -4754,7 +4799,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `Xtensa` (ESP32-S3 PIE) | Xtensa LX7 with the ESP32-S3 Processor Instruction Extensions (`EE.*`) | `Xtensa:LE:32:esp32s3` | Espressif LLVM `XtensaS3DSPInstrInfo.td` (encodings, generated), ESP32-S3 TRM PIE chapter | `unlace-cli/tests/processors.toml` (`xtensa_esp32s3_pie_*`) |
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/processors.toml` (`ez80`) |
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/ez80_raw.rs` |
-| `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a), RDNA 1/2 (gfx10) and RDNA 3 (gfx11) shader ISAs, one-lane lift (RDNA wave32) | `AMDGPU:LE:64:GFX9`, `AMDGPU:LE:64:GFX10`, `AMDGPU:LE:64:GFX11` | LLVM AMDGPU encodings (`llvm-mc -show-encoding` / `--disassemble`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/processors.toml` (`amdgpu*`) |
+| `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a), RDNA 1/2 (gfx10) and RDNA 3 (gfx11) shader ISAs, one-lane lift (RDNA wave32, and wave64 with 64-bit lane masks) | `AMDGPU:LE:64:GFX9`, `AMDGPU:LE:64:GFX10`, `AMDGPU:LE:64:GFX11`, `AMDGPU:LE:64:GFX10-W64`, `AMDGPU:LE:64:GFX11-W64` | LLVM AMDGPU encodings (`llvm-mc -show-encoding` / `--disassemble`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/processors.toml` (`amdgpu*`) |
 | `KVX` | Kalray KVX kv3-1 (Coolidge v1) and kv3-2 (Coolidge v2), 64-bit mode; bundles of up to eight syllables with tail immediate extensions | `KVX:LE:64:kv3-1`, `KVX:LE:64:kv3-2` | encodings generated from the binutils `kvx` opcode table and disassembler register classes by `tools/gen_kvx_sleigh.py`; checked against `kvx-elf-objdump` | `unlace-cli/tests/processors.toml` (`kvx`, `kvx_wide`) |
 | `CPython` | CPython 3.12 bytecode (one code object's co_code) | `CPython:LE:32:3.12` | CPython 3.12 `dis`/`opcode` tables, `Python/bytecodes.c` semantics; oracle `dis` | `unlace-cli/tests/cpython_raw.rs` |
 | `H8500` | Hitachi H8/500 (H8/510, H8/520, H8/532, H8/534, H8/536, H8/570) | `H8500:BE:16:minimum`, `H8500:BE:24:maximum` | H8/500 Programming Manual; MAME h8500dasm.cpp (BSD-3) | `unlace-cli/tests/processors.toml` (`h8500`) |
@@ -4767,6 +4812,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `Propeller` (P2) | Parallax Propeller 2 (P2X8C4M64P), hub execution | `propeller2:LE:32:default` | Parallax "Propeller 2 Instructions" table v35 (encodings, operations, flags); checked against the flexspin assembler | `unlace-cli/tests/processors.toml` (`propeller2`) |
 | `S1C88` | Seiko Epson S1C88 8-bit core (Pokemon mini CPU) | `S1C88:LE:16:default` | Epson S1C88 Core CPU Manual (MF658-05); checked against MAME `minx` on all 768 opcode slots | `unlace-cli/tests/processors.toml` (`s1c88`) |
 | `M7700` | Mitsubishi/Renesas 7700 Family (M37700/M37702/M37710, 7750/7751 additions) | `M7700:LE:24:default` | Renesas 7700 Family Software Manual (chapter 4 instruction pages, Appendix 2 code tables) | `unlace-cli/tests/processors.toml` (`m7700`) |
+| `MULTOS` | MULTOS Executable Language (MEL) smart-card bytecode | `MULTOS:BE:16:MEL` | MULTOS Developer's Reference Manual v1.58 (instruction descriptions, Instruction Map) | `unlace-cli/tests/processors.toml` (`multos_mel`) |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -5174,10 +5220,12 @@ FPSIZE 64, the only FLEN any RISC-V language uses.
 - `fsgnj*` build the result from the sign and magnitude bits. The `rs2 = rs1` aliases `fmv`,
   `fneg` and `fabs` (constructors with `op1519=op2024`) are a copy, `f-` and `abs()`.
 - Single-precision results are written NaN-boxed (`0xffffffff00000000 | zext(v)`), as `fassignS`
-  does. Single-precision sources are read as the low 32 bits of the register (`--unbox truncate`),
-  as the hand-written files did. A register that does not hold a boxed value therefore reads as
-  that value instead of the canonical NaN. Compiled code never produces that state, and the
-  exact read is held back until the decompiler can fold it away for values it knows are boxed.
+  does. That includes the user operations, whose result is the low word: `frd = 0xffffffff00000000 |
+  zext(fadd_s(...))`. Single-precision sources are NaN-unboxed as the ISA requires
+  (`--unbox exact`): a register whose upper 32 bits are not all ones reads as the canonical NaN.
+  `boxedcompare` (§3) folds the test for values written boxed or loaded boxed. Under
+  `fpargboxed` it also folds the test for the FP argument registers on entry, so compiled code
+  prints no unboxing except on a call's return value.
 
 The generated file decodes what LLVM decodes: 2496/2496 RV64 and 2176/2176 RV32 sampled words, plus
 every near miss. The hand-written files rejected `fcvt.d.s`, `fcvt.d.w` and `fcvt.d.wu` with a
@@ -6102,7 +6150,7 @@ mask is passed at the intrinsic's width (`__mmask16`), and a following
 as `_mm512_mask_add_ps(src, k, a, b)` / `_mm512_maskz_add_ps(k, a, b)`. A
 function in which either step finds a whole-register vector run is marked
 `Funcdata::kuna_vector_code`, which `vectorabi` (chapter 04) keys on.
-Pinned by `tests/stages/kuna-vectorabi.xml`.
+Pinned by `tests/stages/kuna-vectorabi.toml`.
 
 
 ## 2.16 DEX exception edges

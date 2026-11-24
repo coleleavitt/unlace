@@ -1,0 +1,155 @@
+# Kuna #1634: a WebAssembly module is an input (P1 program prep, P2 lift;
+# always on, no option). The loader lays the module out as a flat image and
+# lowers each stack-machine body to register form; Wasm.slaspec lifts it.
+# One pass: there is no earlier output to compare with, the module did not
+# load. Fixtures and their sources: tests/fixtures/wasm/ (build.sh).
+#
+# mul_add.wasm is the issue's module. calls.wasm (clang) covers a loop over
+# linear memory, a br_table switch, a data global, imports with their
+# declared signatures, an indirect call through the element table, a frame
+# on the linear-memory stack, and i64 and f64 arithmetic. indirect.wasm
+# (rustc) covers a loop around a call_indirect.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/fixtures/wasm/mul_add.wasm',
+    'option ctypes on',
+    'read symbols',
+    'load function mul_add',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/wasm/calls.wasm',
+    'option ctypes on',
+    'read symbols',
+    'load function sum',
+    'decompile',
+    'print C',
+    'load function pick',
+    'decompile',
+    'print C',
+    'load function bump',
+    'decompile',
+    'print C',
+    'load function apply',
+    'decompile',
+    'print C',
+    'load function frame',
+    'decompile',
+    'print C',
+    'load function mix',
+    'decompile',
+    'print C',
+    'load function favg',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/wasm/indirect.wasm',
+    'option ctypes on',
+    'read symbols',
+    'load function apply_all',
+    'decompile',
+    'print C',
+    'load function collatz',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "wasm #1: the issue's function, parameters in wasm operand order"
+count = 1
+literal = 'return a1 * a0 + a2;'
+
+[[match]]
+name = 'wasm #2: three i32 parameters and an i32 result'
+count = 1
+regex = '^int mul_add\(int a0,int a1,int a2\)'
+
+[[match]]
+name = 'wasm #3: a load through a parameter makes it a pointer'
+count = 1
+regex = '^int sum\(int \*a0,unsigned int a1\)'
+
+[[match]]
+name = 'wasm #4: the loop over linear memory'
+count = 1
+literal = 'v3 = *a0++ + v3;'
+
+[[match]]
+name = 'wasm #5: br_table is a switch'
+count = 1
+literal = 'switch(a0) {'
+
+[[match]]
+name = 'wasm #6: a case calls the import with its one declared argument'
+count = 1
+literal = 'v1 = a1 - ext_log(a1);'
+
+[[match]]
+name = 'wasm #7: a data global in linear memory is read and written at its address'
+count = 1
+literal = 'dat_10020 = *(int *)((dat_10020 & 7) * 4 + 0x10000) + dat_10020;'
+
+[[match]]
+name = 'wasm #8: call_indirect indexes the named table'
+count = 1
+literal = 'v1 = table0[*(int *)(a0 * 4 + 0x10024)];'
+
+[[match]]
+name = 'wasm #9: the indirect call passes both arguments'
+count = 1
+literal = 'return (*v1)(a1,a2);'
+
+[[match]]
+name = 'wasm #10: __stack_pointer is the stack pointer, so the buffer is a stack local'
+count = 1
+regex = 'int v1 \[3\]; // .*stack - 0x10'
+
+[[match]]
+name = "wasm #11: the frame's address is the import's argument"
+count = 1
+literal = 'ext_fill((unsigned int)v1,a0);'
+
+[[match]]
+name = 'wasm #12: no stack-pointer arithmetic is left in a body'
+count = 0
+literal = '__stack_pointer'
+
+[[match]]
+name = 'wasm #13: i64 rotate and multiply'
+count = 1
+literal = 'return a1 * -0x61c8864680b583ebULL ^ rotl(a0,7);'
+
+[[match]]
+name = 'wasm #14: f64 parameters, arithmetic and result'
+count = 1
+regex = 'return \(a0 \+ a1\) \* 0.5;'
+
+[[match]]
+name = 'wasm #15: rustc call_indirect in a loop'
+count = 3
+literal = '= (*table0[v7])(v6'
+
+[[match]]
+name = 'wasm #16: rustc loop with a select'
+count = 1
+literal = 'while (a0 != 1) {'
+
+[[match]]
+name = 'wasm #17: every body was lowered'
+count = 0
+literal = 'unsupported()'

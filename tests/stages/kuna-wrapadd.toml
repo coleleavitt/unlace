@@ -1,0 +1,95 @@
+[image]
+arch = 'MIPS:BE:64:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '03e0000800000000'
+
+# kuna wrapadd: a four-byte addition the machine wraps at 32 bits before a
+# 64-bit sign extension prints as `value + 1` over a signed int, which
+# overflows (undefined C) at INT32_MAX. P9 emission / cast-policy; P0
+# assertion `option wrapadd`. Two passes over LLVM objects for x86-64,
+# AArch64, PowerPC64 and MIPS64 (tests/fixtures/wide-integer-emission/shift.c,
+# `word_wrap`): the default (off) keeps upstream's spelling; on adds the
+# unsigned conversion and restores the signed result. The CLI companion
+# wrap_add_emission.rs executes the on output under UBSan at O0/O2.
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/fixtures/wide-integer-emission/x86-64.elf',
+    'read symbols',
+    'map prototype word_wrap long long word_wrap(int value);',
+    'lo fu word_wrap',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/wide-integer-emission/aarch64.elf',
+    'read symbols',
+    'map prototype word_wrap long long word_wrap(int value);',
+    'lo fu word_wrap',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/wide-integer-emission/ppc64.elf',
+    'read symbols',
+    'map prototype word_wrap long long word_wrap(int value);',
+    'lo fu word_wrap',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/wide-integer-emission/mips64.elf',
+    'read symbols',
+    'map prototype word_wrap long long word_wrap(int value);',
+    'lo fu word_wrap',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/wide-integer-emission/x86-64.elf',
+    'read symbols',
+    'option wrapadd on',
+    'map prototype word_wrap long long word_wrap(int value);',
+    'lo fu word_wrap',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/wide-integer-emission/aarch64.elf',
+    'read symbols',
+    'option wrapadd on',
+    'map prototype word_wrap long long word_wrap(int value);',
+    'lo fu word_wrap',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/wide-integer-emission/ppc64.elf',
+    'read symbols',
+    'option wrapadd on',
+    'map prototype word_wrap long long word_wrap(int value);',
+    'lo fu word_wrap',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/wide-integer-emission/mips64.elf',
+    'read symbols',
+    'option wrapadd on',
+    'map prototype word_wrap long long word_wrap(int value);',
+    'lo fu word_wrap',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'wrapadd #1: the default keeps the signed sum'
+count = 4
+literal = 'return value + 1;'
+
+[[match]]
+name = 'wrapadd #2: on wraps the unsigned sum before the sign extension'
+count = 4
+literal = 'return (int4)((uint4)value + 1);'

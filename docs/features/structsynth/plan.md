@@ -134,12 +134,12 @@ was made dense).
 
 ## 6. Tests and gates
 
-- `tests/stages/structsynth-param-struct.xml` — two-pass, hand-assembled x86-64
+- `tests/stages/structsynth-param-struct.toml` — two-pass, hand-assembled x86-64
   bytechunk, six assertions in the console vocabulary (`int4`/`uint1`).
-- `tests/stages/structsynth-overlap-layout.xml` — two-pass, the interior access
+- `tests/stages/structsynth-overlap-layout.toml` — two-pass, the interior access
   that must not become a field; its assertion #5 (`field_0x4` must not appear)
   fails with `Evidence::prune` ablated.
-- `tests/stages/structsynth-hole-member.xml` — two-pass, an offset nobody
+- `tests/stages/structsynth-hole-member.toml` — two-pass, an offset nobody
   dereferences but the body names anyway; with the hole filler ablated,
   assertions #4 and #5 fail while #3 (the body naming it) still passes, which is
   the bug.

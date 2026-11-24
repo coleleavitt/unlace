@@ -1,0 +1,80 @@
+# Authored switch probe: tag 1 and unsigned tags above 3 reach the RET
+# shared with tag 3, which alone toggles the third byte. Before the fix,
+# declaring [0x401000,0x401039) makes only cases 0 and 2 print; the third-byte
+# store runs after the switch for tag 1 and out-of-range tags as well as tag 3.
+#
+# P2 lift/flow strict correctness fix; no new option. A visited instruction
+# at the inclusive function end joins its existing block instead of being
+# decoded again in the last case. Both early-return edges retain the RET.
+# Both P8 structurers and returndup on/off must preserve case 3 (#1).
+# The CLI native round trip additionally checks all three byte writes,
+# duplicate return entries, separate RETs, signed guards and a post-switch
+# write. Bytes assembled from unlace-cli/tests/fixtures/switch_return_paths.S.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'toggle_dispatch' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+readonly = true
+hex = '''
+83fe0377334863c641b8000040008b1485
+002040004c01c2ffe2803f000f94c08807
+c3807f01000f94c0884701c3807f0200
+0f94c0884702c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402000'
+readonly = true
+hex = '1a10000038100000231000002e100000'
+
+[script]
+commands = [
+    'function bounds 0x401000 0x401039 as toggle_dispatch',
+    'parse line typedef struct ToggleFlags { bool first; bool second; bool last; } ToggleFlags;',
+    'parse line extern void toggle_dispatch(ToggleFlags *flags, unsigned int tag);',
+    'option regionstructure off',
+    'option returndup off',
+    'lo fu toggle_dispatch',
+    'decompile',
+    'print C',
+    'option returndup on',
+    'decompile',
+    'print C',
+    'option regionstructure on',
+    'decompile',
+    'print C',
+    'option returndup off',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'switch-return-paths #1: tag 3 keeps its own case in all configurations'
+count = 4
+literal = 'case 3:'
+
+[[match]]
+name = 'switch-return-paths #2: first byte toggle'
+count = 4
+literal = 'flags->first = flags->first == 0;'
+
+[[match]]
+name = 'switch-return-paths #3: second byte toggle'
+count = 4
+literal = 'flags->second = flags->second == 0;'
+
+[[match]]
+name = 'switch-return-paths #4: third byte toggle stays inside case 3'
+count = 4
+literal = [
+    'case 3:',
+    'flags->last = flags->last == 0;',
+]

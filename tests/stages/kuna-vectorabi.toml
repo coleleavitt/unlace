@@ -1,0 +1,151 @@
+# Kuna (IDA 9.5 avxlifter design, SysV vector ABI): P2/P4, options
+# vexzeroupper, lanefuse and vectorabi (all default on). The script loads the
+# committed vectorabi/vec_x86_64.so (gcc -O2 -mavx2 -mfma -mavx512f, source and
+# command beside it).
+#
+# Asserts #1-#3 are the off pass (all three options off): no vector argument,
+# the lanes of VADDPS print one by one, and the ZMM-widened ymm0 reads back
+# through SUB6432. Asserts #4-#10 are the on pass: __m128/__m256/__m512
+# arguments and returns, the lane run fused to _mm256_add_ps, FMA, and the
+# AVX-512 merge and zero masks folded into _mm512_mask[z]_add_ps. Asserts
+# #11-#14 load the legacy-SSE build (sse_x86_64.so): addps fuses by default,
+# paddd keeps its lanes until `option lanefuse all`, which also fuses mulpd.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/vectorabi/vec_x86_64.so',
+    'option vexzeroupper off',
+    'option lanefuse off',
+    'option vectorabi off',
+    'read symbols',
+    'load function addv',
+    'decompile',
+    'print C',
+    'load function addi',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/vectorabi/vec_x86_64.so',
+    'option vexzeroupper on',
+    'option lanefuse on',
+    'option vectorabi on',
+    'read symbols',
+    'load function addv',
+    'decompile',
+    'print C',
+    'load function addi',
+    'decompile',
+    'print C',
+    'load function fma3',
+    'decompile',
+    'print C',
+    'load function madd',
+    'decompile',
+    'print C',
+    'load function maddz',
+    'decompile',
+    'print C',
+    'load function add128',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/vectorabi/sse_x86_64.so',
+    'read symbols',
+    'load function add128',
+    'decompile',
+    'print C',
+    'load function add128i',
+    'decompile',
+    'print C',
+    'option lanefuse all',
+    'load function add128i',
+    'decompile',
+    'print C',
+    'load function mul128d',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'vectorabi #1: off, addv takes and returns 8-byte scalars'
+count = 1
+regex = '^unsigned long addv\((unsigned long|uint8) a0,(unsigned long|uint8) a1\)'
+
+[[match]]
+name = 'vectorabi #2: off, the VADDPS lanes print as scalar lanes packed into a CONCAT44 (and the default legacy paddd)'
+count = 2
+literal = 'return CONCAT44('
+
+[[match]]
+name = 'vectorabi #3: off, ymm0 is read back out of the widened zmm0'
+count = 1
+literal = 'SUB6432('
+
+[[match]]
+name = 'vectorabi #4: on, the lane run is one intrinsic with __m256 in and out'
+count = 1
+regex = '^__m256 addv\(__m256 a0,__m256 a1\)'
+
+[[match]]
+name = 'vectorabi #5: on, addv returns the fused add'
+count = 1
+literal = 'return _mm256_add_ps(a0,a1);'
+
+[[match]]
+name = 'vectorabi #6: on, integer vectors are __m256i'
+count = 1
+regex = '^__m256i addi\(__m256i a0,__m256i a1\)'
+
+[[match]]
+name = 'vectorabi #7: on, all three FMA vectors are arguments'
+count = 1
+literal = 'return _mm256_fmadd_ps(a0,a1,a2);'
+
+[[match]]
+name = 'vectorabi #8: on, the merge mask folds into the intrinsic'
+count = 1
+regex = 'return _mm512_mask_add_ps\(a0,a\d,a\d,a\d\);'
+
+[[match]]
+name = 'vectorabi #9: on, EVEX.z gives the zero-masking form'
+count = 1
+regex = 'return _mm512_maskz_add_ps\(a\d,a\d,a\d\);'
+
+[[match]]
+name = 'vectorabi #10: on, a VEX.128 add and a legacy SSE addps are __m128 in and out (one VEX, one SSE)'
+count = 2
+regex = '^__m128 add128\(__m128 a0,__m128 a1\)'
+
+[[match]]
+name = 'vectorabi #11: the 128-bit float adds fuse to _mm_add_ps'
+count = 2
+literal = 'return _mm_add_ps(a0,a1);'
+
+[[match]]
+name = 'vectorabi #12: legacy SSE paddd keeps its lanes at the default'
+count = 1
+regex = '^unsigned long add128i\('
+
+[[match]]
+name = 'vectorabi #13: lanefuse all fuses SSE2 integer code'
+count = 1
+regex = '^__m128i add128i\(__m128i a0,__m128i a1\)'
+
+[[match]]
+name = 'vectorabi #14: lanefuse all fuses two-lane doubles'
+count = 1
+literal = 'return _mm_mul_pd(a0,a1);'

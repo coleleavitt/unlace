@@ -363,6 +363,7 @@ kuna_options! { self, p1;
     "importdata" => registered!(crate::printc::ImportData),
     "rangefold" => registered!(crate::kuna_rangefold::RangeFold),
     "pow2select" => registered!(crate::kuna_selectdiv::Pow2Select),
+    "satconvert" => registered!(crate::kuna_satconvert::SatConvert),
     "fpargboxed" => registered!(crate::kuna_boxedcompare::FpArgBoxed),
     "castimplied" => registered!(crate::kuna_castimplied::CastImplied),
     "castsign" => registered!(crate::kuna_castsign::CastSign),

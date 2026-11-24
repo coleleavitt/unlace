@@ -31,7 +31,7 @@ structure-recovery`, tier `transform`, default `off`. Registered in
   contradicted claim at the same offset and one over the same bytes at a
   different offset, a single shared claim, the growth bound, the unclaimed-bytes
   veto, and `off` minting a record per reader.
-* `tests/stages/structmerge-siblings.xml` -- two arms over the same four
+* `tests/stages/structmerge-siblings.toml` -- two arms over the same four
   hand-assembled readers: with `option structmerge off` each of the first pair
   keeps its own record and re-deciding the first changes nothing; with
   `siblings` the second pair is answered by the union and re-deciding the first

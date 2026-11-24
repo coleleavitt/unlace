@@ -898,8 +898,16 @@ instruction named from the decoder's `Unimpl` text (mnemonic and operands, else
 `instruction`). The decompile drive does the same for a DWARF register local
 that `seed_dwarf_register_locals` could not bind (chapter 01): a header warning
 `debuginfo: DWARF local <name> (range from 0x...) not bound: no write of its
-register reaches it`. Both tags are lowercase, so the printer's warning
-records file them under the kinds `notmodelled` and `debuginfo`, and the CLI's
+register reaches it`. A prototype the load withheld is recorded once per image
+in the architecture table `WithheldPrototypes` (by entry address, else by name,
+with its cause): a library signature declaring a `float` or `double` on a
+target whose convention does not return a `double` whole (the libc tables'
+load-time partition, a declared libc function, the ARM list `armfloatreturn`
+does not apply), and a DWARF signature `build_pieces` could not type. The
+decompile's seed (`kuna_honestgaps.rs (seed)`) names it as
+`withheldproto: ...; not applied` in the header of the function it belongs to
+and at each call whose callee it is. The tags are lowercase, so the printer's warning
+records file them under the kinds `notmodelled`, `debuginfo` and `withheldproto`, and the CLI's
 `--json` lists them with the rest and totals every kind in `warning_kinds`
 (`docs/cli.md`). Off by default because the extra comments change the text of
 every function with such a gap; the losses that already print (decode-failure

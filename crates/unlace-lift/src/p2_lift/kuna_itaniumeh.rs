@@ -59,6 +59,9 @@ pub struct MsvcFunclet {
     pub frame_reg: Option<String>,
     pub frame_offset: u64,
     pub returns: Vec<(u64, u64)>,
+    /// An x86 catch block: the runtime calls it with EBP already the parent's,
+    /// so only the stack pointer moves (by 4) and RDX is not defined.
+    pub x86: bool,
 }
 
 /// An [`MsvcFunclet`] with its registers resolved.
@@ -68,6 +71,7 @@ pub struct FuncletPad {
     pub frame: Option<(Address, int4)>,
     pub frame_offset: u64,
     pub returns: Vec<(u64, u64)>,
+    pub x86: bool,
 }
 
 /// The image's call-site table plus the two registers the unwinder fills at a
@@ -278,26 +282,30 @@ fn define_funclet_frame(
     f: &FuncletPad,
     pad: &Address,
 ) -> KunaResult<()> {
-    let (Some((sp, sp_size)), Some((rdx, rdx_size))) = (&table.stack_reg, &table.establisher_reg)
-    else {
+    let Some((sp, sp_size)) = &table.stack_reg else {
         return Ok(());
     };
-    let (frame, frame_size) = match &f.frame {
-        Some((a, s)) => (a, *s),
-        None => (sp, *sp_size),
-    };
-    let establisher = data.new_op(2, pad.clone());
-    data.op_set_opcode_code(establisher, OpCode::CPUI_INT_SUB);
-    let src = data.new_varnode(frame_size, frame, None);
-    data.op_set_input(establisher, src, 0)?;
-    let off = data.new_constant(frame_size, f.frame_offset);
-    data.op_set_input(establisher, off, 1)?;
-    data.new_varnode_out(*rdx_size, rdx, establisher)?;
+    if !f.x86 {
+        let Some((rdx, rdx_size)) = &table.establisher_reg else {
+            return Ok(());
+        };
+        let (frame, frame_size) = match &f.frame {
+            Some((a, s)) => (a, *s),
+            None => (sp, *sp_size),
+        };
+        let establisher = data.new_op(2, pad.clone());
+        data.op_set_opcode_code(establisher, OpCode::CPUI_INT_SUB);
+        let src = data.new_varnode(frame_size, frame, None);
+        data.op_set_input(establisher, src, 0)?;
+        let off = data.new_constant(frame_size, f.frame_offset);
+        data.op_set_input(establisher, off, 1)?;
+        data.new_varnode_out(*rdx_size, rdx, establisher)?;
+    }
     let push = data.new_op(2, pad.clone());
     data.op_set_opcode_code(push, OpCode::CPUI_INT_SUB);
     let cur = data.new_varnode(*sp_size, sp, None);
     data.op_set_input(push, cur, 0)?;
-    let eight = data.new_constant(*sp_size, 8);
+    let eight = data.new_constant(*sp_size, *sp_size as u64);
     data.op_set_input(push, eight, 1)?;
     data.new_varnode_out(*sp_size, sp, push)?;
     let caught: Vec<String> = table
@@ -400,6 +408,7 @@ mod tests {
                 frame: None,
                 frame_offset: 0,
                 returns: vec![(0x10ea, 0x10be)],
+                x86: false,
             }],
         );
         let pads: Vec<u64> = t.msvc_sites_at(0x10b8).iter().map(|s| s.pad).collect();

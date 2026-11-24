@@ -5094,8 +5094,16 @@ parent's frame. The funclet's `ret` with a known continuation becomes a
 `BRANCH` to it, so the handler rejoins the parent and the printer shows
 `try { ... } catch (Err &) { <funclet body> }` through the Itanium forms
 above. When the funclet is decompiled on its own, its entry gets no pad
-definitions and its `ret` stays a return. x64 only; x86 C++ handlers are not
-spliced.
+definitions and its `ret` stays a return.
+
+An x86 C++ function (`kuna_msvcseh.rs (x86_splice)`) keeps its EH state in
+`[ebp-4]` instead of an IP map, so its regions come from the state stores
+(`mov dword/byte [ebp-4], n`, `and dword [ebp-4], 0`, `or dword [ebp-4], -1`)
+between the function start and its first catch block (at most 16 KiB), in
+layout order, the function starting in state -1. Its catch blocks lie in the
+function and are called by the runtime with EBP already the parent's, so the pad
+only drops ESP by 4 (no RDX), and a block is used when it ends in
+`mov eax, <continuation in the function>; ret`, whose `ret` then branches there.
 
 **(kuna) x64 SEH `__except` blocks as pads** (`msvceh`;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvcseh.rs (x64_scopes)`).

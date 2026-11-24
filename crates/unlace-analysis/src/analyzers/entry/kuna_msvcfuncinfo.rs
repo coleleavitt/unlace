@@ -255,6 +255,7 @@ fn splice_sites(
                     frame_reg: frame_reg.clone(),
                     frame_offset,
                     returns,
+                    x86: false,
                 });
             }
             let selector = k as i64 + 1;

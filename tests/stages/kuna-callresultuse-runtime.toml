@@ -1,0 +1,87 @@
+# kuna: under `callresultuse on`, the Objective-C and Swift runtime's
+# entry points say by their name which register they take their object in
+# (p4_calls/kuna_callresultuse.rs, runtime_entry).
+#
+# Stage / sub-stage: P4 parameter recovery, the evidence a hand-off of the
+# first result register needs from its next callee (takes_argument).
+#
+# Source (clang -target aarch64-linux-gnu; g, h and the runtime entry
+# points are symbols without bytes, g declared `long g(long)`):
+#
+#     relx19: stp x29,x30,[sp,#-16]!; mov x29,sp
+#             bl g; bl objc_release_x19
+#             ldp x29,x30,[sp],#16; ret
+#     rarv:   stp x29,x30,[sp,#-16]!; mov x29,sp
+#             bl h; mov x29,x29; bl objc_retainAutoreleasedReturnValue
+#             ldp x29,x30,[sp],#16; ret
+#
+# The bug: g's declared result is in x0 when objc_release_x19 is called,
+# so the result was taken for its argument (`objc_release_x19(g(a0))`),
+# but the entry point takes its object in x19 and never reads x0.  And
+# nothing was known of h, so h's result in x0 was not handed to
+# objc_retainAutoreleasedReturnValue, which takes its object in x0 by the
+# ARC runtime's ABI.
+#
+# The fix: the register-specific entry points (objc_retain_x<N>,
+# objc_release_x<N>, swift_retain_x<N>, swift_release_x<N>) say no for x0,
+# and the x0 entry points (objc_retainAutoreleasedReturnValue, objc_release,
+# swift_release, objc_msgSend, ...) say yes.  Off, neither changes.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'relx19' },
+    { space = 'ram', offset = '0x1018', name = 'rarv' },
+    { space = 'ram', offset = '0x2000', name = 'g' },
+    { space = 'ram', offset = '0x2100', name = 'objc_release_x19' },
+    { space = 'ram', offset = '0x2200', name = 'h' },
+    { space = 'ram', offset = '0x2300', name = 'objc_retainAutoreleasedReturnValue' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = 'fd7bbfa9fd030091fe0300943d040094fd7bc1a8c0035fd6fd7bbfa9fd03009178040094fd031daab6040094fd7bc1a8c0035fd6'
+
+[script]
+commands = [
+    'parse line extern long g(long a);',
+    'option callresultuse on',
+    'lo fu relx19',
+    'decompile',
+    'print C',
+    'lo fu rarv',
+    'decompile',
+    'print C',
+    'option callresultuse off',
+    'lo fu rarv',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CALLRESULTUSE-RUNTIME #1: on, objc_release_x19 does not take the x0 a declared callee left'
+count = 1
+regex = '^  objc_release_x19\(\);'
+
+[[match]]
+name = 'CALLRESULTUSE-RUNTIME #2: on, objc_retainAutoreleasedReturnValue takes the x0 an unknown callee left'
+count = 1
+literal = 'objc_retainAutoreleasedReturnValue(h())'
+
+[[match]]
+name = 'CALLRESULTUSE-RUNTIME #3: off, the hand-off to objc_retainAutoreleasedReturnValue is lost'
+count = 1
+regex = '^  objc_retainAutoreleasedReturnValue\(\);'
+
+[[match]]
+name = 'CALLRESULTUSE-RUNTIME #4: g is called once, as a statement'
+count = 1
+literal = 'g('
+
+[[match]]
+name = 'CALLRESULTUSE-RUNTIME #5: relx19 and rarv stay void'
+count = 3
+regex = '^void (relx19|rarv)\('

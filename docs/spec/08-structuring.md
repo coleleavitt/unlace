@@ -527,7 +527,7 @@ the re-analysed functions. At `2`, eight functions change and gotos rise by
 four, but the affected functions are large enough that the second analysis
 costs +8% (grep) and +26% (libselinux) of whole-binary time. `off` makes
 `record_hits`, the seed and the budget clamp inert, so the output is
-byte-identical to the uncapped form. Witness: `tests/stages/kuna-condstmts.xml`.
+byte-identical to the uncapped form. Witness: `tests/stages/kuna-condstmts.toml`.
 
 **Goto selection (the pathological case).** When the cascade stalls with more
 than one component live, `blockaction.rs (CollapseStructure::select_goto)`

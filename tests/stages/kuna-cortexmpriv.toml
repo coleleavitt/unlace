@@ -1,0 +1,75 @@
+# kuna `option cortexmpriv` (default-OFF opt-in, ON in the `aggressive` preset),
+# P2 lift/inline-inject: the synthesized `isCurrentModePrivileged`
+# `<callotherfixup>` registered in `infra/architecture.rs`
+# (`register_cortexmpriv_fixup`) and consumed at
+# `infra/decompile_drive.rs is_injected_userop`.
+#
+# ARMTHUMBinstructions.sinc models every VERSION_7M (Cortex-M) special-register
+# move as a RUNTIME privilege test rather than as one operation:
+#
+#     b:1 = isCurrentModePrivileged();
+#     if (!b) goto <notPriv>;
+#     <the real effect>
+#   <notPriv>
+#
+# Twelve constructors do it (mrs/msr against ipsr, primask, basepri,
+# basepri_max, faultmask, control), so EVERY MRS/MSR costs one extra basic
+# block and two extra CFG edges that exist in no source.  Upstream Ghidra has
+# the same defect; IDA and Binary Ninja model MRS/MSR as a plain intrinsic.
+#
+# Witness (self-contained, 6 bytes at 0x1000, Thumb):
+#
+#     f3ef 8011   mrs r0,basepri     ; the guarded constructor
+#     4770        bx  lr
+#
+# Pass 1 (default, cortexmpriv off): the bug - the read is wrapped in the
+# privilege test, so a straight-line two-instruction function comes back with a
+# branch and the user-op named in the emitted C.  Assertions #1 and #2.
+# Pass 2 (option cortexmpriv on): the fix - the guard folds to the constant 1,
+# its block and edges die, and the bare `getBasePriority()` read survives.
+# Assertions #3 and #4.
+
+[image]
+arch = 'ARM:LE:32:Cortex'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'read_basepri' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = 'eff311807047'
+
+[script]
+commands = [
+    'set context TMode 1 [ram,0x1000] [ram,0x1010]',
+    'option cortexmpriv off',
+    'lo fu read_basepri',
+    'decompile',
+    'print C',
+    'option cortexmpriv on',
+    'lo fu read_basepri',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CORTEXMPRIV #1: OFF leaves the privilege user-op in the emitted C (pass 1 only)'
+count = 1
+literal = 'isCurrentModePrivileged()'
+
+[[match]]
+name = 'CORTEXMPRIV #2: OFF turns a straight-line special-register read into a branch (pass 1 only)'
+count = 1
+regex = '^  if \('
+
+[[match]]
+name = 'CORTEXMPRIV #3: the real effect survives in BOTH passes'
+count = 2
+literal = 'getBasePriority()'
+
+[[match]]
+name = 'CORTEXMPRIV #4: ON folds the guard away, leaving one unconditional read (pass 2 only)'
+count = 1
+regex = '^  return getBasePriority\(\);'

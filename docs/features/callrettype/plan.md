@@ -38,7 +38,7 @@
   compiles every printed fixture function with gcc and clang at -O0 and -O2,
   option off and on, and checks the program's output; the `cached` control
   pins the tie shape.
-- Negative control stage test `tests/stages/kuna-callrettype.xml`; CLI probes
+- Negative control stage test `tests/stages/kuna-callrettype.toml`; CLI probes
   `tests/cli/callrettype-*.json`.
 - castbench full, typesweep (444 slices), whole-corpus hunks
   (`corpus.py`, `hunkclass.py`), speed (`speed.py`): `record.json`.

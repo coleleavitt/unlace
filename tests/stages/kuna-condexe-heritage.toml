@@ -1,0 +1,56 @@
+# Conditional execution: an op with no readers in a heritaged space.
+#
+# ConditionalExecution (condexe.rs, ported from decompiler/cpp/condexe.cc)
+# removes a block that re-tests a condition its dominator already decided.
+# An op in that block whose output has no readers may go only once its
+# space has had a heritage pass (buildHeritageArray). That array was
+# hard-wired to false, so such a block was never removed.
+#
+# Authored x86-64 (nasm):
+#
+#     test edi,edi ; je L1 ; mov dword [rsi],1
+# L1: test edi,edi ; je L2 ; mov dword [rsi+4],2
+# L2: ret
+#
+# `deadcode delay register 50` keeps the unread flag writes of the second
+# `test` alive past dead-code removal, so they reach the removability test.
+#
+# Fixed: both stores sit under one `if (x)`.
+# Before: `if (x) *p = 1; ... if (x) p[1] = 2;` - two tests.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'f' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '85ff7406c70601000000c74424f80500000085ff7407c7460402000000c3'
+
+[script]
+commands = [
+    'parse line extern void f(int4 x, int4 *p);',
+    'deadcode delay register 50',
+    'lo fu f',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CONDEXE #1: the re-test is removed, one if guards both stores'
+count = 1
+literal = 'if (x) {'
+
+[[match]]
+name = 'CONDEXE #2: no second test of x'
+count = 1
+literal = 'if (x)'
+
+[[match]]
+name = 'CONDEXE #3: no unbraced single-store if remains'
+count = 0
+regex = 'if \(x\)$'

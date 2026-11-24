@@ -99,6 +99,7 @@ pub mod kuna_coldentry;
 pub mod kuna_cortexmvectors;
 pub mod kuna_ehcold;
 pub mod kuna_fdeinterior;
+mod kuna_initterm;
 pub mod kuna_itaniumeh;
 pub mod kuna_machoehframe;
 pub mod kuna_msvceh;

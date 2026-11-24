@@ -5223,7 +5223,7 @@ impl PrintC {
             return None;
         };
         let sb = fd.sblocks_ref();
-        if sb.block(block).get_type() != BlockType::Copy {
+        if sb.block(block).get_type() != crate::block::BlockType::Copy {
             return None;
         }
         let cbranch = fd.bb_op_tail(sb.block(block).get_copy()?).filter(|op| {

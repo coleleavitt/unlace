@@ -112,6 +112,9 @@ pub(super) fn pe_entry_candidates(
         _ => {}
     }
 
+    // Oracle 6: the CRT initializer tables a PE32 hands to `_initterm`.
+    super::kuna_initterm::initterm_entries(file, bytes, execs, &mut out);
+
     out
 }
 

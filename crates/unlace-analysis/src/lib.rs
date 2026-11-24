@@ -56,6 +56,7 @@ pub mod image_bytes;
 pub mod listing;
 pub mod loader;
 pub mod loadimage_cil;
+pub mod loadimage_class;
 pub mod loadimage_dex;
 pub mod loadimage_mz;
 pub mod loadimage_object;

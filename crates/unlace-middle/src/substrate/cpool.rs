@@ -192,6 +192,12 @@ impl CPoolRecord {
         }
     }
 
+    /// (kuna `jvmmodel`) The record with constant `value` (a `PRIMITIVE`'s).
+    pub fn with_value(mut self, value: uintb) -> CPoolRecord {
+        self.value = value;
+        self
+    }
+
     /// Get the type of record (C++ `getTag`).
     #[inline]
     pub fn get_tag(&self) -> uint4 {

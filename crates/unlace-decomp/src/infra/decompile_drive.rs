@@ -4310,6 +4310,12 @@ fn emit_inject(
         {
             crate::kuna_dex::emit_range(context, emit)
         }
+        None if !arch.jvm_models().is_empty()
+            && payload.core().get_type() == crate::pcodeinject::CALLOTHERFIXUP_TYPE
+            && crate::kuna_jvm::is_payload(&payload.core().get_name()[..]) =>
+        {
+            crate::kuna_jvm::emit_payload(arch, &payload.core().get_name()[..], context, emit)
+        }
         None => arch.translate().fetch_inject_pcode(
             payload.core().get_name(),
             payload.core().get_type(),

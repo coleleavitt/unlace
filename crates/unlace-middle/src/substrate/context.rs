@@ -737,6 +737,9 @@ pub struct ArchContext {
     /// (kuna `dexmodel`) The loaded DEX file's constant pool and register
     /// payloads; `None` for any other image or with the option off.
     pub dex: Option<Rc<crate::kuna_dex::DexModel>>,
+    /// (kuna `jvmmodel`) The class file holding the function, when it is a
+    /// method of a loaded class.
+    pub jvm: Option<Rc<crate::kuna_jvm::JvmModel>>,
     /// (kuna) `callmechanisms auto` — only return payloads whose stored slot the next instruction
     /// reloads, forwarded into that reload when possible.
     pub call_mechanism_reload_only: bool,
@@ -1193,6 +1196,7 @@ impl ArchContext {
             kuna_states: Default::default(),
             call_mechanism_effects: false,
             dex: None,
+            jvm: None,
             call_mechanism_reload_only: false,
             manage,
             min_laned_register_size: 4,
@@ -1451,9 +1455,12 @@ impl ArchContext {
             .map(|t| t as &dyn crate::dtype::TypeFactory)
     }
 
-    /// (kuna `dexmodel`) The constant-pool record for `refs` (C++
-    /// `glb->cpool->getRecord`).  Only a DEX image has a pool.
+    /// (kuna `dexmodel`, `jvmmodel`) The constant-pool record for `refs` (C++
+    /// `glb->cpool->getRecord`).  Only a DEX image or a class file has a pool.
     pub fn cpool_record(&self, refs: &[u64]) -> Option<Rc<crate::cpool::CPoolRecord>> {
+        if let Some(jvm) = self.jvm.as_ref() {
+            return jvm.record(refs, self.types()?);
+        }
         self.dex.as_ref()?.record(refs, self.types()?)
     }
 

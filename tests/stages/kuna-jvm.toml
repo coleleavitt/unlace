@@ -1,0 +1,56 @@
+# Kuna Java class-file loader (jvmmodel): the committed class built from
+# tests/stages/fixtures/jvm/Hello.java, and the same class in a JAR, load
+# with the JVM spec. The constant pool names the methods, fields and strings
+# the invoke, field and ldc payloads reference; each method's descriptor is its
+# signature, its arguments arriving through the uponentry copies.
+
+[image]
+arch = 'JVM:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x0', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x0'
+readonly = true
+hex = 'b1'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/jvm/Hello.class',
+    'option setlanguage java-language',
+    'read symbols',
+    'load function demo::Hello::add',
+    'decompile',
+    'print C',
+    'load function demo::Hello::getValue',
+    'decompile',
+    'print C',
+    'load function demo::Hello::greet',
+    'decompile',
+    'print C',
+    'load function demo::Hello::pick',
+    'decompile',
+    'print C',
+    'load function demo::Hello::bump',
+    'decompile',
+    'print C',
+    'load function demo::Hello::fill',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/jvm/hello.jar',
+    'option setlanguage java-language',
+    'read symbols',
+    'load function demo::Hello::mulWide',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'jvm #1: a static method takes its descriptor as its signature'
+count = 1
+literal = 'int add(int param_1,int param_2)'

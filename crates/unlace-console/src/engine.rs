@@ -2646,6 +2646,22 @@ impl ConsoleProgram {
             crate::assertions::park_prototype(self, &target, &mut pieces, proto_model.as_ref());
             self.set_pending_prototype(&function.name, pieces);
         }
+        let classes = self.arch().jvm_models().to_vec();
+        for (model, method) in classes
+            .iter()
+            .flat_map(|m| m.methods.iter().map(move |f| (m, f)))
+        {
+            let Ok(mut pieces) = model.method_prototype(method, self.arch().types()) else {
+                continue;
+            };
+            let proto_model = self.arch().get_model("__stdcall").cloned();
+            let target = crate::assertions::ProtoTarget::At(
+                Address::new(Rc::clone(&space), method.addr),
+                method.name.clone(),
+            );
+            crate::assertions::park_prototype(self, &target, &mut pieces, proto_model.as_ref());
+            self.set_pending_prototype(&method.name, pieces);
+        }
     }
 
     /// Register a console-created function symbol (the `map function` hook): make
@@ -5615,6 +5631,9 @@ pub(crate) fn bootstrap_image(
         })?;
         let _load = enter_load(options, from_env);
         bootstrap_dex_bytes(path, bytes, target, languages)
+    } else if let Some(bytes) = file_class_image(path) {
+        let _load = enter_load(options, from_env);
+        bootstrap_class_bytes(path, bytes, target, languages)
     } else if let Some(bytes) = file_mz_dos_image(path) {
         let _load = enter_load(options, from_env);
         bootstrap_mz_bytes(path, &bytes, target, languages, isa)
@@ -6008,6 +6027,21 @@ fn reader_is_te_image(reader: &mut impl std::io::Read) -> std::io::Result<bool> 
     }
 }
 
+/// (kuna `jvmmodel`) The bytes of a Java class file or JAR at `path`.
+fn file_class_image(path: &str) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let mut prefix = [0u8; 10];
+    std::fs::File::open(path)
+        .ok()?
+        .read_exact(&mut prefix)
+        .ok()?;
+    if !unlace_decomp::kuna_jvm::is_class(&prefix) && !prefix.starts_with(b"PK\x03\x04") {
+        return None;
+    }
+    let bytes = std::fs::read(path).ok()?;
+    unlace_analysis::loadimage_class::is_class_image(&bytes).then_some(bytes)
+}
+
 fn file_is_dex(path: &str) -> bool {
     use std::io::Read;
     let mut prefix = [0u8; 0x70];
@@ -6075,6 +6109,64 @@ pub(crate) fn bootstrap_dex_bytes(
     arch.dex = models;
     // The file is immutable at run time, so a switch payload's key and size
     // fold to the constants a jump-table model needs.
+    arch.readonlypropagate = true;
+    let description = arch.get_description().to_string();
+    let mut program = empty_program(sleigh, registry, ProgramContainer::Dex, description);
+    program.symbols = SymbolStream::from_loader(symbols);
+    apply_readonly_ranges(&mut program, &readonly_ranges);
+    program.read_loader_symbols()?;
+    program.pending_dex_prototypes = true;
+    Ok(program)
+}
+
+/// (kuna `jvmmodel`) Bootstrap a Java class file, or a JAR's `.class` members:
+/// each method's code mapped read-only for the JVM spec, one function per
+/// method with code, and a [`unlace_decomp::kuna_jvm::JvmModel`] per class that
+/// the engine asks for constant-pool records and payloads. The method
+/// prototypes are locked at the analysis commit, after the `option` lines.
+pub(crate) fn bootstrap_class_bytes(
+    path: &str,
+    bytes: Vec<u8>,
+    target: &str,
+    languages: &(impl Languages + ?Sized),
+) -> KunaResult<ConsoleProgram> {
+    let target = unlace_analysis::loadimage_object::explicit_language_target(target).unwrap_or("");
+    let registry = build_registry();
+    let language = unlace_analysis::loadimage_class::JVM_LANGUAGE;
+    let models = unlace_analysis::loadimage_class::load_class_models(bytes)?;
+    let mut loader = unlace_analysis::loadimage_class::ClassLoadImage::new(path, models.clone());
+    let mut sleigh = build_sleigh_for_loader(path, target, languages, &registry, language, None)?;
+    let code_space = default_code_space(&sleigh)?;
+    loader.attach_to_space(Rc::clone(&code_space));
+    let readonly_ranges = loader_readonly_ranges(&loader, sleigh.base().unwrap().manage());
+    let symbols = models
+        .iter()
+        .flat_map(|model| model.methods.iter())
+        .map(|method| ProgramSymbol {
+            ordinal: 0,
+            name: method.name.clone(),
+            addr: Address::new(Rc::clone(&code_space), method.addr),
+            object_location: None,
+            binding: None,
+            provenance: EntryProvenance::Mapped,
+        })
+        .collect();
+    let arch = sleigh.base_mut().unwrap();
+    arch.set_loader(Box::new(loader));
+    // Ghidra's JavaLoader paints the `alignmentPad` of every code byte; only a
+    // `tableswitch`/`lookupswitch` reads it.
+    for model in &models {
+        for (at, pad) in model.switch_paddings() {
+            let (begin, end) = (
+                Address::new(Rc::clone(&code_space), at),
+                Address::new(Rc::clone(&code_space), at + 1),
+            );
+            let _ = arch.with_context_db_mut(|db| {
+                db.set_variable_region(b"alignmentPad", &begin, &end, pad as u32)
+            });
+        }
+    }
+    arch.jvm = models;
     arch.readonlypropagate = true;
     let description = arch.get_description().to_string();
     let mut program = empty_program(sleigh, registry, ProgramContainer::Dex, description);
@@ -9490,6 +9582,7 @@ pub(crate) enum FileInput {
     Mz(Vec<u8>),
     Te(Vec<u8>),
     Dex(Vec<u8>),
+    Class(Vec<u8>),
     Esp(unlace_analysis::loader::firmware::esp::EspImage),
     Cil(Box<CilImage>),
     Retro(Vec<u8>),
@@ -9520,6 +9613,9 @@ pub(crate) fn classify_file(path: &str) -> KunaResult<FileInput> {
     }
     if unlace_analysis::loadimage_dex::is_dex_image(&bytes) {
         return Ok(FileInput::Dex(bytes));
+    }
+    if unlace_analysis::loadimage_class::is_class_image(&bytes) {
+        return Ok(FileInput::Class(bytes));
     }
     if let Some(image) = unlace_analysis::loader::firmware::esp::parse(&bytes) {
         return Ok(FileInput::Esp(image));

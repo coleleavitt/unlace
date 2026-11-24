@@ -2274,6 +2274,10 @@ pub fn detected_output_language(
             || (head.starts_with(b"PK\x03\x04")
                 && std::fs::read(binary)
                     .is_ok_and(|bytes| unlace_analysis::loadimage_dex::is_apk(&bytes)))
+            || unlace_decomp::kuna_jvm::is_class(head)
+            || (head.starts_with(b"PK\x03\x04")
+                && std::fs::read(binary)
+                    .is_ok_and(|bytes| unlace_analysis::loadimage_class::is_jar(&bytes)))
     }) {
         return Some("java-language");
     }

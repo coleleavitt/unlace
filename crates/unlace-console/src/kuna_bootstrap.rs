@@ -168,6 +168,10 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
             FileInput::Te(bytes) => self.te_bytes(path, &bytes),
             FileInput::Retro(bytes) => self.retro_bytes(path, &bytes),
             FileInput::Dex(bytes) => self.dex_bytes(path, bytes),
+            FileInput::Class(bytes) => {
+                let _load = self.enter();
+                crate::engine::bootstrap_class_bytes(path, bytes, self.target, self.languages)
+            }
             FileInput::Cil(image) => {
                 let _load = self.enter();
                 bootstrap_cil(path, *image, self.languages)

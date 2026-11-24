@@ -3458,6 +3458,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/external-refinement · unlace · analysis-enablement · unlace-analysis-cppsig
 - **Example:** `option cppsig inferred`
 
+### `cppclassargs` -- on | off, default `off`
+
+- **Symptoms:** a this of a std container prints as a bare vector; a template class's this prints without its template arguments; vector *this where std::vector<int> *this is meant.
+- **What it does:** Keep the template arguments of a demangled C++ class name when the `this` of its member functions is typed. The demangled scope `std::vector<int, std::allocator<int> >` is stripped to the bare class `vector`, so `this` prints as `vector *`. With the option on, a template class's `this` is the whole scope as the demangler spells it (`std::vector<int, std::allocator<int> >`), a record of its own, and the printer (with `cppshortnames` on) shows `std::vector<int> *this`. A non-template class, a parameter type and the function name are unchanged. Applies to the proven and inferred tiers of `cppsig`.
+- **When to flip:** Turn on with `cppshortnames` for a C++ binary whose member functions take a std container or other class template as `this`: `std::vector<int> *this` where the default prints `vector *this`. Off by default: the template-named record is new, so a DWARF or demangled type that names the same class bare is not merged with it. Not yet measured on a corpus.
+- **Where / provenance:** P1/external-refinement · unlace · analysis-enablement · unlace-analysis-cppsig
+- **Example:** `option cppclassargs on`
+
 ### `addrtable` -- on | off, default `off`
 
 - **Symptoms:** absolute function-pointer table in rodata never recognized; indirect calls through an unrecovered address table in a stripped target.

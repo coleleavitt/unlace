@@ -312,7 +312,9 @@ impl Action for ActionConstbase {
                 .failure = Some(error.to_string());
             return 0;
         }
-        if let Err(error) = crate::kuna_dex::apply_entry(data) {
+        if let Err(error) =
+            crate::kuna_dex::apply_entry(data).and_then(|_| crate::kuna_jvm::apply_entry(data))
+        {
             data.kuna_state_mut::<crate::kuna_callmechanisms::State>()
                 .failure = Some(error.to_string());
             return 0;

@@ -95,4 +95,7 @@ pub mod kuna_evalcurrentproto;
 // (kuna `dexmodel`) The DEX format, and the constant pool and register payloads
 // a DEX image supplies to the Dalvik spec.
 pub mod kuna_dex;
+// (kuna `jvmmodel`) The Java class-file format, and the constant pool and
+// payloads a class file supplies to the JVM spec.
+pub mod kuna_jvm;
 pub mod kuna_wrappedstackmap;

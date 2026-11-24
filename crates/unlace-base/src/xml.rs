@@ -2350,7 +2350,8 @@ mod tests {
         // and kuna-pairlocal / a long long local on 32-bit x86 joins at its phis (option pairlocal)
         // and kuna-guardedloop-emptybody / a do-while that prints only its test is a while (option guardedloop)
         // and kuna-guardedloop-entryconst / an unsigned counted loop's truthiness guard is its first test
-        assert_eq!(count, 1016, "corpus file count drifted");
+        // and kuna-jvm / a Java class file and a JAR load, the constant pool names their references
+        assert_eq!(count, 1017, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

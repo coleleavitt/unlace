@@ -8908,10 +8908,17 @@ both
   every name in it is a plain identifier; any other spelling goes through the
   demangler, which types only a primary table. The pass runs at the commit, with the deferred entry passes, and only
   when `pdb` and `pdbtypes` are both on, so a default load never reads the type,
-  module or line streams. Default off: it changes the
-  output of every PE with a matching `.pdb`, and the x64 frame math has been
-  measured only on the clang-built fixtures `pdb_types_x86_64` and
-  `pdb_types_i386` (`unlace-console/tests/verify_pdbtypes.rs`).
+  module or line streams. Default off, since it changes the output of every PE
+  with a matching `.pdb`; on in the `aggressive` preset. Measured with
+  `decompile-all --mode aggressive` on Mozilla's MSVC-linked images with their
+  published `.pdb`s, it names 1,795 of 2,069 parameters in `softokn3.dll`
+  (2 without it), 2,880 of 3,186 in `firefox.exe` (82) and 2,546 of 2,802 in
+  `mozglue.dll` (77), fully names 466, 965 and 1,007 signatures (1, 30, 28), and
+  takes no more time; `firefox.exe` gains 2,647 pointer casts where MSVC STL
+  `std::basic_string` locals reach their small-string union. Stripped public
+  `.pdb`s (Microsoft's) carry no types or locals and change nothing. The clang
+  fixtures `pdb_types_x86_64` and `pdb_types_i386`
+  (`unlace-console/tests/verify_pdbtypes.rs`) pin the frame math.
 
   **(kuna) Source lines** (`pdblines`, PE-only, default **off**;
   `crates/unlace-analysis/src/analyzers/pdb/kuna_pdblines.rs`). The PDB twin of

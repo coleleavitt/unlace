@@ -123,7 +123,10 @@ build failure. The options it enables:
   `fid`, `rtti`, `itaniumrtti`, `aif` (at `strict`, the aligned gap cursor; its
   `precise` value adds upstream's corroboration test, which costs more real
   functions than it removes phantoms, and no mode sets it), `objc`, `cfstrings`,
-  `pdb`, `macho-arm64e`
+  `pdb`, `pdbtypes` (types, prototypes and locals from a matching `.pdb`; on
+  Mozilla's MSVC-linked softokn3, firefox and mozglue it names 1,795, 2,880 and
+  2,546 parameters where the binary alone names 2, 82 and 77, at no extra time,
+  and it is inert without a `.pdb`), `macho-arm64e`
 - **analysis tier, ARM entry discovery** (DIV-93): `cortexmvectors`, `ptrentry`,
   `tailcallentry`, `poolentry` — the four-step sequence that takes stripped ARM
   entry recall from 88.63% to 93.31% over the 110 non-x86-64 decbench twins while

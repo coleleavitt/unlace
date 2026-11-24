@@ -2,7 +2,7 @@
 //!
 //! `unlace decompile` and `unlace catalog` run `decomp_dbg`; a parent can also spawn
 //! `decomp_test_dbg`. Either can come from a different build than the `unlace`
-//! that spawned it -- `KUNA_DECOMP_DBG` pointing at another install, or a sibling
+//! that spawned it -- `UNLACE_DECOMP_DBG` pointing at another install, or a sibling
 //! left behind when only `unlace` was rebuilt -- and nothing in the render says so.
 //!
 //! The parent exports the matching [`identity`] as [`PARENT_ENV`]. The child compares it
@@ -25,7 +25,7 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// The environment variable the parent sets to its own [`identity`].
-pub const PARENT_ENV: &str = "KUNA_PARENT_BUILD";
+pub const PARENT_ENV: &str = "UNLACE_PARENT_BUILD";
 
 /// The stderr line prefix a mismatched child answers with.
 pub const REPLY: &str = "kuna-build-mismatch: ";
@@ -171,7 +171,7 @@ mod tests {
             "decomp_dbg",
             Path::new("/opt/kuna-v1.329/decomp_dbg"),
             "1.329 (source 00ff)",
-            Some("KUNA_DECOMP_DBG"),
+            Some("UNLACE_DECOMP_DBG"),
         );
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(lines.len(), 3, "{text}");
@@ -186,7 +186,7 @@ mod tests {
         );
         assert_eq!(
             lines[2],
-            "  decomp_dbg: 1.329 (source 00ff) /opt/kuna-v1.329/decomp_dbg, chosen by KUNA_DECOMP_DBG"
+            "  decomp_dbg: 1.329 (source 00ff) /opt/kuna-v1.329/decomp_dbg, chosen by UNLACE_DECOMP_DBG"
         );
     }
 

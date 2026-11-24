@@ -1309,7 +1309,7 @@ pub fn decompile_pulled(
     }
 }
 
-/// (kuna `protoorder`) Is the park/decline trace on (`KUNA_PROTOORDER_TRACE=1`)?
+/// (kuna `protoorder`) Is the park/decline trace on (`UNLACE_PROTOORDER_TRACE=1`)?
 ///
 /// A run's accept/decline tally is the evidence an operator (or a sweep) needs
 /// to judge what the option actually stated about a binary, and it is not worth

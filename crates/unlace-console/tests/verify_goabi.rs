@@ -8,7 +8,7 @@
 //! where the same function renders `(void)` with never-assigned register
 //! locals and the second result's computation is dead-coded away.
 //!
-//! Its own `[[test]]` target: the off arm travels through `KUNA_GOABI`, a
+//! Its own `[[test]]` target: the off arm travels through `UNLACE_GOABI`, a
 //! process-global environment variable read inside `load file`, and the house
 //! rule is that env-mutating tests never share the `integration` binary.
 
@@ -161,7 +161,7 @@ fn go_image_takes_the_golang_cspec_under_auto_and_gcc_under_off() {
 
     // off: the platform model reads RAX/RBX as scratch — no parameters, and
     // the product (dead under one 8-byte return) is deleted with its multiply.
-    let _guard = EnvGuard::set("KUNA_GOABI", "off");
+    let _guard = EnvGuard::set("UNLACE_GOABI", "off");
     let off = decompile_pair(bin);
     assert!(
         off.contains("main.pair(void)"),

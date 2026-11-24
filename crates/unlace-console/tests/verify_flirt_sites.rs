@@ -54,7 +54,7 @@ fn names_with(flirt: &str, fid: &str, fid_db: Option<PathBuf>) -> Vec<String> {
     let dir = fixtures();
     let specs = dir.join("../../specs").canonicalize().unwrap();
     // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var("KUNA_FLIRT_SIGS", dir.join("flirt/callees.sig")) };
+    unsafe { std::env::set_var("UNLACE_FLIRT_SIGS", dir.join("flirt/callees.sig")) };
     if let Some(db) = fid_db {
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("kuna_fid_db", db) };

@@ -46,7 +46,7 @@ fn spec_roots() -> Vec<String> {
 
 /// Every in-repo fixture is far under the 8 MiB floor, so a plan built here
 /// passes a floor of zero and the lanes really run. A parameter rather than
-/// `KUNA_DECODE_MIN_BYTES`: cargo runs these tests as threads of one process,
+/// `UNLACE_DECODE_MIN_BYTES`: cargo runs these tests as threads of one process,
 /// and writing the environment out from under a sibling's `getenv` is a data
 /// race, not a fixture.
 const NO_SIZE_FLOOR: u64 = 0;

@@ -1187,7 +1187,11 @@ fn branch_block(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<BlockId> {
 }
 
 /// Whether a branch next to the one the low-word compare `op` decides
-/// compares `hi` with the high word that goes with `olo`.
+/// compares `hi` with the high word that goes with `olo`. An ordered low
+/// compare needs both blocks above it to test the high words, one of them
+/// ordered: a 64-bit `<` decides on the high words twice (`jl`, then `jg`
+/// or `jne`) before it reaches the low words, while `hi <= 8 && lo <= 0xb`
+/// over two separate bounds tests them once.
 fn branch_linked(data: &Funcdata, op: OpId, hi: VarnodeId, olo: VarnodeId) -> bool {
     let Some(o) = data.obank().get(op) else {
         return false;
@@ -1222,16 +1226,24 @@ fn branch_linked(data: &Funcdata, op: OpId, hi: VarnodeId, olo: VarnodeId) -> bo
             }
         }
     }
-    near.into_iter().any(|bl| {
-        let Some(&cb) = data.bb_ops(bl).last() else {
-            return false;
-        };
-        data.obank().get(cb).is_some_and(|c| {
-            c.code() == OpCode::CPUI_CBRANCH
-                && c.get_in(1)
-                    .is_some_and(|cond| hi_compare(data, cond, hi, olo, ordered, 0))
-        })
-    })
+    let tests = |kind: bool| {
+        near.iter()
+            .filter(|&&bl| {
+                let Some(&cb) = data.bb_ops(bl).last() else {
+                    return false;
+                };
+                data.obank().get(cb).is_some_and(|c| {
+                    c.code() == OpCode::CPUI_CBRANCH
+                        && c.get_in(1)
+                            .is_some_and(|cond| hi_compare(data, cond, hi, olo, kind, 0))
+                })
+            })
+            .count()
+    };
+    if !ordered {
+        return tests(false) > 0;
+    }
+    tests(true) > 0 && tests(true) + tests(false) >= 2
 }
 
 /// Whether the low-word equality `op` is combined, by a BOOL_AND reading a

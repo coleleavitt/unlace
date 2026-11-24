@@ -736,6 +736,7 @@ CJ1: d32^"("^b_reg^")"^"["^s_reg^"]" is s_mode=4 & s_reg; b_mode=14 & b_reg & b_
 CJ1: "@"^d32^"("^b_reg^")"^"["^s_reg^"]" is s_mode=4 & s_reg; b_mode=15 & b_reg & b_rn<15; d32 [ o2 = o1 + 6; ] { local pa:4 = b_reg + d32; local ea:4 = *:4 pa; ea = ea + s_reg; goto [ea]; }
 CJ1: rel^"["^s_reg^"]" is s_mode=4 & s_reg; b_mode=14 & b_rn=15; d32 [ rel = inst_start + o1 + 6 + d32; o2 = o1 + 6; ] { local ea:4 = rel; ea = ea + s_reg; goto [ea]; }
 CJ1: "@"^rel^"["^s_reg^"]" is s_mode=4 & s_reg; b_mode=15 & b_rn=15; d32 [ rel = inst_start + o1 + 6 + d32; o2 = o1 + 6; ] { local pa:4 = rel; local ea:4 = *:4 pa; ea = ea + s_reg; goto [ea]; }
+CJ1: "#"^ia is s_mode=8 & s_rn=15; i8 [ ia = inst_start + o1 + 1; o2 = o1 + 2; ] { local ea:4 = ia; goto [ea]; }
 :JSB CJ1 is entry=0 & op=0x16; CJ1 [ o1 = 1; ] { SP = SP - 4; *:4 SP = inst_next; build CJ1; SP = SP + 4; }
 :JMP CJ1 is entry=0 & op=0x17; CJ1 [ o1 = 1; ] { build CJ1; }
 :BGEQ BR1_1 is entry=0 & op=0x18; BR1_1 [ o1 = 1; ] { if (!N) goto BR1_1; }
@@ -1789,6 +1790,7 @@ CC2: d32^"("^b_reg^")"^"["^s_reg^"]" is s_mode=4 & s_reg; b_mode=14 & b_reg & b_
 CC2: "@"^d32^"("^b_reg^")"^"["^s_reg^"]" is s_mode=4 & s_reg; b_mode=15 & b_reg & b_rn<15; d32 [ o3 = o2 + 6; ] { local pa:4 = b_reg + d32; local ea:4 = *:4 pa; ea = ea + s_reg; call [ea]; }
 CC2: rel^"["^s_reg^"]" is s_mode=4 & s_reg; b_mode=14 & b_rn=15; d32 [ rel = inst_start + o2 + 6 + d32; o3 = o2 + 6; ] { local ea:4 = rel; ea = ea + s_reg; call [ea]; }
 CC2: "@"^rel^"["^s_reg^"]" is s_mode=4 & s_reg; b_mode=15 & b_rn=15; d32 [ rel = inst_start + o2 + 6 + d32; o3 = o2 + 6; ] { local pa:4 = rel; local ea:4 = *:4 pa; ea = ea + s_reg; call [ea]; }
+CC2: "#"^ia is s_mode=8 & s_rn=15; i8 [ ia = inst_start + o2 + 1; o3 = o2 + 2; ] { local ea:4 = ia; call [ea]; }
 :CALLG A1_1, CC2 is entry=0 & op=0xfa; A1_1; CC2 [ o1 = 1; ] { AP = A1_1; build CC2; }
 :CALLS R1_4, CC2 is entry=0 & op=0xfb; R1_4; CC2 [ o1 = 1; ] { local n:4 = R1_4; SP = SP - 4; *:4 SP = n; build CC2; SP = SP + 4 + n * 4; }
 :XFC is entry=0 & op=0xfc [ o1 = 1; ] { xfc(); }

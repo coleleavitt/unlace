@@ -16,6 +16,8 @@ mod hexagon_hmx;
 mod huc6280;
 #[path = "konami.rs"]
 mod konami;
+#[path = "kvx_raw.rs"]
+mod kvx_raw;
 #[path = "lua54.rs"]
 mod lua54;
 #[path = "m6800_family.rs"]
@@ -27,10 +29,6 @@ mod mips_ase;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 
-#[path = "v60.rs"]
-mod v60;
-#[path = "vax.rs"]
-mod vax;
 
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;

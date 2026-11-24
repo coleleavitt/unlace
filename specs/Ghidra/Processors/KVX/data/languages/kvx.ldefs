@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="KVX"
+            endian="little"
+            size="64"
+            variant="kv3-1"
+            version="1.0"
+            slafile="kvx_kv3_1.sla"
+            processorspec="kvx.pspec"
+            id="KVX:LE:64:kv3-1">
+    <description>Kalray KVX kv3-1 (Coolidge v1), 64-bit mode</description>
+    <compiler name="default" spec="kvx.cspec" id="default"/>
+    <external_name tool="gnu" name="kvx"/>
+  </language>
+  <language processor="KVX"
+            endian="little"
+            size="64"
+            variant="kv3-2"
+            version="1.0"
+            slafile="kvx_kv3_2.sla"
+            processorspec="kvx.pspec"
+            id="KVX:LE:64:kv3-2">
+    <description>Kalray KVX kv3-2 (Coolidge v2), 64-bit mode</description>
+    <compiler name="default" spec="kvx.cspec" id="default"/>
+    <external_name tool="gnu" name="kvx"/>
+  </language>
+</language_definitions>

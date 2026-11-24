@@ -4,10 +4,11 @@
 # of [images] holding hex bytes), its load `base` and its SLEIGH `language` id (a list runs
 # every function once per language). Each [[family.function]] decompiles one address:
 #   unlace decompile <image> <address> --raw-image --target <language> --base <base>
-# A function passes when the run exits 0, its lowercased output contains neither "unimplemented"
-# nor "bad instruction" nor any `forbid` entry (family and function lists add up), and its output
-# contains every `expect` entry (case-sensitive). A function may override `language`; one with
-# `xfail = "<why>"` is a known failure, reported until it passes (then the test fails: drop it).
+# (plus the family's `args`, extra CLI arguments). A function passes when the run exits 0, its
+# lowercased output contains neither "unimplemented" nor "bad instruction" nor any `forbid` entry
+# (family and function lists add up), and its output contains every `expect` entry
+# (case-sensitive). A function may override `language`; one with `xfail = "<why>"` is a known
+# failure, reported until it passes (then the test fails: drop the marker).
 # A new processor family adds a [[family]] here instead of a new *_raw.rs file
 # (docs/processor-tests.md).
 
@@ -86,7 +87,7 @@ fixture = "crates/unlace-cli/tests/fixtures/c28x/addb_lret.bin"
 [[family.function]]
 test = "c28x_add_immediate_and_return_decompiles"
 address = "0x8000"
-xfail = "reads past the 16-byte image: \"Unable to load 16 bytes at r0x00008008\" (also on main at a16f4c0c42)"
+xfail = "reads past the end of its 16-byte image: Unable to load N bytes at r0x00008008 (also on main at a16f4c0c42)"
 
 # The native RCA CDP1802 language (SCRT variant) decompiles a raw image: a
 # store-increment loop through R1 closed by BNZ, returning with SEP R5.
@@ -308,6 +309,30 @@ expect = [
     "return sub_94(a0 + 1) + 2;",
 ]
 
+# The M32C/80 language loads a little-endian raw image of two functions built
+# with `m32c-elf-as` (`fixtures/m32c/mul_div.s`) that use the M32C-only
+# `MUL.L`, `SHANC.L` and `DIVU.L`, and decompiles both.
+[[family]]
+name = "m32c"
+language = "M32C/80:LE:24:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/m32c/mul_div.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "m32c_mul_l_and_shanc_decompile"
+address = "0x0"
+expect = [
+    "a1 * 1000 >> 2",
+]
+
+[[family.function]]
+test = "m32c_divu_l_decompiles"
+address = "0x20"
+expect = [
+    "return a1 / a2;",
+]
+
 # The M32R language loads a big-endian raw image of two hand-assembled
 # functions (a compare-and-branch leaf and a caller using `ld24`, `bl` and
 # the parallel-slot `|| nop` filler) and decompiles both.
@@ -438,6 +463,56 @@ expect = [
     "return a0 - a1;",
 ]
 
+# The Data General Nova language (written from DG's Nova programmer's
+# references) decompiles a hand-assembled, word-addressed raw image.
+[[family]]
+name = "nova"
+language = "Nova:BE:16:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/nova/funcs.bin"
+forbid = ["baddata"]
+
+# ADD 1,0; JMP 0,3
+[[family.function]]
+test = "nova_operate_add"
+address = "0x10"
+expect = [
+    "return a1 + a0;",
+]
+
+# SUBZ# 1,0,SNC; MOV 1,0; JMP 0,3
+[[family.function]]
+test = "nova_subtract_skip_max"
+address = "0x14"
+expect = [
+    "if (a0 < a1)",
+    "a0 = a1;",
+]
+
+# LDA 0,050; LDA 1,051; ADD 1,0; STA 0,052; JMP 0,3 (words; symbols print bytes)
+[[family.function]]
+test = "nova_page_zero_load_store"
+address = "0x18"
+expect = [
+    "dat_54 = dat_52 + dat_50;",
+]
+
+# SAV; ADDZL 0,0; STA 0,-4,3; RET
+[[family.function]]
+test = "nova_rotate_through_carry"
+address = "0x28"
+expect = [
+    "return a0 << 2 |",
+]
+
+# SAV; JSR 020; MFFP 3; STA 0,-4,3; RET
+[[family.function]]
+test = "nova3_frame_call"
+address = "0x38"
+expect = [
+    "return sub_10(a0,a1);",
+]
+
 # The PDP-11 language (written from the DEC handbooks) decompiles a
 # hand-assembled raw image: add(a, b) at 0x1000 and max(a, b) at 0x1010.
 [[family]]
@@ -521,6 +596,56 @@ expect = [
     "sub_1000(a0,7);",
 ]
 
+# The Epson S1C17 and S1C33 languages load little-endian raw images of two
+# hand-assembled functions each (a compare-and-branch leaf whose constant needs
+# the `ext` prefix, and a caller that loads through an `ext` displacement and
+# fills a delayed call's slot) and decompile both.
+[[family]]
+name = "s1c17"
+language = "S1C17:LE:24:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/s1c/s1c17_clamp_call.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "s1c17_ext_extended_compare_decompiles"
+address = "0x0"
+expect = [
+    "a0 + a1 <= 100",
+    "return 100;",
+]
+
+[[family.function]]
+test = "s1c17_delayed_call_with_ext_displacement_decompiles"
+address = "0x10"
+expect = [
+    "[1]",
+    "sub_0(v1,5) ^ 3",
+]
+
+[[family]]
+name = "s1c33"
+language = "S1C33:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/s1c/s1c33_max_call.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "s1c33_ext_extended_add_decompiles"
+address = "0x0"
+expect = [
+    "if (a0 < a1)",
+    "return a0 + 1000;",
+]
+
+[[family.function]]
+test = "s1c33_delayed_call_with_ext_displacement_decompiles"
+address = "0x10"
+expect = [
+    "[2]",
+    "sub_0(v1,3) ^ 0x55",
+]
+
 # The native Signetics 2650 language decompiles a raw image: a BDRR
 # decrement-and-branch loop summing into R0, then an absolute store.
 [[family]]
@@ -581,6 +706,23 @@ expect = [
     "0xfff",  # the pointer wraps in its 4 KiB page
 ]
 
+# The ST20 language decompiles a hand-assembled add/compare/store routine.
+[[family]]
+name = "st20"
+language = "ST20:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/st20/add_store.bin"
+
+[[family.function]]
+test = "st20_add_compare_store_decompiles"
+address = "0x0"
+expect = [
+    "dat_8000 = a0 + 3;",  # the stnl store
+    "0xb <= a0 + 3",  # the gt / cj test
+    "return 5;",  # the taken path
+    "return 0;",  # the fall-back path
+]
+
 # The vendored STM8 languages load a raw image and decompile it.
 [[family]]
 name = "stm8"
@@ -591,9 +733,49 @@ fixture = "crates/unlace-cli/tests/fixtures/stm8/add_store.bin"
 [[family.function]]
 test = "stm8_add_and_store_decompiles_in_both_memory_models"
 address = "0x8000"
-xfail = "reads past the 32-byte image: \"Unable to load 16 bytes at r0x8020\" (also on main at a16f4c0c42)"
+xfail = "reads past the end of its 32-byte image: Unable to load N bytes at r0x8020 (also on main at a16f4c0c42)"
 expect = [
     "10",  # the store to $10 survives
+]
+
+# The native TILE-Gx language decompiles a raw image of hand-assembled bundles:
+# a counted loop, a call with register arguments, a conditional move, a register
+# swap inside one bundle (parallel reads) and a bit-field extract.
+[[family]]
+name = "tilegx"
+language = "TILEGX:LE:64:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/tilegx/bundles.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "tilegx_counted_loop_decompiles"
+address = "0x0"
+expect = [
+    "while",  # the load loop is recovered
+    "+= *",  # the loop accumulates loads
+]
+
+[[family.function]]
+test = "tilegx_call_with_register_arguments_decompiles"
+address = "0x30"
+expect = [
+    "sub_0(5,7) + 1",  # r0/r1 arguments and the r0 result
+]
+
+[[family.function]]
+test = "tilegx_bundle_reads_before_it_writes"
+address = "0x70"
+expect = [
+    "return a1 - a0;",  # the in-bundle swap reads old values
+]
+
+[[family.function]]
+test = "tilegx_conditional_move_decompiles"
+address = "0x60"
+expect = [
+    "a0 < a1",  # cmpltu feeds cmovnez
 ]
 
 # The clean-room Toshiba TLCS-90 language loads a raw image and decompiles it.

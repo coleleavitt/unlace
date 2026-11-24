@@ -38,6 +38,7 @@ expect = [
   `crates/unlace-cli/tests/fixtures/<family>/` with `git add -f` (`.bin` is ignored globally).
 - `image` names an entry of the manifest's `[images]` table instead: hex bytes, whitespace
   ignored, written to a scratch file at test time. Use it for images of a few hundred bytes.
+- `args` on a family adds CLI arguments to every run (`args = ["--addr"]`).
 - A `[[family.function]]` may set its own `language` (or list), and its own `forbid` entries,
   which add to the family's.
 - `xfail = "<why>"` on a function marks a known failure: the run prints it with the reason and

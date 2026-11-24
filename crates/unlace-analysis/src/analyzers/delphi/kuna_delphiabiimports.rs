@@ -8,7 +8,10 @@
 //! pushed word. Each import the resolver names, at its IAT slot and at its
 //! jump thunk, is bound to `__stdcall`. A name exported by a Delphi package
 //! (Borland-mangled, `@Unit@Proc$qqrv`) is Delphi code and keeps the default,
-//! and a C runtime import keeps the `__cdecl` the commit gives it.
+//! and a C runtime import keeps the `__cdecl` the commit gives it. A
+//! delay-load thunk (`__imp_load_<name>`) is the image's own code: it saves
+//! ECX and EDX and jumps to `__tailMerge`, so it is no `__stdcall` callee and
+//! keeps the default; the delay IAT slot it fills is bound like any import.
 //!
 //! Fires only when the image composes the Delphi language id: the
 //! `delphiabi` gate is on and the image is a 32-bit Delphi PE
@@ -20,6 +23,9 @@ use object::read::Object;
 use object::{Architecture, BinaryFormat};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, ModelFact, Phase};
+
+/// The name prefix `pe_iat` gives a delay-load import's load thunk.
+const DELAY_LOAD_THUNK: &str = "__imp_load_";
 
 /// The `delphiabi` import-convention pass. Inert unless the gate is on.
 #[derive(Default)]
@@ -49,14 +55,17 @@ impl AnalysisPass for DelphiAbiImportsPass {
 }
 
 /// A `__stdcall` model fact for every resolved import of `file` that is
-/// neither a Delphi package export nor a C runtime function.
+/// neither a Delphi package export, a C runtime function nor a delay-load
+/// thunk.
 pub(crate) fn stdcall_imports(file: &object::File, bytes: &[u8]) -> Vec<ModelFact> {
     let crt: BTreeSet<String> = crate::loader::pe_iat::c_runtime_import_names(bytes)
         .into_iter()
         .collect();
     crate::protos::resolved_import_addrs(file, bytes)
         .into_iter()
-        .filter(|(name, _)| !name.starts_with('@') && !crt.contains(name))
+        .filter(|(name, _)| {
+            !name.starts_with('@') && !name.starts_with(DELAY_LOAD_THUNK) && !crt.contains(name)
+        })
         .map(|(_, addr)| ModelFact {
             func_addr: addr,
             model: "__stdcall",

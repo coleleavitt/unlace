@@ -20,6 +20,8 @@ mod m6800_family;
 mod mep;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
+#[path = "v60.rs"]
+mod v60;
 
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;
@@ -27,6 +29,8 @@ mod aarch64_rme;
 mod aarch64_sme;
 #[path = "aarch64_sve2.rs"]
 mod aarch64_sve2;
+#[path = "ppc_spe2.rs"]
+mod ppc_spe2;
 #[path = "return_branch_cli.rs"]
 mod return_branch_cli;
 #[path = "riscv_bitmanip.rs"]
@@ -57,6 +61,7 @@ mod rust_signature_summary;
 mod sbpf;
 #[path = "sparc_prologue_start.rs"]
 mod sparc_prologue_start;
+
 #[path = "tricore_tc18.rs"]
 mod tricore_tc18;
 #[path = "upd7725.rs"]
@@ -1033,8 +1038,6 @@ mod nullable_relocations;
 
 #[path = "call_site_prototype.rs"]
 mod call_site_prototype;
-#[path = "processors.rs"]
-mod processors;
 
 #[path = "xrefs_immutable_got.rs"]
 mod xrefs_immutable_got;
@@ -1045,5 +1048,9 @@ mod types_header;
 #[path = "typelib.rs"]
 mod typelib;
 
+#[path = "msvcexport_cli.rs"]
+mod msvcexport_cli;
+#[path = "processors.rs"]
+mod processors;
 #[path = "vexzeroupper_cli.rs"]
 mod vexzeroupper_cli;

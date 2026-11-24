@@ -4123,6 +4123,20 @@ literal append whose returned reference is used, an unprovable register-count
 append, a collapse whose continuation zeroes the changed registers, and 29 near
 misses, one defect each, that must stay unrolled in both passes.
 
+### Instruction buffer length (#98)
+
+The SLEIGH parser context buffers `MAX_INSTRUCTION_LEN` = 32 instruction bytes
+(`crates/unlace-sleigh/src/sleigh.rs`), twice upstream's 16, and `load_fill` reads
+that many at each decode. Long-operand ISAs need it: a NEC V60 Format II
+instruction with two double-displacement operands is 20 bytes, and VAX operand
+specifiers chain to well past 16. A read that starts past the buffer is still a
+`BadData` decode error ("Instruction is using more than 32 bytes"); the packed
+reads in `kuna_instructionbytes.rs` take any buffer width. A start address that
+is mapped zero-fills the rest of the read, as before, so a decode near the end of
+a segment sees the same bytes it did with 16. Valid x86 encodings stop at 15 bytes, so
+their decodes do not change; only a run of 16 to 31 redundant prefixes, which
+the CPU faults on, now decodes instead of failing.
+
 ### ARM CPSR control fields (GH-848)
 
 ARM-state `MRS CPSR` combines modeled NZCVQ flags with
@@ -4401,7 +4415,21 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `Clipper` | Fairchild/Intergraph CLIPPER C100/C300 | `clipper:LE:32:default` | written for unlace from the CLIPPER C300 data book, Apache-2.0 |
 | `ROMP` | IBM ROMP (RT PC) | `ROMP:BE:32:default` | written for unlace from the RT PC Hardware Technical Reference, Apache-2.0 |
 | `FRV` | Fujitsu FR-V (FR400, FR450, FR500, FR550) | `FRV:BE:32:default` | written for unlace from the FR-V ISA manuals; decode table generated from binutils CGEN `frv-opc.c` (field layout and mask/value only); decode checked against `frv-elf-objdump` 2.43.1 on all 743 instructions, Apache-2.0 |
+| `Nova` | Data General Nova (Nova 1200/800/2, Nova 3, Nova 4) | `Nova:BE:16:default` | written for unlace from the DG Nova programmer's references, Apache-2.0 |
 <!-- vendor-rows -->
+
+### Data General Nova (#98)
+
+`specs/Ghidra/Processors/Nova` is a SLEIGH module written for unlace from Data
+General's Nova programmer's references (no prior SLEIGH existed):
+`Nova:BE:16:default`. Memory is word addressed. An operate instruction is one
+constructor per ALU function and shift: the carry out is a comparison, the
+17-bit rotate goes through carry, and the no-load flag and the skip condition
+are tested on the shifted result, so a `SUBZ#` with a carry skip folds to a C
+comparison. `JSR` links in AC3 and `JMP 0,3` returns; the Nova 3 `SAV`/`RET`
+frame lives on an upward-growing stack. Device I/O is a user op. Exercised by
+`unlace-cli/tests/nova_raw.rs` (hand-assembled add, unsigned max, page-zero
+load/store, rotate and Nova 3 frame-call routines decompile to the expected C).
 
 ### IBM ROMP (#98)
 
@@ -4476,6 +4504,19 @@ a CFCMOV load, EGPR addressing, an NF add between a CMP and its SETcc)
 decompile to the expected C. Coverage and gaps are in
 `specs/Ghidra/Processors/x86/README.md`.
 
+The other EVEX maps reach the EGPRs too: the 64-bit EVEX prefix in `ia.sinc`
+accepts the X4 and B4 bits (inverted P1 bit 2 and P0 bit 3, which AVX-512
+required to be 1 and 0) and sets the fifth register-id bits from them and from
+EVEX.R', so AVX-512 memory operands and GPR operands can name `R16`-`R31`;
+encodings AVX-512 accepted decode as before. `apx_evex.sinc` adds the EVEX
+forms of the VEX GPR instructions (BMI1, BMI2, KMOV, the AMX tile loads and
+stores and tile configuration), with the `.NF` forms of the flag-writing BMI
+instructions, and `apx_map4.sinc` the map-4 forms of MOVDIR64B, MOVDIRI,
+INVEPT, INVVPID, INVPCID and the CET shadow-stack writes. Before, each of these
+with an EGPR was a bad instruction. Exercised by `x86_apx.rs` (an
+`evex_probe` against `llvm-objdump`, and an EVEX ANDN/SHRX routine that
+decompiles to `(~a1 & a0) >> (a2 & 0x3f)`).
+
 ### Processor modules written for unlace (#98)
 
 These processor directories hold SLEIGH written for unlace from public ISA documentation
@@ -4515,6 +4556,12 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `Rabbit` | Rabbit Semiconductor Rabbit 2000 / Rabbit 3000A | `Rabbit2000:LE:16:default`, `Rabbit3000:LE:16:default` | Rabbit 2000/3000 Instruction Reference Manual (019-0098), Rabbit 2000/3000 User's Manuals, Dynamic C docs | `unlace-cli/tests/rabbit_raw.rs` |
 | `Lanai` | Lanai v11 (Myricom, Google) | `lanai:BE:32:default` | LLVM Lanai backend (`LanaiInstrFormats.td` format descriptions, `LanaiInstrInfo.td`, `LanaiCallingConv.td`) | `unlace-cli/tests/lanai_raw.rs` |
 | `META` | Imagination Technologies META (Meta 1.1, 1.2, 2.1), GP instructions | `META:LE:32:default` | binutils `include/opcode/metag.h` and `opcodes/metag-dis.c` field layouts, Linux `arch/metag` ABI; checked against `metag-linux-gnu-objdump` | `unlace-cli/tests/meta_raw.rs` |
+| `S1C` | Epson S1C17 and S1C33000 cores | `S1C17:LE:24:default`, `S1C33:LE:32:default` | Epson S1C17 Core Manual Rev. 1.2, S1C33000 Core CPU Manual, S1C17 Startup Manual, S1C33 Application Note | `unlace-cli/tests/s1c_raw.rs` |
+| `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/st20_raw.rs` |
+| `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/tilegx_raw.rs` |
+| `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/v60.rs` |
+| `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
+| `M16C` (`M32C_80`) | Renesas M32C/80 (M16C/80 set plus `MUL.L`, `DIV*.L`, `SHANC.L`, `SHLNC.L`) | `M32C/80:LE:24:default` | Renesas M32C/80 Series Software Manual REJ09B0319; checked against `m32c-elf-as` 2.43.1 | `unlace-cli/tests/m32c_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -4690,6 +4737,27 @@ with LLVM 23's disassembler, 102 rows RV64 and 80 RV32), LLVM-selected
 `th.lrd`/`th.lrw`, `th.extu`, `th.mvnez` and `th.mula` functions, and a
 raw RV64 image. Gaps (XTheadVector, Vdot, Fmv, Int) are listed in
 `specs/Ghidra/Processors/RISCV/README.md`.
+
+### PowerPC SPE2 and EFS2 (#98)
+
+A new language `PowerPC:BE:32:e200-SPE2` (`ppc_32_e200_spe2_be.slaspec`) adds
+`SPE2.sinc` to the Power ISA embedded + VLE language: the SPE2 and EFS2
+instructions of the NXP e200z4/e200z7 cores (MPC56xx/MPC57xx), with encodings from
+the binutils opcode table and names from the SPE2 intrinsics. Every SPE2/EFS2 row
+decodes (a probe of 2428 words agrees with `objdump -M spe2 -M efs2`). Lane add,
+subtract, negate, absolute value, min and max, extends, splats, `evmar` and the
+addressing of every load and store lift exactly: immediate offsets are scaled by
+the access size with rA read as 0 for r0, the `u` forms write the address back to
+rA, the modulo `mx` forms access at rA and then advance it through `__circinc`.
+The rest are named pcodeops that read and write `ACC` as the mnemonic says (an
+`a` suffix writes it, the `aa`/`an` forms also read it, the `3` forms read rD
+instead). Under `@define SPE2` the encodings SPE2 and EFS2 reuse are left out of
+the included files (`maddhd`/`maddhdu`/`maddld`, `evmwhusiaaw`/`evmwhusianw`,
+`efdcfuid`/`efdcfsid`/`efdctuidz`/`efdctsidz`), so the other PowerPC languages are
+unchanged. A raw `evlbbsplatbx r3,r3,r4; evaddd r3,r3,r5; blr` decompiles to
+`return *(unsigned char *)(a0 + a1) * 0x101010101010101ULL + a2;`. Exercised by
+`unlace-cli/tests/ppc_spe2.rs`; gaps (record-form CR updates, encodings binutils
+rejects) in `specs/Ghidra/Processors/PowerPC/README.md`.
 
 ### RISC-V Zacas register pairs (#98)
 

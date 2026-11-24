@@ -21,6 +21,7 @@ struct Case {
     base: String,
     address: String,
     image: PathBuf,
+    args: Vec<String>,
     forbid: Vec<String>,
     expect: Vec<String>,
     xfail: Option<String>,
@@ -91,7 +92,7 @@ fn load_cases(text: &str, root: &Path) -> Result<Vec<Case>, String> {
         check_keys(
             fam,
             &[
-                "name", "language", "base", "fixture", "image", "forbid", "function",
+                "name", "language", "base", "fixture", "image", "args", "forbid", "function",
             ],
             name,
         )?;
@@ -112,6 +113,7 @@ fn load_cases(text: &str, root: &Path) -> Result<Vec<Case>, String> {
         };
         let fam_langs = str_list(fam, "language", name)?;
         let fam_forbid = str_list(fam, "forbid", name)?;
+        let args = str_list(fam, "args", name)?;
         let functions = fam
             .get("function")
             .and_then(|f| f.as_array())
@@ -151,6 +153,7 @@ fn load_cases(text: &str, root: &Path) -> Result<Vec<Case>, String> {
                     base: base.to_owned(),
                     address: address.to_owned(),
                     image: image.clone(),
+                    args: args.clone(),
                     forbid: forbid.clone(),
                     expect: expect.clone(),
                     xfail: xfail.clone(),
@@ -164,7 +167,7 @@ fn load_cases(text: &str, root: &Path) -> Result<Vec<Case>, String> {
 /// The failures of one case; empty when it passes.
 fn run_case(c: &Case) -> Vec<String> {
     let image = c.image.to_string_lossy();
-    let (stdout, stderr, code) = run_kuna(&[
+    let mut argv: Vec<&str> = vec![
         "decompile",
         &image,
         &c.address,
@@ -173,7 +176,9 @@ fn run_case(c: &Case) -> Vec<String> {
         &c.language,
         "--base",
         &c.base,
-    ]);
+    ];
+    argv.extend(c.args.iter().map(String::as_str));
+    let (stdout, stderr, code) = run_kuna(&argv);
     if code != 0 {
         return vec![format!("exit {code}: {stderr}")];
     }

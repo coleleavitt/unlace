@@ -7539,7 +7539,21 @@ every other binary's pass list is byte-identical to before the pass existed):
   inlined into stores the vptr through its first parameter exactly as a
   constructor does (a by-value factory's return slot, a placement-new helper, the
   constructor of a class whose first member is a `C`, a `delete p` wrapper), so an
-  optimized constructor is left unnamed rather than risk naming one of those. A
+  optimized constructor is left unnamed rather than risk naming one of those,
+  unless the order of its stores says it builds `C` from a base: the last vptr it
+  stores at offset 0 is `C`'s primary, no ancestor's follows the first of `C`'s, and
+  before it either an ancestor's primary vptr was stored there (an inlined base
+  constructor) or a call was passed `this` (an out-of-line one), with no other call
+  before; it returns nothing (a by-value factory returns its slot) and touches no
+  second parameter (`kuna_itaniumctors.rs (built_after_base)`). Every helper above
+  stores a class's own vptr alone or, inlining a destructor, the class's and then
+  its bases', and a class with no base gives no order to read. GCC `-O2` keeps
+  apfs-fuse's `DeviceDMG::DeviceDMG` (a call to `Device::Device` passed `this`,
+  then its own vptr) and `BTreeNodeVar::BTreeNodeVar(BTree &, ...)` (the inlined
+  `BTreeNode` vptr first) out of line in that shape; `PLArray::PLArray`, whose
+  inlined base stores nothing, stays unnamed. The class of a member that
+  is itself built from a base (`Holder`'s first member a `Derived`) shows the same
+  order, and its constructor is then named `Derived::Derived`. A
   `this` the function stores to a second frame slot is an inlined callee's
   parameter home (an always_inline constructor inlined into the function) until a
   call follows, which makes it the compiler's own spill across that call; a store

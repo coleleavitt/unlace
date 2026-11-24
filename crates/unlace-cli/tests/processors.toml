@@ -88,6 +88,10 @@ x86_64_avx512_base = """
 x86_32_avx10 = """
 c5fb1044240431c062f1ff082f84240c0000000f97c0c3
 """
+x86_64_issue548 = """
+b8ffffffff0fbdc7c3cccccccccccccc486601f8c3cccccccccccccccccc
+cccc406663c7c3
+"""
 
 [[family]]
 name = "blackfin"
@@ -1530,3 +1534,26 @@ image = "x86_32_avx10"
 test = "x86_32_vcomxsd_is_an_ordered_compare"
 address = "0x0"
 expect = ["return a1 < a0;"]
+
+# #548: BSR with a zero source leaves its destination, a REX before another prefix is ignored,
+# and MOVSXD r16, r/m32 (mov eax,-1; bsr eax,edi; ret | 48 66 add ax,di; ret | 40 66 movsxd ax,edi; ret).
+[[family]]
+name = "x86_64_issue548"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_issue548"
+
+[[family.function]]
+test = "x86_bsr_zero_source_keeps_the_destination"
+address = "0x0"
+expect = ["return 0xffffffff;"]
+
+[[family.function]]
+test = "x86_rex_before_a_prefix_is_ignored"
+address = "0x10"
+expect = ["return v1 + a0;"]
+
+[[family.function]]
+test = "x86_movsxd_r16_decodes"
+address = "0x20"
+expect = ["return a0;"]

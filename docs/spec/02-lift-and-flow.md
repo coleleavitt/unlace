@@ -4584,6 +4584,18 @@ Before, each was a bad instruction. The EVEX-promoted GPR forms in
 the AVX-512 scaling of whatever tuple context was current. Exercised by the
 `x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
 
+### x86 prefix, BSF/BSR and MOVSXD fixes (#548)
+
+Found by `tools/difffuzz`. In 64-bit mode a REX prefix that another prefix (a
+legacy prefix or a second REX) follows is ignored, as the CPU does: before, the
+REX constructor moved decoding past the prefix phase and the encoding was a bad
+instruction (about 2% of random encodings, none from compilers). 3DNow! decodes
+after a REX too. BSF and BSR with a zero source set ZF and leave the
+destination unchanged (the manual calls it undefined; CPUs keep it), where
+before they wrote the bit index of their search loop. `66 63 /r` decodes as
+`movsxd r16, r/m32` (the low word of the source). Exercised by the
+`x86_64_issue548` row of `unlace-cli/tests/processors.toml`.
+
 ### x86 AVX-512 base-spec decode fixes (#98)
 
 Four wrong AVX-512 decodes in the Ghidra-derived tables are fixed in every x86

@@ -4925,15 +4925,17 @@ instruction, RV32 and RV64.
 
 ### RISC-V scalar cryptography (#98)
 
-`riscv.rv32k.sinc` (RV32 and RV64) and `riscv.rv64k.sinc` (RV64 only,
-included by `riscv.lp64d.slaspec`) decode the ratified scalar cryptography
+`riscv.zk.sinc`, generated from the Sail model's `zkn_insts.sail` and
+`zks_insts.sail` by `tools/gen_riscv_sail.py` (`docs/sleigh-from-isa-specs.md`),
+decodes the ratified scalar cryptography
 extensions (Scalar Crypto 1.0.1): Zknh (`sha256sig0/1`, `sha256sum0/1`; on
 RV64 `sha512sig0/1`, `sha512sum0/1`; on RV32 the half-word forms
 `sha512sum0r`, `sha512sum1r`, `sha512sig0l/h`, `sha512sig1l/h`), Zksh
 (`sm3p0`, `sm3p1`), Zksed (`sm4ed`, `sm4ks`), and Zkne/Zknd (`aes32esi`,
 `aes32esmi`, `aes32dsi`, `aes32dsmi` on RV32; `aes64es`, `aes64esm`,
-`aes64ds`, `aes64dsm`, `aes64im`, `aes64ks1i`, `aes64ks2` on RV64). They
-replace the 0.6.2 draft those files carried, which put these instructions
+`aes64ds`, `aes64dsm`, `aes64im`, `aes64ks1i`, `aes64ks2` on RV64). It
+replaces the hand-written `riscv.rv32k.sinc` and `riscv.rv64k.sinc`, which
+decoded every word the same way; those had replaced the 0.6.2 draft, which put these instructions
 in the custom-1 and custom-2 opcode spaces (where vendor extensions live)
 under draft names (`ssha256.sig0`, `saes32.encs`, `pollentropy`, ...), all
 `unimpl`; the ratified encodings are in OP and OP-IMM.
@@ -4945,8 +4947,11 @@ the doubleword; each RV32 SHA-512 half forms the 64-bit value `rs2:rs1`
 (`rs2` high), applies its three 64-bit rotates (for `sig0h`/`sig1h` the
 middle term shifts only the low word) and keeps the low 32 bits. The AES
 and SM4 instructions, whose results go through an S-box, are user
-operations named after the instruction, taking `rs1`, `rs2` and, for the
-RV32 AES and SM4 forms, the byte select `bs` (`aes64ks1i` takes `rnum`).
+operations named after the instruction (`--opaque`), taking `rs1`, `rs2`
+and, for the RV32 AES and SM4 forms, the byte select `bs` (`aes64ks1i`
+takes `rnum`). `aes64ks2` lifts to its XOR definition. `aes64ks1i` decodes
+every `rnum`, as LLVM does, though Sail reserves 0xB..0xF
+(`--decode-reserved AES64KS1I`).
 Zbkb, Zbkc and Zbkx are in the bit manipulation files. The Zkr `seed` CSR
 and the vector crypto extensions (Zvk*) are not covered. Exercised by
 `unlace-cli/tests/riscv_crypto.rs`: one probe row per encoding against LLVM's

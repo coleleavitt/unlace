@@ -81,6 +81,16 @@ hand-written `riscv.rv32b.sinc` and `riscv.rv64b.sinc`, decoding every word of t
 existing RISC-V test fixtures identically. With `--opcodes`, the generator also emits
 the riscv-opcodes `$pseudo_op` aliases that fix one register operand to x0 (`zext.w`).
 
+`riscv.zk.sinc` (scalar crypto) is generated the same way from
+`extensions/K/zkn_insts.sail,extensions/K/zks_insts.sail` with
+`--exts rv_zknh,rv32_zknh,rv64_zknh,rv32_zkne,rv64_zkne,rv32_zknd,rv64_zknd,rv_zksh,rv_zksed`,
+`--decode-reserved AES64KS1I` and
+`--opaque aes32esi,aes32esmi,aes32dsi,aes32dsmi,aes64es,aes64esm,aes64ds,aes64dsm,aes64im,aes64ks1i,sm4ed,sm4ks`
+(the S-box rounds stay one user operation each). Table lookups (`aes_sbox_fwd`) and
+other helpers the compiler cannot inline become user operations named after the Sail
+function, and a guard that allows several cubes of an operand's values (`rnum <_u 0xB`)
+becomes one constructor per cube.
+
 To compare another variant, copy `specs/Ghidra/Processors/RISCV/data/languages` into
 `<dir>/Ghidra/Processors/RISCV/data/languages`, replace `riscv.zb.sinc`, compile with
 `slacomp`, and pass `--sleighpath <dir>` to `unlace`.

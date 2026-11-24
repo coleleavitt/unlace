@@ -2686,7 +2686,10 @@ class M32r(ObjdumpArch):
     gdb_pc = "pc"
 
     def canonical(self, cand):
-        # sim/m32r runs the base M32R; its M32RX/M32R2 mode does not keep C in PSW or CBR
+        # sim/m32r runs the base M32R; its M32RX/M32R2 mode does not keep C in PSW or CBR. An
+        # operand objdump prints as ??? is a reserved field value (an accumulator above a1).
+        if "???" in cand["op_str"]:
+            return False
         return not re.match(r"(cmpeq|cmpz|pcmpbz|satb|sath|sat|sadd|bset|bclr|btst|divh|divuh|divb|divub|"
                             r"remh|remuh|remb|remub|jc|jnc|mulwhi|mulwlo|macwhi|macwlo)$", cand["mnemonic"])
     gdb_insn_pad = b"\x70\x00"
@@ -2747,6 +2750,12 @@ class Frv(ObjdumpArch):
 
     def flag_words(self):
         return [("ccr", {"icc0": (16, 4), "icc1": (20, 4), "icc2": (24, 4), "icc3": (28, 4)}, lambda w: w)]
+
+    def canonical(self, cand):
+        # a 64-bit product goes to the register pair GRk, GRk+1: an odd GRk is a register
+        # exception, which binutils decodes anyway
+        m = re.match(r"c?[su]muli?(cc|icc)?$", cand["mnemonic"]) and re.match(r"[^,]+,[^,]+,\s*gr(\d+)", cand["op_str"])
+        return not (m and int(m.group(1)) % 2)
 
     def addr_ok(self, a):
         return a < 0x1000000
@@ -2809,6 +2818,8 @@ class H8300h(ObjdumpArch):
         mn, ops, n = cand["mnemonic"], cand["op_str"].replace(" ", ""), len(cand["bytes"])
         if mn.startswith(("mova", "rts/", "bra/", "rte/", "bsr/", "jsr/", "jmp/")):
             return False
+        if cand["bytes"][0] == 0x7A and cand["bytes"][1] & 0x08:
+            return False                       # 7A x(1erd): H8SX's #xx:16 forms of ADD.L, MOV.L, ...
         if re.match(r"(shl|shar|shal|shlr|shll|rot|ext)", mn) and ops.startswith("#"):
             return False
         if re.match(r"(add|sub|mov|cmp)\.[wl]$", mn) and ops.startswith("#") and n == 2:

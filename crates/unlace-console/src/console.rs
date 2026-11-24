@@ -160,6 +160,8 @@ fn engine_unavailable(entry: &str) -> IfaceError {
 /// `current` field is joined for them, matching C++.
 pub fn unlace_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static, str>> {
     // C++ returns "" for an unknown option (suppressing the current field).
+    // The load-time gates read below report the program's own load options.
+    let _load = conf.load_scope();
     let on_off = |b: bool| if b { "on" } else { "off" };
     // (unlace `dyldimage`) The valued live reader whose value is not a fixed
     // token owns its string; every other arm borrows.
@@ -1381,6 +1383,7 @@ impl IfaceCommandAction for IfcUnlaceAssert {
                     .set_unlace_option(name, &tokens[0])
                     .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
                 conf.callwide_changed();
+                dcp.keep_load_options();
                 let mut out = msg;
                 out.push('\n');
                 out.push_str(&applied_line);

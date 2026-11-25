@@ -16,6 +16,7 @@ hex = '5341544883ec1889fb83e301c7042405000000c7442404070000004889e7e81a010000418
 
 [script]
 commands = [
+    'option partialaccess off',
     'parse line typedef struct LifetimePair { int x; int y; } LifetimePair;',
     'parse line extern int read_pair(const struct LifetimePair *pair);',
     'parse line extern int bounded_index_store(unsigned int index);',

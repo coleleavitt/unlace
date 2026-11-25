@@ -624,6 +624,7 @@ impl Action for ActionStripStackGuard {
     ///
     /// Remove a structurally proven canary failure branch and its unreachable handler.
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        eprintln!("G4 apply enabled={} opt={}", self.enabled, data.get_arch().unlace_options.get::<crate::stackguard::StripStackGuard>().0);
         // C++ `if (!data.getArch()->strip_stack_guard) return 0;` — the live gate
         // is carried on the boundary Architecture (`build_arch_handle`); `enabled`
         // stays as the unit-test OR-override (action registered false).
@@ -637,7 +638,6 @@ impl Action for ActionStripStackGuard {
             return 0; // P0 assertion not set
         }
 
-        eprintln!("G4 apply enabled={} opt={}", self.enabled, data.get_arch().unlace_options.get::<crate::stackguard::StripStackGuard>().0);
         let size = data.bblocks_get_size();
         for i in 0..size {
             let h = data.bblocks_get_block(i);

@@ -2092,5 +2092,6 @@ fn c1_kind(kind: &StmtKind) -> &'static str {
         StmtKind::Try { .. } => "Try",
         StmtKind::JavaTry => "JavaTry",
         StmtKind::Opaque => "Opaque",
+        StmtKind::Label { .. } => "Label",
     }
 }

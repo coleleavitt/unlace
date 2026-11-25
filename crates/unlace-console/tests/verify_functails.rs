@@ -74,6 +74,35 @@ fn functails_holds_with_the_listing_walk() {
     assert!(prog.lookup_symbol("sub_401010").is_some(), "work stays");
 }
 
+/// The fast inventory walk (`fast_funcdisc`) resumes the listing from the committed entries.
+#[test]
+fn functails_holds_with_the_fast_inventory_walk() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap();
+    let bin = root.join("crates/unlace-analysis/tests/fixtures/functailscall_x86_64");
+    let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
+    let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
+        .expect("bootstrap fixture with built processor specs");
+    prog.arch_mut()
+        .set_unlace_option("listing", "on")
+        .expect("listing flips");
+    prog.arch_mut()
+        .set_unlace_option("fast_funcdisc", "on")
+        .expect("fast_funcdisc flips");
+    prog.arch_mut()
+        .set_unlace_option("functails", "on")
+        .expect("functails flips");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
+    assert!(
+        prog.lookup_symbol("sub_401001").is_none(),
+        "work.cold stays with work under the fast inventory walk"
+    );
+    assert!(prog.lookup_symbol("sub_401010").is_some(), "work stays");
+}
+
 #[test]
 fn nullsubs_names_the_empty_function() {
     let prog = bootstrap("off", "on");

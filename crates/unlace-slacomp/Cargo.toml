@@ -35,6 +35,3 @@ path = "src/bin/slacomp.rs"
 name = "integration"
 path = "tests/integration.rs"
 
-[[test]]
-name = "compiler_parity"
-path = "tests/compiler_parity.rs"

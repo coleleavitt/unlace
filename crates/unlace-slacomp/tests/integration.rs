@@ -22,3 +22,6 @@ mod slghparse_golden;
 
 #[path = "slghscan_golden.rs"]
 mod slghscan_golden;
+
+#[path = "compiler_parity.rs"]
+mod compiler_parity;

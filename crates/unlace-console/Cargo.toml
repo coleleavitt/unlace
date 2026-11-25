@@ -59,22 +59,6 @@ name = "integration"
 path = "tests/integration.rs"
 
 [[test]]
-name = "verify_budget_stop"
-path = "tests/verify_budget_stop.rs"
-
-[[test]]
-name = "verify_dwarfstructs"
-path = "tests/verify_dwarfstructs.rs"
-
-[[test]]
-name = "verify_dwarfvariants"
-path = "tests/verify_dwarfvariants.rs"
-
-[[test]]
-name = "verify_variantnames"
-path = "tests/verify_variantnames.rs"
-
-[[test]]
 name = "verify_fid"
 path = "tests/verify_fid.rs"
 
@@ -91,53 +75,18 @@ name = "verify_macho_fat"
 path = "tests/verify_macho_fat.rs"
 
 [[test]]
-name = "verify_msvcfpconst"
-path = "tests/verify_msvcfpconst.rs"
-
-[[test]]
 name = "verify_loadoptions"
 path = "tests/verify_loadoptions.rs"
-
-[[test]]
-name = "verify_pdatachained"
-path = "tests/verify_pdatachained.rs"
 
 [[test]]
 name = "verify_pdb"
 path = "tests/verify_pdb.rs"
 
 [[test]]
-name = "verify_rexthunk"
-path = "tests/verify_rexthunk.rs"
-
-[[test]]
-name = "verify_symbolnamebound"
-path = "tests/verify_symbolnamebound.rs"
-
-[[test]]
 name = "verify_symbolnamechars"
 path = "tests/verify_symbolnamechars.rs"
-
-[[test]]
-name = "verify_symbolnamerepair"
-path = "tests/verify_symbolnamerepair.rs"
-
-[[test]]
-name = "verify_typedepth"
-path = "tests/verify_typedepth.rs"
 
 [[test]]
 name = "verify_goabi"
 path = "tests/verify_goabi.rs"
 
-[[test]]
-name = "verify_goreg"
-path = "tests/verify_goreg.rs"
-
-[[test]]
-name = "verify_swiftdemangle"
-path = "tests/verify_swiftdemangle.rs"
-
-[[test]]
-name = "verify_gotypes"
-path = "tests/verify_gotypes.rs"

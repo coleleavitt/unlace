@@ -58,15 +58,15 @@ fn every_amx_instruction_decodes() {
     assert_eq!(mnemonics, MNEMONICS, "{stdout}");
     for (row, want) in [
         (2, "TILEZERO TMM3"),
-        (6, "TDPBSSD TMM0,TMM1,TMM2"),
-        (10, "TDPBF16PS TMM3,TMM4,TMM5"),
-        (12, "TCMMIMFP16PS TMM1,TMM6,TMM7"),
+        (6, "TDPBSSD TMM0, TMM1, TMM2"),
+        (10, "TDPBF16PS TMM3, TMM4, TMM5"),
+        (12, "TCMMIMFP16PS TMM1, TMM6, TMM7"),
         (14, "TILERELEASE"),
     ] {
         assert_eq!(listing[row], want, "{stdout}");
     }
     assert!(listing[3].starts_with("TILELOADD TMM0,"), "{stdout}");
-    assert!(listing[5].ends_with(",TMM7"), "{stdout}");
+    assert!(listing[5].ends_with(", TMM7"), "{stdout}");
 }
 
 #[test]

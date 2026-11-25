@@ -24,7 +24,9 @@ fn parsed(abi: HelperAbi) -> Vec<(String, Vec<String>)> {
 fn every_payload_is_prefixed_and_every_target_is_unique() {
     for abi in [HelperAbi::X86, HelperAbi::Arm { big_endian: false }] {
         let fixups = parsed(abi);
-        assert!(fixups.iter().all(|(n, _)| n.starts_with(FIXUP_PREFIX)));
+        assert!(fixups.iter().all(|(n, _)| {
+            n.starts_with(FIXUP_PREFIX) || n.starts_with(crate::aeabifloat::FIXUP_PREFIX)
+        }));
         let mut targets: Vec<&String> = fixups.iter().flat_map(|(_, t)| t).collect();
         let total = targets.len();
         targets.sort();

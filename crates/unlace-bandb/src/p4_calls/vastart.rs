@@ -118,6 +118,8 @@ struct VaStart {
     spacebase: VarnodeId,
     address_op: OpCode,
     save_area: u64,
+    /// The bytes of the register save area (176 for SysV, 192 for AAPCS64).
+    save_len: u64,
     named: int4,
     gp: int4,
 }
@@ -200,6 +202,7 @@ fn find(data: &Funcdata) -> Option<VaStart> {
             spacebase,
             address_op,
             save_area,
+            save_len: SAVE_AREA,
             named,
             gp: (gp / 8) as int4,
         };
@@ -211,6 +214,100 @@ fn find(data: &Funcdata) -> Option<VaStart> {
         weak.get_or_insert(m);
     }
     weak
+}
+
+/// The constant a COPY of `vn` writes, through constant arithmetic (see
+/// `vaargaapcs::fold_const`).
+fn written_const(data: &Funcdata, op: OpId) -> Option<u64> {
+    let o = data.obank().get(op)?;
+    if o.code() != OpCode::CPUI_COPY {
+        return None;
+    }
+    crate::vaargaapcs::fold_const(data, o.get_in(0)?, 8)
+}
+
+/// The AAPCS64 `va_list` (option `vaargaapcs`): `__stack` at L, `__gr_top` at L+8,
+/// `__vr_top` at L+16, `__gr_offs` at L+24 and `__vr_offs` at L+28, either as two 4-byte
+/// constants or as one 8-byte constant with `__vr_offs` in its high half. The register save
+/// area runs from `__vr_top` less 128 bytes to `__gr_top`.
+fn find_aapcs(data: &Funcdata) -> Option<VaStart> {
+    if !crate::vaargaapcs::applies(data) {
+        return None;
+    }
+    let writes = stack_writes(data);
+    let at = |off: u64, size: int4| -> Vec<OpId> {
+        writes
+            .iter()
+            .filter(|w| w.0 == off && w.1 == size)
+            .map(|w| w.2)
+            .collect()
+    };
+    let stack_ptr = |field: u64| -> Option<(OpId, (VarnodeId, u64, OpCode))> {
+        at(field, 8).into_iter().find_map(|o| {
+            let v = written(data, o)?;
+            stack_address(data, v).map(|s| (o, s))
+        })
+    };
+    for &(x, size, op) in &writes {
+        let (gr, vr, offsets) = match size {
+            8 => {
+                let c = written_const(data, op)?;
+                (crate::vaargaapcs::signed(c, 4), crate::vaargaapcs::signed(c >> 32, 4), vec![op])
+            }
+            4 => {
+                let g = written_const(data, op)?;
+                let vop = at(x.wrapping_add(4), 4)
+                    .into_iter()
+                    .find(|&o| written_const(data, o).is_some())?;
+                let v = written_const(data, vop)?;
+                (crate::vaargaapcs::signed(g, 4), crate::vaargaapcs::signed(v, 4), vec![op, vop])
+            }
+            _ => continue,
+        };
+        if !(-56..=0).contains(&gr) || gr % 8 != 0 || !(-128..=0).contains(&vr) || vr % 16 != 0 {
+            continue;
+        }
+        let Some(list) = x.checked_sub(24) else {
+            continue;
+        };
+        let Some((stack_op, _)) = stack_ptr(list) else {
+            continue;
+        };
+        let Some((gr_op, (_, gr_off, _))) = stack_ptr(list + 8) else {
+            continue;
+        };
+        let Some((vr_op, (sb, vr_off, code))) = stack_ptr(list + 16) else {
+            continue;
+        };
+        let save_area = vr_off.wrapping_sub(128);
+        let save_len = gr_off.wrapping_sub(save_area) as i64;
+        if !(8..=0x100).contains(&save_len) {
+            continue;
+        }
+        let pointers = vec![stack_op, gr_op, vr_op];
+        let block = |o: OpId| data.obank().get(o).and_then(|x| x.get_parent());
+        let b0 = block(op)?;
+        if !offsets
+            .iter()
+            .chain(pointers.iter())
+            .all(|&o| block(o) == Some(b0))
+        {
+            continue;
+        }
+        let named = (8 + gr / 8) as int4;
+        return Some(VaStart {
+            list,
+            offsets,
+            pointers,
+            spacebase: sb,
+            address_op: code,
+            save_area,
+            save_len: save_len as u64,
+            named,
+            gp: named + 1,
+        });
+    }
+    None
 }
 
 /// The input that carries the last named argument: the prototype's parameter
@@ -323,7 +420,7 @@ fn rewrite(data: &mut Funcdata, m: &VaStart) -> unlace_base::error::UnlaceResult
         data.op_set_input(op, value, 0)?;
     }
     if let Some(stack) = data.get_arch().manage().get_stack_space().cloned() {
-        let end = m.save_area.wrapping_add(SAVE_AREA);
+        let end = m.save_area.wrapping_add(m.save_len);
         let spills: Vec<VarnodeId> = data
             .vbank()
             .iter_loc()
@@ -343,7 +440,7 @@ fn rewrite(data: &mut Funcdata, m: &VaStart) -> unlace_base::error::UnlaceResult
                 }
             }
         }
-        data.scope_local_mark_not_mapped(&stack, m.save_area, SAVE_AREA as int4, false);
+        data.scope_local_mark_not_mapped(&stack, m.save_area, m.save_len as int4, false);
     }
     if !data.get_func_proto().is_input_locked() {
         data.get_func_proto_mut().set_dotdotdot(true);
@@ -387,7 +484,9 @@ impl Action for ActionVaStart {
         {
             return 0;
         }
-        let Some(m) = find(data) else { return 0 };
+        let Some(m) = find(data).or_else(|| find_aapcs(data)) else {
+            return 0;
+        };
         if rewrite(data, &m).is_ok() {
             self.base.count += 1;
             return 1;

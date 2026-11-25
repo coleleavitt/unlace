@@ -3283,6 +3283,26 @@ tier = "transform"
 symptoms = "a variadic function prints all six argument registers and the stack arguments as parameters and no va_arg|va_list field stores such as gp_offset = 0x18 or 0x20 remain beside plain reads of rcx, r8 or r9"
 
 [[settable]]
+option = "vaargaapcs"
+values = "off|on"
+default = "off"
+destructive = false
+phase = "P4"
+subphase = "prototype-source"
+strength = "HARD"
+rewind = "P4"
+issue = "unlace-vaargaapcs"
+summary = "Print the AAPCS64 va_arg expansion as va_arg(ap, T). An AArch64 (ELF, not Apple or Windows) variadic function reads each argument through one selection: a load of __gr_offs (or __vr_offs for a double) is tested for sign, the register arm reads __gr_top plus the offset and steps the offset, the stack arm reads __stack and steps it, and the two arms join at one load. unlace printed the offset arithmetic on the va_list fields. With this on, a load that every predecessor of a join reaches through one of those two addresses of one va_list becomes a va_arg(&ap, class) CALLOTHER (class 1 for the __vr half), the steps of __gr_offs, __vr_offs and __stack in the expansion go, and the selection branches take the register arm. vastart then folds the AAPCS64 va_list prologue (__stack, __gr_top, __vr_top, __gr_offs and __vr_offs) to va_start(ap, last) and marks the prototype variadic."
+use_when = "Off (default). Set on for AArch64 variadic functions that read their arguments with va_arg (clang and gcc expansions under -O2): without it each read prints as offset arithmetic on the va_list and the prologue as register-save spills and field stores. Apple arm64 keeps its own va_list and is unaffected."
+example = "--option vaargaapcs on"
+source_decompiler = "unlace"
+inspiration = "AAPCS64 (ARM IHI 0055) va_list layout; zig cc -target aarch64-linux-gnu -O2 variadic functions"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "a variadic AArch64 function prints __gr_offs or __vr_offs arithmetic on a va_list|a variadic AArch64 function prints the register save area spills and va_list field stores instead of va_start(ap, last)"
+
+
+[[settable]]
 option = "looprotate"
 values = "on|off"
 default = "on"

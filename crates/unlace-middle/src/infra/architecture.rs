@@ -2117,6 +2117,11 @@ impl Architecture {
         ctx.windows_cspec =
             (self.pass_hooks().fastfailnoreturn_archid_is_windows)(self.get_description()); // (unlace) pebnames
         ctx.image_windows_user = self.image_windows_user;
+        ctx.aapcs64_va_list = self.archid.starts_with("AARCH64:")
+            && !self.archid.contains(":AppleSilicon:")
+            && !self.image_apple
+            && !ctx.windows_cspec
+            && !self.image_windows_user;
         // (unlace) resolve the `SYSCALL` user-op ids ONCE per program, for the same
         // reason `simd_shuffle_userops` above is resolved here: the boundary
         // ArchContext carries no userop table.  An op a compiler spec has
@@ -3378,6 +3383,10 @@ impl Architecture {
         // building a small adapter over the (already-populated) factory.
         let adapter = BuiltinTypeArch {
             types: Rc::clone(&self.types),
+            va_list_aapcs64: self.archid.starts_with("AARCH64:")
+                && !self.archid.contains(":AppleSilicon:")
+                && !self.image_apple
+                && !self.image_windows_user,
             data_word_size: self
                 .manage()
                 .get_default_data_space()
@@ -6135,7 +6144,44 @@ impl unlace_num::opbehavior::FloatFormatProvider for OwnedFloatFormats {
 struct BuiltinTypeArch {
     types: Rc<TypeFactoryImpl>,
     data_word_size: int4,
+    /// AArch64 outside Apple and Windows: the va_list is the AAPCS64 struct.
+    va_list_aapcs64: bool,
 }
+
+impl BuiltinTypeArch {
+    /// (unlace `vaargaapcs`) A pointer to the AAPCS64 `__va_list` (32 bytes: `__stack`,
+    /// `__gr_top`, `__vr_top`, `__gr_offs`, `__vr_offs`), which AArch64 outside Apple and
+    /// Windows passes as its `va_list`.
+    fn va_list_aapcs64_pointer(&self) -> Option<Rc<crate::dtype::Datatype>> {
+        use crate::dtype::{TypeFactory, TypeField};
+        let tag = self.types.get_type_struct("__va_list").ok()?;
+        let int = self.types.get_base(4, type_metatype::TYPE_INT).ok()?;
+        let void_ptr = self
+            .types
+            .get_type_pointer(8, self.types.get_type_void().ok()?, 1)
+            .ok()?;
+        let field =
+            |ident: int4, offset: int4, name: &str, ty: &Rc<crate::dtype::Datatype>| TypeField {
+                ident,
+                offset,
+                name: name.to_string(),
+                field_type: Rc::clone(ty),
+            };
+        let fields = vec![
+            field(0, 0, "__stack", &void_ptr),
+            field(1, 8, "__gr_top", &void_ptr),
+            field(2, 16, "__vr_top", &void_ptr),
+            field(3, 24, "__gr_offs", &int),
+            field(4, 28, "__vr_offs", &int),
+        ];
+        let tag = self
+            .types
+            .set_fields_struct_raw(&tag, fields, Vec::new(), 32, 8, 0)
+            .ok()?;
+        self.types.get_type_pointer(8, tag, 1).ok()
+    }
+}
+
 
 impl crate::userop::UseropTypeArchitecture for BuiltinTypeArch {
     fn get_size_of_pointer(&self) -> int4 {
@@ -6183,6 +6229,9 @@ impl crate::userop::UseropTypeArchitecture for BuiltinTypeArch {
         use crate::dtype::{TypeFactory, TypeField};
         if self.types.get_size_of_pointer() != 8 {
             return None;
+        }
+        if self.va_list_aapcs64 {
+            return self.va_list_aapcs64_pointer();
         }
         let tag = self.types.get_type_struct("__va_list_tag").ok()?;
         let uint = self.types.get_base(4, type_metatype::TYPE_UINT).ok()?;

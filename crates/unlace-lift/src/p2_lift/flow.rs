@@ -5438,12 +5438,14 @@ truncating the fall-through here"
                 Ok(None) => {
                     // Could not recover the jumptable.
                     if !for_inline {
+                        self.drop_truncated_table(op, &mut new_tables);
                         self.truncate_indirect_jump(op, RecoveryMode::FailNormal)?;
                     }
                 }
                 Err(mode) => {
                     // A specific failure mode (thunk / return / callother).
                     if !for_inline {
+                        self.drop_truncated_table(op, &mut new_tables);
                         self.truncate_indirect_jump(op, mode)?;
                     }
                 }
@@ -5507,6 +5509,22 @@ truncating the fall-through here"
         let truncop = self.artificial_halt(&addr, 0)?;
         self.data.op_dead_insert_after(truncop, op);
         Ok(())
+    }
+
+    /// Drop the jump table an indirect jump keeps from its earlier recovery stages
+    /// before the jump is truncated to a call: once the op is a CALLIND its
+    /// recovered targets have no block edges, so switch-over would fail on them
+    /// (a re-entered table cut short by the work bound, `jumptablework`). The
+    /// table's index leaves `new_tables` with it.
+    fn drop_truncated_table(&mut self, op: OpId, new_tables: &mut Vec<usize>) {
+        let Some(idx) = self.data.find_jump_table_index(op) else {
+            return;
+        };
+        self.data.remove_jump_table(idx);
+        new_tables.retain(|&t| t != idx);
+        for t in new_tables.iter_mut().filter(|t| **t > idx) {
+            *t -= 1;
+        }
     }
 
     /// Convert a BRANCHIND that could not be recovered into a call or return

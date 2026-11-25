@@ -2644,8 +2644,10 @@ fn element_source(data: &Funcdata, start: VarnodeId) -> Option<&'static str> {
 }
 
 /// Does the pointer arithmetic `op` lead, through at most `depth` more steps
-/// of it, to a byte the program reads as a character of a C string
-/// ([`string_character`])?
+/// of it, to a byte, or a 4-byte `wchar_t`, the program reads as a character of
+/// a C string ([`string_character`])? A wide string walked to its zero unit is a
+/// string read, not an index: the caller's constant prints as the literal.
+
 fn reads_to_a_zero(data: &Funcdata, op: OpId, depth: usize) -> bool {
     let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else {
         return false;
@@ -2659,7 +2661,10 @@ fn reads_to_a_zero(data: &Funcdata, op: OpId, depth: usize) -> bool {
         };
         match o.code() {
             OpCode::CPUI_LOAD if o.get_in(1) == Some(out) => o.get_out().is_some_and(|x| {
-                data.vbank().get(x).is_some_and(|v| v.get_size() == 1) && string_character(data, x)
+                data.vbank()
+                    .get(x)
+                    .is_some_and(|v| matches!(v.get_size(), 1 | 4))
+                    && string_character(data, x)
             }),
             OpCode::CPUI_INT_ADD
             | OpCode::CPUI_PTRADD

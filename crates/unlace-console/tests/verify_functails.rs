@@ -103,6 +103,38 @@ fn functails_holds_with_the_fast_inventory_walk() {
     assert!(prog.lookup_symbol("sub_401010").is_some(), "work stays");
 }
 
+/// gcc's hot/cold split of two assert-style aborts (`first` and `work`), the shape of
+/// /bin/ls's cold stubs: each cold part is a `call abort` that only its owner jumps to.
+/// The listing walk must not list either cold part as a function.
+#[test]
+fn functails_drops_gcc_assert_tails_under_the_listing_walk() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap();
+    let bin = root.join("crates/unlace-analysis/tests/fixtures/cold_stub_x86_64");
+    let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
+    let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
+        .expect("bootstrap fixture with built processor specs");
+    prog.arch_mut()
+        .set_unlace_option("listing", "on")
+        .expect("listing flips");
+    prog.arch_mut()
+        .set_unlace_option("functails", "on")
+        .expect("functails flips");
+    prog.commit_pending_analysis()
+        .expect("analysis commit succeeds");
+    for cold in ["sub_1060", "sub_1066"] {
+        assert!(
+            prog.lookup_symbol(cold).is_none(),
+            "{cold} is an assert tail reached only by its owner"
+        );
+    }
+    for owner in ["sub_1190", "sub_11a0"] {
+        assert!(prog.lookup_symbol(owner).is_some(), "{owner} stays");
+    }
+}
+
 #[test]
 fn nullsubs_names_the_empty_function() {
     let prog = bootstrap("off", "on");

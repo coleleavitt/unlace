@@ -28,6 +28,7 @@
     <register name="ra"/>
   </returnaddress>
   <stackpointer register="sp" space="ram"/>
+  <funcptr align="2"/>     <!-- JALR clears bit 0 of the target; function pointers are 2-byte aligned -->
   <default_proto>
     <prototype name="__stdcall" extrapop="0" stackshift="0">
       <input>

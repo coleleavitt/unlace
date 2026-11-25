@@ -4523,7 +4523,10 @@ not at all where the spec has none (MIPS, PowerPC, RISC-V), which leaves the
 recovered arguments. A single-float image (RISC-V lp64f/ilp32f, MIPS `fp_abi`
 2, PowerPC single-precision) and an image that states nothing (a raw image, a
 clang PowerPC or attribute-less ARM object, a Mach-O, the Ghidra front-end)
-keep the recovered arguments too. The instructions a function executes do not
+keep the recovered arguments too. The RISC-V cspecs declare `<funcptr align="2"/>`: JALR, c.jr, c.jalr and ret clear
+bit 0 of their target, so an indirect call through a loaded pointer carries a
+`& ~1` mask, and RuleFuncPtrEncoding removes a mask that matches the declared
+alignment, which keeps the call's declared prototype. The instructions a function executes do not
 decide it: ARM `softfp` and single-float code compute with floating-point
 registers yet pass doubles, or every value, in integer registers. A
 non-variadic prototype that names its own convention is forced as declared on

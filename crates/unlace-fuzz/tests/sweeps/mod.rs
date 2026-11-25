@@ -288,22 +288,6 @@ fn panic_text(payload: &(dyn Any + Send)) -> String {
     }
 }
 
-/// Whether the SLEIGH specs are built. Without them the pipeline stops at load,
-/// so the decode sweep only checks for panics.
-fn specs_built() -> bool {
-    crate_dir()
-        .join("..")
-        .join("..")
-        .join("specs")
-        .join("Ghidra")
-        .join("Processors")
-        .join("x86")
-        .join("data")
-        .join("languages")
-        .join("x86-64.sla")
-        .exists()
-}
-
 fn fixture_dir() -> PathBuf {
     crate_dir()
         .join("..")
@@ -348,12 +332,12 @@ fn sleigh_decode_sweep() {
         }
     }
 
-    if specs_built() {
-        assert!(
-            any_loaded,
-            "specs are built but no minimal ELF loaded: the container builder is wrong"
-        );
-    }
+    // Without the specs every input stops at load, and the sweep would only check
+    // for panics. Missing specs are a failure, as in the rest of the workspace.
+    assert!(
+        any_loaded,
+        "no minimal ELF loaded: the SLEIGH specs are missing (UNLACE_SPECS), or the container builder is wrong"
+    );
 }
 
 #[test]

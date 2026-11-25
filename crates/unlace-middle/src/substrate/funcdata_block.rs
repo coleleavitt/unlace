@@ -4973,6 +4973,9 @@ impl CloneBlockOps {
         // The addl-flag subset (funcdata_block.cc:987-988), plus the unlace_zextreturn and
         // unlace_exactfloat records.
         use crate::op::pcodeop_addlflags as opaf;
+        // (unlace, `irreduciblesplit`) The copy of a conditional branch keeps its sense flag, so
+        // its condition reads the same way as the original.
+        let fl = fl | if self.cbranch { op_flags & opf::boolean_flip } else { 0 };
         let afl = op_addl
             & (opaf::special_prop
                 | opaf::special_print

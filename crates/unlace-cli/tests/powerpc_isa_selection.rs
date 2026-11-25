@@ -1,4 +1,4 @@
-//! A failed generic PowerPC decode explains the ISA override without guessing it, and a
+//! The generic PowerPC64 language decodes isel (isel.sinc, shared by ppc_64_be/le), and a
 //! little-endian ELFv2 image (POWER8 by its ABI) selects the Power ISA language itself.
 
 use crate::common;
@@ -119,7 +119,7 @@ fn check_selection_semantics(code: &str) {
 }
 
 #[test]
-fn generic_powerpc_failure_explains_the_explicit_isa_override() {
+fn generic_powerpc_decodes_isel_and_elfv2_selects_power_isa() {
     let path = common::scratch_file("powerpc-isa", "o");
     for (endian, name) in [(Endianness::Big, "BE"), (Endianness::Little, "LE")] {
         let generic = format!("PowerPC:{name}:64:default");
@@ -160,12 +160,13 @@ fn generic_powerpc_failure_explains_the_explicit_isa_override() {
             };
             for options in generic_runs {
                 let output = decompile(&path, "select_value", &options);
-                assert!(output.contains("halt_baddata"), "{output}");
-                assert!(output.contains("isel encoding"), "{output}");
                 assert!(
-                    output.contains(&format!("--target {alternate}")),
+                    !output.contains("halt_") && !output.contains("isel encoding"),
                     "{output}"
                 );
+                if !options.contains(&"--json") {
+                    check_selection_semantics(&output);
+                }
             }
             let output = decompile(&path, "select_value", &["--target", &alternate]);
             check_selection_semantics(&output);

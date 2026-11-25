@@ -402,6 +402,9 @@ pub struct Architecture {
     /// Single-function bodies (FDEs, or Go `pclntab` extents) whose interiors the
     /// loader suppressed as separate entries.
     pub unlace_function_bodies: Vec<(u64, u64)>,
+    /// (unlace `ehcold`/`functails`) The withheld `.cold` parts, `[start, end)` and sorted.
+    /// The Listing walk does not root them: the commit drops their entries after the walk.
+    pub unlace_withheld_cold: Vec<(u64, u64)>,
     /// (unlace `floatglobals`) A multi-function run scans images of any size.
     pub unlace_float_scan_batch: bool,
     /// The callee-first driver settles return values from its decompiled callers.
@@ -1115,6 +1118,7 @@ impl Architecture {
             infer_ptr_spaces: Vec::new(),
 
             unlace_function_bodies: Vec::new(),
+            unlace_withheld_cold: Vec::new(),
             unlace_float_scan_batch: false,
             unlace_settle_caller_reads: false,
             unlace_call_returns: Vec::new(),

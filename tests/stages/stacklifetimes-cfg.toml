@@ -39,6 +39,7 @@ hex = '00000040000000000000803f0000000000000000000000400000000000000000'
 
 [script]
 commands = [
+    'option partialaccess off',
     'map addr r0x402000 int4 *escaped_pointer',
     'parse line extern int4 all_paths_overwrite(int4 value);',
     'parse line extern int4 one_path_overwrites(int4 value);',

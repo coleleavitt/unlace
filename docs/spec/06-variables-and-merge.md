@@ -1947,9 +1947,7 @@ made an array element: a C++ class whose object size nothing states (chapter
 `mapped`/`addrtied`/`addrforce`/`nolocalalias` flags (and, in the final sync
 only, data-types) onto the Varnodes. Unmapped locations gain `nolocalalias`
 only when the caller enables alias checking and the local map proves the
-location unaliased and no gathered pointer reaches its first or last byte (#871:
-the window test alone ignores pointers, so a struct whose address a call receives
-keeps its unmapped fields aliased). The first restructuring pass disables this check;
+location unaliased. The first restructuring pass disables this check;
 later passes and the final sync enable it. After `fullloop` exits,
 `crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionMappedLocalSync)` runs that final data-type-updating sync once; its

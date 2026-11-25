@@ -381,7 +381,12 @@ pub(super) fn named_aggregate(
     // order possible — see `glibc`'s module header). The completed struct drops
     // `type_incomplete`: it has its members, and the `.h` emitter should print
     // them.
-    if layout == Layout::Glibc {
+    let glibc_fields = match layout {
+        Layout::Glibc => true,
+        Layout::Streams => name == "FILE",
+        Layout::Off | Layout::Opaque => false,
+    };
+    if glibc_fields {
         if let Some(rows) = glibc::layout_for(name) {
             let fields = glibc::build_fields(rows, types, word_size)?;
             let shell = types.get_type_struct(name)?;
@@ -1837,6 +1842,7 @@ impl AnalysisPass for LibcTypesPass {
         // cannot re-derive them is the one that runs after the object file is
         // gone: a `--define-function 0x..=fopen` directive. Carry them.
         out.libctypes_glibc = layout == Layout::Glibc;
+        out.libctypes_streams = layout == Layout::Streams;
         out.libctypes_refused = layout == Layout::Off;
         // The stream slots mint the same `FILE` at the same width, so they are
         // refused with the rest: the shell's size is a claim too (`structdefs`

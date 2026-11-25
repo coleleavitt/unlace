@@ -620,6 +620,10 @@ pub(crate) fn effective_libctypes_layout(
         L::Off => L::Off,
         _ if !libctypes::glibc::target_takes_the_widths(file) => L::Off,
         L::Glibc if libctypes::glibc::target_is_glibc_x86_64(file) => L::Glibc,
+        L::Streams if libctypes::glibc::target_is_glibc_x86_64(file) => L::Streams,
+        // `streams` is `opaque` plus FILE's published fields, which need the same
+        // target as `glibc`; elsewhere it is exactly `opaque`.
+        L::Streams => L::Opaque,
         _ => L::Opaque,
     }
 }

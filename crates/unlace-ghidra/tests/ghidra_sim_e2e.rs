@@ -532,7 +532,10 @@ const PIN_FAILLOG_RESOLVABLE: [usize; 3] = [0, 0, 0];
 // `libcnames off` for the same reason: those names come from unlace's own libc
 // tables, which a wire session never consults (Ghidra's archives name a
 // callee's parameters itself).
-const PIN_FAILLOG_DIFF_FLOOR: [f64; 3] = [0.02, 0.04, 0.06];
+// Floors flipped 2026-11-24 (fix/u16): sub_3320 and sub_3ad0 now print exactly
+// as the CLI arm does (ratio 0.000; was >= 0.04 / 0.06 before the ctree list
+// printing in b1cfac8333 and its neighbours), so the GUI-path gap shrank to zero.
+const PIN_FAILLOG_DIFF_FLOOR: [f64; 3] = [0.02, 0.0, 0.0];
 const PIN_FAILLOG_DIFF_CEILING: [f64; 3] = [0.09, 0.12, 0.15];
 // Normalized non-empty line count of the flattened markup C, per target: the
 // structural size of what the GUI renders, excluding standalone parameter-source
@@ -578,7 +581,12 @@ const PIN_FAILLOG_DIFF_CEILING: [f64; 3] = [0.09, 0.12, 0.15];
 // whose second test has a prefix statement fold into one condition; +5 with
 // `crossjumprevert` past one block (crossjumptail): the gotos into shared statement
 // runs become copies of the runs on each path.
-const PIN_FAILLOG_C_LINES: [usize; 3] = [282, 34, 92];
+// 2026-11-24 (fix/u16): measured at the tip, sub_2620 282 -> 283 and sub_3ad0
+// 92 -> 94; sub_3320 is still 34. The tail of sub_2620 is now one shared exit
+// path (`LAB_000028d1`): before the ctree list printing (b1cfac8333, which
+// prints a list from its tree statements) the same function had 291 lines,
+// with the exit copied per branch and string literals printed as `s_xxxx`.
+const PIN_FAILLOG_C_LINES: [usize; 3] = [283, 34, 94];
 // Tokens Java's `getC()` cleaner REWRITES (`IllegalCharCppTransformer`).
 // Phase 3 measured 57/10/24 (whole rendered declarators like
 // `"unsigned long *"` as single `<type>` tokens, received by scripts/exports

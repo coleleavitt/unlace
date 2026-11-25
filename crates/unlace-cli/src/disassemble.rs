@@ -95,7 +95,8 @@ mod provenance;
 pub(crate) mod raw_pcode;
 
 use unlace_console::disasm::{
-    self, CodeWalk, DERIVED_INSTRUCTION_CAP, Row, Skip, Window, hex, mapped_run_end, read_upto,
+    self, CodeWalk, DERIVED_INSTRUCTION_CAP, Row, Skip, Window, hex, mapped_run, mapped_run_end,
+    read_upto,
 };
 use unlace_console::engine::ConsoleProgram;
 use unlace_sleigh::loadimage::section_flags;
@@ -762,11 +763,23 @@ fn resolve_region(prog: &ConsoleProgram, args: &DisArgs) -> Result<Region, Strin
 /// on a resolved region, so no walk over it can list a byte the image does not
 /// hold ([`mapped_run_end`]).
 fn bound_to_image(prog: &ConsoleProgram, region: Region) -> Region {
-    let mapped_end = mapped_run_end(prog, region.start).map(|(end, _)| end);
+    let mapped_end = mapped_run_end(prog, region.start)
+        .map(|(end, _)| end)
+        .or_else(|| section_run_end(prog, region.start));
     Region {
         mapped_end,
         ..region
     }
+}
+
+/// A relocatable object publishes no segments, so the memory its image holds is
+/// its sections: a walk from inside one stops at that section's end instead of
+/// listing the zero fill the loader returns past it as `.byte` rows.
+fn section_run_end(prog: &ConsoleProgram, vma: u64) -> Option<u64> {
+    if !prog.segments().is_empty() {
+        return None;
+    }
+    mapped_run(&prog.sections(), vma).map(|(end, _)| end)
 }
 
 /// Did the walk stop at the end of mapped memory with the caller's own request

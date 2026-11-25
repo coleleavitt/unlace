@@ -8314,8 +8314,8 @@ int main(void) {
     )];
     let gcc_only: [(&str, &str); 8] = [
         (
-            "v2 = (*(char *)(v7 + a1) != '=') ? (int)*(char *)(a0 + (unsigned long)*(unsigned char *)(v7 + a1)) : 0;",
-            "v2 = (*(char *)(v7 + a1) != '=') ? *(char *)(a0 + (unsigned long)*(unsigned char *)(v7 + a1)) : 0;",
+            "v3 = (*(char *)(v8 + a1) != '=') ? (int)*(char *)(a0 + (unsigned long)*(unsigned char *)(v8 + a1)) : 0;",
+            "v3 = (*(char *)(v8 + a1) != '=') ? *(char *)(a0 + (unsigned long)*(unsigned char *)(v8 + a1)) : 0;",
         ),
         (
             "v1 = (a1) ? (int)*(char *)(a0 + a1) : 0;",
@@ -8342,8 +8342,8 @@ int main(void) {
             "v1 = (a1) ? *(char *)(a0 + a1) : -1;",
         ),
         (
-            "v5 = (*(char *)(a1 + v7 + 3) != '=') ? (int)*(char",
-            "v5 = (*(char *)(a1 + v7 + 3) != '=') ? *(char",
+            "v6 = (*(char *)(a1 + v8 + 3) != '=') ? (int)*(char",
+            "v6 = (*(char *)(a1 + v8 + 3) != '=') ? *(char",
         ),
     ];
     let gcc_kept = [
@@ -9222,6 +9222,9 @@ int main(void) {
                 opt,
                 "--option",
                 "castwiden",
+                "off",
+                "--option",
+                "boolreturn",
                 "off",
             ];
             let (stdout, stderr, ok) = run_unlace(&args);
@@ -11967,7 +11970,7 @@ int main(void) {
   static const long recs[] = {2, 3, 5, 7, 11, 13};
   unsigned long n = 0;
   unsigned char *dec = w_decode("aGVsbG8gd29ybGQ=", 16, &n);
-  char *rev = @REV@ ? w_rev("unlace", 4) : (w_rev("unlace", 4), "-");
+  char *rev = @REV@ ? w_rev("kuna", 4) : (w_rev("kuna", 4), "-");
   long a = w_sbytes(hi, 6);
   long b = w_ubytes((const unsigned char *)hi, 6);
   long c = w_words(wide, 16);
@@ -12337,6 +12340,9 @@ fn a_big_endian_register_pair_round_trips_through_the_printed_c() {
             "--option",
             "bejoin",
             "on",
+            "--option",
+            "armpairparam",
+            "off",
         ]);
         assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, funcs);
@@ -12864,6 +12870,9 @@ fn a_64_bit_comparison_keeps_its_int_result_in_the_first_register() {
             "--option",
             "bejoin",
             "on",
+            "--option",
+            "armpairparam",
+            "off",
         ]);
         assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, &FUNCS);
@@ -13445,7 +13454,9 @@ fn a_division_by_a_constant_keeps_its_quotient_in_the_first_register() {
 /// `long long` shifted right moves the bit the other way, and `avg64`,
 /// `mshr1_64` and `sshr33` keep their fix. Every function is compiled with gcc
 /// and clang at -O0 and -O2 against `bejoin_shr.c`, the 64-bit arguments split
-/// high word first.
+/// high word first. The ARM objects run with `armpairparam` off: since
+/// fc53d27e61 that option joins each aligned register pair into one 8-byte
+/// parameter, which this test does not measure.
 #[test]
 fn a_shift_that_carries_into_the_first_register_keeps_the_int() {
     const NARROW: [&str; 11] = [
@@ -13473,6 +13484,9 @@ fn a_shift_that_carries_into_the_first_register_keeps_the_int() {
             "--option",
             "bejoin",
             "on",
+            "--option",
+            "armpairparam",
+            "off",
         ]);
         assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, &ALL);

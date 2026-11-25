@@ -131,7 +131,7 @@ static unsigned char *page_end(unsigned n, const unsigned char *bytes)
 }
 int main(void)
 {
-    static const char name[] = "unlace";
+    static const char name[] = "kuna";
     unsigned char rb[24];
     const char *np = name;
     memcpy(rb, &np, 8);

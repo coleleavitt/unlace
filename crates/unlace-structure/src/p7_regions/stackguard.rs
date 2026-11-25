@@ -761,6 +761,11 @@ impl Action for ActionStripStackGuard {
             let mut seen: BTreeSet<VarnodeId> = BTreeSet::new();
             collect_canary_slots(cmp_in1, 32, &mut seen, data, &mut slots, &mut loads);
             collect_value_slots(&loads, data, &mut slots);
+            {
+                let mut c = 0usize; let mut t = 0usize;
+                for bi in 0..data.bblocks_get_size() { let bb = data.bblocks_get_block(bi); for op in data.bb_ops(bb) { t += 1; if format!("{:?}", data.obank().get(op).expect("g5").code()) == "CPUI_CBRANCH" { c += 1; } } }
+                eprintln!("G5 strip fd={:p} cbr={} ops={}", data as *const Funcdata, c, t);
+            }
             data.remove_branch(h, idx)
                 .expect("ActionStripStackGuard: removeBranch");
             eprintln!("G4 post-removebranch h={:?} size_out={} failbasic={} failcall={}", h, data.bblocks_ref().block(h).size_out(), matches!(data.bblocks_ref().block(fail_out).kind(), BlockKind::Basic(_)), block_has_call(fail_out, data));

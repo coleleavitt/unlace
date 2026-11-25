@@ -535,6 +535,11 @@ fn decompile_one_prefollowed_once(
     if let Ok(fd) = &result {
         unlace_decomp::mapglobalsyms::persist(arch, fd);
     }
+    if let Ok(fd) = &result {
+        let mut c = 0usize; let mut t = 0usize;
+        for bi in 0..fd.bblocks_get_size() { let bb = fd.bblocks_get_block(bi); for op in fd.bb_ops(bb) { t += 1; if format!("{:?}", fd.obank().get(op).expect("g5").code()) == "CPUI_CBRANCH" { c += 1; } } }
+        eprintln!("G5 step-end fd={:p} cbr={} ops={}", fd as *const Funcdata, c, t);
+    }
     DecompileStep { result, discovered }
 }
 

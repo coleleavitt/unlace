@@ -988,6 +988,18 @@ pub fn run_listing_consumers_replaying_observed(
     if crate::loader::reloc_object::is_synthetically_laid_out(&file) {
         return Vec::new();
     }
+    // (unlace `ehcold`/`functails`) A withheld cold part is no walk root from any list: the
+    // commit drops its entries after the walk, so the committed and cold-fragment lists are
+    // filtered here too, not only the oracle seeds.
+    let withheld = &arch.unlace_withheld_cold;
+    let live = |vma: &u64| {
+        let idx = withheld.partition_point(|&(start, _)| start <= *vma);
+        !(idx > 0 && *vma < withheld[idx - 1].1)
+    };
+    let live_committed: Vec<u64> = committed_entries.iter().copied().filter(live).collect();
+    let live_cold: Vec<u64> = cold_entries.iter().copied().filter(live).collect();
+    let committed_entries: &[u64] = &live_committed;
+    let cold_entries: &[u64] = &live_cold;
     let mut seeds = listing_seeds_for_language(&file, bytes, Some(arch.get_description()));
     // (unlace) The fast inventory walk leaves out the functions a Go pclntab
     // names, where the `gopclntab` pass ran and commits them: the pass set
@@ -1072,14 +1084,7 @@ pub fn run_listing_consumers_replaying_observed(
         seeds.sort_unstable();
         seeds.dedup();
     }
-    // (unlace `ehcold`/`functails`) A withheld cold part is not a walk root. The oracle
-    // seeds above include its FDE start, and the commit drops its entries only after the
-    // walk, so without this filter the walk lists the part as a function again.
-    let withheld = &arch.unlace_withheld_cold;
-    seeds.retain(|&vma| {
-        let idx = withheld.partition_point(|&(start, _)| start <= vma);
-        !(idx > 0 && vma < withheld[idx - 1].1)
-    });
+    seeds.retain(live);
     let seed_names = funcsym_names(&file);
     let funcsym_seeds = crate::entry::existing_function_addrs(&file, bytes);
     // Every consumer that reads an `Insn`'s disassembly text — the

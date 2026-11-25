@@ -178,9 +178,10 @@ pub enum StmtKind {
     /// (unlace `javatry`) An `if` that opens a DEX `try` statement on its own (its body and
     /// catches all inside the `if`), printed as `try { } catch`.
     JavaTry,
-    /// (unlace `labelnode`) The label line of the C copy leaf `body` (a `Stmts` or `Ops` statement
-    /// with the same origin block), printed before it. The printer prints it from the origin block
-    /// with `emit_any_label_statement`, so the label decision is the printer's; the node places it.
+    /// (unlace `labelnode`) The label line of the statement `body` (a copy leaf, a `Stmts` or `Ops`
+    /// statement, or a loop head) with the same origin block, printed before it. The printer prints
+    /// it from the origin block with `emit_any_label_statement`, so the label decision is the
+    /// printer's; the node places it.
     Label { body: StmtId },
     /// Not modelled yet: printed from its origin block.
     Opaque,
@@ -455,7 +456,10 @@ impl CTree {
     /// when a rewrite wrapped that statement in a sequence led by a statement built from the
     /// same block (an `if` with an arm moved after it), that first statement.
     pub fn stmt_for(&self, blk: BlockId) -> Option<StmtId> {
-        let id = self.node_for(blk)?;
+        let mut id = self.node_for(blk)?;
+        if let StmtKind::Label { body } = &self.stmt(id).kind {
+            id = *body;
+        }
         if let StmtKind::Seq(list) = &self.stmt(id).kind
             && let Some(&first) = list.first()
             && self.stmt(first).origin == Some(blk)

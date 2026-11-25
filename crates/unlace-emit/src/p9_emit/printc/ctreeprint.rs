@@ -11,6 +11,8 @@
 
 use std::collections::BTreeMap;
 
+use super::modifiers;
+
 use unlace_base::types::int4;
 
 use super::{Architecture, Funcdata, PrintC};
@@ -100,6 +102,33 @@ impl PrintC {
         }
     }
 
+    /// (unlace `labelnode`) A `Label` node: the label line of the statement `body` before it. A
+    /// copy leaf prints its label and then its statements. A loop head prints its label in the modes
+    /// its emitter sets before its own label call, then the loop with that call suppressed
+    /// (`label_printed`).
+    fn emit_label_node(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        blk: BlockId,
+        ty: BlockType,
+        body: StmtId,
+    ) -> bool {
+        if ty == BlockType::Copy {
+            self.emit_any_label_statement(fd, blk);
+            return self.emit_copy_leaf(fd, arch, body);
+        }
+        self.context.push_mod();
+        self.context
+            .unset_mod(modifiers::NO_BRANCH | modifiers::ONLY_BRANCH);
+        self.emit_any_label_statement(fd, blk);
+        self.context.pop_mod();
+        self.label_printed = Some(blk);
+        self.emit_ctree_arm(fd, arch, body);
+        self.label_printed = None;
+        true
+    }
+
     /// The statements of a copy leaf `id` (a `Stmts` or `Ops` statement) without its label line,
     /// which the `Label` node in front of it prints.
     fn emit_copy_leaf(&mut self, fd: &Funcdata, arch: &Architecture, id: StmtId) -> bool {
@@ -129,10 +158,7 @@ impl PrintC {
         };
         let ty = fd.sblocks_ref().block(blk).get_type();
         match stmt.kind {
-            StmtKind::Label { body } if ty == BlockType::Copy => {
-                self.emit_any_label_statement(fd, blk);
-                self.emit_copy_leaf(fd, arch, body)
-            }
+            StmtKind::Label { body } => self.emit_label_node(fd, arch, blk, ty, body),
             StmtKind::Seq(children) if ty == BlockType::Graph => {
                 for child in children {
                     let id = self.emit.begin_block(0);
@@ -482,12 +508,11 @@ impl PrintC {
             .into_iter()
             .filter(|&id| {
                 let stmt = tree.stmt(id);
-                matches!(stmt.kind, StmtKind::Stmts { .. } | StmtKind::Ops { .. })
-                    && stmt.origin.is_some_and(|blk| {
-                        tree.node_for(blk) == Some(id)
-                            && lines.get(&blk) == Some(&true)
-                            && fd.sblocks_ref().block(blk).get_type() == BlockType::Copy
-                    })
+                stmt.origin.is_some_and(|blk| {
+                    tree.node_for(blk) == Some(id)
+                        && lines.get(&blk) == Some(&true)
+                        && labelled_kind(&stmt.kind, fd.sblocks_ref().block(blk).get_type())
+                })
             })
             .collect();
         let Some(tree) = self.ctree.as_mut() else {
@@ -2063,4 +2088,16 @@ fn in_statement_position(fd: &Funcdata, blk: BlockId) -> bool {
         }
     }
     !first
+}
+
+/// Whether a statement of block type `ty` is one the `Label` node wraps: a copy leaf, or a loop
+/// head whose emitter prints the label above the loop.
+fn labelled_kind(kind: &StmtKind, ty: BlockType) -> bool {
+    match ty {
+        BlockType::Copy => matches!(kind, StmtKind::Stmts { .. } | StmtKind::Ops { .. }),
+        BlockType::WhileDo => matches!(kind, StmtKind::While { .. } | StmtKind::For { .. }),
+        BlockType::DoWhile => matches!(kind, StmtKind::DoWhile { .. }),
+        BlockType::InfLoop => matches!(kind, StmtKind::Loop { .. }),
+        _ => false,
+    }
 }

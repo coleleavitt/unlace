@@ -3914,9 +3914,7 @@ mod tests {
 }
 
 fn g1b_diag(ctx: &mut dyn MergeContext, opc: OpCode, vn1: VarnodeId, vn2: VarnodeId, h1: HighVariableId, h2: HighVariableId) {
-    if !ctx.high_is_persist(h1) && !ctx.high_is_persist(h2) {
-        return;
-    }
+    eprintln!("[g1b] call {:?} p1={} p2={}", opc, ctx.high_is_persist(h1), ctx.high_is_persist(h2));
     let pe = (ctx.pass_hooks().pointeevalue_keeps_apart)(ctx, vn1, vn2);
     let gv = (ctx.pass_hooks().globalvalue_keeps_apart)(ctx, h1, h2);
     eprintln!("[g1b] {:?} vn1={:?} h1={:?} vn2={:?} h2={:?} pointee_keeps={} globalvalue_keeps={}", opc, vn1, h1, vn2, h2, pe, gv);

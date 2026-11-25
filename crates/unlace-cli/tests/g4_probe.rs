@@ -20,7 +20,8 @@ fn run_with_wrapper(extra: &[&str], tag: &str) -> (String, String) {
 }
 #[test]
 fn g4_probe_ls_main() {
-    let (on, _) = run_with_wrapper(&["--option", "stackguard", "on"], "on");
+    let (on, on_log) = run_with_wrapper(&["--option", "stackguard", "on"], "on");
+    let g5: String = on_log.lines().filter(|l| l.contains("G5")).map(|l| format!("{l}\n")).collect();
     let (off, _) = run_with_wrapper(&["--option", "stackguard", "off"], "off");
     let (def, _) = run_with_wrapper(&[], "default");
     let mut msg = format!("G4PROBE_BEGIN on={} off={} def={} on_eq_off={} on_eq_def={}\n", on.len(), off.len(), def.len(), on == off, on == def);
@@ -29,5 +30,6 @@ fn g4_probe_ls_main() {
     for (i, (x, y)) in on.lines().zip(off.lines()).enumerate().filter(|(_, (x, y))| x != y).take(12) {
         msg.push_str(&format!("DIFF {}: on=[{}] off=[{}]\n", i, x, y));
     }
+    msg.push_str(&g5);
     panic!("{}", msg);
 }

@@ -54,6 +54,14 @@ previous fixture exactly.
 function has none of those instructions; two lines change only a unique-space offset, and the same
 capture over the previous sources reproduces the previous fixture exactly.
 
+`lzcount.txt`, `floatprint.txt`, `promotecompare.txt`, `gh7139-x86-16-disp16-signed.txt`
+and `ccmp.txt` were refreshed after the 2026-11-24 x86 and AArch64 spec additions
+(VEX/AVX-VNNI/IFMA/SM3/SHA512, FMA4/XOP/TBM/LWP, AMX, AArch64 extensions). Only
+unique-space offsets changed (3,300 lines), and the old-to-new offset map is one-to-one,
+so temporary aliasing is unchanged. `gh9203-condexe-loopcopy.txt` also gains the two ops of
+the RISC-V return-target fix (21ff9c1bdc: `ret` clears bit 0, `INT_NEGATE`/`INT_AND`
+before the `RETURN`). The new lines are the Rust runtime's output over `slacomp` specs.
+
 ## Regeneration
 
 ```bash

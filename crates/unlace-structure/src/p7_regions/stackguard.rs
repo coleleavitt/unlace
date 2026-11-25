@@ -611,6 +611,7 @@ impl Action for ActionStripStackGuard {
 
     /// C++ `clone`: filtered by group membership.
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
+        eprintln!("G4 clone stripstackguard group={} contained={}", self.get_group(), grouplist.contains(self.get_group()));
         if !grouplist.contains(self.get_group()) {
             return None;
         }

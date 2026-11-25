@@ -1683,6 +1683,15 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> UnlaceResult<int4
         if !(reflow_requested && fd.has_restart_pending())
             && !crate::bejoin::wide_callee_missed(arch, fd)
         {
+            for bi in 0..fd.bblocks_get_size() {
+                let bb = fd.bblocks_get_block(bi);
+                for op in fd.bb_ops(bb) {
+                    let c = format!("{:?}", fd.obank().get(op).expect("g4").code());
+                    if c == "CPUI_CBRANCH" || c == "CPUI_CALL" {
+                        eprintln!("G4 END {} block={:?} size_out={} op={}", bi, bb, fd.bblocks_ref().block(bb).size_out(), c);
+                    }
+                }
+            }
             drain_pipeline_comments(arch, fd);
             return Ok(total);
         }

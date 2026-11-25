@@ -2211,6 +2211,26 @@ live_field = "copy_run"
 live_true = "on"
 live_false = "off"
 
+
+[[settable]]
+option = "vecpairstore"
+values = "on|off"
+default = "on"
+destructive = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "vecpairstore"
+summary = "Print a 16-byte store of two 8-byte scalars as two 8-byte element stores. gcc's SLP vectorizer merges two adjacent pointer stores (`f[0] = f[1] = p`, `f[0] = a; f[1] = b`) into one 16-byte store built with `vpunpcklqdq` (equal halves) or `vpinsrq` (different halves), which printed as `*(unsigned __int128 *)f = vpunpcklqdq_avx(ZEXT816(p), ZEXT816(p))`. At `on` a STORE whose value is the single-reader result of `vpunpcklqdq_avx(x, y)` or `vpinsrq_avx(x, b, 1)`, where each low half is an INT_ZEXT of an 8-byte value, keeps the store of the low half and adds a second 8-byte store of the high half at pointer plus 8, and the user op is destroyed. A store with an INDIRECT of heritage on it is left alone. Phase P3, after copyrun."
+use_when = "On by default: the element assignments are what the source wrote. Flip off to see the 16-byte user op."
+example = "option vecpairstore off"
+source_decompiler = "unlace"
+inspiration = "gcc -O2 -mavx SLP store merging (vpunpcklqdq for {p,p}, vpinsrq for {p0,p1}), the pair of 8-byte stores it replaces"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = "a 16-byte store of two pointers prints as *(unsigned __int128 *)f = vpunpcklqdq_avx(ZEXT816(p), ZEXT816(p))|a pair of pointer assignments prints as a vpinsrq_avx user op"
+
 [[settable]]
 option = "rodatastring"
 values = "on|off"

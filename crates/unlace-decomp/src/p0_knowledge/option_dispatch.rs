@@ -293,6 +293,7 @@ unlace_options! { self, p1;
     "atomics" => registered!(crate::atomicops::Atomics),
     "llscfold" => registered!(crate::atomicops::LlscFold),
     "copyrun" => registered!(crate::copyrun::CopyRun),
+    "vecpairstore" => registered!(crate::vecpairstore::VecPairStore),
     "regionstructure" => registered!(crate::region_structurer::RegionStructure),
     "guardarm" => registered!(crate::ifnoexit::GuardArm),
     "loopcondhoist" => registered!(crate::ifnoexit::LoopCondHoist),

@@ -20,6 +20,7 @@ pub mod condexe;
 pub mod constantbytes;
 pub mod constspaceload;
 pub mod copyrun;
+pub mod vecpairstore; // (unlace `vecpairstore`) a 16-byte store of two 8-byte scalars is two stores
 pub mod deadcascade;
 pub mod devectorize;
 pub mod egraph; // (unlace `egraph`) equality saturation over MBA trees

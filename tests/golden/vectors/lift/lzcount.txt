@@ -29,12 +29,12 @@ insn ram:0x10020 4
 insn ram:0x10024 4
   LZCOUNT (register,0xc,4) (register,0xc,4)
 insn ram:0x10028 4
-  COPY (unique,0x73900,1) (const,0x1b,1)
-  INT_LEFT (unique,0x73a00,4) (register,0xc,4) (unique,0x73900,1)
-  INT_SUB (unique,0x73b00,1) (const,0x20,1) (unique,0x73900,1)
-  INT_RIGHT (unique,0x73c00,4) (register,0xc,4) (unique,0x73b00,1)
-  INT_OR (unique,0x73e00,4) (unique,0x73a00,4) (unique,0x73c00,4)
-  INT_AND (register,0xc,4) (unique,0x73e00,4) (const,0x7ffffff,4)
+  COPY (unique,0x73a00,1) (const,0x1b,1)
+  INT_LEFT (unique,0x73b00,4) (register,0xc,4) (unique,0x73a00,1)
+  INT_SUB (unique,0x73c00,1) (const,0x20,1) (unique,0x73a00,1)
+  INT_RIGHT (unique,0x73d00,4) (register,0xc,4) (unique,0x73c00,1)
+  INT_OR (unique,0x73f00,4) (unique,0x73b00,4) (unique,0x73d00,4)
+  INT_AND (register,0xc,4) (unique,0x73f00,4) (const,0x7ffffff,4)
 insn ram:0x1002c 4
   RETURN - (register,0x1020,4)
 lifterror baddata ram:0x10030 r0x00010030: Unable to resolve constructor

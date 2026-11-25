@@ -178,7 +178,7 @@ parameter, no source body) is absent from that card, never 0.
 | `local_type_f1`, `local_count_err` | | locals: multiset F1 over (pointer level, primitive class and width, or struct); count error |
 | `struct_field_f1` | higher | struct-pointer parameters: field (offset, size) F1 against the DWARF layout. Predicted layouts come from the record's `types`, so run with `--option structdefs on`. |
 | `callee_recall` | higher | share of the DWARF call-site callees the C calls, by name, `sub_<addr>` or the paired function's name |
-| `noreturn_agree` | higher | unlace's does-not-return verdict (warning or prototype) agrees with `DW_AT_noreturn` |
+| `noreturn_agree` | higher | unlace's own does-not-return verdict agrees with `DW_AT_noreturn`: the function-level header warning at its entry (`option noreturnself on`), not a call-site warning. Score with `--option noreturnself on`. |
 | `addr_coverage` | higher | share of the line table's statement addresses that `line_mappings` cover (code dropped or folded away) |
 | `cfg_ged`, `cfg_ged_norm`, `cfg_exact` | lower/lower/higher | structural CFG edit distance to the source body (below) |
 | `loop_count_err`, `if_count_err`, `switch_count_err` | lower | statement-count differences against the source |

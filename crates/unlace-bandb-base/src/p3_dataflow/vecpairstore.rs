@@ -63,6 +63,15 @@ impl Action for ActionVecPairStore {
             .map(|i| data.bblocks_get_block(i))
             .collect();
         let mut stores = Vec::new();
+        for block in blocks.clone() {
+            for op in data.bb_ops(block) {
+                if let Some(o) = data.obank().get(op).filter(|o| o.code() == CPUI_STORE) {
+                    let v = o.get_in(2).and_then(|v| data.vbank().get(v));
+                    let dc = v.map(|v| v.get_def().and_then(|d| data.obank().get(d)).map(|d| format!("{:?}", d.code())));
+                    eprintln!("[vps] store {:?} val={:?} readers={:?} def={:?}", op, o.get_in(2).and_then(|x| data.vbank().get(x)).map(|x| x.get_size()), v.map(|v| v.descend_iter().count()), dc);
+                }
+            }
+        }
         for block in blocks {
             for op in data.bb_ops(block) {
                 if split_of(data, op).is_some() {

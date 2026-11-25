@@ -8314,8 +8314,8 @@ int main(void) {
     )];
     let gcc_only: [(&str, &str); 8] = [
         (
-            "v2 = (*(char *)(v7 + a1) != '=') ? (int)*(char *)(a0 + (unsigned long)*(unsigned char *)(v7 + a1)) : 0;",
-            "v2 = (*(char *)(v7 + a1) != '=') ? *(char *)(a0 + (unsigned long)*(unsigned char *)(v7 + a1)) : 0;",
+            "v3 = (*(char *)(v8 + a1) != '=') ? (int)*(char *)(a0 + (unsigned long)*(unsigned char *)(v8 + a1)) : 0;",
+            "v3 = (*(char *)(v8 + a1) != '=') ? *(char *)(a0 + (unsigned long)*(unsigned char *)(v8 + a1)) : 0;",
         ),
         (
             "v1 = (a1) ? (int)*(char *)(a0 + a1) : 0;",
@@ -8342,8 +8342,8 @@ int main(void) {
             "v1 = (a1) ? *(char *)(a0 + a1) : -1;",
         ),
         (
-            "v5 = (*(char *)(a1 + v7 + 3) != '=') ? (int)*(char",
-            "v5 = (*(char *)(a1 + v7 + 3) != '=') ? *(char",
+            "v6 = (*(char *)(a1 + v8 + 3) != '=') ? (int)*(char",
+            "v6 = (*(char *)(a1 + v8 + 3) != '=') ? *(char",
         ),
     ];
     let gcc_kept = [
@@ -12337,6 +12337,9 @@ fn a_big_endian_register_pair_round_trips_through_the_printed_c() {
             "--option",
             "bejoin",
             "on",
+            "--option",
+            "armpairparam",
+            "off",
         ]);
         assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, funcs);
@@ -12864,6 +12867,9 @@ fn a_64_bit_comparison_keeps_its_int_result_in_the_first_register() {
             "--option",
             "bejoin",
             "on",
+            "--option",
+            "armpairparam",
+            "off",
         ]);
         assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, &FUNCS);

@@ -245,7 +245,7 @@ tools/hooks/unlace-ci-gates.sh [fast|parity|full]   # default parity
 ## CI
 
 `.github/workflows/tests.yml` runs on every pull request and every push to `main` (and is
-not called by the nightly, which runs its own `slow-tests` and `semantic` jobs; see
+not called by the nightly, which runs its own `semantic` and `decbench` jobs; see
 notes/test-tiers.md). Its jobs start together; none waits for another. The `semantic-gcc` job runs
 the x86_64-gcc rows of the T4 semantic suite (`tools/semantic/README.md`) against its baseline; the
 full three-configuration run stays in the nightly.
@@ -257,7 +257,7 @@ full three-configuration run stays in the nightly.
 | `semantic-gcc` | `tools/semantic/run.py --config x86_64-gcc --opt O0,O2 --baseline tools/semantic/baseline.toml`: each case compiled and run against its reference, failing only on a row that passed in the baseline and no longer does | about 4 min (mostly the release build) |
 | `parity gates` | release build, `cargo test --release -p unlace-harness --test parity`, `tools/check_spec.py`, the `tests/cli` probes, `unlace catalog --check`, the determinism run, the repipe counters, `docs/options.md` freshness, the unlace-ghidra harness, and the web tests when `UNLACE_WEB` is `true` | about 10 min |
 | `workspace suite (build)` | builds every workspace test binary into a cargo-nextest archive (`cargo nextest archive`) | about 12 min |
-| `cargo workspace suite (1/3..3/3)` | three jobs, each running a third of the archive (`--partition count:N/3`) under the nextest profile `ci` (`.config/nextest.toml`), which leaves out the slow tests listed there. Both suite jobs are skipped on a PR from a branch of this repository unless it has the `full-ci` label | a few min each |
+| `cargo workspace suite (1/3..3/3)` | three jobs, each running a third of the archive (`--partition count:N/3`) under the nextest profile `ci` (`.config/nextest.toml`), which leaves out only the parity gates (the `parity gates` job runs them). Both suite jobs are skipped on a PR from a branch of this repository unless it has the `full-ci` label | a few min each |
 
 Caching:
 
@@ -274,14 +274,8 @@ Caching:
 A new push to a PR cancels that PR's running workflow. Each commit on `main` runs in a
 concurrency group of its own, so no landed commit's run is cancelled or replaced.
 
-`.github/workflows/coverage.yml` runs the whole suite (the slow tests included) under
-cargo-llvm-cov once a day and on manual dispatch, on cargo's own harness (under nextest
-every test process wrote its own `.profraw` and the runner's disk filled), writes `lcov.info`
-whether or not a test failed, and uploads it to Repowise. It is kept off the push path
-because instrumented binaries run the suite several times slower.
-
 Locally the same suite runs with `cargo nextest run --workspace
---exclude unlace-wasm --profile ci` (or `--profile full`). A test binary outside the
+--exclude unlace-wasm --profile ci`. A test binary outside the
 checkout (a target dir elsewhere, or an archive) finds the repository through `UNLACE_ROOT`.
 
 Many tests build their input with a cross toolchain. The PE tests run

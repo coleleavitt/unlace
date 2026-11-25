@@ -1,8 +1,6 @@
 name: Nightly
 
 # Once a night on main:
-#   slow-tests -- the seven workspace tests the Tests workflow's `ci` profile leaves out
-#                 (the `nightly` nextest profile, .config/nextest.toml).
 #   semantic  -- the T4 compile-and-run corpus (tools/semantic) against its baseline: a row that
 #                passed and no longer does fails the job.
 #   decbench  -- a fixed sample of the published decbench dataset (the `optimized`
@@ -57,60 +55,6 @@ env:
   SAMPLE_SEED: unlace-nightly-v1
 
 jobs:
-  slow-tests:
-    name: slow tests (nextest profile nightly)
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 120
-    # The same test environment as the Tests workflow's workspace suite (tests.yml, rust-test):
-    # the binaries find the repository and the specs through these variables.
-    env:
-      CARGO_INCREMENTAL: "0"
-      CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      CARGO_PROFILE_TEST_DEBUG: line-tables-only
-      UNLACE_SLA_CACHE: ${{ github.workspace }}/.sla-cache
-      UNLACE_ROOT: ${{ github.workspace }}
-      UNLACE_SPECS: ${{ github.workspace }}/specs
-      SLEIGHHOME: ${{ github.workspace }}/specs
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust (stable)
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: nightly-slow-tests
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          cache-on-failure: true
-
-      - uses: taiki-e/install-action@cargo-nextest
-
-      # Restore only: the Tests workflow's gates job saves this cache on main under the same key.
-      - name: Restore the .sla cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .sla-cache
-          key: sla-v2-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
-
-      # The `nightly` profile (.config/nextest.toml) selects exactly the seven tests that the
-      # `ci` profile leaves out; scripts/check_test_tiers.py keeps the two lists equal.
-      - name: Build and run the slow tests
-        run: |
-          cargo nextest run --workspace --profile nightly \
-            ${{ vars.UNLACE_WEB == 'true' && ' ' || '--exclude unlace-wasm' }}
-
-      - name: Upload the JUnit report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: junit-nightly
-          path: target/nextest/nightly/junit.xml
-          retention-days: 14
-          if-no-files-found: ignore
-
   # The T4 corpus (tools/semantic/README.md): every function of the construct cases is decompiled,
   # its emitted C compiled in place of the original and run. Fails only when a row that passes in
   # tools/semantic/baseline.toml no longer passes (run.py --baseline); newly passing rows are listed.
@@ -323,7 +267,7 @@ jobs:
 
   report:
     name: nightly verdict
-    needs: [slow-tests, semantic, decbench]
+    needs: [semantic, decbench]
     if: always() && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -335,7 +279,6 @@ jobs:
 
       - name: Summarize
         env:
-          SLOW: ${{ needs.slow-tests.result }}
           SEMANTIC: ${{ needs.semantic.result }}
           DECBENCH: ${{ needs.decbench.result }}
         run: |
@@ -345,9 +288,8 @@ jobs:
             echo
             echo "| check | result |"
             echo "|---|---|"
-            echo "| slow tests (nextest nightly) | $SLOW |"
             echo "| semantic suite (T4) | $SEMANTIC |"
             echo "| decbench sample | $DECBENCH |"
             echo "| decbench regressions | $regressions |"
           } >> "$GITHUB_STEP_SUMMARY"
-          [ "$SLOW" = success ] && [ "$SEMANTIC" = success ] && [ "$DECBENCH" = success ]
+          [ "$SEMANTIC" = success ] && [ "$DECBENCH" = success ]

@@ -894,14 +894,14 @@ fn the_datatest_stream_parses() {
 
 #[test]
 fn the_file_selection_matches_paths_names_and_globs() {
-    assert!(glob_match("unlace-*.toml", "wideslice.toml"));
+    assert!(glob_match("wide*.toml", "wideslice.toml"));
     assert!(glob_match(
         "tests/stages/*wide*",
         "tests/stages/wideslice.toml"
     ));
     assert!(glob_match("gh55?-*", "gh558-compareform"));
     assert!(glob_match("*", ""));
-    assert!(!glob_match("unlace-*.xml", "wideslice.toml"));
+    assert!(!glob_match("wide*.xml", "wideslice.toml"));
     assert!(!glob_match("a?c", "ac"));
     let root = Path::new("/repo");
     let file = "/repo/tests/stages/wideslice.toml";

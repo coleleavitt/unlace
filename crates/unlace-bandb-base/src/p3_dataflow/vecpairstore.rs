@@ -93,20 +93,35 @@ const VEC_PINSRQ: u8 = 1;
 /// 8-byte values, and the user op whose result the store wrote.
 struct Split {
     ptr: VarnodeId,
-    lo: VarnodeId,
-    hi: VarnodeId,
+    lo: Half,
+    hi: Half,
     call: OpId,
 }
 
-/// The 8-byte low part of `v` when `v` is an `INT_ZEXT` of an 8-byte value.
-fn low_half(data: &Funcdata, v: VarnodeId) -> Option<VarnodeId> {
-    let def = data.vbank().get(v)?.get_def()?;
-    let o = data.obank().get(def)?;
-    if o.code() != CPUI_INT_ZEXT || data.vbank().get(v)?.get_size() != 16 {
+/// One 8-byte half of a split store: a varnode, or a constant read from a
+/// 16-byte constant's low bytes.
+#[derive(Clone, Copy)]
+enum Half {
+    Vn(VarnodeId),
+    Const(uintb),
+}
+
+/// The 8-byte low part of `v`: the 8-byte input of an `INT_ZEXT` of `v`, or
+/// the low 8 bytes of a 16-byte constant.
+fn low_half(data: &Funcdata, v: VarnodeId) -> Option<Half> {
+    let vv = data.vbank().get(v)?;
+    if vv.get_size() != 16 {
+        return None;
+    }
+    if vv.is_constant() {
+        return Some(Half::Const(vv.get_offset()));
+    }
+    let o = data.obank().get(vv.get_def()?)?;
+    if o.code() != CPUI_INT_ZEXT {
         return None;
     }
     let x = o.get_in(0)?;
-    (data.vbank().get(x)?.get_size() == 8).then_some(x)
+    (data.vbank().get(x)?.get_size() == 8).then_some(Half::Vn(x))
 }
 
 /// The split of `store` when it writes a 16-byte vector-pair user op result
@@ -148,7 +163,7 @@ fn split_of(data: &Funcdata, store: OpId) -> Option<Split> {
             if data.vbank().get(b)?.get_size() != 8 {
                 return None;
             }
-            (low_half(data, call.get_in(1)?)?, b)
+            (low_half(data, call.get_in(1)?)?, Half::Vn(b))
         }
         _ => return None,
     };
@@ -213,9 +228,17 @@ fn rewrite(data: &mut Funcdata, store: OpId, s: &Split) -> UnlaceResult<()> {
     data.op_set_opcode_code(second, CPUI_STORE);
     data.op_set_input(second, space, 0)?;
     data.op_set_input(second, hi_ptr, 1)?;
-    data.op_set_input(second, s.hi, 2)?;
+    let hi = match s.hi {
+        Half::Vn(v) => v,
+        Half::Const(c) => data.new_constant(8, c),
+    };
+    data.op_set_input(second, hi, 2)?;
     data.op_insert_after(second, store);
-    data.op_set_input(store, s.lo, 2)?;
+    let lo = match s.lo {
+        Half::Vn(v) => v,
+        Half::Const(c) => data.new_constant(8, c),
+    };
+    data.op_set_input(store, lo, 2)?;
     data.op_destroy(s.call);
     Ok(())
 }

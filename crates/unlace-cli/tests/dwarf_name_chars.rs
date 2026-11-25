@@ -99,21 +99,24 @@ fn dwarf_names_cannot_restructure_the_document() {
     std::fs::write(&hostile, patched(&std::fs::read(&plain).unwrap())).unwrap();
 
     let off = bodies(&decompile(&hostile, "off"));
-    for raw in [
-        "S; */ system(\"id\"); /*\n\x1b[2J",
-        "f\n// note: \x1b[0m\x07'",
-    ] {
-        assert!(
-            off.contains(raw),
-            "off must stay verbatim ({raw:?}):\n{off}"
-        );
-    }
+    assert!(
+        off.contains("S; */ system(\"id\"); /*\n\x1b[2J"),
+        "off must keep the type name verbatim:\n{off}"
+    );
+    // A member access spells the identifier its declaration uses (the printer's
+    // `sanitize_type_name`, applied to both), so the two cannot disagree.
+    let off_member = format!("f____note____0m{}", "_".repeat(25));
+    assert!(
+        off.contains(&off_member),
+        "off: member access must spell its declared identifier ({off_member}):\n{off}"
+    );
 
+    let safe_member = format!("f_x0a_x2f_x2f_note___x1b_0m_x07_x27{}", "_".repeat(23));
     for mode in ["safe", "ident"] {
         let text = bodies(&decompile(&hostile, mode));
         for escaped in [
             "S; _x2a_x2f system(_x22id_x22); _x2f_x2a_x0a_x1b[2J",
-            "f_x0a_x2f_x2f note: _x1b[0m_x07_x27",
+            safe_member.as_str(),
         ] {
             assert!(
                 text.contains(escaped),

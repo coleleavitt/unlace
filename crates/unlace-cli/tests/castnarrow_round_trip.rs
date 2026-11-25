@@ -134,7 +134,7 @@ const IMAGES: &[(&str, &[(&str, &str)])] = &[
             ("v4 = (unsigned int)a0;", "v4 = a0;"),
             ("v1 = (int)v3;", "v1 = v3;"),
             ("v1 = (int)a0;", "v1 = a0;"),
-            ("v1 = (short)a0;", "v1 = a0;"),
+            ("v2 = (short)a0;", "v2 = a0;"),
             ("return (int)x;", "return x;"),
         ],
     ),

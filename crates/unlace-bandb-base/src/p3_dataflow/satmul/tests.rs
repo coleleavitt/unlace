@@ -59,6 +59,14 @@ fn no_replace()
     |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| Ok(())
 }
 
+/// A formal input `n` at `off` in ram: a free varnode may have only one
+/// descendant, and `n` is read by several ops (and gains the call input).
+fn formal_input(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
+    let ram = Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap());
+    let vn = fd.new_varnode(size, &Address::new(ram, off), None);
+    fd.set_input_varnode(vn).unwrap()
+}
+
 /// `out = opc(inputs)` at a fresh address, `out` a new unique of `size` bytes.
 fn emit(fd: &mut Funcdata, opc: OpCode, inputs: &[VarnodeId], size: int4) -> (OpId, VarnodeId) {
     let ram = Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap());
@@ -98,7 +106,7 @@ fn build_or(
     guard: impl Fn(&mut Funcdata, VarnodeId, VarnodeId) -> VarnodeId,
     wide_low: bool,
 ) -> (OpId, VarnodeId) {
-    let n = fd.new_unique(8, Some(unk(8)));
+    let n = formal_input(fd, 0x2000, 8);
     let (_, zn) = emit(fd, OpCode::CPUI_INT_ZEXT, &[n], 16);
     let four = fd.new_constant(16, 4);
     let (_, p) = emit(fd, OpCode::CPUI_INT_MULT, &[zn, four], 16);

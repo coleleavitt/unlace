@@ -3914,9 +3914,6 @@ mod tests {
 }
 
 fn g1b_diag(ctx: &mut dyn MergeContext, opc: OpCode, vn1: VarnodeId, vn2: VarnodeId, h1: HighVariableId, h2: HighVariableId) {
-    if std::env::var_os("UNLACE_G1B_DIAG").is_none() {
-        return;
-    }
     if !ctx.high_is_persist(h1) && !ctx.high_is_persist(h2) {
         return;
     }

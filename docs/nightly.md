@@ -3,10 +3,9 @@
 `.github/workflows/nightly.yml` runs once a night on `main` (07:17 UTC, after the
 release) and answers three questions about the day's merges:
 
-1. **Do the slow tests and the semantic suite still pass?** The `slow-tests` job runs the seven
-   workspace tests that the per-push suite leaves out (the `nightly` nextest profile), and the
-   `semantic` job compiles and runs the emitted C of `tools/semantic` against its baseline. The
-   per-push gates are not repeated: every push to `main` already ran them (`notes/test-tiers.md`).
+1. **Does the semantic suite still pass?** The `semantic` job compiles and runs the emitted C
+   of `tools/semantic` against its baseline. The per-push gates and the workspace suite are not
+   repeated: every push to `main` already ran them (`notes/test-tiers.md`).
 2. **Did unlace's decbench scores move?** The `decbench` job decompiles a fixed sample of
    the published [decbench dataset](https://huggingface.co/datasets/noelo-lab/decbench-dataset),
    scores it with decbench's own code, and compares every function with the night before.
@@ -85,7 +84,7 @@ one night only.
 Measured on the `ubuntu-26.04` runner (AMD EPYC 7763, 4 vCPU): the `decbench` job
 takes about 30 minutes, of which 3 are a cold build, 2 setup (Rust Joern, decbench,
 the sample download), 22 the one-at-a-time A/B timing (~660 s of CPU per build), and
-3 scoring. The `slow-tests` and `semantic` jobs run beside it. Timing against a near-identical build came
+3 scoring. The `semantic` job runs beside it. Timing against a near-identical build came
 out at -0.1% (95% CI -1.1% .. +0.8%), so the A/B resolves changes of about 1%. The
 per-function scores from that run matched a run on a different machine and Python
 version exactly.

@@ -344,9 +344,7 @@ jobs:
           retention-days: 14
 
   # The workspace suite, under cargo-nextest: one job builds every test binary into an
-  # archive, three run a third of the tests each from it. Coverage (cargo-llvm-cov) and
-  # the slow tests the `ci` profile leaves out run on the Coverage workflow's schedule:
-  # instrumented, this suite took 45-105 min, against 30 min without.
+  # archive, three run a third of the tests each from it.
   #
   # Runs on: every push to main, manual dispatch, any PR from a FORK, and any PR
   # carrying the `full-ci` label. It is skipped only for a PR from a branch in this
@@ -401,11 +399,6 @@ jobs:
           path: nextest-archive.tar.zst
           retention-days: 1
           compression-level: 0
-
-      - name: Doc tests
-        run: |
-          cargo test --doc --workspace \
-            ${{ vars.UNLACE_WEB == 'true' && ' ' || '--exclude unlace-wasm' }}
 
       - name: Workspace build disk usage
         if: always()

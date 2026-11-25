@@ -87,7 +87,6 @@ impl ByteSet {
     }
 
     /// Drop one byte; `true` when it was present.
-    #[cfg(any(test, feature = "test-support"))]
     #[doc(hidden)]
     pub fn remove(&mut self, &(idx, b): &(int4, u64)) -> bool {
         if !self.contains(&(idx, b)) {

@@ -234,39 +234,6 @@ fn the_version_word_reads_like_pklite_prints_it() {
     assert_eq!(version_string(0x6201), "2.01/h/l");
 }
 
-/// Writes every synthetic file and its expected unpack to
-/// `$UNLACE_PKLITE_DUMP`, for checking the generator against deark
-/// (`deark -m pklite`); not part of the suite.
-#[test]
-#[ignore]
-fn dump_synthetic_files_for_an_external_check() {
-    let dir = std::path::PathBuf::from(
-        unlace_base::env::var("UNLACE_PKLITE_DUMP").expect("UNLACE_PKLITE_DUMP"),
-    );
-    for (seed, (name, layout, relocs)) in synth::layouts().into_iter().enumerate() {
-        let stored: &[usize] = if layout.mode.large {
-            &[5000, 9100]
-        } else {
-            &[]
-        };
-        let mut p = synth::program(seed as u32 * 7919 + 1, 12_000, relocs, stored);
-        p.overlay = b"overlay".to_vec();
-        let stem: String = name
-            .chars()
-            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-            .collect();
-        std::fs::write(dir.join(format!("{stem}.exe")), synth::pack(&p, &layout)).unwrap();
-        std::fs::write(
-            dir.join(format!("{stem}.want")),
-            synth::expected(&p, &layout),
-        )
-        .unwrap();
-    }
-    let code = synth::program(5, 9_000, Vec::new(), &[]).code;
-    std::fs::write(dir.join("com.com"), synth::pack_com(&code, 0x010e)).unwrap();
-    std::fs::write(dir.join("com.want"), code).unwrap();
-}
-
 /// The round trip above means something only if the generator reaches every
 /// token kind: literals, both two-byte match forms, short and escaped long
 /// lengths, most distance high-bit codes, the no-op and uncompressed escapes.

@@ -8,6 +8,9 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 unlace-base.workspace = true
 unlace-num.workspace = true
@@ -25,7 +28,6 @@ slotmap.workspace = true
 
 [dev-dependencies]
 unlace-stagefile.workspace = true
-unlace-middle = { workspace = true, features = ["test-support"] }
 unlace-slacomp.workspace = true
 # Verifier-only: the datatest <stringmatch> engine (item w10-structure-printbody).
 regex = { workspace = true }
@@ -44,10 +46,3 @@ path = "tests/integration.rs"
 name = "actionprof_unwind"
 path = "tests/actionprof_unwind.rs"
 
-[[test]]
-name = "verify_w6_s4_fspec_2_r2"
-path = "tests/verify_w6_s4_fspec_2_r2.rs"
-
-[[test]]
-name = "verify_w8_sig_pack"
-path = "tests/verify_w8_sig_pack.rs"

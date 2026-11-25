@@ -518,7 +518,7 @@ impl CalleeReturnWrites {
 
     /// Assemble a summary from its parts, for tests that pin a seam's reading of
     /// one rather than the walk that produced it.
-    #[cfg(any(test, feature = "test-support"))]
+    #[doc(hidden)]
     pub fn from_parts(
         writes: Vec<(int4, u64, int4)>,
         store_spaces: Vec<int4>,
@@ -537,14 +537,14 @@ impl CalleeReturnWrites {
         }
     }
 
-    #[cfg(any(test, feature = "test-support"))]
+    #[doc(hidden)]
     pub fn reading_memory(mut self) -> Self {
         self.reads_nonreturn_memory = true;
         self
     }
 
     /// This summary, as a walk that read through a `setISAMode` would leave it.
-    #[cfg(any(test, feature = "test-support"))]
+    #[doc(hidden)]
     pub fn through_a_mode_switch(mut self) -> Self {
         self.through_mode_switch = true;
         self
@@ -552,7 +552,7 @@ impl CalleeReturnWrites {
 
     /// This summary, with a return instruction that wrote `(idx, off, size)` and
     /// transferred through it.
-    #[cfg(any(test, feature = "test-support"))]
+    #[doc(hidden)]
     pub fn returning_through(mut self, idx: int4, off: u64, size: int4) -> Self {
         self.return_targets.push((idx, off, size));
         self
@@ -560,7 +560,7 @@ impl CalleeReturnWrites {
 
     /// As [`from_parts`](Self::from_parts), with the decoded instruction count
     /// stated (the bodies the return-register rule declines to read).
-    #[cfg(any(test, feature = "test-support"))]
+    #[doc(hidden)]
     pub fn from_parts_sized(
         writes: Vec<(int4, u64, int4)>,
         store_spaces: Vec<int4>,

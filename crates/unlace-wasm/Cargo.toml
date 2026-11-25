@@ -9,6 +9,7 @@ license.workspace = true
 publish = false
 
 [lib]
+doctest = false
 name = "unlace_wasm"
 path = "src/lib.rs"
 

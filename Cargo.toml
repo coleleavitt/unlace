@@ -1,5 +1,37 @@
 # Workspace for the decompiler, SLEIGH toolchain, and frontends.
 
+# `cargo install` (or `cargo install --path .`) from the repo root installs the `unlace`
+# binary to ~/.cargo/bin. It is the same program as crates/unlace-cli's binary; it finds this
+# checkout's specs/ through the path it was built from.
+[package]
+name = "unlace-install"
+description = "Installs the unlace CLI: run `cargo install` in the repo root"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+build = false
+
+[[bin]]
+name = "unlace"
+path = "crates/unlace-cli/src/main.rs"
+test = false
+bench = false
+doc = false
+
+[features]
+# `cargo install --features embed-specs`: carry the compiled SLEIGH tree inside the binary,
+# so it runs without this checkout.
+embed-specs = ["unlace-cli/embed-specs"]
+
+[dependencies]
+unlace-cli.workspace = true
+
 [workspace]
 resolver = "3"
 members = ["crates/*"]

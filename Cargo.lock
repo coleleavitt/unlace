@@ -1526,6 +1526,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-install"
+version = "0.1.0"
+dependencies = [
+ "unlace-cli",
+]
+
+[[package]]
 name = "unlace-lift"
 version = "0.1.0"
 dependencies = [

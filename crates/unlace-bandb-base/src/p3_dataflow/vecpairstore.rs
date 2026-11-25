@@ -51,6 +51,7 @@ impl Action for ActionVecPairStore {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        { use std::io::Write; if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/g2b-vps.log") { let _ = writeln!(f, "[vps] apply on {:?} opt={}", data.get_address(), data.get_arch().unlace_options.get::<crate::vecpairstore::VecPairStore>().0); } }
         if !data
             .get_arch()
             .unlace_options
@@ -68,7 +69,7 @@ impl Action for ActionVecPairStore {
                 if let Some(o) = data.obank().get(op).filter(|o| o.code() == CPUI_STORE) {
                     let v = o.get_in(2).and_then(|v| data.vbank().get(v));
                     let dc = v.map(|v| v.get_def().and_then(|d| data.obank().get(d)).map(|d| format!("{:?}", d.code())));
-                    eprintln!("[vps] store {:?} val={:?} readers={:?} def={:?}", op, o.get_in(2).and_then(|x| data.vbank().get(x)).map(|x| x.get_size()), v.map(|v| v.descend_iter().count()), dc);
+                    { use std::io::Write; if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/g2b-vps.log") { let _ = writeln!(f, "[vps] store {:?} val={:?} readers={:?} def={:?}", op, o.get_in(2).and_then(|x| data.vbank().get(x)).map(|x| x.get_size()), v.map(|v| v.descend_iter().count()), dc); } }
                 }
             }
         }

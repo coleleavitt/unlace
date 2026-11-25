@@ -140,6 +140,50 @@ fn lists(graph: &BlockGraph, root: BlockId) -> Vec<BlockId> {
     out
 }
 
+/// Every block under `roots`, the roots included.
+fn subtree(graph: &BlockGraph, roots: &[BlockId]) -> std::collections::BTreeSet<BlockId> {
+    let mut out = std::collections::BTreeSet::new();
+    let mut stack: Vec<BlockId> = roots.to_vec();
+    while let Some(id) = stack.pop() {
+        if out.insert(id) {
+            let b = graph.block(id);
+            stack.extend((0..b.get_size()).map(|i| b.get_block(i)));
+        }
+    }
+    out
+}
+
+/// Does a plain goto among `comps` name a block outside them that a loop enclosing `list`
+/// holds? That jump is a `continue;` or `break;` of the enclosing loop, which
+/// `crossjumptail` (run after this pass) still prints as one; once `comps` sit under a new
+/// loop, the new loop captures it and the jump stays a goto. Such a wrap is declined.
+fn jumps_to_enclosing_loop(graph: &BlockGraph, list: BlockId, comps: &[BlockId]) -> bool {
+    let inside = subtree(graph, comps);
+    let mut loops = Vec::new();
+    let mut cur = graph.block(list).get_parent();
+    while let Some(c) = cur {
+        if matches!(
+            graph.block(c).get_type(),
+            BlockType::WhileDo | BlockType::DoWhile | BlockType::InfLoop
+        ) {
+            loops.push(subtree(graph, &[c]));
+        }
+        cur = graph.block(c).get_parent();
+    }
+    if loops.is_empty() {
+        return false;
+    }
+    inside.iter().any(|&g| {
+        let Some(t) = plain_goto(graph, g).or_else(|| if_goto(graph, g)) else {
+            return false;
+        };
+        let Some(leaf) = graph.get_front_leaf(t) else {
+            return false;
+        };
+        !inside.contains(&leaf) && loops.iter().any(|l| l.contains(&leaf))
+    })
+}
+
 /// Retag every plain goto to `head` under `loop_id` whose innermost loop is
 /// `loop_id` as `continue`.
 fn continues_to(graph: &mut BlockGraph, loop_id: BlockId, head: BlockId) {
@@ -192,6 +236,9 @@ fn loop_once(data: &mut Funcdata, list: BlockId) -> Option<BlockId> {
             continue;
         };
         if free_jumps(graph, &comps[i..j]) {
+            continue;
+        }
+        if jumps_to_enclosing_loop(graph, list, &comps[i..=j]) {
             continue;
         }
         if conditional

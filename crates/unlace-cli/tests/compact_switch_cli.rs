@@ -126,9 +126,11 @@ fn short_map_fixture(past: &[u16]) -> Vec<u8> {
 }
 
 /// SysV `pick(p, a, b)`: `k = *p - 'A'` is bounded to 0..3 three branches
-/// before a relative table dispatch on `k`, out of reach of the guard search,
-/// so the selector range is the full byte and the table ends at its first
-/// far entry.  `past` overrides the entries after that far entry.
+/// before a relative table dispatch on `k`.  The three branches between them
+/// test the equality of `a` and `b` with constants, which do not use up the
+/// guard search (24b01c98e7), so the range check is recovered and the switch
+/// is printed on `*p` with byte labels 0x41..0x44; the table still ends at its
+/// first far entry.  `past` overrides the entries after that far entry.
 fn far_guard_fixture(past: &[i32]) -> Vec<u8> {
     let mut code = vec![
         0x0f, 0xb6, 0x07, 0x83, 0xe8, 0x41, 0x3c, 0x03, 0x77, 0x38, 0x85, 0xf6, 0x74, 0x3a, 0x85,
@@ -1004,8 +1006,9 @@ fn wider_late_selector_range(past: &[i32]) {
         &[],
     );
     assert!(
-        c.contains("case 0:\n        return 100;") && c.contains("case 3:\n        return 0x67;"),
-        "lost index labels: {c}"
+        c.contains("case 0x41:\n        return 100;")
+            && c.contains("case 0x44:\n        return 0x67;"),
+        "lost case labels: {c}"
     );
     assert!(!c.contains("case 0x40"), "labelled cases by address: {c}");
 }

@@ -185,7 +185,7 @@ fn leaf_marking_propagates_through_call_and_trap_wrappers() {
     assert!(missing.contains("halt_missing"), "{missing}");
     check_emitted(&marked);
 
-    for gate in ["listing", "noreturn_propagate", "noreturn_reach"] {
+    for gate in ["listing", "noreturn_propagate"] {
         let off = decompile(
             &fixture,
             &["--option", "noreturn", "fail_leaf", "--option", gate, "off"],
@@ -196,6 +196,25 @@ fn leaf_marking_propagates_through_call_and_trap_wrappers() {
             "{gate}: {off}"
         );
     }
+    // An int3 after a no-return call is padding for the strict tail rule (commit
+    // 1a48a403c1), so the fixture's fail_wrapper is concluded without noreturn_reach.
+    // Reach's mid-body dead-tail shape is covered by its unit tests in noreturn_propagate.
+    let without_reach = decompile(
+        &fixture,
+        &[
+            "--option",
+            "noreturn",
+            "fail_leaf",
+            "--option",
+            "noreturn_reach",
+            "off",
+        ],
+        false,
+    );
+    assert!(
+        !code(&without_reach, "bounded_tail").contains("halt_missing"),
+        "{without_reach}"
+    );
     let immediate = decompile(&fixture, &["--option", "noreturn", "fail_wrapper"], false);
     assert!(!code(&immediate, "bounded_tail").contains("halt_missing"));
     let explicit_only = decompile(

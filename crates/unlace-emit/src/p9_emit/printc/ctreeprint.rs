@@ -9,6 +9,8 @@
 //! multi-goto block) reaches the block printer's own dispatch, `emit_block_raw`. Each kind prints
 //! what the block printer prints for its origin block, call for call.
 
+use std::collections::BTreeMap;
+
 use unlace_base::types::int4;
 
 use super::{Architecture, Funcdata, PrintC};
@@ -375,6 +377,7 @@ impl PrintC {
         self.ctree_rest_tries(fd);
         self.ctree_java_rests(fd);
         self.ctree_switch_arms(fd);
+        self.ctree_labels(fd);
         if let Some(tree) = self.ctree.as_mut() {
             tree.advance(CMaturity::Rewritten);
         }
@@ -412,6 +415,47 @@ impl PrintC {
                 tree.set_java_list(id);
             }
         }
+    }
+
+    /// The test `emit_any_label_statement` makes for the block `blk` in C: a label line for its
+    /// front leaf when that leaf is an unstructured target that is not a label-free join.
+    fn label_line_wanted(&self, fd: &Funcdata, blk: BlockId) -> bool {
+        let sb = fd.sblocks_ref();
+        if sb.block(blk).is_label_bump_up() {
+            return false;
+        }
+        let Some(front) = sb.get_front_leaf(blk) else {
+            return false;
+        };
+        let leaf = sb.block(front);
+        leaf.is_unstructured_target()
+            && !self.goto_rewrites.labels.contains(&front)
+            && leaf.get_type() == BlockType::Copy
+    }
+
+    /// (unlace `labelnode`) Record, once the rewrites are done, whether the printer prints a label
+    /// line for each block the tree holds (`label_line_wanted`). Only the C colon form, and not Go
+    /// (its suppression set is filled while printing); flat printing keeps the block printer's own
+    /// test.
+    fn ctree_labels(&mut self, fd: &Funcdata) {
+        if self.out_lang == crate::lang::OutLang::Go
+            || !matches!(self.lang().forms.label, crate::lang::LabelForm::CColon)
+        {
+            return;
+        }
+        let Some(tree) = self.ctree.as_ref() else {
+            return;
+        };
+        let lines: BTreeMap<BlockId, bool> = tree
+            .stmt_ids()
+            .into_iter()
+            .filter_map(|id| tree.stmt(id).origin)
+            .map(|blk| (blk, self.label_line_wanted(fd, blk)))
+            .collect();
+        let Some(tree) = self.ctree.as_mut() else {
+            return;
+        };
+        tree.set_label_lines(lines);
     }
 
     /// Record on each switch, per printed arm, the choices `emit_block_switch_c` makes for it:

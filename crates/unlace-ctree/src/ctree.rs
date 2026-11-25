@@ -246,6 +246,7 @@ pub struct CTree {
     rest_tries: BTreeMap<StmtId, Vec<Option<ListTry>>>,
     switch_arms: BTreeMap<StmtId, Vec<ArmRecord>>,
     java_rests: BTreeMap<StmtId, Vec<bool>>,
+    label_lines: BTreeMap<BlockId, bool>,
 }
 
 impl CTree {
@@ -306,6 +307,17 @@ impl CTree {
     /// takes (`list_try_form`).
     pub fn set_rest_tries(&mut self, id: StmtId, rests: Vec<Option<ListTry>>) {
         self.rest_tries.insert(id, rests);
+    }
+
+    /// Record, for each structured block the tree holds, whether the printer prints a label line
+    /// for it (`label_line`).
+    pub fn set_label_lines(&mut self, lines: BTreeMap<BlockId, bool>) {
+        self.label_lines = lines;
+    }
+
+    /// Whether the printer prints a label line for the block `block`, when a record was made.
+    pub fn label_line(&self, block: BlockId) -> Option<bool> {
+        self.label_lines.get(&block).copied()
     }
 
     /// Record, for the switch `id`, the choices the printer makes for each arm (`ArmRecord`).

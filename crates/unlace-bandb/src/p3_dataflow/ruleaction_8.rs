@@ -1982,6 +1982,64 @@ impl Rule for RuleFloatSignCleanup {
 /// `(V | W) != 0` => `(V != 0) || (W != 0)`.
 pub struct RuleOrCompare;
 
+/// (unlace) The stack word a varnode reads, as (space index, offset): a LOAD of
+/// a stack slot (its pointer resolves through the spacebase), a COPY of one, or
+/// a varnode in the stack space itself (a free or input stack word).
+fn stack_word(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<(i32, uintb)> {
+    let v = data.vbank().get(vn)?;
+    if let Some(def) = v.get_def() {
+        match data.obank().get(def).map(|o| o.code()) {
+            Some(OpCode::CPUI_LOAD) => {
+                let (space, off) = crate::ruleaction_4::RuleLoadVarnode::check_spacebase(data, def)?;
+                return (space.get_type() == unlace_base::space::spacetype::IPTR_SPACEBASE)
+                    .then(|| (space.get_index(), off));
+            }
+            Some(OpCode::CPUI_COPY) if depth < 2 => {
+                let src = data.obank().get(def)?.get_in(0)?;
+                return stack_word(data, src, depth + 1);
+            }
+            _ => {}
+        }
+    }
+    let space = v.get_space();
+    (space.get_type() == unlace_base::space::spacetype::IPTR_SPACEBASE)
+        .then(|| (space.get_index(), v.get_offset()))
+}
+
+/// (unlace) Whether `V | W`, with `V = x ^ y` and `W = z ^ u`, is a two-word
+/// equality whose two word pairs are adjacent stack words (`x` above `z` and
+/// `y` above `u`, or the other way round): the shape pairparam's XOR trigger
+/// joins (`RuleDoubleInputPair`). `RuleOrCompare` leaves such an OR alone, so
+/// the join can run once the words are inputs; it splits the OR otherwise.
+fn two_word_stack_equality(data: &Funcdata, v: VarnodeId, w: VarnodeId) -> bool {
+    let xor_inputs = |vn: VarnodeId| -> Option<(VarnodeId, VarnodeId)> {
+        let def = data.vbank().get(vn)?.get_def()?;
+        let o = data.obank().get(def)?;
+        (o.code() == OpCode::CPUI_INT_XOR).then_some(())?;
+        Some((o.get_in(0)?, o.get_in(1)?))
+    };
+    let (Some((x, y)), Some((z, u))) = (xor_inputs(v), xor_inputs(w)) else {
+        return false;
+    };
+    let size = data.vbank().get(x).map(|vx| vx.get_size());
+    if size.is_none() || size != data.vbank().get(y).map(|vy| vy.get_size()) {
+        return false;
+    }
+    let size = size.unwrap_or(0) as uintb;
+    let (Some(x), Some(y), Some(z), Some(u)) = (
+        stack_word(data, x, 0),
+        stack_word(data, y, 0),
+        stack_word(data, z, 0),
+        stack_word(data, u, 0),
+    ) else {
+        return false;
+    };
+    let adjacent = |p: (i32, uintb), q: (i32, uintb)| {
+        p.0 == q.0 && (p.1.wrapping_sub(q.1) == size || q.1.wrapping_sub(p.1) == size)
+    };
+    (adjacent(x, z) && adjacent(y, u)) || (adjacent(x, u) && adjacent(y, z))
+}
+
 impl Rule for RuleOrCompare {
     fn get_op_list(&self) -> Vec<OpCode> {
         vec![OpCode::CPUI_INT_OR]
@@ -2037,6 +2095,15 @@ impl Rule for RuleOrCompare {
             return 0;
         }
         if data.vbank().get(w).expect("oc").is_free() {
+            return 0;
+        }
+        if data
+            .get_arch()
+            .unlace_options
+            .get::<unlace_bandb_base::borrowcompare::PairParams>()
+            .0
+            && two_word_stack_equality(data, v, w)
+        {
             return 0;
         }
         let v_size = data.vbank().get(v).expect("oc").get_size();

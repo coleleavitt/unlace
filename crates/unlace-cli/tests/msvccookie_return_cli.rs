@@ -18,7 +18,7 @@ fn a_kept_cookie_checker_does_not_kill_the_return_value() {
     let mut command = Command::new(unlace());
     command.args(["decompile", &fixture, "relay"]);
     let output = process::required_output(&mut command);
-    let text = String::from_utf8_lossy(&output.stdout);
+    let text = format!("{}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
     let head = text.lines().find(|l| l.contains("relay(")).unwrap_or("");
     assert!(!head.is_empty(), "relay:\n{text}");
     assert!(

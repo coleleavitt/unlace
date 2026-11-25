@@ -526,6 +526,7 @@ impl Action for ActionStripMsvcStackGuard {
     }
 
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        eprintln!("MSVCDBG apply nc={} enabled={}", data.num_calls(), self.enabled);
         let strip = self.enabled
             || data
                 .get_arch()
@@ -539,6 +540,7 @@ impl Action for ActionStripMsvcStackGuard {
             return 0;
         };
         let mut calls = cookie_check_calls(data, &sp, !strip, !strip);
+        eprintln!("MSVCDBG strip={} found={} pops={:?}", strip, calls.len(), calls.iter().map(|(op, _)| pop_is_stated(data, *op)).collect::<Vec<_>>());
         if !strip {
             if calls.is_empty() {
                 return 0;

@@ -2121,6 +2121,7 @@ impl Heritage {
                         &trans_addr,
                         size,
                     )));
+            eprintln!("MSVCDBG guard off={:?} exact={} kb={} ret={}", fd.obank().get(op).map(|o| o.get_addr().get_offset()), exact_cookie_site, effecttype == effect_type::KILLEDBYCALL, msvc_cookie_return);
             let mut preserved = effecttype == effect_type::KILLEDBYCALL
                 && ((fd.hooks().calleepreserves_callee_preserves_range)(fd, fc, &trans_addr, size)
                     || (fd

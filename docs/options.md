@@ -1494,6 +1494,9 @@ Three tiers:
 | the real-binary harness cannot tell which functions lost information | [`honestgaps`](#honestgaps----on--off-default-off) |
 | a pointer parameter is used at once with no NULL test and nothing says the caller must not pass NULL | [`nonnullparam`](#nonnullparam----on--off-default-off) |
 | the decompiled function gives no hint that its parameter is dereferenced on entry | [`nonnullparam`](#nonnullparam----on--off-default-off) |
+| a function crashes or prints a wrong value and no pass is named for it | [`irverify`](#irverify----on--off-default-off) |
+| a pass leaves an op, varnode or block link stale and the damage shows up only in a later pass | [`irverify`](#irverify----on--off-default-off) |
+| a read has no dominating definition after heritage and the output has a value from nowhere | [`irverify`](#irverify----on--off-default-off) |
 
 ## Toggleable transforms
 
@@ -4810,6 +4813,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Off by default. Flip on when reading a function whose parameters are dereferenced at once, to see which pointers it assumes are valid without a NULL test. The claim assumes the dereference traps on NULL, which is not true on a target that maps address zero, so read the comment as a hint, not a proof.
 - **Where / provenance:** P9/warning-style · unlace · opt-in-tool · unlace-1345
 - **Example:** `option nonnullparam on`
+
+### `irverify` -- on | off, default `off`
+
+- **Symptoms:** a function crashes or prints a wrong value and no pass is named for it; a pass leaves an op, varnode or block link stale and the damage shows up only in a later pass; a read has no dominating definition after heritage and the output has a value from nowhere.
+- **What it does:** Check the IR after every pass and report the first pass that leaves it broken. With the option on, after each pass that made a change, the structural links (each op, varnode and basic block agrees with the others) are checked, and once heritage has run, the dataflow tier: every input of an op is a constant, an input, or defined by an op that dominates the reader (or comes earlier in the same block), and a phi input's definition dominates the predecessor on that edge. The first failure becomes one header warning, `irverify: pass <name> left the IR broken: <what>`; later passes are not checked. The printed statements are unchanged. The check walks the function once per pass, so it is for debugging a bad pass, not for the default run.
+- **When to flip:** Off by default. Flip on when a pass corrupts the IR and the damage shows up far from its cause (a crash, a wrong value or a missing statement), to name the pass that first left a link or a definition broken. Read the warning as the first broken invariant, not a proof of a bug in that pass: a false positive names the pass that precedes the check.
+- **Where / provenance:** P9/warning-style · unlace · opt-in-tool · unlace-1255
+- **Example:** `option irverify on`
 
 ## Programmatic use
 

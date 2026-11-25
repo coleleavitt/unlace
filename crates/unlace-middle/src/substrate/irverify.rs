@@ -315,8 +315,10 @@ pub fn verify_dataflow(fd: &Funcdata) -> Result<(), VerifyError> {
                         dominates(&idom, bd_def, bo)
                     };
                     if !defined_first {
+                        let def_code = obank.get(def_op).map(|d| d.code());
                         return Err(VerifyError(format!(
-                            "op {op_id:?} reads {input:?} in slot {slot}, but its definition {def_op:?} in block {bd_def:?} does not reach it"
+                            "op {op_id:?} ({:?}) in block {bo:?} reads {input:?} in slot {slot}, but its definition {def_op:?} ({def_code:?}) in block {bd_def:?} does not reach it",
+                            op.code()
                         )));
                     }
                 }

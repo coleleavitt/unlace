@@ -204,6 +204,8 @@ struct Walk {
 }
 
 fn walk_block(data: &Funcdata, block: BlockId, st: &mut State, sp: Key, out: &mut Walk) {
+    // A unique temporary the block copies a register into: the register it stands for.
+    let mut alias: HashMap<Key, Key> = HashMap::new();
     for id in data.bb_ops(block) {
         let Some(op) = data.obank().get(id) else {
             continue;
@@ -246,6 +248,7 @@ fn walk_block(data: &Funcdata, block: BlockId, st: &mut State, sp: Key, out: &mu
             }
             OpCode::CPUI_LOAD => {
                 if let Some(ak) = op.get_in(1).and_then(|v| key(data, v)) {
+                    let ak = alias.get(&ak).copied().unwrap_or(ak);
                     out.loads.push((block, id, ak, cur_sp));
                 }
             }
@@ -286,6 +289,11 @@ fn walk_block(data: &Funcdata, block: BlockId, st: &mut State, sp: Key, out: &mu
             },
             _ => Val::Other,
         };
+        if op.code() == OpCode::CPUI_COPY && space_type(data, k.0) == Some(unlace_base::space::spacetype::IPTR_INTERNAL) {
+            if let Some(src) = op.get_in(0).and_then(|v| key(data, v)) {
+                alias.insert(k, alias.get(&src).copied().unwrap_or(src));
+            }
+        }
         st.write(k, val);
     }
 }
@@ -394,6 +402,14 @@ pub fn rewrite(data: &mut Funcdata) {
 
     let mut sites: Vec<Site> = Vec::new();
     for &(jb, jop, ak, at_sp) in &walk.loads {
+        if enabled(data) {
+            let jblk = data.bblocks_ref().block(jb);
+            let pv: Vec<(BlockId, Option<Val>)> = (0..jblk.size_in())
+                .map(|i| jblk.get_in(i))
+                .map(|p| (p, exits.get(&p).and_then(|e| e.1.vals.get(&ak).copied())))
+                .collect();
+            eprintln!("vaargaapcs: load {jb:?} addr {ak:?} sp {at_sp:?} preds {pv:?}");
+        }
         let Some(at_sp) = at_sp else { continue };
         let jblk = data.bblocks_ref().block(jb);
         if jblk.size_in() < 2 {

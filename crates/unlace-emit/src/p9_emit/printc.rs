@@ -11551,7 +11551,10 @@ impl PrintC {
                 .get::<crate::coreoptions::ItaniumEh>()
                 .on
         {
-            let callee = self.call_callee_name(fd, op);
+            let callee = fd
+                .get_call_specs_index(op)
+                .map(|idx| fd.get_call_specs(idx).get_name().to_string())
+                .unwrap_or_default();
             if let Some(throw) = super::itaniumthrow::recover(fd, arch, op, &callee) {
                 self.push_throw_call(fd, arch, op, throw);
                 return;

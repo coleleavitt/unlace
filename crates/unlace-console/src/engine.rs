@@ -3618,6 +3618,11 @@ impl ConsoleProgram {
                         merged.merge(out);
                     }
                 }
+                // (unlace, `ehcold`/`functails`) The Listing walk seeds from the raw oracles,
+                // so it must know which cold parts are withheld before it runs.
+                let mut withheld_cold = merged.eh_cold.clone();
+                withheld_cold.sort_unstable();
+                self.arch_mut().unlace_withheld_cold = withheld_cold;
                 // (unlace `uefi`) UEFI module markup decodes the module, so it
                 // runs here; it declines everything but an EFI-subsystem PE.
                 if analysis_pass_enabled(self.arch(), "uefi") {

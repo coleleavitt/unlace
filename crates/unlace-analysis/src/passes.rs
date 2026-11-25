@@ -1072,6 +1072,14 @@ pub fn run_listing_consumers_replaying_observed(
         seeds.sort_unstable();
         seeds.dedup();
     }
+    // (unlace `ehcold`/`functails`) A withheld cold part is not a walk root. The oracle
+    // seeds above include its FDE start, and the commit drops its entries only after the
+    // walk, so without this filter the walk lists the part as a function again.
+    let withheld = &arch.unlace_withheld_cold;
+    seeds.retain(|&vma| {
+        let idx = withheld.partition_point(|&(start, _)| start <= vma);
+        !(idx > 0 && vma < withheld[idx - 1].1)
+    });
     let seed_names = funcsym_names(&file);
     let funcsym_seeds = crate::entry::existing_function_addrs(&file, bytes);
     // Every consumer that reads an `Insn`'s disassembly text — the

@@ -7886,10 +7886,7 @@ fn commit_analysis_output(
     nr.dedup();
     for fact in &nr {
         // Address path (preferred): resolves a demangled/namespaced funcsym.
-        // (unlace, u18) A fact can land on a listing function that is not one of the
-        // commit's entries (a callee reached only through an indirect call). The eager set
-        // above is built from `out.entries`, so such a function has no `Function` yet and
-        // the flag below would be dropped. Materialize it first, as the eager set intends.
+        // A fact can name a listing function that is no commit entry: give it its Function first.
         if fact.addr != 0 {
             let addr = Address::new(Rc::clone(code_space), fact.addr);
             if prog.arch().symboltab.find_function_across_scopes(&addr).is_none() {

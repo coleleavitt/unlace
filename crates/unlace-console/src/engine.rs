@@ -7886,6 +7886,13 @@ fn commit_analysis_output(
     nr.dedup();
     for fact in &nr {
         // Address path (preferred): resolves a demangled/namespaced funcsym.
+        // A fact can name a listing function that is no commit entry: give it its Function first.
+        if fact.addr != 0 {
+            let addr = Address::new(Rc::clone(code_space), fact.addr);
+            if prog.arch().symboltab.find_function_across_scopes(&addr).is_none() {
+                let _ = prog.ensure_function_symbol(addr);
+            }
+        }
         let by_addr = if fact.addr != 0 {
             let addr = Address::new(Rc::clone(code_space), fact.addr);
             prog.arch()

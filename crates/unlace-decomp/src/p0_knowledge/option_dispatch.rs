@@ -632,6 +632,7 @@ unlace_options! { self, p1;
     "noreturn_propagate" => {
         registered!(crate::analysisgates::NoreturnPropagate)
     },
+    "noreturnself" => registered!(crate::analysisgates::Noreturnself),
     "noreturn_reach" => {
         registered!(crate::analysisgates::NoreturnReach)
     },

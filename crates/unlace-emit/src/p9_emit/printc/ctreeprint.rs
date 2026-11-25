@@ -9,6 +9,8 @@
 //! multi-goto block) reaches the block printer's own dispatch, `emit_block_raw`. Each kind prints
 //! what the block printer prints for its origin block, call for call.
 
+use std::collections::BTreeMap;
+
 use unlace_base::types::int4;
 
 use super::{Architecture, Funcdata, PrintC};
@@ -98,6 +100,25 @@ impl PrintC {
         }
     }
 
+    /// The statements of a copy leaf `id` (a `Stmts` or `Ops` statement) without its label line,
+    /// which the `Label` node in front of it prints.
+    fn emit_copy_leaf(&mut self, fd: &Funcdata, arch: &Architecture, id: StmtId) -> bool {
+        let Some(stmt) = self.ctree.as_ref().map(|tree| tree.stmt(id).clone()) else {
+            return false;
+        };
+        match stmt.kind {
+            StmtKind::Stmts { leaf, ops } => {
+                self.emit_block_copy_body(fd, arch, leaf, Some(ops.as_slice()));
+                true
+            }
+            StmtKind::Ops { leaf } => {
+                self.emit_block_copy_body(fd, arch, leaf, None);
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// The walk over the kinds it models; false leaves the statement to the block printer.
     fn emit_ctree_stmt(&mut self, fd: &Funcdata, arch: &Architecture, id: StmtId) -> bool {
         let Some(stmt) = self.ctree.as_ref().map(|tree| tree.stmt(id).clone()) else {
@@ -108,6 +129,10 @@ impl PrintC {
         };
         let ty = fd.sblocks_ref().block(blk).get_type();
         match stmt.kind {
+            StmtKind::Label { body } if ty == BlockType::Copy => {
+                self.emit_any_label_statement(fd, blk);
+                self.emit_copy_leaf(fd, arch, body)
+            }
             StmtKind::Seq(children) if ty == BlockType::Graph => {
                 for child in children {
                     let id = self.emit.begin_block(0);
@@ -375,6 +400,7 @@ impl PrintC {
         self.ctree_rest_tries(fd);
         self.ctree_java_rests(fd);
         self.ctree_switch_arms(fd);
+        self.ctree_labels(fd);
         if let Some(tree) = self.ctree.as_mut() {
             tree.advance(CMaturity::Rewritten);
         }
@@ -411,6 +437,82 @@ impl PrintC {
             {
                 tree.set_java_list(id);
             }
+        }
+    }
+
+    /// The test `emit_any_label_statement` makes for the block `blk` in C: a label line for its
+    /// front leaf when that leaf is an unstructured target that is not a label-free join.
+    fn label_line_wanted(&self, fd: &Funcdata, blk: BlockId) -> bool {
+        let sb = fd.sblocks_ref();
+        if sb.block(blk).is_label_bump_up() {
+            return false;
+        }
+        let Some(front) = sb.get_front_leaf(blk) else {
+            return false;
+        };
+        let leaf = sb.block(front);
+        leaf.is_unstructured_target()
+            && !self.goto_rewrites.labels.contains(&front)
+            && leaf.get_type() == BlockType::Copy
+    }
+
+    /// (unlace `labelnode`) Decide the C label lines in the tree once the rewrites are done. Records,
+    /// for every block the tree holds, whether the printer prints a label line for it
+    /// (`label_line_wanted`), then wraps each copy leaf that gets one in a `Label` node that prints
+    /// the label and then the leaf. Only the C colon form, and not Go (its suppression set is filled
+    /// while printing); flat printing and any block past the depth bound keep the block printer's
+    /// own call.
+    fn ctree_labels(&mut self, fd: &Funcdata) {
+        if self.out_lang == crate::lang::OutLang::Go
+            || !matches!(self.lang().forms.label, crate::lang::LabelForm::CColon)
+        {
+            return;
+        }
+        let Some(tree) = self.ctree.as_ref() else {
+            return;
+        };
+        let lines: BTreeMap<BlockId, bool> = tree
+            .stmt_ids()
+            .into_iter()
+            .filter_map(|id| tree.stmt(id).origin)
+            .map(|blk| (blk, self.label_line_wanted(fd, blk)))
+            .collect();
+        let leaves: Vec<StmtId> = tree
+            .stmt_ids()
+            .into_iter()
+            .filter(|&id| {
+                let stmt = tree.stmt(id);
+                matches!(stmt.kind, StmtKind::Stmts { .. } | StmtKind::Ops { .. })
+                    && stmt.origin.is_some_and(|blk| {
+                        tree.node_for(blk) == Some(id)
+                            && lines.get(&blk) == Some(&true)
+                            && fd.sblocks_ref().block(blk).get_type() == BlockType::Copy
+                    })
+            })
+            .collect();
+        let Some(tree) = self.ctree.as_mut() else {
+            return;
+        };
+        tree.set_label_lines(lines);
+        if leaves.is_empty() {
+            return;
+        }
+        let parents = tree.stmt_ids();
+        let wrapped: BTreeMap<StmtId, StmtId> = leaves
+            .iter()
+            .map(|&leaf| (leaf, tree.wrap_label(leaf)))
+            .collect();
+        for parent in parents {
+            for child in tree.children(parent) {
+                if let Some(&label) = wrapped.get(&child) {
+                    tree.replace_child(parent, child, label);
+                }
+            }
+        }
+        if let Some(root) = tree.root()
+            && let Some(&label) = wrapped.get(&root)
+        {
+            tree.set_root(label);
         }
     }
 

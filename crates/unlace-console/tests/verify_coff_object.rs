@@ -116,8 +116,7 @@ fn coff_object_decompiles_named_function() {
 
     // The COFF symbol table's defined functions register as funcsyms — including
     // `compute`, which sits at `.text`+0 (the relocatable-object-at-VMA-0 case the
-    // `is_undefined()` funcsym skip now keeps). `puts` is an *undefined* external
-    // (no IAT in a pre-link object), so it does NOT register as a funcsym.
+    // `is_undefined()` funcsym skip now keeps).
     assert!(
         prog.lookup_symbol("compute").is_some(),
         "COFF: `compute` (defined @ .text+0) not resolved by the loader"
@@ -126,10 +125,16 @@ fn coff_object_decompiles_named_function() {
         prog.lookup_symbol("run").is_some(),
         "COFF: `run` not resolved by the loader"
     );
+    // `puts` is an undefined external with no IAT in a pre-link object, so it
+    // has no address of its own. `run` calls it through a rel32 `E8` field, which
+    // makes it a code target: `layout_relocatable` names each extern code target
+    // at a synthetic slot (f76b0fe2bb, "COFF rel32 calls name their externs"), so
+    // the call renders by name. The loader still never reads it as a defined
+    // function body.
     assert!(
-        prog.lookup_symbol("puts").is_none(),
-        "COFF: `puts` is an unresolved external symbol — must NOT be a funcsym \
-         (no IAT in a pre-link object, design §3.6)"
+        prog.lookup_symbol("puts").is_some(),
+        "COFF: `puts` is called by `run` through a rel32 call — must resolve by name \
+         at its extern slot (f76b0fe2bb)"
     );
 
     // `unlace decompile coff_obj.obj compute` (by name) → the real body `x*3+1`.

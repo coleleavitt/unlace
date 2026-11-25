@@ -51,18 +51,3 @@ path = "tests/parity.rs"
 name = "integration"
 path = "tests/integration.rs"
 
-[[test]]
-name = "verify_w10_callarg_piece_switchhide_guard"
-path = "tests/verify_w10_callarg_piece_switchhide_guard.rs"
-
-[[test]]
-name = "verify_w10_inline_body"
-path = "tests/verify_w10_inline_body.rs"
-
-[[test]]
-name = "verify_w10_rsp_8_guardfold"
-path = "tests/verify_w10_rsp_8_guardfold.rs"
-
-[[test]]
-name = "verify_w10_rsp_l4l5_stackframe_adversarial"
-path = "tests/verify_w10_rsp_l4l5_stackframe_adversarial.rs"

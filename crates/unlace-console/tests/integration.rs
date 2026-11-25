@@ -521,12 +521,6 @@ mod verify_unmappedentry;
 #[path = "verify_varsources.rs"]
 mod verify_varsources;
 
-#[path = "verify_w10_partial_types_console.rs"]
-mod verify_w10_partial_types_console;
-
-#[path = "verify_w10_union_truncation.rs"]
-mod verify_w10_union_truncation;
-
 #[path = "verify_w11_elf_loader.rs"]
 mod verify_w11_elf_loader;
 

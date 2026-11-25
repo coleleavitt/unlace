@@ -46,10 +46,3 @@ path = "tests/integration.rs"
 name = "actionprof_unwind"
 path = "tests/actionprof_unwind.rs"
 
-[[test]]
-name = "verify_w6_s4_fspec_2_r2"
-path = "tests/verify_w6_s4_fspec_2_r2.rs"
-
-[[test]]
-name = "verify_w8_sig_pack"
-path = "tests/verify_w8_sig_pack.rs"

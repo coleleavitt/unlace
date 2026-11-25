@@ -1824,7 +1824,7 @@ exist yet, so moving edges needs no phi patching, and `ActionFuncLink` still
 materializes the call's argument and return varnodes afterwards. The pass is
 registered before `varnodeprops` rather than directly before `heritage`, because the
 `varnodeprops -> lowerswitchinstall -> heritage` run is a ported C++ adjacency
-(`coreaction.cc:5751-5756`) pinned by `verify_w8x_allowlist.rs`.
+(`coreaction.cc:5751-5756`).
 
 The call is a real `CPUI_CALL` built from nothing — the first in the tree; every other
 site mutates an op the decoder produced. It installs the fspec annotation by hand

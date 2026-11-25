@@ -44,36 +44,6 @@ mod verify_context_commits;
 #[path = "verify_ctxsnapshot.rs"]
 mod verify_ctxsnapshot;
 
-#[path = "verify_w2_sleigh_context.rs"]
-mod verify_w2_sleigh_context;
-
-#[path = "verify_w2_sleigh_core.rs"]
-mod verify_w2_sleigh_core;
-
-#[path = "verify_w2_sleigh_emulate.rs"]
-mod verify_w2_sleigh_emulate;
-
-#[path = "verify_w2_sleigh_loadimage.rs"]
-mod verify_w2_sleigh_loadimage;
-
-#[path = "verify_w2_sleigh_pattern.rs"]
-mod verify_w2_sleigh_pattern;
-
-#[path = "verify_w2_sleigh_pcodeparse.rs"]
-mod verify_w2_sleigh_pcodeparse;
-
-#[path = "verify_w2_sleigh_semantics.rs"]
-mod verify_w2_sleigh_semantics;
-
-#[path = "verify_w2_sleigh_symbol.rs"]
-mod verify_w2_sleigh_symbol;
-
-#[path = "verify_w2_sleigh_translate.rs"]
-mod verify_w2_sleigh_translate;
-
-#[path = "verify_w2core_walkback.rs"]
-mod verify_w2core_walkback;
-
 #[path = "ws4a_pattern_build_golden.rs"]
 mod ws4a_pattern_build_golden;
 

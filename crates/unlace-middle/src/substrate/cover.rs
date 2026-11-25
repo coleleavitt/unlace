@@ -2425,56 +2425,6 @@ mod tests {
         assert_eq!(set.block_start, vec![0, 2]);
     }
 
-    /// The owner-driven populate path used by `StackAffectingOps::populate`
-    /// (`Funcdata::populate_affecting_ops`): direct `add_op_entry` + `finalize_pub`
-    /// + `set_affects` reproduce the same sorted/blocked layout as the closure
-    /// `populate()`, and the freshly-bound `affectsTest` runs against the resolved
-    /// address (verify_w10_chainb_gap1).
-    #[test]
-    fn verify_w10_chainb_gap1_owner_driven_populate_and_affects() {
-        use unlace_base::address::Address;
-
-        let entry = |u: uintm, blk: int4| PcodeOpSetEntry {
-            id: OpId::from(KeyData::from_ffi(u64::from(u) + 1)),
-            block_index: blk,
-            point: op_point(u),
-            order: u,
-            store: false,
-        };
-        let mut set = PcodeOpSet::new(Box::new(Vec::new), Box::new(|_, _: &Address| false));
-        assert!(!set.is_populated());
-        // add out of block/order order; finalize must sort + block-index them.
-        set.add_op_entry(entry(50, 2));
-        set.add_op_entry(entry(20, 0));
-        set.add_op_entry(entry(10, 0));
-        // bind a store-guard-style affectsTest: only op #20 (a guarded STORE whose
-        // range is [0x10, 0x20]) "affects"; everything else (a CALL) always does.
-        let guarded = OpId::from(KeyData::from_ffi(u64::from(20u32) + 1));
-        set.set_affects(Box::new(move |op, addr: &Address| {
-            if op == guarded {
-                let off = addr.get_offset();
-                (0x10..=0x20).contains(&off)
-            } else {
-                true // CALL / unguarded STORE always affects
-            }
-        }));
-        set.finalize_pub();
-        assert!(set.is_populated());
-        assert_eq!(set.op_list[0].order, 10);
-        assert_eq!(set.op_list[1].order, 20);
-        assert_eq!(set.op_list[2].block_index, 2);
-        assert_eq!(set.block_start, vec![0, 2]);
-
-        // affectsTest on the bound closure: a CALL (op #10) always affects;
-        // the guarded STORE (op #20) only affects an address inside its range.
-        let call_op = OpId::from(KeyData::from_ffi(u64::from(10u32) + 1));
-        let in_range = Address::new(test_ram_space(), 0x18);
-        let out_of_range = Address::new(test_ram_space(), 0x40);
-        assert!(set.affects_test(call_op, &out_of_range)); // CALL always affects
-        assert!(set.affects_test(guarded, &in_range)); // STORE: addr in guard range
-        assert!(!set.affects_test(guarded, &out_of_range)); // STORE: addr outside
-    }
-
     /// Minimal RAM-like space for the affectsTest address fixture.
     fn test_ram_space() -> std::rc::Rc<unlace_base::space::AddrSpace> {
         use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};

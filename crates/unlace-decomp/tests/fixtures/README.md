@@ -8,9 +8,9 @@ Ghidra `list action` capture, but has since been updated to include unlace passe
 such as `structsynth`, `constspaceload` and `callpush`. It is not an independent
 C++ oracle.
 
-`universalaction_listing.rs` and `verify_w8x_allowlist.rs` compare the listing
-verbatim, including numbering and blank lines. They also require an empty
-`UNPORTED_ALLOWLIST`; neither test strips missing passes or renumbers the dump.
+`universalaction_listing.rs` compares the listing verbatim, including numbering
+and blank lines. It also requires an empty `UNPORTED_ALLOWLIST`; it does not strip
+missing passes or renumber the dump.
 Separate assertions check pass presence, adjacency and other root filters.
 
 Change the snapshot only for an intentional schedule change. Review each changed

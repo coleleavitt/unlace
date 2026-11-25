@@ -3758,41 +3758,6 @@ mod tests {
         }
     }
 
-    /// Goto edges (unstructured or irreducible out-edges) of every block still reachable under
-    /// `root` after structuring.
-    fn count_goto_edges(g: &BlockGraph, root: BlockId) -> usize {
-        let mut stack = vec![root];
-        let mut total = 0;
-        while let Some(id) = stack.pop() {
-            let blk = g.block(id);
-            total += (0..blk.size_out()).filter(|&i| blk.is_goto_out(i)).count();
-            stack.extend((0..blk.get_size()).map(|i| blk.get_block(i)));
-        }
-        total
-    }
-
-    /// Structures the shape for each seed. Returns the goto count per accepted seed and the
-    /// number of seeds the structurer declined.
-    fn structure_shape_seeds(seeds: std::ops::Range<u64>) -> (Vec<(u64, usize)>, usize) {
-        let mut accepted = Vec::new();
-        let mut declined = 0;
-        for seed in seeds {
-            let shape = gen_shape(&mut seeded_rng(seed), 4);
-            let cfg = ShapeCfg::lower_root(&shape);
-            let (mut g, root, _) = graph(cfg.blocks, &cfg.edges);
-            let ok = {
-                let mut st = RegionStructurer::new(&mut g, root);
-                st.structure(None).unwrap()
-            };
-            if ok {
-                accepted.push((seed, count_goto_edges(&g, root)));
-            } else {
-                declined += 1;
-            }
-        }
-        (accepted, declined)
-    }
-
     #[test]
     fn shape_lowering_reaches_every_block_with_at_most_two_exits() {
         for seed in 0u64..64 {

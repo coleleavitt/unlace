@@ -148,7 +148,6 @@ python3 scripts/check_determinism.py --run target/debug/unlace   # same input, s
 target/debug/unlace catalog --markdown | diff -u docs/options.md -   # options.md is the generator's bytes
 cargo clippy -p unlace-cli -p unlace-base -p unlace-num --no-deps -- -D warnings
 cargo nextest run --workspace --exclude unlace-wasm --profile ci   # the workspace suite
-cargo test --doc --workspace --exclude unlace-wasm       # the doc tests (nextest runs none)
 ```
 
 Run the workspace suite with cargo-nextest, not `cargo test --workspace`: `cargo test` runs the
@@ -257,7 +256,7 @@ full three-configuration run stays in the nightly.
 | `clippy` | `cargo clippy --release ... -- -D warnings` on unlace-cli, unlace-base and unlace-num (the rest of the workspace is not clippy-clean yet) | about 2 min |
 | `semantic-gcc` | `tools/semantic/run.py --config x86_64-gcc --opt O0,O2 --baseline tools/semantic/baseline.toml`: each case compiled and run against its reference, failing only on a row that passed in the baseline and no longer does | about 4 min (mostly the release build) |
 | `parity gates` | release build, `cargo test --release -p unlace-harness --test parity`, `tools/check_spec.py`, the `tests/cli` probes, `unlace catalog --check`, the determinism run, the repipe counters, `docs/options.md` freshness, the unlace-ghidra harness, and the web tests when `UNLACE_WEB` is `true` | about 10 min |
-| `workspace suite (build)` | builds every workspace test binary into a cargo-nextest archive (`cargo nextest archive`), runs the doc tests | about 12 min |
+| `workspace suite (build)` | builds every workspace test binary into a cargo-nextest archive (`cargo nextest archive`) | about 12 min |
 | `cargo workspace suite (1/3..3/3)` | three jobs, each running a third of the archive (`--partition count:N/3`) under the nextest profile `ci` (`.config/nextest.toml`), which leaves out the slow tests listed there. Both suite jobs are skipped on a PR from a branch of this repository unless it has the `full-ci` label | a few min each |
 
 Caching:

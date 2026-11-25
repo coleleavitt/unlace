@@ -8,11 +8,13 @@
 //! with a cycle guard), marks the new target as a label, and releases the old
 //! label once no carrier reaches it.
 //!
+//! ```text
 //!     goto L1;            goto L2;
 //!     ...           =>    ...
 //!   L1: (no statement)
 //!     goto L2;
 //!   L2: ...             L2: ...
+//! ```
 //!
 //! Only carriers of kind `f_goto_goto` are retargeted. Switch-case and
 //! multigoto edges keep naming the label, and `release_converted_labels` keeps a

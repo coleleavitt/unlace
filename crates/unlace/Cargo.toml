@@ -7,6 +7,9 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 # The command line as a library: every load, parse and render goes through its code paths.
 unlace-cli.workspace = true

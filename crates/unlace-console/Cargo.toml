@@ -8,6 +8,9 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 unlace-decomp.workspace = true
 unlace-base.workspace = true

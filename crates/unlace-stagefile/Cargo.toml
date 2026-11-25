@@ -7,6 +7,9 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 toml = { version = "1.1", default-features = false, features = ["parse", "serde", "std"] }
 

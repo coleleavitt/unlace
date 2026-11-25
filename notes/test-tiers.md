@@ -80,7 +80,7 @@ baseline (last night) and cannot gate a PR.
 
 ## Status: what runs where (2026-11-24)
 
-**T1 and T2 run once per event.** `tests.yml`'s `gates` job runs `cargo test --release -p unlace-harness --test parity`, which is both corpora. Nothing else in `tests.yml` runs that binary: `rust-test-build` only archives the test binaries and runs `cargo test --doc`, and the three `rust-test` partitions run `--profile ci`, whose `default-filter` excludes `binary_id(unlace-harness::parity)`. `scripts/check_test_tiers.py` (run through `scripts/tests` in the tidy job) keeps the `nightly` profile's seven tests equal to the `ci` exclusions.
+**T1 and T2 run once per event.** `tests.yml`'s `gates` job runs `cargo test --release -p unlace-harness --test parity`, which is both corpora. Nothing else in `tests.yml` runs that binary: `rust-test-build` only archives the test binaries, and the three `rust-test` partitions run `--profile ci`, whose `default-filter` excludes `binary_id(unlace-harness::parity)`. `scripts/check_test_tiers.py` (run through `scripts/tests` in the tidy job) keeps the `nightly` profile's seven tests equal to the `ci` exclusions.
 
 | Tier | Every pull request | Push to main | Nightly (`nightly.yml`, 07:17 UTC, and dispatch) | Daily coverage (`coverage.yml`) |
 |---|---|---|---|---|

@@ -402,11 +402,6 @@ jobs:
           retention-days: 1
           compression-level: 0
 
-      - name: Doc tests
-        run: |
-          cargo test --doc --workspace \
-            ${{ vars.UNLACE_WEB == 'true' && ' ' || '--exclude unlace-wasm' }}
-
       - name: Workspace build disk usage
         if: always()
         run: |

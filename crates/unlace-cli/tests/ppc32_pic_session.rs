@@ -1,5 +1,6 @@
-//! In-process PPC32 PIC sessions. The option writes the process environment the
-//! loader reads, so these tests run serially in their own binary.
+//! In-process PPC32 PIC sessions. The serial guard keeps the process environment
+//! (read by `from_env_for_load`) clear for the tests that load from it, so these
+//! tests run serially in their own binary.
 
 mod common;
 #[path = "fixtures/ppc32_import_fixture.rs"]
@@ -7,6 +8,7 @@ mod common;
 mod fixture;
 
 use std::sync::{Mutex, MutexGuard};
+use unlace_decomp::loadoptions::LoadOptions;
 use unlace_decomp::ppc32picimports::{ENV, Mode};
 use unlace_decomp::prelude::FuncdataPpc32piccallsExt;
 
@@ -20,18 +22,36 @@ fn serial() -> MutexGuard<'static, ()> {
 }
 
 fn load(path: &std::path::Path) -> unlace_console::engine::ConsoleProgram {
+    load_with(path, &LoadOptions::from_env_for_load())
+}
+
+/// A load that reads `options` rather than the environment, as the console's
+/// next `load file` does after an `option` command.
+fn load_with(
+    path: &std::path::Path,
+    options: &LoadOptions,
+) -> unlace_console::engine::ConsoleProgram {
     let specs = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../specs")
         .canonicalize()
         .unwrap();
-    let mut prog = unlace_console::engine::bootstrap_from_image(
-        path.to_str().unwrap(),
-        "",
-        &[specs.to_string_lossy().into_owned()],
-    )
-    .unwrap();
+    let roots = [specs.to_string_lossy().into_owned()];
+    let mut prog = unlace_console::engine::Bootstrap::new(roots.as_slice())
+        .target("")
+        .options(options)
+        .image(path.to_str().unwrap())
+        .unwrap();
     prog.commit_pending_analysis().unwrap();
     prog
+}
+
+/// The next load's options for the program `prog`: its own load options, the
+/// Go release left to the image, as the console keeps them after an `option`.
+fn carried(prog: &unlace_console::engine::ConsoleProgram) -> LoadOptions {
+    LoadOptions {
+        go_version: None,
+        ..prog.arch().load_options().clone()
+    }
 }
 
 /// A new image starts in `abi` exactly when its loader applied `abi`, so the
@@ -51,14 +71,14 @@ fn a_reloaded_image_reports_the_mode_its_loader_applied() {
     prog.arch_mut()
         .set_unlace_option("ppc32picimports", "abi")
         .unwrap();
-    let mut prog = load(&path);
+    let mut prog = load_with(&path, &carried(&prog));
     assert_eq!(prog.arch().analysis_ppc32picimports, Mode::Abi);
     assert!(named(&prog));
     prog.arch_mut()
         .set_unlace_option("ppc32picimports", "on")
         .unwrap();
     assert_eq!(prog.arch().analysis_ppc32picimports, Mode::On);
-    let mut prog = load(&path);
+    let mut prog = load_with(&path, &carried(&prog));
     assert_eq!(prog.arch().analysis_ppc32picimports, Mode::Off);
     assert!(!named(&prog));
     prog.arch_mut()

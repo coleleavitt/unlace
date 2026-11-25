@@ -210,7 +210,7 @@ fn object(image: &Image) -> Vec<u8> {
     obj.write().unwrap()
 }
 
-fn decompile(stem: &str, image: &Image) -> String {
+fn decompile(stem: &str, image: &Image, options: &[&str]) -> String {
     let path = common::scratch_file(stem, "o");
     std::fs::write(&path, object(image)).unwrap();
     let names: Vec<&str> = image.functions.iter().map(|f| f.0).collect();
@@ -223,6 +223,7 @@ fn decompile(stem: &str, image: &Image) -> String {
             "--functions",
         ])
         .arg(names.join(","))
+        .args(options)
         .output()
         .unwrap();
     let text = String::from_utf8(output.stdout).unwrap();
@@ -259,7 +260,9 @@ fn arm_pairs_moved_back_into_their_own_registers_round_trip_through_the_printed_
         ("own-return-arm", &ARM, true),
         ("own-return-thumb", &THUMB, false),
     ] {
-        let printed = decompile(stem, image);
+        // armpairparam (on by default since fc53d27e61) joins two_ret's r0:r1 into
+        // one long long parameter; this test pins the parameter shape it was written for.
+        let printed = decompile(stem, image, &["--option", "armpairparam", "off"]);
         if two {
             for name in ["two_ret", "two_ret_hi"] {
                 let decl =
@@ -356,7 +359,7 @@ fn a_128_bit_pair_keeps_the_argument_returned_in_its_own_register() {
         ("own-return-a64", &A64, &["own", "own3"][..]),
         ("own-return-x64", &X64, &["own", "own3"][..]),
     ] {
-        let printed = decompile(stem, image);
+        let printed = decompile(stem, image, &[]);
         for &name in pairs {
             let body = function(&printed, name);
             let high = if name == "own" { "a1" } else { "a2" };
@@ -398,7 +401,7 @@ fn a_shift_that_returns_its_argument_unchanged_returns_both_words() {
         "the round trip requires a C compiler"
     );
     let stem = "own-return-rv32";
-    let printed = decompile(stem, &RV32);
+    let printed = decompile(stem, &RV32, &[]);
     let body = function(&printed, "ashr");
     assert!(
         body.contains("unsigned long long ashr(unsigned int a0,int a1,unsigned int a2)"),

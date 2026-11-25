@@ -334,7 +334,7 @@ fn usage() {
          \n\
          Ranked packer or protector classification with its evidence: section-name\n\
          signatures, per-section entropy and entry-point placement. Read-only.\n\
-         --json emits the report as one JSON object."
+         --json emits one object {{detected_signature,format,arch,entry,sections:[...]}}."
     );
 }
 

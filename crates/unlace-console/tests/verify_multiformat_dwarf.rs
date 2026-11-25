@@ -13,7 +13,7 @@
 //! `--redefine-sym`-renamed — see the fixture `.c` headers), with `.debug_*` kept.
 //!
 //! ```text
-//!   before (no DWARF / by raw address):  sub_140001550(...)        / sub_0(...)
+//!   before (no DWARF / by raw address):  sub_140001550(...)        / sub_400000(...)
 //!   after  (DWARF name recovered):        first_byte(char *a0)      [PE and Mach-O]
 //! ```
 //!
@@ -162,16 +162,17 @@ fn macho_dwarf_recovers_name_and_typed_signature() {
     eprintln!("verify_multiformat_dwarf: Mach-O first_byte decompile took {elapsed:?}");
 
     // BEFORE: with the DWARF pass off, the only name left at this address is the
-    // `--redefine-sym`ed symtab entry `_l0` — never the DWARF name.
+    // `--redefine-sym`ed symtab entry `_l0` — never the DWARF name. A relocatable
+    // object is laid out at `RELOC_BASE` (0x400000), so `_l0` sits there, not at 0.
     let prog_b = boot_dwarf_off("macho_dwarf.o");
-    let before = decompile(prog_b, &["load addr 0x0", "decompile", "print C"]);
+    let before = decompile(prog_b, &["load addr 0x400000", "decompile", "print C"]);
 
     assert!(
         after.contains("first_byte"),
         "Mach-O: expected the DWARF name `first_byte`, got:\n{after}"
     );
     assert!(
-        !after.contains("sub_0(") && !after.contains("FUN_0("),
+        !after.contains("sub_400000(") && !after.contains("FUN_400000("),
         "Mach-O: first_byte must render by its DWARF name, not a placeholder:\n{after}"
     );
     assert!(

@@ -414,6 +414,8 @@ fn a_lattice_of_wide_multiequals_is_walked_once_per_varnode() {
 /// marked and finds nothing, since `z` is then read at offset 4 (`c`, not
 /// `x`); reached straight from `r`, `c` leads back to `z` at offset 0 and on to
 /// `x`. The first answer is cut by `z`, so it must not answer the second.
+/// The PIECE and whole-SUBPIECE steps on that path cost no level, so `x` is
+/// reached with one level left at `maxlevel` 4.
 #[test]
 fn a_no_use_cut_by_a_marked_multiequal_is_not_reused_once_it_is_unmarked() {
     let mut ir = Ir::new();
@@ -442,7 +444,7 @@ fn a_no_use_cut_by_a_marked_multiequal_is_not_reused_once_it_is_unmarked() {
     for maxlevel in 1..=8 {
         let walk = ir.score(true, maxlevel, rv, call);
         let memo = ir.score(false, maxlevel, rv, call);
-        assert_eq!(walk.0, maxlevel >= 6, "level {maxlevel}");
+        assert_eq!(walk.0, maxlevel >= 4, "level {maxlevel}");
         assert_eq!(memo.0, walk.0, "level {maxlevel}");
     }
 }

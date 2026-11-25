@@ -849,9 +849,7 @@ impl Action for ActionGroup {
         if self.base.status != statusflags::status_mid {
             self.state = 0; // Initialize the derived action (list.begin())
         }
-        if self.base.name == "fullloop" || self.base.name == "mainloop" {
-            eprintln!("G4 group {} state={} len={} status={} names={:?}", self.base.name, self.state, self.list.len(), self.base.status, self.list.iter().map(|a| a.get_name().to_string()).collect::<Vec<_>>());
-        }
+        eprintln!("G4 grp {} n={} st={}", self.base.name, self.list.len(), self.base.status);
         while self.state < self.list.len() {
             // (unlace decompile-all watchdog) Cooperative deadline at every action
             // boundary: stop scheduling further sub-actions once the per-function

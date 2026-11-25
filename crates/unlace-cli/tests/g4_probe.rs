@@ -20,7 +20,7 @@ fn g4_probe_ls_main() {
     for l in so.lines().filter(|l| l.contains("stack_chk") || l.contains("fs_offset") || l.contains("G4")) {
         msg.push_str("OUT: "); msg.push_str(l); msg.push('\n');
     }
-    for l in se.lines().filter(|l| l.contains("G4") || l.contains("panic")) {
+    for l in se.lines().filter(|l| l.contains("G4") || l.contains("panic")).take(400) {
         msg.push_str("ERR: "); msg.push_str(l); msg.push('\n');
     }
     msg.push_str(&msg0);

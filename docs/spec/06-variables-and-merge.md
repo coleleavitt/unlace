@@ -1948,7 +1948,11 @@ made an array element: a C++ class whose object size nothing states (chapter
 only, data-types) onto the Varnodes. Unmapped locations gain `nolocalalias`
 only when the caller enables alias checking and the local map proves the
 location unaliased. The first restructuring pass disables this check;
-later passes and the final sync enable it. After `fullloop` exits,
+later passes and the final sync enable it. An unmapped slot at or above the
+lowest stack offset that a pointer passed as a call argument reaches is never
+unaliased (unlace #871, `call_argument_alias_floor`): the call may write
+through that pointer, so its INDIRECT guard stays. Only call-argument pointers
+count; the boundary of every gathered pointer does not. After `fullloop` exits,
 `crates/unlace-emit/src/p9_emit/coreaction_render.rs
 (ActionMappedLocalSync)` runs that final data-type-updating sync once; its
 failure mode is tolerance, not an abort — the layout keeps the conceded

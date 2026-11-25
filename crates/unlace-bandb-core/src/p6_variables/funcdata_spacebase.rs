@@ -930,6 +930,8 @@ impl FuncdataSpacebaseExt for Funcdata {
             _ => return false,
         };
         let mut update_occurred = false;
+        // (unlace #871) Computed on the first unmapped slot, then reused.
+        let mut call_floor: Option<Option<uintb>> = None;
 
         // Iterate the location set restricted to the stack space, grouped by
         // (size, addr) — each group is one syncVarnodesWithSymbol run.
@@ -1027,6 +1029,10 @@ impl FuncdataSpacebaseExt for Funcdata {
                 if in_scope {
                     fl = varnode_flags::mapped | varnode_flags::addrtied;
                 } else if unmapped_alias_check {
+                    if call_floor.is_none() {
+                        call_floor = Some(call_argument_alias_floor(self));
+                    }
+                    let call_floor = call_floor.flatten();
                     let unaliased = self
                         .get_scope_local()
                         .and_then(|lm| {
@@ -1034,7 +1040,8 @@ impl FuncdataSpacebaseExt for Funcdata {
                                 .get_space()
                                 .map(|spc| lm.is_unmapped_unaliased(spc, ex_addr.get_offset()))
                         })
-                        .unwrap_or(false);
+                        .unwrap_or(false)
+                        && !call_floor.is_some_and(|floor| ex_addr.get_offset() >= floor);
                     fl = if unaliased {
                         varnode_flags::nolocalalias
                     } else {
@@ -2047,6 +2054,32 @@ impl FuncdataAliasLocalExt for Funcdata {
             None => 0,
         }
     }
+}
+
+/// (unlace #871) The lowest stack offset a pointer passed as a call argument reaches.
+/// A slot at or above it may be written by that call, so its INDIRECT guard must stay.
+/// Only call arguments count: a pointer that never reaches a call cannot be written by
+/// one, and the boundary of every gathered pointer also covers saved frame words above
+/// the locals.
+fn call_argument_alias_floor(fd: &Funcdata) -> Option<uintb> {
+    let mut checker = fd.build_alias_checker_deferred()?;
+    let mut args: std::collections::HashSet<VarnodeId> = std::collections::HashSet::new();
+    for op in fd.obank().iter_alive() {
+        let o = match fd.obank().get(op) {
+            Some(o) => o,
+            None => continue,
+        };
+        if !o.is_call() {
+            continue;
+        }
+        for k in 1..o.num_input() {
+            if let Some(v) = o.get_in(k) {
+                args.insert(v);
+            }
+        }
+    }
+    let mut access = fd.alias_gather_access();
+    checker.lowest_alias_where(&mut access, |vn| args.contains(&vn))
 }
 
 /// Can a pointer reach the stack slot at `offset`: a local or a parameter alias.

@@ -855,6 +855,31 @@ impl AliasChecker {
         vn_offset >= self.alias_boundary
     }
 
+    /// (unlace #871) The lowest alias offset among the gathered pointers whose base
+    /// Varnode `keep` accepts, or `None`. Gathers first if needed, skips the parameter
+    /// references as `gather_internal` does, and answers `None` for a stack that grows
+    /// positive, as `has_local_alias` does.
+    pub fn lowest_alias_where(
+        &mut self,
+        access: &mut dyn AliasGatherAccess,
+        keep: impl Fn(crate::context::VarnodeId) -> bool,
+    ) -> Option<uintb> {
+        if !self.calculated {
+            self.gather_internal(access);
+        }
+        if self.direction == -1 {
+            return None;
+        }
+        let (local_boundary, direction) = (self.local_boundary, self.direction);
+        self.add_base
+            .iter()
+            .zip(self.alias.iter())
+            .filter(|(ab, _)| keep(ab.base))
+            .map(|(_, &off)| off)
+            .filter(|&off| direction != 1 || off >= local_boundary)
+            .min()
+    }
+
     /// (unlace) The gathered pointers split by `direct`: [`Self::has_local_alias`]'s
     /// boundary drawn from the local ones it rejects, and `(start, bytes)` for
     /// each it accepts. Computed once per gather, and again after

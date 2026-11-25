@@ -910,7 +910,7 @@ fn the_file_selection_matches_paths_names_and_globs() {
         "wideslice.toml",
         "tests/stages/wideslice.toml",
         "/repo/tests/stages/wideslice.toml",
-        "tests/stages/unlace-wide*",
+        "tests/stages/wide*",
     ] {
         assert!(selected(root, file, &[p.to_string()]), "{p}");
     }

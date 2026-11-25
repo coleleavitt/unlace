@@ -15,7 +15,7 @@
 //! Option `vecpairstore`.
 
 use unlace_base::error::{UnlaceError, UnlaceResult};
-use unlace_base::types::{uint4, uintb};
+use unlace_base::types::uintb;
 use unlace_num::opcodes::OpCode::{self, *};
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
@@ -85,6 +85,10 @@ impl Action for ActionVecPairStore {
     }
 }
 
+/// Kinds of the vector-pair user ops in `ArchContext::vecpair_userops`.
+const VEC_PUNPCKLQDQ: u8 = 0;
+const VEC_PINSRQ: u8 = 1;
+
 /// The two halves of a split store: the store's pointer, the low and high
 /// 8-byte values, and the user op whose result the store wrote.
 struct Split {
@@ -127,14 +131,15 @@ fn split_of(data: &Funcdata, store: OpId) -> Option<Split> {
     if !uid.is_constant() {
         return None;
     }
-    let name = data
+    let kind = data
         .get_arch()
-        .userops
-        .get_op(uid.get_offset() as uint4)?
-        .get_name();
-    let (lo, hi) = match (name, call.num_input()) {
-        (b"vpunpcklqdq_avx", 3) => (low_half(data, call.get_in(1)?)?, low_half(data, call.get_in(2)?)?),
-        (b"vpinsrq_avx", 4) => {
+        .vecpair_userops
+        .iter()
+        .find(|(id, _)| u64::from(*id) == uid.get_offset())
+        .map(|(_, k)| *k)?;
+    let (lo, hi) = match (kind, call.num_input()) {
+        (VEC_PUNPCKLQDQ, 3) => (low_half(data, call.get_in(1)?)?, low_half(data, call.get_in(2)?)?),
+        (VEC_PINSRQ, 4) => {
             let imm = data.vbank().get(call.get_in(3)?)?;
             if !imm.is_constant() || imm.get_offset() != 1 {
                 return None;

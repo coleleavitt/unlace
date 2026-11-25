@@ -44,6 +44,27 @@ stage fixture, console spelling):
 -   return 0xffffffffffffffff;                    +   return -1;
 ```
 
+## The default: `streams`
+
+`streams` is the shipped value. It names `FILE` (and glibc's `_IO_FILE`) with the
+published x86-64 members from the table below, types the `stdin`, `stdout` and
+`stderr` slots as `FILE *` (a copy-relocated `.bss` word) or `FILE **` (a GOT
+word of a shared object, named `stdout_ptr`), and leaves every other named
+aggregate `void *`. A prototype keeps its other slots: a `stat *` parameter of
+`stat` is `void *`, and the `char *` parameters beside it are unchanged.
+
+It exists because `opaque`, the value before it, retyped unrelated parameters:
+its `struct stat *` retyped the `char *` parameters of `copy_internal` (cp, mv,
+ginstall), so a function that never reads a stat stopped printing its own
+pointer type. That regression is why `glibc` was not
+the default. `streams` keeps the part of the table whose evidence is the
+declaration itself (`fopen` returns `FILE *`, `stdout` is a `FILE *`) and drops
+the members-of-stat case, where a caller's parameter was typed by something the
+caller did not do with it.
+
+`--option libctypes opaque` and `--option libctypes glibc` restore the two
+earlier values exactly.
+
 ## Provenance — every offset was measured, not remembered
 
 `.scratch`-built program, compiled and run on the machine this was written on

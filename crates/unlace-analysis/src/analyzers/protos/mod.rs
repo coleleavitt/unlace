@@ -570,6 +570,10 @@ fn build_ty(
             .ok_or_else(|| unlace_base::error::UnlaceError::lowlevel("unsupported complex layout")),
         Ty::Float => types.get_base(4, type_metatype::TYPE_FLOAT),
         Ty::Double => types.get_base(8, type_metatype::TYPE_FLOAT),
+        Ty::NamedPtr(n) if layout == libctypes::Layout::Streams && n != "FILE" => {
+            let v = types.get_type_void()?;
+            types.get_type_pointer(ptr, v, word_size)
+        }
         Ty::NamedPtr(n) => {
             let s = libctypes::named_aggregate(n, types, word_size, layout)?;
             types.get_type_pointer(ptr, s, word_size)
@@ -620,6 +624,11 @@ pub(crate) fn effective_libctypes_layout(
         L::Off => L::Off,
         _ if !libctypes::glibc::target_takes_the_widths(file) => L::Off,
         L::Glibc if libctypes::glibc::target_is_glibc_x86_64(file) => L::Glibc,
+        L::Streams if libctypes::glibc::target_is_glibc_x86_64(file) => L::Streams,
+        // `streams` names FILE with its published fields, which need the same
+        // target as `glibc`. An image that takes the widths but is not glibc has
+        // no `.dynstr` and imports nothing, so refusing it costs no name.
+        L::Streams => L::Off,
         _ => L::Opaque,
     }
 }

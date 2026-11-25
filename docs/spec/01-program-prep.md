@@ -5026,8 +5026,20 @@ moves.
   and the like; `GetProcAddress`, `GetStdHandle` and the counts the string and
   module-name calls return have none. The two tables are disjoint, so a name
   reaches only its own table's prototype.
-- **(unlace) Named libc aggregate types** (`libctypes`, values `off|opaque|glibc`,
-  default opaque,
+- **(unlace) `libctypes streams`, the shipped default.** `streams` names only the
+  stdio slots: `FILE` (and glibc's `_IO_FILE`) with the published x86-64 glibc
+  fields on a glibc image, and the `stdin`/`stdout`/`stderr` globals (`COPY` and
+  `GLOB_DAT` relocations, `stream_data_symbols`). A prototype's `FILE *` slot is
+  named; every other named aggregate slot (`stat *`, `dirent *`, `tm *`, `option *`,
+  `obstack *`, `DIR *`, ...) falls back to `void *` in that table entry, so the
+  rest of the entry keeps its declared types. The other stat-shaped aggregates
+  are not named under this value because naming `struct stat *` retyped a
+  `char *` parameter in `copy_internal` (docs/features/libctypes/glibc.md). On a
+  target that takes the widths but is not glibc the value is `off`: such an image
+  has no `.dynstr`, imports nothing, and so loses no name. `opaque` and `glibc`
+  keep their meanings below.
+- **(unlace) Named libc aggregate types** (`libctypes`, values `off|streams|opaque|glibc`,
+  default streams,
   `crates/unlace-analysis/src/analyzers/protos/libctypes.rs (LibcTypesPass)`,
   layouts in
   `crates/unlace-analysis/src/analyzers/protos/libctypes/glibc.rs`):

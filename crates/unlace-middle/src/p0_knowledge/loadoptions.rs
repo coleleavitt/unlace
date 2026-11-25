@@ -187,7 +187,7 @@ impl Default for LoadOptions {
             goabi: true,
             cil: true,
             symbolnamechars: NameChars::default(),
-            libctypes: LibcTypesLayout::Opaque,
+            libctypes: LibcTypesLayout::Streams,
             calltargettype: true,
             macho_arm64e: true,
             sourcelang: None,
@@ -508,10 +508,11 @@ pub mod read {
         match v.var(crate::libctypes::LIBCTYPES_ENV) {
             Ok(value) => match value.trim().to_ascii_lowercase().as_str() {
                 "off" | "0" | "false" => LibcTypesLayout::Off,
+                "opaque" => LibcTypesLayout::Opaque,
                 "glibc" => LibcTypesLayout::Glibc,
-                _ => LibcTypesLayout::Opaque,
+                _ => LibcTypesLayout::Streams,
             },
-            Err(_) => LibcTypesLayout::Opaque,
+            Err(_) => LibcTypesLayout::Streams,
         }
     }
 

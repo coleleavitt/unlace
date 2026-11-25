@@ -38,8 +38,12 @@
 //! — an x86-64 ELF whose `.dynstr` names glibc — and keeps the `opaque` shells
 //! everywhere else.
 //!
-//! Default **opaque**: the table's own declaration is the strongest evidence
-//! about a libc pointee that exists, and `void *` discards it. The 675
+//! Default **streams**: the table's own declaration is the strongest evidence
+//! about a libc pointee that exists, and `void *` discards it. `streams` keeps
+//! that for the one pointee every stdio call shares, `FILE`, and for the stream
+//! globals that carry it. `opaque` also names `stat`, `dirent`, `tm` and the
+//! rest, and that is where a `char *` parameter of an unrelated copy helper was
+//! retyped as `struct stat *` (docs/features/libctypes/glibc.md). The 675
 //! datatest assertions are structurally untouched (no datatest loads a file);
 //! the evidence for the default is the corpus sweep recorded in
 //! `docs/features/libctypes/record.json`. `--option libctypes off` restores the
@@ -64,6 +68,9 @@ pub const LIBCTYPES_ENV: &str = "UNLACE_LIBCTYPES";
 pub enum LibcTypesLayout {
     /// The `void *` tables, untouched — the pass does not run.
     Off,
+    /// FILE and the stream globals only: the stdio slots, with FILE's published
+    /// fields on glibc x86-64 and no other aggregate named.
+    Streams,
     /// Named, sized, fieldless shells.
     Opaque,
     /// Named shells plus the published glibc x86-64 field layouts, on a target
@@ -73,8 +80,8 @@ pub enum LibcTypesLayout {
 }
 
 /// The layout this process asks for, from [`LIBCTYPES_ENV`]. Unset ⇒
-/// [`LibcTypesLayout::Opaque`] (the shipped default); an unrecognised token is
-/// read as `Opaque` rather than refused, because this is a bridge, not the
+/// [`LibcTypesLayout::Streams`] (the shipped default); an unrecognised token is
+/// read as `Streams` rather than refused, because this is a bridge, not the
 /// validator — `Architecture::set_unlace_option` rejects a bad value at the
 /// `option` line, where the operator can see it.
 pub fn libctypes_layout() -> LibcTypesLayout {
@@ -127,22 +134,24 @@ impl crate::optionset::UnlaceOption for LibcTypesLayout {
     }
 
     fn shipped() -> Self {
-        LibcTypesLayout::Opaque
+        LibcTypesLayout::Streams
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let layout = match value.trim().to_ascii_lowercase().as_str() {
-            "opaque" | "on" | "1" | "true" => LibcTypesLayout::Opaque,
+            "streams" | "on" | "1" | "true" => LibcTypesLayout::Streams,
+            "opaque" => LibcTypesLayout::Opaque,
             "glibc" => LibcTypesLayout::Glibc,
             "off" | "0" | "false" => LibcTypesLayout::Off,
             other => {
                 return Err(unlace_base::error::UnlaceError::lowlevel(format!(
-                    "libctypes: expected `off`, `opaque` or `glibc`, got `{other}`"
+                    "libctypes: expected `off`, `streams`, `opaque` or `glibc`, got `{other}`"
                 )));
             }
         };
         let state = match layout {
             LibcTypesLayout::Off => "off",
+            LibcTypesLayout::Streams => "on (streams)",
             LibcTypesLayout::Opaque => "on (opaque)",
             LibcTypesLayout::Glibc => "on (glibc layouts)",
         };
@@ -166,7 +175,7 @@ mod tests {
     /// `glibc` is the one token that asks for the field layouts.
     #[test]
     fn libctypes_env_gate() {
-        assert_eq!(read_with(None), LibcTypesLayout::Opaque, "unset => opaque");
+        assert_eq!(read_with(None), LibcTypesLayout::Streams, "unset => streams");
         for off in ["off", "0", "false", "OFF", " off "] {
             assert_eq!(
                 read_with(Some(off)),
@@ -174,11 +183,25 @@ mod tests {
                 "`{off}` should disable"
             );
         }
-        for on in ["opaque", "on", "1", "true", "OPAQUE", " opaque ", ""] {
+        for on in ["streams", "on", "1", "true", "STREAMS", " on "] {
             assert_eq!(
                 read_with(Some(on)),
+                LibcTypesLayout::Streams,
+                "`{on}` is the default"
+            );
+        }
+        for opaque in ["opaque", "OPAQUE", " opaque "] {
+            assert_eq!(
+                read_with(Some(opaque)),
                 LibcTypesLayout::Opaque,
-                "`{on}` is not a layout"
+                "`{opaque}` is the opaque shells"
+            );
+        }
+        for unknown in ["", "bogus"] {
+            assert_eq!(
+                read_with(Some(unknown)),
+                LibcTypesLayout::Streams,
+                "`{unknown}` is not a layout, read as the default"
             );
         }
         for g in ["glibc", "GLIBC", " glibc "] {
@@ -190,6 +213,7 @@ mod tests {
         }
         for layout in [
             LibcTypesLayout::Off,
+            LibcTypesLayout::Streams,
             LibcTypesLayout::Opaque,
             LibcTypesLayout::Glibc,
         ] {

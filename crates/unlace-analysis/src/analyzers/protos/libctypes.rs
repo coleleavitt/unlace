@@ -346,6 +346,11 @@ pub(super) fn named_aggregate(
     word_size: uint4,
     layout: Layout,
 ) -> UnlaceResult<Rc<Datatype>> {
+    if layout == Layout::Streams && name != "FILE" {
+        return Err(UnlaceError::lowlevel(format!(
+            "libctypes: `{name}` is not a stdio stream, and `streams` names only FILE"
+        )));
+    }
     let Some(agg) = NAMED_AGGREGATES.iter().find(|a| a.name == name) else {
         return Err(UnlaceError::lowlevel(format!(
             "libctypes: no width is known for `{name}`"
@@ -381,7 +386,12 @@ pub(super) fn named_aggregate(
     // order possible — see `glibc`'s module header). The completed struct drops
     // `type_incomplete`: it has its members, and the `.h` emitter should print
     // them.
-    if layout == Layout::Glibc {
+    let glibc_fields = match layout {
+        Layout::Glibc => true,
+        Layout::Streams => name == "FILE",
+        Layout::Off | Layout::Opaque => false,
+    };
+    if glibc_fields {
         if let Some(rows) = glibc::layout_for(name) {
             let fields = glibc::build_fields(rows, types, word_size)?;
             let shell = types.get_type_struct(name)?;
@@ -1837,6 +1847,7 @@ impl AnalysisPass for LibcTypesPass {
         // cannot re-derive them is the one that runs after the object file is
         // gone: a `--define-function 0x..=fopen` directive. Carry them.
         out.libctypes_glibc = layout == Layout::Glibc;
+        out.libctypes_streams = layout == Layout::Streams;
         out.libctypes_refused = layout == Layout::Off;
         // The stream slots mint the same `FILE` at the same width, so they are
         // refused with the rest: the shell's size is a claim too (`structdefs`

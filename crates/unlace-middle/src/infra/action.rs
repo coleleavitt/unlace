@@ -1461,6 +1461,13 @@ impl ActionPool {
             {
                 touch_neighbourhood(&mut self.touched, data, op);
             }
+            if res > 0
+                && data.get_arch().unlace_options.get::<crate::p0_knowledge::irverifyopt::IrVerifyPasses>().0
+                && let Err(e) = crate::substrate::irverify::verify_pass_output(data)
+            {
+                let name = self.allrules[rl_idx].state.name.clone();
+                data.warning_header(&format!("irverify-rule: rule {name} broke the IR: {e}"));
+            }
             if res > 0 {
                 far_only = false;
                 if self.allrules[rl_idx].rule.removes_dead_ops()

@@ -763,12 +763,13 @@ impl Action for ActionStripStackGuard {
             collect_value_slots(&loads, data, &mut slots);
             data.remove_branch(h, idx)
                 .expect("ActionStripStackGuard: removeBranch");
+            eprintln!("G4 post-removebranch h={:?} size_out={} failbasic={} failcall={}", h, data.bblocks_ref().block(h).size_out(), matches!(data.bblocks_ref().block(fail_out).kind(), BlockKind::Basic(_)), block_has_call(fail_out, data));
             data.remove_unreachable_blocks(false, true)
                 .expect("ActionStripStackGuard: removeUnreachableBlocks");
             // The check is stripped; release the entry-side canary init (the
             // angr `statements.pop(stmt_idx)` step) so the following
             // ActionDeadCode collects it with the compare/reload residue.
-            eprintln!("G4 after-strip h={:?} size_out={} fail_out={:?} fail_size_in={}", h, data.bblocks_ref().block(h).size_out(), fail_out, data.bblocks_ref().block(fail_out).size_in());
+            eprintln!("G4 after-strip h={:?} size_out={}", h, data.bblocks_ref().block(h).size_out());
             for op in data.bb_ops(h) {
                 eprintln!("G4   hop {:?}", data.obank().get(op).expect("g4").code());
             }

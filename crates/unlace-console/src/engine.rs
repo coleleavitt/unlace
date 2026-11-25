@@ -3622,6 +3622,7 @@ impl ConsoleProgram {
                 // so it must know which cold parts are withheld before it runs.
                 let mut withheld_cold = merged.eh_cold.clone();
                 withheld_cold.sort_unstable();
+                eprintln!("g3dbg early eh_cold={}", withheld_cold.len());
                 self.arch_mut().unlace_withheld_cold = withheld_cold;
                 // (unlace `uefi`) UEFI module markup decodes the module, so it
                 // runs here; it declines everything but an EFI-subsystem PE.
@@ -3833,7 +3834,10 @@ impl ConsoleProgram {
         // function: drop every entry inside one, its start included.
         let mut eh_cold = std::mem::take(&mut merged.eh_cold);
         eh_cold.sort_unstable();
+        let g3_before = merged.entries.iter().filter(|&&v| eh_cold.iter().any(|&(s, e)| s <= v && v < e)).count();
+        eprintln!("g3dbg eh_cold={} entries_in_parts_before={} listing_gate={}", eh_cold.len(), g3_before, self.arch().unlace_options.get::<unlace_decomp::analysisgates::Listing>().0);
         unlace_analysis::entry::ehcold::suppress_eh_cold_entries(&mut merged.entries, &eh_cold);
+        eprintln!("g3dbg after={}", merged.entries.iter().filter(|&&v| eh_cold.iter().any(|&(s, e)| s <= v && v < e)).count());
         // (unlace, `pdbinterior`) The same rejection inside PDB procedures, on its own
         // terms: see `suppress_pdb_interior_entries`.
         suppress_pdb_interior_entries(self.arch(), &code_space, &mut merged);

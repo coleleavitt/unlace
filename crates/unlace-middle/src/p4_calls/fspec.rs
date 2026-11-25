@@ -6636,12 +6636,15 @@ impl FuncProto {
         self.effectlist.sort_by(EffectRecord::compare_by_address);
     }
 
-    /// Get the likely-trash list (C++ `trashBegin`/`trashEnd`).
+    /// Get the likely-trash list (C++ `trashBegin`/`trashEnd`). With no override
+    /// and no model there are no trash registers, so the list is empty.
     pub fn trash_list(&self) -> &[VarnodeData] {
-        if self.likelytrash.is_empty() {
-            self.model().trash_list()
-        } else {
-            &self.likelytrash
+        if !self.likelytrash.is_empty() {
+            return &self.likelytrash;
+        }
+        match &self.model {
+            Some(m) => m.trash_list(),
+            None => &[],
         }
     }
     /// Get the internal-storage list (C++ `internalBegin`/`internalEnd`).

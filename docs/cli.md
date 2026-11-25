@@ -2574,7 +2574,7 @@ Behaviors specific to `decompile-all`:
   `_IO_fflush` in static glibc), a versioned or compatibility spelling, a veneer or
   `.localalias` beside the global it shares a body with. The first of those in
   `.symtab`, PLT, `.dynsym` order is the loader's name for the address, the one call
-  sites print; the others are only ever `aliases`. `name` reports the most informative of
+  sites print; the others are only ever `aliases`. The exception is gcc's `.localalias`: a local alias of a recursive weak function lists first but shares its body with the global name, so it is an alias whenever another name holds its address. `name` reports the most informative of
   them — a real symbol beats a synthesized `_INIT_<i>`/`_FINI_<i>`/`_DT_INIT`/`_DT_FINI`
   table name, which beats a generated `sub_`/`func_`/`FUN_`/`LAB_` placeholder; ties
   prefer the unprefixed spelling (`main` over `_main`), then the shorter name — and

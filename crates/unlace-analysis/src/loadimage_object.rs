@@ -1014,6 +1014,9 @@ impl ObjectLoadImage {
         let mut funcsyms: Vec<FuncSym> = Vec::new();
         let mut aliases: Vec<FuncSym> = Vec::new();
         let mut seen: HashSet<u64> = HashSet::new();
+        // gcc's `f.localalias` (a local alias of a recursive weak `f`) lists before `f`
+        // in `.symtab` but shares its body; it waits here until the other names are in.
+        let mut deferred_local_aliases: Vec<FuncSym> = Vec::new();
         let mut elf_functions = ElfFunctionProvenance::default();
         let is_elf = file.format() == object::BinaryFormat::Elf;
         let is_macho = file.format() == object::BinaryFormat::MachO;
@@ -1085,8 +1088,18 @@ impl ObjectLoadImage {
             if name.is_empty() {
                 continue;
             }
+            let gcc_local_alias = name.ends_with(b".localalias");
             let name = demangle_funcsym_name(name, namechars);
             let size = sym.size();
+            if gcc_local_alias {
+                deferred_local_aliases.push(FuncSym { addr, name, size });
+            } else if seen.insert(addr) || !elfv1.0.is_empty() {
+                funcsyms.push(FuncSym { addr, name, size });
+            } else {
+                aliases.push(FuncSym { addr, name, size });
+            }
+        }
+        for FuncSym { addr, name, size } in deferred_local_aliases {
             if seen.insert(addr) || !elfv1.0.is_empty() {
                 funcsyms.push(FuncSym { addr, name, size });
             } else {

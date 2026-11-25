@@ -1324,7 +1324,7 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   one name per address (the first in symbol-table, import-stub, `.dynsym`
   order, the one the symbol table installs for call sites: on Mach-O the first
   `nlist` entry, locals ahead of externals as the linker writes them, on a PE
-  the first COFF function symbol; a PowerPC64 ELFv1 image keeps every name, as
+  the first COFF function symbol, and an ELF `.localalias` (gcc's local name for a recursive weak function) only when no other name holds its address; a PowerPC64 ELFv1 image keeps every name, as
   before), but no longer discards the other distinct names there: they
   become lookup-only aliases
   (`crates/unlace-analysis/src/loadimage_object.rs (ObjectLoadImage::func_symbol_aliases)`,

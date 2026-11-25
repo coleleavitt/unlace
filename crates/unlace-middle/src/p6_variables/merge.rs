@@ -1693,6 +1693,7 @@ impl Merge {
                     }
                     let h1 = ctx.vn_high(vn1).expect("merge_opcode: vn1 no high");
                     let h2 = ctx.vn_high(vn2).expect("merge_opcode: vn2 no high");
+                    g1b_diag(ctx, opc, vn1, vn2, h1, h2);
                     if opc == OpCode::CPUI_MULTIEQUAL
                         && Self::phi_address_arith_conflict(&*ctx, h1, h2)
                     {
@@ -3909,5 +3910,32 @@ mod tests {
         assert!(merge.copy_trims.is_empty());
         assert!(merge.proto_partial.is_empty());
         assert_eq!(merge.test_cache.cached(hid(1), hid(2)), None);
+    }
+}
+
+fn g1b_diag(ctx: &mut dyn MergeContext, opc: OpCode, vn1: VarnodeId, vn2: VarnodeId, h1: HighVariableId, h2: HighVariableId) {
+    if std::env::var_os("UNLACE_G1B_DIAG").is_none() {
+        return;
+    }
+    if !ctx.high_is_persist(h1) && !ctx.high_is_persist(h2) {
+        return;
+    }
+    let pe = (ctx.pass_hooks().pointeevalue_keeps_apart)(ctx, vn1, vn2);
+    let gv = (ctx.pass_hooks().globalvalue_keeps_apart)(ctx, h1, h2);
+    eprintln!("[g1b] {:?} vn1={:?} h1={:?} vn2={:?} h2={:?} pointee_keeps={} globalvalue_keeps={}", opc, vn1, h1, vn2, h2, pe, gv);
+    for (tag, h) in [("h1", h1), ("h2", h2)] {
+        let n = ctx.high_num_instances(h);
+        let mut parts = Vec::new();
+        for i in 0..n {
+            let v = ctx.high_get_instance(h, i);
+            let storage = ctx.vn_storage(v);
+            let def = ctx.vn_def(v).map(|d| ctx.op_code(d));
+            let gl = ctx.vn_is_global_load(v);
+            parts.push(format!("{:?}@{:?}/def={:?}/gl={}", v, storage, def, gl));
+        }
+        let persist = ctx.high_is_persist(h);
+        let tied = ctx.high_is_addr_tied(h);
+        let input = ctx.high_is_input(h);
+        eprintln!("[g1b]   {} persist={} tied={} input={} inst=[{}]", tag, persist, tied, input, parts.join(" "));
     }
 }

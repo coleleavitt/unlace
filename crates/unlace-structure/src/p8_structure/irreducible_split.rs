@@ -6,13 +6,17 @@
 //! reducible by duplicating an entry block for one external predecessor. The duplicate keeps the
 //! entry's out-edges and takes that one in-edge, so the region loses one entry per split.
 //!
-//! The duplication is the existing [`Funcdata::node_split_through`] primitive, the same one the
-//! `returndupcalls` pass drives, so it inherits its safety checks: the entry must have exactly one
-//! out-edge (the in-region successor), no conditional branch, no call, and no output read outside
-//! the block except through the successor's MULTIEQUALs or a merge it inserts. An entry that fails a
-//! check is left alone and the next candidate is tried. Each split is logged as an
-//! `irreduciblesplit:` warning, and the pass runs at most [`MAX_IRREDUCIBLE_SPLITS`] times per
-//! function.
+//! Regions are searched recursively. A region with one entry is reducible: its back edges (the
+//! edges into that entry) are set aside and the strongly connected regions left inside it are
+//! searched in turn, so a multi-entry loop nested in a reducible outer loop is found.
+//!
+//! The duplication is the existing [`Funcdata::node_split_through`] primitive for an entry with one
+//! out-edge, or [`Funcdata::node_split_through_cbranch`] for an entry ending in a two-way
+//! conditional branch (both primitives are also driven by other passes). Each inherits its safety
+//! checks: no call, no tied output, and no output read outside the two blocks except through a
+//! successor's MULTIEQUALs or a merge it inserts. An entry that fails a check is left alone and the
+//! next candidate is tried. Each split is logged as an `irreduciblesplit:` warning, and the pass
+//! runs at most [`MAX_IRREDUCIBLE_SPLITS`] times per function.
 //!
 //! Gated by `option irreduciblesplit on|off` (`IrreducibleSplit`, shipped off): the copy grows the
 //! code, so it is a judgement call; when off the pass returns at once and output is unchanged.
@@ -27,6 +31,9 @@ use crate::funcdata::Funcdata;
 
 /// Most entry-block duplications the pass performs per function.
 pub const MAX_IRREDUCIBLE_SPLITS: int4 = 16;
+
+/// Deepest nesting of single-entry regions the search descends through.
+const MAX_REGION_DEPTH: usize = 32;
 
 crate::unlace_flag!(
     /// The `irreduciblesplit on|off` ArchOption (controlled node splitting of irreducible loops).
@@ -82,10 +89,14 @@ impl Action for ActionIrreducibleSplit {
     }
 }
 
-/// Strongly connected regions of the top-level basic blocks that contain a cycle (more than one
-/// block), each sorted by block id. Tarjan's algorithm, iterative so a long chain cannot overflow
-/// the stack.
-fn cyclic_regions(data: &Funcdata, nodes: &[BlockId]) -> Vec<Vec<BlockId>> {
+/// Strongly connected regions of the given blocks that contain a cycle (more than one block), each
+/// sorted by block id. Edges in `ignored` are treated as absent. Tarjan's algorithm, iterative so a
+/// long chain cannot overflow the stack.
+fn cyclic_regions(
+    data: &Funcdata,
+    nodes: &[BlockId],
+    ignored: &BTreeSet<(BlockId, BlockId)>,
+) -> Vec<Vec<BlockId>> {
     let index_of: BTreeMap<BlockId, usize> =
         nodes.iter().enumerate().map(|(i, &b)| (b, i)).collect();
     let graph = data.bblocks_ref();
@@ -94,7 +105,9 @@ fn cyclic_regions(data: &Funcdata, nodes: &[BlockId]) -> Vec<Vec<BlockId>> {
         .map(|&b| {
             let blk = graph.block(b);
             (0..blk.size_out())
-                .filter_map(|i| index_of.get(&blk.get_out(i)).copied())
+                .map(|i| blk.get_out(i))
+                .filter(|t| !ignored.contains(&(b, *t)))
+                .filter_map(|t| index_of.get(&t).copied())
                 .collect()
         })
         .collect();
@@ -158,6 +171,85 @@ fn cyclic_regions(data: &Funcdata, nodes: &[BlockId]) -> Vec<Vec<BlockId>> {
     regions
 }
 
+/// Look for one split in the strongly connected regions of `nodes`, with the edges in `ignored` set
+/// aside. A multi-entry region is split when one of its entries can be. A single-entry region is
+/// reducible, so its back edges are set aside and the regions inside it are searched in turn. Returns
+/// true when a split was made.
+fn split_one_region(
+    data: &mut Funcdata,
+    nodes: &[BlockId],
+    ignored: &BTreeSet<(BlockId, BlockId)>,
+    depth: usize,
+) -> bool {
+    let regions = cyclic_regions(data, nodes, ignored);
+    for region in &regions {
+        let members: BTreeSet<BlockId> = region.iter().copied().collect();
+        let (entries, back) = {
+            let graph = data.bblocks_ref();
+            let entries: Vec<BlockId> = region
+                .iter()
+                .copied()
+                .filter(|&b| {
+                    let blk = graph.block(b);
+                    blk.size_in() == 0
+                        || (0..blk.size_in()).any(|i| !members.contains(&blk.get_in(i)))
+                })
+                .collect();
+            let mut back: BTreeSet<(BlockId, BlockId)> = BTreeSet::new();
+            if let [header] = entries.as_slice() {
+                for &u in region {
+                    let blk = graph.block(u);
+                    if (0..blk.size_out()).any(|i| blk.get_out(i) == *header) {
+                        back.insert((u, *header));
+                    }
+                }
+            }
+            (entries, back)
+        };
+        if entries.len() >= 2 {
+            if split_at_entries(data, &members, &entries) {
+                return true;
+            }
+        } else if entries.len() == 1 && depth < MAX_REGION_DEPTH {
+            let mut inner = ignored.clone();
+            inner.extend(back);
+            if split_one_region(data, region, &inner, depth + 1) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Try to duplicate one entry of a multi-entry region for one of its external in-edges. Returns true
+/// on the first split that the primitive accepts.
+fn split_at_entries(
+    data: &mut Funcdata,
+    members: &BTreeSet<BlockId>,
+    entries: &[BlockId],
+) -> bool {
+    for &e in entries {
+        let (size_in, size_out, outside) = {
+            let blk = data.bblocks_ref().block(e);
+            let outside = (0..blk.size_in()).find(|&i| !members.contains(&blk.get_in(i)));
+            (blk.size_in(), blk.size_out(), outside)
+        };
+        let Some(inedge) = outside else { continue };
+        if size_in < 2 {
+            continue;
+        }
+        let split = match size_out {
+            1 => data.node_split_through(e, inedge, false),
+            2 => data.node_split_through_cbranch(e, inedge),
+            _ => continue,
+        };
+        if split.is_ok() {
+            return true;
+        }
+    }
+    false
+}
+
 /// Duplicate entry blocks of irreducible regions until none is left or `max_splits` splits were
 /// made. Returns the number of splits performed.
 pub fn irreducible_split_apply(data: &mut Funcdata, max_splits: int4) -> int4 {
@@ -165,45 +257,10 @@ pub fn irreducible_split_apply(data: &mut Funcdata, max_splits: int4) -> int4 {
     let mut done: int4 = 0;
     while done < max_splits {
         let nodes: Vec<BlockId> = data.bblocks_ref().block(root).get_list().to_vec();
-        let regions = cyclic_regions(data, &nodes);
-        let mut progressed = false;
-        'scan: for region in &regions {
-            let members: BTreeSet<BlockId> = region.iter().copied().collect();
-            let entries: Vec<BlockId> = {
-                let graph = data.bblocks_ref();
-                region
-                    .iter()
-                    .copied()
-                    .filter(|&b| {
-                        let blk = graph.block(b);
-                        blk.size_in() == 0
-                            || (0..blk.size_in()).any(|i| !members.contains(&blk.get_in(i)))
-                    })
-                    .collect()
-            };
-            if entries.len() < 2 {
-                continue;
-            }
-            for e in entries {
-                let (size_in, size_out, outside) = {
-                    let blk = data.bblocks_ref().block(e);
-                    let outside = (0..blk.size_in()).find(|&i| !members.contains(&blk.get_in(i)));
-                    (blk.size_in(), blk.size_out(), outside)
-                };
-                let Some(inedge) = outside else { continue };
-                if size_out != 1 || size_in < 2 {
-                    continue;
-                }
-                if data.node_split_through(e, inedge, false).is_ok() {
-                    done += 1;
-                    progressed = true;
-                    break 'scan;
-                }
-            }
-        }
-        if !progressed {
+        if !split_one_region(data, &nodes, &BTreeSet::new(), 0) {
             break;
         }
+        done += 1;
     }
     done
 }

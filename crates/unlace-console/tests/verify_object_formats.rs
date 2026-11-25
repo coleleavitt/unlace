@@ -58,16 +58,17 @@ fn fixtures() -> PathBuf {
 // The COFF arm additionally goes through the synthetic relocatable layout
 // (`relocobjects`, which the `.obj`'s all-at-VMA-0 sections require to be told
 // apart), so its two functions load at `RELOC_BASE` + their section offset
-// rather than at the pre-link offset itself. Mach-O objects keep the
-// mapped-image path, so their offsets are unchanged.
+// rather than at the pre-link offset itself. A Mach-O `MH_OBJECT` takes the
+// same relocatable layout (`MachOFormat::relocatable_layout`, 72e21c8f9a), so its
+// functions also sit at `RELOC_BASE` + their section offset.
 
 // pe_min.obj — Intel amd64 COFF object (`format=Coff`).
 const PE_TEXT_VMA: u64 = unlace_analysis::loader::reloc_object::RELOC_BASE; // .text base (the_answer)
 const PE_HELPER_OFF: u64 = PE_TEXT_VMA + 0x60; // helper @ .text+0x60
 
 // macho_min.o — Mach-O 64-bit x86_64 object (`format=MachO`).
-const MACHO_TEXT_VMA: u64 = 0x0; // __text base (_the_answer @ 0x0)
-const MACHO_HELPER_OFF: u64 = 0x50; // _helper @ 0x50
+const MACHO_TEXT_VMA: u64 = unlace_analysis::loader::reloc_object::RELOC_BASE; // __text base (_the_answer)
+const MACHO_HELPER_OFF: u64 = MACHO_TEXT_VMA + 0x50; // _helper @ __text+0x50
 
 /// Run a list of console commands against an already-bootstrapped program,
 /// returning the captured output.
@@ -224,7 +225,7 @@ fn macho_object_loads_maps_and_disassembles() {
         ],
     );
     assert!(
-        out.contains("0x00000000:"),
+        out.contains(&format!("0x{MACHO_TEXT_VMA:08x}:")),
         "Mach-O: disassemble produced no listing at __text base:\n{out}"
     );
     assert!(

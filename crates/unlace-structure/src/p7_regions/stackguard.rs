@@ -695,6 +695,10 @@ impl Action for ActionStripStackGuard {
             // Canary corrupted => the no-return handler.  For `slot != reload`
             // the true edge is the failure; for `slot == reload` the false edge.
             let fail_out: BlockId = if is_not_equal { cond_true } else { cond_false };
+            eprintln!("G4 fail_out={:?} basic={} call={} flip={} notequal={} size_out={}", fail_out, matches!(data.bblocks_ref().block(fail_out).kind(), BlockKind::Basic(_)), block_has_call(fail_out, data), flip, is_not_equal, data.bblocks_ref().block(h).size_out());
+            for op in data.bb_ops(fail_out) {
+                eprintln!("G4   failop {:?}", data.obank().get(op).expect("g4").code());
+            }
             // dynamic_cast<BlockBasic *>(failOut) — must be basic.
             if !matches!(
                 data.bblocks_ref().block(fail_out).kind(),
@@ -716,6 +720,7 @@ impl Action for ActionStripStackGuard {
                     break;
                 }
             }
+            eprintln!("G4 idx={}", idx);
             if idx < 0 {
                 continue;
             }

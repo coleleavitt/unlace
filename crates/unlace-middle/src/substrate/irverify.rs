@@ -280,8 +280,11 @@ pub fn verify_dataflow(fd: &Funcdata) -> Result<(), VerifyError> {
                 None
             };
             let Some(def_op) = vn.get_def() else {
+                // Free storage (memory, or a location the function neither writes nor takes as an input)
+                // has no defining op on purpose: heritage leaves a read of it free.
                 if vn.is_constant()
                     || vn.get_addr().is_constant()
+                    || vn.is_free()
                     || vn.is_input()
                     || vn.is_annotation()
                     || vn.is_unaffected()

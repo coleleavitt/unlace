@@ -251,7 +251,8 @@ fn query_reports_candidates_collisions_and_invalid_databases() {
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(value["status"], "ambiguous");
     assert_eq!(value["candidates"].as_array().unwrap().len(), 2);
-    assert_eq!(value["candidates"][1]["name"], "other_candidate");
+    assert_eq!(value["candidates"][0]["name"], "other_candidate");
+    assert_eq!(value["candidates"][1]["name"], "unlace_crc32");
 
     std::fs::write(
         &path,

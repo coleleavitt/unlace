@@ -42,7 +42,7 @@ fn upd7810_dcr_skip_loop_decompiles() {
 #[test]
 fn upd7810_port_poll_and_calf_decompile() {
     let out = decompile("port_poll.bin");
-    assert!(out.contains("while (!(PA & 1));"), "{out}");
+    assert!(out.contains("while (!(PA & 1)) {"), "{out}");
     assert!(out.contains("PB = "), "{out}");
     assert!(out.contains("sub_834();"), "{out}");
 }

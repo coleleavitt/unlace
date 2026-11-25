@@ -57,8 +57,8 @@ fn a_directive_the_output_does_not_show_is_reported() {
     .result
     .expect("mix decompiles");
     let (addr_size, word_size) = prog.arch().data_org();
-    let (float8, _) = parse_type(
-        "double",
+    let (float4, _) = parse_type(
+        "float",
         prog.arch().types(),
         DataOrg {
             addr_size,
@@ -71,11 +71,11 @@ fn a_directive_the_output_does_not_show_is_reported() {
         .expect("applies")
         .expect("binds a Symbol");
     let retyped =
-        unlace_console::hightarget::apply_local(&mut fd, "v7", "", Some(float8.clone()), 8, None)
+        unlace_console::hightarget::apply_local(&mut fd, "v7", "", Some(float4.clone()), 8, None)
             .expect("applies")
             .expect("binds a Symbol");
     let expected =
-        assertions::expected_locals(&fd, &[(0, renamed, None), (1, retyped, Some(float8))]);
+        assertions::expected_locals(&fd, &[(0, renamed, None), (1, retyped, Some(float4))]);
     let code = unlace_decomp::decompile_drive::print_c(prog.arch_mut(), &fd);
     let unapplied = refusals(&prog, &fd, &code, &expected);
     assert_eq!(unapplied.len(), 2, "{unapplied:?}");

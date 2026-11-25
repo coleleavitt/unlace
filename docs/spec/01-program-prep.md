@@ -15669,7 +15669,10 @@ call through the first stub names its import.
 Without a callee prototype, a preserved incoming argument register cannot
 establish import arity: calls with and without that argument can have identical
 instructions. A declared prototype supplies that missing contract
-(`gotimportproto.rs`, §4).
+(`gotimportproto.rs`, §4). A RISC-V call through an `auipc`/`jalr` pair to an
+undefined symbol is the same case: the loader's undefined call relocations are
+the proven imports, so the name-seeded libgcc and libc prototypes bind to it
+(without this, `rv32.o`'s `fadd` prints `void fadd(void) { __addsf3(); }`).
 
 
 ### Weak import identity and slot membership

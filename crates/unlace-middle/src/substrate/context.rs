@@ -1131,7 +1131,8 @@ pub struct ArchContext {
     /// Loader-proven tail transfers, flowed as a call and return; explicit
     /// per-function flow overrides take precedence.
     pub loader_transfer_sites: Rc<std::collections::BTreeSet<Address>>,
-    /// MIPS GOT import entries identified by the loader, never ordinary definitions.
+    /// Import entries the loader identifies (a MIPS GOT slot, a RISC-V call relocation
+    /// to an undefined symbol), never ordinary definitions.
     pub loader_mips_imports: Rc<std::collections::BTreeSet<Address>>,
     pub nullable_literal_values: Rc<std::collections::BTreeSet<u64>>,
     /// The calling convention each declared callee was declared under, keyed the

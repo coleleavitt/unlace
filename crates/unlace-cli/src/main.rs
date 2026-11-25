@@ -5,5 +5,6 @@
 extern crate unlace_decomp_dylib;
 
 fn main() -> std::process::ExitCode {
+    eprintln!("MSVCDBG main");
     unlace_cli::main()
 }

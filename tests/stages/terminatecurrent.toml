@@ -55,4 +55,5 @@ regex = 'sub_4014b0\(\); // no-return'
 [[match]]
 name = 'TERMINATECURRENT #2: both passes call the wrapper'
 min = 2
+max = 99
 regex = 'sub_4014b0\('

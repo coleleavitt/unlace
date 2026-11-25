@@ -704,6 +704,40 @@ fn triple_size(triple: &str) -> Option<i32> {
 // The gate test
 // ===========================================================================
 
+/// Rewrite each `(unique,0x<off>,<size>)` triple by first-appearance index
+/// (`(unique,u0,8)`, `(unique,u1,8)`, ...), across the whole list.  Absolute
+/// unique offsets are compile-order blocks of the compiled `.sla` (slacomp
+/// reserves 256 unique bytes per constructor temporary block), so adding
+/// constructors to the spec shifts them without changing the lift; the identity
+/// pattern (which temporaries are the same) is still compared exactly.
+fn canon_unique(lines: Vec<String>) -> Vec<String> {
+    let mut seen: Vec<String> = Vec::new();
+    lines
+        .into_iter()
+        .map(|line| {
+            let mut out = String::with_capacity(line.len());
+            let mut rest = line.as_str();
+            while let Some(pos) = rest.find("(unique,0x") {
+                out.push_str(&rest[..pos]);
+                let after = &rest[pos + "(unique,".len()..];
+                let end = after.find(',').unwrap_or(after.len());
+                let off = &after[..end];
+                let id = match seen.iter().position(|s| s == off) {
+                    Some(i) => i,
+                    None => {
+                        seen.push(off.to_string());
+                        seen.len() - 1
+                    }
+                };
+                out.push_str(&format!("(unique,u{id}"));
+                rest = &after[end..];
+            }
+            out.push_str(rest);
+            out
+        })
+        .collect()
+}
+
 #[test]
 fn real_flow_links_ops_matching_lift_fixtures() {
     let root = repo_root();
@@ -776,8 +810,8 @@ fn real_flow_links_ops_matching_lift_fixtures() {
         // (output triple), `newCodeRef`/`newVarnode` (input triples), and
         // `opSetOutput`/`opSetInput` linkage produce exactly the fixture's
         // varnodes.
-        let got_lines = first_n_op_lines(&got_body, n_cmp);
-        let want_lines = first_n_op_lines(&fix.body, n_cmp);
+        let got_lines = canon_unique(first_n_op_lines(&got_body, n_cmp));
+        let want_lines = canon_unique(first_n_op_lines(&fix.body, n_cmp));
         assert_eq!(
             got_lines, want_lines,
             "{fixture}: real-flow op lines (out/in varnode triples) diverge from the lift fixture"

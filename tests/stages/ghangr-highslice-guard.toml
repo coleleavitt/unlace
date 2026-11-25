@@ -14,6 +14,7 @@ hex = 'c3'
 commands = [
     'clear architecture',
     'load file crates/unlace-analysis/tests/fixtures/highslice_guard_x86_64',
+    'option rawswitch off',
     'phase catalog highsliceguard',
     'read symbols',
     'parse line extern uint4 narrow_guard(uint8 x);',
@@ -22,6 +23,7 @@ commands = [
     'print C',
     'clear architecture',
     'load file crates/unlace-analysis/tests/fixtures/highslice_guard_x86_64',
+    'option rawswitch off',
     'option highsliceguard on',
     'phase catalog highsliceguard',
     'read symbols',

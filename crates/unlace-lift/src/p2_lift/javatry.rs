@@ -643,16 +643,4 @@ impl crate::action::Action for ActionJavaThrowPrune {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn integer_division_and_object_access_throw() {
-        for op in [0x6e, 0x52, 0x44, 0x22, 0x27, 0x93, 0xb4, 0xdb, 0x1d, 0x21] {
-            assert!(can_throw(op), "{op:#x}");
-        }
-        for op in [0x01, 0x0d, 0x12, 0x28, 0x32, 0x90, 0xa6, 0xd0, 0x7b] {
-            assert!(!can_throw(op), "{op:#x}");
-        }
-    }
-}
+mod tests;

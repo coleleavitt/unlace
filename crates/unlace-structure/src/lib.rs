@@ -32,18 +32,4 @@ pub fn provide_all(slots: &mut crate::passhooks::UnlaceHookSlots) {
 /// themselves: the hooks of this crate and the crates below it, and a stub that panics, naming
 /// itself, for each hook a higher crate provides (`UnlaceHookSlots::finish_with_stubs`).
 #[cfg(test)]
-mod unprovided {
-    use unlace_middle::passhooks::{UnlaceHookSlots, UnlaceHooks};
-
-    #[unsafe(no_mangle)]
-    fn __unlace_default_pass_hooks() -> &'static UnlaceHooks {
-        static HOOKS: std::sync::OnceLock<UnlaceHooks> = std::sync::OnceLock::new();
-        HOOKS.get_or_init(|| {
-            let mut slots = UnlaceHookSlots::default();
-            unlace_middle::provide_all(&mut slots);
-            unlace_lift::provide_all(&mut slots);
-            super::provide_all(&mut slots);
-            slots.finish_with_stubs()
-        })
-    }
-}
+mod unprovided;

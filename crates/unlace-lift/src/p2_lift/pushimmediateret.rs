@@ -15,11 +15,4 @@ use unlace_base::marshal::ElementId;
 pub const ELEM_PUSHIMMEDIATERET: ElementId = ElementId::new("pushimmediateret", 4165);
 
 #[cfg(test)]
-mod tests {
-    use super::ELEM_PUSHIMMEDIATERET;
-
-    #[test]
-    fn element_id_is_stable() {
-        assert_eq!(ELEM_PUSHIMMEDIATERET.get_id(), 4165);
-    }
-}
+mod tests;

@@ -1,0 +1,45 @@
+use super::CommonAllocator;
+
+#[test]
+fn full_sizes_and_alignment_keep_storage_disjoint() {
+    let mut allocator = CommonAllocator::new(0x402000, 1, false);
+    let first = allocator.allocate(64, 32).unwrap();
+    let second = allocator.allocate(32, 64).unwrap();
+    assert_eq!(first % 32, 0);
+    assert_eq!(second % 64, 0);
+    assert!(second >= first + 64);
+    assert!(first >= 0x402010);
+}
+
+#[test]
+fn invalid_allocation_does_not_advance_or_wrap() {
+    let mut allocator = CommonAllocator::new(0x402000, 0, true);
+    assert_eq!(allocator.allocate(8, 3), None);
+    assert_eq!(allocator.allocate(u64::MAX, 8), None);
+    assert_eq!(allocator.allocate(8, 8), Some(0x402000));
+    let mut narrow = CommonAllocator::new(0xfffffff0, 0, false);
+    assert_eq!(narrow.allocate(32, 16), None);
+    assert_eq!(narrow.allocate(16, 16), Some(0xfffffff0));
+    let mut wide = CommonAllocator::new(u64::MAX - 3, 0, true);
+    assert_eq!(wide.allocate(1, 8), None);
+    assert_eq!(CommonAllocator::new(u64::MAX, 1, true).allocate(1, 1), None);
+}
+
+#[test]
+fn reserved_slots_end_where_common_storage_begins() {
+    let mut allocator = CommonAllocator::new(0x402000, 1, true);
+    assert_eq!(allocator.reserve(0), Some(0x402010));
+    assert_eq!(allocator.reserve(24), Some(0x402028));
+    assert_eq!(allocator.allocate(4, 4), Some(0x402028));
+    assert_eq!(allocator.range(), Some((0x402028, 0x40202c)));
+    let mut full = CommonAllocator::new(u64::MAX - 15, 0, true);
+    assert_eq!(full.reserve(16), None);
+    assert_eq!(full.allocate(1, 1), None);
+}
+
+#[test]
+fn zero_size_symbols_still_have_distinct_addresses() {
+    let mut allocator = CommonAllocator::new(0x402000, 0, false);
+    assert_eq!(allocator.allocate(0, 0), Some(0x402000));
+    assert_eq!(allocator.allocate(0, 0), Some(0x402001));
+}

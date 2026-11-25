@@ -206,6 +206,7 @@ fn split_one_region(
             }
             (entries, back)
         };
+        data.warning_header(&format!("irr-dbg: region size={} entries={} depth={}", region.len(), entries.len(), depth));
         if entries.len() >= 2 {
             if split_at_entries(data, &members, &entries) {
                 return true;
@@ -243,7 +244,9 @@ fn split_at_entries(
             2 => data.node_split_through_cbranch(e, inedge),
             _ => continue,
         };
-        if split.is_ok() {
+        if let Err(err) = &split {
+            data.warning_header(&format!("irr-dbg: entry {e:?} in={size_in} out={size_out} inedge={inedge} refused: {err:?}"));
+        } else {
             return true;
         }
     }

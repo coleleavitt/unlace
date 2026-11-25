@@ -4,8 +4,6 @@
 # `die` printed as a plain `void die(void)` ending in `exit(...)`, with the no-return
 # warning only on the call line.
 #
-# noreturnself is off by default, so the script turns it on.
-#
 # Layout (x86-64 SysV):
 #   0x100000  die    48 83 ec 08 ; call exit ; 48 83 c4 08 ; ret   (every path ends in exit)
 #   0x100010  exit   ret                                          (noreturn via the console)
@@ -33,7 +31,6 @@ hex = '4883ec08e8070000004883c408c3ccccc3cccccccccccccccccccccccccccccc85ff740c4
 [script]
 commands = [
     'option warnstyle banner',
-    'option noreturnself on',
     'function noreturn exit',
     'lo fu die',
     'decompile',

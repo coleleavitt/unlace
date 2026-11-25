@@ -64,6 +64,7 @@ impl Action for ActionVecPairStore {
             .map(|i| data.bblocks_get_block(i))
             .collect();
         let mut stores = Vec::new();
+        { use std::io::Write; if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/g2b-vps.log") { let codes: Vec<String> = blocks.iter().map(|b| format!("{:?}", data.bb_ops(*b).iter().filter_map(|o| data.obank().get(*o).map(|p| format!("{:?}", p.code()))).collect::<Vec<_>>())).collect(); let _ = writeln!(f, "[vps] blocks={} ops={:?}", blocks.len(), codes); } }
         for block in blocks.clone() {
             for op in data.bb_ops(block) {
                 if let Some(o) = data.obank().get(op).filter(|o| o.code() == CPUI_STORE) {

@@ -365,6 +365,7 @@ fn a_narrow_argument_or_return_round_trips_through_the_printed_c() {
 const SIGNED_SOURCE: &str = r#"
 #include <stdbool.h>
 typedef signed char neg1;
+typedef unsigned short E2;
 enum { NEGA = -100, NEGB = 100 };
 long s_c16(int k) { return (unsigned short)(k * 300 + 5) + 1L; }
 long s_ce2(int k) { return (unsigned short)(k * 1000) + 1L; }
@@ -741,7 +742,7 @@ fn a_dwarf_char_parameter_keeps_its_declared_sign() {
         "int fmt(char *b,char *f,unsigned char c)",
         "int fmts(char *b,char *f,signed char c)",
         "int fmt8(char *b,char *f,unsigned char c)",
-        "int fmtc(char *b,char *f,char c)",
+        "int fmtc(char *b,char *f,signed char c)",
         "unsigned long ulen(char *s)",
     ] {
         assert!(arm.contains(want), "AArch64 has no `{want}`:\n{arm}");

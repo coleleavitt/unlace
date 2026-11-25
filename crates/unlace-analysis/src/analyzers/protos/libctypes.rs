@@ -346,11 +346,6 @@ pub(super) fn named_aggregate(
     word_size: uint4,
     layout: Layout,
 ) -> UnlaceResult<Rc<Datatype>> {
-    if layout == Layout::Streams && name != "FILE" {
-        return Err(UnlaceError::lowlevel(format!(
-            "libctypes: `{name}` is not a stdio stream, and `streams` names only FILE"
-        )));
-    }
     let Some(agg) = NAMED_AGGREGATES.iter().find(|a| a.name == name) else {
         return Err(UnlaceError::lowlevel(format!(
             "libctypes: no width is known for `{name}`"

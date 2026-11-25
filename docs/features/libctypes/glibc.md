@@ -46,21 +46,19 @@ stage fixture, console spelling):
 
 ## The default: `streams`
 
-`streams` is the shipped value. It names `FILE` (and glibc's `_IO_FILE`) with the
-published x86-64 members from the table below, types the `stdin`, `stdout` and
-`stderr` slots as `FILE *` (a copy-relocated `.bss` word) or `FILE **` (a GOT
-word of a shared object, named `stdout_ptr`), and leaves every other named
-aggregate `void *`. A prototype keeps its other slots: a `stat *` parameter of
-`stat` is `void *`, and the `char *` parameters beside it are unchanged.
+`streams` is the shipped value. It is `opaque` for every libc aggregate pointer
+(`stat *`, `dirent *`, `tm *`, `option *`, `obstack *`, `DIR *`, and the rest get the
+shell `opaque` gives them), and it adds one thing: on an x86-64 glibc image, `FILE`
+(and `_IO_FILE`) carries the published members from the table below, so
+`f->_IO_read_ptr` renders by name. The `stdin`, `stdout` and `stderr` slots are
+typed `FILE *` (a copy-relocated `.bss` word) or `FILE **` (a GOT word of a
+shared object, named `stdout_ptr`) under every enabled value.
 
-It exists because `opaque`, the value before it, retyped unrelated parameters:
-its `struct stat *` retyped the `char *` parameters of `copy_internal` (cp, mv,
-ginstall), so a function that never reads a stat stopped printing its own
-pointer type. That regression is why `glibc` was not
-the default. `streams` keeps the part of the table whose evidence is the
-declaration itself (`fopen` returns `FILE *`, `stdout` is a `FILE *`) and drops
-the members-of-stat case, where a caller's parameter was typed by something the
-caller did not do with it.
+The value exists so the stdio slots get their field names without the other
+members of the `glibc` value. `glibc` also names the other eight aggregates'
+members, and that is where the `st_size` and `copy_internal` changes were
+measured. `copy_internal` is not fixed by `streams`: `opaque` already names
+`struct stat *` there, and `streams` keeps that behaviour.
 
 `--option libctypes opaque` and `--option libctypes glibc` restore the two
 earlier values exactly.

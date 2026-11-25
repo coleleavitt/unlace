@@ -38,12 +38,8 @@
 //! — an x86-64 ELF whose `.dynstr` names glibc — and keeps the `opaque` shells
 //! everywhere else.
 //!
-//! Default **streams**: the table's own declaration is the strongest evidence
-//! about a libc pointee that exists, and `void *` discards it. `streams` keeps
-//! that for the one pointee every stdio call shares, `FILE`, and for the stream
-//! globals that carry it. `opaque` also names `stat`, `dirent`, `tm` and the
-//! rest, and that is where a `char *` parameter of an unrelated copy helper was
-//! retyped as `struct stat *` (docs/features/libctypes/glibc.md). The 675
+//! Default **streams**: `opaque` for every named aggregate, plus FILE's published
+//! fields on glibc x86-64 (the stdio slots carry the stream globals). The 675
 //! datatest assertions are structurally untouched (no datatest loads a file);
 //! the evidence for the default is the corpus sweep recorded in
 //! `docs/features/libctypes/record.json`. `--option libctypes off` restores the

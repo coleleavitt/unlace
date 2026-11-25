@@ -3682,6 +3682,15 @@ impl ConsoleProgram {
                     }
                     committed_entry_seeds.sort_unstable();
                     committed_entry_seeds.dedup();
+                    // (unlace, `ehcold`/`functails`) A withheld cold part is not a walk root
+                    // either: the suppression below runs after the walk, so the seeds must
+                    // drop it here or the walk lists it again.
+                    let mut withheld_cold = merged.eh_cold.clone();
+                    withheld_cold.sort_unstable();
+                    unlace_analysis::entry::ehcold::suppress_eh_cold_entries(
+                        &mut committed_entry_seeds,
+                        &withheld_cold,
+                    );
                     let arch = self.arch();
                     // The call-fixup seed list is empty: a fixup'd callee is also
                     // skipped via the consumer's no-return-disc `function_at(..)`

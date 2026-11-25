@@ -38,4 +38,4 @@ commands = [
 [[match]]
 name = 'B1 proto probe: the call passes the struct address'
 count = 1
-regex = 'ext\\(&'
+regex = 'ext\(&'

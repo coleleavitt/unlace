@@ -2027,6 +2027,14 @@ impl Architecture {
                     .map(|u| u.get_index() as unlace_base::types::uint4)
             })
             .collect();
+        ctx.vecpair_userops = [(&b"vpunpcklqdq_avx"[..], 0u8), (&b"vpinsrq_avx"[..], 1u8)]
+            .into_iter()
+            .filter_map(|(nm, kind)| {
+                self.userops
+                    .get_op_by_name(nm)
+                    .map(|u| (u.get_index() as unlace_base::types::uint4, kind))
+            })
+            .collect();
         ctx.x87_float_to_int_userops = crate::specnames::X87_TRUNCATE_USEROPS
             .iter()
             .filter_map(|nm| self.userops.get_op_by_name(nm))

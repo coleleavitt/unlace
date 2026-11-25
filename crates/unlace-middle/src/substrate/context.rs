@@ -855,6 +855,9 @@ pub struct ArchContext {
     /// [`RuleSimdShuffleLane`](crate::simdlane::RuleSimdShuffleLane) can
     /// name a CALLOTHER without reaching the full `Architecture`.
     pub simd_shuffle_userops: Vec<unlace_base::types::uint4>,
+    /// (unlace `vecpairstore`) CALLOTHER ids of `vpunpcklqdq_avx` (kind 0) and
+    /// `vpinsrq_avx` (kind 1), resolved once per program.
+    pub vecpair_userops: Vec<(unlace_base::types::uint4, u8)>,
     /// (unlace) CALLOTHER ids of the x87 integer conversions read by
     /// [`RuleX87Truncate`](crate::x87truncate::RuleX87Truncate).
     pub x87_float_to_int_userops: Vec<unlace_base::types::uint4>,
@@ -1246,6 +1249,7 @@ impl ArchContext {
             // unit tests.
             opaque_globals_wanted: std::cell::Cell::new(false),
             simd_shuffle_userops: Vec::new(),
+            vecpair_userops: Vec::new(),
             x87_float_to_int_userops: Vec::new(),
             x87_integer_userops: Vec::new(),
             float_rounding_userops: Vec::new(),

@@ -1,0 +1,13 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/globalpointee_gcc_O0_x86_64',
+    'read symbols',
+    'load function g_branch',
+    'decompile',
+    'print C',
+    'quit',
+]

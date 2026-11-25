@@ -26,8 +26,8 @@ fn g4_probe_ls_main() {
     let mut msg = format!("G4PROBE_BEGIN on={} off={} def={} on_eq_off={} on_eq_def={}\n", on.len(), off.len(), def.len(), on == off, on == def);
     let cnt = |s: &str, p: &str| s.lines().filter(|l| l.contains(p)).count();
     msg.push_str(&format!("on: chk={} v98={} ret={}\noff: chk={} v98={} ret={}\n", cnt(&on, "__stack_chk_fail"), cnt(&on, "v98"), cnt(&on, "return dat_2b210"), cnt(&off, "__stack_chk_fail"), cnt(&off, "v98"), cnt(&off, "return dat_2b210")));
-    for (a, b) in on.lines().zip(off.lines()).enumerate().filter(|(_, (a, b))| a != b).take(12) {
-        msg.push_str(&format!("DIFF {}: on=[{}] off=[{}]\n", a.0, a.1.0, a.1.1));
+    for (i, (x, y)) in on.lines().zip(off.lines()).enumerate().filter(|(_, (x, y))| x != y).take(12) {
+        msg.push_str(&format!("DIFF {}: on=[{}] off=[{}]\n", i, x, y));
     }
     panic!("{}", msg);
 }

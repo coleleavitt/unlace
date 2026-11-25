@@ -13,7 +13,6 @@ use std::path::PathBuf;
 
 use unlace_fuzz::{FuzzResult, fuzz_iteration};
 
-#[path = "sweeps.rs"]
 mod sweeps;
 
 fn crate_dir() -> PathBuf {

@@ -797,6 +797,40 @@ fn bootstrap_corpus_and_follow_flow() {
 /// of the first 20 ops matches the lift fixture's corresponding instruction ops.
 /// Flow-order == lift-order at the entry prefix (linear fall-through; see module
 /// docs).
+/// Rewrite each `(unique,0x<off>,<size>)` triple by first-appearance index
+/// (`(unique,u0,8)`, `(unique,u1,8)`, ...), across the whole list.  Absolute
+/// unique offsets are compile-order blocks of the compiled `.sla` (slacomp
+/// reserves 256 unique bytes per constructor temporary block), so adding
+/// constructors to the spec shifts them without changing the lift; the identity
+/// pattern (which temporaries are the same) is still compared exactly.
+fn canon_unique(lines: Vec<String>) -> Vec<String> {
+    let mut seen: Vec<String> = Vec::new();
+    lines
+        .into_iter()
+        .map(|line| {
+            let mut out = String::with_capacity(line.len());
+            let mut rest = line.as_str();
+            while let Some(pos) = rest.find("(unique,0x") {
+                out.push_str(&rest[..pos]);
+                let after = &rest[pos + "(unique,".len()..];
+                let end = after.find(',').unwrap_or(after.len());
+                let off = &after[..end];
+                let id = match seen.iter().position(|s| s == off) {
+                    Some(i) => i,
+                    None => {
+                        seen.push(off.to_string());
+                        seen.len() - 1
+                    }
+                };
+                out.push_str(&format!("(unique,u{id}"));
+                rest = &after[end..];
+            }
+            out.push_str(rest);
+            out
+        })
+        .collect()
+}
+
 #[test]
 fn first_twenty_ops_match_lift_fixture() {
     let root = repo_root();
@@ -846,8 +880,8 @@ fn first_twenty_ops_match_lift_fixture() {
         // Stronger: the full first-20 op LINES (opcode + output + inputs) match
         // byte-for-byte (the bootstrapped lift reproduces the fixture exactly,
         // including the output column and the code-ref/spaceid rendering).
-        let got_lines = first_n_op_lines(&got_body, 20);
-        let want_lines = first_n_op_lines(&fix.body, 20);
+        let got_lines = canon_unique(first_n_op_lines(&got_body, 20));
+        let want_lines = canon_unique(first_n_op_lines(&fix.body, 20));
         assert_eq!(
             got_lines, want_lines,
             "{fixture}: first-20 op lines diverge from the lift fixture"

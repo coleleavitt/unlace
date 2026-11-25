@@ -7904,13 +7904,6 @@ fn commit_analysis_output(
     nr.dedup();
     for fact in &nr {
         // Address path (preferred): resolves a demangled/namespaced funcsym.
-        // A fact can name a listing function that is no commit entry: give it its Function first.
-        if fact.addr != 0 {
-            let addr = Address::new(Rc::clone(code_space), fact.addr);
-            if prog.arch().symboltab.find_function_across_scopes(&addr).is_none() {
-                let _ = prog.ensure_function_symbol(addr);
-            }
-        }
         let by_addr = if fact.addr != 0 {
             let addr = Address::new(Rc::clone(code_space), fact.addr);
             prog.arch()
@@ -7926,6 +7919,26 @@ fn commit_analysis_output(
             // (e.g. an undefined-address `.dynsym` entry whose only installed
             // FunctionSymbol is the PLT stub, resolved by its installed name).
             None => prog.arch().query_global_function(&fact.name).ok(),
+        };
+        // Neither resolves: the fact names a listing function that is no commit entry,
+        // so give it its Function now, unless it is an entry's landing-pad successor
+        // (the address just past an entry's 4-byte endbr64 or bti), which is mid-body.
+        let inside_body = fact.addr >= 4
+            && prog
+                .arch()
+                .symboltab
+                .find_function_across_scopes(&Address::new(Rc::clone(code_space), fact.addr - 4))
+                .is_some();
+        let sid = match sid {
+            None if fact.addr != 0 && !inside_body => {
+                let addr = Address::new(Rc::clone(code_space), fact.addr);
+                let _ = prog.ensure_function_symbol(addr.clone());
+                prog.arch()
+                    .symboltab
+                    .find_function_across_scopes(&addr)
+                    .map(|(sid, _)| sid)
+            }
+            other => other,
         };
         if let Some(sid) = sid {
             prog.arch_mut().symboltab.set_function_no_return(sid, true);

@@ -1089,3 +1089,6 @@ mod processors;
 mod vexzeroupper_cli;
 #[path = "vftablerelocs_cli.rs"]
 mod vftablerelocs_cli;
+
+#[path = "g4_probe.rs"]
+mod g4_probe;

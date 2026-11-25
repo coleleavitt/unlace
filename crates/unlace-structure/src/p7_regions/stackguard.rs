@@ -543,6 +543,30 @@ fn is_canary_compare(cbranch: OpId, data: &Funcdata) -> Option<bool> {
     Some(oc == OpCode::CPUI_INT_NOTEQUAL)
 }
 
+
+/// TEMP g4 debug: describe the defining op of a varnode.
+fn g4_def(vn: VarnodeId, data: &Funcdata) -> String {
+    let Some(v) = data.vbank().get(vn) else { return "novn".into() };
+    if v.is_constant() {
+        return format!("const{:x}", v.get_offset());
+    }
+    let Some(d) = v.get_def() else { return if v.is_written() { "written-nodef".into() } else { "input".into() } };
+    let Some(op) = data.obank().get(d) else { return "nodop".into() };
+    let mut s = format!("{:?}", op.code());
+    let n = op.num_input();
+    for i in 0..n {
+        if let Some(x) = op.get_in(i) {
+            match data.vbank().get(x) {
+                Some(xv) if xv.is_constant() => s += &format!(" c{:x}", xv.get_offset()),
+                Some(xv) if xv.is_written() => s += " w",
+                Some(_) => s += " i",
+                None => s += " ?",
+            }
+        }
+    }
+    s
+}
+
 /// Does basic block `bb` contain a CALL (the canary-fail handler)?
 /// (C++ `blockHasCall`, `unlace_stackguard.cc:104`).
 fn block_has_call(bb: BlockId, data: &Funcdata) -> bool {
@@ -629,6 +653,20 @@ impl Action for ActionStripStackGuard {
             };
             if data.obank().get(cb).expect("stackguard: cb").code() != OpCode::CPUI_CBRANCH {
                 continue;
+            }
+            {
+                let bvn = data.obank().get(cb).expect("g4").get_in(1).expect("g4");
+                let cmpd = data.vbank().get(bvn).and_then(|v| v.get_def());
+                println!("G4 cb block={:?} cond={}", h, g4_def(bvn, data));
+                if let Some(cd) = cmpd {
+                    let cop = data.obank().get(cd).expect("g4");
+                    if let (Some(a), Some(b)) = (cop.get_in(0), cop.get_in(1)) {
+                        let mut s0 = BTreeSet::new();
+                        let mut s1 = BTreeSet::new();
+                        println!("G4   in0={} der0={}", g4_def(a, data), derives_from_canary_load(a, 32, &mut s0, data));
+                        println!("G4   in1={} der1={}", g4_def(b, data), derives_from_canary_load(b, 32, &mut s1, data));
+                    }
+                }
             }
             let is_not_equal = match is_canary_compare(cb, data) {
                 Some(b) => b,

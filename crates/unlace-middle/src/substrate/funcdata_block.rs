@@ -3339,7 +3339,7 @@ impl Funcdata {
             let Some(v) = self.vbank().get(out) else {
                 return Err(UnlaceError::lowlevel("nodesplit-through: stale output"));
             };
-            if v.is_persist() || v.is_addr_tied() {
+            if v.is_addr_tied() || (!cbranch && v.is_persist()) {
                 return Err(UnlaceError::lowlevel("nodesplit-through: tied output"));
             }
             for reader in v.descend_iter() {

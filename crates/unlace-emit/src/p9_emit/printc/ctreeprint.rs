@@ -541,6 +541,29 @@ impl PrintC {
         }
     }
 
+    /// Whether the printer's `label_dangling()` test is true after the arm `arm` (case `case`) is
+    /// printed, when that can be proved from the arm alone: a plain arm whose case block is a copy
+    /// leaf with a label line and no ops that print. The label is the last thing the arm prints.
+    fn arm_ends_on_label(
+        &self,
+        fd: &Funcdata,
+        arm: &crate::switchmerge::PlannedCase,
+        case: &crate::block::CaseOrder,
+    ) -> bool {
+        if arm.guard.is_some() || arm.skip > 0 || case.gototype != 0 {
+            return false;
+        }
+        let sb = fd.sblocks_ref();
+        if sb.block(case.block).get_type() != BlockType::Copy
+            || !self.label_line_wanted(fd, case.block)
+        {
+            return false;
+        }
+        sb.block(case.block)
+            .get_copy()
+            .is_some_and(|under| self.ops_print_nothing(fd, under))
+    }
+
     /// Record on each switch, per printed arm, the choices `emit_block_switch_c` makes for it:
     /// whether the arm ends in a `break` on its own account (`isexit` and not the last arm), and
     /// the goto type of a bare-goto arm (`case_gototype`, none for a guard or a block arm). The
@@ -575,9 +598,12 @@ impl PrintC {
                         self.goto_rewrites
                             .case_gototype(arm.owner, case.block, case.gototype)
                     });
+                    let ends_on_label = Some(i) == last
+                        && self.arm_ends_on_label(fd, arm, case);
                     Some(crate::ctree::ArmRecord {
                         exit_break: case.isexit && Some(i) != last,
                         goto,
+                        ends_on_label,
                     })
                 })
                 .collect();

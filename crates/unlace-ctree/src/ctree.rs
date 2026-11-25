@@ -235,6 +235,10 @@ pub struct ArmRecord {
     /// The arm is a bare `goto` with this goto type (`case_gototype`); `None` for a guard or a
     /// block arm.
     pub goto: Option<uint4>,
+    /// The last arm ends on a label line with nothing printed after it: the proof the printer's
+    /// `label_dangling()` test would give (a copy leaf with a label line and no statements, a
+    /// plain arm). `false` means not proved, and the printer asks `label_dangling()`.
+    pub ends_on_label: bool,
 }
 
 /// The C syntax tree of one function.

@@ -44,9 +44,9 @@ commands = [
 [[match]]
 name = 'NORETURNSELF #1: a function that ends in exit() on every path carries the header warning above its prototype'
 count = 1
-literal = "/* WARNING: Subroutine does not return */\nvoid die(void)"
+literal = ["/* WARNING: Subroutine does not return */", "void die(void)"]
 
 [[match]]
 name = 'NORETURNSELF #2: a function with a returning path has no header warning above its prototype'
 count = 0
-literal = "/* WARNING: Subroutine does not return */\nunsigned long mixed"
+literal = ["/* WARNING: Subroutine does not return */", "unsigned long mixed(int4 a0)"]

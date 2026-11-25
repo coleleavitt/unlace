@@ -182,19 +182,24 @@ fn a_file_of_directives_formats_and_isolates() {
     }
 }
 
+/// Pinned to `typemerge on`: the shipped default is `storage` (b82b5bbf0c),
+/// which keeps `t` and `u` apart without any `isolate`, so the merge this test
+/// starts from only happens under upstream's merge.
+const MERGED: &[&str] = &["--option", "typemerge", "on"];
+
 #[test]
 fn an_isolated_local_is_not_merged_with_its_successor() {
-    for (c, _, _) in both("reuse", &[], &[]) {
+    for (c, _, _) in both("reuse", &[], MERGED) {
         assert!(c.contains("v1 = v1 * 3 + 1;"), "{c}");
     }
-    for (c, report, _) in both("reuse", &["isolate v1"], &[]) {
+    for (c, report, _) in both("reuse", &["isolate v1"], MERGED) {
         assert!(
             c.contains("v2 = v1 * 3 + 1;") && c.contains("k(v2);"),
             "{c}\n{report}"
         );
         assert!(!report.contains("rejected"), "{report}");
     }
-    for (c, report, _) in both("reuse", &["name v1 first", "isolate first"], &[]) {
+    for (c, report, _) in both("reuse", &["name v1 first", "isolate first"], MERGED) {
         assert!(c.contains("v2 = first * 3 + 1;"), "{c}\n{report}");
     }
 }

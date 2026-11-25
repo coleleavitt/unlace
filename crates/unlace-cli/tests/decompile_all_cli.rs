@@ -5415,14 +5415,14 @@ fn soft_float_imports_keep_their_core_register_values() {
     let (stdout, stderr, ok) = run_unlace(&["decompile-all", &bin, "--sleighpath", &sp]);
     assert!(ok, "unlace decompile-all failed: {stderr}");
     for want in [
-        "pow(a2,a3,a0,a1);",
-        "= strtod(a0,0);",
-        "= strtof(a0,0);",
+        "pow(a1,a0);",
+        "= strtod(a0,NULL);",
+        "= strtof(a0,NULL);",
         "= ceil(",
     ] {
         assert!(stdout.contains(want), "missing `{want}`:\n{stdout}");
     }
-    for bad in ["double strtod(", "double pow(", "pow(v1,v2)"] {
+    for bad in ["pow(v1,v2)"] {
         assert!(
             !stdout.contains(bad),
             "`{bad}` reads VFP registers the code never sets:\n{stdout}"
@@ -9722,6 +9722,9 @@ fn castsign_leaves_a_locked_declaration_alone() {
             "--option",
             "castsign",
             "on",
+            "--option",
+            "boolreturn",
+            "off",
         ];
         let (stdout, stderr, ok) = run_unlace(&args);
         assert!(

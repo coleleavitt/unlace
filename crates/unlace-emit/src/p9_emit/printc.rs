@@ -4992,6 +4992,7 @@ impl PrintC {
         }
         self.ctree_rewrite(fd, arch);
         if !self.emit_ctree_body(fd, arch, sroot) {
+            crate::ctreebuild::c1_log("CTREE-FALLBACK body");
             self.emit_block_graph(fd, arch, sroot);
         }
         while let Some(id) = self.eh_open_catch.pop() {

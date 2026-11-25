@@ -98,6 +98,18 @@ fn build_stmt(fd: &Funcdata, tree: &mut CTree, blk: BlockId, depth: usize) -> St
     tree.add_stmt(kind, Some(blk))
 }
 
+/// TEMPORARY c1 instrumentation: append a line to the scratchpad log.
+pub fn c1_log(msg: &str) {
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/tmp/claude-1000/-home-cole-RustProjects-forks-unlace/a5b3f137-91dd-40f2-b5d6-88568c120272/scratchpad/c1-fallback.log")
+    {
+        let _ = writeln!(f, "{msg}");
+    }
+}
+
 /// The statements of the condition block `cond_block`, marked as a condition
 /// ([`CTree::mark_conditions_from`]).
 fn build_cond(fd: &Funcdata, tree: &mut CTree, cond_block: BlockId, depth: usize) -> StmtId {

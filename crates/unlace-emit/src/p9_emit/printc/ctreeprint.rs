@@ -94,6 +94,14 @@ impl PrintC {
         if self.emit_ctree_stmt(fd, arch, id) {
             return;
         }
+        if let Some(tree) = self.ctree.as_ref() {
+            let stmt = tree.stmt(id);
+            let ty = stmt
+                .origin
+                .map(|b| format!("{:?}", fd.sblocks_ref().block(b).get_type()))
+                .unwrap_or_else(|| "none".to_string());
+            crate::ctreebuild::c1_log(&format!("CTREE-FALLBACK arm kind={} ty={}", c1_kind(&stmt.kind), ty));
+        }
         let origin = self.ctree.as_ref().and_then(|tree| tree.stmt(id).origin);
         if let Some(blk) = origin {
             self.emit_block_raw(fd, arch, blk);
@@ -2063,4 +2071,26 @@ fn in_statement_position(fd: &Funcdata, blk: BlockId) -> bool {
         }
     }
     !first
+}
+
+/// TEMPORARY c1 instrumentation: the statement kind name.
+fn c1_kind(kind: &StmtKind) -> &'static str {
+    match kind {
+        StmtKind::Seq(_) => "Seq",
+        StmtKind::Ops { .. } => "Ops",
+        StmtKind::Stmts { .. } => "Stmts",
+        StmtKind::Expr(_) => "Expr",
+        StmtKind::If { .. } => "If",
+        StmtKind::While { .. } => "While",
+        StmtKind::DoWhile { .. } => "DoWhile",
+        StmtKind::For { .. } => "For",
+        StmtKind::Loop { .. } => "Loop",
+        StmtKind::Switch { .. } => "Switch",
+        StmtKind::SwitchOf { .. } => "SwitchOf",
+        StmtKind::Goto { .. } => "Goto",
+        StmtKind::Return { .. } => "Return",
+        StmtKind::Try { .. } => "Try",
+        StmtKind::JavaTry => "JavaTry",
+        StmtKind::Opaque => "Opaque",
+    }
 }

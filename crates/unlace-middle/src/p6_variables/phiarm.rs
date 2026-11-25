@@ -22,7 +22,10 @@
 //!   (an assignment `r = a;` to the join variable stays merged) and that does
 //!   not read the join value;
 //! - the input is not address-tied, persistent or an input, and some op other
-//!   than this MULTIEQUAL that is not a MULTIEQUAL or INDIRECT reads it.
+//!   than this MULTIEQUAL that is not a MULTIEQUAL or INDIRECT reads it;
+//! - the input is not loop-carried ([`loop_carried`]): no COPY or MULTIEQUAL
+//!   output of it reaches a MULTIEQUAL along a back edge, so a loop counter read
+//!   at its loop exit stays the loop variable.
 
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -75,11 +78,53 @@ pub fn arm_slots(ctx: &mut dyn MergeContext, op: OpId) -> Vec<int4> {
         if high == out_high || pinned(ctx, high) {
             continue;
         }
-        if read_as_value(ctx, vn, Some(op)) {
+        if read_as_value(ctx, vn, Some(op)) && !loop_carried(ctx, vn, op) {
             slots.push(slot);
         }
     }
     slots
+}
+
+/// Walk limit for [`loop_carried`]; past it a value counts as not loop-carried.
+const LOOP_CARRIED_LIMIT: usize = 64;
+
+/// Is `vn` loop-carried? Walk its COPY and MULTIEQUAL descendants (never the
+/// join `join` itself) and report whether one of them is a MULTIEQUAL input
+/// that arrives on a back edge, i.e. its predecessor is dominated by the
+/// MULTIEQUAL's block. Such a value is the same source variable on every
+/// iteration, so a loop exit that reads it is the loop variable, not a second one.
+fn loop_carried(ctx: &dyn MergeContext, vn: VarnodeId, join: OpId) -> bool {
+    let mut work = vec![vn];
+    let mut seen: Vec<VarnodeId> = Vec::new();
+    while let Some(cur) = work.pop() {
+        if seen.contains(&cur) || seen.len() >= LOOP_CARRIED_LIMIT {
+            continue;
+        }
+        seen.push(cur);
+        for reader in ctx.vn_descend(cur) {
+            if reader == join {
+                continue;
+            }
+            match ctx.op_code(reader) {
+                OpCode::CPUI_MULTIEQUAL => {
+                    let bl = ctx.op_parent(reader);
+                    for slot in 0..ctx.op_num_input(reader) {
+                        if ctx.op_in(reader, slot) == Some(cur)
+                            && ctx.block_dominates(bl, ctx.block_in(bl, slot))
+                        {
+                            return true;
+                        }
+                    }
+                }
+                OpCode::CPUI_COPY => {}
+                _ => continue,
+            }
+            if let Some(out) = ctx.op_out(reader) {
+                work.push(out);
+            }
+        }
+    }
+    false
 }
 
 /// Is `high` a variable a trim must not move (address-tied, persistent, input)?

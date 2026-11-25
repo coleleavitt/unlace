@@ -542,7 +542,10 @@ marking (below), three passes fuse variables to reduce clutter:
   dominated by the join block (a back edge keeps its induction value in the
   loop variable); it is written by an op that is not a COPY, MULTIEQUAL or
   INDIRECT and does not read the join value; and an op other than the
-  MULTIEQUAL, not a marker, reads it. The pair (arm value, join output) is
+  MULTIEQUAL, not a marker, reads it; and it is not loop-carried: no COPY or
+  MULTIEQUAL output of it reaches a MULTIEQUAL along a back edge
+  (`phiarm.rs (loop_carried)`), so the value a loop counter holds at its exit
+  stays the loop variable instead of a second one. The pair (arm value, join output) is
   recorded, and `phiarm.rs (keeps_apart)`, asked by `Merge::merge` and
   `Merge::merge_test`, refuses any later merge that would join the two again,
   so a later forced merge trims instead and `ActionMergeCopy` does not undo the

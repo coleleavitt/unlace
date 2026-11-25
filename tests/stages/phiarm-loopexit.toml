@@ -1,0 +1,82 @@
+# unlace issue #20: option `phiarm on` splits a loop counter at its loop exit,
+# so one source variable prints as two (`v3 = v2;` inside the loop, `return v3;`
+# after it).  The trim copies the exit value of the counter, an induction
+# value that reaches the loop head's MULTIEQUAL along a back edge, into a
+# variable of its own.  A loop-carried value is one source variable on every
+# iteration, so `phiarm` now leaves it alone (phiarm.rs (loop_carried)).
+#
+# The arms of two_vars are distinct values that meet at a join (the join is
+# `v2`); `phiarm on` still splits that join from the arm values, the case the
+# option exists for, so its `v2 = v1;` copies stay.  Default off: both
+# functions print the same as upstream without the option.
+#
+# Bytes: fixture C built by gcc -O1 -g0 -fno-stack-protector -fcf-protection=none
+# (x86-64, PIE); -O1 keeps the join of two_vars, -O2 folds it away.
+#
+#   volatile int g_n = 7;  volatile int g_out;
+#   int probe(int x)  { return x & 1; }
+#   int get(void)     { return g_n; }
+#   void sink(int x)  { asm volatile("" :: "r"(x)); }   /* sink2, sink3 alike */
+#   int loop_exit_counter(void) {
+#       int i, n = get();
+#       for (i = 0; i < n; i += probe(i) + 1) sink(i);
+#       return i; }
+#   int two_vars(int c, int a, int b) {
+#       int r;
+#       if (c) { int x = probe(a); sink(x); r = x; }
+#       else   { int y = probe(b); sink2(y); r = y; }
+#       g_out = r; sink3(r); return r; }
+#
+# The stubs (probe, get, sink, sink2, sink3) have no bytes here; only their
+# addresses matter, since the calls are rel32.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x1129', name = 'probe' },
+    { space = 'ram', offset = '0x112f', name = 'get' },
+    { space = 'ram', offset = '0x1136', name = 'sink' },
+    { space = 'ram', offset = '0x1137', name = 'sink2' },
+    { space = 'ram', offset = '0x1138', name = 'sink3' },
+    { space = 'ram', offset = '0x1139', name = 'loop_exit_counter' },
+    { space = 'ram', offset = '0x116d', name = 'two_vars' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1139'
+readonly = true
+hex = '5553e8efffffff85c07e2289c5bb0000000089dfe8e4ffffff89dfe8d0ffffff8d5c030139dd7fea89d85b5dc3bb00000000ebf4'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x116d'
+readonly = true
+hex = '5385ff742189f7e8b0ffffff89c389c7e8b4ffffff891d902e000089dfe8a9ffffff89d85bc389d7e88fffffff89c389c7e894ffffffebdd'
+
+[script]
+commands = [
+    'option phiarm on',
+    'load function loop_exit_counter',
+    'decompile',
+    'print C',
+    'load function two_vars',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'issue #20: the loop counter and the join keep one name (phiarm on)'
+count = 2
+literal = 'return v2;'
+
+[[match]]
+name = 'issue #20: no second variable for the loop counter at its exit (phiarm on)'
+count = 0
+literal = 'v3'
+
+[[match]]
+name = 'issue #20: two_vars keeps the join split from its arm values (phiarm on)'
+count = 2
+literal = 'v2 = v1;'

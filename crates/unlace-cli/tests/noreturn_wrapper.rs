@@ -94,6 +94,9 @@ fn decompile(fixture: &Fixture, options: &[&str], single: bool) -> Value {
         "--assert",
         &assertion,
     ]);
+    // The fixture's int3 traps after its no-return calls are positive evidence for
+    // noreturn_disc; these runs isolate the explicit markings this test checks.
+    args.extend(["--option", "noreturn_disc", "off"]);
     args.extend(options);
     let (out, err, rc) = common::run_unlace(&args);
     assert_eq!(rc, 0, "{out}\n{err}");

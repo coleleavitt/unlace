@@ -668,6 +668,44 @@ mod tests {
             "orchainlive",
             // `phithread` (issue #20) landed without a corpus sweep.
             "phithread",
+            // The options below were registered without a preset decision. They are
+            // default-off; each stays out of the preset until its own corpus sweep and
+            // speed measurement.
+            // P1 loader and analysis: format or image scoped, each needs binary evidence first.
+            "aggressivethunks",
+            "functails",
+            "nullsubs",
+            "flirttil",
+            "msvceh",
+            "delphi",
+            "uefientry",
+            "cppclassargs",
+            // P2 and P4 (decode policy, prototype and return shape).
+            "armhoist",
+            "honestgaps",
+            "retpairpaths",
+            "pairbranch",
+            // P3 simplification rules: they change emitted expressions across the corpus.
+            "minmax",
+            "bitfieldarith",
+            "satmul",
+            "floatidentity",
+            "addrcompare",
+            "sfofxor",
+            "mbawide",
+            // P8 goto quality (changes structured control flow).
+            "gotochain",
+            "irreduciblesplit",
+            // P9 printer and naming: print-only changes, each needs its own sweep first.
+            "stringglobalnames",
+            "partmacro",
+            "barrierintrinsics",
+            "evmstorage",
+            "javasync",
+            "renumberlocals",
+            "retternary",
+            "nonnullparam",
+            "godefer",
             // `structassign` (IDA types survey item #4) landed without a corpus sweep.
             "structassign",
             // `dextrpc` landed measured on 17 macOS dexts only; preset membership

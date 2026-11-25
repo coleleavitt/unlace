@@ -170,6 +170,7 @@ fn no_spelling_is_ever_a_ghidra_name() {
         "float",
         "double",
         "long double",
+        "_Float16",
         "void",
     ];
     for m in [&LP64, &ILP32, &LLP64] {

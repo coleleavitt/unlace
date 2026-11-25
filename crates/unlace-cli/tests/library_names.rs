@@ -106,7 +106,10 @@ fn the_default_names_the_locals_and_numbers_them_as_the_option_off_does() {
         "{named}"
     );
     assert!(named.contains("  fd = open(a0,0);\n"), "{named}");
-    assert!(named.contains("n = read(fd,buf,0x200);"), "{named}");
+    assert!(
+        named.contains("while (n = read(fd,buf,0x200), 0 < n) {"),
+        "{named}"
+    );
     let plain = decompile(&["--mode", "reliable", "--option", "libcnames", "off"], &[]);
     assert_eq!(
         declared(&plain),
@@ -250,17 +253,20 @@ fn a_local_a_rename_took_its_library_name_from_prints_its_number() {
         "{code}"
     );
     assert!(
-        code.contains("v3 = read(fd,buf,0x200);") && code.contains("n += write(fd_2,buf,v3);"),
+        code.contains("while (v3 = read(fd,buf,0x200), 0 < v3) {")
+            && code.contains("n += write(fd_2,buf,v3);"),
         "{code}"
     );
     let code = decompile(&[], &["name v5 n", "name v3 got"]);
     assert!(
-        code.contains("got = read(fd,buf,0x200);") && code.contains("n += write(fd_2,buf,got);"),
+        code.contains("while (got = read(fd,buf,0x200), 0 < got) {")
+            && code.contains("n += write(fd_2,buf,got);"),
         "{code}"
     );
     let code = decompile(&[], &["name v5 n", "name n total"]);
     assert!(
-        code.contains("n = read(fd,buf,0x200);") && code.contains("total += write(fd_2,buf,n);"),
+        code.contains("while (n = read(fd,buf,0x200), 0 < n) {")
+            && code.contains("total += write(fd_2,buf,n);"),
         "{code}"
     );
     renames_only(

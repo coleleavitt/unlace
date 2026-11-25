@@ -1,14 +1,15 @@
 //! The PE version resource (`VS_VERSIONINFO`): the `StringFileInfo` strings
 //! (`ProductName`, `FileVersion`, `CompanyName`, ...) and the fixed file and
-//! product versions. Found by its UTF-16 key in `.rsrc` rather than by walking
-//! the resource directory, and parsed by the block lengths it states, each
-//! bounded by its parent.
+//! product versions. Found by its UTF-16 key anywhere in the image rather than by
+//! walking the resource directory, and parsed by the block lengths it states,
+//! each bounded by its parent.
 
 use std::collections::BTreeMap;
 
 const MAX_DEPTH: usize = 4;
 const MAX_CHILDREN: usize = 512;
 const FIXED_SIGNATURE: u32 = 0xfeef_04bd;
+const MAX_CANDIDATES: usize = 16;
 
 struct Block<'a> {
     key: String,
@@ -105,18 +106,37 @@ fn version_pair(ms: u32, ls: u32) -> String {
     format!("{}.{}.{}.{}", ms >> 16, ms & 0xffff, ls >> 16, ls & 0xffff)
 }
 
-/// The version strings of the first version resource in `rsrc` (a `.rsrc`
-/// section's bytes, or any buffer holding one). Empty when there is none.
-pub(crate) fn string_table(rsrc: &[u8]) -> BTreeMap<String, String> {
-    let mut out = BTreeMap::new();
+/// The version strings of the first version resource in `image` (a PE
+/// file's bytes). Empty when there is none. The block is located by its key
+/// anywhere in the image, not through `.rsrc`: the resource directory's RVA
+/// can fall in another section (the fixture explicit_branch_assertion_pe_i386.exe
+/// keeps its version block in `.reloc`), so a `.rsrc`-only search misses it.
+pub(crate) fn string_table(image: &[u8]) -> BTreeMap<String, String> {
     let key = key_bytes();
-    let Some(key_at) = rsrc.windows(key.len()).position(|w| w == key.as_slice()) else {
-        return out;
-    };
+    let mut tried = 0;
+    for (key_at, window) in image.windows(key.len()).enumerate() {
+        if window != key.as_slice() {
+            continue;
+        }
+        tried += 1;
+        if tried > MAX_CANDIDATES {
+            break;
+        }
+        let out = table_at(image, key_at);
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    BTreeMap::new()
+}
+
+/// The version strings of the version block whose key starts at `key_at`.
+fn table_at(image: &[u8], key_at: usize) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
     let Some(start) = key_at.checked_sub(6) else {
         return out;
     };
-    let data = &rsrc[start..];
+    let data = &image[start..];
     let Some((root, _)) = block(data, 0, 0) else {
         return out;
     };

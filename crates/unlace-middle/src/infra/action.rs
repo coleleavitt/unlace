@@ -551,7 +551,7 @@ pub trait Action {
             if ctx.deadline_expired_at(|| format!("action {}", self.get_name())) {
                 break;
             }
-            if self.base().lcount == 20 {
+            if ctx.repeats == MAX_REPEATS {
                 data.warning_header(&format!("repeat-dbg: {}", self.get_name()));
             }
             if ctx.repeat_cap_reached(data) {

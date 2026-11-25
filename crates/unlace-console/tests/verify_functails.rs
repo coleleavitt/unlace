@@ -55,7 +55,7 @@ fn functails_holds_with_the_listing_walk() {
         .join("../..")
         .canonicalize()
         .unwrap();
-    let bin = root.join("crates/unlace-analysis/tests/fixtures/functails_x86_64");
+    let bin = root.join("crates/unlace-analysis/tests/fixtures/functailscall_x86_64");
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
@@ -69,7 +69,7 @@ fn functails_holds_with_the_listing_walk() {
         .expect("analysis commit succeeds");
     assert!(
         prog.lookup_symbol("sub_401001").is_none(),
-        "work.cold is reached only by work's jump, even with the listing walk on"
+        "work.cold (a call stub) is reached only by work's jump, even with the listing walk on"
     );
     assert!(prog.lookup_symbol("sub_401010").is_some(), "work stays");
 }

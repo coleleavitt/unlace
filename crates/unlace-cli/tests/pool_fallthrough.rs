@@ -85,7 +85,9 @@ fn disassemble_lists_the_same_words_as_data() {
 }
 
 /// `u_pool`'s `a4 == 5` path ends at `hi`; read through its pool, it printed
-/// `msg = "other"; return a4 + a1;` after the call, the other path's code.
+/// `msg = "other"; return a4 + a1;` after the call, the other path's code. The
+/// check covers the guard's block only: the statements after its closing brace
+/// are the join both paths reach, which is correct there.
 #[test]
 fn a_call_ahead_of_its_pool_does_not_run_into_the_other_path() {
     let code = decompile("bejoin_unreach_arm32_be_O2", "u_pool", &[]);
@@ -99,10 +101,19 @@ fn a_call_ahead_of_its_pool_does_not_run_into_the_other_path() {
             .is_some_and(|line| line.contains(BOUND)),
         "{code}"
     );
+    let lines: Vec<&str> = code.lines().collect();
+    let indent = |line: &str| line.len() - line.trim_start().len();
+    let guard = lines[..call]
+        .iter()
+        .rposition(|line| line.trim_start().starts_with("if "))
+        .expect("the guard");
+    let close = lines[call + 1..]
+        .iter()
+        .position(|&line| line.trim() == "}" && indent(line) == indent(lines[guard]))
+        .map_or(lines.len(), |p| call + 1 + p);
     assert!(
-        !code
-            .lines()
-            .skip(call + 1)
+        !lines[call + 1..close]
+            .iter()
             .any(|line| line.contains("return") || line.contains("\"other\"")),
         "{code}"
     );

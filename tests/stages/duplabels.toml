@@ -82,15 +82,14 @@ name = 'DUPLABELS #3: the first copy calls intarith'
 count = 1
 literal = [
     'label_4010a7:',
-    'v3 = intarith(a0,a1,v7,v4);',
+    'v4 = intarith(a0,a1,v7,v6);',
 ]
 
 [[match]]
 name = 'DUPLABELS #4: the converted integer path jumps to the first copy'
 count = 1
 literal = [
-    'v4 = v6;',
-    'goto label_4010a7;',
+    'if (vtointeger(a3,&v6,0)) goto label_4010a7;',
 ]
 
 [[match]]

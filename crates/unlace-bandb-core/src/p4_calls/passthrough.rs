@@ -847,6 +847,16 @@ fn claim_untouched_registers_mode(data: &mut Funcdata, pass: ClaimPass) {
         }
     }
     if let Some(ret) = returned_call_result {
+        for &op in &ret.1 {
+            let Some(idx) = (0..data.num_calls()).find(|&i| data.get_call_specs(i).get_op() == op)
+            else {
+                continue;
+            };
+            let entry = data.get_call_specs(idx).get_entry_address().clone();
+            if stated_output(data, &entry).is_none() {
+                data.get_call_specs_mut(idx).init_active_output();
+            }
+        }
         claim_tail_return(data, &mut claims, ret);
     }
     data.unlace_set_passthrough_claims(claims);
@@ -1088,13 +1098,26 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
         };
         let idx = (0..data.num_calls()).find(|&i| data.get_call_specs(i).get_op() == call)?;
         let fc = data.get_call_specs(idx);
-        if fc.proto().is_output_locked() || !fc.is_output_active() {
+        let stated = stated_output(data, fc.get_entry_address());
+        let declared = if beside_own && stated.is_none() {
+            declared_output(fc.proto())
+        } else {
+            None
+        };
+        let usable = match stated {
+            Some(_) => !fc.proto().is_output_locked() && fc.is_output_active(),
+            None => declared.is_some(),
+        };
+        if !usable {
             return None;
         }
-        let (addr, size, _) = data
-            .unlace_protoorder_types(fc.get_entry_address())?
-            .output
-            .clone()?;
+        let (addr, size) = match stated {
+            Some(stated) => {
+                let (addr, size, _) = stated.output.clone()?;
+                (addr, size)
+            }
+            None => declared?,
+        };
         let zero_extended = narrow_tails
             && fc.get_entry_address().get_space().is_some_and(|sp| {
                 data.unlace_narrowret((sp.get_index(), fc.get_entry_address().get_offset()))
@@ -1195,6 +1218,31 @@ fn touched_after(data: &Funcdata, call: OpId, ret: OpId, pieces: &[(Address, int
 /// The registers a stated return value occupies: its own storage, or each piece
 /// of a register pair's join (`rdx:rax`, ARM `r1:r0`). `None` for anything
 /// else, including a join with a piece outside the register file.
+/// The types a callee stated for the return value: a callee whose statement has
+/// no output (a PLT stub or a void callee) states none.
+fn stated_output<'a>(
+    data: &'a Funcdata,
+    entry: &Address,
+) -> Option<&'a crate::protoorder::RecoveredTypes> {
+    data.unlace_protoorder_types(entry)
+        .filter(|s| s.output.is_some())
+}
+
+/// (unlace `mixedtailret`) The return storage a callee the function does not
+/// decompile declares in its prototype (a libc import's typelib entry, such as
+/// `int strcoll(...)`). `protoorder` states types only for callees decompiled
+/// first, so without this a tail call to an import never hands its value back.
+fn declared_output(proto: &crate::fspec::FuncProto) -> Option<(Address, int4)> {
+    let out = proto.get_output();
+    if out
+        .get_type()
+        .is_none_or(|ty| ty.get_metatype() == crate::dtype::type_metatype::TYPE_VOID)
+    {
+        return None;
+    }
+    Some((out.get_address(), out.get_size()))
+}
+
 fn register_pieces(data: &Funcdata, addr: &Address, size: int4) -> Option<Vec<(Address, int4)>> {
     let space = addr.get_space()?;
     if space.get_type() != spacetype::IPTR_JOIN {

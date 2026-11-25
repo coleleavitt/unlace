@@ -4164,7 +4164,7 @@ word is what makes the two words one value. The rule also fires on an INT_XOR
 of such an input word: when an INT_OR combines it with the XOR of the word
 above (the branchless equality above), and the other operand's two words are a
 pair too (two adjacent input words, the two SUBPIECEs of one whole, or two
-constants), the input words are joined the same way. Requiring the other
+constants), the input words are joined the same way. While the two words are still stack LOADs (before heritage makes them inputs), `RuleOrCompare` leaves an OR of two XORs over adjacent stack words unsplit, so this trigger can run later (#1507); with `pairparam` off the OR splits as before. Requiring the other
 operand to be a pair keeps the XOR of one parameter's high word from being read
 as the low word of the next parameter. The rule also fires on a PIECE of
 such an input word and the word above it, high word first, when every op

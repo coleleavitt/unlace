@@ -1,0 +1,55 @@
+# noreturnself: a function whose every path ends in a call to a no-return callee is
+# itself no-return, and its own prototype and header say so (`option noreturnself`,
+# default on; unlace-noreturnself). Before this the verdict reached only the callers:
+# `die` printed as a plain `void die(void)` ending in `exit(...)`, with the no-return
+# warning only on the call line.
+#
+# noreturnself is off by default, so the script turns it on.
+#
+# Layout (x86-64 SysV):
+#   0x100000  die    48 83 ec 08 ; call exit ; 48 83 c4 08 ; ret   (every path ends in exit)
+#   0x100010  exit   ret                                          (noreturn via the console)
+#   0x100020  mixed  test edi,edi ; je +0x0c ; sub rsp,8 ; call exit ; ... ; mov eax,1 ; ret
+#                    (a path returns, so the function is not no-return)
+#
+# Assert #1: die's prototype is preceded by the function-level header warning (banner form).
+# Assert #2: mixed has a returning path, so its prototype has no such header; the phrase
+# appears on its call line only.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'die' },
+    { space = 'ram', offset = '0x100010', name = 'exit' },
+    { space = 'ram', offset = '0x100020', name = 'mixed' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '4883ec08e8070000004883c408c3ccccc3cccccccccccccccccccccccccccccc85ff740c4883ec08e8e3ffffffccccccb801000000c3'
+
+[script]
+commands = [
+    'option warnstyle banner',
+    'option noreturnself on',
+    'function noreturn exit',
+    'lo fu die',
+    'decompile',
+    'print C',
+    'lo fu mixed',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'NORETURNSELF #1: a function that ends in exit() on every path carries the header warning above its prototype'
+count = 1
+literal = ["/* WARNING: Subroutine does not return */", "void die(void)"]
+
+[[match]]
+name = 'NORETURNSELF #2: a function with a returning path has no header warning above its prototype'
+count = 0
+literal = ["/* WARNING: Subroutine does not return */", "unsigned long mixed(int4 a0)"]

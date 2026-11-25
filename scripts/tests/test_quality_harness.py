@@ -217,5 +217,30 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report.worst(con, b, "cfg_ged")["functions"][0]["function"], "f2")
 
 
+class NoreturnClaimTest(unittest.TestCase):
+    """noreturn_agree reads the function's own verdict, not its call sites."""
+
+    ENTRY = 0x1C940
+
+    def _rec(self, warnings, code="void f(void)\n{\n  abort(); // no-return\n}"):
+        return {"address": self.ENTRY, "code": code, "warnings": warnings}
+
+    def test_call_site_warning_is_not_the_functions_verdict(self):
+        # A caller of abort whose own body returns: the warning sits on a call line.
+        rec = self._rec([{"kind": "no-return", "message": "Subroutine does not return",
+                          "line": 6, "address": 0x519C}], code="int g(void)\n{\n  abort();\n}")
+        self.assertFalse(metrics._noreturn_claim(rec))
+
+    def test_header_warning_at_entry_is_the_verdict(self):
+        rec = self._rec([{"kind": "no-return", "message": "Subroutine does not return",
+                          "line": 1, "address": self.ENTRY}])
+        self.assertTrue(metrics._noreturn_claim(rec))
+
+    def test_header_warning_at_another_address_is_not(self):
+        rec = self._rec([{"kind": "no-return", "message": "Subroutine does not return",
+                          "line": 1, "address": self.ENTRY + 4}], code="int g(void)\n{\n}")
+        self.assertFalse(metrics._noreturn_claim(rec))
+
+
 if __name__ == "__main__":
     unittest.main()

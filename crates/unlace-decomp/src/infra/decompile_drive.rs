@@ -1618,6 +1618,7 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> UnlaceResult<int4
             (r, ctx.reflow_requested, ctx.abandoned_for_restart)
         };
         let (r, reflow_requested, abandoned) = res;
+        eprintln!("G4 res r={} rr={} ab={} reflows={}", r, reflow_requested, abandoned, reflows);
         if let Some(error) = fd
             .unlace_state::<crate::callmechanisms::State>()
             .failure
@@ -1673,6 +1674,7 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> UnlaceResult<int4
         if let Some(err) = budget_error(arch) {
             return Err(err);
         }
+        eprintln!("G4 spoiled={} restart_pending={}", spoiled, fd.has_restart_pending());
         if spoiled {
             return Ok(total);
         }
@@ -1693,6 +1695,7 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> UnlaceResult<int4
             drain_pipeline_comments(arch, fd);
             return Ok(total);
         }
+        eprintln!("G4 REFLOW {}", reflows);
         reflows += 1;
         // (unlace `persistcalls`) The last pass cannot restart, so it guards
         // every persistent global at every call.

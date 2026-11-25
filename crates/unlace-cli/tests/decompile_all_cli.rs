@@ -13706,7 +13706,10 @@ fn bejoin_evidence_reads_a_callee_pair_alike_in_every_run() {
 /// run, on main too), and every caller reads its callee's pair in one order in
 /// the default runs. `add64`, `umul64` and `pass` are compiled beside the
 /// source with gcc and clang and must compute it, and the `int`s print as
-/// with `bejoin evidence`.
+/// with `bejoin evidence`. The ARM object runs with `armpairparam` off: that
+/// option (shipped on by fc53d27e61, 2026-11-24) joins the unprototyped
+/// `long long` that `add64`'s aligned register pairs carry, which this test
+/// does not measure; the bejoin ordering it guards is the same either way.
 #[test]
 fn bejoin_callers_read_a_pair_alike_in_every_run() {
     const FUNCS: [&str; 12] = [
@@ -13720,8 +13723,14 @@ fn bejoin_callers_read_a_pair_alike_in_every_run() {
         ("bejoin_callers_arm32_be_O2.o", "// r0:r1"),
     ] {
         let bin = fixtures.join(fixture).to_str().unwrap().to_string();
+        let pin: &[&str] = if fixture.ends_with(".o") {
+            &["--option", "armpairparam", "off"]
+        } else {
+            &[]
+        };
         let run = |extra: &[&str]| {
             let mut args = vec!["decompile-all", bin.as_str(), "--sleighpath", sp.as_str()];
+            args.extend_from_slice(pin);
             args.extend_from_slice(extra);
             let (out, stderr, ok) = run_unlace(&args);
             assert!(
@@ -13732,6 +13741,7 @@ fn bejoin_callers_read_a_pair_alike_in_every_run() {
         };
         let single = |f: &str, extra: &[&str]| {
             let mut args = vec!["decompile", bin.as_str(), f, "--sleighpath", sp.as_str()];
+            args.extend_from_slice(pin);
             args.extend_from_slice(extra);
             let (out, stderr, ok) = run_unlace(&args);
             assert!(ok, "unlace decompile {fixture} {f} failed: {stderr}");

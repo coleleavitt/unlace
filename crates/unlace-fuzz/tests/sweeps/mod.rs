@@ -34,14 +34,14 @@ const ARCH_ITERATIONS: usize = 8;
 /// Random code bytes per decode input.
 const MAX_CODE_BYTES: usize = 512;
 /// Object-loader mutations at the default scale, shared out over the seed fixtures.
-const MUTATION_ITERATIONS: usize = 96;
+const MUTATION_ITERATIONS: usize = 256;
 /// Pipeline (decompile) mutations at the default scale: one per seed. A full
 /// decompile of a real binary costs far more than a load, so this stays small.
 const PIPELINE_MUTATIONS: usize = 8;
 /// Upper bound on pipeline mutations, however large `UNLACE_FUZZ_ITERS` gets.
 const PIPELINE_CAP: usize = 256;
 /// dyld cache mutations at the default scale.
-const DYLD_ITERATIONS: usize = 48;
+const DYLD_ITERATIONS: usize = 512;
 /// Leading bytes where header fields live; most word edits land here.
 const HEADER_WINDOW: usize = 512;
 

@@ -437,7 +437,7 @@ fn arg0_scan_result(insn: &Insn) -> Option<bool> {
 /// form begins `NOP`), or the `int3` trap MSVC, and clang and rustc targeting
 /// Windows, plant there? Such padding is unreachable after a no-return call, so it
 /// is skipped when locating the *last real* instruction.
-fn is_padding_nop(insn: &Insn) -> bool {
+pub(crate) fn is_padding_nop(insn: &Insn) -> bool {
     let text = insn.mnemonic.as_str().trim();
     text.eq_ignore_ascii_case("INT3")
         || text

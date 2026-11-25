@@ -9580,6 +9580,8 @@ int main(void) {
 /// the source declares `unsigned long`, keep that type and the `(long)` their
 /// signed comparison needs, option on as off.  Unlocked, the same variables are
 /// declared `long`, so each case also checks that the option fires there.
+/// `boolreturn` is pinned off: since a43d3535b7 it is on by default and prints
+/// the `if (c) return 1;` shapes these checks read as `return (c);`.
 #[test]
 fn castsign_leaves_a_locked_declaration_alone() {
     let sp = specs();
@@ -9632,6 +9634,9 @@ fn castsign_leaves_a_locked_declaration_alone() {
             "--option",
             "castsign",
             "on",
+            "--option",
+            "boolreturn",
+            "off",
         ]);
         assert!(ok, "unlace decompile failed: {stderr}");
         let semantic = without_variable_sources(&stdout);
@@ -9653,6 +9658,9 @@ fn castsign_leaves_a_locked_declaration_alone() {
                 "--option",
                 "castsign",
                 opt,
+                "--option",
+                "boolreturn",
+                "off",
             ];
             let (stdout, stderr, ok) = run_unlace(&args);
             assert!(ok, "unlace decompile --assert failed: {stderr}");
@@ -9681,6 +9689,9 @@ fn castsign_leaves_a_locked_declaration_alone() {
             "--option",
             "castsign",
             opt,
+            "--option",
+            "boolreturn",
+            "off",
         ];
         let (stdout, stderr, ok) = run_unlace(&args);
         assert!(ok, "unlace decompile-all failed: {stderr}");
@@ -13706,7 +13717,10 @@ fn bejoin_evidence_reads_a_callee_pair_alike_in_every_run() {
 /// run, on main too), and every caller reads its callee's pair in one order in
 /// the default runs. `add64`, `umul64` and `pass` are compiled beside the
 /// source with gcc and clang and must compute it, and the `int`s print as
-/// with `bejoin evidence`.
+/// with `bejoin evidence`. The ARM object runs with `armpairparam` off: that
+/// option (shipped on by fc53d27e61, 2026-11-24) joins the unprototyped
+/// `long long` that `add64`'s aligned register pairs carry, which this test
+/// does not measure; the bejoin ordering it guards is the same either way.
 #[test]
 fn bejoin_callers_read_a_pair_alike_in_every_run() {
     const FUNCS: [&str; 12] = [
@@ -13720,8 +13734,14 @@ fn bejoin_callers_read_a_pair_alike_in_every_run() {
         ("bejoin_callers_arm32_be_O2.o", "// r0:r1"),
     ] {
         let bin = fixtures.join(fixture).to_str().unwrap().to_string();
+        let pin: &[&str] = if fixture.ends_with(".o") {
+            &["--option", "armpairparam", "off"]
+        } else {
+            &[]
+        };
         let run = |extra: &[&str]| {
             let mut args = vec!["decompile-all", bin.as_str(), "--sleighpath", sp.as_str()];
+            args.extend_from_slice(pin);
             args.extend_from_slice(extra);
             let (out, stderr, ok) = run_unlace(&args);
             assert!(
@@ -13732,6 +13752,7 @@ fn bejoin_callers_read_a_pair_alike_in_every_run() {
         };
         let single = |f: &str, extra: &[&str]| {
             let mut args = vec!["decompile", bin.as_str(), f, "--sleighpath", sp.as_str()];
+            args.extend_from_slice(pin);
             args.extend_from_slice(extra);
             let (out, stderr, ok) = run_unlace(&args);
             assert!(ok, "unlace decompile {fixture} {f} failed: {stderr}");

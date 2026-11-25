@@ -2341,6 +2341,9 @@ impl Action for ActionLikelyTrash {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        if !data.get_func_proto().has_model() {
+            return 0;
+        }
         let trash: Vec<VarnodeData> = data.get_func_proto().trash_list().to_vec();
         let mut indlist: Vec<OpId> = Vec::new();
         for vdata in trash.iter() {

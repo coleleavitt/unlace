@@ -899,7 +899,7 @@ mod tests {
         assert_eq!(data.len(), 0x2000);
         assert!(data.starts_with(b"unlace neolite fixture payload\0"));
         assert!(
-            data[29..].iter().all(|&b| b == 0),
+            data[31..].iter().all(|&b| b == 0),
             "the zero tail is part of the stream"
         );
     }

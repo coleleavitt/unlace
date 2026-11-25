@@ -51,8 +51,10 @@ mod operand_tests;
 // ConstructState / ContextSet (context.hh/.cc)
 // ---------------------------------------------------------------------------
 
-/// C++ `ParserContext::MAX_DEPTH`.
-const MAX_DEPTH: i32 = 32;
+/// C++ `ParserContext::MAX_DEPTH` (32 there), raised to 64 here: the instruction
+/// buffer holds 32 bytes, and x86 takes one constructor level per prefix byte, so
+/// a run of prefixes must reach the buffer limit before the depth limit.
+const MAX_DEPTH: i32 = 64;
 /// C++ `ParserContext::MAX_OPERAND`.
 const MAX_OPERAND: i32 = 20;
 /// C++ `ParserContext::MAX_INSTRUCTION_LEN` (16 upstream); raised so the longest

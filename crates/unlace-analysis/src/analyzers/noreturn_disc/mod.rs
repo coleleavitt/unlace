@@ -186,6 +186,14 @@ fn last_act_is_terminal_call(listing: &Listing, entry: u64, terminal: &BTreeSet<
     let next = listing.next_function_after(entry).map(|f| f.entry);
     let mut has_terminal_call = false;
     let outside = |t: u64| t < entry || next.is_some_and(|n| t >= n);
+    let Some(last_real) = listing
+        .instructions_in_range(entry, next)
+        .rev()
+        .find(|(_, insn)| !crate::analyzers::noreturn_propagate::is_padding_nop(insn))
+        .map(|(&vma, _)| vma)
+    else {
+        return false;
+    };
     for (&vma, insn) in listing.instructions_in_range(entry, next) {
         // An `int3` trap (lifted as a call through the vector and a RETURN) is
         // where control never arrives, not a returning path.
@@ -213,6 +221,17 @@ fn last_act_is_terminal_call(listing: &Listing, entry: u64, terminal: &BTreeSet<
         }
         if !insn.flow.is_call {
             continue;
+        }
+        // A jump into the dead tail past the last real instruction (`jne .L`, with
+        // `.L` a NOP after a call to a no-return callee) reaches code that falls off
+        // the function, so the function returns on that path.
+        if insn.flow.is_jump
+            && insn
+                .flows
+                .iter()
+                .any(|&t| !outside(t) && t > last_real && !terminal.contains(&t))
+        {
+            return false;
         }
         // A call with no fall-through to a callee not known to be no-return is
         // a tail call lowered as a call: it returns when the callee does.

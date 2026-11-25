@@ -768,6 +768,10 @@ impl Action for ActionStripStackGuard {
             // The check is stripped; release the entry-side canary init (the
             // angr `statements.pop(stmt_idx)` step) so the following
             // ActionDeadCode collects it with the compare/reload residue.
+            eprintln!("G4 after-strip h={:?} size_out={} fail_out={:?} fail_size_in={}", h, data.bblocks_ref().block(h).size_out(), fail_out, data.bblocks_ref().block(fail_out).size_in());
+            for op in data.bb_ops(h) {
+                eprintln!("G4   hop {:?}", data.obank().get(op).expect("g4").code());
+            }
             release_canary_slots(data, &slots);
             self.base.count += 1;
             // One canary per apply; the fullloop re-invokes and self-gates (the

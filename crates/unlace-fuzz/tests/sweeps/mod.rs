@@ -413,6 +413,9 @@ fn dyld_cache_mutation_sweep() {
             .unwrap_or_else(|error| panic!("missing dyld cache sibling {sibling}: {error}"));
     }
     let main_path = work.join(DYLD_MAIN);
+    // The unmutated fixture must open, or the sweep below would only test rejections.
+    std::fs::write(&main_path, &main_seed).expect("write the seed cache");
+    DyldCache::open(&main_path).expect("the unmutated dyld cache fixture opens");
 
     let iterations = scaled(DYLD_ITERATIONS);
     let mut prng = XorShift64::new(DYLD_SEED);

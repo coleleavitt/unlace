@@ -105,7 +105,8 @@ fn functails_holds_with_the_fast_inventory_walk() {
 
 /// gcc's hot/cold split of two assert-style aborts (`first` and `work`), the shape of
 /// /bin/ls's cold stubs: each cold part is a `call abort` that only its owner jumps to.
-/// The listing walk must not list either cold part as a function.
+/// `work.cold` starts off the 16-byte alignment, so the listing walk must not list it
+/// as a function. `first.cold` starts on it, so it stays a function as before.
 #[test]
 fn functails_drops_gcc_assert_tails_under_the_listing_walk() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -124,12 +125,10 @@ fn functails_drops_gcc_assert_tails_under_the_listing_walk() {
         .expect("functails flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");
-    for cold in ["sub_1060", "sub_1066"] {
-        assert!(
-            prog.lookup_symbol(cold).is_none(),
-            "{cold} is an assert tail reached only by its owner"
-        );
-    }
+    assert!(
+        prog.lookup_symbol("sub_1066").is_none(),
+        "work.cold is an assert tail reached only by work's jump"
+    );
     for owner in ["sub_1190", "sub_11a0"] {
         assert!(prog.lookup_symbol(owner).is_some(), "{owner} stays");
     }

@@ -150,7 +150,9 @@ fn the_repaired_blocks_document_their_flags() {
 fn every_json_surface_names_its_root_in_help() {
     let stated: &[(&str, &str)] = &[
         ("fid", "{binary,"),
+        ("flirt", "{format,"),
         ("identify-packer", "{detected_signature,"),
+        ("idb", "{path,"),
         ("lumina", "{binary,"),
         ("rust-signatures", "{status,"),
         ("sbom", "{bomFormat,"),

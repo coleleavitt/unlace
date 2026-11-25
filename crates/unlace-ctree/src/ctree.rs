@@ -178,6 +178,10 @@ pub enum StmtKind {
     /// (unlace `javatry`) An `if` that opens a DEX `try` statement on its own (its body and
     /// catches all inside the `if`), printed as `try { } catch`.
     JavaTry,
+    /// (unlace `labelnode`) The label line of the C copy leaf `body` (a `Stmts` or `Ops` statement
+    /// with the same origin block), printed before it. The printer prints it from the origin block
+    /// with `emit_any_label_statement`, so the label decision is the printer's; the node places it.
+    Label { body: StmtId },
     /// Not modelled yet: printed from its origin block.
     Opaque,
 }
@@ -318,6 +322,55 @@ impl CTree {
     /// Whether the printer prints a label line for the block `block`, when a record was made.
     pub fn label_line(&self, block: BlockId) -> Option<bool> {
         self.label_lines.get(&block).copied()
+    }
+
+    /// Wrap the statement `leaf` in a `Label` node with the same origin, which becomes the node
+    /// the origin block answers (`node_for`). The caller puts the node where `leaf` was.
+    pub fn wrap_label(&mut self, leaf: StmtId) -> StmtId {
+        let origin = self.stmts[leaf.index()].origin;
+        let id = self.add_stmt(StmtKind::Label { body: leaf }, origin);
+        if let Some(block) = origin {
+            self.by_origin.insert(block, id);
+        }
+        if self.conds.contains(&leaf) {
+            self.conds.insert(id);
+        }
+        id
+    }
+
+    /// Replace the child `old` of the statement `parent` with `new`, in the slot it holds.
+    pub fn replace_child(&mut self, parent: StmtId, old: StmtId, new: StmtId) {
+        fn swap(slot: &mut StmtId, old: StmtId, new: StmtId) {
+            if *slot == old {
+                *slot = new;
+            }
+        }
+        match &mut self.stmts[parent.index()].kind {
+            StmtKind::Seq(list) | StmtKind::Switch { parts: list } => {
+                for slot in list.iter_mut() {
+                    swap(slot, old, new);
+                }
+            }
+            StmtKind::If { pre, then, els, .. } => {
+                if let Some(slot) = pre.as_mut() {
+                    swap(slot, old, new);
+                }
+                swap(then, old, new);
+                if let Some(slot) = els.as_mut() {
+                    swap(slot, old, new);
+                }
+            }
+            StmtKind::While { pre, body, .. } => {
+                if let Some(slot) = pre.as_mut() {
+                    swap(slot, old, new);
+                }
+                swap(body, old, new);
+            }
+            StmtKind::DoWhile { body, .. } | StmtKind::For { body, .. } | StmtKind::Loop { body } => {
+                swap(body, old, new);
+            }
+            _ => {}
+        }
     }
 
     /// Record, for the switch `id`, the choices the printer makes for each arm (`ArmRecord`).
@@ -480,6 +533,7 @@ impl CTree {
             StmtKind::DoWhile { body, .. }
             | StmtKind::For { body, .. }
             | StmtKind::Loop { body } => vec![*body],
+            StmtKind::Label { body } => vec![*body],
             StmtKind::Ops { .. }
             | StmtKind::Stmts { .. }
             | StmtKind::Expr(_)
@@ -496,6 +550,7 @@ impl CTree {
         let head = match &stmt.kind {
             StmtKind::Seq(list) => format!("seq[{}]", list.len()),
             StmtKind::Ops { .. } => "ops".to_string(),
+            StmtKind::Label { .. } => "label".to_string(),
             StmtKind::Stmts { ops, .. } => format!("stmts[{}]", ops.len()),
             StmtKind::Expr(e) => format!("expr {}", self.expr_text(*e)),
             StmtKind::If { cond, els, .. } => format!(

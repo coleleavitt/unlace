@@ -127,9 +127,7 @@ pub(crate) fn collect(bytes: &[u8]) -> Result<Inventory, String> {
         object::BinaryFormat::MachO => macho_commands(bytes, &mut inv, &mut comps),
         object::BinaryFormat::Pe => {
             pe_imports(&file, &mut comps);
-            if let Some(rsrc) = file.section_by_name(".rsrc").and_then(|s| s.data().ok()) {
-                inv.version_info = pever::string_table(rsrc);
-            }
+            inv.version_info = pever::string_table(bytes);
         }
         _ => {}
     }

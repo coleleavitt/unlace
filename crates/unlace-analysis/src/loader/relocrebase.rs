@@ -114,14 +114,7 @@ pub fn rebased_view(file: &object::File, bytes: &[u8]) -> Option<RebasedView> {
 
     let mut out = bytes.to_vec();
     splice_laid_sections(file, &layout, &mut out);
-    // A Mach-O object's debug sections are left as they are: their symbol
-    // values are pre-link addresses, not the section offsets the ELF and COFF
-    // relocation pass reads.
-    let inflated = if file.format() == object::BinaryFormat::MachO {
-        Vec::new()
-    } else {
-        relocate_unlaid_sections(file, &layout, &mut out)
-    };
+    let inflated = relocate_unlaid_sections(file, &layout, &mut out);
     patch_section_addresses(file, &layout, &inflated, &mut out)?;
 
     let mut ranges: Vec<(u64, u64)> = layout
@@ -276,9 +269,15 @@ fn apply_relocations(
         let Some(s) = resolve_target(file, layout, &reloc) else {
             continue;
         };
+        // A Mach-O in-place addend is a pre-link address (the target section's
+        // `addr` plus the offset); subtract that origin to get the offset.
+        let origin = match reloc.target() {
+            RelocationTarget::Section(sidx) => section_origin(file, sidx) as i128,
+            _ => 0,
+        };
         let a = reloc.addend() as i128
             + if reloc.has_implicit_addend() {
-                order.signed(field)
+                order.signed(field) - origin
             } else {
                 0
             };
@@ -315,7 +314,7 @@ fn resolve_target(
                         .get(&sec_idx)
                         .copied()
                         .unwrap_or(0)
-                        .wrapping_add(sym.address()),
+                        .wrapping_add(sym.address().wrapping_sub(section_origin(file, sec_idx))),
                 ),
                 SymbolSection::Undefined | SymbolSection::Common => {
                     layout.extern_addr.get(&idx).copied()
@@ -329,6 +328,16 @@ fn resolve_target(
         }
         _ => None,
     }
+}
+
+/// The pre-link address a Mach-O section was given in its object (its `addr`), which
+/// a symbol value and an in-place relocation addend both carry. Zero for every other
+/// format, whose symbol and addend offsets are already section-relative.
+fn section_origin(file: &object::File, sidx: SectionIndex) -> u64 {
+    if file.format() != object::BinaryFormat::MachO {
+        return 0;
+    }
+    file.section_by_index(sidx).map_or(0, |s| s.address())
 }
 
 /// The byte order of the fields an object stores: its own (COFF's is always

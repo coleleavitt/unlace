@@ -7,7 +7,9 @@
 #
 # fixtures/ckeywords/members-gcc-O2: members.c, gcc -std=c99 -O2 -g -fno-pie
 # -no-pie -nostdlib -static -fcf-protection=none
-# -fno-asynchronous-unwind-tables -Wl,--build-id=none, .comment stripped.
+# -fno-asynchronous-unwind-tables -Wl,--build-id=none, .comment stripped; .symtab and
+# .debug_* are kept (the function is looked up by name, so a stripped binary
+# has no `score` to load).
 
 [image]
 arch = 'x86:LE:64:default:gcc'

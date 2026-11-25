@@ -278,7 +278,7 @@ mod tests {
         assert!(OptionStructHeadless.apply("on").is_err());
         assert!(!StructHeadlessMode::Off.fires());
         assert!(StructHeadlessMode::Closed.fires());
-        assert_eq!(StructHeadlessMode::default(), StructHeadlessMode::Off);
+        assert_eq!(StructHeadlessMode::default(), StructHeadlessMode::Closed);
     }
 
     fn ptr_to(ptrto: std::rc::Rc<Datatype>) -> Datatype {

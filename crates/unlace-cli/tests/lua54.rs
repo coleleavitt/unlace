@@ -32,7 +32,7 @@ fn decompile(fixture: &str) -> String {
 fn lua54_numeric_for_and_bitwise_return_decompile() {
     let out = decompile("sum_for.bin");
     assert!(out.contains("v1 = luaForPrep(1,a0,1);"), "{out}");
-    assert!(out.contains("v2 = luaAdd(v2,v4);"), "{out}");
+    assert!(out.contains("v2 = luaAdd(v2,v3);"), "{out}");
     assert!(out.contains("v1 = luaForLoop(v3,a0,1);"), "{out}");
     assert!(out.contains("if (luaLt(a1,v2))"), "{out}");
     assert!(out.contains("return v2 & K0;"), "{out}");

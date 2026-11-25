@@ -189,6 +189,7 @@ fn a_narrowing_into_a_destination_of_its_type_round_trips_through_the_printed_c(
                 "--option",
                 "bitidioms",
                 "off",
+                "--option",
                 "typevote",
                 "off",
             ]);

@@ -5484,6 +5484,10 @@ impl PrintC {
     /// have to be a basic block; `get_front_leaf` finds the entry `t_copy` leaf.
     #[doc(hidden)]
     pub fn emit_any_label_statement(&mut self, fd: &Funcdata, bl: BlockId) {
+        // The tree decided (C colon form, `ctree_labels`) that no label line is printed here.
+        if self.ctree.as_ref().and_then(|tree| tree.label_line(bl)) == Some(false) {
+            return;
+        }
         // Label printed by someone else.
         if fd.sblocks_ref().block(bl).is_label_bump_up() {
             return;

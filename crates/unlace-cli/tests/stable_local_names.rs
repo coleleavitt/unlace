@@ -8,7 +8,10 @@
 //! Fixture: `unlace-analysis/tests/fixtures/stablenames_x86_64` (source beside
 //! it), whose `mix` prints thirteen numbered locals, and the static glibc
 //! `mcount_x86_64`, whose `handle_intel.constprop.0` keeps many same-width
-//! temporaries at one instruction. Every case runs on both surfaces: the text
+//! temporaries at one instruction. Every case pins upstream's type merge
+//! (`typemerge on`): the default `storage` mode keeps apart same-typed locals
+//! the merge joins, which renumbers the `vN` names these tests address.
+//! Every case runs on both surfaces: the text
 //! one drives `decomp_dbg` through a console script, `--json` runs in-process.
 
 use std::collections::BTreeSet;
@@ -30,6 +33,7 @@ fn decompile_with(extra: &[&str], directives: &[&str]) -> String {
 fn decompile_in(fixture: &str, function: &str, extra: &[&str], directives: &[&str]) -> String {
     let binary = common::fixture(fixture);
     let mut args = vec!["decompile", binary.as_str(), function];
+    args.extend(["--option", "typemerge", "on"]);
     args.extend(extra);
     for directive in directives {
         args.extend(["--assert", directive]);
@@ -233,7 +237,7 @@ fn console(script: &str) -> String {
         .spawn()
         .expect("run console");
     let script = format!(
-        "load file \"{}\"\nread symbols\n{script}\nquit\n",
+        "load file \"{}\"\nread symbols\noption typemerge on\n{script}\nquit\n",
         common::fixture("stablenames_x86_64")
     );
     child
@@ -773,6 +777,7 @@ fn outcomes(
 ) -> (String, Vec<(String, Option<String>)>) {
     let binary = common::fixture(fixture);
     let mut args = vec!["decompile", binary.as_str(), function];
+    args.extend(["--option", "typemerge", "on"]);
     for directive in directives {
         args.extend(["--assert", directive]);
     }
@@ -1007,7 +1012,16 @@ fn a_keyword_or_type_name_is_refused() {
         ("type v6 unsigned int while", "`while` is a C keyword"),
     ] {
         let (text, stderr, code) =
-            common::run_unlace(&["decompile", binary.as_str(), "mix", "--assert", directive]);
+            common::run_unlace(&[
+                "decompile",
+                binary.as_str(),
+                "mix",
+                "--option",
+                "typemerge",
+                "on",
+                "--assert",
+                directive,
+            ]);
         assert_eq!(code, 0, "{directive}: {stderr}");
         assert!(
             stderr.contains("rejected") && stderr.contains(reason),

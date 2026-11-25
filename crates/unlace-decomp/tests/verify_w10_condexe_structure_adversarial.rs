@@ -311,22 +311,16 @@ fn count_condition_blocks(fd: &Funcdata) -> usize {
 }
 
 // ===========================================================================
-// AT1 — DEAD-CODE TRIPWIRE (the central verified fact of this review): NO
-// corpus function the Rust engine analyzes currently produces a
-// `BlockType::Condition` node, so `emit_block_condition` (added by this diff) is
-// never reached end-to-end.  The `||`/`&&` that DO appear in renders (e.g. nan's
-// `NAN(..) || NAN(..)`) come from the DATA-FLOW expression printer
-// (CPUI_BOOL_OR PcodeOp -> BOOLEAN_OR token), not the control-flow short-circuit
-// emitter.  This test pins that reality: when a future wave makes
-// CollapseStructure::rule_block_or fire on the corpus, this tripwire flips and
-// the THAT wave's verdict must re-confirm emitBlockCondition's parity end-to-end.
-//
-// (The transcription itself was verified faithful against the C++ by inspection
-// — see the verdict file — but it cannot be confirmed by execution until a
-// Condition node is produced.)
+// AT1 — REACHABILITY: the structurer produces a short-circuit `BlockCondition`
+// on the corpus, so `emit_block_condition` is reached end-to-end.  This test
+// pinned ZERO Condition nodes while the short-circuit fold was off.  It flipped
+// on the deliberate default change ab16de4596 ("P8: condfold on by default",
+// 2026-10-30), which makes `nan`'s guards fold into a BOOL_AND Condition.  The
+// rendered `&&`/`||` itself has NOT been re-checked against the C++ oracle by
+// this test; that re-verification is still open.  AT2 pins the glue opcodes.
 // ===========================================================================
 #[test]
-fn at1_emitblockcondition_is_currently_unreached_dead_code() {
+fn at1_emitblockcondition_is_reached_on_corpus() {
     let stems = [
         "nan",
         "ccmp",
@@ -336,6 +330,7 @@ fn at1_emitblockcondition_is_currently_unreached_dead_code() {
         "condexesub",
     ];
     let mut any_cond = Vec::new();
+    let mut decompiled = 0usize;
     for stem in stems {
         let (_x, fd) = match rust_decompile_first(stem) {
             Ok(v) => v,
@@ -348,18 +343,20 @@ fn at1_emitblockcondition_is_currently_unreached_dead_code() {
                 continue;
             }
         };
+        decompiled += 1;
         let opcs = condition_opcodes(&fd);
         if !opcs.is_empty() {
             any_cond.push(format!("{stem} -> {opcs:?}"));
         }
     }
-    // CURRENT, VERIFIED state: zero BlockCondition nodes (the new emitter is
-    // unreached).  If this assert fails because a Condition appeared, the
-    // structuring layer advanced — re-verify emitBlockCondition's parity then.
+    if decompiled == 0 {
+        eprintln!("SKIP at1: no corpus stem decompiled in this environment");
+        return;
+    }
     assert!(
-        any_cond.is_empty(),
-        "a BlockCondition node now appears ({any_cond:?}) — emitBlockCondition is \
-         no longer dead code; re-verify its &&/|| render against the C++ oracle"
+        !any_cond.is_empty(),
+        "no BlockCondition node in any corpus stem; emit_block_condition is unreached \
+         again (condfold default regressed, or the short-circuit fold stopped firing)"
     );
 }
 
@@ -368,9 +365,9 @@ fn at1_emitblockcondition_is_currently_unreached_dead_code() {
 // opcode is one of the two boolean-glue opcodes.  The emitter's branch is
 // `if opc == CPUI_BOOL_AND { &&-token } else { ||-token }` with an
 // `unwrap_or(BOOL_AND)` fallback — a Condition carrying a non-boolean opcode
-// would be silently mis-rendered as `&&`.  Today no corpus function builds a
-// Condition (AT1), so this is a guard that holds vacuously now and becomes load-
-// bearing the moment structuring lands; it must never observe a bad opcode.
+// would be silently mis-rendered as `&&`.  Since ab16de4596 (condfold on by
+// default) the corpus builds Condition nodes (AT1), so this guard is load-bearing
+// now; it must never observe a bad opcode.
 // ===========================================================================
 #[test]
 fn at2_any_condition_opcode_is_a_boolean_glue() {

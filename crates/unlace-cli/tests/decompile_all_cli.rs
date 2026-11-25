@@ -9580,6 +9580,8 @@ int main(void) {
 /// the source declares `unsigned long`, keep that type and the `(long)` their
 /// signed comparison needs, option on as off.  Unlocked, the same variables are
 /// declared `long`, so each case also checks that the option fires there.
+/// `boolreturn` is pinned off: since a43d3535b7 it is on by default and prints
+/// the `if (c) return 1;` shapes these checks read as `return (c);`.
 #[test]
 fn castsign_leaves_a_locked_declaration_alone() {
     let sp = specs();
@@ -9632,6 +9634,9 @@ fn castsign_leaves_a_locked_declaration_alone() {
             "--option",
             "castsign",
             "on",
+            "--option",
+            "boolreturn",
+            "off",
         ]);
         assert!(ok, "unlace decompile failed: {stderr}");
         let semantic = without_variable_sources(&stdout);
@@ -9653,6 +9658,9 @@ fn castsign_leaves_a_locked_declaration_alone() {
                 "--option",
                 "castsign",
                 opt,
+                "--option",
+                "boolreturn",
+                "off",
             ];
             let (stdout, stderr, ok) = run_unlace(&args);
             assert!(ok, "unlace decompile --assert failed: {stderr}");
@@ -9681,6 +9689,9 @@ fn castsign_leaves_a_locked_declaration_alone() {
             "--option",
             "castsign",
             opt,
+            "--option",
+            "boolreturn",
+            "off",
         ];
         let (stdout, stderr, ok) = run_unlace(&args);
         assert!(ok, "unlace decompile-all failed: {stderr}");

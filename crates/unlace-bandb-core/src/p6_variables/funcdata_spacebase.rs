@@ -930,13 +930,6 @@ impl FuncdataSpacebaseExt for Funcdata {
             _ => return false,
         };
         let mut update_occurred = false;
-        // (unlace #871) The alias gather behind `unmapped_alias_check`: an unmapped
-        // slot is only "unaliased" when no pointer reaches it.
-        let mut escapes = if unmapped_alias_check {
-            self.build_alias_checker_deferred()
-        } else {
-            None
-        };
 
         // Iterate the location set restricted to the stack space, grouped by
         // (size, addr) — each group is one syncVarnodesWithSymbol run.
@@ -1034,7 +1027,7 @@ impl FuncdataSpacebaseExt for Funcdata {
                 if in_scope {
                     fl = varnode_flags::mapped | varnode_flags::addrtied;
                 } else if unmapped_alias_check {
-                    let mut unaliased = self
+                    let unaliased = self
                         .get_scope_local()
                         .and_then(|lm| {
                             ex_addr
@@ -1042,22 +1035,6 @@ impl FuncdataSpacebaseExt for Funcdata {
                                 .map(|spc| lm.is_unmapped_unaliased(spc, ex_addr.get_offset()))
                         })
                         .unwrap_or(false);
-                    // (unlace #871) The window test ignores pointers. A struct whose
-                    // address is passed to a call keeps its unmapped fields aliased: the
-                    // first and last byte are checked, and the alias tests are monotone in
-                    // the offset, so the bytes between them agree.
-                    if unaliased {
-                        unaliased = match (escapes.as_mut(), ex_addr.get_space()) {
-                            (Some(checker), Some(spc)) => {
-                                let first = ex_addr.get_offset();
-                                let last = spc
-                                    .wrap_offset(first.wrapping_add((ex_size.max(1) - 1) as uintb));
-                                !stack_slot_aliased(self, checker, spc, first)
-                                    && !stack_slot_aliased(self, checker, spc, last)
-                            }
-                            _ => false,
-                        };
-                    }
                     fl = if unaliased {
                         varnode_flags::nolocalalias
                     } else {

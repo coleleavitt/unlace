@@ -56,11 +56,14 @@ fn flow_with(
     (program, fd)
 }
 
+/// `jumptablework` (default 250000 instructions, b3668e64e9) stops this chain at
+/// 316 targets, after which the closure is not recovered at all. The test checks
+/// the closure itself, so it pins the bound off; the default is covered below.
 #[test]
 fn four_hundred_steps_use_two_full_recovery_stages() {
-    let (program, fd) = flow(
+    let (program, fd) = flow_with(
         "tests/fixtures/indirect-flow-closure/chain-400-64.bin",
-        false,
+        &[("jumptablework", "off")],
     );
     assert_eq!(fd.num_jump_tables(), 1);
     let table = fd.get_jump_table(0);
@@ -106,6 +109,17 @@ fn ordinary_register_closure_needs_only_the_reentry_value() {
         1,
         "off keeps upstream's first target"
     );
+}
+
+/// The default work bound stops the same chain partway: the dispatch prints as a
+/// computed call and its partial table is dropped, so flow still completes.
+#[test]
+fn work_bound_truncation_leaves_no_table_behind() {
+    let (_, fd) = flow(
+        "tests/fixtures/indirect-flow-closure/chain-400-64.bin",
+        false,
+    );
+    assert_eq!(fd.num_jump_tables(), 0);
 }
 
 fn warnings(program: &unlace_console::engine::ConsoleProgram) -> usize {

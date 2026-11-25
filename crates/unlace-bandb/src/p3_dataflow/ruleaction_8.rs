@@ -2007,7 +2007,8 @@ fn stack_word(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<(i32, uintb)
 }
 
 /// (unlace) Whether `V | W`, with `V = x ^ y` and `W = z ^ u`, is a two-word
-/// equality whose two word pairs are adjacent stack words (`x` above `z` and
+/// equality whose two word pairs are adjacent stack words, or an adjacent stack
+/// word pair against two constants (`x` above `z` and
 /// `y` above `u`, or the other way round): the shape pairparam's XOR trigger
 /// joins (`RuleDoubleInputPair`). `RuleOrCompare` leaves such an OR alone, so
 /// the join can run once the words are inputs; it splits the OR otherwise.
@@ -2026,18 +2027,27 @@ fn two_word_stack_equality(data: &Funcdata, v: VarnodeId, w: VarnodeId) -> bool 
         return false;
     }
     let size = size.unwrap_or(0) as uintb;
-    let (Some(x), Some(y), Some(z), Some(u)) = (
-        stack_word(data, x, 0),
-        stack_word(data, y, 0),
-        stack_word(data, z, 0),
-        stack_word(data, u, 0),
-    ) else {
+    // A word is a stack word (Some), a constant (None), or neither (no match).
+    let word = |vn: VarnodeId| -> Option<Option<(i32, uintb)>> {
+        if data.vbank().get(vn)?.is_constant() {
+            Some(None)
+        } else {
+            stack_word(data, vn, 0).map(Some)
+        }
+    };
+    let (Some(x), Some(y), Some(z), Some(u)) = (word(x), word(y), word(z), word(u)) else {
         return false;
     };
-    let adjacent = |p: (i32, uintb), q: (i32, uintb)| {
-        p.0 == q.0 && (p.1.wrapping_sub(q.1) == size || q.1.wrapping_sub(p.1) == size)
+    let adjacent = |p: Option<(i32, uintb)>, q: Option<(i32, uintb)>| match (p, q) {
+        (Some(p), Some(q)) => {
+            p.0 == q.0 && (p.1.wrapping_sub(q.1) == size || q.1.wrapping_sub(p.1) == size)
+        }
+        _ => false,
     };
-    (adjacent(x, z) && adjacent(y, u)) || (adjacent(x, u) && adjacent(y, z))
+    let pair = |p: Option<(i32, uintb)>, q: Option<(i32, uintb)>| {
+        adjacent(p, q) || (p.is_none() && q.is_none())
+    };
+    (adjacent(x, z) && pair(y, u)) || (adjacent(x, u) && pair(y, z))
 }
 
 impl Rule for RuleOrCompare {

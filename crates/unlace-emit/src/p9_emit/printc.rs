@@ -5398,6 +5398,17 @@ impl PrintC {
         // through `emit_any_label_statement` skips the label when it was hoisted up
         // to an enclosing loop head (`isLabelBumpUp`).
         self.emit_any_label_statement(fd, blk);
+        self.emit_block_copy_body(fd, arch, blk, ops);
+    }
+
+    /// The statements of a copy leaf, without its label line (the caller prints that).
+    fn emit_block_copy_body(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        blk: BlockId,
+        ops: Option<&[OpId]>,
+    ) {
         if let Some(under) = fd.sblocks_ref().block(blk).get_copy() {
             // The copy's `copy` field is a *bblocks* BlockId.
             self.emit_basic_block_ops_in(fd, arch, under, true, ops);

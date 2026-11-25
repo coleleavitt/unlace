@@ -63,7 +63,7 @@ regex = '!\(a <=? b\)'
 [[match]]
 name = 'AArch64 FCMP NaN #3: gt holds only when b < a'
 count = 1
-regex = 'return a != b && b <= a;'
+regex = 'return b < a;'
 
 [[match]]
 name = 'AArch64 FCMP NaN #4: ngt (le) is !(b < a), true for a NaN'

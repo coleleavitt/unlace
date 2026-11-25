@@ -1359,5 +1359,5 @@ crate::unlace_flag!(
     "noreturnself",
     "function-level no-return verdict",
     unset: false,
-    shipped: true
+    shipped: false
 );

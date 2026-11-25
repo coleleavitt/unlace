@@ -2859,6 +2859,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P5/type-propagation · unlace · type-inference · vtabletypes
 - **Example:** `option vtabletypes off`
 
+### `noreturnself` -- on | off, default `on`
+
+- **Symptoms:** a function that never returns prints as a plain void f(void) with no marker; a function ending in exit() or abort() on every path is indistinguishable from one that returns; the no-return verdict appears only at the call sites of the function
+- **What it does:** Mark a function no-return when every path of its flow ends in a call to a no-return callee or a no-return halt. The verdict was reached only by the callers: each call to a no-return callee carries `Subroutine does not return` at the call site, but the function that never returns printed as a plain `void f(void)` ending in `abort(); // no-return`. When the flow generated for the function has no live return that is not a halt, no unresolved indirect jump or call, and every live halt is a `noreturn` halt, the function's own prototype is set no-return and a header warning `Subroutine does not return` is printed at its entry address (line 1). Any other halt (a decode failure or a truncation) leaves the function alone. Reads the flow of the function only, so it works without the Listing. On by default; the output change is the header line on a function that never returns.
+- **When to flip:** On by default. Flip off to see a function that never returns with no header marker, as upstream prints it, or when a consumer keys on the call-site warnings alone.
+- **Where / provenance:** P2/flow-classification · unlace · presentation-default · unlace-noreturnself
+- **Example:** `option noreturnself off`
+
 ### `noreturn_propagate` -- on | off, default `on`
 
 - **Symptoms:** unreachable code after a call to an exit/fatal wrapper; function truncated after calling a cold wrapper; spurious while(true) around a call that never returns; stripped binary's unnamed exit wrapper swallows the functions after it.

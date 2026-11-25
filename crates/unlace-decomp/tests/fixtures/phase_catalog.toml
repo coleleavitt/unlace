@@ -5514,6 +5514,25 @@ tier = "transform"
 symptoms = ["a c++ virtual call renders as (**(code **)(*(long *)obj + 0x10))() with no method name", "virtual call arguments missing or the call cast to (void)", "this->vptr not typed in a member function", "call on a local c++ object stays indirect"]
 
 [[option]]
+option = "noreturnself"
+values = ["on", "off"]
+default = "on"
+destructive_as_default = false
+phase = "P2"
+subphase = "flow-classification"
+strength = "HARD"
+rewind = "P2"
+issue = "unlace-noreturnself"
+summary = "Mark a function no-return when every path of its flow ends in a call to a no-return callee or a no-return halt. The verdict was reached only by the callers: each call to a no-return callee carries `Subroutine does not return` at the call site, but the function that never returns printed as a plain `void f(void)` ending in `abort(); // no-return`. When the flow generated for the function has no live return that is not a halt, no unresolved indirect jump or call, and every live halt is a `noreturn` halt, the function's own prototype is set no-return and a header warning `Subroutine does not return` is printed at its entry address (line 1). Any other halt (a decode failure or a truncation) leaves the function alone. Reads the flow of the function only, so it works without the Listing. On by default; the output change is the header line on a function that never returns."
+use_when = "On by default. Flip off to see a function that never returns with no header marker, as upstream prints it, or when a consumer keys on the call-site warnings alone."
+example = "option noreturnself off"
+source_decompiler = "unlace"
+inspiration = "Ghidra prints /* WARNING: Subroutine does not return */ above a function whose body never returns; unlace kept the verdict on the call sites only."
+change_kind = "presentation-default"
+tier = "core"
+symptoms = ["a function that never returns prints as a plain void f(void) with no marker", "a function ending in exit() or abort() on every path is indistinguishable from one that returns", "the no-return verdict appears only at the call sites of the function"]
+
+[[option]]
 option = "noreturn_propagate"
 values = ["on", "off"]
 default = "on"

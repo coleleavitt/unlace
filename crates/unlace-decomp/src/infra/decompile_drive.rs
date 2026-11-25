@@ -1447,6 +1447,7 @@ fn generate_flow(arch: &mut Architecture, fd: Funcdata) -> UnlaceResult<Funcdata
     // C++ startProcessing also calls sortCallSpecs() (dominance order for the
     // call-spec list); now that qlst exists, sort it.
     data.sort_call_specs();
+    crate::noreturnself::mark_self_no_return(arch, &mut data);
     Ok(data)
 }
 

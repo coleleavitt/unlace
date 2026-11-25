@@ -1351,3 +1351,13 @@ impl crate::optionset::UnlaceOption for MovwPairs {
         Ok((mode, format!("movw/movt address pairs set to {value}")))
     }
 }
+
+crate::unlace_flag!(
+    /// (unlace `noreturnself`) A function whose every path ends in a no-return call or
+    /// halt is itself no-return: its prototype is marked and its header says so. Default on.
+    Noreturnself,
+    "noreturnself",
+    "function-level no-return verdict",
+    unset: false,
+    shipped: true
+);

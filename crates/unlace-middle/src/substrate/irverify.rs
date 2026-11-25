@@ -280,11 +280,18 @@ pub fn verify_dataflow(fd: &Funcdata) -> Result<(), VerifyError> {
                 None
             };
             let Some(def_op) = vn.get_def() else {
-                if vn.is_constant() || vn.is_input() || vn.is_annotation() || vn.is_unaffected() {
+                if vn.is_constant()
+                    || vn.get_addr().is_constant()
+                    || vn.is_input()
+                    || vn.is_annotation()
+                    || vn.is_unaffected()
+                {
                     continue;
                 }
                 return Err(VerifyError(format!(
-                    "op {op_id:?} reads {input:?} in slot {slot}, which no op defines and which is not an input or constant"
+                    "op {op_id:?} ({:?}) reads {input:?} at {:?} in slot {slot}, which no op defines and which is not an input or constant",
+                    op.code(),
+                    vn.get_addr()
                 )));
             };
             let Some(&(bd_def, id_def)) = position.get(&def_op) else {

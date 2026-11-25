@@ -1570,6 +1570,7 @@ fn run_jumptable_pipeline(
 /// already ported in `action.rs`); this drives it through the engine-side
 /// [`ActionContext`] so the warning-emission points are observable.
 fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> UnlaceResult<int4> {
+    eprintln!("G4 run_pipeline entry");
     let _load = arch.load_scope();
     // C++ allacts.setCurrent("decompile") derives the filtered decompile root
     // (idempotent if already current).

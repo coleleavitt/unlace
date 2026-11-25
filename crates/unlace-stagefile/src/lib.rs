@@ -153,7 +153,8 @@ fn commands(script: &Table) -> Result<Vec<(String, bool)>, String> {
         .get("commands")
         .and_then(|c| c.as_array())
         .ok_or("[script]: `commands` is not an array")?;
-    list.iter()
+    let mut probe = vec![("option irverify on".to_owned(), false)];
+    let rest: Result<Vec<(String, bool)>, String> = list.iter()
         .map(|c| match c {
             toml::Value::String(s) => Ok((s.clone(), false)),
             toml::Value::Table(t) => {
@@ -168,7 +169,9 @@ fn commands(script: &Table) -> Result<Vec<(String, bool)>, String> {
             }
             _ => Err("[script]: a command is not a string or a table".to_owned()),
         })
-        .collect()
+        .collect();
+    probe.extend(rest?);
+    Ok(probe)
 }
 
 /// Resolves a computed count's `settables` filter (a table of `field = value`) to the number of

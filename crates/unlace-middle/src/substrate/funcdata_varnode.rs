@@ -2856,7 +2856,6 @@ impl Funcdata {
 
     /// [`ancestor_op_use`](Self::ancestor_op_use), or with `every_path` the
     /// upstream walk with no memo, and the number of steps it took.
-    #[cfg(any(test, feature = "test-support"))]
     #[allow(clippy::too_many_arguments)]
     #[doc(hidden)]
     pub fn ancestor_op_use_counted(
@@ -2904,10 +2903,7 @@ impl Funcdata {
         if let Some(found) = key.and_then(|k| memo.recall(self, k, maxlevel)) {
             return found;
         }
-        #[cfg(any(test, feature = "test-support"))]
-        {
-            memo.steps += 1;
-        }
+        memo.steps += 1;
         let found = self.ancestor_op_step(memo, maxlevel, invn, op, trial, offset, main_flags);
         if let Some(k) = key {
             memo.remember(k, maxlevel, found);
@@ -3252,9 +3248,7 @@ struct AncestorMemo {
     /// path, so a CALL output or creation ends a path as a use.
     call_result_root: bool,
     unused: crate::fasthash::FxHashMap<AncestorKey, UnusedAbove>,
-    #[cfg(any(test, feature = "test-support"))]
     every_path: bool,
-    #[cfg(any(test, feature = "test-support"))]
     steps: u64,
 }
 
@@ -3271,7 +3265,6 @@ impl AncestorMemo {
     /// A step's key, or `None` when no MULTIEQUAL is on the path (one path
     /// reaches the step) or the path is too deep to track.
     fn key(&self, vn: VarnodeId, offset: int4, flags: uint4) -> Option<AncestorKey> {
-        #[cfg(any(test, feature = "test-support"))]
         if self.every_path {
             return None;
         }

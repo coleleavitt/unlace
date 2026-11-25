@@ -53,7 +53,7 @@ brotli-decompressor = "5"
 smallvec = "1.15"
 slotmap = "1.0"
 egg = { version = "0.11", default-features = false, features = ["deterministic"] }
-object = { version = "0.39", default-features = false, features = ["read_core", "elf", "pe", "macho", "coff", "archive", "std", "compression"] }
+object = { version = "0.39", default-features = false, features = ["read_core", "elf", "pe", "macho", "coff", "archive", "std", "compression", "write"] }
 regex = "1"
 memchr = "2"
 syn = { version = "2", default-features = false, features = ["full", "parsing", "printing", "clone-impls", "proc-macro"] }
@@ -90,11 +90,10 @@ unlace-decomp-dylib = { path = "crates/unlace-decomp-dylib" }
 # Ordered collections keep output decisions deterministic; see clippy.toml.
 disallowed_types = "deny"
 
-# Exercise real-image workloads without disabling debug validation.
-[profile.test]
+# Exercise real-image workloads without disabling debug validation. On dev, not test:
+# `cargo test` inherits it, so builds and test runs share every compiled crate.
+[profile.dev]
 opt-level = 1
-debug-assertions = true
-overflow-checks = true
 
 # Thin LTO: since the crate split, calls between the decompiler crates inline only through LTO.
 # Without it, decompile-all on grep/sort/libselinux ran 3-4% slower than the single crate did.

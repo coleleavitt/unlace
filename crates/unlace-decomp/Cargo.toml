@@ -25,7 +25,6 @@ slotmap.workspace = true
 
 [dev-dependencies]
 unlace-stagefile.workspace = true
-unlace-middle = { workspace = true, features = ["test-support"] }
 unlace-slacomp.workspace = true
 # Verifier-only: the datatest <stringmatch> engine (item w10-structure-printbody).
 regex = { workspace = true }

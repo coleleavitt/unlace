@@ -14,7 +14,7 @@ use module_scope::*;
 
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::spacebase_tests::{build_fd, reg_addr};
+use crate::funcdata_spacebase::spacebase_fixtures::{build_fd, reg_addr};
 use crate::registerepochs::single_family;
 use unlace_num::opcodes::OpCode;
 

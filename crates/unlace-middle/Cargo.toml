@@ -7,10 +7,6 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
-[features]
-# Test instrumentation (step counters) the driver's moved unit tests read; never on in a build.
-test-support = []
-
 [dependencies]
 unlace-base.workspace = true
 unlace-num.workspace = true

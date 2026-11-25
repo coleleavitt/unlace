@@ -39,23 +39,25 @@ they run on dev binaries, which is faster to build and gives the same results.
 ## Build recipe
 
 ```bash
-export RUSTUP_TOOLCHAIN=rustc-rdr-main CARGO_UNSTABLE_PUBLIC_API_HASH=true
-export RUSTC_WRAPPER=sccache
-# Join the machine-wide jobserver (tools/hooks/unlace-jobserver holds the fifo).
-# Do NOT set CARGO_BUILD_JOBS or pass -j while it runs: either makes cargo create its
-# own jobserver and ignore the shared one.
-fifo=/run/user/$(id -u)/unlace-jobserver.fifo
-if [ -p "$fifo" ]; then export MAKEFLAGS="-j --jobserver-auth=fifo:$fifo"; unset CARGO_BUILD_JOBS; else export CARGO_BUILD_JOBS=4; fi
-export CARGO_PROFILE_DEV_OPT_LEVEL=1 CARGO_PROFILE_DEV_DEBUG=line-tables-only CARGO_PROFILE_TEST_DEBUG=line-tables-only
-# Never export RUSTFLAGS: it replaces the linker and -Z flags set in ~/.cargo/config.toml.
-# Never set CARGO_INCREMENTAL=0.
+# Plain cargo: ~/.cargo/config.toml carries the linker, the -Z flags and the debug level.
+# Never export RUSTFLAGS (it replaces those flags), RUSTC_WRAPPER, CARGO_BUILD_JOBS,
+# CARGO_PROFILE_* or CARGO_INCREMENTAL=0.
 export CARGO_TARGET_DIR=$(readlink -f target)
-export UNLACE_SPECS=$PWD/specs SLEIGHHOME=$PWD/specs
+export UNLACE_ROOT=$PWD UNLACE_SPECS=$PWD/specs SLEIGHHOME=$PWD/specs
 
 cargo check -p <crate>                        # while editing
 cargo test -p <crate> --lib <filter>           # focused
 cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli   # dev profile
 ```
+
+The dev profile is `opt-level = 1` (root `Cargo.toml`) and `cargo test` inherits it, so a
+`cargo build` and a test run reuse each other's compiled crates. Keep it that way: a separate
+`[profile.test]` setting, or a feature that only a dev-dependency turns on (on a workspace crate
+or on a shared dependency such as `object` or `libc`), makes cargo compile every crate above it
+twice. Put such a feature on the normal dependency instead (`object`'s `write` is on in the
+workspace dependency for this reason). On a nightly cargo, `-Zfeature-unification` with
+`resolver.feature-unification = "workspace"` (in `~/.cargo/config.toml` on the shared host)
+also makes a `-p <crate>` run reuse the workspace build.
 
 Every `UNLACE_*` environment variable the Rust code reads is also read under its old `UNLACE_*`
 name, as a deprecated alias: `UNLACE_<NAME>` wins when both are set (`unlace_base::env`). The
@@ -146,7 +148,13 @@ python3 scripts/check_determinism.py --run target/debug/unlace   # same input, s
 target/debug/unlace catalog --markdown | diff -u docs/options.md -   # options.md is the generator's bytes
 cargo clippy -p unlace-cli -p unlace-base -p unlace-num --no-deps -- -D warnings
 cargo nextest run --workspace --exclude unlace-wasm --profile ci   # the workspace suite
+cargo test --doc --workspace --exclude unlace-wasm       # the doc tests (nextest runs none)
 ```
+
+Run the workspace suite with cargo-nextest, not `cargo test --workspace`: `cargo test` runs the
+test binaries one after another, so the slowest test of each binary holds up every later binary
+(unlace-console alone: 110 s against 69 s under nextest on a 24-core host). nextest schedules every
+test of every binary at once. For one library's unit tests either runner is fine.
 
 The parity target (`crates/unlace-harness/tests/parity.rs`) holds two tests:
 `datatests_match_the_baseline` runs `tests/datatests` against `docs/baseline.json` (PARITY OK,

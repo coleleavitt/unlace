@@ -10,7 +10,7 @@ use crate::context::{ArchContext, BlockId, OpId, VarnodeId};
 use crate::dtype::{type_class, type_metatype};
 use crate::fspec::{FuncCallSpecs, FuncProto, ParamEntry, ParameterPieces, ProtoModel};
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::spacebase_tests::{build_fd, make_sp_in, reg_addr};
+use crate::funcdata_spacebase::spacebase_fixtures::{build_fd, make_sp_in, reg_addr};
 
 use super::{
     MAX_CALLER_SCAN_OPS, caller_home_cell, caller_home_unobserved, frame_value_overlaps,

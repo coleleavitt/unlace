@@ -11,7 +11,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::{ArchContext, BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::funcdata_spacebase::spacebase_tests::{build_fd, make_sp_in, reg_addr};
+use crate::funcdata_spacebase::spacebase_fixtures::{build_fd, make_sp_in, reg_addr};
 
 use super::{
     EffectRange, FrameRange, Save, eligible_effect_lane, overlaps, proven_unobserved,

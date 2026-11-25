@@ -640,16 +640,3 @@ fn verify_xml_deep_nesting_beyond_oracle_envelope_f1() {
     }
 }
 
-/// Dump the corpus to files for the C++ oracle harness (not a test).
-#[test]
-#[ignore]
-fn dump_corpus() {
-    let dir = match unlace_base::env::var("UNLACE_XML_VERIFY_DUMP") {
-        Ok(d) => d,
-        Err(_) => return,
-    };
-    std::fs::create_dir_all(&dir).unwrap();
-    for (i, case) in corpus().iter().enumerate() {
-        std::fs::write(format!("{dir}/case_{i:04}.xml"), case).unwrap();
-    }
-}

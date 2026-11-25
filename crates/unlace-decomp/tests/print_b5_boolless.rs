@@ -302,47 +302,6 @@ fn run_full(stem: &str, which: usize) -> Result<(XmlArchitecture, Funcdata), Str
 use unlace_decomp::decompile_drive::print_c;
 use unlace_decomp::printc::ArchPrintExt;
 
-#[test]
-#[ignore]
-fn zz_dump_boolless_cfg() {
-    let (mut xarch, fd) = match run_full("boolless", 0) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("SKIP: {e}");
-            return;
-        }
-    };
-    let arch = xarch.sleigh_mut().base_mut().unwrap();
-    let nbb = fd.bblocks_get_size();
-    eprintln!("=== basic blocks ({nbb}) ===");
-    for i in 0..nbb {
-        let bl = fd.bblocks_get_block(i);
-        let block = fd.bblocks_ref().block(bl);
-        let so = block.size_out();
-        let mut outs = String::new();
-        for j in 0..so {
-            let o = fd.bblocks_ref().block(bl).get_out(j);
-            outs.push_str(&format!(" out{j}={:?}", o));
-        }
-        eprintln!("BB {i} (id={bl:?}) sizeOut={so}{outs}");
-        for op in fd.bb_ops(bl) {
-            let o = fd.obank().get(op).unwrap();
-            let flip = o.is_boolean_flip();
-            let ft = o.is_fallthru_true();
-            eprintln!(
-                "    {} flip={flip} fallthru_true={ft}",
-                render_op(arch, &fd, op)
-            );
-        }
-    }
-    eprintln!("=== sblocks size: {} ===", fd.sblocks_get_size());
-    // (unlace DIV-37) The frozen C++ oracles pin the upstream braced
-    // single-statement if-body form; reset braceelide for the comparison.
-    arch.print_mut().options.set_brace_elide(false);
-    let rust = print_c(arch, &fd);
-    eprintln!("=== RUST print C ===\n{rust}");
-}
-
 /// The committed C++ B5 oracle for boolless (tests/golden/snapshots/cpp/...).
 // (Header gap adjusted for the unlace DIV-34 brace-placement default.)
 const CPP_B5_ORACLE: &str = "\nuint1 boolless(void)\n{\n  uint1 v1; // acc\n  \n  v1 = dat_52;\n  if (dat_52 <= 10) {\n    v1 = 1;\n  }\n  return v1;\n}\n";

@@ -3815,20 +3815,4 @@ mod tests {
             }
         }
     }
-
-    /// Survey, run by hand: `cargo test -p unlace-structure --lib structured_shape_goto_survey
-    /// -- --ignored --nocapture`. Prints how many gotos the structurer leaves per shape.
-    #[test]
-    #[ignore = "survey: prints the goto histogram over generated shapes"]
-    fn structured_shape_goto_survey() {
-        let (accepted, declined) = structure_shape_seeds(0..500);
-        let mut hist = std::collections::BTreeMap::new();
-        for (_, gotos) in &accepted {
-            *hist.entry(*gotos).or_insert(0usize) += 1;
-        }
-        eprintln!(
-            "goto histogram over {} accepted, {declined} declined: {hist:?}",
-            accepted.len()
-        );
-    }
 }

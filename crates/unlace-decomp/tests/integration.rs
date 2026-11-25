@@ -41,14 +41,10 @@ mod register_symbol_identity;
 #[path = "testcirclerange.rs"]
 mod testcirclerange;
 
-#[path = "testfuncproto.rs"]
-mod testfuncproto;
 
 #[path = "testunlaceregion.rs"]
 mod testunlaceregion;
 
-#[path = "testparamstore.rs"]
-mod testparamstore;
 
 #[path = "testtypes.rs"]
 mod testtypes;

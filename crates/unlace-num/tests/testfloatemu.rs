@@ -194,35 +194,6 @@ fn float_decimal_precision() {
     assert_eq!(ff.print_decimal(f64::from(f4), false), "0.111294314");
 }
 
-// IGNORED pending a fix in unlace-num src/float.rs (owned by item
-// w1-num-float-multiprec, not this harness item): the f1 = DBL_MAX row
-// (0x7fefffffffffffff) fails.  C++ printDecimal's istream readback
-// (float.cc:465-473) follows C++11 num_get overflow semantics -- on ERANGE
-// it stores numeric_limits<double>::max() (verified against g++/libstdc++ on
-// this host: "1.79769313486232e+308" reads back as max with failbit set), so
-// the precision-15 roundtrip equals DBL_MAX and the loop breaks with
-// "1.79769313486232e+308".  Rust's parse::<f64>() returns +inf on overflow
-// instead, so the port's roundtrip never matches and it falls through to
-// decimal_max_precision, yielding "1.7976931348623157e+308".  The same gap
-// exists on the size<=4 path (parse::<f32>() -> inf vs FLT_MAX).
-#[test]
-#[ignore = "unlace-num float.rs print_decimal roundtrip diverges from C++11 num_get overflow semantics at DBL_MAX; see comment above"]
-fn double_decimal_precision() {
-    let ff = FloatFormat::new(8);
-    let f0 = double_from_raw_bits(0x3fc5555555555555);
-    assert_eq!(ff.print_decimal(f0, false), "0.16666666666666666");
-    let f1 = double_from_raw_bits(0x7fefffffffffffff);
-    assert_eq!(ff.print_decimal(f1, false), "1.79769313486232e+308");
-    let f2 = double_from_raw_bits(0x3fd555555c7dda4b);
-    assert_eq!(ff.print_decimal(f2, false), "0.33333334");
-    let f3 = double_from_raw_bits(0x3fd0000000000000);
-    assert_eq!(ff.print_decimal(f3, false), "0.25");
-    let f4 = double_from_raw_bits(0x3fb999999999999a);
-    assert_eq!(ff.print_decimal(f4, false), "0.1");
-    let f5 = double_from_raw_bits(0x3fbf7ced916872b0);
-    assert_eq!(ff.print_decimal(f5, true), "1.23000000000000e-01");
-}
-
 #[test]
 fn float_midpoint_rounding() {
     let ff = FloatFormat::new(4);

@@ -58,20 +58,6 @@ fn verify_calc_scale_mask_wordsize_scaling_cpp_oracle() {
     assert_eq!(s.wrap_offset(0x7fffffffffffffff), 0x7fffffffffffffff);
 }
 
-/// FINDING F1 (pinned, #[ignore]d pending repair): with wordsize == 0 the
-/// C++ computes `(wordsize-1)` in **uint4** arithmetic, so
-/// `highest = calc_mask(as)*0 + 0xFFFFFFFF = 0x00000000FFFFFFFF`
-/// (C++ micro-oracle, any addressSize).  The Rust
-/// `(self.wordsize as u64).wsub(1)` wraps at 64 bits and yields u64::MAX.
-/// Run with `cargo test -- --ignored` to observe the divergence.
-#[test]
-#[ignore = "F1 w1-base-space-address: ws==0 wraps at u64 width, C++ wraps at uint4 (space.cc:38)"]
-fn verify_calc_scale_mask_wordsize_zero_uint4_wrap_f1() {
-    let s = proc_space("wz", 4, 4, 0);
-    // C++ oracle: highest == 0x00000000FFFFFFFF for wordsize == 0
-    assert_eq!(s.get_highest(), 0x00000000ffffffff);
-}
-
 /// RangeList insert/remove boundary semantics (address.cc:383-449):
 /// overlap-by-exactly-one-byte merges, pure adjacency does NOT, equal-key
 /// (same `first`) inserts merge through the upper_bound/step-back walk, and

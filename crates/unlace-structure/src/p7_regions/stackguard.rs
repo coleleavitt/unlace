@@ -637,6 +637,7 @@ impl Action for ActionStripStackGuard {
             return 0; // P0 assertion not set
         }
 
+        eprintln!("G4 apply enabled={} opt={}", self.enabled, data.get_arch().unlace_options.get::<crate::stackguard::StripStackGuard>().0);
         let size = data.bblocks_get_size();
         for i in 0..size {
             let h = data.bblocks_get_block(i);
@@ -657,14 +658,14 @@ impl Action for ActionStripStackGuard {
             {
                 let bvn = data.obank().get(cb).expect("g4").get_in(1).expect("g4");
                 let cmpd = data.vbank().get(bvn).and_then(|v| v.get_def());
-                println!("G4 cb block={:?} cond={}", h, g4_def(bvn, data));
+                eprintln!("G4 cb block={:?} cond={}", h, g4_def(bvn, data));
                 if let Some(cd) = cmpd {
                     let cop = data.obank().get(cd).expect("g4");
                     if let (Some(a), Some(b)) = (cop.get_in(0), cop.get_in(1)) {
                         let mut s0 = BTreeSet::new();
                         let mut s1 = BTreeSet::new();
-                        println!("G4   in0={} der0={}", g4_def(a, data), derives_from_canary_load(a, 32, &mut s0, data));
-                        println!("G4   in1={} der1={}", g4_def(b, data), derives_from_canary_load(b, 32, &mut s1, data));
+                        eprintln!("G4   in0={} der0={}", g4_def(a, data), derives_from_canary_load(a, 32, &mut s0, data));
+                        eprintln!("G4   in1={} der1={}", g4_def(b, data), derives_from_canary_load(b, 32, &mut s1, data));
                     }
                 }
             }

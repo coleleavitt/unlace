@@ -102,6 +102,9 @@ mod verify_ehcold;
 #[path = "verify_functails.rs"]
 mod verify_functails;
 
+#[path = "verify_g3probe.rs"]
+mod verify_g3probe;
+
 #[path = "verify_importvote.rs"]
 mod verify_importvote;
 

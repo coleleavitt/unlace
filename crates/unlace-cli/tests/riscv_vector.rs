@@ -41,7 +41,9 @@ fn every_vector_encoding_decodes_as_llvm_names_it() {
     let expected = std::fs::read_to_string(fixture("probe64.txt")).unwrap();
     let expected: Vec<&str> = expected.lines().collect();
     let elf = fixture("vector64.elf");
-    let (stdout, stderr, code) = run_unlace(&["disassemble", &elf, "probe"]);
+    let count = expected.len().to_string();
+    let (stdout, stderr, code) =
+        run_unlace(&["disassemble", &elf, "probe", "--count", &count]);
     assert_eq!(code, 0, "{stderr}");
     let listing = rows(&stdout);
     assert!(listing.len() >= expected.len(), "{} rows", listing.len());

@@ -9223,6 +9223,9 @@ int main(void) {
                 "--option",
                 "castwiden",
                 "off",
+                "--option",
+                "boolreturn",
+                "off",
             ];
             let (stdout, stderr, ok) = run_unlace(&args);
             assert!(ok, "unlace decompile-all failed: {stderr}");
@@ -13451,7 +13454,9 @@ fn a_division_by_a_constant_keeps_its_quotient_in_the_first_register() {
 /// `long long` shifted right moves the bit the other way, and `avg64`,
 /// `mshr1_64` and `sshr33` keep their fix. Every function is compiled with gcc
 /// and clang at -O0 and -O2 against `bejoin_shr.c`, the 64-bit arguments split
-/// high word first.
+/// high word first. The ARM objects run with `armpairparam` off: since
+/// fc53d27e61 that option joins each aligned register pair into one 8-byte
+/// parameter, which this test does not measure.
 #[test]
 fn a_shift_that_carries_into_the_first_register_keeps_the_int() {
     const NARROW: [&str; 11] = [
@@ -13479,6 +13484,9 @@ fn a_shift_that_carries_into_the_first_register_keeps_the_int() {
             "--option",
             "bejoin",
             "on",
+            "--option",
+            "armpairparam",
+            "off",
         ]);
         assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, &ALL);

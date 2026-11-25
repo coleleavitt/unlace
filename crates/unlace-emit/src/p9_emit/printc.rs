@@ -1791,6 +1791,8 @@ pub struct PrintC {
     indirect_input_aliases: std::collections::HashSet<crate::context::HighVariableId>,
     signature_param_names: std::collections::HashMap<i32, String>,
     pub go_suppressed_labels: std::collections::HashSet<BlockId>,
+    /// (unlace `labelnode`) The loop head whose label line a `Label` node has already printed.
+    label_printed: Option<BlockId>,
     /// (unlace `oslog`) Statements that only fill a decoded os_log buffer.
     oslog_hidden: std::collections::BTreeSet<OpId>,
     /// Strict subpieces suppressed in favor of their overlap group's unique
@@ -1884,6 +1886,7 @@ impl PrintC {
             indirect_input_aliases: std::collections::HashSet::new(),
             signature_param_names: std::collections::HashMap::new(),
             go_suppressed_labels: Default::default(),
+            label_printed: None,
             oslog_hidden: Default::default(),
             local_name_aliases: std::collections::HashMap::new(),
             local_name_standalones: std::collections::HashSet::new(),
@@ -5495,6 +5498,10 @@ impl PrintC {
     /// have to be a basic block; `get_front_leaf` finds the entry `t_copy` leaf.
     #[doc(hidden)]
     pub fn emit_any_label_statement(&mut self, fd: &Funcdata, bl: BlockId) {
+        if self.label_printed == Some(bl) {
+            self.label_printed = None;
+            return;
+        }
         // The tree decided (C colon form, `ctree_labels`) that no label line is printed here.
         if self.ctree.as_ref().and_then(|tree| tree.label_line(bl)) == Some(false) {
             return;

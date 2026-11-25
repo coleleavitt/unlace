@@ -62,3 +62,17 @@ fn label_node_wraps_a_leaf_in_its_parent() {
     assert_eq!(tree.stmt(label).kind, StmtKind::Label { body: leaf });
     assert_eq!(tree.children(label), vec![leaf]);
 }
+
+#[test]
+fn label_node_over_a_loop_is_its_origin_node() {
+    let block = BlockId::default();
+    let mut tree = CTree::new();
+    let body = tree.add_stmt(StmtKind::Ops { leaf: block }, None);
+    let lp = tree.add_stmt(StmtKind::Loop { body }, Some(block));
+    let seq = tree.add_stmt(StmtKind::Seq(vec![lp]), None);
+    let label = tree.wrap_label(lp);
+    tree.replace_child(seq, lp, label);
+    assert_eq!(tree.children(seq), vec![label]);
+    assert_eq!(tree.node_for(block), Some(label));
+    assert_eq!(tree.stmt_for(block), Some(lp));
+}

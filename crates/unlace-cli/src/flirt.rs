@@ -83,7 +83,10 @@ fn usage() {
          --libname is the library name in its header (default: the first input's file\n\
          stem). Functions that share their leading 32 bytes and CRC are told apart by\n\
          a tail byte, then by a referenced name; those nothing tells apart are listed\n\
-         on stderr and left out of the `.sig`."
+         on stderr and left out of the `.sig`.\n\
+         \n\
+         inspect prints a .sig or .til header and a sample of its names; --json prints\n\
+         one object {{format,path,...}}."
     );
 }
 

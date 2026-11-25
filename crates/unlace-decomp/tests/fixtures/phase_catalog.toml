@@ -3022,7 +3022,7 @@ source_decompiler = "unlace"
 inspiration = "original unlace goto_coalesce.rs (coalesce_goto_chains, run on the HIR); IDA Hex-Rays sample vds11 (goto L1 => goto L2)"
 change_kind = "structure-recovery"
 tier = "transform"
-symptoms = ["a goto label_A where label_A: is followed directly by goto label_B;", "a label whose only statement is a goto to another label", "two labels in a row, the first holding only a jump"]
+symptoms = ["goto label_A where label_A: is followed directly by goto label_B;", "a label whose only statement is a goto to another label", "two labels in a row, the first holding only a jump"]
 
 [[option]]
 option = "gotoreduce"
@@ -3725,7 +3725,7 @@ source_decompiler = "unlace"
 inspiration = "Ghidra's demangled this for a template class names the class with its template arguments; the standard-library container names are the issue #1343 port from the archived unlace cpp_stl recogniser."
 change_kind = "analysis-enablement"
 tier = "analysis"
-symptoms = ["a this of a std container prints as a bare vector","a template class's this prints without its template arguments","vector *this where std::vector<int> *this is meant"]
+symptoms = ["a this of a std container prints as a bare vector", "a template class's this prints without its template arguments", "vector *this where std::vector<int> *this is meant"]
 
 [[option]]
 option = "cppshortnames"
@@ -5380,7 +5380,6 @@ change_kind = "analysis-enablement"
 tier = "analysis"
 symptoms = ["a stripped rust binary lists core and std functions as sub_<addr>", "rust panic and allocation helpers have no names in a stripped binary"]
 
-
 [[option]]
 option = "rtti"
 values = ["on", "off"]
@@ -5627,7 +5626,6 @@ inspiration = "IDA 9.5 final pass (sub_5f55a0 step 8): string runs inside unexpl
 change_kind = "correctness-fix"
 tier = "analysis"
 symptoms = ["a char array literal appears at an address inside a function's code", "instruction bytes print as a four-character string literal", "a function pointer argument renders as a short garbage string"]
-
 
 [[option]]
 option = "aifpoolslide"
@@ -6672,7 +6670,7 @@ source_decompiler = "unlace"
 inspiration = "variable_merge.rs max_coalescible_vars fallback (origin/master); Merge::mergeLinear (merge.cc:272-292)"
 change_kind = "speed"
 tier = "transform"
-symptoms = ["one function takes minutes in variable merging","a decompile of one very large function hits the watchdog in the variable merge","a generated function with thousands of locals prints as a flood of one-use variables"]
+symptoms = ["one function takes minutes in variable merging", "a decompile of one very large function hits the watchdog in the variable merge", "a generated function with thousands of locals prints as a flood of one-use variables"]
 
 [[option]]
 option = "macho-arm64e"
@@ -7292,7 +7290,7 @@ subphase = "type-propagation"
 strength = "HARD"
 rewind = "P1"
 issue = "ida95-60"
-summary = "Name an x86 ELF executable's static TLS variables where code reaches them through the thread pointer. A local-exec access to a __thread variable is a load at a constant offset from the thread pointer (x86-64 `mov eax, fs:[-0x10]`), lowered to FS_OFFSET + -0x10 and rendered as `*(int *)(v1 + -0x10)` off an untyped fs_offset input. The x86 TLS ABIs (variant II) put the executable's TLS block immediately below the thread pointer, so the STT_TLS symbol with value v sits at v - align_up(PT_TLS.p_memsz, PT_TLS.p_align). The loader reads PT_TLS and the defined STT_TLS symbols into a layout; in a function that reads FS_OFFSET (x86-64) or GS_OFFSET (x86) and never stores through it, the register input gets a type-locked Symbol `tls`, a pointer relative to a `__tls_block` structure (each TLS symbol a field of its size, the rest holes) that points at the block's end, so the access renders ADJ(tls)->counter. A function that stores through the base, a shared object (whose TLS goes through __tls_get_addr), an image without TLS symbols and every non-x86 target are unchanged."
+summary = "Name an x86 or AArch64 ELF image's static TLS variables where code reaches them through the thread pointer. A local-exec access to a __thread variable is a load at a constant offset from the thread pointer (x86-64 `mov eax, fs:[-0x10]`), lowered to FS_OFFSET + -0x10 and rendered as `*(int *)(v1 + -0x10)` off an untyped fs_offset input. The x86 TLS ABIs (variant II) put the executable's TLS block immediately below the thread pointer, so the STT_TLS symbol with value v sits at v - align_up(PT_TLS.p_memsz, PT_TLS.p_align). The loader reads PT_TLS and the defined STT_TLS symbols into a layout; in a function that reads FS_OFFSET (x86-64) or GS_OFFSET (x86) and never stores through it, the register input gets a type-locked Symbol `tls`, a pointer relative to a `__tls_block` structure (each TLS symbol a field of its size, the rest holes) that points at the block's end, so the access renders ADJ(tls)->counter. AArch64 uses TLS variant I: tpidr_el0 points at a 16-byte thread control block and the executable's block follows it at align_up(16, PT_TLS.p_align), so the symbol is a plain pointer to a `__tls_block` that starts with the control block and the access renders tls->counter. A relocatable AArch64 object's block is its SHF_TLS sections in order, the layout the loader applies the TLSLE relocations (R_AARCH64_TLSLE_ADD_TPREL_HI12/LO12, LDST*_TPREL_LO12) with. A function that stores through the base, a shared object (whose TLS goes through __tls_get_addr), an image without TLS symbols and every other target are unchanged."
 use_when = "On by default: an executable's __thread variables read by name (ADJ(tls)->counter += a0) instead of offsets off fs_offset. Flip off to see the raw thread-pointer arithmetic, for example when checking the offsets against the ABI by hand."
 example = "option tlsnames off"
 source_decompiler = "ida"
@@ -7774,7 +7772,7 @@ source_decompiler = "unlace"
 inspiration = "Go cmd/compile defer lowering (runtime.deferproc, deferreturn, gorecover); the archived unlace driver's go_defer_sites header summary"
 change_kind = "opt-in-tool"
 tier = "transform"
-symptoms = ["a go function that defers prints raw runtime.deferproc calls with no sign of the defer","a go function with recover() in a deferred closure does not say it recovers","a deferred call's target is not named where the function starts"]
+symptoms = ["a go function that defers prints raw runtime.deferproc calls with no sign of the defer", "a go function with recover() in a deferred closure does not say it recovers", "a deferred call's target is not named where the function starts"]
 
 [[option]]
 option = "condcallpush"

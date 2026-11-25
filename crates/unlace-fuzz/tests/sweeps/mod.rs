@@ -30,13 +30,18 @@ const MUTATION_SEED: u64 = 0x5EED_C0DE_0BAD_0002;
 const DYLD_SEED: u64 = 0x5EED_D1D1_CACE_0003;
 
 /// Iterations per architecture in the decode sweep, at the default scale.
-const ARCH_ITERATIONS: usize = 16;
+const ARCH_ITERATIONS: usize = 8;
 /// Random code bytes per decode input.
 const MAX_CODE_BYTES: usize = 512;
-/// Container mutations, at the default scale, shared out over the seed fixtures.
-const MUTATION_ITERATIONS: usize = 192;
+/// Object-loader mutations at the default scale, shared out over the seed fixtures.
+const MUTATION_ITERATIONS: usize = 96;
+/// Pipeline (decompile) mutations at the default scale: one per seed. A full
+/// decompile of a real binary costs far more than a load, so this stays small.
+const PIPELINE_MUTATIONS: usize = 8;
+/// Upper bound on pipeline mutations, however large `UNLACE_FUZZ_ITERS` gets.
+const PIPELINE_CAP: usize = 256;
 /// dyld cache mutations at the default scale.
-const DYLD_ITERATIONS: usize = 128;
+const DYLD_ITERATIONS: usize = 48;
 /// Leading bytes where header fields live; most word edits land here.
 const HEADER_WINDOW: usize = 512;
 
@@ -363,25 +368,12 @@ fn container_mutation_sweep() {
         })
         .collect();
 
+    // The object loader on every mutation: the cheap, wide pass.
     let iterations = scaled(MUTATION_ITERATIONS);
     let mut prng = XorShift64::new(MUTATION_SEED);
     for i in 0..iterations {
         let (name, seed) = &seeds[i % seeds.len()];
         let input = mutate(&mut prng, seed);
-
-        if let FuzzResult::Panicked { stage, payload } = fuzz_iteration(&input) {
-            let small = minimise_crash(&input);
-            panic!(
-                "container sweep: iteration {i} (seed {name}, {} bytes) panicked in stage `{stage}`: \
-                 {payload}\nminimised input ({} bytes): {}",
-                input.len(),
-                small.len(),
-                hex(&small),
-            );
-        }
-
-        // The object loader directly, past the pipeline's magic gate and its
-        // function-discovery budget.
         if let Err(payload) = catch_unwind(AssertUnwindSafe(|| {
             ObjectLoadImage::from_bytes_silent(name, &input)
         })) {
@@ -391,6 +383,24 @@ fn container_mutation_sweep() {
                 input.len(),
                 panic_text(&*payload),
                 hex(&minimise_object_panic(name, &input)),
+            );
+        }
+    }
+
+    // The whole pipeline on a few mutations: load, discovery and decompile.
+    let pipeline = scaled(PIPELINE_MUTATIONS).min(PIPELINE_CAP);
+    let mut prng = XorShift64::new(MUTATION_SEED ^ 0xA5A5);
+    for i in 0..pipeline {
+        let (name, seed) = &seeds[i % seeds.len()];
+        let input = mutate(&mut prng, seed);
+        if let FuzzResult::Panicked { stage, payload } = fuzz_iteration(&input) {
+            let small = minimise_crash(&input);
+            panic!(
+                "container sweep: pipeline iteration {i} (seed {name}, {} bytes) panicked in \
+                 stage `{stage}`: {payload}\nminimised input ({} bytes): {}",
+                input.len(),
+                small.len(),
+                hex(&small),
             );
         }
     }

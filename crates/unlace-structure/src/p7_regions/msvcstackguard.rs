@@ -516,6 +516,7 @@ impl Action for ActionStripMsvcStackGuard {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
+        eprintln!("MSVCDBG clone in={}", grouplist.contains(self.get_group()));
         if !grouplist.contains(self.get_group()) {
             return None;
         }

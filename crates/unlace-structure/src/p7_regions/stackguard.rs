@@ -600,6 +600,7 @@ impl Action for ActionStripStackGuard {
     ///
     /// Remove a structurally proven canary failure branch and its unreachable handler.
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        eprintln!("SGDBG apply");
         // C++ `if (!data.getArch()->strip_stack_guard) return 0;` — the live gate
         // is carried on the boundary Architecture (`build_arch_handle`); `enabled`
         // stays as the unit-test OR-override (action registered false).

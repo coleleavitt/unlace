@@ -207,6 +207,7 @@ impl AnalysisPass for UefiPass {
                     volume
                         .as_ref()
                         .zip(ctx.image_path)
+                        .filter(|_| self.entry_names)
                         .and_then(|(v, p)| v.entry_name(p))
                         .unwrap_or("_ModuleEntryPoint"),
                     kind.entry_decl(),

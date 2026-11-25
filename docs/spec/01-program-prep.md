@@ -5622,9 +5622,9 @@ moves.
   A module loaded from
   that directory takes its phase from its file type (PEIM, PEI core and
   combined PEIM/driver are PEI; MM standalone and MM core standalone are MM;
-  a traditional SMM driver is entered as a DXE driver), its entry point is
-  named `PeimEntryPoint` (a PEIM) or `StandaloneMmEntryPoint` (MM standalone)
-  rather than `_ModuleEntryPoint`, takes the struct
+  a traditional SMM driver is entered as a DXE driver), with option `uefientry on`
+  its entry point is named `PeimEntryPoint` (a PEIM) or `StandaloneMmEntryPoint`
+  (MM standalone) rather than `_ModuleEntryPoint`, takes the struct
   another module synthesized for a GUID, and gets a comment at each interface
   lookup naming the module that installs it, the instance address and the
   member functions: `gEfiPeiRscHandlerPpiGuid is installed by

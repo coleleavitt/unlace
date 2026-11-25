@@ -161,7 +161,7 @@ fn w8_fw_universalaction_allgroups_full_order_count_head_tail() {
         "all universalAction passes are ported; UNPORTED_ALLOWLIST must be empty"
     );
     assert_eq!(
-        nonblank, 341,
+        nonblank, 355,
         "full unlace schedule registration count changed"
     );
 
@@ -174,6 +174,7 @@ fn w8_fw_universalaction_allgroups_full_order_count_head_tail() {
             "start",
             "constbase",
             "linuxsyscall",
+            "evmcalls",
             "x64syscall",
             "syscallregs",
             "pebnames",
@@ -186,7 +187,6 @@ fn w8_fw_universalaction_allgroups_full_order_count_head_tail() {
             "extrapopsetup",
             "prototypetypes",
             "funclink",
-            "funclink_outonly",
         ]
     );
 

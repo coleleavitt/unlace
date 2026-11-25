@@ -11,3 +11,8 @@ commands = [
     'print C',
     'quit',
 ]
+
+[[match]]
+name = 'g1b diag: never matches'
+count = 0
+literal = 'zzzz_never'

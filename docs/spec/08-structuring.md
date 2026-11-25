@@ -1343,20 +1343,26 @@ summed GED, 3:0 improved:regressed, zero regressions).
 
 `crates/unlace-structure/src/p8_structure/irreducible_split.rs (ActionIrreducibleSplit)`, option
 `irreduciblesplit` (default off). *Pattern:* a strongly connected region of the block graph with two
-or more entry blocks, such as the two-entry loop `0 -> 1, 0 -> 2, 1 -> 2, 2 -> 1`. No natural loop
-header dominates it, so the structurer prints it with a `goto`. *Detection:* an iterative Tarjan SCC
-over the top-level basic blocks; a region is irreducible when two or more of its blocks have an
-in-edge from outside it (or no in-edge at all). *Transform:* duplicate one entry block `e` for one
-external in-edge with `Funcdata::node_split_through` (the primitive `returndupcalls` drives): the copy
-keeps the entry's single out-edge and takes that external predecessor. The region loses an entry per
-split and becomes a natural loop once one is left. *Bounds/failure:* `e` must have exactly one out-edge
-and at least two in-edges; `node_split_through` refuses a conditional branch, a call, a tied output and
-a value read outside the block except through the successor's MULTIEQUALs, and such an entry is skipped
-for the next candidate. At most `MAX_IRREDUCIBLE_SPLITS` = 16 splits per function, each logged
-`irreduciblesplit:`. *Scope:* original unlace (`origin/master`, `unlace-struct/src/node_split.rs`)
-duplicates every multi-predecessor entry block, including entries with several out-edges; main has no
-primitive for that, so this port takes only the single-out-edge entries and leaves the rest goto-shaped.
-Off by default because the copy grows the code; the effect is not yet measured.
+or more entry blocks, such as the two-entry loop `0 -> 1, 0 -> 2, 1 -> 2, 2 -> 1`, or a two-head loop
+where each head ends in a conditional branch. No natural loop header dominates it, so the structurer
+prints it with a `goto`. *Detection:* an iterative Tarjan SCC over the top-level basic blocks; a region
+is irreducible when two or more of its blocks have an in-edge from outside it (or no in-edge at all).
+*Recursion:* a region with exactly one entry is reducible, so its back edges (edges into that entry) are
+set aside and the SCCs left inside it are searched the same way, to a depth of `MAX_REGION_DEPTH` = 32.
+A multi-entry loop nested in a reducible outer loop is therefore found. *Transform:* duplicate one entry
+block `e` for one external in-edge. An entry with one out-edge uses `Funcdata::node_split_through` (the
+primitive `returndupcalls` drives): the copy keeps the entry's out-edge and takes that predecessor. An
+entry ending in a two-way CBRANCH uses `Funcdata::node_split_through_cbranch`: the copy keeps the
+conditional branch and both out-edges in order, and each successor gains one MULTIEQUAL input for the
+copy. The region loses an entry per split and becomes a natural loop once one is left. *Bounds/failure:*
+`e` must have at least two in-edges. Both primitives refuse a call, a tied output, a non-BRANCH/CBRANCH
+branch, and a value read outside the two blocks except through a successor's MULTIEQUAL; the
+single-successor form may also route such a value through the merge it inserts, which the two-successor
+form does not. A refused entry is skipped for the next candidate. At most `MAX_IRREDUCIBLE_SPLITS` = 16
+splits per function, each logged `irreduciblesplit:`. *Scope:* original unlace (`origin/master`,
+`unlace-struct/src/node_split.rs`) duplicates every multi-predecessor entry block, including entries with
+several out-edges; main has no primitive for that, so this port takes one- and two-way entries and leaves
+the rest goto-shaped. Off by default because the copy grows the code.
 
 ### loopbreak_recovery — `goto` → `break;` (Ghidra `scopeBreak`, angr-surfaced)
 

@@ -1,0 +1,38 @@
+# A VEX write to an XMM register zero-extends into its YMM and ZMM upper halves
+# (the SLEIGH spec's `ZmmReg1 = zext(result)`, split by vexzeroupper). Here the
+# `vmovd xmm0,edi` result is never returned: the function returns the argument
+# plus one in eax. The writes feeding xmm0/ymm0 die (the vector output candidates
+# of vectorabi beside a general-register primary return are not the value
+# returned), so no xmm or ymm local is declared and no ZEXT is printed.
+#
+# Bytes: c5 f9 6e c7 = vmovd xmm0,edi; 8d 47 01 = lea eax,[rdi+1]; c3 = ret.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'vexdeadwrite' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c5f96ec78d4701c3'
+
+[script]
+commands = [
+    'load function vexdeadwrite',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'the vmovd xmm0 write leaves no xmm, ymm or zmm in the output'
+count = 0
+regex = 'xmm|ymm|zmm|ZEXT'
+
+[[match]]
+name = 'the function returns its argument plus one'
+count = 1
+regex = 'return .*1;'

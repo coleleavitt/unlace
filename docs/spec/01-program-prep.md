@@ -5026,8 +5026,15 @@ moves.
   and the like; `GetProcAddress`, `GetStdHandle` and the counts the string and
   module-name calls return have none. The two tables are disjoint, so a name
   reaches only its own table's prototype.
-- **(unlace) Named libc aggregate types** (`libctypes`, values `off|opaque|glibc`,
-  default opaque,
+- **(unlace) `libctypes streams`, the shipped default.** `streams` is `opaque` for
+  every named aggregate (`FILE *`, `stat *`, `dirent *`, `tm *`, `option *`,
+  `obstack *`, `DIR *`, ...), with one addition: on a glibc x86-64 image `FILE`
+  (and glibc's `_IO_FILE`) carries the published fields from `glibc::GLIBC_LAYOUTS`,
+  so `f->_IO_read_ptr` reads by name. The `stdin`/`stdout`/`stderr` globals are
+  typed by `stream_data_symbols` under every enabled value. Elsewhere `streams`
+  is exactly `opaque`. `opaque` and `glibc` keep their meanings below.
+- **(unlace) Named libc aggregate types** (`libctypes`, values `off|streams|opaque|glibc`,
+  default streams,
   `crates/unlace-analysis/src/analyzers/protos/libctypes.rs (LibcTypesPass)`,
   layouts in
   `crates/unlace-analysis/src/analyzers/protos/libctypes/glibc.rs`):

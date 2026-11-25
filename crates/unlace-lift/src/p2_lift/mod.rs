@@ -50,6 +50,7 @@ pub mod msvcimportcall; // (unlace `msvcsig`) a call through an import slot with
 pub mod msvcstrappend; // (unlace) collapse an inlined MSVC std::string push_back/append diamond into one call
 pub mod noreturn_externmatch; // (unlace) angr incorrect-duplication-chcon: name-matched extern no-return
 pub mod noreturnextern; // (unlace) angr tail-tail-bytes-ret-dup: undefined-extern name-based no-return
+pub mod noreturnself; // (unlace `noreturnself`) a function whose every path ends in a no-return halt is no-return
 pub mod objcarc; // (unlace) hide Objective-C ARC bookkeeping calls through call-fixups
 pub mod outlinedinline; // (unlace) inline clang's OUTLINED_FUNCTION_<n> fragments into their callers
 pub mod overlapbranch; // (unlace) a conditional branch target inside its own fall-through instruction (anti-disassembly overlap)

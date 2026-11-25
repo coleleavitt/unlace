@@ -933,6 +933,11 @@ pub struct AnalysisOutput {
     /// Carried for the same late consumer as [`Self::libctypes_glibc`], which
     /// must then answer from the width-stable `void *` tables too.
     pub libctypes_refused: bool,
+    /// (unlace `libctypes`) The same pass installed only the stdio stream layout
+    /// (`streams`): FILE with its published fields and the stream globals, and no
+    /// other named aggregate. The console answers a declared `FILE *` from this,
+    /// not from the opaque tables.
+    pub libctypes_streams: bool,
     /// (unlace `typelib`) The library target of this image and its imports, for
     /// the commit to consult the prebuilt type library with.
     pub typelib: Option<TypeLibFacts>,
@@ -1345,6 +1350,7 @@ impl AnalysisOutput {
         self.uefi_installs.extend(other.uefi_installs);
         self.libctypes_glibc |= other.libctypes_glibc;
         self.libctypes_refused |= other.libctypes_refused;
+        self.libctypes_streams |= other.libctypes_streams;
         if other.typelib.is_some() {
             self.typelib = other.typelib;
         }

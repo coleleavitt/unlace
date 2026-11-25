@@ -221,9 +221,18 @@ def _pred_layouts(rec: dict) -> dict:
 
 
 def _noreturn_claim(rec: dict) -> bool:
+    """Does unlace say this function itself does not return?
+
+    Only the function-level verdict counts: the header warning (line 1, at the entry
+    address) that unlace prints for a function whose every path ends in a no-return
+    call or halt. A call-site "does not return" warning says that the callee does not
+    return, not this function, so it is not a claim about the record.
+    """
+    entry = rec.get("address")
     for w in rec.get("warnings") or []:
         text = f"{w.get('kind', '')} {w.get('message', '')}".lower()
-        if "no-return" in text or "does not return" in text:
+        at_header = w.get("line") == 1 and (entry is None or w.get("address") == entry)
+        if at_header and ("no-return" in text or "does not return" in text):
             return True
     head = (rec.get("code") or "").split("{", 1)[0]
     return bool(re.search(r"noreturn|_Noreturn|__noreturn", head))

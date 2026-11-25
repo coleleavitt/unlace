@@ -3152,6 +3152,7 @@ fn hexagon_low6_mask(form: HexLow6, insn: u32) -> Option<u32> {
         (HexLow6::R11, false, 0x91) => 0x0000_07e0,
         (HexLow6::R11, false, 0xa1) => 0x0000_003f,
         (HexLow6::R10, false, 0x75 | 0x76) => 0x0000_07e0,
+        (HexLow6::R6, false, 0x7c) => 0x001f_8000,
         (HexLow6::R6, false, 0x9d) => 0x0000_0fc0,
         (HexLow6::R6, false, 0xad) => 0x0000_003f,
         _ => return None,
@@ -5094,6 +5095,18 @@ mod hexagon_tests {
         let mut field = insn.to_le_bytes();
         apply_info(spec, info, &mut field, true, symbol, place, None, None)?;
         Ok(u32::from_le_bytes(field))
+    }
+
+    // ld.lld 22.1.8 on a non-duplex `0x7c` `Rd = ##` word: the consumer's low six bits sit at 15..20, and the
+    // `immext` carries the value above bit 5 (scattered over 13..0 and 27..16).
+    #[test]
+    fn low_six_bits_of_a_0x7c_immediate_match_the_linker() {
+        assert_eq!(
+            patch(R_HEX_32_6_X, 0, 0x0000_4000, 0x1_00b4, 0),
+            Ok(0x0000_4402)
+        );
+        assert_eq!(patch(R_HEX_6_X, 0, 0x7c80_4020, 0x1_00b4, 0), Ok(0x7c9a_4020));
+        assert_eq!(patch(R_HEX_6_X, 0, 0x7c80_4080, 0x41_0464, 0), Ok(0x7c92_4080));
     }
 
     // Words as ld.lld writes them for the sweep's hexagon objects.

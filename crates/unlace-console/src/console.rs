@@ -564,6 +564,7 @@ pub fn unlace_live_value(conf: &Architecture, option: &str) -> Option<Cow<'stati
             .get::<unlace_decomp::libctypes::LibcTypesLayout>()
         {
             unlace_decomp::libctypes::LibcTypesLayout::Off => "off",
+            unlace_decomp::libctypes::LibcTypesLayout::Streams => "streams",
             unlace_decomp::libctypes::LibcTypesLayout::Opaque => "opaque",
             unlace_decomp::libctypes::LibcTypesLayout::Glibc => "glibc",
         },

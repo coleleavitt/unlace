@@ -636,6 +636,10 @@ pub struct ConsoleProgram {
     /// width-stable `void *` signature, exactly as an imported one did. `false`
     /// on every path with no analysis tier.
     libctypes_refused: bool,
+    /// (unlace `libctypes`) The load-time pass installed the `streams` layout
+    /// (`AnalysisOutput::libctypes_streams`). `false` on every path with no
+    /// analysis tier.
+    libctypes_streams: bool,
     /// (unlace) What became of each configured `.fid` database at the last
     /// analysis commit (`AnalysisOutput::fid_databases`). Empty when the FID
     /// pass did not run or no database was configured.
@@ -3098,6 +3102,8 @@ impl ConsoleProgram {
             unlace_decomp::libctypes::LibcTypesLayout::Off
         } else if self.libctypes_glibc {
             unlace_decomp::libctypes::LibcTypesLayout::Glibc
+        } else if self.libctypes_streams {
+            unlace_decomp::libctypes::LibcTypesLayout::Streams
         } else {
             unlace_decomp::libctypes::LibcTypesLayout::Opaque
         };
@@ -5327,6 +5333,7 @@ fn empty_program(
         dwarf_locals: Vec::new(),
         libctypes_glibc: false,
         libctypes_refused: false,
+        libctypes_streams: false,
         fid_databases: Vec::new(),
         rust_profile_request: None,
         rust_profile_apply: false,
@@ -7512,6 +7519,7 @@ fn commit_analysis_output(
     //     `load file` of a foreign-arch image clears what the first established.
     prog.libctypes_glibc = out.libctypes_glibc;
     prog.libctypes_refused = out.libctypes_refused;
+    prog.libctypes_streams = out.libctypes_streams;
 
     // 0c. (unlace `objc`) The Objective-C reference slots the `objc` pass
     //     reported constant: painted `Varnode::readonly` like 1b below AND added to

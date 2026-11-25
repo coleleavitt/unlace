@@ -1791,6 +1791,8 @@ pub struct PrintC {
     indirect_input_aliases: std::collections::HashSet<crate::context::HighVariableId>,
     signature_param_names: std::collections::HashMap<i32, String>,
     pub go_suppressed_labels: std::collections::HashSet<BlockId>,
+    /// (unlace `labelnode`) The loop head whose label line a `Label` node has already printed.
+    label_printed: Option<BlockId>,
     /// (unlace `oslog`) Statements that only fill a decoded os_log buffer.
     oslog_hidden: std::collections::BTreeSet<OpId>,
     /// Strict subpieces suppressed in favor of their overlap group's unique
@@ -1884,6 +1886,7 @@ impl PrintC {
             indirect_input_aliases: std::collections::HashSet::new(),
             signature_param_names: std::collections::HashMap::new(),
             go_suppressed_labels: Default::default(),
+            label_printed: None,
             oslog_hidden: Default::default(),
             local_name_aliases: std::collections::HashMap::new(),
             local_name_standalones: std::collections::HashSet::new(),
@@ -5398,6 +5401,17 @@ impl PrintC {
         // through `emit_any_label_statement` skips the label when it was hoisted up
         // to an enclosing loop head (`isLabelBumpUp`).
         self.emit_any_label_statement(fd, blk);
+        self.emit_block_copy_body(fd, arch, blk, ops);
+    }
+
+    /// The statements of a copy leaf, without its label line (the caller prints that).
+    fn emit_block_copy_body(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        blk: BlockId,
+        ops: Option<&[OpId]>,
+    ) {
         if let Some(under) = fd.sblocks_ref().block(blk).get_copy() {
             // The copy's `copy` field is a *bblocks* BlockId.
             self.emit_basic_block_ops_in(fd, arch, under, true, ops);
@@ -5484,6 +5498,14 @@ impl PrintC {
     /// have to be a basic block; `get_front_leaf` finds the entry `t_copy` leaf.
     #[doc(hidden)]
     pub fn emit_any_label_statement(&mut self, fd: &Funcdata, bl: BlockId) {
+        if self.label_printed == Some(bl) {
+            self.label_printed = None;
+            return;
+        }
+        // The tree decided (C colon form, `ctree_labels`) that no label line is printed here.
+        if self.ctree.as_ref().and_then(|tree| tree.label_line(bl)) == Some(false) {
+            return;
+        }
         // Label printed by someone else.
         if fd.sblocks_ref().block(bl).is_label_bump_up() {
             return;

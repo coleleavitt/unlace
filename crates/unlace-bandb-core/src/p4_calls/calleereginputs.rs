@@ -7,10 +7,10 @@
 //! the callee through an incremental-link `jmp` stub learns nothing from the
 //! stub's own decompile either.
 //!
-//! The callee's p-code is read from its entry along the straight line its first
-//! instructions run, following direct `jmp`s, until a conditional branch, a call,
-//! a return, an indirect jump or [`BUDGET`] instructions. A register the line
-//! reads before writing any part of it is an input: once `mov cx,[eax+0xa]` has
+//! The callee's p-code is read from its entry along every path its first
+//! instructions reach, following direct `jmp`s and both edges of a conditional
+//! branch, until a call, a return, an indirect jump or [`BUDGET`] instructions
+//! in all. A register a path reads before writing any part of it is an input: once `mov cx,[eax+0xa]` has
 //! set the low half, a read of all of ECX takes upper bytes no caller sets (the
 //! CRT's float formatter masks them off). Some readings are not uses: storing a
 //! register through the stack pointer (a `push` that saves it), a copy of a
@@ -697,6 +697,8 @@ pub struct Step {
     /// The next instruction of the line: `Some(target)` for a direct jump,
     /// `None` when the line ends here; falls through when [`Self::ends`] is false.
     pub jump: Option<uintb>,
+    /// The taken edge of a conditional branch; the path also falls through.
+    pub branch: Option<uintb>,
     pub ends: bool,
 }
 
@@ -777,6 +779,16 @@ pub fn step(
                 s.ends = true;
             }
             OpCode::CPUI_CBRANCH
+                if ins.first().is_some_and(|d| {
+                    !d.space.as_ref().is_some_and(|sp| {
+                        sp.get_type() == unlace_base::space::spacetype::IPTR_CONSTANT
+                    })
+                }) =>
+            {
+                s.branch = Some(ins[0].offset);
+                s.ends = true;
+            }
+            OpCode::CPUI_CBRANCH
             | OpCode::CPUI_BRANCHIND
             | OpCode::CPUI_CALL
             | OpCode::CPUI_CALLIND
@@ -804,29 +816,38 @@ fn registers(arch: &Architecture) -> Option<Regs> {
     Some(Regs { tracked, sp })
 }
 
-/// The registers the straight line from `entry` reads before writing.
+/// The registers the paths from `entry` read before writing, each path keeping
+/// its own written bytes; a path ends at a call, a return or an indirect jump.
 fn walk(arch: &Architecture, entry: &Address) -> Option<u8> {
     let space = entry.get_space()?.clone();
     let regs = registers(arch)?;
     let translate = arch.translate();
-    let mut at = entry.get_offset();
-    let mut written = [0u8; 6];
     let mut read = 0u8;
     let mut seen = std::collections::HashSet::new();
-    for _ in 0..BUDGET {
-        if !seen.insert(at) {
+    let mut paths = vec![(entry.get_offset(), [0u8; 6])];
+    let mut budget = BUDGET;
+    while let Some((at, written)) = paths.pop() {
+        if !seen.insert((at, written)) {
+            continue;
+        }
+        if budget == 0 {
             break;
         }
+        budget -= 1;
         let addr = Address::new(space.clone(), at);
         let mut collect = Collect::default();
         let len = translate.one_instruction(&mut collect, &addr).ok()?;
         let s = step(&collect.0, &regs, written);
         read |= s.read;
-        written = s.written;
-        match (s.ends, s.jump) {
-            (true, Some(target)) => at = target,
-            (true, None) => break,
-            (false, _) => at = at.wrapping_add(len.max(1) as uintb),
+        let next = at.wrapping_add(len.max(1) as uintb);
+        match (s.ends, s.jump, s.branch) {
+            (true, Some(target), _) => paths.push((target, s.written)),
+            (true, None, Some(target)) => {
+                paths.push((target, s.written));
+                paths.push((next, s.written));
+            }
+            (true, None, None) => {}
+            (false, _, _) => paths.push((next, s.written)),
         }
     }
     Some(read)

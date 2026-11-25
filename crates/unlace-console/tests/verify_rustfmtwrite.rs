@@ -315,8 +315,12 @@ fn unchanged_write_expressions_append_native_bytes_and_preserve_success() {
         let expression = expressions[0]
             .trim()
             .strip_prefix("if ")
-            .unwrap()
+            .unwrap();
+        // The branch polarity follows the lifted compare: the != 0 form is the unwrap failure arm,
+        // and the assertion below checks the same write result either way.
+        let expression = expression
             .strip_suffix(" == b'\\0' {")
+            .or_else(|| expression.strip_suffix(" != b'\\0' {"))
             .unwrap();
         let mut bindings = String::from("let a0=out as *mut String as u64;");
         for argument in primitive.captures_iter(expression) {

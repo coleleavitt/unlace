@@ -197,6 +197,17 @@ fn the_line_follows_a_jump_and_ends_at_a_branch_or_call() {
 }
 
 #[test]
+fn a_conditional_branch_names_its_taken_edge_and_falls_through() {
+    let f = fx();
+    let jcc = step(
+        &[(OpCode::CPUI_CBRANCH, None, vec![vn(&f.ram, 0x401010, 4)])],
+        &f.regs,
+        [0; 6],
+    );
+    assert_eq!((jcc.ends, jcc.jump, jcc.branch), (true, None, Some(0x401010)));
+}
+
+#[test]
 fn a_copy_onto_itself_neither_reads_nor_writes() {
     let f = fx();
     let s = step(&[copy(&f, ECXO, ECXO)], &f.regs, [0; 6]);

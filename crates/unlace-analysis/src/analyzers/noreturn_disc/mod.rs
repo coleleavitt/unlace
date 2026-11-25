@@ -219,12 +219,10 @@ fn last_act_is_terminal_call(listing: &Listing, entry: u64, terminal: &BTreeSet<
         {
             return false;
         }
-        if !insn.flow.is_call {
-            continue;
-        }
         // A jump into the dead tail past the last real instruction (`jne .L`, with
         // `.L` a NOP after a call to a no-return callee) reaches code that falls off
-        // the function, so the function returns on that path.
+        // the function, so the function returns on that path. This is checked before
+        // the call-only arm below, which would skip a conditional jump.
         if insn.flow.is_jump
             && insn
                 .flows
@@ -232,6 +230,9 @@ fn last_act_is_terminal_call(listing: &Listing, entry: u64, terminal: &BTreeSet<
                 .any(|&t| !outside(t) && t > last_real && !terminal.contains(&t))
         {
             return false;
+        }
+        if !insn.flow.is_call {
+            continue;
         }
         // A call with no fall-through to a callee not known to be no-return is
         // a tail call lowered as a call: it returns when the callee does.

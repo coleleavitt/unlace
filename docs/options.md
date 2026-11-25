@@ -25,6 +25,9 @@ Three tiers:
 | '\0' <= c where the source tests c >= 0 | [`charnum`](#charnum----on--off-default-off) |
 | c + '\x01' where the source adds 1 | [`charnum`](#charnum----on--off-default-off) |
 | a non-printable character literal in a comparison | [`charnum`](#charnum----on--off-default-off) |
+| (uint1)(x >> 8) where the source reads BYTE1(x) | [`partmacro`](#partmacro----on--off-default-off) |
+| a 16-bit part of a 32-bit value printed as a cast of a shift | [`partmacro`](#partmacro----on--off-default-off) |
+| LOBYTE(HIWORD(x)) where the source reads BYTE2(x) | [`partmacro`](#partmacro----on--off-default-off) |
 | if (0x3b < x) where the source reads if (x > 59) | [`constright`](#constright----on--off-default-off) |
 | constant on the left of an ordered comparison | [`constright`](#constright----on--off-default-off) |
 | small signed bounds print in hex (0x3b) next to decimal ones (1000) | [`signeddec`](#signeddec----on--off-default-off) |
@@ -33,12 +36,15 @@ Three tiers:
 | a rotate prints as a pair of opposite shifts ORed together | [`bitidioms`](#bitidioms----on--off-default-on) |
 | bswap or rev instructions decompile to shift and mask soup | [`bitidioms`](#bitidioms----on--off-default-on) |
 | hash or crc code full of paired shifts | [`bitidioms`](#bitidioms----on--off-default-on) |
-| new T[n] prints as a 128-bit multiply with a SUB168 high-half test and a -1 select | [`satmul`](#satmul----on--off-default-off) |
-| operator new[] is called with -(ulong)(overflow) ORed into n * size | [`satmul`](#satmul----on--off-default-off) |
-| a cmovo or seto after a mul feeds an allocation size | [`satmul`](#satmul----on--off-default-off) |
+| a branch-free minimum prints as b + ((a - b) & ((a - b) >> 31)) | [`minmax`](#minmax----on--off-default-off) |
+| a branch-free maximum prints as a - ((a - b) & ((a - b) >> 31)) | [`minmax`](#minmax----on--off-default-off) |
+| a cmov-style min or max of two ints prints as a shift, a mask and an add | [`minmax`](#minmax----on--off-default-off) |
 | a register field is extracted with a shift and an AND | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
 | a flag field is set with a clear-mask OR and a shifted insert | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
 | packed descriptor or hardware register fields print as shift and mask arithmetic | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
+| new T[n] prints as a 128-bit multiply with a SUB168 high-half test and a -1 select | [`satmul`](#satmul----on--off-default-off) |
+| operator new[] is called with -(ulong)(overflow) ORed into n * size | [`satmul`](#satmul----on--off-default-off) |
+| a cmovo or seto after a mul feeds an allocation size | [`satmul`](#satmul----on--off-default-off) |
 | a float add of +0.0 or a float multiply by 1.0 survives in the output | [`floatidentity`](#floatidentity----on--off-default-off) |
 | a float subtraction of a negated operand prints as a subtraction of a negation | [`floatidentity`](#floatidentity----on--off-default-off) |
 | a float add of a negated operand prints as (-x) + y | [`floatidentity`](#floatidentity----on--off-default-off) |
@@ -64,13 +70,13 @@ Three tiers:
 | a RISC-V float function starts with one NAN test per float argument | [`fpargboxed`](#fpargboxed----on--off-default-on) |
 | an unused int variable named after fa0 or fa1 beside a float parameter | [`fpargboxed`](#fpargboxed----on--off-default-on) |
 | v = NAN; if ((int)(r >> 0x20) == -1) v = r; after a RISC-V call that returns a float | [`fpargboxed`](#fpargboxed----on--off-default-on) |
+| a jl or jge after cmp prints as an XOR of a sign test and an overflow test | [`sfofxor`](#sfofxor----on--off-default-off) |
+| SF != OF in a signed comparison of two registers | [`sfofxor`](#sfofxor----on--off-default-off) |
+| (a < b) ^ __OFSUB__(a, b) in a signed branch condition | [`sfofxor`](#sfofxor----on--off-default-off) |
 | if (NAN(x)) v = 0x7fffffff; after v = (int)x; | [`satconvert`](#satconvert----on--off-default-on) |
 | a float-to-int conversion followed by clamps to -0x80000000 and 0x7fffffff | [`satconvert`](#satconvert----on--off-default-on) |
 | v = 0; if (x <= -1.0) after an unsigned conversion | [`satconvert`](#satconvert----on--off-default-on) |
 | (int)x where the clamps for NaN and overflow should not print | [`satconvert`](#satconvert----on--off-default-on) |
-| a jl or jge after cmp prints as an XOR of a sign test and an overflow test | [`sfofxor`](#sfofxor----on--off-default-off) |
-| SF != OF in a signed comparison of two registers | [`sfofxor`](#sfofxor----on--off-default-off) |
-| (a < b) ^ __OFSUB__(a, b) in a signed branch condition | [`sfofxor`](#sfofxor----on--off-default-off) |
 | a < b or a == b printed as two tests where a <= b would do | [`cmpmerge`](#cmpmerge----on--off-default-off) |
 | a0 != a1 && !(a0 < a1) on floats | [`cmpmerge`](#cmpmerge----on--off-default-off) |
 | two branches in a row test the same value against neighbouring constants and jump to one place | [`cmpmerge`](#cmpmerge----on--off-default-off) |
@@ -137,6 +143,9 @@ Three tiers:
 | `isCurrentModePrivileged()` appears in the emitted C at all | [`cortexmpriv`](#cortexmpriv----on--off-default-on) |
 | a Cortex-M function has more basic blocks and branches than its source | [`cortexmpriv`](#cortexmpriv----on--off-default-on) |
 | `getBasePriority()`/`isIRQinterruptsEnabled()`/`getCurrentExceptionNumber()` are each read under their own conditional | [`cortexmpriv`](#cortexmpriv----on--off-default-on) |
+| a PowerPC lwsync prints as sync(1) where the source called __lwsync | [`barrierintrinsics`](#barrierintrinsics----on--off-default-off) |
+| a PowerPC isync prints as instructionSynchronize() where the source called __isync | [`barrierintrinsics`](#barrierintrinsics----on--off-default-off) |
+| a PowerPC ptesync prints as sync(2) where the source called __ptesync | [`barrierintrinsics`](#barrierintrinsics----on--off-default-off) |
 | leaf function ends in a (*dat_...)(...) computed call with a 'Treating indirect jump as call' warning | [`tailcalljump`](#tailcalljump----on--direct--off-default-on) |
 | jmp to a plt stub inlined into the caller instead of a named tail call | [`tailcalljump`](#tailcalljump----on--direct--off-default-on) |
 | plt thunk body absorbed where func(...) is expected | [`tailcalljump`](#tailcalljump----on--direct--off-default-on) |
@@ -177,6 +186,9 @@ Three tiers:
 | solidity internal functions are inlined into every caller | [`evmcalls`](#evmcalls----on--off-default-on) |
 | evm return labels such as 0x91 are assigned to stack slots instead of calls | [`evmcalls`](#evmcalls----on--off-default-on) |
 | every evm internal function return is a switch on a stack value | [`evmcalls`](#evmcalls----on--off-default-on) |
+| sload and sstore print as raw sload(0) and sstore(0,v1) calls | [`evmstorage`](#evmstorage----on--off-default-off) |
+| contract state reads as slot arithmetic | [`evmstorage`](#evmstorage----on--off-default-off) |
+| a mapping slot prints as an opaque keccak result | [`evmstorage`](#evmstorage----on--off-default-off) |
 | a min or max prints as a1 * (unsigned int)(a1 < a0) + a0 * (unsigned int)(a1 >= a0) | [`selectmul`](#selectmul----on--off-default-on) |
 | a select prints as a sum of two products with (unsigned int) casts of complementary compares | [`selectmul`](#selectmul----on--off-default-on) |
 | tricore sel or sat prints as multiplications by booleans | [`selectmul`](#selectmul----on--off-default-on) |
@@ -193,9 +205,6 @@ Three tiers:
 | a function returns the result of a call through swi(3) | [`int3pad`](#int3pad----off--warn--halt-default-warn) |
 | nothing in the C says control ran into a run of 0xcc padding bytes | [`int3pad`](#int3pad----off--warn--halt-default-warn) |
 | an anti-debug binary's clean-run path ends in an indirect call that only the disassembly explains | [`int3pad`](#int3pad----off--warn--halt-default-warn) |
-| a call to IsDebuggerPresent or ptrace prints as an ordinary call with nothing to say it is a debugger probe | [`antidebug`](#antidebug----off--warn-default-off) |
-| a timing probe such as rdtsc or QueryPerformanceCounter is indistinguishable from any other call in the C | [`antidebug`](#antidebug----off--warn-default-off) |
-| OutputDebugStringA used as a debugger test prints nothing that marks it | [`antidebug`](#antidebug----off--warn-default-off) |
 | an x86-64 syscall renders as syscall() with empty parens, with the number and every argument erased | [`x64syscall`](#x64syscall----off--on--abi-default-on) |
 | a syscall wrapper returns its own first parameter, the syscall number, instead of the syscall's result | [`x64syscall`](#x64syscall----off--on--abi-default-on) |
 | the register writes feeding a SYSCALL are all missing from the C while unlace disassemble shows them | [`x64syscall`](#x64syscall----off--on--abi-default-on) |
@@ -396,7 +405,7 @@ Three tiers:
 | if (c) goto label_N; ... label_N: where an if around the skipped statements would do | [`gotosink`](#gotosink----on--off-default-on) |
 | label_N: ... if (c) goto label_N; where a do-while would do | [`gotosink`](#gotosink----on--off-default-on) |
 | label_N: ... goto label_N; at the end of a statement run instead of a loop | [`gotosink`](#gotosink----on--off-default-on) |
-| a goto label_A where label_A: is followed directly by goto label_B; | [`gotochain`](#gotochain----on--off-default-off) |
+| goto label_A where label_A: is followed directly by goto label_B; | [`gotochain`](#gotochain----on--off-default-off) |
 | a label whose only statement is a goto to another label | [`gotochain`](#gotochain----on--off-default-off) |
 | two labels in a row, the first holding only a jump | [`gotochain`](#gotochain----on--off-default-off) |
 | goto to a label that only returns | [`gotoreduce`](#gotoreduce----off--return--on-default-on) |
@@ -444,6 +453,9 @@ Three tiers:
 | wide switch where every case assigns a constant and breaks to one shared return | [`switchreturn`](#switchreturn----on--off-default-on) |
 | switch (x) { case A: v = K; break; ... } return v; instead of per-case return K | [`switchreturn`](#switchreturn----on--off-default-on) |
 | 17-plus-case const dispatch keeps a merged return variable | [`switchreturn`](#switchreturn----on--off-default-on) |
+| goto into the middle of a loop that has two entrances | [`irreduciblesplit`](#irreduciblesplit----on--off-default-off) |
+| a loop with two entry points rendered with goto labels | [`irreduciblesplit`](#irreduciblesplit----on--off-default-off) |
+| irreducible region left as goto-shaped control flow | [`irreduciblesplit`](#irreduciblesplit----on--off-default-off) |
 | call result spilled to a temp used exactly once: v5 = f(); if (v5 < 0) | [`foldcallret`](#foldcallret----on--off-default-on) |
 | single-use call return not inlined into its use site | [`foldcallret`](#foldcallret----on--off-default-on) |
 | flip off to force every call output into a named temporary (ghidra style) | [`foldcallret`](#foldcallret----on--off-default-on) |
@@ -516,6 +528,8 @@ Three tiers:
 | every use of an argument is *(T *)(a0 + k) but the argument is not a pointer | [`ptrfromuse`](#ptrfromuse----off--byte--void-default-void) |
 | one function takes T *a0 and its sibling takes long a0 for the same kind of argument | [`ptrfromuse`](#ptrfromuse----off--byte--void-default-void) |
 | an argument dereferenced at offset 0 gets a pointer type but one dereferenced at +8 does not | [`ptrfromuse`](#ptrfromuse----off--byte--void-default-void) |
+| a local is declared with a type most of its uses contradict | [`lvarvote`](#lvarvote----on--off-default-off) |
+| a local takes the most specific type one stray use proposes | [`lvarvote`](#lvarvote----on--off-default-off) |
 | a call result declared long and dereferenced as *(T *)(v1 + k) | [`ptrfromlocal`](#ptrfromlocal----on--off-default-off) |
 | a pointer loaded from a structure is declared long and cast at every use | [`ptrfromlocal`](#ptrfromlocal----on--off-default-off) |
 | a string parameter is declared unsigned long and every call site passes it to strlen or printf | [`charptr`](#charptr----on--off-default-off) |
@@ -618,8 +632,8 @@ Three tiers:
 | __chkstk_darwin is called with arguments it does not take | [`chkstkdarwin`](#chkstkdarwin----on--off-default-on-destructive-opt-in) |
 | an apple function calls _OUTLINED_FUNCTION_<n>(...) with arguments that make no sense | [`outlinedinline`](#outlinedinline----on--off-default-on) |
 | a function body is a string of OUTLINED_FUNCTION calls | [`outlinedinline`](#outlinedinline----on--off-default-on) |
-| c function returning bool prints v = CONCAT71((undefined7)(v >> 8), a == b) instead of returning the comparison | [`gobool`](#gobool----off--auto--always-default-auto-destructive-opt-in) |
 | go function returning bool prints v = CONCAT71((undefined7)(v >> 8), a == b) instead of returning the comparison | [`gobool`](#gobool----off--auto--always-default-auto-destructive-opt-in) |
+| c function returning bool prints v = CONCAT71((undefined7)(v >> 8), a == b) instead of returning the comparison | [`gobool`](#gobool----off--auto--always-default-auto-destructive-opt-in) |
 | return value masked with 0xffffffff around a boolean | [`gobool`](#gobool----off--auto--always-default-auto-destructive-opt-in) |
 | undefined7 casts feeding a concatenation at every boolean return | [`gobool`](#gobool----off--auto--always-default-auto-destructive-opt-in) |
 | an objective-c method reads *(long *)((long)self + dat_<addr>) instead of self->_ivar | [`objcivars`](#objcivars----on--off-default-on) |
@@ -697,8 +711,6 @@ Three tiers:
 | stack-probe calls obscure a known constant frame allocation | [`rustprobestack`](#rustprobestack----off--auto--always-default-off-destructive-opt-in) |
 | a variable declared undefined4/undefined8 although it is shifted, masked or compared | [`typevote`](#typevote----on--off-default-on) |
 | a cast back to a variable's own declared type at each read | [`typevote`](#typevote----on--off-default-on) |
-| a local is declared with a type most of its uses contradict | [`lvarvote`](#lvarvote----on--off-default-off) |
-| a local takes the most specific type one stray use proposes | [`lvarvote`](#lvarvote----on--off-default-off) |
 | an os_log call prints a stack buffer address and a byte count instead of its arguments | [`oslog`](#oslog----on--off-default-on) |
 | _os_log_impl(0x100000000,...,&v1,8) with v1 = 0x4000100 before it | [`oslog`](#oslog----on--off-default-on) |
 | the first argument of _os_log_impl or _os_log_internal is a raw image address | [`oslog`](#oslog----on--off-default-on) |
@@ -735,6 +747,9 @@ Three tiers:
 | memcpy(&v1,a0,sizeof) copies one whole record into a local of that record type | [`structassign`](#structassign----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
+| a call to IsDebuggerPresent or ptrace prints as an ordinary call with nothing to say it is a debugger probe | [`antidebug`](#antidebug----off--warn-default-off) |
+| a timing probe such as rdtsc or QueryPerformanceCounter is indistinguishable from any other call in the C | [`antidebug`](#antidebug----off--warn-default-off) |
+| OutputDebugStringA used as a debugger test prints nothing that marks it | [`antidebug`](#antidebug----off--warn-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
 | every function of an MS-DOS executable declares an unsigned short local commented // ds | [`mzdgroup`](#mzdgroup----on--off-default-on) |
 | the same DOS global gets no shared name across functions | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -748,6 +763,9 @@ Three tiers:
 | a function returning a long long sum prints void on xtensa | [`carryuse`](#carryuse----on--off-default-on) |
 | a 64-bit add whose carry is a bgeu branch loses the return value | [`carryuse`](#carryuse----on--off-default-on) |
 | mul_wide returns void after call8 __umulsidi3 | [`carryuse`](#carryuse----on--off-default-on) |
+| a this of a std container prints as a bare vector | [`cppclassargs`](#cppclassargs----on--off-default-off) |
+| a template class's this prints without its template arguments | [`cppclassargs`](#cppclassargs----on--off-default-off) |
+| vector *this where std::vector<int> *this is meant | [`cppclassargs`](#cppclassargs----on--off-default-off) |
 | a function that only ever passes its argument to a libc stdio call still declares it long or unsigned long | [`libctypes`](#libctypes----off--opaque--glibc-default-opaque) |
 | a fopen or fdopen result is a void * that nothing can name | [`libctypes`](#libctypes----off--opaque--glibc-default-opaque) |
 | a stat or lstat call fills an untyped void * buffer | [`libctypes`](#libctypes----off--opaque--glibc-default-opaque) |
@@ -808,6 +826,8 @@ Three tiers:
 | LC_FUNCTION_STARTS absent and the arm64 gap walk cannot reach the body | [`unwindstarts`](#unwindstarts----on--off-default-on) |
 | functions the unwinder describes in __unwind_info missing from the inventory | [`unwindstarts`](#unwindstarts----on--off-default-on) |
 | a jump-only stub into code that is not a function gets no thunk attribution | [`aggressivethunks`](#aggressivethunks----on--off-default-off) |
+| the body behind a hand-written jmp stub prints as an orphan block of its caller | [`aggressivethunks`](#aggressivethunks----on--off-default-off) |
+| a stripped image's jmp table entries are not functions although each only jumps | [`aggressivethunks`](#aggressivethunks----on--off-default-off) |
 | a stripped mach-o loses functions whose unwind info is a dwarf fde in __eh_frame | [`machoehframe`](#machoehframe----on--off-default-on) |
 | functions listed by llvm-objdump --dwarf=frames on a mach-o missing from the inventory | [`machoehframe`](#machoehframe----on--off-default-on) |
 | many sub_<addr> functions that end in _Unwind_Resume() | [`ehcold`](#ehcold----on--off-default-on) |
@@ -1257,6 +1277,8 @@ Three tiers:
 |  st1` is returned but never assigned | [`x87depth`](#x87depth----on--off-default-on) |
 | a caller's x87 push makes a void callee return a float | [`x87depth`](#x87depth----on--off-default-on) |
 | a value from recv or getenv reaches system or popen with no warning | [`taintcheck`](#taintcheck----on--off-default-off) |
+| an input-controlled argument to execl or execve is not flagged | [`taintcheck`](#taintcheck----on--off-default-off) |
+| a command sink fed by a network read needs a manual trace | [`taintcheck`](#taintcheck----on--off-default-off) |
 | a variadic function has fourteen parameters a0..a13 | [`varargsave`](#varargsave----on--off-default-off) |
 | if (al) guards stores of xmm registers in a printf wrapper | [`varargsave`](#varargsave----on--off-default-off) |
 | va_list fields are assigned 8 and 0x30 by hand | [`varargsave`](#varargsave----on--off-default-off) |
@@ -1392,6 +1414,8 @@ Three tiers:
 | the emitted C does not compile because its type names are not C | [`ctypes`](#ctypes----on--off-default-off) |
 | the same local declared once although many HighVariables share the stack slot | [`dedupvardecls`](#dedupvardecls----on--off-default-on) |
 | flip off to see one declaration line per high (e.g. int4 option_index repeated hundreds of times) | [`dedupvardecls`](#dedupvardecls----on--off-default-on) |
+| synthetic locals print as v7, v12 with gaps where Hex-Rays would print v1, v2 | [`renumberlocals`](#renumberlocals----on--off-default-off) |
+| a function's default-named locals are numbered by the naming pass rather than read as a compact list | [`renumberlocals`](#renumberlocals----on--off-default-off) |
 | avx code reads SUB6432(zmm0,0) instead of ymm0 | [`vexzeroupper`](#vexzeroupper----on--off-default-on) |
 | a ymm or xmm argument shows as a 64-byte zmm local | [`vexzeroupper`](#vexzeroupper----on--off-default-on) |
 | vector values are widened to char[64] | [`vexzeroupper`](#vexzeroupper----on--off-default-on) |
@@ -1468,6 +1492,8 @@ Three tiers:
 | a debug build shows a generic register name where the DWARF information names a local | [`honestgaps`](#honestgaps----on--off-default-off) |
 | a function with unimplemented instructions says so in its header but not where | [`honestgaps`](#honestgaps----on--off-default-off) |
 | the real-binary harness cannot tell which functions lost information | [`honestgaps`](#honestgaps----on--off-default-off) |
+| a pointer parameter is used at once with no NULL test and nothing says the caller must not pass NULL | [`nonnullparam`](#nonnullparam----on--off-default-off) |
+| the decompiled function gives no hint that its parameter is dereferenced on entry | [`nonnullparam`](#nonnullparam----on--off-default-off) |
 
 ## Toggleable transforms
 
@@ -1488,14 +1514,6 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On (default). Flip off to see each pointer step as its own statement.
 - **Where / provenance:** P9/pointer-notation · unlace · presentation-default · postinc
 - **Example:** `option postinc off`
-
-### `nonnullparam` -- on | off, default `off`
-
-- **Symptoms:** a pointer parameter is used at once with no NULL test and nothing says the caller must not pass NULL; the decompiled function gives no hint that its parameter is dereferenced on entry.
-- **What it does:** Mark a parameter the function dereferences before any branch as non-null, with a comment above its first use. A function that loads or stores through a parameter in its entry block, before any conditional branch or indirect jump, requires the caller to have passed a pointer that is not null, or the access traps. With the option on, the printer adds `/* non-null: p is dereferenced before any branch */` above the first statement that dereferences the parameter, or a copy of it made in the entry block, once per parameter. The parameter is the function prototype's input whose storage the entry-block varnode is, so a callee-saved register read on entry is not one. Only the comment is added: the printed statements and every other comment are unchanged.
-- **When to flip:** Off by default. Flip on when reading a function whose parameters are dereferenced at once, to see which pointers it assumes are valid without a NULL test. The claim assumes the dereference traps on NULL, which is not true on a target that maps address zero, so read the comment as a hint, not a proof.
-- **Where / provenance:** P9/warning-style · unlace · opt-in-tool · unlace-1345
-- **Example:** `option nonnullparam on`
 
 ### `structdefs` -- on | off, default `off`
 
@@ -1553,14 +1571,6 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-minmax
 - **Example:** `option minmax on`
 
-### `satmul` -- on | off, default `off`
-
-- **Symptoms:** new T[n] prints as a 128-bit multiply with a SUB168 high-half test and a -1 select; operator new[] is called with -(ulong)(overflow) ORed into n * size; a cmovo or seto after a mul feeds an allocation size.
-- **What it does:** Fold the overflow-checked multiply a compiler emits before operator new[] into saturated_mul(a, b): a select between the low half of a product and all-ones, where all-ones is chosen exactly when the product overflowed. The low half is SUBPIECE(zext(a) * zext(b), 0), a * b or a << k at the width W; the guard is the high half of the double-width product compared with zero (x86 mul + cmovo/seto, AArch64 umulh + cmp + csinv), the product compared with 2^W - 1, or the threshold a > (2^W - 1) / c for a constant factor c; the select is a MULTIEQUAL behind that branch (cmov, csinv) or an OR with the smeared flag -zext(overflow) (seto; neg; or, sbb; or). This is Hex-Rays' REMOVE_MUL_OVERFLOW_CHECK rule.
-- **When to flip:** Off by default: it prints a helper that is not C. Turn it on for C++ code where every new T[n] prints as a 128-bit multiply, a SUB168(..., 8) != 0 test and a -1 select (or a -(ulong)(overflow) mask ORed into the product) before operator new[].
-- **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-satmul
-- **Example:** `option satmul on`
-
 ### `bitfieldarith` -- on | off, default `off`
 
 - **Symptoms:** a register field is extracted with a shift and an AND; a flag field is set with a clear-mask OR and a shifted insert; packed descriptor or hardware register fields print as shift and mask arithmetic.
@@ -1568,6 +1578,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off by default: it prints bitfield_get and bitfield_set calls, which are not C and carry no field names. Turn it on to read register-level packing (flag words, descriptor fields, hardware registers) as one access per field instead of shift-and-mask arithmetic.
 - **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-bitfieldarith
 - **Example:** `option bitfieldarith on`
+
+### `satmul` -- on | off, default `off`
+
+- **Symptoms:** new T[n] prints as a 128-bit multiply with a SUB168 high-half test and a -1 select; operator new[] is called with -(ulong)(overflow) ORed into n * size; a cmovo or seto after a mul feeds an allocation size.
+- **What it does:** Fold the overflow-checked multiply a compiler emits before operator new[] into saturated_mul(a, b): a select between the low half of a product and all-ones, where all-ones is chosen exactly when the product overflowed. The low half is SUBPIECE(zext(a) * zext(b), 0), a * b or a << k at the width W; the guard is the high half of the double-width product compared with zero (x86 mul + cmovo/seto, AArch64 umulh + cmp + csinv), the product compared with 2^W - 1, or the threshold a > (2^W - 1) / c for a constant factor c; the select is a MULTIEQUAL behind that branch (cmov, csinv) or an OR with the smeared flag -zext(overflow) (seto; neg; or, sbb; or). This is Hex-Rays' REMOVE_MUL_OVERFLOW_CHECK rule.
+- **When to flip:** Off by default: it prints a helper that is not C. Turn it on for C++ code where every new T[n] prints as a 128-bit multiply, a SUB168(..., 8) != 0 test and a -1 select (or a -(ulong)(overflow) mask ORed into the product) before operator new[].
+- **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-satmul
+- **Example:** `option satmul on`
 
 ### `floatidentity` -- on | off, default `off`
 
@@ -1633,14 +1651,6 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P3/simplification-quiescence · unlace · presentation-default · unlace-fpargboxed
 - **Example:** `option fpargboxed off`
 
-### `satconvert` -- on | off, default `on`
-
-- **Symptoms:** if (NAN(x)) v = 0x7fffffff; after v = (int)x;; a float-to-int conversion followed by clamps to -0x80000000 and 0x7fffffff; v = 0; if (x <= -1.0) after an unsigned conversion; (int)x where the clamps for NaN and overflow should not print.
-- **What it does:** Print a float-to-integer conversion that saturates exactly as RISC-V `fcvt.w*`/`fcvt.l*` with `rtz` does as the C cast. `riscv.fd.sinc` lifts the instruction as the ISA defines it: truncation, then three clamps (NaN and values at or above the range give the maximum, values below it the minimum, 0 for the unsigned forms), printed `v = (int)x; if (x < -2147483648.0) v = -0x80000000; if (2147483648.0 <= x) v = 0x7fffffff; if (NAN(x)) v = 0x7fffffff;`. `RuleSatConvert` (oppool1, `satconvert.rs`) takes the outermost of three two-input MULTIEQUALs, each choosing a constant on one out-edge of its immediate dominator's branch (the `pow2select` select test), whose innermost input is a `FLOAT_TRUNC` of `x` (or the low part of a 64-bit one) and whose branches test `x` against float constants or `NAN(x)`. It evaluates the ladder at NaN, the infinities, zero, -0.5, -1 and every threshold and its neighbours, and requires the result to equal C's saturating conversion at the join's width, signed or unsigned. Only then does it replace the join by the truncation, so the clamps die and the function prints `(int)x`. The 64-bit unsigned form, whose truncation is itself split at 2^63, keeps its ladder.
-- **When to flip:** On by default: C leaves an out-of-range float-to-integer conversion undefined, so `(int)x` is what the source said, and the ladder appears only where the ISA defines the saturation. Flip off to see the ISA's exact result for NaN and out-of-range values.
-- **Where / provenance:** P3/simplification-quiescence · unlace · presentation-default · unlace-satconvert
-- **Example:** `option satconvert off`
-
 ### `sfofxor` -- on | off, default `off`
 
 - **Symptoms:** a jl or jge after cmp prints as an XOR of a sign test and an overflow test; SF != OF in a signed comparison of two registers; (a < b) ^ __OFSUB__(a, b) in a signed branch condition.
@@ -1648,6 +1658,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Turn on for x86 code where a jl or jge after a cmp prints as an XOR of a sign test and an overflow test, after checking on a sample function that the lifted SF is the sign of the subtraction. Default off: it is an identity over the flag model rather than a structural cleanup, and the flag model has not been verified against the lifter.
 - **Where / provenance:** P3/simplification-quiescence · unlace · transform · unlace-1271
 - **Example:** `option sfofxor on`
+
+### `satconvert` -- on | off, default `on`
+
+- **Symptoms:** if (NAN(x)) v = 0x7fffffff; after v = (int)x;; a float-to-int conversion followed by clamps to -0x80000000 and 0x7fffffff; v = 0; if (x <= -1.0) after an unsigned conversion; (int)x where the clamps for NaN and overflow should not print.
+- **What it does:** Print a float-to-integer conversion that saturates exactly as RISC-V `fcvt.w*`/`fcvt.l*` with `rtz` does as the C cast. `riscv.fd.sinc` lifts the instruction as the ISA defines it: truncation, then three clamps (NaN and values at or above the range give the maximum, values below it the minimum, 0 for the unsigned forms), printed `v = (int)x; if (x < -2147483648.0) v = -0x80000000; if (2147483648.0 <= x) v = 0x7fffffff; if (NAN(x)) v = 0x7fffffff;`. `RuleSatConvert` (oppool1, `satconvert.rs`) takes the outermost of three two-input MULTIEQUALs, each choosing a constant on one out-edge of its immediate dominator's branch (the `pow2select` select test), whose innermost input is a `FLOAT_TRUNC` of `x` (or the low part of a 64-bit one) and whose branches test `x` against float constants or `NAN(x)`. It evaluates the ladder at NaN, the infinities, zero, -0.5, -1 and every threshold and its neighbours, and requires the result to equal C's saturating conversion at the join's width, signed or unsigned. Only then does it replace the join by the truncation, so the clamps die and the function prints `(int)x`. The 64-bit unsigned form, whose truncation is itself split at 2^63, keeps its ladder.
+- **When to flip:** On by default: C leaves an out-of-range float-to-integer conversion undefined, so `(int)x` is what the source said, and the ladder appears only where the ISA defines the saturation. Flip off to see the ISA's exact result for NaN and out-of-range values.
+- **Where / provenance:** P3/simplification-quiescence · unlace · presentation-default · unlace-satconvert
+- **Example:** `option satconvert off`
 
 ### `cmpmerge` -- on | off, default `off`
 
@@ -1801,6 +1819,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P2/inline-inject · ida · correctness-fix · cortexmpriv
 - **Example:** `option cortexmpriv on`
 
+### `barrierintrinsics` -- on | off, default `off`
+
+- **Symptoms:** a PowerPC lwsync prints as sync(1) where the source called __lwsync; a PowerPC isync prints as instructionSynchronize() where the source called __isync; a PowerPC ptesync prints as sync(2) where the source called __ptesync.
+- **What it does:** On PowerPC, print a sync user op whose L operand is 0, 1 or 2 as the GCC and Clang barrier builtin __sync, __lwsync or __ptesync, and an instructionSynchronize user op as __isync, the names the Hex-Rays PowerPC plugin prints. Only the spelling of the call changes: the SLEIGH user ops keep their operands and their place in the flow.
+- **When to flip:** Off by default, so the output keeps the SLEIGH names sync(L) and instructionSynchronize() and existing consumers see no change. Turn on to read PowerPC barrier code under the names the source called, which separates lwsync and ptesync from a full sync; a sync whose operand is not a constant keeps its SLEIGH name.
+- **Where / provenance:** P9/naming-policy · unlace · presentation-default · unlace-barrierintrinsics
+- **Example:** `option barrierintrinsics on`
+
 ### `tailcalljump` -- on | direct | off, default `on`
 
 - **Symptoms:** leaf function ends in a (*dat_...)(...) computed call with a 'Treating indirect jump as call' warning; jmp to a plt stub inlined into the caller instead of a named tail call; plt thunk body absorbed where func(...) is expected; a veneer renders as switch(0x...) with one case holding another function's body, or halt_missing() with a 'flows out of bounds' warning.
@@ -1920,15 +1946,6 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On (`warn`) by default: it adds a comment and changes nothing else, so a decoded `int3` is named wherever one is reached. Set `halt` when reading anti-debug code whose clean-run path falls into a pad and the fabricated `return (*(void *)swi(3))();` is in the way - it is not the default because a debugger attached to the process can step past an `int3`, so ending the flow is a judgement about the pad rather than a fact about the encoding. Set `off` to restore the unannotated upstream rendering. Shape-gated on the `swi` vector 3, so `int 0x29` (Windows __fastfail, see `fastfailnoreturn`), `int 0x80` (Linux, see `linuxsyscall`) and every non-x86 language are untouched; structurally inert wherever no `int3` is decoded, and byte-identical (0/675) on the datatest corpus. The pad length is a loader read: when it fails, or when the encoding is the two-byte `INT 0x03` rather than `0xcc`, the warning is emitted without a count rather than with a guessed one.
 - **Where / provenance:** P2/flow-classification · unlace · presentation-default · GH-468
 - **Example:** `option int3pad halt`
-
-### `antidebug` -- off | warn, default `off`
-
-- **Symptoms:** a call to IsDebuggerPresent or ptrace prints as an ordinary call with nothing to say it is a debugger probe; a timing probe such as rdtsc or QueryPerformanceCounter is indistinguishable from any other call in the C; OutputDebugStringA used as a debugger test prints nothing that marks it.
-- **What it does:** Name a call to a well-known anti-debugging API, instead of letting it pass unremarked through the C. The callee is recognised by the name the flow pass recorded for a direct call: `IsDebuggerPresent`, `CheckRemoteDebuggerPresent`, `NtQueryInformationProcess`, `NtSetInformationThread` (debugger checks), `ptrace` (a self-trace), `rdtsc`, `GetTickCount`, `GetTickCount64` and `QueryPerformanceCounter` (timing probes), and `OutputDebugStringA`/`W` (a debugger-channel side effect). `warn` buffers one warning per such call site and changes nothing else: no statement, type or control-flow edge moves. The roster is the one the archived master's `anti_debug_detect` pass carried, which was declared there and never called.
-- **Use when:** Off by default: the call is a fact about the binary, but reading it as evasion is a judgement about intent, and a licence check or a cheat detector calls the same APIs. Set `warn` when triaging code you suspect of resisting a debugger, to see where the probes are before reading the logic around them. The warning is a reviewable signal that evasion logic is present, not proof that the binary is malicious. It is structurally inert on every call whose callee name is off the roster, so it has no effect on the datatest corpus, which carries no such calls under the default.
-- **Example:** `option antidebug warn`
-- **Source:** unlace; inspiration: archived master's crates/unlace-passes/src/anti_debug_detect.rs (ROADMAP Phase E.4.3), declared there but never called
-- **Change kind:** new-analysis; tier analysis; phase P2 (flow-classification); strength HINT.
 
 ### `x64syscall` -- off | on | abi, default `on`
 
@@ -2428,10 +2445,10 @@ The control surface: each of these can make output worse on the wrong source sha
 
 ### `gotochain` -- on | off, default `off`
 
-- **Symptoms:** a goto label_A where label_A: is followed directly by goto label_B; a label whose only statement is a goto to another label; two labels in a row, the first holding only a jump.
+- **Symptoms:** goto label_A where label_A: is followed directly by goto label_B;; a label whose only statement is a goto to another label; two labels in a row, the first holding only a jump.
 - **What it does:** Retarget a goto to a label whose block is only an unconditional goto. When a label leaf holds no statement (its block only branches) and is immediately followed in its statement list by `goto L2;`, every unstructured `goto L1;` and `if (c) goto L1;` that names it is rewritten to `goto L2;` (chains followed transitively, with a cycle guard). The new target is labelled, and the old label is released once no goto, switch case or multi-goto edge still names it. Only plain gotos are retargeted: switch-case and multi-goto edges keep their label, so the output stays valid C.
 - **When to flip:** Off by default: the goto-to-goto rendering is upstream's. Set `on` when a function prints `label_A: goto label_B;` and several gotos reach `label_A` only to fall through to `label_B`; each such jump then names `label_B` directly and the middle label disappears. The original unlace `goto_coalesce` pass ran this on its HIR; this is the structured-tree port. Not yet measured on the datatest corpus: flip to `on` only after `make test` shows 0/675 movement for the default and a stage run confirms the labels it removes.
-- **Where / provenance:** P8/goto-quality · unlace · structure-recovery · gotochain
+- **Where / provenance:** P8/goto-quality · unlace · structure-recovery · goto-chain-coalesce
 - **Example:** `option gotochain on`
 
 ### `gotoreduce` -- off | return | on, default `on`
@@ -2530,14 +2547,6 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P8/goto-quality · angr · structure-recovery · angr-ReturnDuplicatorHigh-peredge
 - **Example:** `option earlyreturn on`
 
-### `irreduciblesplit` -- on | off, default `off`
-
-- **Symptoms:** goto into the middle of a loop that has two entrances; a loop with two entry points rendered with goto labels; irreducible region left as goto-shaped control flow.
-- **What it does:** Make an irreducible loop region reducible before structuring, so it prints as a `while`/`do` loop instead of a `goto`. A strongly connected region of the block graph with two or more entry blocks has no natural loop header; the pass duplicates one entry block for an external predecessor (`Funcdata::node_split_through`, the primitive `returndupcalls` drives), so that predecessor enters a private copy that flows into the same successor. The region loses one entry per split and becomes a natural loop once one entry is left. The pass only takes an entry with exactly one out-edge that stays in the region, no conditional branch, no call, and no output read outside the block except through the successor's MULTIEQUALs or a merge it inserts; an entry that fails a check is skipped and the next one is tried. At most 16 splits per function, each logged (`irreduciblesplit:`). Ported from original unlace (origin/master `unlace-struct` `irreducible.rs` and `node_split.rs`), which duplicates every multi-predecessor entry block; this port is narrower on purpose because `node_split_through` is the only entry-duplication primitive main has.
-- **When to flip:** A loop with two entrances, such as a branch that jumps into the middle of a loop body from two places, renders with a `goto` into the loop where the source has one `while`. Off by default: duplicating a block copies code, so it is a judgement call. Flip on to test whether the copies recover a loop the structurer would otherwise leave goto-shaped. The effect has not been measured yet: before a default flip, measure goto count and GED on decbench cases with irreducible loops (the `irreducible` fixture and `tests/datatests` cases that print a goto into a loop). When off the pass returns at once and output is byte-identical to before.
-- **Where / provenance:** P8/goto-quality · ghidra · structure-recovery · irreduciblesplit
-- **Example:** `option irreduciblesplit on`
-
 ### `switchreturn` -- on | off, default `on`
 
 - **Symptoms:** wide switch where every case assigns a constant and breaks to one shared return; switch (x) { case A: v = K; break; ... } return v; instead of per-case return K; 17-plus-case const dispatch keeps a merged return variable.
@@ -2545,6 +2554,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** A WIDE multi-way const dispatch renders merged — `switch (x) { case A: v = K0; break; … } return v;` — instead of the source's per-case `switch (x) { case A: return K0; … }` (more cases than earlyreturn's 16-in-edge cap; e.g. libedit tty__getcharindex, iproute2 accept_msg, coreutils stat fmt_to_mask). On by default (DIV-25: the incremental wide-switch ablation on top of earlyreturn-on measured NET-POSITIVE, +2 perfect / -107 summed GED / zero regressions); flip OFF to restore the merged rendering. By construction it cannot cause the variable-return over-firing that reverted returndup (it splits only constant case arms).
 - **Where / provenance:** P8/goto-quality · angr · structure-recovery · angr-ReturnDuplicatorHigh-switchphi
 - **Example:** `option switchreturn on`
+
+### `irreduciblesplit` -- on | off, default `off`
+
+- **Symptoms:** goto into the middle of a loop that has two entrances; a loop with two entry points rendered with goto labels; irreducible region left as goto-shaped control flow.
+- **What it does:** Make an irreducible loop region reducible before structuring, so it prints as a `while`/`do` loop instead of a `goto`. A strongly connected region of the block graph with two or more entry blocks has no natural loop header; the pass duplicates one entry block for an external predecessor (`Funcdata::node_split_through`, the primitive `returndupcalls` drives), so that predecessor enters a private copy that flows into the same successor. The region loses one entry per split and becomes a natural loop once one entry is left. The pass only takes an entry with exactly one out-edge that stays in the region, no conditional branch, no call, and no output read outside the block except through the successor's MULTIEQUALs or a merge it inserts; an entry that fails a check is skipped and the next one is tried. At most 16 splits per function, each logged (`irreduciblesplit:`). Ported from original unlace (origin/master `unlace-struct` `irreducible.rs` and `node_split.rs`), which duplicates every multi-predecessor entry block; this port is narrower on purpose because `node_split_through` is the only entry-duplication primitive main has.
+- **When to flip:** A loop with two entrances, such as a branch that jumps into the middle of a loop body from two places, renders with a `goto` into the loop where the source has one `while`. Off by default: duplicating a block copies code, so it is a judgement call. Flip on to test whether the copies recover a loop the structurer would otherwise leave goto-shaped. The effect has not been measured yet: before a default flip, measure goto count and GED on decbench cases with irreducible loops (the `irreducible` fixture and `tests/datatests` cases that print a goto into a loop). When off the pass returns at once and output is byte-identical to before.
+- **Where / provenance:** P8/goto-quality · ghidra · structure-recovery · original-unlace-irreducible-split
+- **Example:** `option irreduciblesplit on`
 
 ### `foldcallret` -- on | off, default `on`
 
@@ -2697,6 +2714,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default (`void`): a pointer-width parameter whose every memory use is `*(T *)(a0 + k)` -- a struct or buffer pointer once the compiler has folded the field offsets in -- is declared `void *a0`, and its field accesses keep their byte arithmetic with a cast on the base (`*(long *)((long)a0 + 0x28)`). With `protoorder` at its default the callee's `void *` also types the matching argument at each call site, which is how a wrapper that only forwards its arguments (the `qsort` comparators and hash-table callbacks whose declared parameters are `void const *`) is declared with `void *` parameters: over the 444-slice decbench sweep the default moves 204 functions onto a perfect type_match and 85 more up, none down. `byte` declares `char *a0` instead and rewrites the arithmetic into indexing (`*(long *)&a0[0x28]`, `RulePtrArith`); it moves 7 functions onto perfect. Turn it off to get upstream's integer declaration and uncast arithmetic back, when a script matches body text an older run printed (the `(long)a0 + k` casts, and the local renumbering where a retyped value merges differently), or when a parameter really is an integer the function also uses as an address -- committing it to a pointer is a claim the width-only integer spelling did not make. Prefer `libctypes` where the argument reaches a libc call: a named `FILE *` outranks this rule's candidate and is kept. KNOWN AMBIGUITY: an index into a global array is the same shape as a base at a constant offset -- both are `INT_ADD(value, constant)` -- so the rule grades the constant. A named global object refuses the candidate (`char table[256]; int lookup(long i){return table[i];}` keeps `long a0` and its named global; typing it would also replace `table` in the body with its raw address). An address-like constant that names nothing is neutral, so a parameter used ONLY that way is still declined, but one that is also dereferenced at an ordinary field offset is typed on the strength of that other use -- which is right for a large struct and wrong for a subscript into an unnamed table that the function also uses as a base. A constant below the space's pointer lower bound is always read as a field offset.
 - **Where / provenance:** P5/type-propagation · angr · opt-in-tool · ptrfromuse
 - **Example:** `option ptrfromuse off`
+
+### `lvarvote` -- on | off, default `off`
+
+- **Symptoms:** a local is declared with a type most of its uses contradict; a local takes the most specific type one stray use proposes.
+- **What it does:** Type a local whose reads and writes disagree by a weighted vote instead of the most specific type: each op that writes or reads the Varnode votes for its own type; an unknown type ranks behind a known one; the type most of the votes support wins (same-width integers support each other, signedness being decided separately), then the most votes, then the first vote seen. A local whose votes all agree keeps the type it had.
+- **When to flip:** Off by default (byte-identical output). Turn on to see whether a local should take the type most of its uses agree on rather than the most specific one a single stray use proposes. Only locals whose votes conflict change. Measure on decbench before any default change.
+- **Where / provenance:** P5/type-propagation · unlace · type-inference · unlace-lvarvote
+- **Example:** `option lvarvote on`
 
 ### `ptrfromlocal` -- on | off, default `off`
 
@@ -2916,7 +2941,7 @@ The control surface: each of these can make output worse on the wrong source sha
 
 ### `gobool` -- off | auto | always, default `auto` (destructive opt-in)
 
-- **Symptoms:** c function returning bool prints v = CONCAT71((undefined7)(v >> 8), a == b) instead of returning the comparison; go function returning bool prints v = CONCAT71((undefined7)(v >> 8), a == b) instead of returning the comparison; return value masked with 0xffffffff around a boolean; undefined7 casts feeding a concatenation at every boolean return.
+- **Symptoms:** go function returning bool prints v = CONCAT71((undefined7)(v >> 8), a == b) instead of returning the comparison; c function returning bool prints v = CONCAT71((undefined7)(v >> 8), a == b) instead of returning the comparison; return value masked with 0xffffffff around a boolean; undefined7 casts feeding a concatenation at every boolean return.
 - **What it does:** Narrow a Go boolean return's stale-high concatenation. Go's ABI materializes a bool result as 0/1 in the LOW BYTE of the return register and leaves the upper bytes unspecified: the compiler emits a bare SETcc with no zeroing XOR, so the lifted value is PIECE(stale7, bool1) feeding the RETURN and the C prints the CONCAT71 artifact (v = CONCAT71((undefined7)(v >> 8), x == y); return v & 0xffffffff). SubvariableFlow's return pull rightly refuses to narrow it - nothing proves the high bytes zero - and rustc never shows the shape because it zeroes first. The rule rewrites such a RETURN to read ZEXT(bool) instead, asserting the ABI fact the way rustabi asserts the ScalarPair: the stale bytes are unspecified, so zeroing them is the declared reading, and the dead concatenation is collected by ordinary dead-code elimination. The low byte must be a genuine boolean definition (a comparison, carry/borrow, boolean logic or float predicate opcode); any other 7+1 concatenation is left alone. At auto (default) the rule acts only when the image's source language is Go or C (the SysV x86-64 ABI, like the Go one, fixes only the low byte of a _Bool return); always drops the language test (stage-test bytechunks); off keeps the faithful concatenation.
 - **When to flip:** Leave auto: Go and C functions returning bool stop printing CONCAT71 noise and return their comparison directly. Use always on a Go function carved into a bytechunk where detection has nothing to read; off only to audit the raw register dataflow.
 - **Where / provenance:** P4/output-prototype · unlace · correctness-fix · unlace-multilang-gobool
@@ -3090,14 +3115,6 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P5/type-propagation · unlace · presentation-default · typevote
 - **Example:** `option typevote off`
 
-### `lvarvote` -- on | off, default `off`
-
-- **Symptoms:** a local is declared with a type most of its uses contradict; a local takes the most specific type one stray use proposes.
-- **What it does:** Type a local whose reads and writes disagree by a weighted vote instead of the most specific type: each op that writes or reads the Varnode votes for its own type; an unknown type ranks behind a known one; the type most of the votes support wins (same-width integers support each other, signedness being decided separately), then the most votes, then the first vote seen. A local whose votes all agree keeps the type it had.
-- **When to flip:** Off by default (byte-identical output). Turn on to see whether a local should take the type most of its uses agree on rather than the most specific one a single stray use proposes. Only locals whose votes conflict change. Measure on decbench before any default change.
-- **Where / provenance:** P5/type-propagation · unlace · type-inference · unlace-lvarvote
-- **Example:** `option lvarvote on`
-
 ### `oslog` -- on | off, default `on`
 
 - **Symptoms:** an os_log call prints a stack buffer address and a byte count instead of its arguments; _os_log_impl(0x100000000,...,&v1,8) with v1 = 0x4000100 before it; the first argument of _os_log_impl or _os_log_internal is a raw image address.
@@ -3214,6 +3231,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P3/simplification-quiescence · unlace · speed · unlace-dirtypool
 - **Example:** `option dirtypool on`
 
+### `antidebug` -- off | warn, default `off`
+
+- **Symptoms:** a call to IsDebuggerPresent or ptrace prints as an ordinary call with nothing to say it is a debugger probe; a timing probe such as rdtsc or QueryPerformanceCounter is indistinguishable from any other call in the C; OutputDebugStringA used as a debugger test prints nothing that marks it.
+- **What it does:** Name a call to a well-known anti-debugging API, instead of letting it pass unremarked through the C. The callee is recognised by the name the flow pass recorded for a direct call: `IsDebuggerPresent`, `CheckRemoteDebuggerPresent`, `NtQueryInformationProcess`, `NtSetInformationThread` (debugger checks), `ptrace` (a self-trace), `rdtsc`, `GetTickCount`, `GetTickCount64` and `QueryPerformanceCounter` (timing probes), and `OutputDebugStringA`/`W` (a debugger-channel side effect). `warn` buffers one warning per such call site and changes nothing else: no statement, type or control-flow edge moves. The roster is the one the archived master's `anti_debug_detect` pass carried, which was declared there and never called.
+- **When to flip:** Off by default: the call is a fact about the binary, but reading it as evasion is a judgement about intent, and a licence check or a cheat detector calls the same APIs. Set `warn` when triaging code you suspect of resisting a debugger, to see where the probes are before reading the logic around them. The warning is a reviewable signal that evasion logic is present, not proof that the binary is malicious. It is structurally inert on every call whose callee name is off the roster, so it has no effect on the datatest corpus, which carries no such calls under the default.
+- **Where / provenance:** P2/flow-classification · unlace · new-analysis · unlace-1214
+- **Example:** `option antidebug warn`
+
 ### `mzdgroup` -- on | off, default `on`
 
 - **Symptoms:** a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals; every function of an MS-DOS executable declares an unsigned short local commented // ds; the same DOS global gets no shared name across functions; a near string pointer in a DOS program resolves to a low address instead of its data segment.
@@ -3245,6 +3270,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** On by default: on 15 Xtensa gcc images (the real-code sweep's windowed .o/.elf builds, libgcc softfp, test objects) only lost returns are gained, each a 64-bit sum whose low word gcc branches on for the carry (`mul_wide`, `x + y`, `f(x) + 7` now return `unsigned long long` instead of `void`); on 89 control images of every other family in the sweep (x86, AArch64, ARM/Thumb, MIPS, RISC-V, PowerPC, SPARC, LoongArch, Hexagon, ARC, C-SKY, m68k, OpenRISC, s390x, BPF, AVR, MSP430, ...) and /usr/bin/xz no line changes, and the datatest (675/675) and stage (6000/6001, the pre-existing PAIRLOCAL #1 failure) corpora are unchanged with it on. Flip off for upstream's scoring.
 - **Where / provenance:** P4/output-prototype · unlace · analysis-enablement · unlace-carryuse
 - **Example:** `option carryuse off`
+
+### `cppclassargs` -- on | off, default `off`
+
+- **Symptoms:** a this of a std container prints as a bare vector; a template class's this prints without its template arguments; vector *this where std::vector<int> *this is meant.
+- **What it does:** Keep the template arguments of a demangled C++ class name when the `this` of its member functions is typed. The demangled scope `std::vector<int, std::allocator<int> >` is stripped to the bare class `vector`, so `this` prints as `vector *`. With the option on, a template class's `this` is the whole scope as the demangler spells it (`std::vector<int, std::allocator<int> >`), a record of its own, and the printer (with `cppshortnames` on) shows `std::vector<int> *this`. A non-template class, a parameter type and the function name are unchanged. Applies to the proven and inferred tiers of `cppsig`.
+- **When to flip:** Turn on with `cppshortnames` for a C++ binary whose member functions take a std container or other class template as `this`: `std::vector<int> *this` where the default prints `vector *this`. Off by default: the template-named record is new, so a DWARF or demangled type that names the same class bare is not merged with it. Not yet measured on a corpus.
+- **Where / provenance:** P1/external-refinement · unlace · analysis-enablement · unlace-analysis-cppsig
+- **Example:** `option cppclassargs on`
 
 ### `libctypes` -- off | opaque | glibc, default `opaque`
 
@@ -3550,14 +3583,6 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/external-refinement · unlace · analysis-enablement · unlace-analysis-cppsig
 - **Example:** `option cppsig inferred`
 
-### `cppclassargs` -- on | off, default `off`
-
-- **Symptoms:** a this of a std container prints as a bare vector; a template class's this prints without its template arguments; vector *this where std::vector<int> *this is meant.
-- **What it does:** Keep the template arguments of a demangled C++ class name when the `this` of its member functions is typed. The demangled scope `std::vector<int, std::allocator<int> >` is stripped to the bare class `vector`, so `this` prints as `vector *`. With the option on, a template class's `this` is the whole scope as the demangler spells it (`std::vector<int, std::allocator<int> >`), a record of its own, and the printer (with `cppshortnames` on) shows `std::vector<int> *this`. A non-template class, a parameter type and the function name are unchanged. Applies to the proven and inferred tiers of `cppsig`.
-- **When to flip:** Turn on with `cppshortnames` for a C++ binary whose member functions take a std container or other class template as `this`: `std::vector<int> *this` where the default prints `vector *this`. Off by default: the template-named record is new, so a DWARF or demangled type that names the same class bare is not merged with it. Not yet measured on a corpus.
-- **Where / provenance:** P1/external-refinement · unlace · analysis-enablement · unlace-analysis-cppsig
-- **Example:** `option cppclassargs on`
-
 ### `addrtable` -- on | off, default `off`
 
 - **Symptoms:** absolute function-pointer table in rodata never recognized; indirect calls through an unrecovered address table in a stripped target.
@@ -3646,7 +3671,6 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/external-refinement · unlace · analysis-enablement · unlace-ruststdsigs
 - **Example:** `unlace functions ./stripped-rust --option listing on --option flirt on --option ruststdsigs nearest`
 
-
 ### `rtti` -- on | off, default `on`
 
 - **Symptoms:** msvc c++ class names missing and vftables left as unnamed data; no Class::vftable or RTTI_ labels in a windows pe with polymorphic classes.
@@ -3726,7 +3750,6 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** On (default). Flip off for firmware that keeps short, unpadded strings in its code section and loses their literals in the decompiled C.
 - **Where / provenance:** P1/code-data-partition · unlace · correctness-fix · unlace-codestrings
 - **Example:** `--option codestrings off`
-
 
 ### `aifpoolslide` -- on | off, default `on`
 
@@ -4276,14 +4299,6 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **Where / provenance:** P9/naming-policy · unlace · correctness-fix · acleintrinsics
 - **Example:** `option acleintrinsics off`
 
-### `barrierintrinsics` -- on | off, default `off`
-
-- **Symptoms:** a PowerPC lwsync prints as sync(1) where the source called __lwsync; a PowerPC isync prints as instructionSynchronize() where the source called __isync; a PowerPC ptesync prints as sync(2) where the source called __ptesync
-- **What it does:** On PowerPC, print a sync user op whose L operand is 0, 1 or 2 as the GCC and Clang barrier builtin __sync, __lwsync or __ptesync, and an instructionSynchronize user op as __isync, the names the Hex-Rays PowerPC plugin prints. Only the spelling of the call changes: the SLEIGH user ops keep their operands and their place in the flow.
-- **When to flip:** Off by default, so the output keeps the SLEIGH names sync(L) and instructionSynchronize() and existing consumers see no change. Turn on to read PowerPC barrier code under the names the source called, which separates lwsync and ptesync from a full sync; a sync whose operand is not a constant keeps its SLEIGH name.
-- **Where / provenance:** P9/naming-policy · unlace · presentation-default · barrierintrinsics
-- **Example:** `option barrierintrinsics on`
-
 ### `wideconst` -- on | off, default `on`
 
 - **Symptoms:** a 160-bit or 256-bit constant prints as a chain of zext732/zext832 shifts and ors; an evm address mask prints as ((zext732(0xffffffffffffff) << 0x40 ;  ...); an event topic hash spans several lines of shifted pieces.
@@ -4787,6 +4802,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Turn on when auditing how much of a binary the output can be trusted for: with --json each record lists these sites in warnings and the document totals every warning kind in warning_kinds. Leave off for the upstream text.
 - **Where / provenance:** P2/decode-error-policy · unlace · opt-in-tool · unlace-33-honestgaps
 - **Example:** `option honestgaps on`
+
+### `nonnullparam` -- on | off, default `off`
+
+- **Symptoms:** a pointer parameter is used at once with no NULL test and nothing says the caller must not pass NULL; the decompiled function gives no hint that its parameter is dereferenced on entry.
+- **What it does:** Mark a parameter the function dereferences before any branch as non-null, with a comment above its first use. A function that loads or stores through a parameter in its entry block, before any conditional branch or indirect jump, requires the caller to have passed a pointer that is not null, or the access traps. With the option on, the printer adds `/* non-null: p is dereferenced before any branch */` above the first statement that dereferences the parameter, or a copy of it made in the entry block, once per parameter. The parameter is the function prototype's input whose storage the entry-block varnode is, so a callee-saved register read on entry is not one. Only the comment is added: the printed statements and every other comment are unchanged.
+- **When to flip:** Off by default. Flip on when reading a function whose parameters are dereferenced at once, to see which pointers it assumes are valid without a NULL test. The claim assumes the dereference traps on NULL, which is not true on a target that maps address zero, so read the comment as a hint, not a proof.
+- **Where / provenance:** P9/warning-style · unlace · opt-in-tool · unlace-1345
+- **Example:** `option nonnullparam on`
 
 ## Programmatic use
 

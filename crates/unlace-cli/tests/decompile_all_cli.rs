@@ -13167,6 +13167,10 @@ fn a_branch_chosen_flag_or_an_int_truncation_keeps_its_int_in_the_first_register
 /// -O0 and -O2 against `bejoin_code.c`, the 64-bit arguments split high word
 /// first. ARM big-endian -O2 leaves out `ovf_m1` and `clamp_ll`, which print
 /// wrong there for reasons unrelated to the join, with the option on or off.
+/// The ARM fixtures run with `armpairparam` off: that option (on by default since
+/// fc53d27e61, 2026-11-24) joins each aligned register pair into one 8-byte
+/// parameter, and these tests count the words of each signature, so they pin it
+/// off as 533b021def does.
 #[test]
 fn a_range_check_returning_any_literal_or_flag_keeps_its_int_in_the_first_register() {
     const ONE: &str = "for (int i = 0; i < 13; i++) {\n    i64 v = (i64)ws[i];\n";
@@ -13245,15 +13249,22 @@ fn a_range_check_returning_any_literal_or_flag_keeps_its_int_in_the_first_regist
             .filter(|f| !skip.contains(f))
             .collect();
         let bin = fixtures.join(fixture).to_str().unwrap().to_string();
-        let (stdout, stderr, ok) = run_unlace(&[
+        let pin: &[&str] = if fixture.contains("arm") {
+            &["--option", "armpairparam", "off"]
+        } else {
+            &[]
+        };
+        let mut args = vec![
             "decompile-all",
-            &bin,
+            bin.as_str(),
             "--sleighpath",
-            &sp,
+            sp.as_str(),
             "--option",
             "bejoin",
             "on",
-        ]);
+        ];
+        args.extend_from_slice(pin);
+        let (stdout, stderr, ok) = run_unlace(&args);
         assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, &funcs);
         let sigs: Vec<&str> = printed
@@ -13869,7 +13880,8 @@ fn bejoin_callers_read_a_pair_alike_in_every_run() {
 /// went with them; the sizes the symbols state keep the walk out of both.
 /// `c_hi` reads only the first register of each, so every function prints as
 /// with `bejoin evidence`, in a whole `decompile-all` and a single
-/// `unlace decompile`.
+/// `unlace decompile`. The ARM and Thumb fixtures run with `armpairparam` off, as
+/// in 533b021def, since the join would change the parameter words they print.
 #[test]
 fn bejoin_callers_ignore_code_a_call_does_not_return_to() {
     const HIDDEN: &[&str] = &["hi_p", "hi_t", "hi_c", "u_ptr", "u_tl", "u_cold", "c_hi"];
@@ -13929,8 +13941,14 @@ fn bejoin_callers_ignore_code_a_call_does_not_return_to() {
     ];
     for (fixture, funcs, expect) in cases {
         let bin = fixtures.join(fixture).to_str().unwrap().to_string();
+        let pin: &[&str] = if fixture.contains("arm") || fixture.contains("thumb") {
+            &["--option", "armpairparam", "off"]
+        } else {
+            &[]
+        };
         let run = |extra: &[&str]| {
             let mut args = vec!["decompile-all", bin.as_str(), "--sleighpath", sp.as_str()];
+            args.extend_from_slice(pin);
             args.extend_from_slice(extra);
             let (out, stderr, ok) = run_unlace(&args);
             assert!(
@@ -13947,6 +13965,7 @@ fn bejoin_callers_ignore_code_a_call_does_not_return_to() {
         };
         let single = |f: &str, extra: &[&str]| {
             let mut args = vec!["decompile", bin.as_str(), f, "--sleighpath", sp.as_str()];
+            args.extend_from_slice(pin);
             args.extend_from_slice(extra);
             let (out, stderr, ok) = run_unlace(&args);
             assert!(ok, "unlace decompile {fixture} {f} failed: {stderr}");
@@ -14150,6 +14169,10 @@ fn an_int_kept_in_a_stack_slot_proves_no_loaded_pair() {
 /// function that prints with the source's word count is compiled with gcc and
 /// clang at -O0 and -O2 against `bejoin_hiop.c`, 64-bit arguments split high
 /// word first.
+/// The ARM fixtures run with `armpairparam` off: that option (on by default since
+/// fc53d27e61, 2026-11-24) joins each aligned register pair into one 8-byte
+/// parameter, and these tests count the words of each signature, so they pin it
+/// off as 533b021def does.
 #[test]
 fn an_int_worked_out_from_the_high_half_of_a_temporary_keeps_it() {
     const SHAPES: [(&str, &str); 22] = [
@@ -14197,15 +14220,22 @@ fn an_int_worked_out_from_the_high_half_of_a_temporary_keeps_it() {
         ),
     ] {
         let bin = fixtures_dir.join(fixture).to_str().unwrap().to_string();
-        let (stdout, stderr, ok) = run_unlace(&[
+        let pin: &[&str] = if fixture.contains("arm") {
+            &["--option", "armpairparam", "off"]
+        } else {
+            &[]
+        };
+        let mut args = vec![
             "decompile-all",
-            &bin,
+            bin.as_str(),
             "--sleighpath",
-            &sp,
+            sp.as_str(),
             "--option",
             "bejoin",
             "on",
-        ]);
+        ];
+        args.extend_from_slice(pin);
+        let (stdout, stderr, ok) = run_unlace(&args);
         assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let checked: Vec<(&str, &str)> = SHAPES
             .iter()

@@ -1652,9 +1652,10 @@ at the match (01 §1.4).
   arguments in its place: a constructor run on one local was handed another
   local's fields. Flow reads the callee when it builds the call spec, because
   only flow holds the instruction decoder. The callee's p-code is followed
-  along the straight line its first instructions run, through direct `jmp`s
-  (so an incremental-link stub reaches the body), until a conditional branch,
-  a call, a return, an indirect jump or 64 instructions. A register read before
+  along every path its first instructions reach, through direct `jmp`s
+  (so an incremental-link stub reaches the body), through both edges of a
+  conditional branch, until a call, a return, an indirect jump or 64
+  instructions in all. A register read before
   any part of it is written is an input; once `mov cx,[eax+0xa]` has set its low
   half, a read of all of ECX takes upper bytes no caller sets (the CRT's float
   formatter masks them off), and counting it gave such a callee a `this` its
@@ -1681,8 +1682,8 @@ at the match (01 §1.4).
   the register's entry value being genuinely read before it is written: the
   post-heritage entry reads `passthrough` records (`entryreads.rs`), filed
   per function after each decompile (`calleereginputs.rs (record)`) together
-  with every direct call the decompile printed. These see a value the
-  straight-line decode above cannot (one read past the first branch, or pushed to
+  with every direct call the decompile printed. These see a value a
+  decode of the entry's paths cannot (one read past a call, or pushed to
   a sub-call and compared after it), while a value only saved in the prologue and
   restored, or only stored, does not count. Before the pass, while the call graph
   is alive, each eligible callee's direct call sites and the functions they sit in
@@ -2550,7 +2551,7 @@ classified:
   parameters in registers (`regparm` in `EAX`, `EDX`, `ECX`; `__fastcall` in `ECX`,
   `EDX`; `__thiscall` in `ECX`), so when the declared list places every parameter on
   the stack while the direct callee's own entry reads `r` of `EAX`, `ECX` and `EDX`
-  before writing them (the straight-line walk of `unlace_calleereginputs`, x86-32
+  before writing them (the entry-read walk of `unlace_calleereginputs`, x86-32
   Windows), its stack arguments are at most the declared parameters after the first
   `r`, and a slot above them is not one. GCC passes a static function's arguments in
   registers while its debug information lists them as ordinary parameters: wine's

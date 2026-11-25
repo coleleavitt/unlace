@@ -11967,7 +11967,7 @@ int main(void) {
   static const long recs[] = {2, 3, 5, 7, 11, 13};
   unsigned long n = 0;
   unsigned char *dec = w_decode("aGVsbG8gd29ybGQ=", 16, &n);
-  char *rev = @REV@ ? w_rev("unlace", 4) : (w_rev("unlace", 4), "-");
+  char *rev = @REV@ ? w_rev("kuna", 4) : (w_rev("kuna", 4), "-");
   long a = w_sbytes(hi, 6);
   long b = w_ubytes((const unsigned char *)hi, 6);
   long c = w_words(wide, 16);

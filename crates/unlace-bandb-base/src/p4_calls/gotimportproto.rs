@@ -8,7 +8,9 @@
 //! the caller uses. A MIPS PIC call to an import loads its target from the
 //! import's external-symbol GOT slot and calls through `jalr t9`, so the callee
 //! is proven by the loader, and a preserved incoming argument register cannot
-//! establish the import's arity. Such a call
+//! establish the import's arity. A RISC-V call through an `auipc`/`jalr` pair
+//! to an undefined symbol is the same case: its constant target deindirects to
+//! the import's extern slot. Such a call
 //! takes the declared prototype when the loader proved the entry an import and
 //! every parameter and the return are concrete, non-void types. Missing, void
 //! and unknown types, variadic declarations, which fix no arity, and entries

@@ -291,7 +291,8 @@ pub struct Architecture {
     /// Loader-proven tail transfers: a call whose callee returns to this
     /// function's caller, decoded as a call followed by a return.
     pub loader_transfer_sites: Rc<std::collections::BTreeSet<Address>>,
-    /// MIPS GOT import entries identified by the loader, never ordinary definitions.
+    /// Import entries the loader identifies (a MIPS GOT slot, a RISC-V call relocation
+    /// to an undefined symbol), never ordinary definitions.
     pub loader_mips_imports: Rc<std::collections::BTreeSet<Address>>,
     pub nullable_literal_values: Rc<std::collections::BTreeSet<u64>>,
 

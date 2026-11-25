@@ -6621,6 +6621,16 @@ pub(crate) fn bootstrap_object(
         .mips_linkage()
         .filter(|_| arch_id.starts_with("MIPS:"))
         .cloned();
+    let riscv_import_slots: Vec<u64> = if arch_id.starts_with("RISCV:") {
+        loader
+            .reloc_symbols()
+            .iter()
+            .filter(|sym| sym.undefined)
+            .map(|sym| sym.vma)
+            .collect()
+    } else {
+        Vec::new()
+    };
     let isa = isa.or_else(|| {
         let file = parsed.as_ref()?;
         unlace_analysis::loadimage_object::arm_isa_hint(file, &bytes)
@@ -6956,6 +6966,14 @@ pub(crate) fn bootstrap_object(
                 mips_t9_probe(prog.arch().translate().loader_rc(), elf32, little, loc.size),
             ));
         }
+    }
+    if !riscv_import_slots.is_empty() {
+        prog.arch_mut().loader_mips_imports = Rc::new(
+            riscv_import_slots
+                .into_iter()
+                .map(|vma| Address::new(Rc::clone(&code_space), vma))
+                .collect(),
+        );
     }
     prog.load_notes = load_notes;
     prog.symbols = SymbolStream::from_loader(symbols);

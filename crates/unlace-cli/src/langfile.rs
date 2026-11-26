@@ -2,6 +2,8 @@
 //! output language and overrides parts of it (`unlace_decomp::langflavour`,
 //! `docs/cli.md` "Language files").
 
+use std::path::Path;
+
 use unlace_console::engine::ConsoleProgram;
 use unlace_decomp::lang::OutLang;
 use unlace_decomp::langflavour::{self, Flavour};
@@ -12,6 +14,8 @@ use unlace_decomp::printc::ArchPrintExt;
 pub(crate) struct LanguageFile {
     /// The path as given; a console script and a `--jobs` worker read the file again from it.
     pub(crate) path: String,
+    /// The flavour's name: the file's `name`, else the file stem.
+    pub(crate) name: String,
     flavour: &'static Flavour,
 }
 
@@ -22,8 +26,19 @@ impl LanguageFile {
             std::fs::read_to_string(path).map_err(|e| format!("--language-file {path}: {e}"))?;
         let flavour =
             langflavour::load(&text).map_err(|e| format!("--language-file {path}: {e}"))?;
+        let name = match flavour.name() {
+            Some(name) => name.to_string(),
+            None => Path::new(path)
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .ok_or_else(|| {
+                    format!("--language-file {path}: no file name to take a flavour name from")
+                })?
+                .to_string(),
+        };
         Ok(Self {
             path: path.to_string(),
+            name,
             flavour,
         })
     }

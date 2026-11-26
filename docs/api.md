@@ -132,7 +132,7 @@ read and checked when the method is called. An unknown field, a value its field 
 or an override the base language's printer cannot honour is `Error::Request` naming the field;
 an unreadable file is `Error::Io`. The file names its base language, so `with_language` does
 not apply with it: the load refuses the pair. `Decompiled::json` reports the base language in
-`"language"`.
+`"language"` and the flavour's name in `"language_flavour"`.
 
 ```rust
 let mut decompiler = unlace::Decompiler::open("a.out")?.with_language_file("pseudo.toml")?;

@@ -287,8 +287,9 @@ fn only_types_are_renamed(r: &FuncResult, map: &[(String, String)]) -> bool {
 }
 
 /// `r` with its structures renamed from `own` to `serial`, or `None` when the
-/// two answer lists do not name structures with the same members, or the
-/// function's text names one the renaming does not cover.
+/// two answer lists do not name structures with the same members, the
+/// function's text names one the renaming does not cover, or it carries a token
+/// map or tree that the renaming would leave behind.
 fn rename_result(
     r: &FuncResult,
     own: Option<&[shard::Answer]>,
@@ -297,6 +298,12 @@ fn rename_result(
 ) -> Option<FuncResult> {
     let map = shard::renaming(own?, serial)?;
     if !only_types_are_renamed(r, &map) {
+        return None;
+    }
+    // The token map and the tree hold positions in the code and the names as
+    // the worker spelled them, so a rename of the code leaves them stale. Such a
+    // function is decompiled again with the serial names instead.
+    if r.detail.is_some() && !map.is_empty() {
         return None;
     }
     let text = |s: &str| shard::rename_identifiers(s, &map, held);

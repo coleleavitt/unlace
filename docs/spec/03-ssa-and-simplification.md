@@ -725,6 +725,43 @@ moves: the walk must still be complete, the range must still be a register the
 walk proves untouched, an explicit effect override still wins, and only *killed
 by call* is ever downgraded.
 
+**A caller that reads the register is the third mark.** gcc's `-fipa-ra`
+allocates a caller's registers against what each callee really clobbers, so
+gcc 15 keeps an accumulator in `RDX` across `call add` when `add` is `lea
+rax,[rdi+rsi]; ret` (GH-1497). `x86-64-gcc.cspec` lists `RDX` in
+`<killedbycall>` as the high half of a 128-bit return; the INDIRECT creation
+left every later read of the accumulator with no definition, and the loop printed
+`v2 = v3` from a `v3` nothing assigns. `add` writes neither a preserved
+register nor memory, so neither mark above admits it, and the return-register
+arm below declines `RDX` because it carries arguments. The caller-read clause
+(`crates/unlace-bandb/src/p4_calls/calleeiparead.rs (caller_relies_on)`)
+admits the body when the caller itself reads a byte of the register after the
+call that no op between the call and the read has written again. A caller
+compiled to the convention never does that with a killed register except to
+read the call's result, and a callee whose complete walk never writes the
+register returns nothing in it, so such a read is what the caller was compiled
+to rely on. The forward walk (`calleeiparead.rs (caller_reads_across)`) follows
+the op order of the call's block and then its successors, tracks which bytes
+of the range are still the value from the call, ends a path where all of them
+are written again or at the next CALL or CALLIND, skips INDIRECT and
+MULTIEQUAL markers, does not count `x ^ x` or `x - x`, and declines after 4096
+ops. A register only a later call's argument trial would read is not a read
+(trials are not ops during heritage), so that register keeps the convention's
+answer and no call gains an argument from it. The callee must still be a body in
+the return-register arm's sense (`calleeretpreserves.rs (body_is_a_body)`):
+more than one instruction and a write to a register the convention names. The
+clause answers only for a register the model returns a value in as the second
+half of a pair, the register entry that is not first in its class
+(`callretpair.rs (pair_of)`'s reading; `RDX` beside `RAX`): the first-in-class
+return register and a locked non-void declared output are the call's result
+(`calleeiparead.rs (the_calls_result)`) and stay with the return-register arm,
+so a callee that hands its argument back untouched in `RAX` and writes `RBX`
+keeps its two-register `RBX:RAX` result. Fixtures built by gcc at `-O2` show
+the clause at work beyond GH-1497: the `persistcalls` and `prunedssa`
+`churn` functions keep their accumulator in `RDX` across every call to a
+`sink` that writes only `RAX`, and printed it as hundreds of locals nothing
+assigns until the read across the call kept it.
+
 **The return register is a different question.** That positive finding — a write
 to a register the model marks `<unaffected>` — is the signature of a hand-rolled
 helper, and a helper that clobbers only what its convention already allows never

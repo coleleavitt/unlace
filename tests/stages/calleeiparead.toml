@@ -1,0 +1,87 @@
+# unlace GH-1497: gcc 15 keeps a loop accumulator in RDX across a call to a
+# callee it knows writes only RAX (-fipa-ra), and the accumulator printed as a
+# local nothing assigns.
+#
+# x86-64-gcc.cspec lists RDX in <killedbycall> (the high half of a 128-bit
+# return), so Heritage::guardCalls planted an INDIRECT creation of RDX at the
+# call and the read `s += a` after it had no definition:
+#
+#     while (v1 = add(a,b), v2 = v3, 4 < v1) { v2 = v3 + a; a -= 1; ... }
+#
+# The callee probe proves `add` never writes RDX, but `add` writes neither a
+# preserved register nor memory, so calleepreserves' two marks refused it, and
+# calleeretpreserves refuses RDX as an argument register. The caller reading RDX
+# after the call before writing it is the third mark
+# (calleeiparead.rs (caller_relies_on)).
+#
+# Bytes: loop_calls and add from tests/fixtures/go-output/output.c built by
+# gcc 15.3 with the README's command (gcc -O2 -g -fno-pie -no-pie -fno-inline
+# -fno-stack-protector); the fixture binary itself is the gcc 11.4 build, which
+# keeps the accumulator in R8 instead.
+#
+#   int64_t add(int64_t a,int64_t b) { return a+b; }
+#   int64_t loop_calls(int64_t a,int64_t b)
+#   { int64_t s=0;while(a>0 && add(a,b)>4){s+=a;a--;}return s; }
+#
+#     4012a4  xor  edx,edx          ; s = 0
+#     4012a6  test rdi,rdi
+#     4012a9  jg   4012b9
+#     4012ab  jmp  4012c4
+#     4012b0  add  rdx,rdi          ; s += a   (RDX read after the call)
+#     4012b3  sub  rdi,0x1
+#     4012b7  je   4012c4
+#     4012b9  call 401140           ; add: endbr64; lea rax,[rdi+rsi]; ret
+#     4012be  cmp  rax,0x4
+#     4012c2  jg   4012b0
+#     4012c4  mov  rax,rdx          ; return s
+#     4012c7  ret
+#
+# Stage: P3 heritage call guarding; the callee-body preservation proof is
+# always on.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401140', name = 'add' },
+    { space = 'ram', offset = '0x4012a0', name = 'loop_calls' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401140'
+readonly = true
+hex = 'f30f1efa488d0437c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x4012a0'
+readonly = true
+hex = 'f30f1efa31d24885ff7f0eeb170f1f004801fa4883ef01740be882feffff4883f8047fec4889d0c3'
+
+[script]
+commands = [
+    'lo fu loop_calls',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CALLEEIPAREAD #1: the accumulator is one rdx local, not a second one nothing assigns'
+count = 1
+regex = '^  int8 v[0-9]+; // rdx$'
+
+[[match]]
+name = 'CALLEEIPAREAD #2: the loop adds the counter into the accumulator it read across the call'
+count = 1
+literal = 'v1 += a0;'
+
+[[match]]
+name = 'CALLEEIPAREAD #3: no copy out of a local the call left undefined'
+count = 0
+regex = 'v[0-9]+ = v[0-9]+[,;]'
+
+[[match]]
+name = 'CALLEEIPAREAD #4: both exits return the accumulator'
+count = 2
+literal = 'return v1;'

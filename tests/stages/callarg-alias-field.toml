@@ -1,0 +1,47 @@
+# unlace #871 (PEGRP32F-class, jt871 neighbour): a stack struct's address is passed to a call,
+# and a field read after the call is returned. The field's slot lies outside the parameter
+# window, so `is_unmapped_unaliased` alone marks it nolocalalias and RuleIndirectCollapse drops
+# the call's INDIRECT guard on it: the read folds to the 0 stored before the call. The callee
+# has a prototype, so its pointer argument is a call input the alias gather can see.
+#
+# Bytes (hand-assembled x86-64, no compiler): sub rsp,0x18; mov qword [rsp+8],0; mov rdi,rsp;
+# call ext; mov eax,[rsp+8]; add rsp,0x18; ret. ext at 0x100020 is a bare ret. Before the fix
+# the output is `return 0;` after `ext(a0);`; after it the field read stays.
+
+[image]
+arch = 'x86:LE:64:default:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'esc' },
+    { space = 'ram', offset = '0x100020', name = 'ext' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '4883ec1848c7442408000000004889e7e80b0000008b4424084883c418c3cccc'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100020'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'parse line extern int4 ext(int4 *p);',
+    'lo fu esc',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CALLARG #1: the callee is passed the struct address'
+count = 1
+literal = 'ext(a0);'
+
+[[match]]
+name = 'CALLARG #2: the field read after the call does not fold to the value stored before it'
+count = 0
+literal = 'return 0;'

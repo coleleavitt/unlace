@@ -176,6 +176,24 @@ fn a_delay_slot_belongs_to_its_branch() {
     );
 }
 
+/// The `(name, type)` of each variable `register` holds on entry to `address`.
+fn held_in(function: &Value, register: &str, address: u64) -> Vec<(String, String)> {
+    let holds = |piece: &Value| {
+        let mut ranges = piece["ranges"].as_array().expect("ranges").iter();
+        piece["register"] == register
+            && ranges
+                .any(|r| r["start"].as_u64() <= Some(address) && Some(address) < r["end"].as_u64())
+    };
+    let text = |value: &Value| value.as_str().expect("a string").to_owned();
+    function["variables"]
+        .as_array()
+        .expect("variables")
+        .iter()
+        .filter(|v| v["storage"].as_array().expect("storage").iter().any(holds))
+        .map(|v| (text(&v["name"]), text(&v["type"])))
+        .collect()
+}
+
 /// A conditional move is one instruction per path for the walk, so its write
 /// counts only where it is made (`unlace disassemble ptx.o compare_words`):
 ///
@@ -189,21 +207,9 @@ fn a_conditional_move_writes_on_the_path_that_makes_it() {
         &common::fixture("ptx.o"),
         &["decompile", "compare_words", "--storage"],
     );
-    let in_rcx = |address: u64| -> Vec<&str> {
-        let holds = |piece: &Value| {
-            let ranges = piece["ranges"].as_array().expect("ranges").iter();
-            piece["register"] == "rcx"
-                && ranges.clone().any(|r| {
-                    r["start"].as_u64() <= Some(address) && Some(address) < r["end"].as_u64()
-                })
-        };
-        doc["functions"][0]["variables"]
-            .as_array()
-            .expect("variables")
-            .iter()
-            .filter(|v| v["storage"].as_array().expect("storage").iter().any(holds))
-            .map(|v| v["name"].as_str().expect("name"))
-            .collect()
+    let in_rcx = |address: u64| -> Vec<String> {
+        let held = held_in(&doc["functions"][0], "rcx", address);
+        held.into_iter().map(|(name, _)| name).collect()
     };
     // After the move rcx is `length`, the smaller of the two, on both paths.
     assert_eq!(in_rcx(0x400029), ["length"]);
@@ -212,6 +218,37 @@ fn a_conditional_move_writes_on_the_path_that_makes_it() {
     let before = in_rcx(0x400025);
     assert_eq!(before.len(), 1, "{before:?}");
     assert_ne!(before[0], "length");
+}
+
+/// A block joined across a jump runs in the order control takes, which is not
+/// address order: every case of `credits` jumps back to the shared tail, and
+/// the decompiler gives each case its own copy of it
+/// (`objdump -d fmtvalist_x86_64`):
+///
+/// ```text
+/// 11f0 <credits>: push %rbp     11f1: mov %rdi,%rbp          ; the stream
+/// 1394: mov 0x78(%rsp),%rax     ... 13b0: pop %rbp   13b1: ret    ; the tail
+/// 13e2: mov 0x20(%rsp),%rcx     13e7: mov $0x1,%esi          13ec: mov %rbp,%rdi
+/// 13ef: xor %eax,%eax           13f1: lea 0xc4c(%rip),%rdx
+/// 13f8: call __fprintf_chk      13fd: jmp 1394
+/// ```
+#[test]
+fn a_block_joined_across_a_jump_runs_in_control_order() {
+    let doc = run_on(
+        &common::fixture("fmtvalist_x86_64"),
+        &["decompile", "credits", "--storage"],
+    );
+    let stream = |address: u64| -> Vec<String> {
+        let held = held_in(&doc["functions"][0], "rbp", address);
+        held.into_iter().map(|(_, type_name)| type_name).collect()
+    };
+    // The case's argument set-up runs before its call and before the tail:
+    // rbp is the stream there, and 13ec passes it on.
+    for address in [0x13e2, 0x13ec, 0x13f8] {
+        assert_eq!(stream(address), ["FILE *"], "{address:#x}");
+    }
+    // The tail restores the caller's rbp; nothing reads the stream after the call.
+    assert!(stream(0x13b0).is_empty());
 }
 
 /// The key is opt-in, so a document that does not ask for it is the document

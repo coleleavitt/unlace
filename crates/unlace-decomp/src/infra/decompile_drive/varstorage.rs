@@ -26,8 +26,10 @@
 //!   never overlap.
 //!
 //! An instruction is the part of one in one basic block: a conditional move is
-//! two, and its write counts on the path through the block that makes it. An
-//! instruction none of whose p-code survived takes the liveness the
+//! two, and its write counts on the path through the block that makes it. A
+//! block's instructions are in the order control passes through them
+//! ([`in_order`]), which is not address order where blocks were joined across
+//! a jump. An instruction none of whose p-code survived takes the liveness the
 //! instruction before it in its block left. An instruction no basic block
 //! covers (padding between two) is in no range.
 
@@ -341,6 +343,11 @@ struct Written {
     stores_move: bool,
     /// The temporaries that hold a moved value.
     moved: BTreeSet<u64>,
+    /// Where the instruction's last op branches, when it branches to an
+    /// address, and whether on a condition.
+    exit: Option<(u64, bool)>,
+    /// The instruction has p-code at all.
+    acts: bool,
 }
 
 impl Written {
@@ -404,6 +411,15 @@ impl PcodeEmit for Written {
                     .space
                     .as_ref()
                     .is_some_and(|space| space.get_type() == spacetype::IPTR_CONSTANT)
+        };
+        self.acts = true;
+        self.exit = match (opc, vars) {
+            (OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH, [target, ..]) => target
+                .space
+                .as_ref()
+                .filter(|space| space.get_type() == spacetype::IPTR_PROCESSOR)
+                .map(|_| (target.offset, opc == OpCode::CPUI_CBRANCH)),
+            _ => None,
         };
         let moved = match (opc, vars) {
             (OpCode::CPUI_LOAD, _) => true,
@@ -529,46 +545,42 @@ impl<'a> Machine<'a> {
                     })
                     .or_insert((order, order));
             }
-            // Each range of the block as instructions, with what they write. An
+            // Each range of the block as instructions, with what they write, cut
+            // into straight runs: a run ends where an instruction jumps away, or
+            // may have (a conditional jump no op is left for was decided). An
             // instruction's ops are those at any address inside it: the ops of
             // a delay slot carry the address of the instruction in the slot.
-            let runs: Vec<Vec<Slot>> = fd
-                .bb_ranges(bl)
-                .map(|range| {
-                    decode(arch, range.get_space(), range.get_first(), |at| {
-                        at <= range.get_last()
-                    })
-                    .into_iter()
-                    .map(|(start, end, written)| Slot {
+            let mut runs: Vec<Vec<Slot>> = Vec::new();
+            for range in fd.bb_ranges(bl) {
+                let mut run = Vec::new();
+                let last = range.get_last();
+                for (start, end, written) in
+                    decode(arch, range.get_space(), range.get_first(), |at| at <= last)
+                {
+                    let ops = ops
+                        .range(start..end)
+                        .map(|(_, &ops)| ops)
+                        .reduce(|a, b| (a.0.min(b.0), a.1.max(b.1)));
+                    let leaves = match written.exit {
+                        Some((_, conditional)) => !conditional || ops.is_none(),
+                        None => false,
+                    };
+                    run.push(Slot {
                         block: index,
                         start,
                         end,
-                        ops: ops
-                            .range(start..end)
-                            .map(|(_, &ops)| ops)
-                            .reduce(|a, b| (a.0.min(b.0), a.1.max(b.1))),
+                        ops,
                         written,
-                    })
-                    .collect()
-                })
-                .collect();
-            // A block spliced from several ranges runs them in op order. A range
-            // none of whose p-code survived goes before the one after it in
-            // address order: the two are split by an instruction without p-code.
-            let mut order: Vec<uintm> = runs
-                .iter()
-                .map(|run| {
-                    run.iter()
-                        .find_map(|slot| slot.ops)
-                        .map_or(uintm::MAX, |ops| ops.0)
-                })
-                .collect();
-            for i in (1..order.len()).rev() {
-                order[i - 1] = order[i - 1].min(order[i]);
+                    });
+                    if leaves {
+                        runs.push(std::mem::take(&mut run));
+                    }
+                }
+                if !run.is_empty() {
+                    runs.push(run);
+                }
             }
-            let mut runs: Vec<(uintm, Vec<Slot>)> = order.into_iter().zip(runs).collect();
-            runs.sort_by_key(|(order, run)| (*order, run.first().map(|slot| slot.start)));
-            let mut runs: Vec<Vec<Slot>> = runs.into_iter().map(|(_, run)| run).collect();
+            let mut runs = in_order(runs);
             // Instructions without p-code between the function's entry and its
             // first op (an `endbr64`) run before the entry block's first one.
             let entry = fd.get_address();
@@ -579,7 +591,9 @@ impl<'a> Machine<'a> {
             {
                 let stop = first.start;
                 let lead = decode(arch, space, entry.get_offset(), |at| at < stop);
-                if lead.last().is_some_and(|&(_, end, _)| end == stop) {
+                if lead.last().is_some_and(|&(_, end, _)| end == stop)
+                    && lead.iter().all(|(.., written)| !written.acts)
+                {
                     let lead = lead.into_iter().map(|(start, end, written)| Slot {
                         block: index,
                         start,
@@ -994,6 +1008,66 @@ impl<'a> Machine<'a> {
             }
         }
     }
+}
+
+/// The straight runs of one basic block in the order control passes through
+/// them. Runs with surviving ops are in op order. A run none of whose p-code
+/// survived goes before the run it leads to: the one its last instruction
+/// jumps to, else the next one by address. A conditional jump was taken when
+/// its target starts a run of the block. A run that leads to none is last.
+fn in_order(runs: Vec<Vec<Slot>>) -> Vec<Vec<Slot>> {
+    let first_op = |at: usize| runs[at].iter().find_map(|slot| slot.ops).map(|ops| ops.0);
+    let starts: BTreeMap<u64, usize> = runs
+        .iter()
+        .enumerate()
+        .map(|(at, run)| (run[0].start, at))
+        .collect();
+    let leads_to = |at: usize| {
+        let last = &runs[at][runs[at].len() - 1];
+        let from = |target: u64| {
+            let mut later = starts.range(target..).map(|(_, &other)| other);
+            later.find(|&other| other != at)
+        };
+        match last.written.exit {
+            Some((target, false)) => from(target),
+            Some((target, true)) => starts
+                .get(&target)
+                .copied()
+                .filter(|&other| other != at)
+                .or_else(|| from(last.end)),
+            None => from(last.end),
+        }
+    };
+    let (mut with_ops, loose): (Vec<usize>, Vec<usize>) =
+        (0..runs.len()).partition(|&at| first_op(at).is_some());
+    with_ops.sort_by_key(|&at| first_op(at));
+    // The runs without ops that lead to each run, by address.
+    let mut before: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for &at in &loose {
+        if let Some(next) = leads_to(at) {
+            before.entry(next).or_default().push(at);
+        }
+    }
+    let mut sequence = Vec::with_capacity(runs.len());
+    let mut placed = vec![false; runs.len()];
+    for root in with_ops.into_iter().chain(loose) {
+        // The runs that lead to `root`, then `root`.
+        let mut stack = vec![(root, false)];
+        while let Some((at, led_to)) = stack.pop() {
+            if led_to {
+                sequence.push(at);
+            } else if !std::mem::replace(&mut placed[at], true) {
+                stack.push((at, true));
+                let prior = before.get(&at).into_iter().flatten();
+                stack.extend(prior.rev().map(|&prior| (prior, false)));
+            }
+        }
+    }
+    let mut runs: Vec<Option<Vec<Slot>>> = runs.into_iter().map(Some).collect();
+    sequence
+        .into_iter()
+        .filter_map(|at| runs[at].take())
+        .collect()
 }
 
 /// The instructions from `at` while `more(at)`: each one's extent and what its

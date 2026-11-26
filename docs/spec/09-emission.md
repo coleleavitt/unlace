@@ -2298,15 +2298,16 @@ argument error.
 A whole-binary C run edits `code` once more after the render: where a callee
 declares a character pointer and a call passes a scalar address,
 `project.rs (reconcile_pointer_arguments)` inserts a cast at the argument. The
-map used to be withheld for such a function. It now follows the edit:
+map follows the edit:
 `srcmap.rs (insert_casts)` adds a `(`, a `type` token and a `)` at each cast
 that was applied, the kinds the printer gives a cast of its own, and moves the
 later tokens of that line right by the cast's length;
 `inspect.rs (FuncDetail::insert_casts)` keeps the per-token global references
 aligned and runs `verify` against the edited text, so the map still ships only
-when it rebuilds `code` exactly. Over 1,389 ELF, PE and Mach-O fixtures of the
-repository, decompiled whole through the CLI, all 37,977 function bodies
-verify, and `code` is identical with and without the flag;
+when it rebuilds `code` exactly. Over the 1,399 ELF, PE and Mach-O fixtures of
+the repository that load without `--target`, decompiled whole through the CLI,
+all 47,205 function bodies verify (16.0 million tokens), and `code` is
+identical with and without the flag;
 `crates/unlace-cli/tests/tokens_cli.rs` holds the same checks as the
 console-path test over seven of them in C and Rust.
 

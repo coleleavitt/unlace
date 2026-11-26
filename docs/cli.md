@@ -2584,10 +2584,10 @@ a drifted map is never shipped. A record without `code` has `[]` and `null`.
 The casts a whole-binary C run adds after the render, to a scalar address passed
 where the callee declares a character pointer, are in the map as a `(`, a `type`
 token and a `)`. A `--jobs N` worker's record does not carry the map, so
-`--tokens` with `--jobs` above 1 exits 2 and names `--jobs 1`. Over 1,389 ELF,
-PE and Mach-O fixtures of the repository (37,977 function bodies), every map
-rebuilds its code and `code` is identical with and without the flag; a run
-executes 1.1-2.4% more instructions with it.
+`--tokens` with `--jobs` above 1 exits 2 and names `--jobs 1`. Over the 1,399
+ELF, PE and Mach-O fixtures of the repository that load without `--target`
+(47,205 function bodies), every map rebuilds its code and `code` is identical
+with and without the flag; a run executes 1.1-2.4% more instructions with it.
 
 ```bash
 unlace decompile ./sample.elf sum_to --json --tokens

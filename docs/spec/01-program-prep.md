@@ -10790,7 +10790,7 @@ included, after the `coldentry` entries are added. A cold throw path reached by
 an ordinary branch (`may_throw.cold`) is not a landing-pad target and stays a
 function. x86/x86-64 ELF only.
 
-**(unlace) Or any other single-owner cold part** (`functails`, default off;
+**(unlace) Or any other single-owner cold part** (`functails`, default on;
 `crates/unlace-analysis/src/analyzers/entry/ehcold.rs (cold_tail_owners)`). The
 same test without the landing pad takes every `.cold` part IDA keeps as a
 function tail (`AF_FTAIL`, libida `append_func_tail`): a lone `ud2` after an

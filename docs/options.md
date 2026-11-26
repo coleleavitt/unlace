@@ -837,9 +837,9 @@ Three tiers:
 | many sub_<addr> functions that end in _Unwind_Resume() | [`ehcold`](#ehcold----on--off-default-on) |
 | a stripped c++ binary's function list is full of cleanup fragments from .text.unlikely | [`ehcold`](#ehcold----on--off-default-on) |
 | a function that starts by reading an undefined rbx and frees buffers before _Unwind_Resume | [`ehcold`](#ehcold----on--off-default-on) |
-| many sub_<addr> functions that are a single ud2 at the start of .text | [`functails`](#functails----on--off-default-off) |
-| a function jumps to sub_<addr> for its error path instead of showing it | [`functails`](#functails----on--off-default-off) |
-| a gcc .cold part is listed as its own function | [`functails`](#functails----on--off-default-off) |
+| many sub_<addr> functions that are a single ud2 at the start of .text | [`functails`](#functails----on--off-default-on) |
+| a function jumps to sub_<addr> for its error path instead of showing it | [`functails`](#functails----on--off-default-on) |
+| a gcc .cold part is listed as its own function | [`functails`](#functails----on--off-default-on) |
 | an mfc window class's message handlers are missing from the function list | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
 | a function in an mfc image spans several handlers that a message map names | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
 | IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
@@ -3433,11 +3433,11 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/code-data-partition · unlace · analysis-enablement · ida95-22-ehcold
 - **Example:** `--option ehcold off`
 
-### `functails` -- on | off, default `off`
+### `functails` -- on | off, default `on`
 
 - **Symptoms:** many sub_<addr> functions that are a single ud2 at the start of .text; a function jumps to sub_<addr> for its error path instead of showing it; a gcc .cold part is listed as its own function.
 - **What it does:** Keep every single-owner .cold part out of the function list, as IDA keeps a function tail (AF_FTAIL, append_func_tail). GCC's hot/cold split moves a function's unlikely blocks (ud2 traps, error paths, the cleanups ehcold already takes) into .text.unlikely, each with its own FDE; the FDE oracle listed each as a function, so each was listed and decompiled on its own beside the owner that already decodes it. With the option on, an FDE body with no function symbol at its start, targeted by no direct call, entered by direct jmp/jcc rel32 only from ONE other FDE body (its owner), laid out before that owner, or starting exactly where the owner's FDE ends, and starting off the 16-byte function alignment contributes no entries: the commit drops every discovered entry inside it, its start included. A tail that starts where the owner's FDE ends also extends that owner's `fdeflowbound` extent over it, so flow may fall from the owner into it. ehcold is the landing-pad case of the same rule. x86/x86-64 ELF only.
-- **When to flip:** Off by default. Turn it on for a gcc -O2 x86-64 ELF whose function list carries many small sub_<addr> fragments at the start of .text that only one function jumps to (a lone ud2, an error call), so they stop crowding the function list. On IDA 9.5's own databases of its loaders, the IDA tail chunks unlace lists as functions drop from 9/51/4/18 to 2/12/0/5 (pe/elf/coff/dex.so), and one function IDA keeps is lost (pe.so 0x62fe). The owners print the same C: their flow already decoded the parts. Leave it off to list and decompile the cold parts on their own.
+- **When to flip:** On by default: a gcc -O2 x86-64 ELF whose function list carries many small sub_<addr> fragments at the start of .text that only one function jumps to (a lone ud2, an error call) no longer lists them, so they stop crowding the function list. On IDA 9.5's own databases of its loaders, the IDA tail chunks unlace lists as functions drop from 9/51/4/18 to 2/12/0/5 (pe/elf/coff/dex.so), and one function IDA keeps is lost (pe.so 0x62fe). The owners print the same C: their flow already decoded the parts. Turn it off to list and decompile the cold parts on their own.
 - **Where / provenance:** P1/code-data-partition · unlace · analysis-enablement · ida-gap-kernel-autoanalysis-1
 - **Example:** `--option functails on`
 

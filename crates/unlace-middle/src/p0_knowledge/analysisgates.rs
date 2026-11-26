@@ -284,7 +284,7 @@ crate::unlace_flag!(
     "functails",
     "Single-owner .cold parts kept as their owner's tails",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 crate::unlace_flag!(

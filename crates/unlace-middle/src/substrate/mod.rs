@@ -51,6 +51,8 @@ pub mod printhandle;
 pub mod rangeutil;
 pub mod regioneval;
 pub mod specnames;
+pub mod syscallnames; // (unlace `syscallnames`) ARM and AArch64 system calls by name
+pub mod syscalltables; // (unlace `syscallnames`) generated system-call number tables
 pub mod transform;
 pub mod typeop;
 pub mod typequal; // (unlace) C type qualifiers on their own type layer

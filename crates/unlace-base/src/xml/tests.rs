@@ -570,6 +570,10 @@ fn test_xml_malformed_plain_syntax_errors() {
         b"<?xml?><a/>",                                // XML decl without version
         b"<?xml version='1.0' standalone='yes'?><a/>", // unsupported decl attr
         b"<1a/>",                                      // name starting with a digit
+        b"<a>&#0;</a>",                                // char ref to NUL, not an XML Char
+        b"<a>&#xD800;</a>",                            // char ref to a surrogate
+        b"<a>&#x110000;</a>",                          // char ref past U+10FFFF
+        b"<a>&#99999999999999999999;</a>",             // char ref overflowing the accumulator
     ] {
         assert_eq!(
             parse_err(case),
@@ -754,13 +758,10 @@ fn test_xml_convert_entity_and_char_ref() {
     assert_eq!(convert_char_ref(b"65"), 65);
     assert_eq!(convert_char_ref(b"x41"), 0x41);
     assert_eq!(convert_char_ref(b"xFf"), 0xff);
-    assert_eq!(convert_char_ref(b"x0"), 0);
-    // no overflow guard upstream: the i32 accumulator wraps
-    assert_eq!(convert_char_ref(b"99999999999999999999"), {
-        let mut v: i32 = 0;
-        for _ in 0..20 {
-            v = v.wmul(10).wadd(9);
-        }
-        v
-    });
+    assert_eq!(convert_char_ref(b"x0"), -1);
+    assert_eq!(convert_char_ref(b"x10FFFF"), 0x10FFFF);
+    assert_eq!(convert_char_ref(b"0"), -1);
+    assert_eq!(convert_char_ref(b"xD800"), -1);
+    assert_eq!(convert_char_ref(b"x110000"), -1);
+    assert_eq!(convert_char_ref(b"99999999999999999999"), -1);
 }

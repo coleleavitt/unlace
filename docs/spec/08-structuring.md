@@ -471,9 +471,12 @@ it. Dead-code removal deletes the `STORE` on a later pass, but the tree still
 nests one `if` per call where the source wrote `if (a && f(x) && !g(x))`
 (DecBench O2-noinline `iproute2::invalid_name`).
 
-With `option condcallpush on` `bb_is_complex` skips a `STORE` whose block
-holds a call op at the same instruction address whose result the block's
-branch reads (`crates/unlace-middle/src/substrate/condcallpush.rs
+With `option condcallpush on` `bb_is_complex` skips a `STORE` that precedes,
+in its block, a call op at the same instruction address whose result the
+block's branch reads. A `STORE` after the call at the call's address is a
+return-boundary effect `callmechanisms` installs for the callee (the PPC64
+ELFv1 TOC save at `0x28(r1)`), not the push, and keeps its count
+(`crates/unlace-middle/src/substrate/condcallpush.rs
 (is_call_push)`, a walk of at most 32 varnodes back from the `CBRANCH`
 through ops of the block, through the call's output or an `INDIRECT` it
 creates). A call made only for its effect keeps the count, so it is not pulled

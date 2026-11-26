@@ -26,6 +26,8 @@ pub struct RewriteRule {
     name: String,
     group: String,
     program: Rc<Program>,
+    /// Whether the pattern reads further than one op from the op it fires on.
+    far: bool,
 }
 
 impl fmt::Debug for RewriteRule {
@@ -42,6 +44,7 @@ impl RewriteRule {
         Self {
             name,
             group,
+            far: depth(&program.pattern) > 2,
             program: Rc::new(program),
         }
     }
@@ -54,6 +57,15 @@ impl RewriteRule {
     /// The group the rule is added behind and belongs to.
     pub fn group(&self) -> &str {
         &self.group
+    }
+}
+
+/// How many ops the pattern at `node` nests: 1 for an op over captures and
+/// constants.
+fn depth(node: &MatchNode) -> usize {
+    match &node.kind {
+        Match::Op { inputs, .. } => 1 + inputs.iter().map(depth).max().unwrap_or(0),
+        _ => 0,
     }
 }
 
@@ -304,6 +316,12 @@ impl Rule for RewriteRule {
         grouplist
             .contains(&self.group)
             .then(|| Box::new(self.clone()) as Box<dyn Rule>)
+    }
+
+    /// A pattern with an op two levels below its root reads the inputs of that
+    /// op, which a partial sweep does not offer the root for.
+    fn walks_far(&self) -> bool {
+        self.far
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {

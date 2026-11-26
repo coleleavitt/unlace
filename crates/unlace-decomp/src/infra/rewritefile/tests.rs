@@ -220,6 +220,20 @@ fn the_replacement_takes_its_sizes_from_what_the_pattern_matched() {
 }
 
 #[test]
+fn a_pattern_nested_two_ops_deep_is_offered_every_op_of_its_opcode() {
+    use crate::action::Rule;
+    let far = |pattern: &str| {
+        let rules = parse_rules(&rule("probe", "analysis", pattern, "x")).unwrap();
+        rules[0].walks_far()
+    };
+    // The root reads its inputs and what writes them: one op away.
+    assert!(!far("INT_AND(x, 0)"));
+    assert!(!far("INT_AND(INT_OR(x, y), INT_XOR(x, y))"));
+    // The inputs of the innermost op are two ops from the root.
+    assert!(far("INT_AND(INT_OR(INT_NEGATE(x), y), y)"));
+}
+
+#[test]
 fn a_file_that_is_not_rules_is_one_error() {
     let line = |source: &str| -> RewriteError {
         let errors = parse_rules(source).unwrap_err();

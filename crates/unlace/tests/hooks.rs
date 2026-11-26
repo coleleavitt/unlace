@@ -363,6 +363,47 @@ fn a_bad_registration_is_a_request_error() {
     }
 }
 
+/// A rule that cannot handle the first INT_ADD it is offered.
+struct Panics;
+
+impl Rule for Panics {
+    fn get_op_list(&self) -> Vec<OpCode> {
+        vec![OpCode::CPUI_INT_ADD]
+    }
+    fn clone_rule(&self, groups: &ActionGroupList) -> Option<Box<dyn Rule>> {
+        groups
+            .contains("analysis")
+            .then(|| Box::new(Panics) as Box<dyn Rule>)
+    }
+    fn apply_op(&mut self, _op: OpId, _data: &mut Funcdata) -> i32 {
+        panic!("no INT_ADD today")
+    }
+}
+
+#[test]
+fn a_panic_in_a_rule_or_a_callback_fails_the_function_it_ran_on() {
+    let failed = |decompiler: &mut Decompiler, message: &str| {
+        let error = decompiler.decompile(0x1000).unwrap_err();
+        assert!(
+            matches!(&error, Error::Decompile { name, reason, .. }
+                if name == "mix" && reason.contains(message)),
+            "{error}"
+        );
+    };
+    let mut ruled = mix()
+        .with_rule("analysis", RuleState::new("analysis", 0, "panics"), Panics)
+        .unwrap();
+    failed(&mut ruled, "no INT_ADD today");
+    // The load is kept: the inventory still answers, and the function fails the same way.
+    assert_eq!(ruled.functions().unwrap().len(), 1);
+    failed(&mut ruled, "no INT_ADD today");
+
+    let mut hooked = mix()
+        .with_phase_hook(UnlacePhase::P5, |_| panic!("not at P5"))
+        .unwrap();
+    failed(&mut hooked, "not at P5");
+}
+
 /// The table in the module docs of `unlace::unstable::hooks`.
 const DOCUMENTED_GROUPS: [(&str, &[&str]); 3] = [
     (

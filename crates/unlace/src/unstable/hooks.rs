@@ -60,6 +60,13 @@
 //! - It does not change control flow: no block, edge or branch target.
 //! - One instance serves every function of a load. State it keeps between
 //!   ops is cleared in [`Rule::reset`], which runs before each function.
+//! - After a sweep that only removed dead ops and replaced inputs by what
+//!   they copy, the pool offers a rule only the ops next to those changes. A
+//!   rule whose test reads further than one op from the op it is offered
+//!   (past that op's inputs and output, their readers, and the ops that write
+//!   the inputs) returns `true` from [`Rule::walks_far`] to be offered every
+//!   op of its opcodes in such a sweep; otherwise it fires on what a change
+//!   two ops away made possible only at the next full sweep.
 //! - Its name is its own: no built-in rule and no other added rule has it.
 //!
 //! A rewrite that is one op pattern and one replacement needs no Rust:
@@ -103,8 +110,9 @@
 //! hash map. State carried from one function into the changes made to
 //! another makes the output depend on the order functions are decompiled in.
 //!
-//! A panic in a rule or callback is caught like an engine panic: the call
-//! returns [`Error::Panic`] and the load is dropped.
+//! A panic in a rule or callback fails the function it ran on, like a panic
+//! in an engine pass: the call returns [`Error::Decompile`] with the panic's
+//! message in its reason, and the load stays usable.
 
 use std::cell::RefCell;
 use std::path::Path;

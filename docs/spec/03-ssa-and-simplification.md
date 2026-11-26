@@ -1759,7 +1759,11 @@ file (`rewritefile.rs (parse_rules)`):
   (`crates/unlace-decomp/src/infra/hooks.rs (rule_names)`), because a rule is
   addressed by its name.
 
-The rule is offered every op of the pattern's root opcode. It matches a list
+The rule is offered every op of the pattern's root opcode. A pattern with an
+op two levels below its root reads the inputs of that op, further than a wave
+re-offers the root for, so its rule is far-walking
+(`rule.rs (RewriteRule::walks_far)`) and a wave offers it every op of the
+opcode. It matches a list
 of goals, each a pattern node and a Varnode, starting with the root and the
 op's output (`rule.rs (solve)`). An op node needs a Varnode written by an op
 of its opcode and number of inputs, and adds that op's inputs as goals; for a

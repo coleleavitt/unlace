@@ -2583,8 +2583,8 @@ does not rebuild `code` exactly, `tokens` is `[]` and `tokens_error` says why, s
 a drifted map is never shipped. A record without `code` has `[]` and `null`.
 The casts a whole-binary C run adds after the render, to a scalar address passed
 where the callee declares a character pointer, are in the map as a `(`, a `type`
-token and a `)`. A `--jobs N` worker's record does not carry the map, so
-`--tokens` with `--jobs` above 1 exits 2 and names `--jobs 1`. Over the 1,399
+token and a `)`. The map crosses `--jobs N` unchanged: a worker ships it in its
+result frame, so `--tokens` with `--jobs` is the same document as with `--jobs 1`. Over the 1,399
 ELF, PE and Mach-O fixtures of the repository that load without `--target`
 (47,205 function bodies), every map rebuilds its code and `code` is identical
 with and without the flag; a run executes 1.1-2.4% more instructions with it.
@@ -2700,8 +2700,8 @@ size of the code (coreutils `tr`, 185 functions, 135 KB of C: a 1.0 MB document 
 it, 16.6 MB with it; the run time is the same within noise, 3.5 s).
 The record gains two members after its last default one, `ctree` and `ctree_error`; every
 other member, `code` included, and the exit status are what they are without the flag.
-`--ctree` needs `--json`, and one process: with `--jobs N` above 1 it is an argument error,
-because a worker's record does not carry the tree.
+`--ctree` needs `--json`. With `--jobs N` each worker ships the tree in its result frame, so the
+document is the same as with `--jobs 1`.
 
 `ctree` is `{"style": {...}, "root": {...}}`, or `null` when the function has no tree;
 `ctree_error` then says why (both are `null` on a record with no `code`). `root` is a

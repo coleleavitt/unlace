@@ -332,7 +332,7 @@ fn result_encoding_matches_the_version_twelve_wire_layout() {
         detail: None,
     };
     let expected = [
-        b"UNLACEJOBR13\x01\x55\0\0\0".as_slice(),
+        b"UNLACEJOBR14\x01\x56\0\0\0".as_slice(),
         b"\x10\0\0\0\0\0\0\0\x20\0\0\0\0\0\0\0",
         b"\xff\xff\xff\xff\xff\xff\xff\xff",
         b"\x01\0\0\0f\0\x01\x01\0\0\0e\0\0",
@@ -349,6 +349,7 @@ fn result_encoding_matches_the_version_twelve_wire_layout() {
         b"\0\0\0\0", // warnings
         b"\0\0\0\0", // call declarations
         b"\0\0\0\0", // callwide prototypes
+        b"\0",       // detail
     ]
     .concat();
     ResultWriter::create(&path).unwrap().push(&result).unwrap();
@@ -1075,6 +1076,8 @@ pub(super) fn cfg(max_fn_seconds: u64, load_seconds: f64) -> PoolConfig<'static>
         want_proto: false,
         want_provenance: false,
         want_storage: false,
+        want_tokens: false,
+        want_ctree: false,
         want_types: false,
         want_callee_hints: false,
         want_pointer_arguments: false,

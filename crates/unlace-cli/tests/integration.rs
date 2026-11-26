@@ -120,6 +120,9 @@ mod array_record;
 #[path = "ctree_cli.rs"]
 mod ctree_cli;
 
+#[path = "jobs_document.rs"]
+mod jobs_document;
+
 #[path = "aif_lea_padding.rs"]
 mod aif_lea_padding;
 

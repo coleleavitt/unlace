@@ -123,6 +123,7 @@ unlace_options! { self, p1;
     "dynalloca" => registered!(crate::dynalloca::DynAlloca),
     "vaarg" => registered!(crate::vaarg::VaArg),
     "vaargconst" => registered!(crate::vaargconst::VaArgConst),
+    "vaargaapcs" => registered!(crate::vaargaapcs::VaArgAapcs),
     "indexrescale" => registered!(crate::indexrescale::IndexRescale),
     "looprotate" => registered!(crate::looprotate::LoopRotate),
     "guardedloop" => registered!(crate::coreoptions::GuardedLoop),

@@ -989,6 +989,8 @@ pub struct ArchContext {
     /// (unlace) The loader identified a Windows user-mode PE: the fact
     /// `option pebnames auto` acts on.
     pub image_windows_user: bool,
+    /// (unlace `vaargaapcs`) An AArch64 image outside Apple and Windows: its va_list is the AAPCS64 struct.
+    pub aapcs64_va_list: bool,
     /// AArch64 integer division returns zero for a zero divisor.
     pub go_keep_divide_checks: bool,
     /// Attempt conversion of `whiledo` loops to `for` loops (C++
@@ -1296,6 +1298,7 @@ impl ArchContext {
             syscall_regs_family: None,
             syscall_regs_userops: Vec::new(),
             windows_cspec: false,
+            aapcs64_va_list: false,
             image_windows_user: false,
 
             go_keep_divide_checks: false,

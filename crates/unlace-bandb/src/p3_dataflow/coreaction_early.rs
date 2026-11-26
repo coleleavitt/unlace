@@ -128,6 +128,7 @@ impl Action for ActionStart {
         crate::alloca::rewrite_raw(data);
         crate::varargsave::strip(data);
         crate::vaargconst::rewrite(data);
+        crate::vaargaapcs::rewrite(data);
         crate::x87emptyreturn::capture(data);
         crate::x87free::annotate(data);
         0

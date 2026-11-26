@@ -115,6 +115,15 @@ pub fn returns_decided_value(
     tails: &[(OpId, OpId)],
 ) -> bool {
     let [(addr, size)] = pieces else { return false };
+    eprintln!(
+        "MTR0 ret={:?} own={} opt={}",
+        ret,
+        last_write_is_own(data, ret, addr, *size),
+        data.get_arch()
+            .unlace_options
+            .get::<crate::mixedtailret::MixedTailRet>()
+            .0
+    );
     if !data
         .get_arch()
         .unlace_options
@@ -123,6 +132,21 @@ pub fn returns_decided_value(
         || !last_write_is_own(data, ret, addr, *size)
     {
         return false;
+    }
+    eprintln!(
+        "MTR ret={:?} const={} origin={:?}",
+        ret,
+        returns_constant(data, ret, addr, *size),
+        decided_origin(
+            data,
+            ret,
+            addr,
+            *size,
+            &tails.iter().map(|t| t.1).collect::<Vec<_>>()
+        )
+    );
+    if returns_constant(data, ret, addr, *size) {
+        return true;
     }
     let (calls, rets): (Vec<OpId>, Vec<OpId>) = tails.iter().copied().unzip();
     decided_origin(data, ret, addr, *size, &rets)
@@ -221,6 +245,20 @@ fn write_of(data: &Funcdata, op: OpId, addr: &Address, size: int4) -> Write {
 /// widened (`RAX = zext(EAX)` after every x86-64 32-bit write).
 fn value_width(data: &Funcdata, op: OpId) -> Option<int4> {
     let o = data.obank().get(op)?;
+    if o.code() == OpCode::CPUI_COPY {
+        if let Some(c) = o
+            .get_in(0)
+            .and_then(|v| data.vbank().get(v))
+            .filter(|v| v.is_constant())
+        {
+            let bits = 64 - c.get_offset().leading_zeros() as int4;
+            let need = [1, 2, 4, 8]
+                .into_iter()
+                .find(|w| bits <= w * 8)
+                .unwrap_or(8);
+            return Some(need.min(o.get_out().and_then(|v| data.vbank().get(v))?.get_size()));
+        }
+    }
     let vn = match o.code() {
         OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => o.get_in(0)?,
         _ => o.get_out()?,
@@ -356,6 +394,56 @@ fn decided_origin(
         cur = data.bb_op_tail(pred);
     }
     None
+}
+
+/// Does `ret` hand back a constant the function loaded into `[addr, addr+size)`
+/// just before (`mov $-1,%eax; ret`)?
+///
+/// Walks up the single-predecessor chain to the last write of the register,
+/// through the copies and extensions that carry it (x86-64's
+/// `RAX = ZEXT(EAX)`), and accepts a COPY of a constant. A function that
+/// returns a constant beside a tail call to a value-returning callee returns
+/// an integer of the callee's width: a comparator's `return -1`.
+fn returns_constant(data: &Funcdata, ret: OpId, addr: &Address, size: int4) -> bool {
+    let Some(mut bl) = data.obank().get(ret).and_then(|o| o.get_parent()) else {
+        return false;
+    };
+    let mut tracked = (addr.clone(), size);
+    let mut cur = data.op_previous_op(ret);
+    for _ in 0..CHAIN_BLOCKS {
+        while let Some(op) = cur {
+            let Some(o) = data.obank().get(op) else {
+                return false;
+            };
+            if matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
+                return false;
+            }
+            let out = o.get_out().and_then(|v| data.vbank().get(v));
+            if out.is_some_and(|v| overlaps(v.get_addr(), v.get_size(), &tracked.0, tracked.1))
+                && !crate::passthrough::is_injected_noop(data, op)
+            {
+                if o.code() == OpCode::CPUI_COPY
+                    && o.get_in(0)
+                        .and_then(|v| data.vbank().get(v))
+                        .is_some_and(|v| v.is_constant())
+                {
+                    return true;
+                }
+                match register_copy_source(data, op) {
+                    Some(source) => tracked = source,
+                    None => return false,
+                }
+            }
+            cur = data.op_previous_op(op);
+        }
+        let b = data.bblocks_ref().block(bl);
+        if bl == data.bblocks_get_block(0) || b.size_in() != 1 {
+            return false;
+        }
+        bl = b.get_in(0);
+        cur = data.bb_op_tail(bl);
+    }
+    false
 }
 
 /// The register a COPY or extension `op` reads, when it moves one register's

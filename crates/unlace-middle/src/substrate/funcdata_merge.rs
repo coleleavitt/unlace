@@ -401,9 +401,9 @@ fn high_addrtied_member(fd: &Funcdata, high: HighVariableId) -> Option<VarnodeId
     (0..h.num_instances())
         .map(|i| h.get_instance(i))
         .find(|&vn| {
-            fd.vbank().get(vn).is_some_and(|v| {
-                v.get_flags() & crate::varnode::varnode_flags::addrtied != 0
-            })
+            fd.vbank()
+                .get(vn)
+                .is_some_and(|v| v.get_flags() & crate::varnode::varnode_flags::addrtied != 0)
         })
 }
 

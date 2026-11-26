@@ -78,7 +78,8 @@ literal = 'ExitProcess(0xc); // no-return'
 
 [[match]]
 name = 'PEIMPORTCALL #3: the bound call carries its no-return flow effect'
-count = 2
+# Two calls to ExitProcess, plus bail's own header (noreturnself).
+count = 3
 literal = '// no-return'
 
 [[match]]

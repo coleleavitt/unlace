@@ -38,7 +38,7 @@ commands = [
 name = 'Go panicCheck1 returns to the terminal gopanic call'
 count = 1
 regex = [
-    '^void runtime\.panicshift\(void\)$',
+    '^void runtime\.panicshift\(void\)( // no-return)?$',
     '^\{$',
     '^\s+runtime\.panicCheck1\(\);$',
     '^\s+runtime\.gopanic\(\); // no-return$',
@@ -60,7 +60,7 @@ regex = [
 name = 'Go gopanic fallthrough sentinel appears only with known no-return off'
 count = 1
 regex = [
-    '^void runtime\.panicshift\(void\)$',
+    '^void runtime\.panicshift\(void\)( // no-return)?$',
     '^\{$',
     '^\s+runtime\.panicCheck1\(\);$',
     '^\s+runtime\.gopanic\(\);$',

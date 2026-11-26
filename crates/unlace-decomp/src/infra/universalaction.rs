@@ -1633,7 +1633,9 @@ pub fn universal_sched_hooked(
             act!(Box::new(crate::copyrun::ActionCopyRun::new("returnsplit"))),
             // (unlace) vecpairstore (option `vecpairstore`): a 16-byte store of two 8-byte
             // scalars (SLP's vpunpcklqdq/vpinsrq) printed as two element stores.
-            act!(Box::new(crate::vecpairstore::ActionVecPairStore::new("returnsplit"))),
+            act!(Box::new(crate::vecpairstore::ActionVecPairStore::new(
+                "returnsplit"
+            ))),
             // (unlace) javatry: drop the DEX exceptional edges that bring their
             // handler no value of its own; the next mainloop splices the halves.
             act!(crate::javatry::ActionJavaThrowPrune::boxed("returnsplit")),

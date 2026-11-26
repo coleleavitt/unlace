@@ -223,11 +223,7 @@ fn split_one_region(
 
 /// Try to duplicate one entry of a multi-entry region for one of its external in-edges. Returns true
 /// on the first split that the primitive accepts.
-fn split_at_entries(
-    data: &mut Funcdata,
-    members: &BTreeSet<BlockId>,
-    entries: &[BlockId],
-) -> bool {
+fn split_at_entries(data: &mut Funcdata, members: &BTreeSet<BlockId>, entries: &[BlockId]) -> bool {
     for &e in entries {
         let (size_in, size_out, outside) = {
             let blk = data.bblocks_ref().block(e);

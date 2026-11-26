@@ -106,6 +106,8 @@ Three tiers:
 | a struct copy prints as eight paired assignments through a register | [`copyrun`](#copyrun----on--off-default-on) |
 | *a0 = *a1; a0[1] = v1; ... for a fixed-size memcpy | [`copyrun`](#copyrun----on--off-default-on) |
 | SSE xmm0 lanes shuttle a buffer one word at a time | [`copyrun`](#copyrun----on--off-default-on) |
+| a 16-byte store of two pointers prints as *(unsigned __int128 *)f = vpunpcklqdq_avx(ZEXT816(p), ZEXT816(p)) | [`vecpairstore`](#vecpairstore----on--off-default-on) |
+| a pair of pointer assignments prints as a vpinsrq_avx user op | [`vecpairstore`](#vecpairstore----on--off-default-on) |
 | stack string initialisation renders as an array-typed cast such as (char[8])s_addr._0_8_ | [`rodatastring`](#rodatastring----on--off-default-on) |
 | partial-symbol slice assignments like buf._0_9_ = s_addr._16_9_ instead of the string | [`rodatastring`](#rodatastring----on--off-default-on) |
 | a recognized rodata literal never appears in the function that copies it onto the stack | [`rodatastring`](#rodatastring----on--off-default-on) |
@@ -1436,6 +1438,9 @@ Three tiers:
 | avx-512 arithmetic prints as vaddps_avx512f | [`avxintrinsics`](#avxintrinsics----on--off-default-on) |
 | a global one function accessed whole prints as unrelated dat_ names in another | [`mapglobalsyms`](#mapglobalsyms----on--off-default-off) |
 | later functions do not see the DAT_ symbol an earlier decompile created, unlike upstream decomp_dbg sessions | [`mapglobalsyms`](#mapglobalsyms----on--off-default-off) |
+| a function that never returns prints as a plain void f(void) with no marker | [`noreturnself`](#noreturnself----on--off-default-on) |
+| a function ending in exit() or abort() on every path is indistinguishable from one that returns | [`noreturnself`](#noreturnself----on--off-default-on) |
+| the no-return verdict appears only at the call sites of the function | [`noreturnself`](#noreturnself----on--off-default-on) |
 | calls to empty functions read as sub_<addr>() like any other | [`nullsubs`](#nullsubs----on--off-default-off) |
 | a virtual table slot points at a function that only returns | [`nullsubs`](#nullsubs----on--off-default-off) |
 | an untyped MIPS32 big-endian producer loses its low return word despite a declared 64-bit consumer | [`callwide`](#callwide----on--off-default-off) |
@@ -1730,6 +1735,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off by default. Flip on to see the element moves, or when the two buffers may overlap through different pointers: the run copies in program order, which memcpy does not promise.
 - **Where / provenance:** P3/simplification-quiescence · unlace · presentation-default · copyrun
 - **Example:** `option copyrun off`
+
+### `vecpairstore` -- on | off, default `on`
+
+- **Symptoms:** a 16-byte store of two pointers prints as *(unsigned __int128 *)f = vpunpcklqdq_avx(ZEXT816(p), ZEXT816(p)); a pair of pointer assignments prints as a vpinsrq_avx user op.
+- **What it does:** Print a 16-byte store of two 8-byte scalars as two 8-byte element stores. gcc's SLP vectorizer merges two adjacent pointer stores (`f[0] = f[1] = p`, `f[0] = a; f[1] = b`) into one 16-byte store built with `vpunpcklqdq` (equal halves) or `vpinsrq` (different halves), which printed as `*(unsigned __int128 *)f = vpunpcklqdq_avx(ZEXT816(p), ZEXT816(p))`. At `on` a STORE whose value is the single-reader result of `vpunpcklqdq_avx(x, y)` or `vpinsrq_avx(x, b, 1)`, where each low half is an INT_ZEXT of an 8-byte value, keeps the store of the low half and adds a second 8-byte store of the high half at pointer plus 8, and the user op is destroyed. A store with an INDIRECT of heritage on it is left alone. Phase P3, after copyrun.
+- **When to flip:** On by default: the element assignments are what the source wrote. Flip off to see the 16-byte user op.
+- **Where / provenance:** P3/simplification-quiescence · unlace · presentation-default · vecpairstore
+- **Example:** `option vecpairstore off`
 
 ### `rodatastring` -- on | off, default `on`
 
@@ -2858,14 +2871,6 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default on a GCC/Clang C++ ELF or Mach-O with RTTI: virtual calls read as p->vptr->method(p,args), a member function's own virtual calls on this as this->vptr->method, and a call on a locally constructed object as the direct call. Flip off to see the raw slot arithmetic (**(code **)(*obj + off))() or to rule the typing out when a slot name looks wrong (identical-code folding can put one function in unrelated classes' slots). Inert without __cxxabiv1 typeinfo anchors (C, -fno-rtti). On a Windows PE with MSVC RTTI (MSVC or clang-cl) a virtual member's this is a C * and its virtual calls on this read (*this->__vftable->method)(this,args); inert on a PE built /GR-.
 - **Where / provenance:** P5/type-propagation · unlace · type-inference · vtabletypes
 - **Example:** `option vtabletypes off`
-
-### `noreturnself` -- on | off, default `on`
-
-- **Symptoms:** a function that never returns prints as a plain void f(void) with no marker; a function ending in exit() or abort() on every path is indistinguishable from one that returns; the no-return verdict appears only at the call sites of the function
-- **What it does:** Mark a function no-return when every path of its flow ends in a call to a no-return callee or a no-return halt. The verdict was reached only by the callers: each call to a no-return callee carries `Subroutine does not return` at the call site, but the function that never returns printed as a plain `void f(void)` ending in `abort(); // no-return`. When the flow generated for the function has no live return that is not a halt, no unresolved indirect jump or call, and every live halt is a `noreturn` halt, the function's own prototype is set no-return and a header warning `Subroutine does not return` is printed at its entry address (line 1). Any other halt (a decode failure or a truncation) leaves the function alone. Reads the flow of the function only, so it works without the Listing. On by default. The output change is a header line and a prototype comment on a function that never returns.
-- **When to flip:** On by default. Flip off to see a function that never returns with no header marker, as upstream prints it, or when a consumer keys on the call-site warnings alone.
-- **Where / provenance:** P2/flow-classification · unlace · presentation-default · unlace-noreturnself
-- **Example:** `option noreturnself off`
 
 ### `noreturn_propagate` -- on | off, default `on`
 
@@ -4674,6 +4679,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Off by default: the output of a function then depends on which functions were decompiled before it in the same session. Turn on to get upstream's session behaviour: a global a first function read as 8 bytes stays one 8-byte object, so a later function's 4-byte access to its upper half prints as a piece of it (dat_x._4_4_) instead of a separate dat_<addr+4>.
 - **Where / provenance:** P9/naming-policy · ghidra · presentation-default · unlace-mapglobals-dat-symbols
 - **Example:** `option mapglobalsyms on`
+
+### `noreturnself` -- on | off, default `on`
+
+- **Symptoms:** a function that never returns prints as a plain void f(void) with no marker; a function ending in exit() or abort() on every path is indistinguishable from one that returns; the no-return verdict appears only at the call sites of the function.
+- **What it does:** Mark a function no-return when every path of its flow ends in a call to a no-return callee or a no-return halt. The verdict was reached only by the callers: each call to a no-return callee carries `Subroutine does not return` at the call site, but the function that never returns printed as a plain `void f(void)` ending in `abort(); // no-return`. When the flow generated for the function has no live return that is not a halt, no unresolved indirect jump or call, and every live halt is a `noreturn` halt, the function's own prototype is set no-return and a header warning `Subroutine does not return` is printed at its entry address (line 1). Any other halt (a decode failure or a truncation) leaves the function alone. Reads the flow of the function only, so it works without the Listing. On by default. The output change is a header line and a prototype comment on a function that never returns.
+- **When to flip:** On by default. Flip off to see a function that never returns with no header marker, as upstream prints it, or when a consumer keys on the call-site warnings alone.
+- **Where / provenance:** P2/flow-classification · unlace · presentation-default · unlace-noreturnself
+- **Example:** `option noreturnself off`
 
 ### `nullsubs` -- on | off, default `off`
 

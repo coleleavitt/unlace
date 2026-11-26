@@ -50,9 +50,13 @@ fn lazy_stub_imports_keep_their_own_no_return() {
             assert!(no_return_calls(body).is_empty(), "{image} {name}: {body}");
             assert!(body.contains(tail), "{image} {name} lost its tail: {body}");
         }
+        // `noreturnself` may also mark the function itself in its signature line.
         for (name, callee) in [("die", "exit("), ("check", "abort(")] {
             let body = code(&doc, name);
-            let calls = no_return_calls(body);
+            let calls: Vec<&str> = no_return_calls(body)
+                .into_iter()
+                .filter(|line| !line.starts_with("void ") && !line.starts_with("int "))
+                .collect();
             assert!(
                 calls.len() == 1 && calls[0].contains(callee),
                 "{image} {name}: {body}"

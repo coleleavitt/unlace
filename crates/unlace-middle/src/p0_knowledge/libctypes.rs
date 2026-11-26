@@ -171,7 +171,11 @@ mod tests {
     /// `glibc` is the one token that asks for the field layouts.
     #[test]
     fn libctypes_env_gate() {
-        assert_eq!(read_with(None), LibcTypesLayout::Streams, "unset => streams");
+        assert_eq!(
+            read_with(None),
+            LibcTypesLayout::Streams,
+            "unset => streams"
+        );
         for off in ["off", "0", "false", "OFF", " off "] {
             assert_eq!(
                 read_with(Some(off)),

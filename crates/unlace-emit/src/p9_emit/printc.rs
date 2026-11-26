@@ -7049,8 +7049,8 @@ impl PrintC {
                 // (unless it is the last case, whose fall-through is the close).
                 let last = i == ncase - 1;
                 let exits_here = record.map_or(case.isexit && !last, |record| record.exit_break);
-                let dangling = record.is_some_and(|record| record.ends_on_label)
-                    || self.emit.label_dangling();
+                let dangling =
+                    record.is_some_and(|record| record.ends_on_label) || self.emit.label_dangling();
                 if exits_here || (last && dangling) {
                     self.emit.tag_line();
                     self.emit_goto_statement(

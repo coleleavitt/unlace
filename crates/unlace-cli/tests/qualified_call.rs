@@ -16,8 +16,7 @@ fn partial_unit_declarations_preserve_the_indirect_call_result() {
             code.lines().any(|line| line.contains("if (")
                 && line.contains("initialize(")
                 && line.contains("callback"))
-                || (code.contains("= initialize(callback) == 0;")
-                    && code.contains("if (v1)")),
+                || (code.contains("= initialize(callback) == 0;") && code.contains("if (v1)")),
             "{code}"
         );
         assert!(code.contains(" = 1;"), "{code}");

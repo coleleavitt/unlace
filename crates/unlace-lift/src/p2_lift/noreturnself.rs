@@ -6,8 +6,10 @@
 //! returns printed as a plain `void f(void)` with `abort(); // no-return` as its last
 //! statement. The flow generated for the function decides it: no live return that is
 //! not a halt, no unresolved indirect transfer, and at least one live halt, every one of
-//! them a `noreturn` halt. Any other halt (a decode failure, a truncation) leaves the
-//! function alone, since its tail is not known to be a call that never returns.
+//! them a `noreturn` halt inside the block of the call that never returns. Any other
+//! halt (a decode failure, a truncation, or the `funcboundflow` cut where the
+//! fall-through reaches the next function's entry, a halt that opens a block of its own)
+//! leaves the function alone, since its tail is not known to be a call that never returns.
 
 use crate::architecture::Architecture;
 use crate::funcdata::Funcdata;
@@ -43,6 +45,12 @@ pub fn mark_self_no_return(arch: &Architecture, data: &mut Funcdata) {
                 continue;
             }
             if op.get_halt_type() != pcodeop_flags::noreturn {
+                return;
+            }
+            let opens_block = op
+                .get_parent()
+                .is_some_and(|bl| data.bb_ops(bl).first() == Some(&id));
+            if opens_block {
                 return;
             }
             halts += 1;

@@ -65,10 +65,7 @@ impl Action for ActionVecPairStore {
         let mut stores = Vec::new();
         for block in blocks.clone() {
             for op in data.bb_ops(block) {
-                if let Some(o) = data.obank().get(op).filter(|o| o.code() == CPUI_STORE) {
-                    let v = o.get_in(2).and_then(|v| data.vbank().get(v));
-                    let dc = v.map(|v| v.get_def().and_then(|d| data.obank().get(d)).map(|d| format!("{:?}", d.code())));
-                }
+                if let Some(o) = data.obank().get(op).filter(|o| o.code() == CPUI_STORE) {}
             }
         }
         for block in blocks {
@@ -161,7 +158,10 @@ fn split_of(data: &Funcdata, store: OpId) -> Option<Split> {
         .find(|(id, _)| u64::from(*id) == uid.get_offset())
         .map(|(_, k)| *k)?;
     let (lo, hi) = match (kind, call.num_input()) {
-        (VEC_PUNPCKLQDQ, 3) => (low_half(data, call.get_in(1)?)?, low_half(data, call.get_in(2)?)?),
+        (VEC_PUNPCKLQDQ, 3) => (
+            low_half(data, call.get_in(1)?)?,
+            low_half(data, call.get_in(2)?)?,
+        ),
         (VEC_PINSRQ, 4) => {
             let imm = data.vbank().get(call.get_in(3)?)?;
             if !imm.is_constant() || imm.get_offset() != 1 {
@@ -178,7 +178,12 @@ fn split_of(data: &Funcdata, store: OpId) -> Option<Split> {
     if has_indirect(data, store) {
         return None;
     }
-    Some(Split { ptr, lo, hi, call: call_id })
+    Some(Split {
+        ptr,
+        lo,
+        hi,
+        call: call_id,
+    })
 }
 
 /// Does an INDIRECT that heritage hung on `store` sit in its block?

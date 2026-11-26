@@ -3325,8 +3325,8 @@ impl Funcdata {
             let Some(o) = self.obank().get(op) else {
                 return Err(UnlaceError::lowlevel("nodesplit-through: stale op"));
             };
-            let branch_ok = o.code() == OpCode::CPUI_BRANCH
-                || (cbranch && o.code() == OpCode::CPUI_CBRANCH);
+            let branch_ok =
+                o.code() == OpCode::CPUI_BRANCH || (cbranch && o.code() == OpCode::CPUI_CBRANCH);
             if o.is_branch() && !branch_ok {
                 return Err(UnlaceError::lowlevel(
                     "nodesplit-through: conditional branch",
@@ -4975,7 +4975,12 @@ impl CloneBlockOps {
         use crate::op::pcodeop_addlflags as opaf;
         // (unlace, `irreduciblesplit`) The copy of a conditional branch keeps its sense flag, so
         // its condition reads the same way as the original.
-        let fl = fl | if self.cbranch { op_flags & opf::boolean_flip } else { 0 };
+        let fl = fl
+            | if self.cbranch {
+                op_flags & opf::boolean_flip
+            } else {
+                0
+            };
         let afl = op_addl
             & (opaf::special_prop
                 | opaf::special_print

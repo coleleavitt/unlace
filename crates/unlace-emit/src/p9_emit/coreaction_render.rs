@@ -2767,10 +2767,10 @@ fn dc_is_vector_register(data: &Funcdata, vn: VarnodeId) -> bool {
     if space.get_name() != "register" {
         return false;
     }
-    let name = data
-        .get_arch()
-        .translate()
-        .get_register_name(space, addr.get_offset(), v.get_size());
+    let name =
+        data.get_arch()
+            .translate()
+            .get_register_name(space, addr.get_offset(), v.get_size());
     ["xmm", "ymm", "zmm"].iter().any(|p| name.starts_with(p))
 }
 

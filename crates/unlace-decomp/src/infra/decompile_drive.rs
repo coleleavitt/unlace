@@ -1448,6 +1448,16 @@ fn generate_flow(arch: &mut Architecture, fd: Funcdata) -> UnlaceResult<Funcdata
     // call-spec list); now that qlst exists, sort it.
     data.sort_call_specs();
     crate::noreturnself::mark_self_no_return(arch, &mut data);
+    if !data.get_func_proto().is_no_return() {
+        // A console re-decompile does not clear the last run's warnings, so drop a
+        // no-return header that an earlier `noreturnself` verdict published.
+        let entry = data.get_address().clone();
+        arch.commentdb.retain_comments(|c| {
+            c.func_addr != entry
+                || c.tp & crate::architecture::comment_type::warningheader == 0
+                || !c.text.ends_with("Subroutine does not return")
+        });
+    }
     Ok(data)
 }
 

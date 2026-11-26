@@ -5105,8 +5105,14 @@ mod hexagon_tests {
             patch(R_HEX_32_6_X, 0, 0x0000_4000, 0x1_00b4, 0),
             Ok(0x0000_4402)
         );
-        assert_eq!(patch(R_HEX_6_X, 0, 0x7c80_4020, 0x1_00b4, 0), Ok(0x7c9a_4020));
-        assert_eq!(patch(R_HEX_6_X, 0, 0x7c80_4080, 0x41_0464, 0), Ok(0x7c92_4080));
+        assert_eq!(
+            patch(R_HEX_6_X, 0, 0x7c80_4020, 0x1_00b4, 0),
+            Ok(0x7c9a_4020)
+        );
+        assert_eq!(
+            patch(R_HEX_6_X, 0, 0x7c80_4080, 0x41_0464, 0),
+            Ok(0x7c92_4080)
+        );
     }
 
     // Words as ld.lld writes them for the sweep's hexagon objects.

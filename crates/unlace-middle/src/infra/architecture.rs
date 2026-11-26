@@ -6194,7 +6194,6 @@ impl BuiltinTypeArch {
     }
 }
 
-
 impl crate::userop::UseropTypeArchitecture for BuiltinTypeArch {
     fn get_size_of_pointer(&self) -> int4 {
         self.types.get_size_of_pointer()

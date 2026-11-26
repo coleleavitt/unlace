@@ -19,8 +19,8 @@ use std::any::Any;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::PathBuf;
 
-use unlace_analysis::loadimage_object::ObjectLoadImage;
 use unlace_analysis::loader::dyldcache::DyldCache;
+use unlace_analysis::loadimage_object::ObjectLoadImage;
 use unlace_fuzz::{FuzzResult, fuzz_iteration, minimise_crash};
 
 use super::{XorShift64, crate_dir};

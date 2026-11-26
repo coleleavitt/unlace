@@ -19,8 +19,8 @@ use std::fmt;
 
 use crate::block::BlockKind;
 use crate::context::{BlockId, OpId};
-use unlace_num::opcodes::OpCode;
 use crate::funcdata::Funcdata;
+use unlace_num::opcodes::OpCode;
 
 /// One broken link, described in the words of the check that found it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -210,7 +210,9 @@ pub fn report_first_break(fd: &mut Funcdata, pass: &str) -> bool {
     match verify_pass_output(fd) {
         Ok(()) => false,
         Err(error) => {
-            fd.warning_header(&format!("irverify: pass {pass} left the IR broken: {error}"));
+            fd.warning_header(&format!(
+                "irverify: pass {pass} left the IR broken: {error}"
+            ));
             true
         }
     }
@@ -355,11 +357,7 @@ fn dominators(
         }
     }
     post.reverse();
-    let rpo: BTreeMap<BlockId, usize> = post
-        .iter()
-        .enumerate()
-        .map(|(i, &bl)| (bl, i))
-        .collect();
+    let rpo: BTreeMap<BlockId, usize> = post.iter().enumerate().map(|(i, &bl)| (bl, i)).collect();
     let mut idom: BTreeMap<BlockId, BlockId> = BTreeMap::new();
     idom.insert(entry, entry);
     let mut changed = true;

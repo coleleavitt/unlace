@@ -16,7 +16,7 @@
 
 use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::uintb;
-use unlace_num::opcodes::OpCode::{self, *};
+use unlace_num::opcodes::OpCode::*;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{BlockId, OpId, VarnodeId};
@@ -63,11 +63,6 @@ impl Action for ActionVecPairStore {
             .map(|i| data.bblocks_get_block(i))
             .collect();
         let mut stores = Vec::new();
-        for block in blocks.clone() {
-            for op in data.bb_ops(block) {
-                if let Some(o) = data.obank().get(op).filter(|o| o.code() == CPUI_STORE) {}
-            }
-        }
         for block in blocks {
             for op in data.bb_ops(block) {
                 if split_of(data, op).is_some() {

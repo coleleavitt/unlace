@@ -63,7 +63,10 @@ impl crate::optionset::UnlaceOption for VaArgAapcs {
                 )));
             }
         };
-        Ok((choice, format!("AAPCS64 va_arg and va_start recovery {what}")))
+        Ok((
+            choice,
+            format!("AAPCS64 va_arg and va_start recovery {what}"),
+        ))
     }
 }
 
@@ -121,11 +124,20 @@ enum Val {
     /// The entry stack pointer plus a constant.
     Sp(i64),
     /// The 4-byte field loaded from stack offset `at`, plus `k`.
-    Off { at: i64, k: i64 },
+    Off {
+        at: i64,
+        k: i64,
+    },
     /// The 8-byte field loaded from stack offset `at`, plus `k`.
-    Ptr { at: i64, k: i64 },
+    Ptr {
+        at: i64,
+        k: i64,
+    },
     /// The pointer field at `ptr` plus the offset field at `off`.
-    Sum { ptr: i64, off: i64 },
+    Sum {
+        ptr: i64,
+        off: i64,
+    },
     Const(u64),
     Other,
 }
@@ -260,13 +272,19 @@ fn walk_block(data: &Funcdata, block: BlockId, st: &mut State, sp: Key, out: &mu
         let val = match op.code() {
             OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => ins[0],
             OpCode::CPUI_SUBPIECE => match (ins[0], ins.get(1)) {
-                (Val::Const(c), Some(Val::Const(s))) => Val::Const(trunc(c.checked_shr((8 * s) as u32).unwrap_or(0), size)),
+                (Val::Const(c), Some(Val::Const(s))) => {
+                    Val::Const(trunc(c.checked_shr((8 * s) as u32).unwrap_or(0), size))
+                }
                 (v, Some(Val::Const(0))) => v,
                 _ => Val::Other,
             },
             OpCode::CPUI_INT_ADD => add(ins[0], ins[1], size),
             OpCode::CPUI_INT_SUB => match ins[1] {
-                Val::Const(c) => add(ins[0], Val::Const(signed(c, size).wrapping_neg() as u64), size),
+                Val::Const(c) => add(
+                    ins[0],
+                    Val::Const(signed(c, size).wrapping_neg() as u64),
+                    size,
+                ),
                 _ => Val::Other,
             },
             OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR => {
@@ -289,7 +307,9 @@ fn walk_block(data: &Funcdata, block: BlockId, st: &mut State, sp: Key, out: &mu
             },
             _ => Val::Other,
         };
-        if op.code() == OpCode::CPUI_COPY && space_type(data, k.0) == Some(unlace_base::space::spacetype::IPTR_INTERNAL) {
+        if op.code() == OpCode::CPUI_COPY
+            && space_type(data, k.0) == Some(unlace_base::space::spacetype::IPTR_INTERNAL)
+        {
             if let Some(src) = op.get_in(0).and_then(|v| key(data, v)) {
                 alias.insert(k, alias.get(&src).copied().unwrap_or(src));
             }
@@ -300,8 +320,17 @@ fn walk_block(data: &Funcdata, block: BlockId, st: &mut State, sp: Key, out: &mu
 
 /// The blocks reachable from `starts` (forward along successors, or backward along
 /// predecessors), not entering `avoid`.
-fn reach(data: &Funcdata, starts: &[BlockId], forward: bool, avoid: Option<BlockId>) -> HashSet<BlockId> {
-    let mut seen: HashSet<BlockId> = starts.iter().copied().filter(|b| Some(*b) != avoid).collect();
+fn reach(
+    data: &Funcdata,
+    starts: &[BlockId],
+    forward: bool,
+    avoid: Option<BlockId>,
+) -> HashSet<BlockId> {
+    let mut seen: HashSet<BlockId> = starts
+        .iter()
+        .copied()
+        .filter(|b| Some(*b) != avoid)
+        .collect();
     let mut queue: VecDeque<BlockId> = seen.iter().copied().collect();
     while let Some(b) = queue.pop_front() {
         let blk = data.bblocks_ref().block(b);
@@ -356,7 +385,6 @@ pub fn rewrite(data: &mut Funcdata) {
     if data.bblocks_get_size() < 3 {
         return;
     }
-    let trace = std::env::var_os("UNLACE_VAAPCS_TRACE").is_some();
     let entry = data.bblocks_get_block(0);
     let mut walk = Walk::default();
     let mut exits: HashMap<BlockId, (usize, State)> = HashMap::new();
@@ -370,7 +398,8 @@ pub fn rewrite(data: &mut Funcdata) {
             s.vals.insert(sp, Val::Sp(0));
             s
         } else {
-            let mut known: Vec<&(usize, State)> = preds.iter().filter_map(|p| exits.get(p)).collect();
+            let mut known: Vec<&(usize, State)> =
+                preds.iter().filter_map(|p| exits.get(p)).collect();
             known.sort_by_key(|e| e.0);
             match known.first() {
                 Some(first) => {
@@ -386,9 +415,9 @@ pub fn rewrite(data: &mut Funcdata) {
             }
         };
         walk_block(data, b, &mut state, sp, &mut walk);
-        state
-            .vals
-            .retain(|k, _| space_type(data, k.0) != Some(unlace_base::space::spacetype::IPTR_INTERNAL));
+        state.vals.retain(|k, _| {
+            space_type(data, k.0) != Some(unlace_base::space::spacetype::IPTR_INTERNAL)
+        });
         let ord = exits.len();
         exits.insert(b, (ord, state));
         let blk = data.bblocks_ref().block(b);
@@ -402,14 +431,6 @@ pub fn rewrite(data: &mut Funcdata) {
 
     let mut sites: Vec<Site> = Vec::new();
     for &(jb, jop, ak, at_sp) in &walk.loads {
-        if enabled(data) {
-            let jblk = data.bblocks_ref().block(jb);
-            let pv: Vec<(BlockId, Option<Val>)> = (0..jblk.size_in())
-                .map(|i| jblk.get_in(i))
-                .map(|p| (p, exits.get(&p).and_then(|e| e.1.vals.get(&ak).copied())))
-                .collect();
-            eprintln!("vaargaapcs: load {jb:?} addr {ak:?} sp {at_sp:?} preds {pv:?}");
-        }
         let Some(at_sp) = at_sp else { continue };
         let jblk = data.bblocks_ref().block(jb);
         if jblk.size_in() < 2 {
@@ -418,7 +439,11 @@ pub fn rewrite(data: &mut Funcdata) {
         let preds: Vec<BlockId> = (0..jblk.size_in()).map(|i| jblk.get_in(i)).collect();
         let vals: Option<Vec<(BlockId, Val)>> = preds
             .iter()
-            .map(|p| exits.get(p).and_then(|e| e.1.vals.get(&ak).map(|v| (*p, *v))))
+            .map(|p| {
+                exits
+                    .get(p)
+                    .and_then(|e| e.1.vals.get(&ak).map(|v| (*p, *v)))
+            })
             .collect();
         let Some(vals) = vals else { continue };
         let Some((ptr, off)) = vals.iter().find_map(|(_, v)| match v {
@@ -453,19 +478,15 @@ pub fn rewrite(data: &mut Funcdata) {
             .map(|(b, _)| *b)
             .collect();
         let back = reach(data, &[jb], false, None);
-        let fwd = reach(data, &fblocks.iter().copied().collect::<Vec<_>>(), true, None);
+        let fwd = reach(
+            data,
+            &fblocks.iter().copied().collect::<Vec<_>>(),
+            true,
+            None,
+        );
         let ladder: HashSet<BlockId> = back.intersection(&fwd).copied().collect();
         if !reg_arm.iter().any(|p| fblocks.contains(p)) {
-            if trace {
-                eprintln!("vaargaapcs: join {jb:?} list {list:#x} has no test of its field");
-            }
             continue;
-        }
-        if trace {
-            eprintln!(
-                "vaargaapcs: site join {jb:?} list {list:#x} class {class} ladder {}",
-                ladder.len()
-            );
         }
         sites.push(Site {
             block: jb,

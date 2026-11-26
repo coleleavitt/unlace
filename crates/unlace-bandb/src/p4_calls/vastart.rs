@@ -252,7 +252,11 @@ fn find_aapcs(data: &Funcdata) -> Option<VaStart> {
         let (gr, vr, offsets) = match size {
             8 => {
                 let c = written_const(data, op)?;
-                (crate::vaargaapcs::signed(c, 4), crate::vaargaapcs::signed(c >> 32, 4), vec![op])
+                (
+                    crate::vaargaapcs::signed(c, 4),
+                    crate::vaargaapcs::signed(c >> 32, 4),
+                    vec![op],
+                )
             }
             4 => {
                 let g = written_const(data, op)?;
@@ -260,7 +264,11 @@ fn find_aapcs(data: &Funcdata) -> Option<VaStart> {
                     .into_iter()
                     .find(|&o| written_const(data, o).is_some())?;
                 let v = written_const(data, vop)?;
-                (crate::vaargaapcs::signed(g, 4), crate::vaargaapcs::signed(v, 4), vec![op, vop])
+                (
+                    crate::vaargaapcs::signed(g, 4),
+                    crate::vaargaapcs::signed(v, 4),
+                    vec![op, vop],
+                )
             }
             _ => continue,
         };

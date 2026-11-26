@@ -249,6 +249,8 @@ Three tiers:
 | a variadic function's loop over multiple int/long/double arguments prints as separate gp_offset-checked loads | [`vaarg`](#vaarg----on--off-default-on) |
 | a variadic function prints all six argument registers and the stack arguments as parameters and no va_arg | [`vaargconst`](#vaargconst----off--on--builtin-default-off) |
 | va_list field stores such as gp_offset = 0x18 or 0x20 remain beside plain reads of rcx, r8 or r9 | [`vaargconst`](#vaargconst----off--on--builtin-default-off) |
+| a variadic AArch64 function prints __gr_offs or __vr_offs arithmetic on a va_list | [`vaargaapcs`](#vaargaapcs----off--on-default-off) |
+| a variadic AArch64 function prints the register save area spills and va_list field stores instead of va_start(ap, last) | [`vaargaapcs`](#vaargaapcs----off--on-default-off) |
 | if (n > 0) { i = 0; do { ... } while (i != n); } instead of a for loop | [`looprotate`](#looprotate----on--off-default-on) |
 | a while loop prints as an if around a do-while | [`looprotate`](#looprotate----on--off-default-on) |
 | if (c) { do { ... } while (c); } where the source has while (c) | [`guardedloop`](#guardedloop----on--off-default-on) |
@@ -2074,6 +2076,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off (default). Set on for x86-64 SysV variadic functions that switch over a request code and read their arguments with va_arg (libedit history_w, el_get, el_set), which otherwise print every argument register as a parameter. builtin prints gcc's __builtin_va_arg spelling.
 - **Where / provenance:** P4/prototype-source · unlace · new-analysis · unlace-vaargconst
 - **Example:** `--option vaargconst on`
+
+### `vaargaapcs` -- off | on, default `off`
+
+- **Symptoms:** a variadic AArch64 function prints __gr_offs or __vr_offs arithmetic on a va_list; a variadic AArch64 function prints the register save area spills and va_list field stores instead of va_start(ap, last).
+- **What it does:** Print the AAPCS64 va_arg expansion as va_arg(ap, T). An AArch64 (ELF, not Apple or Windows) variadic function reads each argument through one selection: a load of __gr_offs (or __vr_offs for a double) is tested for sign, the register arm reads __gr_top plus the offset and steps the offset, the stack arm reads __stack and steps it, and the two arms join at one load. unlace printed the offset arithmetic on the va_list fields. With this on, a load that every predecessor of a join reaches through one of those two addresses of one va_list becomes a va_arg(&ap, class) CALLOTHER (class 1 for the __vr half), the steps of __gr_offs, __vr_offs and __stack in the expansion go, and the selection branches take the register arm. vastart then folds the AAPCS64 va_list prologue (__stack, __gr_top, __vr_top, __gr_offs and __vr_offs) to va_start(ap, last) and marks the prototype variadic.
+- **When to flip:** Off (default). Set on for AArch64 variadic functions that read their arguments with va_arg (clang and gcc expansions under -O2): without it each read prints as offset arithmetic on the va_list and the prologue as register-save spills and field stores. Apple arm64 keeps its own va_list and is unaffected.
+- **Where / provenance:** P4/prototype-source · unlace · new-analysis · unlace-vaargaapcs
+- **Example:** `--option vaargaapcs on`
 
 ### `looprotate` -- on | off, default `on`
 

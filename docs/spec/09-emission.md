@@ -431,7 +431,15 @@ or from a call whose prototype returns a float or double, is stored through
 the reverse union: `v1 = ((union { float from; unsigned int to; }){ .from =
 adjust_value(first) }).to;`. The call is judged by its prototype's logical
 result width, not the ABI register (an x87 `ST0` result is wider than the
-`float` it holds). Integer operations such as the sign-bit XOR keep the word
+`float` it holds). The store through the reverse union holds without
+`stackviews` too, for any variable declared as an integer word: a plain
+assignment would convert the value. A call whose prototype locks no output
+counts when its callee's own decompile stated a float return
+(`callrettype`) in the storage and width the call's result is read from: on a
+soft-float ARM image `rd`'s `strd` of `clampd`'s `r0:r1` printed
+`v1 = sub_10224(a0);`, turning 2.25 into 2, and now prints
+`v1 = ((union { double from; unsigned long long to; }){ .from = sub_10224(a0) }).to;`.
+Integer operations such as the sign-bit XOR keep the word
 as integer, and values already declared as floats keep their ordinary
 expression. Unnamed expressions and declarations that are not integer words
 keep ordinary emission. `FLOAT_INT2FLOAT` remains a numeric conversion of its

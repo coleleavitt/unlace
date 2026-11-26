@@ -5432,14 +5432,14 @@ fn soft_float_imports_keep_their_core_register_values() {
 
 /// `floatret_armrows_soft` and `floatret_armrows_hard` (soft-float and
 /// hard-float ARM): `clampd` returns `strtod`'s result or 0, and `rd` copies
-/// its bits into a `uint64_t`. With the libc table's `double` rows the soft
-/// image printed `double sub_10224(..)` beside `rd`'s `unsigned long long v1 =
-/// sub_10224()`, which converts 2.25 to 2, where the rows' absence returns the
-/// right `CONCAT44(v2,v1)`; the hard image printed `unsigned int sub_101f0(..)`
-/// returning `SUB84(v1,0)`, the low half of `d0`. ARM gets none of the rows
-/// with `armfloatreturn` off. Under the default preset's hard-float contract
-/// the hard image takes `strtod`'s row, and `parse` and `clampd` return their
-/// doubles whole in `d0`.
+/// its bits into a `uint64_t`. The soft image states the base standard, which
+/// returns a `double` whole in `r0:r1`, so it takes the rows whatever the
+/// option: `clampd` is `double sub_10224(..)`, and `rd` keeps the bits it copies
+/// (`unsigned long long v1 = sub_10224()` converted 2.25 to 2). The hard image
+/// printed `unsigned int sub_101f0(..)` returning `SUB84(v1,0)`, the low half
+/// of `d0`, and gets none of the rows with `armfloatreturn` off. Under the
+/// default preset's hard-float contract it takes `strtod`'s row, and `parse`
+/// and `clampd` return their doubles whole in `d0`.
 #[test]
 fn arm_images_get_no_double_libc_rows() {
     let sp = specs();
@@ -5460,17 +5460,27 @@ fn arm_images_get_no_double_libc_rows() {
             &sp,
         ]);
         assert!(ok, "unlace decompile-all failed on {name}: {stderr}");
-        for bad in ["double", "SUB84("] {
-            assert!(
-                !stdout.contains(bad),
-                "{name}: `{bad}` from a libc row ARM does not return whole:\n{stdout}"
-            );
-        }
+        assert!(
+            !stdout.contains("SUB84("),
+            "{name}: a double return is cut to its low word:\n{stdout}"
+        );
         if name.ends_with("soft") {
+            for want in [
+                "double strtod(char *a0,char **a1)",
+                "double sub_10224(char *a0)",
+                "{ .from = sub_10224(a0) }).to;",
+                "{ .from = sub_10214(a0) }).to;",
+            ] {
+                assert!(stdout.contains(want), "{name}: missing `{want}`:\n{stdout}");
+            }
             assert!(
-                stdout.contains("unsigned long long sub_10224(")
-                    && stdout.contains("return CONCAT44(v2,v1);"),
-                "{name}: `clampd` no longer returns its r0:r1 bits:\n{stdout}"
+                !stdout.contains("v1 = sub_10224(a0);") && !stdout.contains("v1 = sub_10214(a0);"),
+                "{name}: a bit copy of a double prints as a conversion:\n{stdout}"
+            );
+        } else {
+            assert!(
+                !stdout.contains("double"),
+                "{name}: `double` from a libc row with `armfloatreturn` off:\n{stdout}"
             );
         }
         let (preset, stderr, ok) = run_unlace(&["decompile-all", &bin, "--sleighpath", &sp]);

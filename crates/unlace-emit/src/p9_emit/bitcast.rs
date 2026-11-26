@@ -247,24 +247,37 @@ pub fn reinterprets_to_float(fd: &Funcdata, input: VarnodeId) -> bool {
 
 /// The declared word type of the explicit variable that `op` assigns a float or double
 /// result to: a call whose prototype returns one (its logical width, not the ABI register's),
-/// or a native float op whose output has that width. The assignment then stores the bits.
+/// or, where the prototype locks no output, whose callee's own decompile stated one in the
+/// storage and width the call's result is read from; or a native float op whose output has
+/// that width. The assignment then stores the bits:
+/// a plain assignment would convert the value (a soft-float `double` result copied into a
+/// `uint64_t` printed `v1 = clampd(s)`, 2.25 becoming 2), so this holds whatever the options.
 #[doc(hidden)]
 pub fn word_result(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
-    if !fd
-        .get_arch()
-        .unlace_options
-        .get::<crate::coreoptions::StackViews>()
-        .0
-    {
-        return None;
-    }
     let operation = fd.obank().get(op)?;
     let out = operation.get_out()?;
     let size = match operation.code() {
         OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-            let index = fd.get_call_specs_index(op)?;
-            let result = fd.get_call_specs(index).proto().get_output_type()?;
-            (result.get_metatype() == type_metatype::TYPE_FLOAT).then(|| result.get_size())?
+            let fc = fd.get_call_specs(fd.get_call_specs_index(op)?);
+            let proto = fc.proto();
+            let declared = proto
+                .get_output_type()
+                .filter(|t| t.get_metatype() == type_metatype::TYPE_FLOAT)
+                .map(|t| t.get_size());
+            match declared {
+                Some(size) => size,
+                None if proto.is_output_locked() => return None,
+                None => {
+                    let value = fd.vbank().get(out)?;
+                    let entry = fc.get_entry_address();
+                    let key = (entry.get_space()?.get_index(), entry.get_offset());
+                    let stated = fd.unlace_callret_stated(key)?;
+                    (stated.ct.get_metatype() == type_metatype::TYPE_FLOAT
+                        && stated.addr == *value.get_addr()
+                        && stated.size == value.get_size())
+                    .then_some(stated.size)?
+                }
+            }
         }
         OpCode::CPUI_FLOAT_ABS
         | OpCode::CPUI_FLOAT_ADD

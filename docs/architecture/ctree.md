@@ -470,21 +470,19 @@ Measured (2026-11-26):
 - The parity corpora, through the harness's tree pass (`cargo test -p unlace-harness --test parity --
   --ignored trees --nocapture`, `docs/dev-setup.md`): all 5,344 functions printed (177 in
   `tests/datatests`, 5,167 in `tests/stages`) export a tree that prints back byte for byte, in
-  each language. In C: 4,871 trees, 4,858 without a `raw` node; the other 13 hold `raw` lines only
-  above the prototype (132 lines: the type definitions `structdefs` prints there and the helper
-  preamble of `bytearrayc`). In Go: 201 trees, 89 without `raw`. In Java: 37 trees, 28 without.
-  In Rust: 235 trees, none without `raw`, because every Rust function has a `#[allow(...)]` line
-  above its prototype, and its loops, tests and declarations are typed; the other Rust `raw` nodes
-  are `break` statements (the emitter does not mark them as statements), `match` arms and
-  standalone comments. The Go and Java `raw` nodes are the forms the reader does not cover yet
-  (`switch`, unsafe pointer access, standalone comments, and some block statements).
+  each language. Without a `raw` node: C 4,681 of 4,694 trees (the other 13 hold `raw` lines only
+  above the prototype, the type definitions `structdefs` prints there and the helper preamble of
+  `bytearrayc`); Go 196 of 201; Java 28 of 37; Rust 216 of 235. The Java `raw` nodes are the
+  `try`, `catch`, `finally` and `synchronized` statements (a multi-handler `try` and a
+  `synchronized` kind are not in the vocabulary yet); the Rust ones are `if !(...)` conditions,
+  raw-pointer expressions and unstructured-goto `panic!` lines; the Go ones are `for` loop
+  temporaries and `fallthrough`.
 - The fixture binaries in the repository, through `unlace decompile-all --json --ctree` piped into
   `ctree_roundtrip`: 1,482 binaries, 47,525 functions with code. 38,332 are printed in C: every
   tree (7.5 million nodes in all) prints back byte for byte. 38,327 hold no `raw` node; the other
   five hold nine between them, all of it text nested past level 61 (the five functions named under
-  "Chains and depth"). This measurement predates the other languages; their trees were measured on
-  seven fixture binaries (46 functions each): Java 46 of 46 without `raw`, Go 35, Rust 0 (the
-  attribute line of each function, as above).
+  "Chains and depth"). This measurement predates the other languages; on seven fixture binaries
+  (46 functions each) the other languages measure: Java 46 of 46 without `raw`, Go 43, Rust 41.
 
 What cannot print back, and why: text wrapped by `option maxlinewidth` (the tree has no node for
 a line break inside an expression; every `--json` render prints unbroken lines, so `--ctree` never

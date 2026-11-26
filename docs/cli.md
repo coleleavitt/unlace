@@ -2732,7 +2732,9 @@ language's layout and forms;
 | `while` | the condition, the body `block` | the condition `const` `true` prints `while( true )` |
 | `do_while` | the body `block`, the condition | |
 | `for` | the initializer, the condition, the step, the body `block` | an absent part is `empty` |
-| `switch` | the value, a `block` of `case`, `default` and statements | with no block: `switch(value);`, a jump through a table with no recovered target |
+| `switch` | the value, a `block` of `case`, `default` and statements (Rust: of `arm`s) | with no block: `switch(value);`, a jump through a table with no recovered target |
+| `arm` | the pattern (a `list` of its alternatives, `|` between them), the arm's `block` | a Rust `match` arm, `pattern => { ... }`; the wildcard `_` is `text` |
+| `attribute` | | an attribute line above the prototype (Rust `#[...]`); `text` is the line |
 | `case`, `default` | a `case`'s value | |
 | `try` | the guarded `block`, the handler `block` | `text` is the handler's header (`catch (int)`) |
 | `goto`, `label` | | `text` is the label |
@@ -2779,15 +2781,15 @@ reference printer, `unlace::unstable::printer::CPrinter`, over a `--json --ctree
 document) repeats the check from outside. Measured on 2026-11-26. For C, over the fixture binaries of this repository (1,482
 binaries; 38,332 functions printed in C), every tree prints back to its `code` byte for byte;
 38,327 hold no `raw` node and the other five hold nine between them, all of it text nested past
-level 61. Over the two parity corpora every printed function exports a tree that prints back
-byte for byte, in each language: C 4,694 trees of which 4,681 hold no `raw` node (the other 13
-hold `raw` lines only above the prototype: the type definitions and helper preamble an option
-prints there); Go 201 trees, 89 without `raw`; Java 37 trees, 28 without; Rust 235 trees, none
-without a `raw` node, because every Rust function has a `#[allow(...)]` line above its
-prototype, and the loops, tests and declarations are typed. A `raw` node holds the text of a
-statement or expression the typed vocabulary does not cover: a `break` the emitter does not
-mark as a statement, a `match` (Rust) or `switch` (Go), a standalone comment, an unsafe pointer
-access, and the statements the parity corpora print in those forms. `ctree_error` is one of:
+level 61. The C figure predates the other languages. Over the two parity corpora every printed
+function exports a tree that prints back byte for byte, in each language. Without a `raw` node:
+C 4,681 of 4,694 trees (the other 13 hold `raw` lines above the prototype: the type definitions
+and helper preamble an option prints there); Go 196 of 201; Java 28 of 37; Rust 216 of 235. On
+seven fixture binaries (46 functions each): Java 46 of 46, Rust 41 of 46, Go 43 of 46. The
+`raw` nodes that remain are the text the typed vocabulary does not cover: Java's `try`,
+`catch`, `finally` and `synchronized` statements; Rust's `if !(...)` conditions, raw-pointer
+expressions and unstructured-goto `panic!` lines; Go's `for` loop temporaries and `fallthrough`.
+`ctree_error` is one of:
 
 - `the text was rewritten after it was printed (a cookie-literal return)`: the
   stack-cookie presentation pass edited the text.

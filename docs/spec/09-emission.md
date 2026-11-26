@@ -6493,8 +6493,11 @@ not print back to the edited text it is dropped with that reason.
 `if`, `while` and `for` is parenthesised when `caps.paren_conditions` says so, a statement ends
 with the profile's `kw_semicolon` (Go has none, so a statement ends at its line), Go's `while`
 spelling is also its `for` (a header with a `;` is a three-part `for`), and Rust's `loop {` is a
-`while` with an empty test. The printer writes the same forms back, and a form the reader does
-not cover is kept as a `raw` node.
+`while` with an empty test. Rust's `match` is a `switch` whose items are `arm` nodes (a pattern
+list and a block; the wildcard is text), and its header is bare. An attribute line above the
+prototype is an `attribute` node, and a line comment above the prototype or in a block is a
+comment node. The printer writes the same forms back, and a form the reader does not cover is
+kept as a `raw` node.
 
 The reference printer (`ctreeexport::CPrinter`, the defaults of the `Printer` trait)
 prints a tree as follows; it is the builder's check and what `print_c` and

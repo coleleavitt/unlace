@@ -361,8 +361,9 @@ its machine is read from the ELF header
 (`crates/unlace-analysis/src/loader/arctarget.rs`).
 `EM_ARC_COMPACT2` (195, ARC EM and HS) selects `ARC:LE:32:ARCv2` or
 `ARC:BE:32:ARCv2` by the image's byte order (§2). `EM_ARC_COMPACT` (93,
-ARC600/ARC700) is not mapped: its 16-bit encodings differ and it has no
-language yet, so it still needs an explicit `--target`. A relocatable ARCv2
+ARC600/ARC700) is not mapped: its 16-bit encodings differ, so it still
+needs an explicit `--target` (`ARC:LE:32:ARCompact` or `ARC:BE:32:ARCompact`,
+see §02 "Synopsys ARCv2"). A relocatable ARCv2
 object's `bl`/`b` (`S25W_PCREL`/`S25H_PCREL` and their `_PLT` spellings, the
 displacement from `P & !3`), middle-endian long immediates (`32_ME`) and data
 words (`32`, `PC32`) are applied (`reloc_apply.rs (classify_arc)`); the

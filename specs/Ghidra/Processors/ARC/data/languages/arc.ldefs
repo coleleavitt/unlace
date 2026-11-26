@@ -10,4 +10,14 @@
     <description>Synopsys ARCv2 (ARC EM / HS) 32-bit, big endian</description>
     <compiler name="default" spec="arcv2_be.cspec" id="default"/>
   </language>
+  <language processor="ARC" endian="little" size="32" variant="ARCompact" version="1.0"
+            slafile="arcompact_le.sla" processorspec="arcv2.pspec" id="ARC:LE:32:ARCompact">
+    <description>Synopsys ARCompact (ARC600 / ARC700) 32-bit, little endian</description>
+    <compiler name="default" spec="arcv2_le.cspec" id="default"/>
+  </language>
+  <language processor="ARC" endian="big" size="32" variant="ARCompact" version="1.0"
+            slafile="arcompact_be.sla" processorspec="arcv2.pspec" id="ARC:BE:32:ARCompact">
+    <description>Synopsys ARCompact (ARC600 / ARC700) 32-bit, big endian</description>
+    <compiler name="default" spec="arcv2_be.cspec" id="default"/>
+  </language>
 </language_definitions>

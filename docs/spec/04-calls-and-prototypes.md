@@ -4598,7 +4598,14 @@ global or weak function symbol and every resolved import is bound to
 `__stdcall_softfp` (`crates/unlace-analysis/src/loader/armbasepcs.rs`,
 analysis pass `armbasepcs`, model facts committed through the loader-bound model
 table). The binding covers the function's own decompile, its declared (DWARF or
-library) prototype, and every direct call to it. `float scale(float v, int n)` on a
+library) prototype, and every direct call to it. The bound model is the
+soft-float model below, with its argument extension
+(`typedcallabi.rs (bound_model)`), and a declaration that names no convention
+is locked onto the function's symbol under it too
+(`unlace-console/src/assertions.rs (lock_prototype_on_symbol)`), so a caller
+lays the declared callee out as the callee's own decompile does: a softfp
+`double t1(int k)` tail-calling `double vr(int n, ...)` returns `vr(k,2)`
+rather than `r0:r1` its callee was read as never setting. `float scale(float v, int n)` on a
 soft-float big-endian or Cortex-M object read its result from `s0`, or lost it,
 and the `__aeabi_fadd` result it returns went unused (#681). A local function
 keeps the default layout as above. MIPS, PowerPC and RISC-V specs have no soft-float model, so a

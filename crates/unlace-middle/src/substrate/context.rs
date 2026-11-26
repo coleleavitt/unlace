@@ -1535,11 +1535,6 @@ impl ArchContext {
         addr: &Address,
     ) -> Option<std::rc::Rc<crate::fspec::ProtoModel>> {
         let key = (addr.get_space()?.get_index(), addr.get_offset());
-        eprintln!(
-            "DBGMF query {:x?} in {}",
-            key,
-            self.bound_proto_models.len()
-        );
         self.bound_proto_models.get(&key).cloned()
     }
 

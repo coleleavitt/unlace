@@ -815,21 +815,39 @@ fn soft_float_arm_lays_dwarf_prototypes_out_in_core_registers() {
 /// `static float sq(float x) { return x * x + 1.0f; }` (noinline) and its
 /// caller `float g(float y) { return sq(y) * 2.0f; }`, clang -O2 for armv7
 /// with `-mfloat-abi=softfp`: the image states the base convention and VFPv3
-/// hardware, and clang passes the static function's float in `s0`.
+/// hardware, and clang passes the static function's float in `s0`.  `sq` is
+/// a local symbol, as a `static` function is.
 fn arm_softfp_static() -> Vec<u8> {
-    let g = vec![
+    let g: [u32; 6] = [
         0xe92d4800, 0xee000a10, 0xeb000002, 0xee300a00, 0xee100a10, 0xe8bd8800,
     ];
-    let sq = vec![0xeeb71a00, 0xee001a00, 0xeeb00a41, 0xe12fff1e];
-    image(
-        Architecture::Arm,
-        Endianness::Little,
-        &[("g", g), ("sq", sq)],
-        Some((
-            b".ARM.attributes",
-            attributes(b"aeabi", &[6, 10, 10, 3], Endianness::Little),
-        )),
-    )
+    let sq: [u32; 4] = [0xeeb71a00, 0xee001a00, 0xeeb00a41, 0xe12fff1e];
+    let mut object = Object::new(BinaryFormat::Elf, Architecture::Arm, Endianness::Little);
+    let text = object.add_section(Vec::new(), b".text".to_vec(), SectionKind::Text);
+    let code: Vec<u8> = g.iter().chain(&sq).flat_map(|w| w.to_le_bytes()).collect();
+    object.append_section_data(text, &code, 4);
+    for (name, value, size, scope) in [
+        ("g", 0, 24, SymbolScope::Linkage),
+        ("sq", 24, 16, SymbolScope::Compilation),
+    ] {
+        object.add_symbol(Symbol {
+            name: name.as_bytes().to_vec(),
+            value,
+            size,
+            kind: SymbolKind::Text,
+            scope,
+            weak: false,
+            section: SymbolSection::Section(text),
+            flags: SymbolFlags::None,
+        });
+    }
+    let attrs = object.add_section(Vec::new(), b".ARM.attributes".to_vec(), SectionKind::Other);
+    object.append_section_data(
+        attrs,
+        &attributes(b"aeabi", &[6, 10, 10, 3], Endianness::Little),
+        1,
+    );
+    object.write().unwrap()
 }
 
 #[test]

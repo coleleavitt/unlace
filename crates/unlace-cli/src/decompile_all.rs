@@ -14,6 +14,8 @@ mod custom_reg_callers;
 mod functions_serialize;
 mod omit;
 mod result_store;
+pub(crate) mod storagejson;
+mod tokenmap;
 
 pub(crate) use callee_first::decompile_callee_first;
 use callee_first::decompile_entries_callee_first;
@@ -22,6 +24,10 @@ pub(crate) use omit::Omit;
 /// The opt-in members of a `--json` record.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Extra {
+    /// `--tokens`: the token source map (`tokens`, `tokens_error`).
+    pub(crate) tokens: bool,
+    /// `--storage`: each variable's `storage` list.
+    pub(crate) storage: bool,
     /// `--ctree`: the C syntax tree of the code (`ctree`, `ctree_error`).
     pub(crate) ctree: bool,
 }
@@ -156,6 +162,8 @@ pub(crate) struct Args {
     /// block is built from.
     pub(crate) jobs_proto: bool,
     pub(crate) jobs_provenance: bool,
+    /// Worker mode: fill each variable's storage (`--storage` in the parent).
+    pub(crate) jobs_storage: bool,
     pub(crate) jobs_types: bool,
     /// Report each function's callee hints — the `--stream` scheduler's
     /// frontier, asked for by `--jobs-callees`.
@@ -211,6 +219,7 @@ impl Args {
             jobs_worker: None,
             jobs_proto: false,
             jobs_provenance: false,
+            jobs_storage: false,
             jobs_types: false,
             jobs_callees: false,
             jobs_pointerargs: false,
@@ -227,10 +236,10 @@ impl Args {
         )
     }
 
-    /// Whether the decompile runs the markup render: the `--json` line mappings
-    /// and the variables' `line_numbers`/`addresses` both come from it.
+    /// Whether the decompile runs the markup render: the `--json` line mappings,
+    /// the variables' `line_numbers`/`addresses` and the tokens all come from it.
     pub(crate) fn wants_provenance(&self) -> bool {
-        self.json && !(self.omit.line_mappings && self.no_vars)
+        self.json && (self.extra.tokens || !(self.omit.line_mappings && self.no_vars))
     }
 }
 
@@ -872,6 +881,7 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
                 park_recovered_proto: false,
                 single_target: false,
                 want_tokens: false,
+                want_storage: args.jobs_storage,
                 want_pointer_arguments: args.jobs_pointerargs,
                 want_ctree: false,
             };
@@ -1168,6 +1178,7 @@ pub(crate) fn pool_config<'a>(
         no_vars: args.no_vars,
         want_proto,
         want_provenance,
+        want_storage: args.extra.storage,
         want_types,
         want_callee_hints,
         want_pointer_arguments: false,
@@ -1652,6 +1663,8 @@ pub(crate) fn decompile_entries_with(
         want_proto,
         want_provenance: args.wants_provenance(),
         single_target: targets.len() == 1,
+        want_tokens: args.extra.tokens,
+        want_storage: args.extra.storage,
         want_pointer_arguments: pointer_arguments,
         want_ctree: args.extra.ctree,
         ..DecompileOptions::default()
@@ -2918,7 +2931,12 @@ fn function_json(
     if !omit.variables {
         record.push((
             "variables".into(),
-            Json::Array(f.variables.iter().map(var_json).collect()),
+            Json::Array(
+                f.variables
+                    .iter()
+                    .map(|v| var_json(v, extra.storage))
+                    .collect(),
+            ),
         ));
     }
     // (unlace `structdefs`) The layout side: the definitions of the
@@ -2935,6 +2953,9 @@ fn function_json(
             "stack_objects".into(),
             Json::Array(f.stack_objects.iter().map(stack_object_json).collect()),
         ));
+    }
+    if extra.tokens {
+        record.extend(tokenmap::fields(f));
     }
     record.extend(declared.marker(f.byte_address));
     if let Some(inside) = interior.get(&f.byte_address) {
@@ -3072,9 +3093,9 @@ fn type_json(t: &TypeInfo) -> Json {
 }
 
 /// One `VariableInfo`-shaped JSON object (the fields decbench's `type_match`
-/// consumes).
-fn var_json(v: &VarInfo) -> Json {
-    Json::Object(vec![
+/// consumes), with its `storage` when the caller asked for it.
+fn var_json(v: &VarInfo, storage: bool) -> Json {
+    let mut row = vec![
         ("name".into(), Json::Str(v.name.clone())),
         ("type".into(), Json::Str(v.type_name.clone())),
         ("kind".into(), Json::Str(v.kind().into())),
@@ -3109,7 +3130,11 @@ fn var_json(v: &VarInfo) -> Json {
                     .collect(),
             ),
         ),
-    ])
+    ];
+    if storage {
+        row.push(("storage".into(), storagejson::list(&v.storage)));
+    }
+    Json::Object(row)
 }
 
 #[cfg(test)]
@@ -3284,6 +3309,7 @@ pub(crate) fn parse_args_with_filters(
     let mut jobs_worker: Option<String> = None;
     let mut jobs_proto = false;
     let mut jobs_provenance = false;
+    let mut jobs_storage = false;
     let mut jobs_types = false;
     let mut jobs_callees = false;
     let mut jobs_pointerargs = false;
@@ -3317,6 +3343,8 @@ pub(crate) fn parse_args_with_filters(
             "--omit" if matches!(cmd, "decompile-all" | "decompile") => {
                 omit.add(&take(argv, &mut i, "--omit")?)?
             }
+            "--tokens" if matches!(cmd, "decompile-all" | "decompile") => extra.tokens = true,
+            "--storage" if matches!(cmd, "decompile-all" | "decompile") => extra.storage = true,
             "--functions" => {
                 let v = take(argv, &mut i, "--functions")?;
                 names = Some(
@@ -3369,6 +3397,7 @@ pub(crate) fn parse_args_with_filters(
             }
             "--jobs-proto" if cmd == "decompile-all" => jobs_proto = true,
             "--jobs-provenance" if cmd == "decompile-all" => jobs_provenance = true,
+            "--jobs-storage" if cmd == "decompile-all" => jobs_storage = true,
             "--jobs-types" if cmd == "decompile-all" => jobs_types = true,
             "--jobs-callees" if cmd == "decompile-all" => jobs_callees = true,
             "--jobs-pointerargs" if cmd == "decompile-all" => jobs_pointerargs = true,
@@ -3544,6 +3573,9 @@ pub(crate) fn parse_args_with_filters(
         }
         no_vars |= omit.variables;
     }
+    if (extra.tokens || extra.storage) && !json {
+        return Err("--tokens and --storage select --json record keys; add --json".into());
+    }
 
     if raw_image {
         if target
@@ -3707,6 +3739,13 @@ pub(crate) fn parse_args_with_filters(
                     .into(),
             );
         }
+        if extra.tokens {
+            return Err(
+                "--tokens and --jobs are exclusive: a worker's record does not carry the token \
+                 map. Re-run with --jobs 1."
+                    .into(),
+            );
+        }
     }
 
     if let (Some(min), Some(max)) = (filters.min_size, filters.max_size)
@@ -3747,6 +3786,7 @@ pub(crate) fn parse_args_with_filters(
         jobs_worker,
         jobs_proto,
         jobs_provenance,
+        jobs_storage,
         jobs_types,
         jobs_callees,
         jobs_pointerargs,
@@ -3805,6 +3845,7 @@ fn usage_decompile_all() {
     eprintln!(
         "usage: unlace decompile-all <binary> [--json] [--ctree] [--project FILE] [--functions a,b,..] [--addr 0xVMA].. \\\n\
          \x20                   [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
+         \x20                   [--tokens] [--storage] \\\n\
          \x20                   [--max-fn-seconds N] [--max-fn-memory MiB] \\\n\
          \x20                   [--mode auto|reliable|aggressive|fast] \\\n\
          \x20                   [--jobs N|auto] [--jobs-chunk N] [--jobs-full-load] \\\n\
@@ -3832,6 +3873,13 @@ fn usage_decompile_all() {
          types -- and lists them in a top-level `omitted` array, so an omitted\n\
          collection is never mistaken for an empty one.\n\
          --no-vars skips the variable extraction and leaves `variables` empty.\n\
+         --tokens (with --json, not with --jobs above 1) adds the token source map\n\
+         to every record: `tokens`, each token of `code` with its line, column,\n\
+         kind and the instruction, callee or variable it stands for, and\n\
+         `tokens_error`, set when the map could not be shipped.\n\
+         --storage (with --json) adds `storage` to every variable: the registers\n\
+         and stack slots that hold it, each with the instruction address ranges\n\
+         in which it does.\n\
          --rules FILE (repeatable) adds the p-code rewrite rules of a TOML rule file\n\
          to the rule pools for this run (`unlace docs cli`, \"--rules FILE\").\n\
          --max-fn-seconds N caps ONE function's decompile at N seconds (default 10\n\

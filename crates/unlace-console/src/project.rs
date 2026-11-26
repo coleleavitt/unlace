@@ -156,6 +156,30 @@ impl FuncResult {
             .as_deref()
             .map_or(0, unlace_decomp::langrust::count_unstructured_gotos)
     }
+
+    /// The address of the global data token `index` of the token map names: a
+    /// named global symbol ([`crate::inspect::FuncDetail::token_globals`]),
+    /// else a global the decompiler names by its address ([`Self::globals`])
+    /// that a variable token with no row spells.
+    pub fn token_global(&self, index: usize) -> Option<u64> {
+        let detail = self.detail.as_deref()?;
+        let token = detail.tokens.get(index)?;
+        let named = detail
+            .token_globals
+            .get(index)
+            .copied()
+            .flatten()
+            .and_then(|g| detail.globals.get(g))
+            .map(|g| g.address);
+        named.or_else(|| {
+            let plain = token.kind == unlace_decomp::prettyprint::TokenKind::Variable
+                && token.var.is_none();
+            self.globals
+                .iter()
+                .find(|g| plain && g.name == token.text)
+                .map(|g| g.address)
+        })
+    }
 }
 
 /// Reconcile calls only after the buffered driver's accepted results are final.
@@ -193,12 +217,19 @@ pub fn reconcile_pointer_arguments(results: &mut [FuncResult]) {
             detail.cast_tree_arguments(original, &edits);
         }
         let applied = pointerargs::apply(original, &edits);
-        if applied.code != original {
-            if let Some(detail) = result.detail.as_mut().filter(|d| d.tokens_error.is_none()) {
-                detail.tokens.clear();
-                detail.tokens_error =
-                    Some("pointer-argument casts are not in the token map".into());
-            }
+        if applied.code != original
+            && let Some(detail) = result.detail.as_mut().filter(|d| d.tokens_error.is_none())
+        {
+            let mut skipped: Vec<_> = applied.skipped.iter().map(|(edit, _)| edit).collect();
+            let mut inserted = edits.clone();
+            inserted.retain(|edit| match skipped.iter().position(|left| *left == edit) {
+                Some(at) => {
+                    skipped.swap_remove(at);
+                    false
+                }
+                None => true,
+            });
+            detail.insert_casts(original, &inserted, &applied.code);
         }
         result.code = Some(applied.code);
     }
@@ -280,6 +311,9 @@ pub struct DecompileOptions {
     /// Capture the token source map ([`FuncResult::detail`]); implies the
     /// provenance render.
     pub want_tokens: bool,
+    /// Fill each variable's [`VarInfo::storage`]; implies the provenance
+    /// render, whose references bind a row to its Varnodes.
+    pub want_storage: bool,
     /// Record [`FuncResult::pointerargs`] for a buffered driver. A batch that
     /// returns its results ([`decompile_targets_with`]) reconciles them itself;
     /// a pulled caller owns that step.
@@ -318,6 +352,7 @@ pub fn decompile_targets(
         park_recovered_proto: false,
         single_target: targets.len() == 1,
         want_tokens: false,
+        want_storage: false,
         want_pointer_arguments: false,
         want_ctree: false,
     };
@@ -372,6 +407,7 @@ pub fn export_options(single_target: bool) -> DecompileOptions {
         park_recovered_proto: false,
         single_target,
         want_tokens: false,
+        want_storage: false,
         want_pointer_arguments: true,
         want_ctree: false,
     }
@@ -700,10 +736,12 @@ pub fn decompile_pulled(
         header_carries_types,
         single_target,
         want_tokens,
+        want_storage,
         want_pointer_arguments,
         want_ctree,
         ..
     } = *opts;
+    let want_provenance = want_provenance || want_storage;
     prog.arch_mut().unlace_float_scan_batch = !single_target;
     // (unlace `structdefs`) A project export's bodies do NOT carry the
     // type-definition preamble: they `#include` the generated header, and
@@ -1158,6 +1196,14 @@ pub fn decompile_pulled(
                     }
                     let var_refs =
                         provenance.apply_to_variables_with_refs(prog.arch(), &fd, &mut variables);
+                    if want_storage {
+                        unlace_decomp::decompile_drive::varstorage::attach(
+                            prog.arch(),
+                            &fd,
+                            &var_refs,
+                            &mut variables,
+                        );
+                    }
                     let detail = want_tokens.then(|| {
                         Box::new(crate::inspect::FuncDetail::resolve(
                             prog,
@@ -1186,6 +1232,11 @@ pub fn decompile_pulled(
                     for variable in &mut variables {
                         for address in &mut variable.addresses {
                             *address = prog.output_code_offset(*address);
+                        }
+                        for (start, end) in variable.storage.iter_mut().flat_map(|p| &mut p.ranges)
+                        {
+                            *start = prog.output_code_offset(*start);
+                            *end = prog.output_code_end_offset(*end);
                         }
                     }
                     // The prototype must be captured HERE (fd is dropped at the

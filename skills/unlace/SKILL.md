@@ -115,6 +115,10 @@ unlace xrefs ./challenge --from main --json
 Treat generated C as an estimate. Verify answer-critical branches, widths, signedness,
 and indirect calls against assembly or observed execution. Use `unlace disassemble` for
 targeted instructions and `unlace read` for encoded data and lookup-table bytes.
+`unlace map ./challenge check --line 12` prints the addresses of the instructions line 12
+of `check`'s C came from, and `--addr 0x401020` the text that instruction printed and the
+variables live there with their registers and stack slots, so the check starts at the
+right instructions.
 
 ## Recover from command failures
 

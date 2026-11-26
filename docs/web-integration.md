@@ -227,7 +227,8 @@ Compact JSON, every address a number plus an `_hex` twin:
 `tokens` is the token source map (`docs/spec/09-emission.md` §9.2): `line` is 1-based in
 `code`, `col`/`len` are UTF-16 code units, and on each line the tokens' texts joined with
 the gaps as spaces rebuild that line exactly (the engine verifies it before shipping; on
-failure `tokens` is `[]` and `tokens_error` says why). `kind` is `syntax`, `variable`,
+failure `tokens` is `[]` and `tokens_error` says why). `unlace decompile --json --tokens`
+carries the same two members (`docs/cli.md`, "The JSON documents"). `kind` is `syntax`, `variable`,
 `value` (literals and case labels), `op`, `funcname`, `type`, `field`, `comment` or
 `label`; `color` is the printer's highlight class (`keyword`, `comment`, `type`,
 `funcname`, `var`, `const`, `param`, `global`, `none`, `error`, `special`). Optional

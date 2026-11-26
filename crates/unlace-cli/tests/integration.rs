@@ -600,6 +600,13 @@ mod stack_float_snapshot;
 #[path = "register_locals_json.rs"]
 mod register_locals_json;
 
+#[path = "map_cli.rs"]
+mod map_cli;
+#[path = "tokens_cli.rs"]
+mod tokens_cli;
+#[path = "variable_storage_cli.rs"]
+mod variable_storage_cli;
+
 #[path = "stack_object_discovery.rs"]
 mod stack_object_discovery;
 

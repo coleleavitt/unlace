@@ -108,6 +108,13 @@ Opt-in or unfinished. Each is off by default or marked above:
   documents"; `docs/architecture/ctree.md` section 11]
 - **Callbacks on the C syntax tree** (`unlace::unstable::ctree`): they work on the engine's own
   types, which change with it. [`docs/architecture/ctree.md` section 10]
+- **Token map, variable storage and `unlace map`** (`--tokens`, `--storage`, `unlace map`,
+  `unlace::unstable::mapping`): which instructions a span of the output came from, and where each
+  variable is in the machine and when. Both record members are opt-in, and the library types can
+  change. `storage` describes the decompiler's variables: checked against DWARF it agrees for 93-99%
+  of the bytes where both name a location, and in Go output it names one for 15% of the bytes DWARF
+  does. [`docs/cli.md`, "The JSON documents" and "unlace map"; `docs/spec/06-variables-and-merge.md`,
+  "Variable storage"]
 - **Tier 3 architectures**: decompile without an output check.
 
 Option-level status (tier, default, what each flip does) is in [docs/options.md](options.md), which is

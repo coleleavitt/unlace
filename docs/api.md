@@ -168,6 +168,33 @@ recovery, and that rules and callbacks must be deterministic. Rules and callback
 again on every load, before any option is applied; with none registered the pipeline and its
 output are the default ones. `docs/spec/00-overview.md` §0.6 describes the mechanism.
 
+### unlace::unstable::mapping — what the text corresponds to
+
+`Decompiler::map(address)` and `map_named(name)` decompile one function as `unlace map` does
+(`docs/cli.md`, "unlace map") and return a `Mapped`: the `Decompiled` function, whose document
+carries the token map (`functions[0].tokens`) and each variable's `storage`, and three queries
+over them. Lines count from 1 and columns from 0 in UTF-16 code units, as in the token map.
+
+```rust
+use unlace::Decompiler;
+use unlace::unstable::mapping::Span;
+
+let mut decompiler = Decompiler::open("a.out")?;
+let main = decompiler.map_named("main")?;
+for address in main.addresses(Span::line(7)) {        // line 7 came from these instructions
+    for site in main.spans(address) {                   // and each of them printed this text
+        println!("{address:#x} {}:{} {}", site.span.start.line, site.span.start.col, site.text);
+    }
+    for variable in main.live(address) {                // while these variables were live
+        println!("{address:#x} {} in {:?}", variable.name, variable.storage);
+    }
+}
+```
+
+`Decompiler::with_tokens()` and `with_storage()` add the same two members to every document the
+decompiler returns (`--tokens`, `--storage`); without them the documents are unchanged. A function
+whose token map does not rebuild its text is an `Error::Decompile` from `map` that says why.
+
 ### unlace::unstable::printer — the printed function as a tree, and printers over it
 
 `Decompiler::tree(address)` and `tree_named(name)` decompile one function and return its text as a

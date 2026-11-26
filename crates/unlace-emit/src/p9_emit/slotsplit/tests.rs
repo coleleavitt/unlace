@@ -11,6 +11,7 @@ fn frame_row(off: i64, size: i64) -> VarInfo {
         line_numbers: Vec::new(),
         addresses: Vec::new(),
         split_piece: false,
+        storage: Vec::new(),
     }
 }
 

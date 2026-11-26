@@ -158,6 +158,7 @@ fn every_json_surface_names_its_root_in_help() {
         ("sbom", "{bomFormat,"),
         ("decompile", "{binary,"),
         ("decompile-all", "{binary,"),
+        ("map", "{binary,"),
         ("functions", "{binary,"),
         ("disassemble", "{binary,"),
         ("raw-pcode", "{binary,"),

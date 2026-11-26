@@ -428,6 +428,7 @@ const NOTED_SUBCOMMANDS: &[&str] = &[
     "decompile-all",
     "decompile-project",
     "decompile-graph",
+    "map",
     "functions",
     "disassemble",
     "read",

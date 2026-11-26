@@ -119,6 +119,26 @@ impl FuncDetail {
             ctree: None,
         }
     }
+
+    /// Follow the pointer-argument casts a batch inserted into `original`
+    /// (giving `edited`) into the tokens, which ship only if they rebuild
+    /// `edited`.
+    pub fn insert_casts(
+        &mut self,
+        original: &str,
+        casts: &[unlace_decomp::pointerargs::Insertion],
+        edited: &str,
+    ) {
+        for at in srcmap::insert_casts(&mut self.tokens, original, casts) {
+            let at = at.min(self.token_globals.len());
+            self.token_globals.splice(at..at, [None; 3]);
+        }
+        if let Err(error) = srcmap::verify(&self.tokens, edited) {
+            self.tokens.clear();
+            self.token_globals.clear();
+            self.tokens_error = Some(error);
+        }
+    }
 }
 
 /// The global data symbol each variable token names: a name the function's own

@@ -84,7 +84,7 @@ pub(crate) fn function_address(path: &str, name: &str) -> Result<String, String>
 
 /// Rewrite the arguments of a command given a database in place of a binary into a raw
 /// load of its segments: `--raw-image --target --base`, `--entry` per function (not for
-/// `decompile`, which selects one), `--functions` names as `--addr`es, and the knowledge
+/// `decompile` and `map`, which select one), `--functions` names as `--addr`es, and the knowledge
 /// as `--assert @FILE` (a temporary file pushed onto `temp`). Arguments that already say
 /// `--raw-image` (a `--jobs` worker's) are left alone.
 pub(crate) fn prepare_args(
@@ -138,7 +138,7 @@ pub(crate) fn prepare_args(
         }
     }
     let seeded = args.iter().any(|a| a == "--entry" || a == "--addr");
-    if sub != "decompile" && !seeded {
+    if !matches!(sub, "decompile" | "map") && !seeded {
         for f in &db.functions {
             args.extend(["--entry".to_string(), hex(f.start)]);
         }

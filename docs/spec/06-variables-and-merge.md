@@ -1860,6 +1860,195 @@ is in a function that improves overall. Against main, it costs +0.86% CPU and +0
 wall time with `--json` and -0.28% wall time in text mode, where a separately
 built copy of main measured +1.01%, -0.93% and -1.21%.
 
+**Variable storage.** The rows above say what a variable is. With `--storage`
+(`unlace decompile --json`, `unlace decompile-all --json`, and every `unlace
+map` run) a row also says where the variable is in the machine and at which
+instructions: a `storage` list of pieces, each with the instruction address
+ranges in which it holds the variable.
+`crates/unlace-decomp/src/infra/decompile_drive/varstorage.rs (attach)`
+builds it after the provenance render has bound each row to its Varnodes
+(`CodeProvenance::apply_to_variables_with_refs`: the instances of the row's
+HighVariable the printed text references), so `--storage` runs that render. It
+changes no p-code and no emitted C.
+
+A piece is a run of bytes in a processor space or on the stack, reported as its
+space's name, the smallest named register that contains it, its offset (for the
+stack the signed frame offset `stack_offset` uses) and its size. Three things
+make one. The row's declared home, a parameter's prototype storage or a frame
+row's slot, is always listed. Each bound instance contributes its own location
+when that is a register, a stack slot or memory (a join contributes its pieces;
+a constant or a temporary contributes nothing). And each instance contributes
+the homes simplification removed from it while keeping its value
+(`Funcdata::unlace_storage_sources`, the record the storage comment `// eax |
+stack - 0x14` is printed from): the register a stack local was loaded into, the
+slot a register parameter was spilled to. A location inside a declared home
+counts as that home, so a store to one element of an array row is the array's
+slot and not a piece of its own.
+
+The ranges answer one question for every instruction of the function: does
+this piece hold the variable on entry to it? `varstorage.rs (Machine::of)` first
+lays the function out as the machine runs it. Each basic block's address ranges
+are decoded again into instructions; an instruction whose p-code is split over
+several blocks (a conditional move) is one entry per block. An instruction's
+ops are the surviving ops at any address inside it (the ops of a delay slot
+carry the slot's address), without MULTIEQUALs, whose value is there at the top
+of the block.
+
+A block the decompiler joined from several pieces does not run in address
+order: where every case of a switch jumps back to a shared tail and each case
+got its own copy of the tail, the case runs first and lies above it. So each
+range is cut where an instruction jumps away (an unconditional jump, or a
+conditional one no op is left for, which the decompiler decided), and
+`varstorage.rs (in_order)` puts the resulting runs in the order control passes
+through them. Runs with surviving ops are in op order. A run without any goes
+before the run it leads to: the one its last instruction jumps to (for a
+conditional jump, when a run of the block starts at its target), else the next
+one by address; a run that leads to none is last. In 188 of the repository's
+fixtures, 366 blocks have several runs, and in 18 of them a run without ops
+comes before a run at a lower address. The instructions between the function's
+entry and the first one with p-code (an `endbr64`) are put in front of the
+entry block when none of them has p-code. An instruction without p-code at the
+head of any other block is in no block's ranges, so it is in no range of a
+piece. Two conditions then decide.
+
+*The instance is live there.* `Machine::live` rebuilds the instance's cover with
+a context that does not follow implied outputs (`Reads`). The merge cover of
+§6.1 extends a Varnode through every expression it is folded into, to where
+that expression prints: that decides which Varnodes may share a name, and it is
+later than the machine read the storage. The instance is live on entry to an
+instruction when its cover holds the instruction's first op and its definition
+comes before that op. An instruction none of whose ops survived takes the state
+the instruction before it left.
+
+*The piece has the value on every path there.* `Machine::kept` follows the
+value from where it is known to be in the piece.
+
+- The instance's own location has it after the defining instruction, at the top
+  of the block for a MULTIEQUAL, and at the function's entry for an input.
+- A removed home's record holds the home and one address: that of the op that
+  defined the Varnode that was there (`Machine::removed`).
+  - The instruction at that address writes the home itself. The value is in the
+    home afterwards if the write is a move (a copy, a load, an extension or a
+    truncation of some location's value) or the instruction is the one that
+    computes the instance. A record of an equal value some other computation
+    left in the home is not followed.
+  - The instruction is a call that does not preserve the home. The value is
+    the call's result, in the home afterwards.
+  - Otherwise the instruction leaves the home alone: the op was a MULTIEQUAL,
+    the INDIRECT of a call that preserves the home, or a truncation heritage
+    placed at a read. The home holds the value on entry to that instruction.
+  - A record at an instruction in several blocks is not followed. A record
+    without an address is an input's: the home has the value at the function's
+    entry.
+
+From each of these the walk goes forward through the instructions the instance
+is live at and stops behind one that writes the piece. A write is any output of
+the instruction's own p-code in a processor space, which is why the
+instructions are decoded again (`Translate::one_instruction`): the write that
+ends a register's hold is often one no op is left for, a constant loaded for
+the next call or an address computed into the register. The outputs of the
+surviving ops count as well (a stack location is written through a pointer, and
+only heritage names it), so does a removed stack home at an instruction that
+stores, and for a register so does a call whose prototype does not list it as
+unaffected. A walk does not enter the block whose MULTIEQUAL defines the
+instance from another block, because on that edge the instance takes its next
+value. From an instruction the home is known to hold the value on entry to, the
+walk also goes backward, through the instructions that leave the home alone and
+that the instance is live at, and not past the top of that MULTIEQUAL's block.
+A last pass drops what some other path reaches without the value: an
+instruction stays only while every instruction before it either wrote the value
+to the piece or had it on entry and did not write the piece, so a register
+loaded on one arm of a branch is not the variable after the join. An
+address-tied instance (a stack variable whose address is taken, a global) needs
+no walk: its versions never overlap, so it is in its location wherever it is
+live.
+
+The ranges are `[start, end)` over whole instructions, joined where they touch
+and converted to the target's address units as `addresses` is.
+`VarInfo::storage` crosses the `--jobs` wire with the rest of the row, and a
+worker computes it when the parent passes `--jobs-storage`. The pass polls the
+function's budget once a row (`budget::deadline_passed_in`) and stops when it
+is spent.
+
+The list describes the decompiler's variable, not the source's, and it is not a
+debugger's location list.
+
+- A piece is listed only while something reads the value again: a register
+  that still holds a dead value is not the variable.
+- A variable the C merged from two source variables has the storage of both.
+  One source variable the compiler keeps in a frame slot and in a register can
+  be two variables in the C: across calls the decompiler cannot replace the
+  register copy by the slot, so the slot keeps the row (and the source name
+  when debug information gives one) and the register is another local.
+- A home ends at the writes the decompiler models. A store through an
+  unrelated pointer does not end a stack home, nor does a store whose value
+  the decompiler removed as dead.
+- A removed home is followed only from the records described above, so a
+  piece can be missing where the value reached the home through a computation
+  the decompiler later proved equal.
+
+The member is opt-in because of what it costs. With it a whole-binary run
+executes 0.8-2.5% more instructions (four x86-64 fixtures of 13 to 400
+functions, user mode, one pinned core) and its document grows by 46-103%, 73%
+over six fixtures. Without it `attach` is not called and the document is the
+one it was: byte for byte the document of the build before this member existed
+(six fixtures), and the `--storage` document less its `storage` members is the
+same JSON.
+
+`tools/storage_dwarf.py` checks the ranges against DWARF. For every function
+with DWARF and every variable reported under a name DWARF gives a parameter or
+local of that function (a name two scopes declare is skipped), it compares,
+byte by byte over the function, where DWARF's location places the variable (a
+register, a CFA-relative stack slot, a static address) with where the `storage`
+ranges place it. Variables with a location list, which the compiler tracked
+through the code, are counted apart from those with one location expression
+for a whole scope: an unoptimized build's frame slot, which DWARF also names
+before the value is stored there. Of the 181 fixture files of the repository
+with debug information, 118 have DWARF the script reads for an architecture it
+has a register table for (x86-64, i386, AArch64, ARM), and 94 of those have a
+variable to compare. In bytes of function:
+
+| | C, C++, Rust: location lists | C, C++, Rust: one expression | Go: location lists | Go: one expression |
+|---|---|---|---|---|
+| fixtures, functions, variables | 85, 887, 655 | 85, 887, 1,034 | 9, 2,795, 7,116 | 9, 2,795, 923 |
+| both name a location, and one piece is DWARF's | 41,124 | 22,540 | 290,125 | 118,136 |
+| both name a location, and none is | 1,482 | 1,409 | 20,361 | 1,069 |
+| agreement | 96.5% | 94.1% | 93.4% | 99.1% |
+| only DWARF names one | 30,964 | 18,299 | 1,856,614 | 593,190 |
+| only `storage` names one | 7,661 | 478 | 127,717 | 12,824 |
+
+In the C, C++ and Rust fixtures, 1,026 of the 1,482 disagreeing bytes are at a
+location that is a piece of the variable with other ranges, and 798 of those
+are one variable (`left_field_start` of `define_all_fields` in `ptx.o`, kept in
+`rbp` and in a frame slot: the case of the second limit above). Of the 1,409
+bytes of the one-expression column, 1,313 come before the row is first in the
+slot DWARF names (the prologue has not stored the parameter, or the first
+assignment has not run), 92 are a register that holds the value up to the
+instruction that stores it, and 4 are the first two instructions of a Thumb
+function whose frame base is the stack pointer, which is still moving there.
+Where only DWARF names a location, the variable is not live for the decompiler
+(its value is not read again), or its copy in that location is another
+variable in the C: 72 of the 1,689 rows have no range at all and are 49% of
+those bytes. 1,911 of the 2,078 distinct locations DWARF gives these variables
+are pieces of their rows.
+
+In the Go fixtures the two agree as often where both name a location, but
+`storage` names one for only 15% of the bytes DWARF does (57% in the C, C++
+and Rust fixtures). 4,465 of the 8,039 rows have no range at all, and they
+hold 87% of the bytes only DWARF covers; 8,945 of DWARF's 12,922 locations are
+pieces of their rows, half of them as the declared home of a row without a
+range. Go passes arguments in registers and reserves a frame slot for each,
+and DWARF's location list for a parameter names the register and then the
+slot. The decompiler gives the DWARF name to the frame row, which no printed
+code references, and tracks the value in another row. In
+`internal/runtime/maps.NewMap` of `go-arm64-dwarf-result/arm64-plain.elf`,
+DWARF places `mt` in `x0` up to `0x12040` and in the slot `stack + 0x8` after
+it; the row `mt` is that slot with no range, and the row `param_1` has `x0`,
+`x5` and the same slot with their ranges. A row gets its ranges from the
+Varnodes its printed references bind, so a row nothing references has none.
+That is the second limit above. It is a gap in how the Go output names its
+parameters, not in the ranges.
+
 **Which offsets are frame.** The local
 scope's window is the prototype's local range plus its parameter range, and
 `MapState` then clears the parameter range back out, so only the local range

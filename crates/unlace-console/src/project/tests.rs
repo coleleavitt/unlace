@@ -490,6 +490,7 @@ fn streamed(proto: &str, param_type: &str) -> FuncResult {
             line_numbers: vec![],
             addresses: vec![],
             split_piece: false,
+            storage: Vec::new(),
         }],
         types: vec![],
         stack_objects: Vec::new(),
@@ -518,6 +519,7 @@ fn a_register_local_has_no_asm_variable_comment() {
         line_numbers: vec![],
         addresses: vec![],
         split_piece: false,
+        storage: Vec::new(),
     };
     let mut r = streamed("long sub_1000(long);", "long");
     r.variables
@@ -562,6 +564,33 @@ fn pointer_arguments_use_only_the_final_successful_results() {
             expression: "&v1".into(),
         }],
     });
+    // The caller's token map: it follows a cast that is applied.
+    let token = |col: usize, text: &str| unlace_decomp::srcmap::CodeToken {
+        line: 1,
+        col,
+        len: text.len(),
+        kind: unlace_decomp::prettyprint::TokenKind::Syntax,
+        color: unlace_decomp::prettyprint::SyntaxHighlight::NoColor,
+        text: text.into(),
+        address: None,
+        callee: None,
+        var: None,
+        decl: None,
+        type_text: None,
+    };
+    let tokens = vec![
+        token(0, "sink"),
+        token(4, "("),
+        token(5, "&"),
+        token(6, "v1"),
+        token(8, ")"),
+        token(9, ";"),
+    ];
+    caller.detail = Some(Box::new(crate::inspect::FuncDetail {
+        token_globals: vec![None; tokens.len()],
+        tokens,
+        ..Default::default()
+    }));
     for failed in [false, true] {
         let mut results = vec![caller.clone(), callee.clone()];
         if failed {
@@ -576,6 +605,14 @@ fn pointer_arguments_use_only_the_final_successful_results() {
         assert_eq!(results[0].code.as_deref(), Some(expected));
         super::reconcile_pointer_arguments(&mut results);
         assert_eq!(results[0].code.as_deref(), Some(expected));
+        let detail = results[0].detail.as_ref().unwrap();
+        assert_eq!(detail.tokens_error, None);
+        assert_eq!(
+            unlace_decomp::srcmap::verify(&detail.tokens, expected),
+            Ok(())
+        );
+        assert_eq!(detail.tokens.len(), if failed { 6 } else { 9 });
+        assert_eq!(detail.token_globals.len(), detail.tokens.len());
     }
     callee.pointerargs.as_mut().unwrap().parameters[0]
         .as_mut()

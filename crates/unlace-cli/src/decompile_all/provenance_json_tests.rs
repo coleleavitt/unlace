@@ -22,6 +22,7 @@ fn function() -> FuncResult {
             line_numbers: vec![3],
             addresses: vec![0x401004],
             split_piece: false,
+            storage: Vec::new(),
         }],
         types: vec![TypeInfo {
             name: "mystruct".into(),

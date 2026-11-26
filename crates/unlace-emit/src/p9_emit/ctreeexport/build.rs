@@ -748,8 +748,15 @@ impl<'a> Builder<'a> {
             let comment = self.toks[i].kind == TokenKind::Comment
                 && self.toks[i].col == 0
                 && (i + 1 == count || self.line_of[i + 1] != self.line_of[i]);
+            let attribute = self.toks[i].text.starts_with('#');
             let (node, next) = if comment && i >= self.function_begin {
                 (self.leaf(Kind::Comment, i, i + 1), i + 1)
+            } else if attribute {
+                let mut j = i;
+                while j < proto && self.line_of[j] == self.line_of[i] {
+                    j += 1;
+                }
+                (self.leaf(Kind::Attribute, i, j), j)
             } else {
                 self.raw_lines(i, proto)
             };

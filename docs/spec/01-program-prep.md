@@ -361,8 +361,9 @@ its machine is read from the ELF header
 (`crates/unlace-analysis/src/loader/arctarget.rs`).
 `EM_ARC_COMPACT2` (195, ARC EM and HS) selects `ARC:LE:32:ARCv2` or
 `ARC:BE:32:ARCv2` by the image's byte order (§2). `EM_ARC_COMPACT` (93,
-ARC600/ARC700) is not mapped: its 16-bit encodings differ and it has no
-language yet, so it still needs an explicit `--target`. A relocatable ARCv2
+ARC600/ARC700) is not mapped: its 16-bit encodings differ, so it still
+needs an explicit `--target` (`ARC:LE:32:ARCompact` or `ARC:BE:32:ARCompact`,
+see §02 "Synopsys ARCv2"). A relocatable ARCv2
 object's `bl`/`b` (`S25W_PCREL`/`S25H_PCREL` and their `_PLT` spellings, the
 displacement from `P & !3`), middle-endian long immediates (`32_ME`) and data
 words (`32`, `PC32`) are applied (`reloc_apply.rs (classify_arc)`); the
@@ -10790,7 +10791,7 @@ included, after the `coldentry` entries are added. A cold throw path reached by
 an ordinary branch (`may_throw.cold`) is not a landing-pad target and stays a
 function. x86/x86-64 ELF only.
 
-**(unlace) Or any other single-owner cold part** (`functails`, default off;
+**(unlace) Or any other single-owner cold part** (`functails`, default on;
 `crates/unlace-analysis/src/analyzers/entry/ehcold.rs (cold_tail_owners)`). The
 same test without the landing pad takes every `.cold` part IDA keeps as a
 function tail (`AF_FTAIL`, libida `append_func_tail`): a lone `ud2` after an
@@ -14206,8 +14207,10 @@ completing instruction where it lands in a mapped section (IDA's "valid addresse
 only" reading of `MOVT` pairs), which is a judgement: a number built the same way
 that lands in a section names it. Everything else of the carry applies unchanged
 (eight hops, no joins along the run, a `movk` that only re-inserts zero upper
-halves changes nothing), and big-endian code is not read. `off` (the default) is
-the behaviour above.
+halves changes nothing), and big-endian code is not read. `on` is the default;
+`off` is the behaviour above. GCC for Cortex-M builds addresses from literal pools, so the
+default changes the Listing of those images not at all; clang's `movw`/`movt` pairs are the
+case it changes.
 
 A constant subtracted from a carried address biases that address rather than
 naming another one. Swift builds a string literal's object as `adrp/add` of the

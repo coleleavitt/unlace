@@ -284,7 +284,7 @@ crate::unlace_flag!(
     "functails",
     "Single-owner .cold parts kept as their owner's tails",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 crate::unlace_flag!(
@@ -1334,7 +1334,7 @@ impl crate::optionset::UnlaceOption for MovwPairs {
     }
 
     fn shipped() -> Self {
-        MovwPairs::Off
+        MovwPairs::On
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {

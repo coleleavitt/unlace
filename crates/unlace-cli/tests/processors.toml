@@ -75,6 +75,10 @@ xtensa_hifi4_rt700 = """
 arcv2_list_sum = """
 0a220080e120c1070c704c4344424b7ae120c10778604c434442f30a31807860e07ee078
 """
+# ARCompact (ARC600/ARC700) j_s [blink] then nop_s: the 16-bit return and nop encodings.
+arcompact_return = """
+e07ee078
+"""
 r32c = """
 f260df9f9f9f9f9f9f9f9f9f9f9f9f9ffa40bbedfff220df9f9f9f9f9f9f9f9f
 a108640304b10864df9f9f9f9f9f9f9fb4ac40007fdf9f9f9f9f9f9f9f9f9f9f
@@ -4051,6 +4055,20 @@ test = "arcv2_conditional_delayed_return_runs_its_slot"
 address = "0x0"
 expect = ["v2 = 0;", "return v2 + *v1;"]
 
+# ARCompact (ARC600/ARC700) little endian: a 16-bit j_s [blink] decompiles to a bare return.
+[[family]]
+name = "arcompact"
+language = "ARC:LE:32:ARCompact"
+base = "0x0"
+image = "arcompact_return"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "arcompact_return_decompiles"
+address = "0x0"
+expect = ["return;"]
+
 # C-SKY ET_REL (EM_CSKY, ABIv2) routes to CSKY:LE:32:v2 (#776); bsr32 calls take PCREL_IMM26BY2.
 [[family]]
 name = "elfroute_csky_o"
@@ -4748,3 +4766,43 @@ expect = ["dat_8000 = 8;"]
 test = "k78_bnz_loop"
 address = "0x20"
 expect = ["} while ("]
+
+[[family]]
+name = "aarch64_svc_names"
+language = "AARCH64:LE:64:v8A"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/aarch64/svc_syscalls.bin"
+args = ["--option", "syscallregs", "on"]
+forbid = ["CallSupervisor"]
+
+# `fixtures/aarch64/svc_syscalls.c`, `.text` only: a Linux `svc #0` write (x8 = 64), a
+# Darwin `svc #0x80` write (x16 = 4) and Mach trap (x16 = -28), each wrapper passing its
+# own parameters in place (option syscallnames).
+[[family.function]]
+test = "aarch64_svc_linux_write"
+address = "0x0"
+expect = ["return sys_write(a0,a1,a2);"]
+
+[[family.function]]
+test = "aarch64_svc_darwin_write"
+address = "0x1c"
+expect = ["return sys_write(a0,a1,a2);"]
+
+[[family.function]]
+test = "aarch64_svc_mach_trap"
+address = "0x28"
+expect = ["return task_self_trap();"]
+
+[[family]]
+name = "arm_svc_names"
+language = "ARM:LE:32:v8"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/arm/svc_syscall.bin"
+args = ["--isa", "arm", "--option", "syscallregs", "on"]
+forbid = ["software_interrupt"]
+
+# `fixtures/arm/svc_syscall.c`: a Linux EABI `svc #0` write (r7 = 4).
+[[family.function]]
+test = "arm_svc_linux_write"
+address = "0x0"
+expect = ["return sys_write(a0,a1,a2);"]

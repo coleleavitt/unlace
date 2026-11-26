@@ -8,6 +8,13 @@
 # address it names as the loop end. The instruction decoded there is prefixed
 # with the hardware's end-of-body test, a direct branch back to the loop start.
 
+@ifdef ARCOMPACT
+@define BRT0 "& brh3=0"
+@define BRT1 "& brh3=1"
+@else
+@define BRT0 ""
+@define BRT1 ""
+@endif
 define endian=$(ENDIAN);
 define alignment=2;
 
@@ -119,6 +126,12 @@ define token h1(16)
   sd7     = (0,6) signed
   sd9     = (0,8) signed
   sd11    = (0,10) signed
+  shl4    = (5,7)
+  shl5    = (5,7)
+  shl6    = (5,7)
+  shl7    = (5,7)
+  sh6hi   = (0,2)
+  sh6op   = (3,4)
 ;
 
 define token h2(16)
@@ -148,6 +161,7 @@ define token h2(16)
   staa    = (3,4)
   stzz    = (1,2)
   stw     = (0,0)
+  brh3    = (3,3)
 ;
 
 define token lh(16) limmhi = (0,15);
@@ -169,6 +183,10 @@ attach variables [ shl0 sgl0 ] [ r0 r1 r2 r3 r4 r5 r6 r7 ];
 attach variables [ shl1 sgl1 ] [ r8 r9 r10 r11 r12 r13 r14 r15 ];
 attach variables [ shl2 sgl2 ] [ r16 r17 r18 r19 r20 r21 r22 r23 ];
 attach variables [ shl3 sgl3 ] [ r24 r25 gp fp sp ilink r30 blink ];
+attach variables [ shl4 ] [ r32 r33 r34 r35 r36 r37 r38 r39 ];
+attach variables [ shl5 ] [ r40 r41 r42 r43 r44 r45 r46 r47 ];
+attach variables [ shl6 ] [ r48 r49 r50 r51 r52 r53 r54 r55 ];
+attach variables [ shl7 ] [ r56 r57 r58 r59 lp_count r61 r62 pcl ];
 
 macro flagsZN(r) { Z = (r == 0); N = (r s< 0); }
 macro flagsAdd(x, y) { C = carry(x, y); V = scarry(x, y); }
@@ -285,8 +303,12 @@ docc: "."^cc is pp=3 ; cc { if (!cc) goto inst_next; }
 :bxor^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x12 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; local r:4 = x ^ (1 << (y & 31));  flagsZN(r); dst = r; }
 :bmsk^docc dst, srcB, src2 is (maj=4 & sub=0x13 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = srcB & ((2 << (src2 & 31)) - 1); }
 :bmsk^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x13 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; local r:4 = x & ((2 << (y & 31)) - 1);  flagsZN(r); dst = r; }
+@ifndef ARCOMPACT
 :bmskn^docc dst, srcB, src2 is (maj=4 & sub=0x2c ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = srcB & ~((2 << (src2 & 31)) - 1); }
+@endif
+@ifndef ARCOMPACT
 :bmskn^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x2c ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; local r:4 = x & ~((2 << (y & 31)) - 1);  flagsZN(r); dst = r; }
+@endif
 :add1^docc dst, srcB, src2 is (maj=4 & sub=0x14 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = srcB + (src2 << 1); }
 :add1^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x14 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2 << 1; local r:4 = x + y; flagsAdd(x, y); flagsZN(r); dst = r; }
 :add2^docc dst, srcB, src2 is (maj=4 & sub=0x15 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = srcB + (src2 << 2); }
@@ -301,34 +323,94 @@ docc: "."^cc is pp=3 ; cc { if (!cc) goto inst_next; }
 :sub3^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x19 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2 << 3; local r:4 = x - y; flagsSub(x, y); flagsZN(r); dst = r; }
 :mpy^docc dst, srcB, src2 is (maj=4 & sub=0x1a ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = srcB * src2; }
 :mpy^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x1a ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:8 = sext(srcB); local y:8 = sext(src2); local p:8 = x * y; local r:4 = p:4; V = (p != sext(r)); flagsZN(r); dst = r; }
+@ifdef ARCOMPACT
+:mpyh^docc dst, srcB, src2 is (maj=4 & sub=0x1b ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local x:8 = sext(srcB); local y:8 = sext(src2); local p:8 = x * y; dst = p(4); }
+@else
 :mpym^docc dst, srcB, src2 is (maj=4 & sub=0x1b ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local x:8 = sext(srcB); local y:8 = sext(src2); local p:8 = x * y; dst = p(4); }
+@endif
+@ifdef ARCOMPACT
+:mpyh^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x1b ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:8 = sext(srcB); local y:8 = sext(src2); local p:8 = x * y; local r:4 = p(4); V = 0; flagsZN(r); dst = r; }
+@else
 :mpym^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x1b ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:8 = sext(srcB); local y:8 = sext(src2); local p:8 = x * y; local r:4 = p(4); V = 0; flagsZN(r); dst = r; }
+@endif
+@ifdef ARCOMPACT
+:mpyhu^docc dst, srcB, src2 is (maj=4 & sub=0x1c ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local x:8 = zext(srcB); local y:8 = zext(src2); local p:8 = x * y; dst = p(4); }
+@else
 :mpymu^docc dst, srcB, src2 is (maj=4 & sub=0x1c ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local x:8 = zext(srcB); local y:8 = zext(src2); local p:8 = x * y; dst = p(4); }
+@endif
+@ifdef ARCOMPACT
+:mpyhu^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x1c ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:8 = zext(srcB); local y:8 = zext(src2); local p:8 = x * y; local r:4 = p(4); V = 0; N = 0; Z = (r == 0); dst = r; }
+@else
 :mpymu^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x1c ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:8 = zext(srcB); local y:8 = zext(src2); local p:8 = x * y; local r:4 = p(4); V = 0; N = 0; Z = (r == 0); dst = r; }
+@endif
 :mpyu^docc dst, srcB, src2 is (maj=4 & sub=0x1d ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = srcB * src2; }
 :mpyu^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x1d ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:8 = zext(srcB); local y:8 = zext(src2); local p:8 = x * y; local r:4 = p:4; V = (p != zext(r)); N = 0; Z = (r == 0); dst = r; }
+@ifndef ARCOMPACT
 :mpyw^docc dst, srcB, src2 is (maj=4 & sub=0x1e ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; dst = sext(x:2) * sext(y:2); }
+@endif
+@ifndef ARCOMPACT
 :mpyw^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x1e ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; local r:4 = sext(x:2) * sext(y:2); V = 0; flagsZN(r); dst = r; }
+@endif
+@ifndef ARCOMPACT
 :mpyuw^docc dst, srcB, src2 is (maj=4 & sub=0x1f ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; dst = zext(x:2) * zext(y:2); }
+@endif
+@ifndef ARCOMPACT
 :mpyuw^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x1f ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; local r:4 = zext(x:2) * zext(y:2); V = 0; flagsZN(r); dst = r; }
+@endif
+@ifndef ARCOMPACT
 :xbfu^docc dst, srcB, src2 is (maj=4 & sub=0x2d ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local y:4 = src2; dst = (srcB >> (y & 31)) & ((2 << ((y >> 5) & 31)) - 1); }
+@endif
+@ifndef ARCOMPACT
 :xbfu^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x2d ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local y:4 = src2; local r:4 = (srcB >> (y & 31)) & ((2 << ((y >> 5) & 31)) - 1); flagsZN(r); dst = r; }
+@endif
+@ifndef ARCOMPACT
 :seteq^docc dst, srcB, src2 is (maj=4 & sub=0x38 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = zext(srcB == src2); }
+@endif
+@ifndef ARCOMPACT
 :seteq^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x38 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; local d:4 = x - y; flagsSub(x, y); flagsZN(d); dst = zext(x == y); }
+@endif
+@ifndef ARCOMPACT
 :setne^docc dst, srcB, src2 is (maj=4 & sub=0x39 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = zext(srcB != src2); }
+@endif
+@ifndef ARCOMPACT
 :setne^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x39 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; local d:4 = x - y; flagsSub(x, y); flagsZN(d); dst = zext(x != y); }
+@endif
+@ifndef ARCOMPACT
 :setlt^docc dst, srcB, src2 is (maj=4 & sub=0x3a ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = zext(srcB s< src2); }
+@endif
+@ifndef ARCOMPACT
 :setlt^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x3a ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; local d:4 = x - y; flagsSub(x, y); flagsZN(d); dst = zext(x s< y); }
+@endif
+@ifndef ARCOMPACT
 :setge^docc dst, srcB, src2 is (maj=4 & sub=0x3b ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = zext(srcB s>= src2); }
+@endif
+@ifndef ARCOMPACT
 :setge^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x3b ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; local d:4 = x - y; flagsSub(x, y); flagsZN(d); dst = zext(x s>= y); }
+@endif
+@ifndef ARCOMPACT
 :setlo^docc dst, srcB, src2 is (maj=4 & sub=0x3c ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = zext(srcB < src2); }
+@endif
+@ifndef ARCOMPACT
 :setlo^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x3c ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; local d:4 = x - y; flagsSub(x, y); flagsZN(d); dst = zext(x < y); }
+@endif
+@ifndef ARCOMPACT
 :seths^docc dst, srcB, src2 is (maj=4 & sub=0x3d ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = zext(srcB >= src2); }
+@endif
+@ifndef ARCOMPACT
 :seths^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x3d ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; local d:4 = x - y; flagsSub(x, y); flagsZN(d); dst = zext(x >= y); }
+@endif
+@ifndef ARCOMPACT
 :setle^docc dst, srcB, src2 is (maj=4 & sub=0x3e ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = zext(srcB s<= src2); }
+@endif
+@ifndef ARCOMPACT
 :setle^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x3e ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; local d:4 = x - y; flagsSub(x, y); flagsZN(d); dst = zext(x s<= y); }
+@endif
+@ifndef ARCOMPACT
 :setgt^docc dst, srcB, src2 is (maj=4 & sub=0x3f ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { dst = zext(srcB s> src2); }
+@endif
+@ifndef ARCOMPACT
 :setgt^docc^".f" dst, srcB, src2 is (maj=4 & sub=0x3f ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local y:4 = src2; local d:4 = x - y; flagsSub(x, y); flagsZN(d); dst = zext(x s> y); }
+@endif
 
 :mov^docc dstB, src2 is (maj=4 & sub=0x0a ; F=0) ... & docc ... & dstB ... & src2 ... { dstB = src2; }
 :mov^docc^".f" dstB, src2 is (maj=4 & sub=0x0a ; F=1) ... & docc ... & dstB ... & src2 ... { local r:4 = src2; flagsZN(r); dstB = r; }
@@ -355,12 +437,22 @@ jdst: immU6 is (pp=3 ; m=1) ... & immU6 ... { export immU6; }
 :jl^jcc jdst is (maj=4 & sub=0x22 ; F=0) ... & jcc ... & jdst ... { local t:4 = jdst; blink = inst_next; call [t]; }
 :jl^jccd^".d" jdst is (maj=4 & sub=0x23 ; F=0) ... & jccd ... & jdst ... { local c:1 = jccd; local t:4 = jdst; delayslot(1); if (!c) goto <skip>; blink = inst_next2; call [t]; <skip> }
 
+@ifndef ARCOMPACT
 :bi [srcC] is (maj=4 & sub=0x24 & pp=0 ; F=0) ... & srcC ... { local t:4 = inst_next + (srcC << 2); goto [t]; }
+@endif
+@ifndef ARCOMPACT
 :bih [srcC] is (maj=4 & sub=0x25 & pp=0 ; F=0) ... & srcC ... { local t:4 = inst_next + (srcC << 1); goto [t]; }
+@endif
+@ifndef ARCOMPACT
 :ldi dstB, [src2] is (maj=4 & sub=0x26 ; F=0) ... & dstB ... & src2 ... { local ea:4 = ldi_base + (src2 << 2); dstB = *:4 ea; }
+@endif
+@ifndef ARCOMPACT
 :aex dstB, [src2] is (maj=4 & sub=0x27 ; F=0) ... & dstB ... & src2 ... { local t:4 = aux_read(src2); aux_write(src2, dstB); dstB = t; }
+@endif
 :flag^docc src2 is (maj=4 & sub=0x29 ; F=0) ... & docc ... & src2 ... { set_flags(src2); }
+@ifndef ARCOMPACT
 :kflag^docc src2 is (maj=4 & sub=0x29 ; F=1) ... & docc ... & src2 ... { set_kernel_flags(src2); }
+@endif
 :lr dstB, [src2] is (maj=4 & sub=0x2a ; F=0) ... & dstB ... & src2 ... { dstB = aux_read(src2); }
 :sr srcB, [src2] is (maj=4 & sub=0x2b ; F=0) ... & srcB ... & src2 ... { aux_write(src2, srcB); }
 
@@ -380,8 +472,12 @@ lptarget: addr is pp=3 ; m=1 & u6 [ addr = (inst_start & 0xfffffffc) + (u6 << 1)
   { if (!cc) goto lptarget; lp_start = inst_next; lp_end = &lptarget; }
 
 dbtarget: addr is maj ; s12hi & s12lo [ addr = (inst_start & 0xfffffffc) + (((s12hi << 6) | s12lo) << 1); ] { export *[ram]:4 addr; }
+@ifndef ARCOMPACT
 :dbnz dstB, dbtarget is (maj=4 & pp=2 & dbnzsub=6 & dbnzn=0 ; F=0) ... & dstB ... & dbtarget ... { dstB = dstB - 1; if (dstB != 0) goto dbtarget; }
+@endif
+@ifndef ARCOMPACT
 :dbnz.d dstB, dbtarget is (maj=4 & pp=2 & dbnzsub=6 & dbnzn=1 ; F=0) ... & dstB ... & dbtarget ... { dstB = dstB - 1; local t:1 = (dstB != 0); delayslot(1); if (t) goto dbtarget; }
+@endif
 
 # ---- major 0x04, subopcode 0x2f: single-operand operations ----
 
@@ -397,20 +493,40 @@ dbtarget: addr is maj ; s12hi & s12lo [ addr = (inst_start & 0xfffffffc) + (((s1
 :rrc.f dstB, src2 is (maj=4 & sub=0x2f ; F=1 & areg=0x04) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = (x >> 1) | (zext(C) << 31); C = ((x & 1) != 0); flagsZN(r); dstB = r; }
 :sexb dstB, src2 is (maj=4 & sub=0x2f ; F=0 & areg=0x05) ... & dstB ... & src2 ... { local x:4 = src2; dstB = sext(x:1); }
 :sexb.f dstB, src2 is (maj=4 & sub=0x2f ; F=1 & areg=0x05) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = sext(x:1);  flagsZN(r); dstB = r; }
+@ifdef ARCOMPACT
+:sexw dstB, src2 is (maj=4 & sub=0x2f ; F=0 & areg=0x06) ... & dstB ... & src2 ... { local x:4 = src2; dstB = sext(x:2); }
+@else
 :sexh dstB, src2 is (maj=4 & sub=0x2f ; F=0 & areg=0x06) ... & dstB ... & src2 ... { local x:4 = src2; dstB = sext(x:2); }
+@endif
+@ifdef ARCOMPACT
+:sexw.f dstB, src2 is (maj=4 & sub=0x2f ; F=1 & areg=0x06) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = sext(x:2);  flagsZN(r); dstB = r; }
+@else
 :sexh.f dstB, src2 is (maj=4 & sub=0x2f ; F=1 & areg=0x06) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = sext(x:2);  flagsZN(r); dstB = r; }
+@endif
 :extb dstB, src2 is (maj=4 & sub=0x2f ; F=0 & areg=0x07) ... & dstB ... & src2 ... { local x:4 = src2; dstB = zext(x:1); }
 :extb.f dstB, src2 is (maj=4 & sub=0x2f ; F=1 & areg=0x07) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = zext(x:1);  flagsZN(r); dstB = r; }
+@ifdef ARCOMPACT
+:extw dstB, src2 is (maj=4 & sub=0x2f ; F=0 & areg=0x08) ... & dstB ... & src2 ... { local x:4 = src2; dstB = zext(x:2); }
+@else
 :exth dstB, src2 is (maj=4 & sub=0x2f ; F=0 & areg=0x08) ... & dstB ... & src2 ... { local x:4 = src2; dstB = zext(x:2); }
+@endif
+@ifdef ARCOMPACT
+:extw.f dstB, src2 is (maj=4 & sub=0x2f ; F=1 & areg=0x08) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = zext(x:2);  flagsZN(r); dstB = r; }
+@else
 :exth.f dstB, src2 is (maj=4 & sub=0x2f ; F=1 & areg=0x08) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = zext(x:2);  flagsZN(r); dstB = r; }
+@endif
 :abs dstB, src2 is (maj=4 & sub=0x2f ; F=0 & areg=0x09) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = x; if (x s>= 0) goto <done>; r = -x; <done> dstB = r; }
 :abs.f dstB, src2 is (maj=4 & sub=0x2f ; F=1 & areg=0x09) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = x; C = (x s< 0); V = (x == 0x80000000); if (x s>= 0) goto <done>; r = -x; <done> flagsZN(r); dstB = r; }
 :not dstB, src2 is (maj=4 & sub=0x2f ; F=0 & areg=0x0a) ... & dstB ... & src2 ... { local x:4 = src2; dstB = ~x; }
 :not.f dstB, src2 is (maj=4 & sub=0x2f ; F=1 & areg=0x0a) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = ~x;  flagsZN(r); dstB = r; }
 :rlc dstB, src2 is (maj=4 & sub=0x2f ; F=0 & areg=0x0b) ... & dstB ... & src2 ... { local x:4 = src2; dstB = (x << 1) | zext(C); }
 :rlc.f dstB, src2 is (maj=4 & sub=0x2f ; F=1 & areg=0x0b) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = (x << 1) | zext(C); C = (x s< 0); flagsZN(r); dstB = r; }
+@ifndef ARCOMPACT
 :rol dstB, src2 is (maj=4 & sub=0x2f ; F=0 & areg=0x0d) ... & dstB ... & src2 ... { local x:4 = src2; dstB = (x << 1) | (x >> 31); }
+@endif
+@ifndef ARCOMPACT
 :rol.f dstB, src2 is (maj=4 & sub=0x2f ; F=1 & areg=0x0d) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = (x << 1) | (x >> 31); C = (x s< 0); flagsZN(r); dstB = r; }
+@endif
 
 :ex dstB, [src2] is (maj=4 & sub=0x2f ; areg=0x0c) ... & dstB ... & src2 ... { local ea:4 = src2; local t:4 = *:4 ea; *:4 ea = dstB; dstB = t; }
 :llock dstB, [src2] is (maj=4 & sub=0x2f ; areg=0x10) ... & dstB ... & src2 ... { local ea:4 = src2; load_locked(ea); dstB = *:4 ea; }
@@ -435,42 +551,106 @@ dbtarget: addr is maj ; s12hi & s12lo [ addr = (inst_start & 0xfffffffc) + (((s1
 :asr^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x02 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local n:4 = src2 & 31; local r:4 = x s>> n; if (n == 0) goto <keep>; C = (((x >> (n - 1)) & 1) != 0); <keep> flagsZN(r); dst = r; }
 :ror^docc dst, srcB, src2 is (maj=5 & sub=0x03 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local n:4 = src2 & 31; dst = (x >> n) | (x << ((32 - n) & 31)); }
 :ror^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x03 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local x:4 = srcB; local n:4 = src2 & 31; local r:4 = (x >> n) | (x << ((32 - n) & 31)); if (n == 0) goto <keep>; C = (((x >> (n - 1)) & 1) != 0); <keep> flagsZN(r); dst = r; }
+@ifndef ARCOMPACT
 :div^docc dst, srcB, src2 is (maj=5 & sub=0x04 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local y:4 = src2; if (y == 0) goto inst_next; dst = srcB s/ y; }
+@endif
+@ifndef ARCOMPACT
 :div^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x04 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local y:4 = src2; if (y == 0) goto inst_next; local r:4 = srcB s/ y; V = 0; flagsZN(r); dst = r; }
+@endif
+@ifndef ARCOMPACT
 :divu^docc dst, srcB, src2 is (maj=5 & sub=0x05 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local y:4 = src2; if (y == 0) goto inst_next; dst = srcB / y; }
+@endif
+@ifndef ARCOMPACT
 :divu^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x05 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local y:4 = src2; if (y == 0) goto inst_next; local r:4 = srcB / y; V = 0; N = 0; Z = (r == 0); dst = r; }
+@endif
+@ifndef ARCOMPACT
 :rem^docc dst, srcB, src2 is (maj=5 & sub=0x08 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local y:4 = src2; if (y == 0) goto inst_next; dst = srcB s% y; }
+@endif
+@ifndef ARCOMPACT
 :rem^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x08 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local y:4 = src2; if (y == 0) goto inst_next; local r:4 = srcB s% y; V = 0; flagsZN(r); dst = r; }
+@endif
+@ifndef ARCOMPACT
 :remu^docc dst, srcB, src2 is (maj=5 & sub=0x09 ; F=0) ... & docc ... & dst ... & srcB ... & src2 ... { local y:4 = src2; if (y == 0) goto inst_next; dst = srcB % y; }
+@endif
+@ifndef ARCOMPACT
 :remu^docc^".f" dst, srcB, src2 is (maj=5 & sub=0x09 ; F=1) ... & docc ... & dst ... & srcB ... & src2 ... { local y:4 = src2; if (y == 0) goto inst_next; local r:4 = srcB % y; V = 0; N = 0; Z = (r == 0); dst = r; }
+@endif
 :swap dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x00) ... & dstB ... & src2 ... { local x:4 = src2; dstB = (x << 16) | (x >> 16); }
 :swap.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x00) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = (x << 16) | (x >> 16);  flagsZN(r); dstB = r; }
 :norm dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x01) ... & dstB ... & src2 ... { local x:4 = src2; dstB = lzcount(x ^ (x s>> 31)) - 1; }
 :norm.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x01) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = lzcount(x ^ (x s>> 31)) - 1;  flagsZN(r); dstB = r; }
+@ifdef ARCOMPACT
+:normw dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x08) ... & dstB ... & src2 ... { local x:4 = src2; local h:2 = x:2; local k:4 = lzcount(h ^ (h s>> 15)); dstB = k - 1; }
+@else
 :normh dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x08) ... & dstB ... & src2 ... { local x:4 = src2; local h:2 = x:2; local k:4 = lzcount(h ^ (h s>> 15)); dstB = k - 1; }
+@endif
+@ifdef ARCOMPACT
+:normw.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x08) ... & dstB ... & src2 ... { local x:4 = src2; local h:2 = x:2; local k:4 = lzcount(h ^ (h s>> 15)); local r:4 = k - 1; Z = (h == 0); N = (h s< 0); dstB = r; }
+@else
 :normh.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x08) ... & dstB ... & src2 ... { local x:4 = src2; local h:2 = x:2; local k:4 = lzcount(h ^ (h s>> 15)); local r:4 = k - 1; Z = (h == 0); N = (h s< 0); dstB = r; }
+@endif
 :swape dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x09) ... & dstB ... & src2 ... { local x:4 = src2; dstB = (x << 24) | ((x & 0xff00) << 8) | ((x >> 8) & 0xff00) | (x >> 24); }
 :swape.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x09) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = (x << 24) | ((x & 0xff00) << 8) | ((x >> 8) & 0xff00) | (x >> 24);  flagsZN(r); dstB = r; }
+@ifndef ARCOMPACT
 :lsl16 dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x0a) ... & dstB ... & src2 ... { local x:4 = src2; dstB = x << 16; }
+@endif
+@ifndef ARCOMPACT
 :lsl16.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x0a) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = x << 16;  flagsZN(r); dstB = r; }
+@endif
+@ifndef ARCOMPACT
 :lsr16 dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x0b) ... & dstB ... & src2 ... { local x:4 = src2; dstB = x >> 16; }
+@endif
+@ifndef ARCOMPACT
 :lsr16.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x0b) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = x >> 16;  flagsZN(r); dstB = r; }
+@endif
+@ifndef ARCOMPACT
 :asr16 dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x0c) ... & dstB ... & src2 ... { local x:4 = src2; dstB = x s>> 16; }
+@endif
+@ifndef ARCOMPACT
 :asr16.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x0c) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = x s>> 16;  flagsZN(r); dstB = r; }
+@endif
+@ifndef ARCOMPACT
 :asr8 dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x0d) ... & dstB ... & src2 ... { local x:4 = src2; dstB = x s>> 8; }
+@endif
+@ifndef ARCOMPACT
 :asr8.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x0d) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = x s>> 8;  flagsZN(r); dstB = r; }
+@endif
+@ifndef ARCOMPACT
 :lsr8 dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x0e) ... & dstB ... & src2 ... { local x:4 = src2; dstB = x >> 8; }
+@endif
+@ifndef ARCOMPACT
 :lsr8.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x0e) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = x >> 8;  flagsZN(r); dstB = r; }
+@endif
+@ifndef ARCOMPACT
 :lsl8 dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x0f) ... & dstB ... & src2 ... { local x:4 = src2; dstB = x << 8; }
+@endif
+@ifndef ARCOMPACT
 :lsl8.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x0f) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = x << 8;  flagsZN(r); dstB = r; }
+@endif
+@ifndef ARCOMPACT
 :rol8 dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x10) ... & dstB ... & src2 ... { local x:4 = src2; dstB = (x << 8) | (x >> 24); }
+@endif
+@ifndef ARCOMPACT
 :rol8.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x10) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = (x << 8) | (x >> 24);  flagsZN(r); dstB = r; }
+@endif
+@ifndef ARCOMPACT
 :ror8 dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x11) ... & dstB ... & src2 ... { local x:4 = src2; dstB = (x >> 8) | (x << 24); }
+@endif
+@ifndef ARCOMPACT
 :ror8.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x11) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = (x >> 8) | (x << 24);  flagsZN(r); dstB = r; }
+@endif
+@ifndef ARCOMPACT
 :ffs dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x12) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = 31; if (x == 0) goto <done>; r = popcount((x & -x) - 1); <done> dstB = r; }
+@endif
+@ifndef ARCOMPACT
 :ffs.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x12) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = 31; Z = (x == 0); N = (x s< 0); if (x == 0) goto <done>; r = popcount((x & -x) - 1); <done> dstB = r; }
+@endif
+@ifndef ARCOMPACT
 :fls dstB, src2 is (maj=5 & sub=0x2f ; F=0 & areg=0x13) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = 0; if (x == 0) goto <done>; r = 31 - lzcount(x); <done> dstB = r; }
+@endif
+@ifndef ARCOMPACT
 :fls.f dstB, src2 is (maj=5 & sub=0x2f ; F=1 & areg=0x13) ... & dstB ... & src2 ... { local x:4 = src2; local r:4 = 0; Z = (x == 0); N = (x s< 0); if (x == 0) goto <done>; r = 31 - lzcount(x); <done> dstB = r; }
+@endif
 
 # ---- major 0x02 / 0x03 / 0x04(0x30..0x37): load and store ----
 
@@ -530,8 +710,14 @@ stsfx: ".aw" is maj ; staa=1 { }
 stsfx: ".ab" is maj ; staa=2 { }
 stsfx: ".as" is maj ; staa=3 { }
 
+@ifdef ARCOMPACT
+stVal: srcC is maj ... & srcC ... { export srcC; }
+@else
 stVal: srcC is (maj ; stw=0) ... & srcC ... { export srcC; }
+@endif
+@ifndef ARCOMPACT
 stVal: w6 is maj ; stw=1 & w6 { export *[const]:4 w6; }
+@endif
 
 :st^stsfx stVal, stEA is (maj=3 ; stzz=0) ... & stsfx ... & stVal ... & stEA ... & stWB ... { local v:4 = stVal; local ea:4 = stEA; build stWB; *:4 ea = v; }
 :stb^stsfx stVal, stEA is (maj=3 ; stzz=1) ... & stsfx ... & stVal ... & stEA ... & stWB ... { local v:4 = stVal; local ea:4 = stEA; build stWB; *:1 ea = v:1; }
@@ -562,22 +748,22 @@ brTarget: addr is brdisp ; ldS [ addr = (inst_start & 0xfffffffc) + ((ldS << 8) 
 brC: srcC is (maj ; brm=0) ... & srcC ... { export srcC; }
 brC: immU6 is (maj ; brm=1) ... & immU6 ... { export immU6; }
 
-:breq srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=0) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (x == y) goto brTarget; }
-:breq.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=0) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (x == y); delayslot(1); if (t) goto brTarget; }
-:brne srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=1) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (x != y) goto brTarget; }
-:brne.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=1) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (x != y); delayslot(1); if (t) goto brTarget; }
-:brlt srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=2) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (x s< y) goto brTarget; }
-:brlt.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=2) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (x s< y); delayslot(1); if (t) goto brTarget; }
-:brge srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=3) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (x s>= y) goto brTarget; }
-:brge.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=3) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (x s>= y); delayslot(1); if (t) goto brTarget; }
-:brlo srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=4) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (x < y) goto brTarget; }
-:brlo.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=4) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (x < y); delayslot(1); if (t) goto brTarget; }
-:brhs srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=5) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (x >= y) goto brTarget; }
-:brhs.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=5) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (x >= y); delayslot(1); if (t) goto brTarget; }
-:bbit0 srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=6) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (((x >> (y & 31)) & 1) == 0) goto brTarget; }
-:bbit0.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=6) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (((x >> (y & 31)) & 1) == 0); delayslot(1); if (t) goto brTarget; }
-:bbit1 srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=7) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (((x >> (y & 31)) & 1) != 0) goto brTarget; }
-:bbit1.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=7) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (((x >> (y & 31)) & 1) != 0); delayslot(1); if (t) goto brTarget; }
+:breq srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=0 $(BRT0)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (x == y) goto brTarget; }
+:breq.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=0 $(BRT0)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (x == y); delayslot(1); if (t) goto brTarget; }
+:brne srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=1 $(BRT0)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (x != y) goto brTarget; }
+:brne.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=1 $(BRT0)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (x != y); delayslot(1); if (t) goto brTarget; }
+:brlt srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=2 $(BRT0)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (x s< y) goto brTarget; }
+:brlt.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=2 $(BRT0)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (x s< y); delayslot(1); if (t) goto brTarget; }
+:brge srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=3 $(BRT0)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (x s>= y) goto brTarget; }
+:brge.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=3 $(BRT0)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (x s>= y); delayslot(1); if (t) goto brTarget; }
+:brlo srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=4 $(BRT0)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (x < y) goto brTarget; }
+:brlo.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=4 $(BRT0)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (x < y); delayslot(1); if (t) goto brTarget; }
+:brhs srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=5 $(BRT0)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (x >= y) goto brTarget; }
+:brhs.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=5 $(BRT0)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (x >= y); delayslot(1); if (t) goto brTarget; }
+:bbit0 srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=6 $(BRT1)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (((x >> (y & 31)) & 1) == 0) goto brTarget; }
+:bbit0.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=6 $(BRT1)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (((x >> (y & 31)) & 1) == 0); delayslot(1); if (t) goto brTarget; }
+:bbit1 srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=0 & bri=7 $(BRT1)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; if (((x >> (y & 31)) & 1) != 0) goto brTarget; }
+:bbit1.d srcB, brC, brTarget is (maj=1 & bfar=1 ; dslot=1 & bri=7 $(BRT1)) ... & srcB ... & brC ... & brTarget ... { local x:4 = srcB; local y:4 = brC; local t:1 = (((x >> (y & 31)) & 1) != 0); delayslot(1); if (t) goto brTarget; }
 
 # ---- 16-bit instructions ----
 
@@ -622,23 +808,47 @@ sRel7: addr is sd6 [ addr = (inst_start & 0xfffffffc) + (sd6 << 1); ] { export *
 sRel8: addr is sd7 [ addr = (inst_start & 0xfffffffc) + (sd7 << 1); ] { export *[ram]:4 addr; }
 sRel13: addr is sd11 [ addr = (inst_start & 0xfffffffc) + (sd11 << 2); ] { export *[ram]:4 addr; }
 
+@ifndef ARCOMPACT
 :mov_s sG, sH is maj=0x08 ... & sbit2=0 ... & sG ... & sH ... { sG = sH; }
+@endif
+@ifndef ARCOMPACT
 :ld_s sr4, [sH, sU5x4] is maj=0x08 ... & sbit2=1 ... & sr4 ... & sH ... & sU5x4 ... { local ea:4 = sH + sU5x4; sr4 = *:4 ea; }
+@endif
 
+@ifndef ARCOMPACT
 :ld_s.as sa, [sb, sc] is maj=0x09 & si2=0 & sa & sb & sc { local ea:4 = sb + (sc << 2); sa = *:4 ea; }
+@endif
+@ifndef ARCOMPACT
 :sub_s sa, sb, sc is maj=0x09 & si2=2 & sa & sb & sc { sa = sb - sc; }
+@endif
+@ifndef ARCOMPACT
 :add_s srb, sb, sU6 is maj=0x09 & sbit3=1 & srb & sb & sU6 { srb = sb + sU6; }
+@endif
 
+@ifndef ARCOMPACT
 :ld_s "r1", ["gp", sGp11] is maj=0x0a & si2=0 & sGp11 { local ea:4 = gp + sGp11; r1 = *:4 ea; }
+@endif
+@ifndef ARCOMPACT
 :st_s "r0", ["gp", sGp11] is maj=0x0a & si2=2 & sGp11 { local ea:4 = gp + sGp11; *:4 ea = r0; }
+@endif
+@ifndef ARCOMPACT
 :ldi_s sb, [sU7i] is maj=0x0a & sbit3=1 & sb & sU7i { local ea:4 = ldi_base + (sU7i << 2); sb = *:4 ea; }
+@endif
 
+@ifndef ARCOMPACT
 :jli_s su10 is maj=0x0b & sbit10=0 & su10 { blink = inst_next; local t:4 = jli_base + (su10 << 2); call [t]; }
+@endif
+@ifndef ARCOMPACT
 :ei_s su10 is maj=0x0b & sbit10=1 & su10 { local t:4 = ei_base + (su10 << 2); call [t]; }
+@endif
 
 :ld_s sa, [sb, sc] is maj=0x0c & si2=0 & sa & sb & sc { local ea:4 = sb + sc; sa = *:4 ea; }
 :ldb_s sa, [sb, sc] is maj=0x0c & si2=1 & sa & sb & sc { local ea:4 = sb + sc; local t:1 = *:1 ea; sa = zext(t); }
+@ifdef ARCOMPACT
+:ldw_s sa, [sb, sc] is maj=0x0c & si2=2 & sa & sb & sc { local ea:4 = sb + sc; local t:2 = *:2 ea; sa = zext(t); }
+@else
 :ldh_s sa, [sb, sc] is maj=0x0c & si2=2 & sa & sb & sc { local ea:4 = sb + sc; local t:2 = *:2 ea; sa = zext(t); }
+@endif
 :add_s sa, sb, sc is maj=0x0c & si2=3 & sa & sb & sc { sa = sb + sc; }
 
 :add_s sc, sb, sU3 is maj=0x0d & si2=0 & sc & sb & sU3 { sc = sb + sU3; }
@@ -646,12 +856,24 @@ sRel13: addr is sd11 [ addr = (inst_start & 0xfffffffc) + (sd11 << 2); ] { expor
 :asl_s sc, sb, sU3 is maj=0x0d & si2=2 & sc & sb & sU3 { sc = sb << sU3; }
 :asr_s sc, sb, sU3 is maj=0x0d & si2=3 & sc & sb & sU3 { sc = sb s>> sU3; }
 
+@ifndef ARCOMPACT
 :add_s sb, sb2, sH is maj=0x0e ... & si3=0 ... & sb ... & sb2 ... & sH ... { sb = sb + sH; }
+@endif
+@ifndef ARCOMPACT
 :add_s sHdst, sH, sS3 is maj=0x0e ... & si3=1 ... & sHdst ... & sH ... & sS3 ... { sHdst = sH + sS3; }
+@endif
+@ifndef ARCOMPACT
 :mov_s sHdst, sS3 is maj=0x0e & si3=3 & sHdst & sS3 { sHdst = sS3; }
+@endif
+@ifndef ARCOMPACT
 :cmp_s sb, sH is maj=0x0e ... & si3=4 ... & sb ... & sH ... { local x:4 = sb; local y:4 = sH; local r:4 = x - y; flagsSub(x, y); flagsZN(r); }
+@endif
+@ifndef ARCOMPACT
 :cmp_s sH, sS3 is maj=0x0e ... & si3=5 ... & sH ... & sS3 ... { local x:4 = sH; local y:4 = sS3; local r:4 = x - y; flagsSub(x, y); flagsZN(r); }
+@endif
+@ifndef ARCOMPACT
 :mov_s.ne sb, sH is maj=0x0e ... & si3=7 ... & sb ... & sH ... { if (Z) goto inst_next; sb = sH; }
+@endif
 
 :j_s [sb] is maj=0x0f & sop5=0 & sop3=0 & sb { goto [sb]; }
 :j_s.d [sb] is maj=0x0f & sop5=0 & sop3=1 & sb { local t:4 = sb; delayslot(1); goto [t]; }
@@ -660,7 +882,9 @@ sRel13: addr is sd11 [ addr = (inst_start & 0xfffffffc) + (sd11 << 2); ] { expor
 :sub_s.ne sb, sb2, sb3 is maj=0x0f & sop5=0 & sop3=6 & sb & sb2 & sb3 { if (Z) goto inst_next; sb = 0; }
 :nop_s  is maj=0x0f & sop5=0 & sop3=7 & sb=0 { }
 :unimp_s  is maj=0x0f & sop5=0 & sop3=7 & sb=1 { unimplemented_instruction(); }
+@ifndef ARCOMPACT
 :swi_s  is maj=0x0f & sop5=0 & sop3=7 & sb=2 { software_interrupt(); }
+@endif
 :jeq_s ["blink"] is maj=0x0f & sop5=0 & sop3=7 & sb=4 { if (!Z) goto inst_next; return [blink]; }
 :jne_s ["blink"] is maj=0x0f & sop5=0 & sop3=7 & sb=5 { if (Z) goto inst_next; return [blink]; }
 :j_s ["blink"] is maj=0x0f & sop5=0 & sop3=7 & sb=6 { return [blink]; }
@@ -671,14 +895,28 @@ sRel13: addr is sd11 [ addr = (inst_start & 0xfffffffc) + (sd11 << 2); ] { expor
 :or_s sb, sb2, sc is maj=0x0f & sop5=0x05 & sb & sb2 & sc { sb = sb | sc; }
 :bic_s sb, sb2, sc is maj=0x0f & sop5=0x06 & sb & sb2 & sc { sb = sb & ~sc; }
 :xor_s sb, sb2, sc is maj=0x0f & sop5=0x07 & sb & sb2 & sc { sb = sb ^ sc; }
+@ifndef ARCOMPACT
 :mpyw_s sb, sb2, sc is maj=0x0f & sop5=0x09 & sb & sb2 & sc { local x:4 = sb; local y:4 = sc; sb = sext(x:2) * sext(y:2); }
+@endif
+@ifndef ARCOMPACT
 :mpyuw_s sb, sb2, sc is maj=0x0f & sop5=0x0a & sb & sb2 & sc { local x:4 = sb; local y:4 = sc; sb = zext(x:2) * zext(y:2); }
+@endif
 :tst_s sb, sc is maj=0x0f & sop5=0x0b & sb & sc { local r:4 = sb & sc; flagsZN(r); }
+@ifndef ARCOMPACT
 :mpy_s sb, sb2, sc is maj=0x0f & sop5=0x0c & sb & sb2 & sc { sb = sb * sc; }
+@endif
 :sexb_s sb, sc is maj=0x0f & sop5=0x0d & sb & sc { local x:4 = sc; sb = sext(x:1); }
+@ifdef ARCOMPACT
+:sexw_s sb, sc is maj=0x0f & sop5=0x0e & sb & sc { local x:4 = sc; sb = sext(x:2); }
+@else
 :sexh_s sb, sc is maj=0x0f & sop5=0x0e & sb & sc { local x:4 = sc; sb = sext(x:2); }
+@endif
 :extb_s sb, sc is maj=0x0f & sop5=0x0f & sb & sc { local x:4 = sc; sb = zext(x:1); }
+@ifdef ARCOMPACT
+:extw_s sb, sc is maj=0x0f & sop5=0x10 & sb & sc { local x:4 = sc; sb = zext(x:2); }
+@else
 :exth_s sb, sc is maj=0x0f & sop5=0x10 & sb & sc { local x:4 = sc; sb = zext(x:2); }
+@endif
 :abs_s sb, sc is maj=0x0f & sop5=0x11 & sb & sc { local x:4 = sc; local r:4 = x; if (x s>= 0) goto <done>; r = -x; <done> sb = r; }
 :not_s sb, sc is maj=0x0f & sop5=0x12 & sb & sc { sb = ~sc; }
 :neg_s sb, sc is maj=0x0f & sop5=0x13 & sb & sc { sb = -sc; }
@@ -692,16 +930,30 @@ sRel13: addr is sd11 [ addr = (inst_start & 0xfffffffc) + (sd11 << 2); ] { expor
 :asr_s sb, sc is maj=0x0f & sop5=0x1c & sb & sc { sb = sc s>> 1; }
 :lsr_s sb, sc is maj=0x0f & sop5=0x1d & sb & sc { sb = sc >> 1; }
 :trap_s su6 is maj=0x0f & sop5=0x1e & su6 { trap(su6:1); }
+@ifndef ARCOMPACT
 :swi_s su6 is maj=0x0f & sop5=0x1f & su6 { software_interrupt(su6:1); }
+@endif
 :brk_s  is maj=0x0f & sop5=0x1f & su6=0x3f { breakpoint(); }
 
 :ld_s sc, [sb, sU5x4b] is maj=0x10 & sc & sb & sU5x4b { local ea:4 = sb + sU5x4b; sc = *:4 ea; }
 :ldb_s sc, [sb, sU5] is maj=0x11 & sc & sb & sU5 { local ea:4 = sb + sU5; local t:1 = *:1 ea; sc = zext(t); }
+@ifdef ARCOMPACT
+:ldw_s sc, [sb, sU5x2] is maj=0x12 & sc & sb & sU5x2 { local ea:4 = sb + sU5x2; local t:2 = *:2 ea; sc = zext(t); }
+@else
 :ldh_s sc, [sb, sU5x2] is maj=0x12 & sc & sb & sU5x2 { local ea:4 = sb + sU5x2; local t:2 = *:2 ea; sc = zext(t); }
+@endif
+@ifdef ARCOMPACT
+:ldw_s.x sc, [sb, sU5x2] is maj=0x13 & sc & sb & sU5x2 { local ea:4 = sb + sU5x2; local t:2 = *:2 ea; sc = sext(t); }
+@else
 :ldh_s.x sc, [sb, sU5x2] is maj=0x13 & sc & sb & sU5x2 { local ea:4 = sb + sU5x2; local t:2 = *:2 ea; sc = sext(t); }
+@endif
 :st_s sc, [sb, sU5x4b] is maj=0x14 & sc & sb & sU5x4b { local ea:4 = sb + sU5x4b; *:4 ea = sc; }
 :stb_s sc, [sb, sU5] is maj=0x15 & sc & sb & sU5 { local ea:4 = sb + sU5; local v:4 = sc; *:1 ea = v:1; }
+@ifdef ARCOMPACT
+:stw_s sc, [sb, sU5x2] is maj=0x16 & sc & sb & sU5x2 { local ea:4 = sb + sU5x2; local v:4 = sc; *:2 ea = v:2; }
+@else
 :sth_s sc, [sb, sU5x2] is maj=0x16 & sc & sb & sU5x2 { local ea:4 = sb + sU5x2; local v:4 = sc; *:2 ea = v:2; }
+@endif
 
 :asl_s sb, sb2, sU5 is maj=0x17 & sop3=0 & sb & sb2 & sU5 { sb = sb << sU5; }
 :lsr_s sb, sb2, sU5 is maj=0x17 & sop3=1 & sb & sb2 & sU5 { sb = sb >> sU5; }
@@ -725,6 +977,7 @@ sRel13: addr is sd11 [ addr = (inst_start & 0xfffffffc) + (sd11 << 2); ] { expor
 :push_s "blink" is maj=0x18 & sop3=7 & su5=0x11 { sp = sp - 4; *:4 sp = blink; }
 
 # enter_s / leave_s: blink at the lowest slot, then r13 upward, then fp.
+@ifndef ARCOMPACT
 linkOff: is slink=0 { export 0:4; }
 linkOff: is slink=1 { export 4:4; }
 enterLink: is slink=0 { }
@@ -770,10 +1023,15 @@ enterSize: v is su4 & sfp & slink [ v = (su4 + sfp + slink) << 2; ] { export *[c
 :leave_s "{"^leaveRegs "fp" leaveLink^"}" is maj=0x18 & sjmp=0 & sop3=6 & sbit0=0 & sfp=1 & leaveRegs & leaveLink & enterSize { sp = fp; build leaveLink; build leaveRegs; fp = *:4 leaveRegs; sp = sp + enterSize; }
 :leave_s "{"^leaveRegs leaveLink "pcl}" is maj=0x18 & sjmp=1 & sop3=6 & sbit0=0 & sfp=0 & leaveRegs & leaveLink & enterSize { build leaveLink; build leaveRegs; sp = sp + enterSize; return [blink]; }
 :leave_s "{"^leaveRegs "fp" leaveLink "pcl}" is maj=0x18 & sjmp=1 & sop3=6 & sbit0=0 & sfp=1 & leaveRegs & leaveLink & enterSize { sp = fp; build leaveLink; build leaveRegs; fp = *:4 leaveRegs; sp = sp + enterSize; return [blink]; }
+@endif
 
 :ld_s "r0", ["gp", sS9x4] is maj=0x19 & sgpop=0 & sS9x4 { local ea:4 = gp + sS9x4; r0 = *:4 ea; }
 :ldb_s "r0", ["gp", sS9] is maj=0x19 & sgpop=1 & sS9 { local ea:4 = gp + sS9; local t:1 = *:1 ea; r0 = zext(t); }
+@ifdef ARCOMPACT
+:ldw_s "r0", ["gp", sS9x2] is maj=0x19 & sgpop=2 & sS9x2 { local ea:4 = gp + sS9x2; local t:2 = *:2 ea; r0 = zext(t); }
+@else
 :ldh_s "r0", ["gp", sS9x2] is maj=0x19 & sgpop=2 & sS9x2 { local ea:4 = gp + sS9x2; local t:2 = *:2 ea; r0 = zext(t); }
+@endif
 :add_s "r0", "gp", sS9x4 is maj=0x19 & sgpop=3 & sS9x4 { r0 = gp + sS9x4; }
 
 :ld_s sb, [sU8x4] is maj=0x1a & sb & sU8x4 { sb = *:4 sU8x4; }
@@ -795,6 +1053,10 @@ enterSize: v is su4 & sfp & slink [ v = (su4 + sfp + slink) << 2; ] { export *[c
 :blo_s sRel7 is maj=0x1e & sbrop=3 & sbrcc=6 & sRel7 { if (C) goto sRel7; }
 :bls_s sRel7 is maj=0x1e & sbrop=3 & sbrcc=7 & sRel7 { if (C || Z) goto sRel7; }
 :bl_s sRel13 is maj=0x1f & sRel13 { blink = inst_next; call sRel13; }
+
+@ifdef ARCOMPACT
+@include "arcompact.sinc"
+@endif
 
 } # with : phase=1
 

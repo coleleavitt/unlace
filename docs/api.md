@@ -87,13 +87,9 @@ The public items of `crates/unlace` are the stable surface: methods and fields a
 changed; `Error`, `Language`, `FunctionInfo` and `Decompiled` are `#[non_exhaustive]`. The JSON
 document only gains keys. Option names and their values follow the catalog and can change between
 releases; `unlace catalog --check` reports drift. `unlace_cli::embed` is not stable.
+`unlace::unstable` is outside this promise: each part below can change or go away in any release.
 
-## Unstable extension points (`unlace::unstable`)
-
-`unlace::unstable` holds extension points that are **not** part of the stable surface: its types are
-the engine's own and change with it. Pin the crate version when you build on it.
-
-### `unlace::unstable::ctree`: rewrite the C syntax tree before it prints
+### unlace::unstable::ctree — callbacks on the C syntax tree
 
 The engine prints every function from a C syntax tree (`docs/architecture/ctree.md`) that it takes
 through four levels: `Built`, `Statements`, `Rewritten`, `Final`. `Decompiler::with_tree_hook(level,
@@ -126,6 +122,48 @@ Runnable: `cargo run -p unlace --example tree_hook -- /usr/bin/true main __stack
 edits the printer honours, and that a callback runs once per print (twice per `decompile`, which
 prints the text and then the line map), is in `docs/architecture/ctree.md` section 10. A hook
 survives the reload a later builder method causes.
+
+### unlace::unstable::printer — the printed function as a tree, and printers over it
+
+`Decompiler::tree(address)` and `tree_named(name)` decompile one function and return its text as a
+`Tree`: nested `Node`s for the prototype, the declarations, the statements and the expressions,
+each with its `kind`, its children, its C type where the printer knows it (`ty`), where its text is
+in the code (`span`) and the instruction addresses it came from. It is the tree
+`unlace decompile --json --ctree` writes as the record's `ctree` member (`docs/cli.md`, "The JSON
+documents", `--ctree`); `tree_from_json` reads that member back. A function has a tree when its output
+language is C; otherwise the call returns `TreeError::Unavailable` with the reason.
+
+`Printer` prints a tree. Its methods (`function`, `prototype`, `declaration`, `item`, `statement`,
+`expr`) each have a default that prints C in the decompiler's own layout and calls back into the
+printer for the nodes underneath. `CPrinter` is the defaults and nothing else: `print_c(&tree)`
+is the function's code, byte for byte. A printer for another flavour overrides what it prints
+differently:
+
+```rust
+use unlace::unstable::printer::{Kind, Node, Printer, Writer, print};
+
+struct LetBindings;
+
+impl Printer for LetBindings {
+    // `long acc;` becomes `let mut acc: long;`.
+    fn declaration(&mut self, w: &mut Writer, node: &Node) {
+        let name = node.children.iter().find(|child| child.kind == Kind::Var);
+        w.push(&format!(
+            "let mut {}: {};",
+            name.map_or("_", |name| name.text.as_str()),
+            node.ty.as_deref().unwrap_or("_"),
+        ));
+    }
+}
+
+let tree = unlace::Decompiler::open("a.out")?.tree_named("main")?;
+println!("{}", print(&mut LetBindings, &tree));
+```
+
+Runnable: `cargo run -p unlace --example let_flavour -- /usr/bin/true main` (prototype, `let`
+bindings and casts in another flavour) and `unlace decompile-all a.out --json --ctree | cargo run
+-p unlace --example ctree_roundtrip` (prints every exported tree back and compares it with the
+code). The node kinds and the layout rules are in `docs/architecture/ctree.md` section 11.
 
 ## For a framework with its own loader (fugue-style integration)
 

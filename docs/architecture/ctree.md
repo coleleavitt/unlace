@@ -440,9 +440,9 @@ then comes from real nesting only, and it is bounded exactly: a tree has at most
 level is a `raw` node, and a statement with no room for its block and operands is `raw` lines. The
 number is chosen for the JSON: a node of level `d` is nested `3 + 2d` arrays and objects deep in a
 `--json` document and its own arrays one more, 126 at most, which the project's JSON reader and a
-default `serde_json` (both stop at 128) still read. Before chains were wide and the bound exact, two
-fixture binaries (`loadguardreads_x86_64`, `globalcallranges_x86_64`) exported documents that
-`serde_json` refused with `recursion limit exceeded`. What still meets the bound in the fixture
+default `serde_json` (both stop at 128) still read. Before chains were wide and the bound exact,
+seven of the 1,482 fixture binaries (2,277 functions) exported documents that `serde_json` refused
+with `recursion limit exceeded`; now every document reads. What still meets the bound in the fixture
 binaries is real nesting, in five functions: 128 `if`s inside one another (`big` of
 `globalptrstores`), a 50-step `(((a + 1 ^ 2) + 3 ^ 4) ...` guard, a 30-term Horner hash
 `(v13 + (v12 + (...) * 0x1f) * 0x1f)`, and one operand under 27 nested `if`s and loops of glibc's

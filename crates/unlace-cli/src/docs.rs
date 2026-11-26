@@ -225,4 +225,5 @@ pub fn human_size(bytes: usize) -> String {
 }
 
 #[cfg(test)]
+#[path = "docs/tests.rs"]
 mod tests;

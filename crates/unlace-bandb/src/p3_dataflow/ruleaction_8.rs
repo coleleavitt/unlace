@@ -1990,7 +1990,8 @@ fn stack_word(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<(i32, uintb)
     if let Some(def) = v.get_def() {
         match data.obank().get(def).map(|o| o.code()) {
             Some(OpCode::CPUI_LOAD) => {
-                let (space, off) = crate::ruleaction_4::RuleLoadVarnode::check_spacebase(data, def)?;
+                let (space, off) =
+                    crate::ruleaction_4::RuleLoadVarnode::check_spacebase(data, def)?;
                 return (space.get_type() == unlace_base::space::spacetype::IPTR_SPACEBASE)
                     .then(|| (space.get_index(), off));
             }

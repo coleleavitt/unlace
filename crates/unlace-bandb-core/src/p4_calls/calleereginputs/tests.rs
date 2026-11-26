@@ -204,7 +204,10 @@ fn a_conditional_branch_names_its_taken_edge_and_falls_through() {
         &f.regs,
         [0; 6],
     );
-    assert_eq!((jcc.ends, jcc.jump, jcc.branch), (true, None, Some(0x401010)));
+    assert_eq!(
+        (jcc.ends, jcc.jump, jcc.branch),
+        (true, None, Some(0x401010))
+    );
 }
 
 #[test]

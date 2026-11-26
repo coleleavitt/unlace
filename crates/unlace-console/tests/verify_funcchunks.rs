@@ -91,4 +91,3 @@ fn inventory_size_is_the_chunk_body() {
     assert_eq!(body[&F], 11 + 6);
     assert_eq!(body[&G], 12 + 6);
 }
-

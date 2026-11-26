@@ -126,4 +126,5 @@ pub fn extract_json_span(transcript: &str) -> Option<&str> {
 }
 
 #[cfg(test)]
+#[path = "jsonfmt/tests.rs"]
 mod tests;

@@ -42,8 +42,7 @@ fn every_vector_encoding_decodes_as_llvm_names_it() {
     let expected: Vec<&str> = expected.lines().collect();
     let elf = fixture("vector64.elf");
     let count = expected.len().to_string();
-    let (stdout, stderr, code) =
-        run_unlace(&["disassemble", &elf, "probe", "--count", &count]);
+    let (stdout, stderr, code) = run_unlace(&["disassemble", &elf, "probe", "--count", &count]);
     assert_eq!(code, 0, "{stderr}");
     let listing = rows(&stdout);
     assert!(listing.len() >= expected.len(), "{} rows", listing.len());

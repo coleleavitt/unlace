@@ -29,12 +29,19 @@ pub struct Flavour {
     profile: LangProfile,
     /// The operator tokens the file respells, by identity, with their spelling.
     spellings: Vec<(&'static OpToken, &'static str)>,
+    /// The file's `name`, when it names the flavour.
+    name: Option<String>,
 }
 
 impl Flavour {
     /// The language whose printer renders this flavour.
     pub fn base(&self) -> OutLang {
         self.base
+    }
+
+    /// The name the file gives the flavour, if it gives one.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
     }
 
     /// The base language's profile with the file's overrides applied.
@@ -119,6 +126,7 @@ struct Draft<'doc> {
     keywords: Vec<(&'static Keyword, &'doc str)>,
     /// Each `[operators]` key with its spelling and the tokens it respells.
     operators: Vec<(&'doc str, &'doc str, Vec<&'static OpToken>)>,
+    name: Option<&'doc str>,
 }
 
 impl<'doc> Draft<'doc> {
@@ -147,6 +155,7 @@ impl<'doc> Draft<'doc> {
             caps: base.profile().caps,
             keywords: Vec::new(),
             operators: Vec::new(),
+            name: None,
         };
         for (key, value) in sorted(doc) {
             match key {
@@ -155,6 +164,7 @@ impl<'doc> Draft<'doc> {
                 "operators" => draft.operators(section(key, value)?)?,
                 "forms" => draft.forms(section(key, value)?)?,
                 "caps" => draft.caps(section(key, value)?)?,
+                "name" => draft.name = Some(flavour_name(value)?),
                 "types" => {
                     return refuse(
                         key,
@@ -165,7 +175,7 @@ impl<'doc> Draft<'doc> {
                 _ => {
                     return refuse(
                         key,
-                        "unknown field (expected base, keywords, operators, forms or caps)",
+                        "unknown field (expected base, keywords, operators, forms, caps or name)",
                     );
                 }
             }
@@ -338,11 +348,24 @@ impl<'doc> Draft<'doc> {
             base: self.base,
             profile,
             spellings,
+            name: self.name.map(str::to_string),
         }
     }
 }
 
 /// A table's entries in key order, whatever order the file or the TOML map keeps them in.
+/// The `name` field: a string with some text in it.
+fn flavour_name(value: &Value) -> Result<&str, FlavourError> {
+    match value {
+        Value::String(text) if !text.trim().is_empty() => Ok(text),
+        Value::String(_) => refuse(
+            "name",
+            "expected a name; leave the field out to use the file name",
+        ),
+        _ => refuse("name", "expected a string"),
+    }
+}
+
 fn sorted(table: &Table) -> Vec<(&str, &Value)> {
     let mut entries: Vec<(&str, &Value)> = table.iter().map(|(k, v)| (k.as_str(), v)).collect();
     entries.sort_by_key(|(key, _)| *key);

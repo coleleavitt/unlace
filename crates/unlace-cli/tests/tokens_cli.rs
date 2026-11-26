@@ -174,7 +174,7 @@ fn a_pointer_argument_cast_is_in_the_token_map() {
 }
 
 #[test]
-fn tokens_need_json_and_one_process() {
+fn tokens_need_json() {
     let binary = path("integrations/web/test/fixtures/sample.elf");
     let (_, stderr, status) = common::run_unlace(&["decompile", &binary, "sum_to", "--tokens"]);
     assert_eq!(status, 2, "{stderr}");
@@ -182,19 +182,10 @@ fn tokens_need_json_and_one_process() {
         stderr.contains("--tokens selects --json record keys"),
         "{stderr}"
     );
-    let (_, stderr, status) = common::run_unlace(&[
-        "decompile-all",
-        &binary,
-        "--json",
-        "--tokens",
-        "--jobs",
-        "2",
-    ]);
-    assert_eq!(status, 2, "{stderr}");
-    assert!(
-        stderr.contains("--tokens and --jobs are exclusive"),
-        "{stderr}"
-    );
+    let fixture = "integrations/web/test/fixtures/sample.elf";
+    let serial = document(fixture, &["--tokens", "--jobs", "1"]);
+    let pooled = document(fixture, &["--tokens", "--jobs", "2"]);
+    assert_eq!(serial, pooled, "--jobs 2 differs from --jobs 1");
 }
 
 /// `unlace decompile --json --tokens` gives the one record `decompile-all`

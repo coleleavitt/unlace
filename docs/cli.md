@@ -1387,6 +1387,7 @@ types and the structure are the base language's; the file changes spellings and 
 
 ```toml
 base = "c"                      # required: c, rust, go or java
+name = "pseudo"                 # optional: the JSON document's language_flavour (default: the file stem)
 
 [keywords]                      # how a keyword is spelled
 if = "when"
@@ -1420,7 +1421,9 @@ unlace decompile ./ptx.o swallow_file_in_memory --language-file pseudo.toml
 
 The file names its base language, so `--language` does not apply with it, and an
 `--option setlanguage` or `outlang` for another language is an error. A `--json` document
-reports the base language in `"language"`. A `--jobs` worker and the console child of
+reports the base language in `"language"`. A run with a flavour adds `"language_flavour"`
+after it: the file's `name`, or the file stem when the file has no `name`. The name must have
+some text in it. Without `--language-file` the document has no `language_flavour` key. A `--jobs` worker and the console child of
 `decompile` read the file again from the same path. In a console script the command is
 `language file <path>`, after the `option` lines; a later `option setlanguage` renders the
 built-in language again.

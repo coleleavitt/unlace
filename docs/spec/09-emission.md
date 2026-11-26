@@ -3609,6 +3609,9 @@ emitters of `langrust.rs` and `langgo.rs`, and every pass that asks `OutLang` wh
 construct means behave as they do for the base language. A flavour changes what the printer
 writes and nothing about the recovered function. With no flavour, and with a file that sets
 only `base`, the output is the base language's byte for byte.
+A file may also set `name`: a string with some text in it, which the JSON document reports as
+`language_flavour`. `Flavour::name` returns it. Without `name` the CLI takes the file's stem
+(`crates/unlace-cli/src/langfile.rs`). The name does not change the printer.
 
 The profile is not the whole of a language. A statement emitter may write a keyword as text,
 a pass may test `out_lang` where a capability would do, and a form selects which language's

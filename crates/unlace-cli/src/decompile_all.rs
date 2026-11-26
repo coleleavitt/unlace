@@ -755,6 +755,7 @@ pub fn run(argv: &[String]) -> i32 {
                         &run.declared,
                         args.omit,
                         args.extra,
+                        args.language_file.as_ref().map(|file| file.name.as_str()),
                     )
                 }),
             };
@@ -2618,9 +2619,20 @@ pub(crate) fn render_result_json(
     declared: &crate::funcdecl::Declared,
     omit: Omit,
     extra: Extra,
+    language_flavour: Option<&str>,
 ) -> String {
     render_selected_json(
-        binary, funcs, options, error, None, assertions, interior, declared, omit, extra,
+        binary,
+        funcs,
+        options,
+        error,
+        None,
+        assertions,
+        interior,
+        declared,
+        omit,
+        extra,
+        language_flavour,
     )
 }
 
@@ -2644,10 +2656,22 @@ pub(crate) fn render_selected_json(
     declared: &crate::funcdecl::Declared,
     omit: Omit,
     extra: Extra,
+    language_flavour: Option<&str>,
 ) -> String {
     let mut out = Vec::new();
     write_selected_json(
-        &mut out, binary, funcs, options, error, total, assertions, interior, declared, omit, extra,
+        &mut out,
+        binary,
+        funcs,
+        options,
+        error,
+        total,
+        assertions,
+        interior,
+        declared,
+        omit,
+        extra,
+        language_flavour,
     )
     .expect("rendering the document into memory");
     String::from_utf8(out).expect("the document is ASCII")
@@ -2668,13 +2692,22 @@ pub(crate) fn write_selected_json(
     declared: &crate::funcdecl::Declared,
     omit: Omit,
     extra: Extra,
+    language_flavour: Option<&str>,
 ) -> std::io::Result<()> {
     let language = crate::loadtime::explicit_output_language(options)
         .and_then(unlace_decomp::lang::OutLang::from_print_name)
         .map(|lang| lang.print_name())
         .unwrap_or("c-language");
     let (head, tail) = document_fields(
-        binary, funcs, language, error, total, assertions, declared, omit,
+        binary,
+        funcs,
+        language,
+        language_flavour,
+        error,
+        total,
+        assertions,
+        declared,
+        omit,
     );
     let records = funcs
         .iter()
@@ -2793,6 +2826,7 @@ fn result_json(
     binary: &str,
     funcs: &[FuncResult],
     language: &str,
+    language_flavour: Option<&str>,
     error: Option<&str>,
     total: Option<usize>,
     assertions: &[unlace_console::assertions::Outcome],
@@ -2802,7 +2836,15 @@ fn result_json(
 ) -> Json {
     let declared = crate::funcdecl::Declared::default();
     let (mut fields, tail) = document_fields(
-        binary, funcs, language, error, total, assertions, &declared, omit,
+        binary,
+        funcs,
+        language,
+        language_flavour,
+        error,
+        total,
+        assertions,
+        &declared,
+        omit,
     );
     let functions = funcs
         .iter()
@@ -2825,6 +2867,7 @@ fn document_fields(
     binary: &str,
     funcs: &[FuncResult],
     language: &str,
+    language_flavour: Option<&str>,
     error: Option<&str>,
     total: Option<usize>,
     assertions: &[unlace_console::assertions::Outcome],
@@ -2838,6 +2881,14 @@ fn document_fields(
         // consumer cannot tell a Rust body from a C one without guessing.
         ("language".to_string(), Json::Str(language.to_string())),
     ];
+    // (unlace `langflavour`) The flavour `--language-file` applied over `language`,
+    // present only when one was.
+    if let Some(flavour) = language_flavour {
+        fields.push((
+            "language_flavour".to_string(),
+            Json::Str(flavour.to_string()),
+        ));
+    }
     if let Some(omitted) = omit.json() {
         fields.push(("omitted".to_string(), omitted));
     }

@@ -425,6 +425,10 @@ impl Session {
             &self.declared,
             self.args.omit,
             self.args.extra,
+            self.args
+                .language_file
+                .as_ref()
+                .map(|file| file.name.as_str()),
         );
         let warnings = function.warnings.iter().map(|w| w.message()).collect();
         let output = Output {

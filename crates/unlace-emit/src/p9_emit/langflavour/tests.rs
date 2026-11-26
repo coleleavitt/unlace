@@ -255,3 +255,14 @@ fn the_same_text_loads_once() {
     let text = "base = \"java\"\n[keywords]\nwhile = \"whilst\"\n";
     assert!(std::ptr::eq(flavour(text), flavour(text)));
 }
+
+#[test]
+fn the_name_is_kept_and_a_blank_one_is_refused() {
+    assert_eq!(
+        flavour("base = \"c\"\nname = \"house\"\n").name(),
+        Some("house")
+    );
+    assert_eq!(flavour("base = \"c\"\n").name(), None);
+    assert!(refused("base = \"c\"\nname = \"  \"\n").contains("name: expected a name"));
+    assert!(refused("base = \"c\"\nname = 3\n").contains("name: expected a string"));
+}

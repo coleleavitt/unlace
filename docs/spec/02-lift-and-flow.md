@@ -4501,7 +4501,16 @@ registers are opaque (`lr`/`sr`/`aex` lift to `aux_read`/`aux_write`), as are
 `ei_s` and `ldi` index tables at the `jli_base`, `ei_base` and `ldi_base`
 registers, which nothing sets; `bi`/`bih` are computed jumps. The DSP, FPU and
 64-bit multiply-accumulate extensions (major opcodes 6 and 7 and the
-accumulator forms of 5) and ARCompact are not decoded. Exercised by
+accumulator forms of 5) are not decoded. ARCompact (ARC600/ARC700) is the same
+`arcv2.sinc` compiled with `ARCOMPACT` defined (`arcompact_le.slaspec`,
+`arcompact_be.slaspec`, languages `ARC:LE:32:ARCompact` and `ARC:BE:32:ARCompact`).
+That define drops the ARCv2-only forms (the `ldi`/`aex`/`bi`/`bih` group, the
+set-on-compare family, `dbnz`, the shift-by-8/16 and bit-scan group, `xbfu`,
+`bmskn`, `mpyw`/`mpyuw`) and substitutes the ARCompact ones: `mpyh`/`mpyhu`,
+`sexw`/`extw`, and the branch forms with the `brh3` bit (`BRT0`/`BRT1`).
+The ARCompact 32-bit operand layout is not separately verified beyond the
+`processors.toml` row `arcompact` (`j_s [blink]`, `nop_s`); no ARC toolchain is
+on the test host, so the other encodings are unchecked against hardware. Exercised by
 `tests/stages/arcv2-zeroloop.toml` and
 `unlace-sleigh/tests/arcv2_decode.rs` (one vector per instruction class and
 operand form, assembled by the GNU ARC assembler).

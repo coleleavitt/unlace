@@ -68,6 +68,10 @@ xtensa_hifi4_rt700 = """
 arcv2_list_sum = """
 0a220080e120c1070c704c4344424b7ae120c10778604c434442f30a31807860e07ee078
 """
+# ARCompact (ARC600/ARC700) j_s [blink] then nop_s: the 16-bit return and nop encodings.
+arcompact_return = """
+e07ee078
+"""
 r32c = """
 f260df9f9f9f9f9f9f9f9f9f9f9f9f9ffa40bbedfff220df9f9f9f9f9f9f9f9f
 a108640304b10864df9f9f9f9f9f9f9fb4ac40007fdf9f9f9f9f9f9f9f9f9f9f
@@ -4043,6 +4047,20 @@ forbid = ["halt_baddata"]
 test = "arcv2_conditional_delayed_return_runs_its_slot"
 address = "0x0"
 expect = ["v2 = 0;", "return v2 + *v1;"]
+
+# ARCompact (ARC600/ARC700) little endian: a 16-bit j_s [blink] decompiles to a bare return.
+[[family]]
+name = "arcompact"
+language = "ARC:LE:32:ARCompact"
+base = "0x0"
+image = "arcompact_return"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "arcompact_return_decompiles"
+address = "0x0"
+expect = ["return;"]
 
 # C-SKY ET_REL (EM_CSKY, ABIv2) routes to CSKY:LE:32:v2 (#776); bsr32 calls take PCREL_IMM26BY2.
 [[family]]

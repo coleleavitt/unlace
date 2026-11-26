@@ -2264,6 +2264,10 @@ into a reader of the copy when a write lies between the copy and the reader, and
 chapter 06 keeps the copy as its own variable, so
 `r = gi; *pp2 = p + 1; return r[1];` keeps `r` where the binary loads it rather
 than reading `gi` after the second store.
+When `RulePushMulti` reuses an existing `MULTIEQUAL`, that value gains the new readers,
+so its consumed-bits mask is set to all bits (`ruleaction_1.rs (RulePushMulti::apply_op)`) until
+`ActionDeadCode` narrows it again. In the COPY case the reused value's mask is ORed with the merge's
+mask. Otherwise `RuleOrConsume` could drop an OR whose bits only the new readers use.
 
 These questions are asked again every time the rule pool visits a reader
 (issue #818). One search for an earlier value read after the store first sets

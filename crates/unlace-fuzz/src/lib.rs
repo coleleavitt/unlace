@@ -183,6 +183,72 @@ pub fn minimise_crash(input: &[u8]) -> Vec<u8> {
     })
 }
 
+/// A minimised crashing input, ready to commit under `crash-corpus/`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrashFixture {
+    /// `crash_<fnv1a64 hex>.bin`: the content hash names the input.
+    pub file_name: String,
+    /// The minimal reproducing input.
+    pub bytes: Vec<u8>,
+    /// The JSON sidecar for `reports/`: size, stage and panic payload of the minimal input.
+    pub sidecar: String,
+}
+
+/// Turn a crashing input into a committable regression fixture.
+///
+/// Returns `None` when `input` does not panic. Otherwise the input is minimised
+/// with [`minimise_crash`] and the report is taken from the minimal input, so the
+/// stage and payload describe the bytes that were written.
+pub fn crash_fixture(input: &[u8]) -> Option<CrashFixture> {
+    if !matches!(fuzz_iteration(input), FuzzResult::Panicked { .. }) {
+        return None;
+    }
+    let bytes = minimise_crash(input);
+    let FuzzResult::Panicked { stage, payload } = fuzz_iteration(&bytes) else {
+        return None;
+    };
+    let sidecar = format!(
+        "{{\n  \"size\": {},\n  \"origin\": \"unlace-fuzz --minimise\",\n  \"stage\": {},\n  \"payload\": {}\n}}\n",
+        bytes.len(),
+        json_string(stage),
+        json_string(&payload),
+    );
+    let file_name = format!("crash_{:016x}.bin", fnv1a64(&bytes));
+    Some(CrashFixture {
+        file_name,
+        bytes,
+        sidecar,
+    })
+}
+
+/// FNV-1a, 64 bit: the content hash that names a crash-corpus file. It needs no
+/// dependency, and collisions among a handful of committed crashes do not matter.
+pub fn fnv1a64(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |hash, &byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+    })
+}
+
+/// `text` as a JSON string literal, escaped by hand so the harness stays
+/// dependency-free.
+fn json_string(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c < ' ' => out.push_str(&format!("\\u{:04x}", u32::from(c))),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
 /// Best-effort text of a `catch_unwind` payload. The standard library only
 /// guarantees a `&str` or `String` downcast for `panic!`; anything else
 /// gets a placeholder.

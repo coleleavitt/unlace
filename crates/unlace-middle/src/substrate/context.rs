@@ -855,6 +855,9 @@ pub struct ArchContext {
     /// [`RuleSimdShuffleLane`](crate::simdlane::RuleSimdShuffleLane) can
     /// name a CALLOTHER without reaching the full `Architecture`.
     pub simd_shuffle_userops: Vec<unlace_base::types::uint4>,
+    /// (unlace `vecpairstore`) CALLOTHER ids of `vpunpcklqdq_avx` (kind 0) and
+    /// `vpinsrq_avx` (kind 1), resolved once per program.
+    pub vecpair_userops: Vec<(unlace_base::types::uint4, u8)>,
     /// (unlace) CALLOTHER ids of the x87 integer conversions read by
     /// [`RuleX87Truncate`](crate::x87truncate::RuleX87Truncate).
     pub x87_float_to_int_userops: Vec<unlace_base::types::uint4>,
@@ -986,6 +989,8 @@ pub struct ArchContext {
     /// (unlace) The loader identified a Windows user-mode PE: the fact
     /// `option pebnames auto` acts on.
     pub image_windows_user: bool,
+    /// (unlace `vaargaapcs`) An AArch64 image outside Apple and Windows: its va_list is the AAPCS64 struct.
+    pub aapcs64_va_list: bool,
     /// AArch64 integer division returns zero for a zero divisor.
     pub go_keep_divide_checks: bool,
     /// Attempt conversion of `whiledo` loops to `for` loops (C++
@@ -1246,6 +1251,7 @@ impl ArchContext {
             // unit tests.
             opaque_globals_wanted: std::cell::Cell::new(false),
             simd_shuffle_userops: Vec::new(),
+            vecpair_userops: Vec::new(),
             x87_float_to_int_userops: Vec::new(),
             x87_integer_userops: Vec::new(),
             float_rounding_userops: Vec::new(),
@@ -1292,6 +1298,7 @@ impl ArchContext {
             syscall_regs_family: None,
             syscall_regs_userops: Vec::new(),
             windows_cspec: false,
+            aapcs64_va_list: false,
             image_windows_user: false,
 
             go_keep_divide_checks: false,

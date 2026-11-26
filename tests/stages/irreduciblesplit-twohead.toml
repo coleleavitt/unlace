@@ -1,0 +1,64 @@
+# unlace `irreduciblesplit`: a two-head loop (gcc 15 -O2) whose two loop heads each end in a
+# conditional branch, so neither head dominates the loop and the structurer prints a goto into it.
+#
+# The bytes are f from twohead.c (below), built by gcc -O2 -fno-pie -fno-stack-protector
+# -fcf-protection=none -fno-asynchronous-unwind-tables; f is the first 0x24 bytes of .text:
+#
+#   int f(int a, int b, volatile int *p) {
+#       int s = 0;
+#       if (a) goto second;
+#   first:
+#       s += *p;
+#       if (s > 100) return s;
+#   second:
+#       s = s * 3 + b;
+#       if (s < 1000) goto first;
+#       return s;
+#   }
+#
+# The loop {first, second} has two entries: the fall-through from the function entry into
+# `first`, and the jump into `second`. Both heads end in a conditional branch, so a split of
+# the head `second` (whose copy keeps its branch and both out-edges) leaves one natural loop.
+# Option off prints `goto label_401014;` and `label_401014:`; option on prints no goto.
+#
+# Stage / sub-stage: P8 "goto-quality", option `irreduciblesplit on|off`.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'f' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '''
+89f885ff751a8b0a01c883f8647f0c8d044001f03de70300007eebc30f1f400089f0ebf0
+'''
+
+[script]
+commands = [
+    'option irreduciblesplit off',
+    'lo fu f',
+    'decompile',
+    'print C',
+    'option irreduciblesplit on',
+    'lo fu f',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'irreduciblesplit #1: off, the loop is entered by a goto into its second head'
+count = 2
+literal = 'label_401014'
+
+[[match]]
+name = 'irreduciblesplit #2: on, the split leaves one natural loop and no goto'
+count = 1
+literal = 'warn: irreduciblesplit: split 1 irreducible entry block(s) in f'
+
+[[match]]
+name = 'irreduciblesplit #3: on, the copy keeps the conditional test of the second head'
+count = 1
+literal = 'if (!(a1 <= 999)) {'

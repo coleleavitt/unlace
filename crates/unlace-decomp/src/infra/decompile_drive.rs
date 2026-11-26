@@ -1449,6 +1449,16 @@ fn generate_flow(arch: &mut Architecture, fd: Funcdata) -> UnlaceResult<Funcdata
     // call-spec list); now that qlst exists, sort it.
     data.sort_call_specs();
     crate::noreturnself::mark_self_no_return(arch, &mut data);
+    if !data.get_func_proto().is_no_return() {
+        // A console re-decompile does not clear the last run's warnings, so drop a
+        // no-return header that an earlier `noreturnself` verdict published.
+        let entry = data.get_address().clone();
+        arch.commentdb.retain_comments(|c| {
+            c.func_addr != entry
+                || c.tp & crate::architecture::comment_type::warningheader == 0
+                || !c.text.ends_with("Subroutine does not return")
+        });
+    }
     Ok(data)
 }
 
@@ -1611,6 +1621,10 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> UnlaceResult<int4
             // into the action loop (`None` = no budget, the parity default).
             ctx.deadline = deadline;
             ctx.restart_early = reflows < MAX_REFLOW;
+            ctx.irverify = arch
+                .unlace_options
+                .get::<crate::irverifyopt::IrVerifyPasses>()
+                .0;
             fd.set_maturity_tracked(true);
             let r = root.perform(fd, &mut ctx);
             if let Some(error) = ctx.error {

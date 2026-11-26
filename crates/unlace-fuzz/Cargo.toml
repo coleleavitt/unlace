@@ -12,6 +12,7 @@ doctest = false
 
 [dependencies]
 unlace = { path = "../unlace" }
+unlace-analysis.workspace = true
 
 [[bin]]
 name = "unlace-fuzz"

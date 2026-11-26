@@ -48,6 +48,7 @@ pub mod stackparamalign;
 pub mod swiftcall; // (unlace) Swift calls that may throw, and stale swiftself arguments
 pub mod swifterror; // (unlace) the Swift error register named after a throwing call and before a throwing return
 pub mod sysveightbyte; // (unlace `sysv_eightbyte`) the SysV AMD64 eightbyte classes of a struct passed or returned by value, a leaf with no caller yet
+pub mod vaargaapcs; // (unlace `vaargaapcs`) an AAPCS64 va_arg join as va_arg(ap, T)
 pub mod vaargconst; // (unlace) a constant-offset SysV va_arg expansion as va_arg(ap, T)
 pub mod varargretreg; // (unlace) a variadic call's argument in the register its value returns in
 pub mod varargsave; // (unlace) the System V register save area of a variadic function

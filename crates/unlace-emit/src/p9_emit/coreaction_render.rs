@@ -2750,7 +2750,29 @@ use crate::context::{OpId, VarnodeId};
 use unlace_base::address::{calc_mask, coveringmask, leastsigbit_set, minimalmask};
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
+use unlace_middle::database::DatabaseArch;
 use unlace_num::opcodes::OpCode;
+
+/// (unlace vectorabi) Is `vn` a value held in an XMM, YMM or ZMM register, at any
+/// width? Used by [`deadcode_apply`] to tell a vector output candidate from the
+/// general-register return.
+fn dc_is_vector_register(data: &Funcdata, vn: VarnodeId) -> bool {
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
+    let addr = v.get_addr();
+    let Some(space) = addr.get_space() else {
+        return false;
+    };
+    if space.get_name() != "register" {
+        return false;
+    }
+    let name =
+        data.get_arch()
+            .translate()
+            .get_register_name(space, addr.get_offset(), v.get_size());
+    ["xmm", "ymm", "zmm"].iter().any(|p| name.starts_with(p))
+}
 
 /// C++ `ActionDeadCode::pushConsumed` (coreaction.cc:3714).
 ///
@@ -3501,8 +3523,20 @@ fn deadcode_apply(data: &mut Funcdata) -> ApplyResult {
                 if let Some(i0) = data.obank().get(op).expect("stale op").get_in(0) {
                     dc_push_consumed(data, !0u64, i0, &mut worklist);
                 }
+                // (unlace vectorabi) An XMM/YMM/ZMM output candidate beside a
+                // general-register primary return is not the value returned: the
+                // writes that feed it, a VEX zero-upper `ymm = zext(xmm)`, die with it.
+                let primary_vector = data
+                    .obank()
+                    .get(op)
+                    .expect("stale op")
+                    .get_in(1)
+                    .is_some_and(|vn| dc_is_vector_register(data, vn));
                 for i in 1..n {
                     if let Some(ii) = data.obank().get(op).expect("stale op").get_in(i) {
+                        if !primary_vector && dc_is_vector_register(data, ii) {
+                            continue;
+                        }
                         dc_push_consumed(data, return_consume, ii, &mut worklist);
                     }
                 }

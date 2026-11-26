@@ -10803,7 +10803,10 @@ GCC and Clang give
 a function at -O2 but not a cold part. The last two tests keep a real function
 that only one other function tail-calls. The bodies go out on the `ehcold`
 channel, so the commit drops every entry inside one; the owner's flow decodes
-the part as before. A tail that starts exactly where its owner's FDE ends is the owner's
+the part as before. The Listing walk does not root a withheld part either: its
+oracle seeds, committed entries and `coldentry` roots are filtered by the same
+withheld set (`Architecture::unlace_withheld_cold`), so the walk cannot list
+a dropped part again as a function. A tail that starts exactly where its owner's FDE ends is the owner's
 fall-through, so the owner's `fdeflowbound` extent (chapter 02) runs over it. Against IDA 9.5's own databases of its loaders, the IDA
 tail chunks unlace lists as functions drop from 9/51/4/18 to 2/12/0/5
 (pe/elf/coff/dex.so), and one function IDA keeps is lost (pe.so 0x62fe). The

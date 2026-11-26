@@ -69,3 +69,21 @@ fn minimise_crash_no_op_on_clean_input() {
     let bytes = b"not a binary, will return NotBinary";
     assert_eq!(minimise_crash(bytes).as_slice(), bytes.as_slice());
 }
+
+/// The FNV-1a 64-bit reference vectors.
+#[test]
+fn fnv1a64_matches_reference_vectors() {
+    assert_eq!(fnv1a64(b""), 0xcbf2_9ce4_8422_2325);
+    assert_eq!(fnv1a64(b"a"), 0xaf63_dc4c_8601_ec8c);
+}
+
+#[test]
+fn json_string_escapes_quotes_backslashes_and_controls() {
+    assert_eq!(json_string("a\"b\\c\n\u{1}"), "\"a\\\"b\\\\c\\n\\u0001\"");
+}
+
+/// A clean input has no fixture to write.
+#[test]
+fn crash_fixture_is_none_for_clean_input() {
+    assert!(crash_fixture(b"not a binary").is_none());
+}

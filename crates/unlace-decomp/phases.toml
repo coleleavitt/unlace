@@ -2211,6 +2211,26 @@ live_field = "copy_run"
 live_true = "on"
 live_false = "off"
 
+
+[[settable]]
+option = "vecpairstore"
+values = "on|off"
+default = "on"
+destructive = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "vecpairstore"
+summary = "Print a 16-byte store of two 8-byte scalars as two 8-byte element stores. gcc's SLP vectorizer merges two adjacent pointer stores (`f[0] = f[1] = p`, `f[0] = a; f[1] = b`) into one 16-byte store built with `vpunpcklqdq` (equal halves) or `vpinsrq` (different halves), which printed as `*(unsigned __int128 *)f = vpunpcklqdq_avx(ZEXT816(p), ZEXT816(p))`. At `on` a STORE whose value is the single-reader result of `vpunpcklqdq_avx(x, y)` or `vpinsrq_avx(x, b, 1)`, where each low half is an INT_ZEXT of an 8-byte value, keeps the store of the low half and adds a second 8-byte store of the high half at pointer plus 8, and the user op is destroyed. A store with an INDIRECT of heritage on it is left alone. Phase P3, after copyrun."
+use_when = "On by default: the element assignments are what the source wrote. Flip off to see the 16-byte user op."
+example = "option vecpairstore off"
+source_decompiler = "unlace"
+inspiration = "gcc -O2 -mavx SLP store merging (vpunpcklqdq for {p,p}, vpinsrq for {p0,p1}), the pair of 8-byte stores it replaces"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = "a 16-byte store of two pointers prints as *(unsigned __int128 *)f = vpunpcklqdq_avx(ZEXT816(p), ZEXT816(p))|a pair of pointer assignments prints as a vpinsrq_avx user op"
+
 [[settable]]
 option = "rodatastring"
 values = "on|off"
@@ -3281,6 +3301,26 @@ inspiration = "DecBench O2-noinline libedit history_w/el_get against IDA 9.5 (no
 change_kind = "new-analysis"
 tier = "transform"
 symptoms = "a variadic function prints all six argument registers and the stack arguments as parameters and no va_arg|va_list field stores such as gp_offset = 0x18 or 0x20 remain beside plain reads of rcx, r8 or r9"
+
+[[settable]]
+option = "vaargaapcs"
+values = "off|on"
+default = "off"
+destructive = false
+phase = "P4"
+subphase = "prototype-source"
+strength = "HARD"
+rewind = "P4"
+issue = "unlace-vaargaapcs"
+summary = "Print the AAPCS64 va_arg expansion as va_arg(ap, T). An AArch64 (ELF, not Apple or Windows) variadic function reads each argument through one selection: a load of __gr_offs (or __vr_offs for a double) is tested for sign, the register arm reads __gr_top plus the offset and steps the offset, the stack arm reads __stack and steps it, and the two arms join at one load. unlace printed the offset arithmetic on the va_list fields. With this on, a load that every predecessor of a join reaches through one of those two addresses of one va_list becomes a va_arg(&ap, class) CALLOTHER (class 1 for the __vr half), the steps of __gr_offs, __vr_offs and __stack in the expansion go, and the selection branches take the register arm. vastart then folds the AAPCS64 va_list prologue (__stack, __gr_top, __vr_top, __gr_offs and __vr_offs) to va_start(ap, last) and marks the prototype variadic."
+use_when = "Off (default). Set on for AArch64 variadic functions that read their arguments with va_arg (clang and gcc expansions under -O2): without it each read prints as offset arithmetic on the va_list and the prologue as register-save spills and field stores. Apple arm64 keeps its own va_list and is unaffected."
+example = "--option vaargaapcs on"
+source_decompiler = "unlace"
+inspiration = "AAPCS64 (ARM IHI 0055) va_list layout; zig cc -target aarch64-linux-gnu -O2 variadic functions"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "a variadic AArch64 function prints __gr_offs or __vr_offs arithmetic on a va_list|a variadic AArch64 function prints the register save area spills and va_list field stores instead of va_start(ap, last)"
+
 
 [[settable]]
 option = "looprotate"
@@ -4923,7 +4963,7 @@ subphase = "goto-quality"
 strength = "HARD"
 rewind = "P8"
 issue = "original-unlace-irreducible-split"
-summary = "Make an irreducible loop region reducible before structuring, so it prints as a `while`/`do` loop instead of a `goto`. A strongly connected region of the block graph with two or more entry blocks has no natural loop header; the pass duplicates one entry block for an external predecessor (`Funcdata::node_split_through`, the primitive `returndupcalls` drives), so that predecessor enters a private copy that flows into the same successor. The region loses one entry per split and becomes a natural loop once one entry is left. The pass only takes an entry with exactly one out-edge that stays in the region, no conditional branch, no call, and no output read outside the block except through the successor's MULTIEQUALs or a merge it inserts; an entry that fails a check is skipped and the next one is tried. At most 16 splits per function, each logged (`irreduciblesplit:`). Ported from original unlace (origin/master `unlace-struct` `irreducible.rs` and `node_split.rs`), which duplicates every multi-predecessor entry block; this port is narrower on purpose because `node_split_through` is the only entry-duplication primitive main has."
+summary = "Make an irreducible loop region reducible before structuring, so it prints as a `while`/`do` loop instead of a `goto`. A strongly connected region of the block graph with two or more entry blocks has no natural loop header; the pass duplicates one entry block for an external predecessor, so that predecessor enters a private copy that flows into the same successors. The region loses one entry per split and becomes a natural loop once one entry is left. Regions are searched recursively: a single-entry region is reducible, so its back edges are set aside and a multi-entry loop nested inside it is found. An entry with one out-edge is duplicated with `Funcdata::node_split_through` (the primitive `returndupcalls` drives); an entry ending in a two-way conditional branch with `Funcdata::node_split_through_cbranch`, whose copy keeps the branch and both out-edges. Each primitive refuses a call, a tied output, and a value read outside the two blocks except through a successor's MULTIEQUAL (or a merge the one-successor form inserts); an entry that fails a check is skipped and the next one is tried. At most 16 splits per function, each logged (`irreduciblesplit:`). Ported from original unlace (origin/master `unlace-struct` `irreducible.rs` and `node_split.rs`), which duplicates every multi-predecessor entry block; this port is narrower on purpose because `node_split_through` is the only entry-duplication primitive main has."
 use_when = "A loop with two entrances, such as a branch that jumps into the middle of a loop body from two places, renders with a `goto` into the loop where the source has one `while`. Off by default: duplicating a block copies code, so it is a judgement call. Flip on to test whether the copies recover a loop the structurer would otherwise leave goto-shaped. The effect has not been measured yet: before a default flip, measure goto count and GED on decbench cases with irreducible loops (the `irreducible` fixture and `tests/datatests` cases that print a goto into a loop). When off the pass returns at once and output is byte-identical to before."
 example = "option irreduciblesplit on"
 source_decompiler = "ghidra"
@@ -7232,15 +7272,15 @@ live_false = "off"
 [[settable]]
 option = "noreturnself"
 values = "on|off"
-default = "off"
+default = "on"
 destructive = false
 phase = "P2"
 subphase = "flow-classification"
 strength = "HARD"
 rewind = "P2"
 issue = "unlace-noreturnself"
-summary = "Mark a function no-return when every path of its flow ends in a call to a no-return callee or a no-return halt. The verdict was reached only by the callers: each call to a no-return callee carries `Subroutine does not return` at the call site, but the function that never returns printed as a plain `void f(void)` ending in `abort(); // no-return`. When the flow generated for the function has no live return that is not a halt, no unresolved indirect jump or call, and every live halt is a `noreturn` halt, the function's own prototype is set no-return and a header warning `Subroutine does not return` is printed at its entry address (line 1). Any other halt (a decode failure or a truncation) leaves the function alone. Reads the flow of the function only, so it works without the Listing. Off by default: the output change (a header line and a prototype comment on a function that never returns) moves the stage assertions that anchor on the exact prototype line."
-use_when = "Off by default. Flip on to mark a function whose every path ends in a no-return call or halt: its prototype gets a no-return comment and a header warning, as Ghidra prints it. Leave it off when a consumer matches the exact prototype line."
+summary = "Mark a function no-return when every path of its flow ends in a call to a no-return callee or a no-return halt. The verdict was reached only by the callers: each call to a no-return callee carries `Subroutine does not return` at the call site, but the function that never returns printed as a plain `void f(void)` ending in `abort(); // no-return`. When the flow generated for the function has no live return that is not a halt, no unresolved indirect jump or call, and every live halt is a `noreturn` halt, the function's own prototype is set no-return and a header warning `Subroutine does not return` is printed at its entry address (line 1). Any other halt (a decode failure or a truncation) leaves the function alone. Reads the flow of the function only, so it works without the Listing. On by default. The output change is a header line and a prototype comment on a function that never returns."
+use_when = "On by default. Flip off to see a function that never returns with no header marker, as upstream prints it, or when a consumer keys on the call-site warnings alone."
 example = "option noreturnself off"
 source_decompiler = "unlace"
 inspiration = "Ghidra prints /* WARNING: Subroutine does not return */ above a function whose body never returns; unlace kept the verdict on the call sites only."
@@ -9551,6 +9591,25 @@ inspiration = "the archived engine's collect_non_null_param_hints (origin/master
 change_kind = "opt-in-tool"
 tier = "core"
 symptoms = "a pointer parameter is used at once with no NULL test and nothing says the caller must not pass NULL|the decompiled function gives no hint that its parameter is dereferenced on entry"
+
+[[settable]]
+option = "irverify"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "warning-style"
+strength = "HINT"
+rewind = "P9"
+issue = "unlace-1255"
+summary = "Check the IR after every pass and report the first pass that leaves it broken. With the option on, after each pass that made a change, the structural links (each op, varnode and basic block agrees with the others) are checked, and once heritage has run, the dataflow tier: every input of an op is a constant, an input, or defined by an op that dominates the reader (or comes earlier in the same block), and a phi input's definition dominates the predecessor on that edge. The first failure becomes one header warning, `irverify: pass <name> left the IR broken: <what>`; later passes are not checked. The printed statements are unchanged. The check walks the function once per pass, so it is for debugging a bad pass, not for the default run."
+use_when = "Off by default. Flip on when a pass corrupts the IR and the damage shows up far from its cause (a crash, a wrong value or a missing statement), to name the pass that first left a link or a definition broken. Read the warning as the first broken invariant, not a proof of a bug in that pass: a false positive names the pass that precedes the check."
+example = "option irverify on"
+source_decompiler = "unlace"
+inspiration = "the original unlace whole-function verifier (origin/master crates/unlace-ir/src/verify.rs, verify_ssa_function), which checked the definedness and dominance of every SSA use"
+change_kind = "opt-in-tool"
+tier = "core"
+symptoms = "a function crashes or prints a wrong value and no pass is named for it|a pass leaves an op, varnode or block link stale and the damage shows up only in a later pass|a read has no dominating definition after heritage and the output has a value from nowhere"
 
 [[settable]]
 option = "goitabcalls"

@@ -391,6 +391,22 @@ fn copy_pair_writes(
     writes
 }
 
+/// (unlace) First member Varnode carrying the addrtied flag. C++
+/// `HighVariable::getTiedVarnode` throws when no member is inserted, and the
+/// Rust lookup then returned an invalid address; two highs with invalid
+/// addresses compared equal, so a global could join a stack value it is
+/// not address-tied with (`merge_test_required`, `merge.cc:111-116`).
+fn high_addrtied_member(fd: &Funcdata, high: HighVariableId) -> Option<VarnodeId> {
+    let h = fd.high_bank().get(high)?;
+    (0..h.num_instances())
+        .map(|i| h.get_instance(i))
+        .find(|&vn| {
+            fd.vbank()
+                .get(vn)
+                .is_some_and(|v| v.get_flags() & crate::varnode::varnode_flags::addrtied != 0)
+        })
+}
+
 impl MergeContext for Funcdata {
     fn pass_hooks(&self) -> &'static crate::passhooks::UnlaceHooks {
         self.hooks()
@@ -843,7 +859,10 @@ impl MergeContext for Funcdata {
         false
     }
     fn bank_tied_addr(&self, high: HighVariableId) -> Address {
-        match self.high_tied_or_input_varnode(high, false) {
+        let tied = self
+            .high_tied_or_input_varnode(high, false)
+            .or_else(|| high_addrtied_member(self, high));
+        match tied {
             Some(vn) => self
                 .vbank()
                 .get(vn)

@@ -1,0 +1,42 @@
+# (unlace) `mixedtailret` on a tail call to an import whose return is declared.
+#
+# gcc -O2 of `int f(struct s *a, struct s *b) { long d = a->t - b->t; if (d)
+# return d < 0 ? -1 : 1; return strcoll(a->n, b->n); }`: the nonzero path
+# returns the computed difference in eax, the zero path tail-calls strcoll
+# (a libc import, so protoorder states nothing about it). With the option on,
+# the tail call hands its declared int return back, so the function returns
+# int and both paths give the value. The bytes are gcc's, with the
+# `jmp strcoll` rel32 resolved to the strcoll symbol at 0x100100.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'f' },
+    { space = 'ram', offset = '0x100100', name = 'strcoll' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'f30f1efa488b07482b067514488b7608488b7f08e9e70000000f1f800000000048c1f83f83c801c3'
+
+[script]
+commands = [
+    'parse line extern int4 strcoll(char *, char *);',
+    'lo fu f',
+    'option mixedtailret on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'mixedtailret: f returns int, not void'
+count = 1
+literal = 'int4 f('
+
+[[match]]
+name = 'mixedtailret: the tail call returns strcoll result'
+count = 1
+regex = 'return strcoll\('

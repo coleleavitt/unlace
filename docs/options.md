@@ -106,6 +106,8 @@ Three tiers:
 | a struct copy prints as eight paired assignments through a register | [`copyrun`](#copyrun----on--off-default-on) |
 | *a0 = *a1; a0[1] = v1; ... for a fixed-size memcpy | [`copyrun`](#copyrun----on--off-default-on) |
 | SSE xmm0 lanes shuttle a buffer one word at a time | [`copyrun`](#copyrun----on--off-default-on) |
+| a 16-byte store of two pointers prints as *(unsigned __int128 *)f = vpunpcklqdq_avx(ZEXT816(p), ZEXT816(p)) | [`vecpairstore`](#vecpairstore----on--off-default-on) |
+| a pair of pointer assignments prints as a vpinsrq_avx user op | [`vecpairstore`](#vecpairstore----on--off-default-on) |
 | stack string initialisation renders as an array-typed cast such as (char[8])s_addr._0_8_ | [`rodatastring`](#rodatastring----on--off-default-on) |
 | partial-symbol slice assignments like buf._0_9_ = s_addr._16_9_ instead of the string | [`rodatastring`](#rodatastring----on--off-default-on) |
 | a recognized rodata literal never appears in the function that copies it onto the stack | [`rodatastring`](#rodatastring----on--off-default-on) |
@@ -247,6 +249,8 @@ Three tiers:
 | a variadic function's loop over multiple int/long/double arguments prints as separate gp_offset-checked loads | [`vaarg`](#vaarg----on--off-default-on) |
 | a variadic function prints all six argument registers and the stack arguments as parameters and no va_arg | [`vaargconst`](#vaargconst----off--on--builtin-default-off) |
 | va_list field stores such as gp_offset = 0x18 or 0x20 remain beside plain reads of rcx, r8 or r9 | [`vaargconst`](#vaargconst----off--on--builtin-default-off) |
+| a variadic AArch64 function prints __gr_offs or __vr_offs arithmetic on a va_list | [`vaargaapcs`](#vaargaapcs----off--on-default-off) |
+| a variadic AArch64 function prints the register save area spills and va_list field stores instead of va_start(ap, last) | [`vaargaapcs`](#vaargaapcs----off--on-default-off) |
 | if (n > 0) { i = 0; do { ... } while (i != n); } instead of a for loop | [`looprotate`](#looprotate----on--off-default-on) |
 | a while loop prints as an if around a do-while | [`looprotate`](#looprotate----on--off-default-on) |
 | if (c) { do { ... } while (c); } where the source has while (c) | [`guardedloop`](#guardedloop----on--off-default-on) |
@@ -1436,6 +1440,9 @@ Three tiers:
 | avx-512 arithmetic prints as vaddps_avx512f | [`avxintrinsics`](#avxintrinsics----on--off-default-on) |
 | a global one function accessed whole prints as unrelated dat_ names in another | [`mapglobalsyms`](#mapglobalsyms----on--off-default-off) |
 | later functions do not see the DAT_ symbol an earlier decompile created, unlike upstream decomp_dbg sessions | [`mapglobalsyms`](#mapglobalsyms----on--off-default-off) |
+| a function that never returns prints as a plain void f(void) with no marker | [`noreturnself`](#noreturnself----on--off-default-on) |
+| a function ending in exit() or abort() on every path is indistinguishable from one that returns | [`noreturnself`](#noreturnself----on--off-default-on) |
+| the no-return verdict appears only at the call sites of the function | [`noreturnself`](#noreturnself----on--off-default-on) |
 | calls to empty functions read as sub_<addr>() like any other | [`nullsubs`](#nullsubs----on--off-default-off) |
 | a virtual table slot points at a function that only returns | [`nullsubs`](#nullsubs----on--off-default-off) |
 | an untyped MIPS32 big-endian producer loses its low return word despite a declared 64-bit consumer | [`callwide`](#callwide----on--off-default-off) |
@@ -1494,6 +1501,9 @@ Three tiers:
 | the real-binary harness cannot tell which functions lost information | [`honestgaps`](#honestgaps----on--off-default-off) |
 | a pointer parameter is used at once with no NULL test and nothing says the caller must not pass NULL | [`nonnullparam`](#nonnullparam----on--off-default-off) |
 | the decompiled function gives no hint that its parameter is dereferenced on entry | [`nonnullparam`](#nonnullparam----on--off-default-off) |
+| a function crashes or prints a wrong value and no pass is named for it | [`irverify`](#irverify----on--off-default-off) |
+| a pass leaves an op, varnode or block link stale and the damage shows up only in a later pass | [`irverify`](#irverify----on--off-default-off) |
+| a read has no dominating definition after heritage and the output has a value from nowhere | [`irverify`](#irverify----on--off-default-off) |
 
 ## Toggleable transforms
 
@@ -1730,6 +1740,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off by default. Flip on to see the element moves, or when the two buffers may overlap through different pointers: the run copies in program order, which memcpy does not promise.
 - **Where / provenance:** P3/simplification-quiescence · unlace · presentation-default · copyrun
 - **Example:** `option copyrun off`
+
+### `vecpairstore` -- on | off, default `on`
+
+- **Symptoms:** a 16-byte store of two pointers prints as *(unsigned __int128 *)f = vpunpcklqdq_avx(ZEXT816(p), ZEXT816(p)); a pair of pointer assignments prints as a vpinsrq_avx user op.
+- **What it does:** Print a 16-byte store of two 8-byte scalars as two 8-byte element stores. gcc's SLP vectorizer merges two adjacent pointer stores (`f[0] = f[1] = p`, `f[0] = a; f[1] = b`) into one 16-byte store built with `vpunpcklqdq` (equal halves) or `vpinsrq` (different halves), which printed as `*(unsigned __int128 *)f = vpunpcklqdq_avx(ZEXT816(p), ZEXT816(p))`. At `on` a STORE whose value is the single-reader result of `vpunpcklqdq_avx(x, y)` or `vpinsrq_avx(x, b, 1)`, where each low half is an INT_ZEXT of an 8-byte value, keeps the store of the low half and adds a second 8-byte store of the high half at pointer plus 8, and the user op is destroyed. A store with an INDIRECT of heritage on it is left alone. Phase P3, after copyrun.
+- **When to flip:** On by default: the element assignments are what the source wrote. Flip off to see the 16-byte user op.
+- **Where / provenance:** P3/simplification-quiescence · unlace · presentation-default · vecpairstore
+- **Example:** `option vecpairstore off`
 
 ### `rodatastring` -- on | off, default `on`
 
@@ -2058,6 +2076,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off (default). Set on for x86-64 SysV variadic functions that switch over a request code and read their arguments with va_arg (libedit history_w, el_get, el_set), which otherwise print every argument register as a parameter. builtin prints gcc's __builtin_va_arg spelling.
 - **Where / provenance:** P4/prototype-source · unlace · new-analysis · unlace-vaargconst
 - **Example:** `--option vaargconst on`
+
+### `vaargaapcs` -- off | on, default `off`
+
+- **Symptoms:** a variadic AArch64 function prints __gr_offs or __vr_offs arithmetic on a va_list; a variadic AArch64 function prints the register save area spills and va_list field stores instead of va_start(ap, last).
+- **What it does:** Print the AAPCS64 va_arg expansion as va_arg(ap, T). An AArch64 (ELF, not Apple or Windows) variadic function reads each argument through one selection: a load of __gr_offs (or __vr_offs for a double) is tested for sign, the register arm reads __gr_top plus the offset and steps the offset, the stack arm reads __stack and steps it, and the two arms join at one load. unlace printed the offset arithmetic on the va_list fields. With this on, a load that every predecessor of a join reaches through one of those two addresses of one va_list becomes a va_arg(&ap, class) CALLOTHER (class 1 for the __vr half), the steps of __gr_offs, __vr_offs and __stack in the expansion go, and the selection branches take the register arm. vastart then folds the AAPCS64 va_list prologue (__stack, __gr_top, __vr_top, __gr_offs and __vr_offs) to va_start(ap, last) and marks the prototype variadic.
+- **When to flip:** Off (default). Set on for AArch64 variadic functions that read their arguments with va_arg (clang and gcc expansions under -O2): without it each read prints as offset arithmetic on the va_list and the prologue as register-save spills and field stores. Apple arm64 keeps its own va_list and is unaffected.
+- **Where / provenance:** P4/prototype-source · unlace · new-analysis · unlace-vaargaapcs
+- **Example:** `--option vaargaapcs on`
 
 ### `looprotate` -- on | off, default `on`
 
@@ -2558,7 +2584,7 @@ The control surface: each of these can make output worse on the wrong source sha
 ### `irreduciblesplit` -- on | off, default `off`
 
 - **Symptoms:** goto into the middle of a loop that has two entrances; a loop with two entry points rendered with goto labels; irreducible region left as goto-shaped control flow.
-- **What it does:** Make an irreducible loop region reducible before structuring, so it prints as a `while`/`do` loop instead of a `goto`. A strongly connected region of the block graph with two or more entry blocks has no natural loop header; the pass duplicates one entry block for an external predecessor (`Funcdata::node_split_through`, the primitive `returndupcalls` drives), so that predecessor enters a private copy that flows into the same successor. The region loses one entry per split and becomes a natural loop once one entry is left. The pass only takes an entry with exactly one out-edge that stays in the region, no conditional branch, no call, and no output read outside the block except through the successor's MULTIEQUALs or a merge it inserts; an entry that fails a check is skipped and the next one is tried. At most 16 splits per function, each logged (`irreduciblesplit:`). Ported from original unlace (origin/master `unlace-struct` `irreducible.rs` and `node_split.rs`), which duplicates every multi-predecessor entry block; this port is narrower on purpose because `node_split_through` is the only entry-duplication primitive main has.
+- **What it does:** Make an irreducible loop region reducible before structuring, so it prints as a `while`/`do` loop instead of a `goto`. A strongly connected region of the block graph with two or more entry blocks has no natural loop header; the pass duplicates one entry block for an external predecessor, so that predecessor enters a private copy that flows into the same successors. The region loses one entry per split and becomes a natural loop once one entry is left. Regions are searched recursively: a single-entry region is reducible, so its back edges are set aside and a multi-entry loop nested inside it is found. An entry with one out-edge is duplicated with `Funcdata::node_split_through` (the primitive `returndupcalls` drives); an entry ending in a two-way conditional branch with `Funcdata::node_split_through_cbranch`, whose copy keeps the branch and both out-edges. Each primitive refuses a call, a tied output, and a value read outside the two blocks except through a successor's MULTIEQUAL (or a merge the one-successor form inserts); an entry that fails a check is skipped and the next one is tried. At most 16 splits per function, each logged (`irreduciblesplit:`). Ported from original unlace (origin/master `unlace-struct` `irreducible.rs` and `node_split.rs`), which duplicates every multi-predecessor entry block; this port is narrower on purpose because `node_split_through` is the only entry-duplication primitive main has.
 - **When to flip:** A loop with two entrances, such as a branch that jumps into the middle of a loop body from two places, renders with a `goto` into the loop where the source has one `while`. Off by default: duplicating a block copies code, so it is a judgement call. Flip on to test whether the copies recover a loop the structurer would otherwise leave goto-shaped. The effect has not been measured yet: before a default flip, measure goto count and GED on decbench cases with irreducible loops (the `irreducible` fixture and `tests/datatests` cases that print a goto into a loop). When off the pass returns at once and output is byte-identical to before.
 - **Where / provenance:** P8/goto-quality · ghidra · structure-recovery · original-unlace-irreducible-split
 - **Example:** `option irreduciblesplit on`
@@ -2858,14 +2884,6 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default on a GCC/Clang C++ ELF or Mach-O with RTTI: virtual calls read as p->vptr->method(p,args), a member function's own virtual calls on this as this->vptr->method, and a call on a locally constructed object as the direct call. Flip off to see the raw slot arithmetic (**(code **)(*obj + off))() or to rule the typing out when a slot name looks wrong (identical-code folding can put one function in unrelated classes' slots). Inert without __cxxabiv1 typeinfo anchors (C, -fno-rtti). On a Windows PE with MSVC RTTI (MSVC or clang-cl) a virtual member's this is a C * and its virtual calls on this read (*this->__vftable->method)(this,args); inert on a PE built /GR-.
 - **Where / provenance:** P5/type-propagation · unlace · type-inference · vtabletypes
 - **Example:** `option vtabletypes off`
-
-### `noreturnself` -- on | off, default `off`
-
-- **Symptoms:** a function that never returns prints as a plain void f(void) with no marker; a function ending in exit() or abort() on every path is indistinguishable from one that returns; the no-return verdict appears only at the call sites of the function
-- **What it does:** Mark a function no-return when every path of its flow ends in a call to a no-return callee or a no-return halt. The verdict was reached only by the callers: each call to a no-return callee carries `Subroutine does not return` at the call site, but the function that never returns printed as a plain `void f(void)` ending in `abort(); // no-return`. When the flow generated for the function has no live return that is not a halt, no unresolved indirect jump or call, and every live halt is a `noreturn` halt, the function's own prototype is set no-return and a header warning `Subroutine does not return` is printed at its entry address (line 1). Any other halt (a decode failure or a truncation) leaves the function alone. Reads the flow of the function only, so it works without the Listing. Off by default: the output change (a header line and a prototype comment on a function that never returns) moves the stage assertions that anchor on the exact prototype line.
-- **When to flip:** Off by default. Flip on to mark a function whose every path ends in a no-return call or halt: its prototype gets a no-return comment and a header warning, as Ghidra prints it. Leave it off when a consumer matches the exact prototype line.
-- **Where / provenance:** P2/flow-classification · unlace · presentation-default · unlace-noreturnself
-- **Example:** `option noreturnself off`
 
 ### `noreturn_propagate` -- on | off, default `on`
 
@@ -4675,6 +4693,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **Where / provenance:** P9/naming-policy · ghidra · presentation-default · unlace-mapglobals-dat-symbols
 - **Example:** `option mapglobalsyms on`
 
+### `noreturnself` -- on | off, default `on`
+
+- **Symptoms:** a function that never returns prints as a plain void f(void) with no marker; a function ending in exit() or abort() on every path is indistinguishable from one that returns; the no-return verdict appears only at the call sites of the function.
+- **What it does:** Mark a function no-return when every path of its flow ends in a call to a no-return callee or a no-return halt. The verdict was reached only by the callers: each call to a no-return callee carries `Subroutine does not return` at the call site, but the function that never returns printed as a plain `void f(void)` ending in `abort(); // no-return`. When the flow generated for the function has no live return that is not a halt, no unresolved indirect jump or call, and every live halt is a `noreturn` halt, the function's own prototype is set no-return and a header warning `Subroutine does not return` is printed at its entry address (line 1). Any other halt (a decode failure or a truncation) leaves the function alone. Reads the flow of the function only, so it works without the Listing. On by default. The output change is a header line and a prototype comment on a function that never returns.
+- **When to flip:** On by default. Flip off to see a function that never returns with no header marker, as upstream prints it, or when a consumer keys on the call-site warnings alone.
+- **Where / provenance:** P2/flow-classification · unlace · presentation-default · unlace-noreturnself
+- **Example:** `option noreturnself off`
+
 ### `nullsubs` -- on | off, default `off`
 
 - **Symptoms:** calls to empty functions read as sub_<addr>() like any other; a virtual table slot points at a function that only returns.
@@ -4818,6 +4844,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Off by default. Flip on when reading a function whose parameters are dereferenced at once, to see which pointers it assumes are valid without a NULL test. The claim assumes the dereference traps on NULL, which is not true on a target that maps address zero, so read the comment as a hint, not a proof.
 - **Where / provenance:** P9/warning-style · unlace · opt-in-tool · unlace-1345
 - **Example:** `option nonnullparam on`
+
+### `irverify` -- on | off, default `off`
+
+- **Symptoms:** a function crashes or prints a wrong value and no pass is named for it; a pass leaves an op, varnode or block link stale and the damage shows up only in a later pass; a read has no dominating definition after heritage and the output has a value from nowhere.
+- **What it does:** Check the IR after every pass and report the first pass that leaves it broken. With the option on, after each pass that made a change, the structural links (each op, varnode and basic block agrees with the others) are checked, and once heritage has run, the dataflow tier: every input of an op is a constant, an input, or defined by an op that dominates the reader (or comes earlier in the same block), and a phi input's definition dominates the predecessor on that edge. The first failure becomes one header warning, `irverify: pass <name> left the IR broken: <what>`; later passes are not checked. The printed statements are unchanged. The check walks the function once per pass, so it is for debugging a bad pass, not for the default run.
+- **When to flip:** Off by default. Flip on when a pass corrupts the IR and the damage shows up far from its cause (a crash, a wrong value or a missing statement), to name the pass that first left a link or a definition broken. Read the warning as the first broken invariant, not a proof of a bug in that pass: a false positive names the pass that precedes the check.
+- **Where / provenance:** P9/warning-style · unlace · opt-in-tool · unlace-1255
+- **Example:** `option irverify on`
 
 ## Programmatic use
 

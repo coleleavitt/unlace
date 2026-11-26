@@ -6,8 +6,15 @@ name: Fuzz
 # (crates/unlace-fuzz/src/lib.rs). The seed corpus and the crash-corpus regression
 # run in the same test binary.
 #
-# A panic fails the job, and the test output names the iteration. Rerun with the same
-# UNLACE_FUZZ_ITERS to reproduce it.
+# The test binary also runs three seeded sweeps (crates/unlace-fuzz/tests/sweeps.rs):
+# SLEIGH decode and lift of random code for six architectures, mutated ELF/PE/Mach-O
+# fixtures through the object loader, and mutated dyld shared caches. They scale with
+# UNLACE_FUZZ_ITERS, and the decode sweep needs the SLEIGH specs (UNLACE_SPECS below).
+#
+# A panic fails the job, and the test output names the iteration and prints a
+# minimised input as hex. Rerun with the same UNLACE_FUZZ_ITERS to reproduce it, and
+# `unlace-fuzz --minimise crates/unlace-fuzz/crash-corpus < input.bin` commits the
+# minimised input as a regression fixture.
 
 on:
   schedule:
@@ -45,4 +52,6 @@ jobs:
       - name: Seed corpus, crash corpus and random sweep
         env:
           UNLACE_FUZZ_ITERS: ${{ github.event.inputs.iterations || '200000' }}
+      UNLACE_SPECS: ${{ github.workspace }}/specs
+      SLEIGHHOME: ${{ github.workspace }}/specs
         run: cargo test -p unlace-fuzz

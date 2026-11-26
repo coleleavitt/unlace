@@ -666,23 +666,22 @@ impl PrintC {
             return false;
         };
         let leaf = sb.block(front);
-        leaf.is_unstructured_target()
-            && !self.goto_rewrites.labels.contains(&front)
-            && leaf.get_type() == BlockType::Copy
+        if !leaf.is_unstructured_target() || leaf.get_type() != BlockType::Copy {
+            return false;
+        }
+        match self.lang().forms.label {
+            crate::lang::LabelForm::CColon => !self.goto_rewrites.labels.contains(&front),
+            crate::lang::LabelForm::CommentOnly => true,
+        }
     }
 
     /// (unlace `labelnode`) Decide the C label lines in the tree once the rewrites are done. Records,
     /// for every block the tree holds, whether the printer prints a label line for it
     /// (`label_line_wanted`), then wraps each copy leaf that gets one in a `Label` node that prints
-    /// the label and then the leaf. Only the C colon form, and not Go (its suppression set is filled
-    /// while printing); flat printing and any block past the depth bound keep the block printer's
-    /// own call.
+    /// the label and then the leaf. Go's suppressed labels stay a print-time test (its set is filled
+    /// while printing), and the test runs at the same point whichever node prints the label. Flat
+    /// printing and any block past the depth bound keep the block printer's own call.
     fn ctree_labels(&mut self, fd: &Funcdata) {
-        if self.out_lang == crate::lang::OutLang::Go
-            || !matches!(self.lang().forms.label, crate::lang::LabelForm::CColon)
-        {
-            return;
-        }
         let Some(tree) = self.ctree.as_ref() else {
             return;
         };

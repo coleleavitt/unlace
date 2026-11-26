@@ -69,6 +69,7 @@ pub mod stackreadscope;
 pub mod storecopyeffects;
 pub mod strlenscan;
 pub mod tiedstorekeep;
+pub mod vecpairstore; // (unlace `vecpairstore`) a 16-byte store of two 8-byte scalars is two stores
 pub mod volatileload;
 pub mod wideslice;
 pub mod wrapsplit;

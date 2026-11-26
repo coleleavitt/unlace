@@ -4065,6 +4065,16 @@ than the next link, is not rewritten. The run copies element by element in progr
 does not promise for buffers that overlap through different pointers; the
 rewrite cannot see that, which is what the option is for.
 
+**Vector pair stores** (`option vecpairstore`, default **on**) —
+`crates/unlace-bandb-base/src/p3_dataflow/vecpairstore.rs (ActionVecPairStore)`,
+in the same `returnsplit` slot after `copyrun`. gcc's SLP vectorizer merges two
+adjacent 8-byte pointer stores into one 16-byte store built with `vpunpcklqdq`
+(equal halves) or `vpinsrq` (different halves). The action rewrites a STORE whose
+value is the single-reader result of `vpunpcklqdq_avx(x, y)` or
+`vpinsrq_avx(x, b, 1)`, where each low half is an `INT_ZEXT` of an 8-byte value,
+into the store of the low half plus a second 8-byte store at pointer + 8; the user
+op is destroyed. A store with an INDIRECT of heritage on it is left alone.
+
 **constspaceload** (repipe `arm-neon-zero-initialization`) —
 `crates/unlace-bandb-base/src/p3_dataflow/constspaceload.rs
 (RuleConstSpaceLoad)`, oppool1, fires on LOAD. *Pattern:* a LOAD whose space

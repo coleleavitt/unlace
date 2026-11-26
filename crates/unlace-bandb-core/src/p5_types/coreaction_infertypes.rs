@@ -461,12 +461,14 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
             == Some(crate::userop::BUILTIN_VA_START as u64)
     {
         if let Some(tlst) = arch.types() {
-            if let Ok(ptr) = tlst
-                .get_type_struct("__va_list_tag")
-                .and_then(|t| tlst.get_type_pointer(8, t, 1))
-            {
-                if ptr.get_ptr_to().is_some_and(|t| t.get_size() == 24) {
-                    return ptr;
+            for (name, size) in [("__va_list_tag", 24), ("__va_list", 32)] {
+                if let Ok(ptr) = tlst
+                    .get_type_struct(name)
+                    .and_then(|t| tlst.get_type_pointer(8, t, 1))
+                {
+                    if ptr.get_ptr_to().is_some_and(|t| t.get_size() == size) {
+                        return ptr;
+                    }
                 }
             }
         }

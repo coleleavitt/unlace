@@ -55,5 +55,6 @@ literal = 'return 7;'
 
 [[match]]
 name = 'terminal call has a local contract'
-count = 1
+# The __stack_chk_fail call, plus check's own header (noreturnself).
+count = 2
 literal = 'no-return'

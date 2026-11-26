@@ -3248,16 +3248,55 @@ impl Funcdata {
         inedge: int4,
         calls: bool,
     ) -> UnlaceResult<BlockId> {
-        let (size_in, succ) = {
+        self.node_split_through_impl(b, inedge, calls, false)
+    }
+
+    /// (unlace, `irreduciblesplit`) [`Self::node_split_through`] for a block that ends in a
+    /// two-way CBRANCH. The clone keeps the conditional branch and both out-edges in their
+    /// original order, and each successor takes one more in-edge from the clone, so each
+    /// successor's MULTIEQUALs gain the cloned value. Calls are refused, and so is a value the
+    /// block defines that is read outside the two blocks except through a successor's
+    /// MULTIEQUAL: with two successors there is no single merge point to route it through.
+    /// When a condition fails nothing changes and an error is returned.
+    pub fn node_split_through_cbranch(
+        &mut self,
+        b: BlockId,
+        inedge: int4,
+    ) -> UnlaceResult<BlockId> {
+        self.node_split_through_impl(b, inedge, false, true)
+    }
+
+    /// Shared body of [`Self::node_split_through`] (one out-edge) and
+    /// [`Self::node_split_through_cbranch`] (two out-edges, the last op a CBRANCH).
+    fn node_split_through_impl(
+        &mut self,
+        b: BlockId,
+        inedge: int4,
+        calls: bool,
+        cbranch: bool,
+    ) -> UnlaceResult<BlockId> {
+        let (size_in, succs): (int4, Vec<BlockId>) = {
             let blk = self.bblocks_ref().block(b);
-            if blk.size_out() != 1 {
+            let succs: Vec<BlockId> = (0..blk.size_out()).map(|i| blk.get_out(i)).collect();
+            (blk.size_in(), succs)
+        };
+        if cbranch {
+            let ends_cbranch = self
+                .bb_ops(b)
+                .last()
+                .and_then(|&op| self.obank().get(op))
+                .is_some_and(|o| o.code() == OpCode::CPUI_CBRANCH);
+            if succs.len() != 2 || succs[0] == succs[1] || !ends_cbranch {
                 return Err(UnlaceError::lowlevel(
-                    "nodesplit-through needs one out edge",
+                    "nodesplit-through: not a two-way branch",
                 ));
             }
-            (blk.size_in(), blk.get_out(0))
-        };
-        if succ == b || size_in <= 1 || inedge < 0 || inedge >= size_in {
+        } else if succs.len() != 1 {
+            return Err(UnlaceError::lowlevel(
+                "nodesplit-through needs one out edge",
+            ));
+        }
+        if succs.contains(&b) || size_in <= 1 || inedge < 0 || inedge >= size_in {
             return Err(UnlaceError::lowlevel("nodesplit-through: bad block shape"));
         }
         let mut seen: std::collections::BTreeSet<BlockId> = std::collections::BTreeSet::new();
@@ -3268,19 +3307,27 @@ impl Funcdata {
                 ));
             }
         }
-        let slot = self.bblocks_ref().block(succ).get_in_index(b);
-        let succ_single = self.bblocks_ref().block(succ).size_in() == 1;
-        let mut escaping: Vec<VarnodeId> = Vec::new();
-        if slot < 0 {
-            return Err(UnlaceError::lowlevel(
-                "nodesplit-through: successor lost its edge",
-            ));
+        let mut slots: Vec<int4> = Vec::with_capacity(succs.len());
+        for &succ in &succs {
+            let slot = self.bblocks_ref().block(succ).get_in_index(b);
+            if slot < 0 {
+                return Err(UnlaceError::lowlevel(
+                    "nodesplit-through: successor lost its edge",
+                ));
+            }
+            slots.push(slot);
         }
+        // A value may leave the block only when its one successor has no other predecessor,
+        // so that the merge in `merge_split_value` has a block to live in.
+        let escape_ok = succs.len() == 1 && self.bblocks_ref().block(succs[0]).size_in() == 1;
+        let mut escaping: Vec<VarnodeId> = Vec::new();
         for op in self.bb_ops(b) {
             let Some(o) = self.obank().get(op) else {
                 return Err(UnlaceError::lowlevel("nodesplit-through: stale op"));
             };
-            if o.is_branch() && o.code() != OpCode::CPUI_BRANCH {
+            let branch_ok =
+                o.code() == OpCode::CPUI_BRANCH || (cbranch && o.code() == OpCode::CPUI_CBRANCH);
+            if o.is_branch() && !branch_ok {
                 return Err(UnlaceError::lowlevel(
                     "nodesplit-through: conditional branch",
                 ));
@@ -3292,7 +3339,7 @@ impl Funcdata {
             let Some(v) = self.vbank().get(out) else {
                 return Err(UnlaceError::lowlevel("nodesplit-through: stale output"));
             };
-            if v.is_persist() || v.is_addr_tied() {
+            if !cbranch && (v.is_persist() || v.is_addr_tied()) {
                 return Err(UnlaceError::lowlevel("nodesplit-through: tied output"));
             }
             for reader in v.descend_iter() {
@@ -3303,11 +3350,13 @@ impl Funcdata {
                 if parent == Some(b) {
                     continue;
                 }
-                let via_slot = parent == Some(succ)
-                    && r.code() == OpCode::CPUI_MULTIEQUAL
-                    && (0..r.num_input()).all(|s| r.get_in(s) != Some(out) || s == slot);
+                let via_slot = succs.iter().zip(slots.iter()).any(|(&succ, &slot)| {
+                    parent == Some(succ)
+                        && r.code() == OpCode::CPUI_MULTIEQUAL
+                        && (0..r.num_input()).all(|s| r.get_in(s) != Some(out) || s == slot)
+                });
                 if !via_slot {
-                    if !succ_single {
+                    if !escape_ok {
                         return Err(UnlaceError::lowlevel(
                             "nodesplit-through: value read outside the block",
                         ));
@@ -3322,33 +3371,36 @@ impl Funcdata {
         let bprime = self.node_split_block_edge(b, inedge);
         let mut cloner = CloneBlockOps::new();
         cloner.calls = calls;
+        cloner.cbranch = cbranch;
         cloner.clone_block(self, b, bprime, inedge)?;
 
-        let newslot = self.bblocks_ref().block(succ).size_in() - 1;
-        let phis: Vec<OpId> = self
-            .bb_ops(succ)
-            .into_iter()
-            .filter(|&op| {
-                self.obank()
-                    .get(op)
-                    .is_some_and(|o| o.code() == OpCode::CPUI_MULTIEQUAL)
-            })
-            .collect();
-        for phi in phis {
-            let Some(v) = self.obank().get(phi).and_then(|o| o.get_in(slot)) else {
-                continue;
-            };
-            let cloned = self
-                .vbank()
-                .get(v)
-                .and_then(|vn| vn.get_def())
-                .and_then(|d| cloner.orig_to_clone.get(&d).copied())
-                .filter(|&c| self.obank().get(c).is_some_and(|o| !o.is_dead()))
-                .and_then(|c| self.obank().get(c).and_then(|o| o.get_out()));
-            self.op_insert_input(phi, cloned.unwrap_or(v), newslot)?;
+        for (&succ, &slot) in succs.iter().zip(slots.iter()) {
+            let newslot = self.bblocks_ref().block(succ).size_in() - 1;
+            let phis: Vec<OpId> = self
+                .bb_ops(succ)
+                .into_iter()
+                .filter(|&op| {
+                    self.obank()
+                        .get(op)
+                        .is_some_and(|o| o.code() == OpCode::CPUI_MULTIEQUAL)
+                })
+                .collect();
+            for phi in phis {
+                let Some(v) = self.obank().get(phi).and_then(|o| o.get_in(slot)) else {
+                    continue;
+                };
+                let cloned = self
+                    .vbank()
+                    .get(v)
+                    .and_then(|vn| vn.get_def())
+                    .and_then(|d| cloner.orig_to_clone.get(&d).copied())
+                    .filter(|&c| self.obank().get(c).is_some_and(|o| !o.is_dead()))
+                    .and_then(|c| self.obank().get(c).and_then(|o| o.get_out()));
+                self.op_insert_input(phi, cloned.unwrap_or(v), newslot)?;
+            }
         }
         for v in escaping {
-            self.merge_split_value(b, bprime, succ, v, &cloner)?;
+            self.merge_split_value(b, bprime, succs[0], v, &cloner)?;
         }
         self.structure_reset();
         Ok(bprime)
@@ -4849,6 +4901,9 @@ struct CloneBlockOps {
     /// gets its own copy of the call spec, and a cloned INDIRECT names the
     /// cloned call.
     calls: bool,
+    /// (unlace, `irreduciblesplit`) Clone a two-way CBRANCH as well; its condition is cloned like
+    /// any input, and the clone keeps the original out-edge order.
+    cbranch: bool,
 }
 
 impl CloneBlockOps {
@@ -4857,6 +4912,7 @@ impl CloneBlockOps {
             clone_list: Vec::new(),
             orig_to_clone: std::collections::BTreeMap::new(),
             calls: false,
+            cbranch: false,
         }
     }
 
@@ -4876,12 +4932,14 @@ impl CloneBlockOps {
             )
         };
         if is_branch {
-            if opc != OpCode::CPUI_BRANCH {
+            if opc == OpCode::CPUI_BRANCH {
+                return Ok(None);
+            }
+            if !(self.cbranch && opc == OpCode::CPUI_CBRANCH) {
                 return Err(UnlaceError::lowlevel(
                     "Cannot duplicate 2-way or n-way branch in nodeplit",
                 ));
             }
-            return Ok(None);
         }
         let dup = data.new_op(num_input, addr);
         data.op_set_opcode_code(dup, opc);
@@ -4915,6 +4973,14 @@ impl CloneBlockOps {
         // The addl-flag subset (funcdata_block.cc:987-988), plus the unlace_zextreturn and
         // unlace_exactfloat records.
         use crate::op::pcodeop_addlflags as opaf;
+        // (unlace, `irreduciblesplit`) The copy of a conditional branch keeps its sense flag, so
+        // its condition reads the same way as the original.
+        let fl = fl
+            | if self.cbranch {
+                op_flags & opf::boolean_flip
+            } else {
+                0
+            };
         let afl = op_addl
             & (opaf::special_prop
                 | opaf::special_print

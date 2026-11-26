@@ -375,7 +375,9 @@ printed (operator tokens and parentheses). That record is the expression tree th
 implicitly while it prints, so it has the precedence, the folding and the names of the text by
 construction. Nothing is recorded on any other render, and the text is still the plain render.
 
-**How it is built** (`ctreeexport/build.rs`). Expressions come from the record. Statements are read
+**How it is built** (`ctreeexport/build.rs`). Expressions come from the record, and a constant's
+type is the read-facing type of the Varnode it was printed for (spec 09, the exported tree).
+Statements are read
 from the token stream: keywords, braces, the statement marks the emitter brackets each statement
 with, the declaration and prototype flags, and each token's line and column. `PrintC` writes some
 operators outside the RPN driver (the `&&`/`||`/`!`/`?:`/`=` of the tree rewrites, the commas of a

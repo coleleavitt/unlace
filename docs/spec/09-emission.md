@@ -6392,6 +6392,17 @@ records anything, and `code` is byte-identical with and without the capture.
 typed nodes; the kinds and members are listed in `docs/cli.md`, "The JSON documents",
 `--ctree`):
 
+- A constant (`const` node) has a `type` when the printer printed it for a Varnode. The
+  constant branch of `push_vn_explicit_ir` records that Varnode and the op that reads it
+  (`rpn_constant`), and the type is `fd.vn_type_read_facing(vn, op)`: the type the printer chose
+  the spelling with, spelled as every other `type` in the tree (`declarator_parts`). A constant
+  the printer spells from a value alone has none: a subscript index, a call argument with no
+  Varnode behind it (the `0x10` of `memcpy(dst, src, 0x10)`), a `case` label, the `true` of a
+  `while`. On seven fixture binaries checked for this change (the sample and six x86-64 fixtures), 1,352 of
+  8,261 constants carry a type; 6,133 of the 6,909 untyped ones are subscript indexes, 764 call
+  arguments, 11 case labels and one `while` condition. The type does not change
+  the text: the reference printer prints the tree the same way with or without it.
+
 - An expression is the recorded node and the recorded nodes under it. A `HiddenFunction`
   token is its one operand. A binary operator applied again to one of its own operands
   with no parentheses between them (the operand is a recorded node with the same token

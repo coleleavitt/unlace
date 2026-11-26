@@ -1857,6 +1857,9 @@ pub struct PrintC {
     /// (unlace `ctreeexport`) The expression nodes the RPN driver prints, recorded during a
     /// tree-capture render (`doc_function_capture`); `None` on every other render.
     rpn_record: Option<ctreerecord::RpnRecord>,
+    /// The constant Varnode whose `push_vn_explicit_ir` is printing, so the atoms it pushes
+    /// can be recorded with it; `None` outside a constant.
+    rpn_constant: Option<crate::printlanguage::IrKey>,
     /// (unlace `noretfirst`) `CBRANCH` ops whose condition prints negated, for an `if` whose
     /// arms the tree swapped.
     flipped_branches: std::collections::BTreeSet<OpId>,
@@ -1926,6 +1929,7 @@ impl PrintC {
             label_names: std::collections::BTreeMap::new(),
             ctree: None,
             rpn_record: None,
+            rpn_constant: None,
             flipped_branches: std::collections::BTreeSet::new(),
         }
     }
@@ -14408,6 +14412,22 @@ impl PrintC {
     /// unlace `dat_<addr>` global -> `Space<hex>` fallback.
     #[doc(hidden)]
     pub fn push_vn_explicit_ir(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        vn: VarnodeId,
+        op: OpId,
+    ) {
+        let constant = fd
+            .vbank()
+            .get(vn)
+            .is_some_and(|v| v.is_constant() && !v.is_annotation());
+        let outer = std::mem::replace(&mut self.rpn_constant, constant.then(|| vn_key(vn)));
+        self.push_vn_explicit_body(fd, arch, vn, op);
+        self.rpn_constant = outer;
+    }
+
+    fn push_vn_explicit_body(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

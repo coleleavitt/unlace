@@ -256,3 +256,56 @@ fn a_language_file_over_c_changes_spellings_and_not_what_the_nodes_are() {
     };
     assert_eq!(member(kinds(&flavoured)), member(kinds(&plain)));
 }
+
+#[test]
+fn a_constant_carries_the_type_it_is_printed_with() {
+    let document = document(&["decompile", &sample(), "sum_to", "--json", "--ctree"]);
+    let root = &document["functions"][0]["ctree"]["root"];
+    let body = &root["children"][1];
+    let loop_ = body["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|statement| statement["kind"] == "for")
+        .expect("a for loop");
+    let [init, _, step, _] = loop_["children"].as_array().unwrap().as_slice() else {
+        panic!("{loop_}");
+    };
+    let start = &init["children"][1];
+    let one = &step["children"][1]["children"][1];
+    assert_eq!(
+        (&start["kind"], &start["text"], &start["type"]),
+        (&"const".into(), &"1".into(), &"int".into())
+    );
+    assert_eq!(
+        (&one["kind"], &one["text"], &one["type"]),
+        (&"const".into(), &"1".into(), &"int".into())
+    );
+    let tree = ctree_from_json(&document["functions"][0]["ctree"].to_string()).expect("a tree");
+    let mut zeros = Vec::new();
+    tree.root.walk(&mut |node| {
+        if node.kind == Kind::Const && node.text == "0" {
+            zeros.push(node.ty.clone());
+        }
+    });
+    assert_eq!(zeros, vec![Some("long".to_string())]);
+}
+
+#[test]
+fn a_string_literal_carries_its_pointer_type() {
+    let document = document(&["decompile", &sample(), "main", "--json", "--ctree"]);
+    let tree = ctree_from_json(&document["functions"][0]["ctree"].to_string()).expect("a tree");
+    let mut constants = Vec::new();
+    tree.root.walk(&mut |node| {
+        if node.kind == Kind::Const {
+            constants.push((node.text.clone(), node.ty.clone()));
+        }
+    });
+    assert_eq!(
+        constants,
+        vec![
+            ("3".to_string(), Some("int".to_string())),
+            ("\"%ld\\n\"".to_string(), Some("char *".to_string())),
+        ]
+    );
+}

@@ -530,6 +530,10 @@ pub trait Action {
                         return -1; // Indicate action breakpoint
                     }
                 }
+                if ctx.irverify && !ctx.irverify_failed && res >= 0 {
+                    ctx.irverify_failed =
+                        crate::substrate::irverify::report_first_break(data, self.get_name());
+                }
                 // (the apply body's C++ `break` only exits the switch)
             } else if st == statusflags::status_end {
                 return 0; // Rule applied, do not repeat until reset
@@ -614,6 +618,11 @@ pub struct ActionContext {
     /// (unlace `stackstoreguard`) Set when the drive will analyze the function
     /// again, so the containers stop scheduling work as on an expired deadline.
     pub abandon: bool,
+    /// (unlace `irverify`) Check the IR after each pass that made a change, reporting the first
+    /// pass that breaks an invariant ([`crate::substrate::irverify::report_first_break`]).
+    pub irverify: bool,
+    /// (unlace `irverify`) Set once a pass has been reported; later passes go unchecked.
+    pub irverify_failed: bool,
     /// (unlace `earlyrestart`) Set by the outer driver when it will re-follow
     /// flow for a restart: a pass whose heritage bumped a space's dead-code
     /// delay stops at once instead of finishing an analysis it throws away.

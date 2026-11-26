@@ -3723,8 +3723,14 @@ The structural tier of the IR verifier is `crates/unlace-middle/src/substrate/ir
 (verify_funcdata)`. It checks that the op, varnode and basic-block links agree: each output's
 definition is its op, each input is among its varnode's descendants, each descendant reads the
 varnode, and each basic block's op list is a chain whose length and tail match the block record.
-It makes no dominance or definedness claim. The scheduler does not call it yet; it is a tool for
-locating the pass that broke a link.
+It makes no dominance or definedness claim. Once heritage has run, `verify_dataflow` adds the dataflow
+tier: every input of an op is a constant, an input, or defined by an op that dominates the reader (or comes
+earlier in the same block), and a MULTIEQUAL input's definition dominates the predecessor on its edge. The
+dominators are recomputed from the current edges, and only blocks reachable from the entry are checked.
+
+The scheduler calls `verify_pass_output` after each pass that made a change, but only under the `irverify`
+option (off by default; `ActionContext::irverify`, set in `run_pipeline`). The first failure becomes one header
+warning naming the pass, and later passes go unchecked. The option changes no printed statement.
 
 ## 0.4 The knowledge plane (P0)
 

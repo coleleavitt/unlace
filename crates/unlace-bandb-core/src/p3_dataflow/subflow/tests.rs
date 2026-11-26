@@ -1098,6 +1098,30 @@ fn w10_splitdt_generate_constants_zext_and_oversize_bail() {
     assert!(inv.is_empty(), "oversize piece must clear the accumulator");
 }
 
+#[test]
+fn generate_constants_rejects_pieces_past_the_full_size() {
+    let mut fd = build_fd();
+    let mut sd = SplitDatatype::new(3);
+    let cst = mk_const(&mut fd, 4, 0x1122_3344);
+    let zext = mk_op(&mut fd, 0x80, 1, OpCode::CPUI_INT_ZEXT);
+    wire_in(&mut fd, zext, cst, 0);
+    let zout = mk_reg(&mut fd, 0x50, 8);
+    let zout = wire_out(&mut fd, zext, zout);
+    let sink = mk_op(&mut fd, 0x100, 1, OpCode::CPUI_COPY);
+    wire_in(&mut fd, sink, zout, 0);
+    let sinkout = mk_reg(&mut fd, 0x88, 8);
+    let _ = wire_out(&mut fd, sink, sinkout);
+    let int4 = Rc::new(Datatype::new(4, type_metatype::TYPE_INT));
+    sd.data_type_pieces.push(Component {
+        in_type: Rc::clone(&int4),
+        out_type: Rc::clone(&int4),
+        offset: 6,
+    });
+    let mut inv: Vec<VarnodeId> = Vec::new();
+    assert!(!sd.generate_constants(&mut fd, zout, &mut inv).unwrap());
+    assert!(inv.is_empty());
+}
+
 fn pieces_with_byte_oracle(bytes: &[u8], big_endian: bool) -> (SplitDatatype, Vec<u64>) {
     let mut memory = bytes.to_vec();
     if big_endian {

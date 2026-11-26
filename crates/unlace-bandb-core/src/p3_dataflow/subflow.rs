@@ -4969,6 +4969,10 @@ impl SplitDatatype {
             } else {
                 self.data_type_pieces[i].offset
             };
+            if sa < 0 || sa + dt.get_size() > full_size {
+                in_varnodes.clear();
+                return Ok(false);
+            }
             let val = crate::constantbytes::pair(hi, lo, losize, sa, dt.get_size());
             let out_vn = data.new_constant(dt.get_size(), val);
             in_varnodes.push(out_vn);

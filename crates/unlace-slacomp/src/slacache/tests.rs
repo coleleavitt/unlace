@@ -52,6 +52,55 @@ fn a_compiled_image_is_reused_while_its_sources_are_unchanged() {
     let _ = fs::remove_dir_all(&cache);
 }
 
+fn element_ids(bytes: &[u8]) -> Vec<u32> {
+    use unlace_base::marshal::Decoder;
+    let manager = unlace_base::space::AddrSpaceManager::new();
+    let mut decoder = unlace_sleigh::slaformat::FormatDecode::new(&manager);
+    decoder.ingest_stream(bytes).expect("ingest");
+    let mut ids = Vec::new();
+    while let Ok(id) = decoder.peek_element()
+        && id != 0
+    {
+        ids.push(id);
+        decoder.open_element().expect("open");
+        decoder.close_element_skipping(id).expect("skip");
+    }
+    ids
+}
+
+#[test]
+fn the_first_read_of_a_cached_image_leaves_an_uncompressed_copy() {
+    let spec = repo_specs().join("Toy/data/languages/toy_builder_le.slaspec");
+    let sla = compile_cached(&spec).expect("compile into the cache");
+    let raw = sla.with_extension("slr");
+    let _ = fs::remove_file(&raw);
+    let stale = raw.with_file_name("toy_builder_le-stale.slr");
+    fs::write(&stale, RAW_SLA_HEADER).expect("a copy under an earlier key");
+    let compressed = fs::read(&sla).expect("read .sla");
+
+    let image = read_image(&sla).expect("first read");
+    assert_eq!(image, raw_sla_image(&compressed).expect("inflate"));
+    assert_eq!(fs::read(&raw).expect("the copy"), image);
+    assert!(!stale.exists(), "the earlier key's copy is removed");
+    assert_eq!(read_image(&sla).expect("second read"), image);
+    assert_eq!(element_ids(&image), element_ids(&compressed));
+}
+
+#[test]
+fn an_image_outside_the_cache_is_read_as_it_is() {
+    let cache = std::env::temp_dir().join(format!("unlace-sla-raw-test-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&cache);
+    let spec = repo_specs().join("Toy/data/languages/toy_builder_le.slaspec");
+    let sla = compile_cached_in(&cache, &spec).expect("compile");
+    let compressed = fs::read(&sla).expect("read .sla");
+    assert_eq!(read_image(&sla).expect("read"), compressed);
+    assert!(
+        !sla.with_extension("slr").exists(),
+        "no copy beside a prebuilt image"
+    );
+    let _ = fs::remove_dir_all(&cache);
+}
+
 #[test]
 fn a_symlinked_or_stale_sla_is_not_used_as_prebuilt() {
     let dir = std::env::temp_dir().join(format!("unlace-sla-prebuilt-{}", std::process::id()));

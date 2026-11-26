@@ -59,8 +59,14 @@ pub fn inflate_sla(s: &[u8]) -> UnlaceResult<Vec<u8>> {
     if !ok {
         return Err(UnlaceError::lowlevel("Missing SLA format header"));
     }
-    let mut decompressor = Decompress::new();
     let mut out: Vec<u8> = Vec::with_capacity(compressed.len().saturating_mul(8));
+    inflate_into(compressed, &mut out)?;
+    Ok(out)
+}
+
+/// Inflate the zlib stream `compressed` onto the end of `out`, checking the zlib checksum.
+fn inflate_into(compressed: &[u8], out: &mut Vec<u8>) -> UnlaceResult<()> {
+    let mut decompressor = Decompress::new();
     // The C++ `Decompress` keeps a `z_stream next_in` pointer INTO the
     // caller's buffer, so unconsumed input survives across `inflate`
     // calls.  The unlace `Decompress::input` instead REPLACES its internal
@@ -84,6 +90,24 @@ pub fn inflate_sla(s: &[u8]) -> UnlaceResult<Vec<u8>> {
             return Err(UnlaceError::lowlevel("Truncated SLA compressed stream"));
         }
     }
+    Ok(())
+}
+
+/// (unlace) The header of an uncompressed `.sla` image: `slr` and the format version, followed
+/// by the packed element stream itself. The `.sla` cache (`unlace_slacomp::slacache`) keeps one
+/// beside each compressed image it has loaded, so later loads skip the inflate;
+/// [`FormatDecode::ingest_stream`] takes either form.
+pub const RAW_SLA_HEADER: [u8; 4] = [b's', b'l', b'r', FORMAT_VERSION as u8];
+
+/// (unlace) The uncompressed image of a compressed `.sla`: [`RAW_SLA_HEADER`] and the inflated
+/// element stream.
+pub fn raw_sla_image(s: &[u8]) -> UnlaceResult<Vec<u8>> {
+    let (ok, compressed) = is_sla_format(s);
+    if !ok {
+        return Err(UnlaceError::lowlevel("Missing SLA format header"));
+    }
+    let mut out = RAW_SLA_HEADER.to_vec();
+    inflate_into(compressed, &mut out)?;
     Ok(out)
 }
 
@@ -171,9 +195,13 @@ impl<'a> FormatDecode<'a> {
     /// PackedDecode chunk buffers; the Rust decompresses into one `Vec<u8>`
     /// and transfers it with `ingest_owned`, which copies only the trailing
     /// partial chunk so `endIngest` has one to pad — every packed byte has its
-    /// high bit set, so the NUL-terminator scan never trips.
+    /// high bit set, so the NUL-terminator scan never trips.  (unlace) An
+    /// uncompressed image ([`RAW_SLA_HEADER`]) is taken as it is.
     pub fn ingest_stream(&mut self, s: &[u8]) -> UnlaceResult<()> {
-        let out = inflate_sla(s)?;
+        let out = match s.strip_prefix(&RAW_SLA_HEADER) {
+            Some(packed) => packed.to_vec(),
+            None => inflate_sla(s)?,
+        };
         self.inner.ingest_owned(out)
     }
 

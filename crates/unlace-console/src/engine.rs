@@ -4835,22 +4835,18 @@ fn build_registry() -> IdRegistry {
 /// root wins (mirroring the C++ `scanForSleighDirectories` over the recorded
 /// roots).  A root may also be a tree held in memory
 /// ([`unlace_decomp::memoryspecs::MemorySpecs`]).
-fn scan_language_database(
-    spec_roots: &[impl IntoSpecRoot],
-    registry: &IdRegistry,
-) -> UnlaceResult<LanguageDatabase> {
+fn scan_language_database(spec_roots: &[impl IntoSpecRoot]) -> LanguageDatabase {
     let mut db = LanguageDatabase::new();
     for root in spec_roots {
         db.add_spec_root(&root.to_spec_root());
     }
-    db.get_descriptions(registry)?;
-    Ok(db)
+    db
 }
 
 /// Scan `spec_roots` into a [`LanguageDatabase`] once, for [`Bootstrap`]s to
 /// share. A bootstrap over spec roots scans them again at each load: it lists
-/// their `.ldefs` and parses every one, whichever language the image needs. A
-/// bootstrap over the database builds what the same bootstrap over the roots
+/// their `.ldefs` and parses the one that defines the language the image needs.
+/// A bootstrap over the database builds what the same bootstrap over the roots
 /// builds.
 ///
 /// A bootstrap only reads the database, and the database is `Send + Sync`, so
@@ -4859,7 +4855,22 @@ fn scan_language_database(
 /// `.pspec` and `.cspec` contents, which each bootstrap reads and decodes for
 /// its own language.
 pub fn language_database(spec_roots: &[impl IntoSpecRoot]) -> UnlaceResult<LanguageDatabase> {
-    scan_language_database(spec_roots, &build_registry())
+    let mut db = scan_language_database(spec_roots);
+    db.get_descriptions(&build_registry())?;
+    Ok(db)
+}
+
+/// Read the `.ldefs` of language `id` into `db` unless it holds every language already (a
+/// shared database does; one scanned for this load reads only what the load needs).
+fn load_language(
+    db: &mut Cow<'_, LanguageDatabase>,
+    id: &str,
+    registry: &IdRegistry,
+) -> UnlaceResult<()> {
+    if db.is_complete() {
+        return Ok(());
+    }
+    db.to_mut().load_language(id, registry)
 }
 
 pub(crate) use languages::Languages;
@@ -4872,30 +4883,30 @@ mod languages {
     /// a private module, so [`crate::engine::LanguageSource`] can name it as a
     /// supertrait that callers cannot implement.
     pub trait Languages {
-        fn database(&self, registry: &IdRegistry) -> UnlaceResult<Cow<'_, LanguageDatabase>>;
+        fn database(&self) -> Cow<'_, LanguageDatabase>;
     }
 
     impl<R: IntoSpecRoot> Languages for [R] {
-        fn database(&self, registry: &IdRegistry) -> UnlaceResult<Cow<'_, LanguageDatabase>> {
-            scan_language_database(self, registry).map(Cow::Owned)
+        fn database(&self) -> Cow<'_, LanguageDatabase> {
+            Cow::Owned(scan_language_database(self))
         }
     }
 
     impl<R: IntoSpecRoot, const N: usize> Languages for [R; N] {
-        fn database(&self, registry: &IdRegistry) -> UnlaceResult<Cow<'_, LanguageDatabase>> {
-            self.as_slice().database(registry)
+        fn database(&self) -> Cow<'_, LanguageDatabase> {
+            self.as_slice().database()
         }
     }
 
     impl<R: IntoSpecRoot> Languages for Vec<R> {
-        fn database(&self, registry: &IdRegistry) -> UnlaceResult<Cow<'_, LanguageDatabase>> {
-            self.as_slice().database(registry)
+        fn database(&self) -> Cow<'_, LanguageDatabase> {
+            self.as_slice().database()
         }
     }
 
     impl Languages for LanguageDatabase {
-        fn database(&self, _registry: &IdRegistry) -> UnlaceResult<Cow<'_, LanguageDatabase>> {
-            Ok(Cow::Borrowed(self))
+        fn database(&self) -> Cow<'_, LanguageDatabase> {
+            Cow::Borrowed(self)
         }
     }
 }
@@ -4934,15 +4945,15 @@ fn attr(el: &Element, name: &str) -> Option<String> {
 /// opens the `<binaryimage>`; the ELF path attaches the default code space).
 fn build_engine_and_init(
     sleigh: &mut SleighArchitecture,
-    db: &LanguageDatabase,
+    db: Cow<'_, LanguageDatabase>,
 ) -> UnlaceResult<()> {
     // buildSpecFile -> the resolved .sla; buildTranslator (decode the .sla).
-    let specs = sleigh.build_spec_file(db)?;
+    let specs = sleigh.build_spec_file(&db)?;
     let resolved_sla = specs
         .slafile
         .ok_or_else(|| UnlaceError::lowlevel("build_spec_file resolved no .sla"))?;
     let sla = db
-        .read_spec(&resolved_sla)
+        .read_sla_image(&resolved_sla)
         .map_err(|e| UnlaceError::lowlevel(format!("read sla {resolved_sla}: {e}")))?;
 
     // The loader is handed to the translator as a dummy first; the real opened
@@ -4965,10 +4976,6 @@ fn build_engine_and_init(
         // engine elsewhere means applying them there too
         // (`decodekit::EngineRecipe`).
         arch.set_decode_truncations(db.truncations(langindex));
-        unlace_decomp::langfamily::set_language_families(
-            arch,
-            unlace_decomp::langfamily::families(db),
-        );
     }
 
     // Hand the resolved compiler-spec (`.cspec`) XML to the architecture so
@@ -5003,6 +5010,15 @@ fn build_engine_and_init(
                 .set_pspec_xml(pspec.into_owned());
         }
     }
+
+    // (unlace) The `.ldefs` languages a FID database may be built for, kept with the
+    // architecture; a database scanned for this load reads another language on demand.
+    unlace_decomp::langfamily::set_language_families(
+        sleigh
+            .base_mut()
+            .ok_or_else(|| UnlaceError::lowlevel("no Architecture base after build_translator"))?,
+        unlace_decomp::langfamily::LanguageFamilies::new(db),
+    );
 
     // Install the register-name lookup on the engine's manager (the C++
     // `AddrSpace::trans` back-pointer) while the engine is still the sole owner
@@ -5060,9 +5076,11 @@ pub(crate) fn bootstrap_xml_image(
     arch.build_loader(Rc::clone(&binaryimage))?;
 
     // collectSpecFiles + resolveArchitecture (language-id normalization/index).
-    let db = languages.database(&registry)?;
+    let mut db = languages.database();
     arch.sleigh_mut().set_archid(arch_id);
-    arch.sleigh_mut().resolve_architecture(&db, arch_id)?;
+    let baseid = arch.sleigh_mut().resolve_language_id(arch_id)?;
+    load_language(&mut db, &baseid, &registry)?;
+    arch.sleigh_mut().select_language(&db, &baseid)?;
     if arch.sleigh().language_index() < 0 {
         return Err(UnlaceError::lowlevel(format!(
             "No sleigh specification for architecture {arch_id}"
@@ -5071,7 +5089,7 @@ pub(crate) fn bootstrap_xml_image(
 
     // buildSpecFile -> buildTranslator -> the Architecture::init tail (shared
     // by both the XML and ELF frontends).
-    build_engine_and_init(arch.sleigh_mut(), &db)?;
+    build_engine_and_init(arch.sleigh_mut(), db)?;
 
     // postSpecFile: open the corpus image against the engine spaces.
     let manager_ptr: *const AddrSpaceManager = arch.sleigh().base().unwrap().manage();
@@ -5205,25 +5223,24 @@ fn build_sleigh_for_loader(
     arch_type: &str,
     fallback_arch_id: Option<&[u8]>,
 ) -> UnlaceResult<SleighArchitecture> {
-    let db = languages.database(registry)?;
+    let mut db = languages.database();
     let mut sleigh = SleighArchitecture::new(path, target);
-    sleigh.resolve_architecture(&db, arch_type)?;
-    if sleigh.language_index() < 0 && target.is_empty() {
-        if let Some(fallback) = fallback_arch_id {
-            let fallback = String::from_utf8_lossy(fallback).into_owned();
-            let mut retry = SleighArchitecture::new(path, "");
-            retry.resolve_architecture(&db, &fallback)?;
-            if retry.language_index() >= 0 {
-                sleigh = retry;
-            }
+    let baseid = sleigh.resolve_language_id(arch_type)?;
+    load_language(&mut db, &baseid, registry)?;
+    if let Err(primary) = sleigh.select_language(&db, &baseid) {
+        let Some(fallback) = fallback_arch_id.filter(|_| target.is_empty()) else {
+            return Err(primary);
+        };
+        let fallback = String::from_utf8_lossy(fallback).into_owned();
+        let mut retry = SleighArchitecture::new(path, "");
+        let baseid = retry.resolve_language_id(&fallback)?;
+        load_language(&mut db, &baseid, registry)?;
+        if retry.select_language(&db, &baseid).is_err() {
+            return Err(primary);
         }
+        sleigh = retry;
     }
-    if sleigh.language_index() < 0 {
-        return Err(UnlaceError::lowlevel(format!(
-            "No sleigh specification for architecture {arch_type}"
-        )));
-    }
-    build_engine_and_init(&mut sleigh, &db)?;
+    build_engine_and_init(&mut sleigh, db)?;
     Ok(sleigh)
 }
 
@@ -5454,14 +5471,16 @@ pub(crate) fn bootstrap_raw_image(
     let registry = build_registry();
     let capability = RawBinaryArchitectureCapability::new();
     let mut raw = capability.build_architecture(path, target);
-    let db = languages.database(&registry)?;
-    raw.resolve_architecture(&db)?;
+    let mut db = languages.database();
+    let baseid = raw.resolve_language_id()?;
+    load_language(&mut db, &baseid, &registry)?;
+    raw.sleigh_mut().select_language(&db, &baseid)?;
     if raw.sleigh().language_index() < 0 {
         return Err(UnlaceError::lowlevel(format!(
             "No sleigh specification for architecture {target}"
         )));
     }
-    build_engine_and_init(raw.sleigh_mut(), &db)?;
+    build_engine_and_init(raw.sleigh_mut(), db)?;
 
     let code_space = default_code_space(raw.sleigh())?;
     let word_size = u64::from(code_space.get_word_size());

@@ -283,6 +283,97 @@ fn set_archid_overrides_resolution_source() {
 }
 
 // ---------------------------------------------------------------------------
+// load_language: one .ldefs at a time
+// ---------------------------------------------------------------------------
+
+fn ldefs(id: &str, processor: &str) -> Vec<u8> {
+    format!(
+        r#"<language_definitions>
+  <language processor="{processor}" endian="little" size="32" variant="default"
+            version="1" slafile="{processor}.sla" processorspec="{processor}.pspec"
+            id="{id}">
+    <compiler name="default" spec="{processor}.cspec" id="default"/>
+  </language>
+</language_definitions>"#
+    )
+    .into_bytes()
+}
+
+/// Three languages in three files; the `ARM` one is named for its processor, the `mn10300` one
+/// is not.
+fn mounted_db() -> LanguageDatabase {
+    let tree = MemorySpecs::from_files([
+        (
+            "Ghidra/Processors/ARM/data/languages/ARM.ldefs",
+            ldefs("ARM:LE:32:v8", "ARM"),
+        ),
+        (
+            "Ghidra/Processors/MN103/data/languages/mn103.ldefs",
+            ldefs("mn10300:LE:32:default", "mn10300"),
+        ),
+        (
+            "Ghidra/Processors/x86/data/languages/x86.ldefs",
+            ldefs("x86:LE:32:default", "x86"),
+        ),
+    ]);
+    let mut db = LanguageDatabase::new();
+    db.add_spec_root(&SpecRoot::Memory(tree));
+    db
+}
+
+#[test]
+fn load_language_reads_the_file_named_for_the_processor_first() {
+    let mut db = mounted_db();
+    assert!(!db.is_complete());
+    db.load_language("x86:LE:32:default", &registry()).unwrap();
+    let ids: Vec<&str> = db.descriptions().iter().map(|d| d.get_id()).collect();
+    assert_eq!(ids, ["x86:LE:32:default"]);
+    assert!(!db.is_complete());
+
+    let mut sa = SleighArchitecture::new("file", "x86:LE:32:default:default");
+    sa.resolve_architecture(&db, "").unwrap();
+    assert_eq!(sa.language_index(), 0);
+
+    db.get_descriptions(&registry()).unwrap();
+    let ids: Vec<&str> = db.descriptions().iter().map(|d| d.get_id()).collect();
+    assert_eq!(
+        ids,
+        ["x86:LE:32:default", "ARM:LE:32:v8", "mn10300:LE:32:default"]
+    );
+    assert!(db.is_complete());
+    assert_eq!(sa.language_index(), 0, "an index stays valid");
+}
+
+#[test]
+fn load_language_falls_back_to_every_file_in_order() {
+    let mut db = mounted_db();
+    db.load_language("mn10300:LE:32:default", &registry())
+        .unwrap();
+    let ids: Vec<&str> = db.descriptions().iter().map(|d| d.get_id()).collect();
+    assert_eq!(ids, ["ARM:LE:32:v8", "mn10300:LE:32:default"]);
+
+    let mut db = mounted_db();
+    db.load_language("PowerPC:BE:32:default", &registry())
+        .unwrap();
+    assert_eq!(db.descriptions().len(), 3);
+    assert!(db.is_complete());
+    let mut sa = SleighArchitecture::new("file", "PowerPC:BE:32:default:default");
+    assert!(sa.resolve_architecture(&db, "").is_err());
+}
+
+#[test]
+fn get_descriptions_reads_every_file_once() {
+    let mut db = mounted_db();
+    db.get_descriptions(&registry()).unwrap();
+    db.get_descriptions(&registry()).unwrap();
+    let ids: Vec<&str> = db.descriptions().iter().map(|d| d.get_id()).collect();
+    assert_eq!(
+        ids,
+        ["ARM:LE:32:v8", "mn10300:LE:32:default", "x86:LE:32:default"]
+    );
+}
+
+// ---------------------------------------------------------------------------
 // header encode/restore (sleigh_arch.cc:464-477)
 // ---------------------------------------------------------------------------
 

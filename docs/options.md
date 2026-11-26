@@ -792,10 +792,10 @@ Three tiers:
 | *p = v1; after a __divdi3 call where v1 is never written | [`libgccsigs`](#libgccsigs----on--off-default-off) |
 | a PIE or shared object calls __stack_chk_fail_local with an argument (__stack_chk_fail_local(a0 * 3)) | [`libgccsigs`](#libgccsigs----on--off-default-off) |
 | a function that returns a value before its stack-protector check is void | [`libgccsigs`](#libgccsigs----on--off-default-off) |
-| unlace xrefs --to a global finds 0 references on ARM code that builds addresses with movw/movt | [`movwpairs`](#movwpairs----off--access--on-default-off) |
-| a stripped Cortex-M image misses a function only passed by address (movw r0,#lo; movt r0,#hi) | [`movwpairs`](#movwpairs----off--access--on-default-off) |
-| a string passed to a function in ARMv7 code has no data symbol while the decompiled C prints its address | [`movwpairs`](#movwpairs----off--access--on-default-off) |
-| AArch64 movz/movk-built addresses (-mcmodel=large) reference nothing in the listing | [`movwpairs`](#movwpairs----off--access--on-default-off) |
+| unlace xrefs --to a global finds 0 references on ARM code that builds addresses with movw/movt | [`movwpairs`](#movwpairs----off--access--on-default-on) |
+| a stripped Cortex-M image misses a function only passed by address (movw r0,#lo; movt r0,#hi) | [`movwpairs`](#movwpairs----off--access--on-default-on) |
+| a string passed to a function in ARMv7 code has no data symbol while the decompiled C prints its address | [`movwpairs`](#movwpairs----off--access--on-default-on) |
+| AArch64 movz/movk-built addresses (-mcmodel=large) reference nothing in the listing | [`movwpairs`](#movwpairs----off--access--on-default-on) |
 | string constants render as raw addresses or unnamed data instead of quoted char[N] literals | [`strings`](#strings----on--off-default-on) |
 | no data symbols at ascii runs in rodata | [`strings`](#strings----on--off-default-on) |
 | four-character commands such as quit, show, bind, or fork render as hexadecimal addresses | [`strings`](#strings----on--off-default-on) |
@@ -3329,11 +3329,11 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/external-refinement · unlace · correctness-fix · pr-1252-libgcc-divdi3
 - **Example:** `option libgccsigs on`
 
-### `movwpairs` -- off | access | on, default `off`
+### `movwpairs` -- off | access | on, default `on`
 
 - **Symptoms:** unlace xrefs --to a global finds 0 references on ARM code that builds addresses with movw/movt; a stripped Cortex-M image misses a function only passed by address (movw r0,#lo; movt r0,#hi); a string passed to a function in ARMv7 code has no data symbol while the decompiled C prints its address; AArch64 movz/movk-built addresses (-mcmodel=large) reference nothing in the listing.
 - **What it does:** Read an address that an ARM `movw`/`movt` pair (A32 or T32) or an AArch64 `movz`/`movk` pair builds in 16-bit halves in the discovery Listing (`regcarry`). The decompiler folds such a pair, but the Listing reads references one instruction at a time and carries a register's constant only when it could be an address on its own (at least 4096), so the low half (`movw r0,#0x1cc`, most often below that floor) started nothing: a global a function loads or stores through the completed register, a string it passes and a function pointer it registers had no cross-reference, the address-taken function was never discovered, and the data there was not typed. Both halves are recognised by their encodings (A32/T32 `movw` and `movt`, AArch64 `movz` with no shift and `movk` with one) and only on a run nothing else enters, as every carried value is. `access` carries the low half to the `movt`/`movk` that completes it: a load or store through the completed register is then a read or a write of the address. `on` also files the completed value as a reference where it lands in a mapped section (IDA's 'valid addresses only' for `MOVT` pairs), so a string, a table or a Thumb function pointer built this way is named and typed. Little-endian code only.
-- **When to flip:** Off by default. Turn access on for ARMv7/ARMv7-M or AArch64 code built with movw/movt or movz/movk addresses (clang and GCC at -O2 for Cortex-M, -mexecute-only, -mcmodel=large): `unlace xrefs --to <global>` finds no reference to a global the code reads and writes, or a stripped image misses a callback only registered by address. Turn on to also name what the pair points at (a string argument, a function pointer); a 32-bit number a pair builds that happens to land in a mapped section then prints as that address.
+- **When to flip:** On by default: an address a movw/movt or movz/movk pair builds is a reference in the Listing, read and written through like any carried address, and a value the completing instruction builds that lands in a mapped section is named. Set access for the carry without the data reference, or off for the one-instruction carry. A 32-bit number a pair builds that lands in a mapped section then prints as that address.
 - **Where / provenance:** P1/code-data-partition · unlace · analysis-enablement · ida95-gap-movt-pairs
 - **Example:** `option movwpairs on`
 

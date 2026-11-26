@@ -410,11 +410,14 @@ pub fn print_statement<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &No
         }
         Kind::Switch => {
             w.keyword(Keyword::Switch);
-            w.push("(");
+            let parenthesised = w.parenthesised_tests();
+            w.push(if parenthesised { "(" } else { " " });
             match node.children.as_slice() {
                 [value, body] => {
                     p.expr(w, value);
-                    w.push(")");
+                    if parenthesised {
+                        w.push(")");
+                    }
                     open_brace(w, w.style.brace_switch, indent);
                     let place = Place {
                         indent: indent + 2 * step,
@@ -428,7 +431,10 @@ pub fn print_statement<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &No
                 }
                 [value] => {
                     p.expr(w, value);
-                    w.push(");");
+                    if parenthesised {
+                        w.push(")");
+                    }
+                    w.terminator();
                 }
                 _ => {}
             }

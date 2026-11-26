@@ -1050,17 +1050,14 @@ impl<'a> Builder<'a> {
             ));
         }
         if self.kw(i, Keyword::Switch) {
-            let close = self
-                .close_of(i + 1, end, "(", ")")
-                .filter(|_| self.sym(i + 1, "("))?;
-            let value = self.expr(i + 2, close);
-            if self.sym(close + 1, ";") {
+            let (value, after) = self.test(i, end)?;
+            if self.sym(after, ";") {
                 return Some((
                     Node {
                         children: vec![value],
-                        ..self.node(Kind::Switch, i, close + 2)
+                        ..self.node(Kind::Switch, i, after + 1)
                     },
-                    close + 2,
+                    after + 1,
                 ));
             }
             let step = self.style.indent;
@@ -1068,7 +1065,7 @@ impl<'a> Builder<'a> {
                 indent: indent + 2 * step,
                 blank: indent + step,
             };
-            let (body, next) = self.braces(close + 1, end, inside)?;
+            let (body, next) = self.braces(after, end, inside)?;
             return Some((
                 Node {
                     children: vec![value, body],
@@ -1077,6 +1074,7 @@ impl<'a> Builder<'a> {
                 next,
             ));
         }
+
         if self.word(i, "try") {
             let (body, at) = self.block(i + 1, end, indent)?;
             let header = at < end

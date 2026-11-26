@@ -14206,8 +14206,10 @@ completing instruction where it lands in a mapped section (IDA's "valid addresse
 only" reading of `MOVT` pairs), which is a judgement: a number built the same way
 that lands in a section names it. Everything else of the carry applies unchanged
 (eight hops, no joins along the run, a `movk` that only re-inserts zero upper
-halves changes nothing), and big-endian code is not read. `off` (the default) is
-the behaviour above.
+halves changes nothing), and big-endian code is not read. `on` is the default;
+`off` is the behaviour above. GCC for Cortex-M builds addresses from literal pools, so the
+default changes the Listing of those images not at all; clang's `movw`/`movt` pairs are the
+case it changes.
 
 A constant subtracted from a carried address biases that address rather than
 naming another one. Swift builds a string literal's object as `adrp/add` of the

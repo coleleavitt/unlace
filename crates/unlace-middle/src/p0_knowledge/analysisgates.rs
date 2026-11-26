@@ -1334,7 +1334,7 @@ impl crate::optionset::UnlaceOption for MovwPairs {
     }
 
     fn shipped() -> Self {
-        MovwPairs::Off
+        MovwPairs::On
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {

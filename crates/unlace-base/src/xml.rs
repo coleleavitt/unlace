@@ -64,7 +64,6 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use crate::error::{UnlaceError, UnlaceResult};
-use crate::types::Wrap;
 
 // ---------------------------------------------------------------------------
 // Token codes (XmlScan::token, xml.y:45-53). Values <= 255 are byte values.
@@ -933,26 +932,40 @@ fn convert_entity_ref(r: &[u8]) -> i32 {
     }
 }
 
-/// Convert an XML character reference to its equivalent character
-/// (`convertCharRef`).  The C++ accumulates into an `int4` with no overflow
-/// guard; transcribed with wrapping ops per ADR 0003.
+/// Convert an XML character reference to its character value
+/// (`convertCharRef`).  Returns -1 for a non-digit, a value past U+10FFFF, or a
+/// code point XML does not allow as a character.
 fn convert_char_ref(r: &[u8]) -> i32 {
-    let (start, mult): (usize, i32) = if r[0] == b'x' { (1, 16) } else { (0, 10) };
-    let mut val: i32 = 0;
-    for &b in &r[start..] {
-        // C++ reads the (signed) char; the scanner restricts these bytes to
-        // ASCII [0-9A-Fa-f] so sign extension cannot trigger here.
-        let c = i32::from(b as i8);
-        let cur = if c <= ch(b'9') {
-            c - ch(b'0')
-        } else if c <= ch(b'F') {
-            10 + c - ch(b'A')
-        } else {
-            10 + c - ch(b'a')
-        };
-        val = val.wmul(mult).wadd(cur);
+    const MAX_CODE_POINT: u32 = 0x10FFFF;
+    let (start, base): (usize, u32) = if r.first() == Some(&b'x') {
+        (1, 16)
+    } else {
+        (0, 10)
+    };
+    if start == r.len() {
+        return -1;
     }
-    val
+    let mut val: u32 = 0;
+    for &b in &r[start..] {
+        let Some(digit) = (b as char).to_digit(base) else {
+            return -1;
+        };
+        if val > (MAX_CODE_POINT - digit) / base {
+            return -1;
+        }
+        val = val * base + digit;
+    }
+    if !is_xml_char(val) {
+        return -1;
+    }
+    i32::try_from(val).unwrap_or(-1)
+}
+
+fn is_xml_char(val: u32) -> bool {
+    matches!(
+        val,
+        0x9 | 0xA | 0xD | 0x20..=0xD7FF | 0xE000..=0xFFFD | 0x10000..=0x10FFFF
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -1230,9 +1243,11 @@ impl Parser<'_, '_> {
             }
             // CharRef: charrefstart CHARREF ';' (xml.y:218)
             self.expect_char(b';')?;
-            Ok(convert_char_ref(
-                &lv2.expect("scanner invariant: CHARREF carries lvalue"),
-            ))
+            let value = convert_char_ref(&lv2.expect("scanner invariant: CHARREF carries lvalue"));
+            if value < 0 {
+                return Err(SYNTAX_ERROR.to_string());
+            }
+            Ok(value)
         } else {
             Err(SYNTAX_ERROR.to_string())
         }

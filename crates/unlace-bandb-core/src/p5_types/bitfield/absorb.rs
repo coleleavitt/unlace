@@ -409,6 +409,9 @@ fn pull_absorb_and(data: &mut Funcdata, and_op: OpId, pull_op: OpId) -> int4 {
         Some(v) => vn_offset(data, v) as int4,
         None => return 0,
     };
+    if bitsize <= 0 || bitsize > (std::mem::size_of::<uintb>() * 8) as int4 {
+        return 0;
+    }
     let mut match_val: uintb = 1;
     match_val <<= bitsize - 1; // Mask for sign-bit
     if match_val != vn_offset(data, mask_vn) {

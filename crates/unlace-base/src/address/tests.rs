@@ -432,3 +432,16 @@ fn test_range_last_addr_open() {
     // it still sorts after every real address
     assert!(Address::new(Rc::clone(&io), 0xffff) < open);
 }
+
+#[test]
+fn calc_int_min_clamps_to_the_word_size() {
+    assert_eq!(calc_int_min(1), 0x80);
+    assert_eq!(calc_int_min(9), 1 << 63);
+    assert_eq!(calc_int_min(0), 0);
+}
+
+#[test]
+fn extending_from_a_negative_bit_gives_zero() {
+    assert_eq!(sign_extend(5, -1), 0);
+    assert_eq!(zero_extend(5, -1), 0);
+}

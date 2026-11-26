@@ -4969,6 +4969,10 @@ impl SplitDatatype {
             } else {
                 self.data_type_pieces[i].offset
             };
+            if sa < 0 || sa + dt.get_size() > full_size {
+                in_varnodes.clear();
+                return Ok(false);
+            }
             let val = crate::constantbytes::pair(hi, lo, losize, sa, dt.get_size());
             let out_vn = data.new_constant(dt.get_size(), val);
             in_varnodes.push(out_vn);
@@ -5562,7 +5566,7 @@ impl SplitDatatype {
             data.op_destroy(cop);
         }
         data.op_destroy(load_op);
-        root.free_pointer_chain(data);
+        root.free_pointer_chain(data, None);
         Ok(true)
     }
 
@@ -5765,9 +5769,9 @@ impl SplitDatatype {
 
         if let Some(lop) = load_op {
             data.op_destroy(lop);
-            load_root.free_pointer_chain(data);
+            load_root.free_pointer_chain(data, Some(&mut store_root));
         }
-        store_root.free_pointer_chain(data);
+        store_root.free_pointer_chain(data, None);
         crate::aggregatefields::discard_unused_truncations(data, in_vn);
         Ok(true)
     }
@@ -6023,8 +6027,10 @@ impl RootPointer {
     }
 
     /// Remove the now-dead pointer chain (C++
-    /// `SplitDatatype::RootPointer::freePointerChain`, subflow.cc:2199).
-    fn free_pointer_chain(&mut self, data: &mut Funcdata) {
+    /// `SplitDatatype::RootPointer::freePointerChain`, subflow.cc:2199).  When
+    /// `other` shares its first Varnode, that Varnode is freed here and `other`
+    /// is marked as already freed, so it never reads the destroyed Varnode.
+    fn free_pointer_chain(&mut self, data: &mut Funcdata, mut other: Option<&mut RootPointer>) {
         let mut first = self.first_pointer.expect("firstPointer");
         while first != self.pointer
             && !data.vbank().get(first).expect("stale first").is_addr_tied()
@@ -6040,6 +6046,11 @@ impl RootPointer {
                 .expect("stale first")
                 .get_def()
                 .expect("first def");
+            if let Some(other) = other.as_deref_mut()
+                && other.first_pointer == Some(first)
+            {
+                other.first_pointer = Some(other.pointer);
+            }
             first = data
                 .obank()
                 .get(tmp_op)

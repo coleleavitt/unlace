@@ -213,6 +213,17 @@ impl CommandStream {
         self.eof
     }
 
+    /// `s.tellg()` — the offset of the next unread byte.
+    pub fn tell(&self) -> usize {
+        self.pos
+    }
+
+    /// `s.clear(); s.seekg(at)` — rewind to an offset from [`tell`](CommandStream::tell).
+    pub fn seek(&mut self, at: usize) {
+        self.pos = at;
+        self.eof = false;
+    }
+
     /// `s >> ws` — skip leading whitespace, latching eof if the end is reached.
     ///
     /// Returns a `&mut Self` so calls chain like the C++ `s >> ws` expression.
@@ -1249,9 +1260,17 @@ impl IfaceStatus {
         if *first == *last {
             return 0; // empty subrange
         }
+        let mut complete: Option<usize> = None;
+        let mut complete_words: usize = 0;
+        let mut argument_position: usize = 0;
         let mut pos: usize = 0;
         loop {
             s.skip_ws();
+            if res && !s.eof() && self.comlist[*first].num_words() as usize == pos {
+                complete = Some(*first);
+                complete_words = pos;
+                argument_position = s.tell();
+            }
             if *first == *last - 1 {
                 // subrange is unique
                 if s.eof() {
@@ -1283,7 +1302,16 @@ impl IfaceStatus {
             expand.push(tok);
             self.restrict_com(first, last, expand);
             if *first == *last {
-                return 0; // empty subrange
+                // The token extends no command: it is an argument to the last
+                // complete command, so that command wins and the token is unread.
+                let Some(command) = complete else {
+                    return 0;
+                };
+                s.seek(argument_position);
+                *first = command;
+                *last = command + 1;
+                expand.truncate(complete_words);
+                return 1;
             }
             let (newtok, r) = maxmatch(
                 self.comlist[*first].command_word(pos),

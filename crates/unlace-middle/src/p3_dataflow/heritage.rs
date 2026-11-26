@@ -111,6 +111,12 @@ pub const GLOBAL_LOAD_BUDGET: usize = 4096;
 /// Varnode stack (C++ `typedef map<Address,vector<Varnode *> > VariableStack`).
 pub type VariableStack = BTreeMap<Address, Vec<crate::context::VarnodeId>>;
 
+/// What one block pushed while it was renamed; popped when its dominator subtree is done.
+struct BlockRename {
+    writelist: Vec<crate::context::VarnodeId>,
+    guarded: Vec<Address>,
+}
+
 // =============================================================================
 // LocationMap (heritage.hh:38, heritage.cc:34)
 // =============================================================================
@@ -4791,12 +4797,12 @@ impl Heritage {
     // and the offset, neither of which mutates after the key is inserted, so
     // the key ordering is stable — a justified false positive.
     #[allow(clippy::mutable_key_type)]
-    pub fn rename_recurse(
+    fn rename_block(
         &mut self,
         fd: &mut crate::funcdata::Funcdata,
         bl: BlockId,
         varstack: &mut VariableStack,
-    ) -> UnlaceResult<()> {
+    ) -> UnlaceResult<BlockRename> {
         use unlace_num::opcodes::OpCode;
         let mut writelist: Vec<crate::context::VarnodeId> = Vec::new();
         let mut guarded: Vec<Address> = Vec::new();
@@ -5036,15 +5042,16 @@ impl Heritage {
             }
         }
 
-        // Recurse into dom-children.
-        let i = fd.bblocks_ref().block(bl).get_index() as usize;
-        let children: Vec<BlockId> = self.domchild[i].clone();
-        for child in children {
-            self.rename_recurse(fd, child, varstack)?;
-        }
+        Ok(BlockRename { writelist, guarded })
+    }
 
-        // Pop this block's writes off the stack.
-        for vnout in writelist {
+    fn unrename_block(
+        &mut self,
+        fd: &crate::funcdata::Funcdata,
+        frame: BlockRename,
+        varstack: &mut VariableStack,
+    ) {
+        for vnout in frame.writelist {
             let key = fd
                 .vbank()
                 .get(vnout)
@@ -5055,10 +5062,53 @@ impl Heritage {
                 stack.pop();
             }
         }
-        for key in guarded.iter().rev() {
+        for key in frame.guarded.iter().rev() {
             self.load_reads.pop(key);
         }
+    }
+
+    /// Rename the dominator tree below `bl`.  The walk keeps its own stack, so a
+    /// deep chain of blocks cannot overflow the native stack.
+    #[allow(clippy::mutable_key_type)]
+    pub fn rename_recurse(
+        &mut self,
+        fd: &mut crate::funcdata::Funcdata,
+        bl: BlockId,
+        varstack: &mut VariableStack,
+    ) -> UnlaceResult<()> {
+        struct Pending {
+            children: Vec<BlockId>,
+            next: usize,
+            frame: BlockRename,
+        }
+        let root = self.rename_block(fd, bl, varstack)?;
+        let mut pending = vec![Pending {
+            children: self.dom_children(fd, bl),
+            next: 0,
+            frame: root,
+        }];
+        while let Some(top) = pending.last_mut() {
+            if top.next == top.children.len() {
+                let done = pending.pop().expect("pending frame");
+                self.unrename_block(fd, done.frame, varstack);
+                continue;
+            }
+            let child = top.children[top.next];
+            top.next += 1;
+            let frame = self.rename_block(fd, child, varstack)?;
+            let children = self.dom_children(fd, child);
+            pending.push(Pending {
+                children,
+                next: 0,
+                frame,
+            });
+        }
         Ok(())
+    }
+
+    fn dom_children(&self, fd: &crate::funcdata::Funcdata, bl: BlockId) -> Vec<BlockId> {
+        let i = fd.bblocks_ref().block(bl).get_index() as usize;
+        self.domchild[i].clone()
     }
 
     /// (unlace `loadguardreads`) Read each range guarded at the LOAD `op` as

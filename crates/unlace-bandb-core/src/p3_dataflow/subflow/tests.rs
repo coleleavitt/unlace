@@ -1098,6 +1098,30 @@ fn w10_splitdt_generate_constants_zext_and_oversize_bail() {
     assert!(inv.is_empty(), "oversize piece must clear the accumulator");
 }
 
+#[test]
+fn generate_constants_rejects_pieces_past_the_full_size() {
+    let mut fd = build_fd();
+    let mut sd = SplitDatatype::new(3);
+    let cst = mk_const(&mut fd, 4, 0x1122_3344);
+    let zext = mk_op(&mut fd, 0x80, 1, OpCode::CPUI_INT_ZEXT);
+    wire_in(&mut fd, zext, cst, 0);
+    let zout = mk_reg(&mut fd, 0x50, 8);
+    let zout = wire_out(&mut fd, zext, zout);
+    let sink = mk_op(&mut fd, 0x100, 1, OpCode::CPUI_COPY);
+    wire_in(&mut fd, sink, zout, 0);
+    let sinkout = mk_reg(&mut fd, 0x88, 8);
+    let _ = wire_out(&mut fd, sink, sinkout);
+    let int4 = Rc::new(Datatype::new(4, type_metatype::TYPE_INT));
+    sd.data_type_pieces.push(Component {
+        in_type: Rc::clone(&int4),
+        out_type: Rc::clone(&int4),
+        offset: 6,
+    });
+    let mut inv: Vec<VarnodeId> = Vec::new();
+    assert!(!sd.generate_constants(&mut fd, zout, &mut inv).unwrap());
+    assert!(inv.is_empty());
+}
+
 fn pieces_with_byte_oracle(bytes: &[u8], big_endian: bool) -> (SplitDatatype, Vec<u64>) {
     let mut memory = bytes.to_vec();
     if big_endian {
@@ -1366,4 +1390,34 @@ fn try_return_pull_terminal_trim_emits_one_patch_and_sets_traversed() {
         patches_mid + 1,
         "second call must not re-traverse RETURNs, only add its terminal"
     );
+}
+
+#[test]
+fn free_pointer_chain_marks_shared_remainder_freed_for_the_other_chain() {
+    let mut fd = build_fd();
+    let root = mk_input(&mut fd, 0x10, 8);
+    let ptr = mk_reg(&mut fd, 0x20, 8);
+    let add = mk_op(&mut fd, 0x1000, 2, OpCode::CPUI_INT_ADD);
+    let c = mk_const(&mut fd, 8, 4);
+    wire_in(&mut fd, add, root, 0);
+    wire_in(&mut fd, add, c, 1);
+    let ptr = wire_out(&mut fd, add, ptr);
+    let load = mk_op(&mut fd, 0x1004, 2, OpCode::CPUI_LOAD);
+    wire_in(&mut fd, load, ptr, 1);
+    let mut load_root = RootPointer {
+        load_store: Some(load),
+        first_pointer: Some(ptr),
+        pointer: root,
+        ..Default::default()
+    };
+    let mut store_root = RootPointer {
+        load_store: None,
+        first_pointer: Some(ptr),
+        pointer: root,
+        ..Default::default()
+    };
+    fd.op_destroy(load);
+    load_root.free_pointer_chain(&mut fd, Some(&mut store_root));
+    store_root.free_pointer_chain(&mut fd, None);
+    assert_eq!(store_root.first_pointer, Some(root));
 }

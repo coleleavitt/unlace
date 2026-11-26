@@ -762,8 +762,9 @@ impl OpBehavior for OpBehaviorIntLeft {
             return Err(recover_unimplemented());
         }
         let sa = in_ as i32; // cast: C++ `int4 sa = in` truncation (in < sizeout*8 here)
-        // 8*sizeout-sa can hit 64 (sa=0, sizeout=8): C++ UB; the oracle's
-        // x86 shift masks the count, which wshl reproduces
+        if sa == 0 {
+            return Ok(out);
+        }
         if (out.wshl((8 * sizeout - sa) as u32) & calc_mask(sizeout)) != 0 {
             // cast above: shift count
             return Err(UnlaceError::evaluation(
@@ -810,7 +811,14 @@ impl OpBehavior for OpBehaviorIntRight {
         }
 
         let sa = in_ as i32; // cast: C++ `int4 sa = in` truncation (in < sizeout*8 here)
-        // 8*sizein-sa can hit 64 (sa=0, sizein=8): C++ UB, x86-masked count
+        if sa == 0 {
+            if out & !calc_mask(sizein) != 0 {
+                return Err(UnlaceError::evaluation(
+                    "Output is not in range of right shift operation",
+                ));
+            }
+            return Ok(out);
+        }
         if out.wshr((8 * sizein - sa) as u32) != 0 {
             // cast above: shift count
             return Err(UnlaceError::evaluation(

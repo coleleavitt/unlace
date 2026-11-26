@@ -34,8 +34,10 @@ fn leftshift(num: i32, in_: &[u64], out: &mut [u64], sa: i32) {
             out_index -= 1;
             in_index -= 1;
         }
-        out[out_index as usize] = in_[0] << sa;
-        out_index -= 1;
+        if in_index == 0 {
+            out[out_index as usize] = in_[0] << sa;
+            out_index -= 1;
+        }
         while out_index >= 0 {
             out[out_index as usize] = 0;
             out_index -= 1;
@@ -81,13 +83,16 @@ pub fn subtract128(in1: &[u64; 2], in2: &[u64; 2], out: &mut [u64; 2]) {
 }
 
 /// Divide two little-endian 128-bit values, writing quotient and remainder.
-/// A zero divisor panics for a 64-bit numerator and returns an error otherwise.
+/// A zero divisor returns an error.
 pub fn udiv128(
     numer: &[u64; 2],
     denom: &[u64; 2],
     quotient_res: &mut [u64; 2],
     remainder_res: &mut [u64; 2],
 ) -> UnlaceResult<()> {
+    if *denom == [0, 0] {
+        return Err(UnlaceError::lowlevel("divide by 0"));
+    }
     if numer[1] == 0 && denom[1] == 0 {
         quotient_res[0] = numer[0] / denom[0];
         quotient_res[1] = 0;
@@ -108,9 +113,6 @@ fn udiv128_wide(
 ) -> UnlaceResult<()> {
     let n = from_limbs(numer);
     let d = from_limbs(denom);
-    if d == 0 {
-        return Err(UnlaceError::lowlevel("divide by 0"));
-    }
     if n < d {
         *quotient_res = [0, 0];
         *remainder_res = *numer;

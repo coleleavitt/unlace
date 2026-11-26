@@ -2781,6 +2781,9 @@ impl Equal2Form {
         let lo1 = self.lo1.expect("eq2: lo1");
         let boolandor = self.bool_and_or.expect("eq2: boolandor");
         if vn_is_constant(data, hi2) && vn_is_constant(data, lo2) {
+            if self.in_.get_size() > 8 || vn_get_size(data, lo1) >= 8 {
+                return false;
+            }
             let mut val = vn_get_offset(data, hi2);
             val = val.wshl((8 * vn_get_size(data, lo1)) as u32);
             val |= vn_get_offset(data, lo2);
@@ -3264,9 +3267,11 @@ impl LessThreeWay {
                 self.hival &= calc_mask(self.in_.get_size());
                 self.hilessequalform = false;
             }
-            self.hival = self
-                .hival
-                .wshr((vn_get_size(data, self.in_.get_lo().expect("nh: lo")) * 8) as u32);
+            let losize = vn_get_size(data, self.in_.get_lo().expect("nh: lo"));
+            if losize >= 8 {
+                return false;
+            }
+            self.hival = self.hival.wshr((losize * 8) as u32);
         } else if self.hilessequalform {
             // Make sure the false branch contains the equal case
             self.hilessequalform = false;
@@ -3299,6 +3304,9 @@ impl LessThreeWay {
             if vn_get_size(data, self.vnhie2.expect("nm: vnhie2")) == self.in_.get_size() {
                 // Convert to comparison on high part
                 let lopart = self.midval & calc_mask(losize);
+                if losize >= 8 {
+                    return false;
+                }
                 self.midval = self.midval.wshr((losize * 8) as u32);
                 if self.midlessform {
                     if self.midlessequal {
@@ -3578,6 +3586,9 @@ impl LessThreeWay {
         self.set_op_code();
         if self.hiconstform {
             let losize = vn_get_size(data, self.in_.get_lo().expect("tr: lo"));
+            if self.in_.get_size() > 8 || losize >= 8 {
+                return false;
+            }
             let val = self.hival.wshl((8 * losize) as u32) | self.loval;
             self.in2.init_partial_const(self.in_.get_size(), val);
             if !self.set_bool_op(data) {
@@ -3699,6 +3710,9 @@ impl LessConstForm {
         self.hilessequalform =
             opc == OpCode::CPUI_INT_SLESSEQUAL || opc == OpCode::CPUI_INT_LESSEQUAL;
 
+        if self.in_.get_size() > 8 || losize <= 0 || losize >= 8 {
+            return false;
+        }
         let mut val = vn_get_offset(data, cvn).wshl((8 * losize) as u32);
         if self.hilessequalform != (self.inslot == 1) {
             val |= calc_mask(losize);

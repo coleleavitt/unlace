@@ -417,6 +417,23 @@ fn build_collision_graph(n: usize) -> (Funcdata, Vec<VarnodeId>) {
 }
 
 #[test]
+fn unique_hash_op_scans_its_collision_list() {
+    // Three identical INT_ADDs at one address: the op form must find the
+    // collision list and encode a position, not give up with hash 0.
+    let (mut fd, outs) = build_collision_graph(3);
+    let op = fd.vbank().get(outs[0]).unwrap().get_def().unwrap();
+    let mut dh = DynamicHash::new();
+    dh.unique_hash_op(op, 0, 8, &mut fd);
+    let h = dh.get_hash();
+    assert_ne!(h, 0, "a colliding op still gets a hash within budget");
+    assert_eq!(
+        DynamicHash::get_total_from_hash(h),
+        3,
+        "three colliding ops"
+    );
+}
+
+#[test]
 fn colliding_roots_get_distinct_positions() {
     // Three identical-shape ADD outputs at one address: uniqueHash must encode a
     // collision list (total >= the count) and assign each a distinct position;

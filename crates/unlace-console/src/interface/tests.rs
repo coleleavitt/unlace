@@ -283,6 +283,32 @@ fn resolve_unknown_is_invalid() {
     assert_eq!(e.explain, "Invalid command");
 }
 
+#[test]
+fn expand_com_leaves_argument_after_complete_command() {
+    let mut st = IfaceStatus::new("> ", dummy_source(), 10);
+    let reg = |st: &mut IfaceStatus, ws: &[&str]| {
+        st.register_com(
+            Box::new(TestAction {
+                module: "base".into(),
+            }),
+            ws,
+        );
+    };
+    reg(&mut st, &["open"]);
+    reg(&mut st, &["open", "file"]);
+    st.ensure_sorted();
+    let mut is = CommandStream::new("open hello");
+    let mut expand = Vec::new();
+    let (mut first, mut last) = (0usize, st.comlist.len());
+    assert_eq!(
+        st.expand_com(&mut expand, &mut is, &mut first, &mut last),
+        1
+    );
+    assert_eq!(expand, vec!["open"]);
+    assert_eq!(st.comlist[first].num_words(), 1);
+    assert_eq!(is.read_token(), "hello");
+}
+
 // ---- runCommand diagnostics in optr --------------------------------
 
 fn status_feeding(lines: &[&str]) -> IfaceStatus {

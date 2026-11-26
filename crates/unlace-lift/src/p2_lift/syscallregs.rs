@@ -442,6 +442,14 @@ fn arm_floor(
     number: &(Address, int4),
     family: SyscallFamily,
 ) -> Option<usize> {
+    if !data
+        .get_arch()
+        .unlace_options
+        .get::<crate::syscallnames::SyscallNames>()
+        .0
+    {
+        return None;
+    }
     let value = constant_at(data, op, &number.0, number.1)?;
     let imm = immediate(data, op)?;
     let (_, count) = crate::syscallnames::name_for(family.userop(), imm, value, number.1)?;

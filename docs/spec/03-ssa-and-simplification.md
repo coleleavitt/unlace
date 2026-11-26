@@ -2827,6 +2827,16 @@ logically-sized ones. It is all-or-nothing by construction: any placeholder the
 trace cannot legalize aborts the whole transform with no IR change (marks are
 cleared, `subflow.rs (SubvariableFlow::do_trace)`).
 
+Each logically-sized op is inserted right after the op it shadows, except
+one whose output a copy patch pulls back into that same op: a single-bit test
+against the set bit (`INT_EQUAL x, 1` turned around by `INT_EQUAL`, or
+`INT_NOTEQUAL x, 0` and `INT_EQUAL x, 0` with the negating polarity) builds a
+`BOOL_NEGATE` of the narrow bit and turns the compare itself into a `COPY` of
+it, so the `BOOL_NEGATE` is inserted *before* the compare. Inserting it after
+left the `COPY` reading a value defined later in the same block, which the
+`irverify` dataflow tier reports; copy propagation in the same pool hid it
+from the printed C.
+
 An aligned, contiguous byte slice also retains its original machine-storage
 slice for P9 source comments. Its address respects the source space's byte
 order. A bit-field extraction that cannot describe a byte slice does not claim

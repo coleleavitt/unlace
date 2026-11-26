@@ -2059,6 +2059,9 @@ when the caller's object ends at `+10` at the end of a page. The same held for a
 (`(int)a0[a1]`), and for a masked byte of an 8-byte element (`(q[1] & 0x30) !=
 0x10`).
 
+The guard that keeps a bare pointer's element type from widening a read is `is_field_reference`
+(`ruleaction_8.rs`): the pointer must be a PTRSUB, possibly indexed through PTRADDs, or point to an enum.
+
 unlace never takes the truncation form: the read prints at its own width and
 offset, `*(unsigned short *)&a0->field_0x8`, with the one cast the truncation
 had. The AND form is taken only when the widened pointer is a field of a record

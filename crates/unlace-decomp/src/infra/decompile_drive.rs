@@ -4,6 +4,7 @@
 //! and printer, following upstream `IfcDecompile` and `IfcPrintC`.
 
 mod varrefs;
+pub mod varstorage;
 
 use crate::elfmaindecl::FuncdataElfmaindeclExt;
 use crate::inputhints::FuncdataInputhintsExt;
@@ -3154,7 +3155,8 @@ pub fn print_c(arch: &mut Architecture, fd: &Funcdata) -> String {
             printer.doc_function_full(fd, arch)
         } else {
             let (out, mut markup) = printer.doc_function_full_with_statement_provenance(fd, arch);
-            traced_cookie_rewrite(fd, out, &cookie_calls, &mut markup).0
+            let spelling = CookieSpelling::of(printer);
+            traced_cookie_rewrite(fd, out, &cookie_calls, &mut markup, spelling).0
         }
     })
 }
@@ -3248,7 +3250,28 @@ fn rewrite_cookie_literal_returns(
     calls: &BTreeMap<u64, BTreeSet<String>>,
     markup: &mut crate::prettyprint::MarkupProvenance,
 ) -> String {
-    rewrite_cookie_literal_returns_with_edits(text, calls, markup).0
+    let c = CookieSpelling {
+        assign: "=",
+        kw_return: "return",
+    };
+    rewrite_cookie_literal_returns_with_edits(text, calls, markup, c).0
+}
+
+/// How the printer spells what the cookie literal-return rule reads and writes; a
+/// language flavour may respell both.
+#[derive(Clone, Copy)]
+struct CookieSpelling {
+    assign: &'static str,
+    kw_return: &'static str,
+}
+
+impl CookieSpelling {
+    fn of(printer: &crate::printc::PrintC) -> Self {
+        Self {
+            assign: printer.op_spelling(&crate::printc::tokens::ASSIGNMENT),
+            kw_return: printer.lang().kw_return,
+        }
+    }
 }
 
 /// [`rewrite_cookie_literal_returns`], also returning each line pair it
@@ -3258,7 +3281,10 @@ fn rewrite_cookie_literal_returns_with_edits(
     text: String,
     calls: &BTreeMap<u64, BTreeSet<String>>,
     markup: &mut crate::prettyprint::MarkupProvenance,
+    spelling: CookieSpelling,
 ) -> (String, Vec<crate::srcmap::CookieRewrite>) {
+    let CookieSpelling { assign, kw_return } = spelling;
+    let assign = format!(" {assign} ");
     let mut edits = Vec::new();
     if calls.is_empty() {
         return (text, edits);
@@ -3272,7 +3298,7 @@ fn rewrite_cookie_literal_returns_with_edits(
     let leading_sink_line = usize::from(text.starts_with('\n'));
     for i in 0..lines.len().saturating_sub(2) {
         let assignment = lines[i].trim();
-        let Some((name, value)) = assignment.split_once(" = ") else {
+        let Some((name, value)) = assignment.split_once(assign.as_str()) else {
             continue;
         };
         if name.is_empty()
@@ -3293,13 +3319,13 @@ fn rewrite_cookie_literal_returns_with_edits(
         if !exact_marked_call {
             continue;
         }
-        if lines[i + 2].trim() != format!("return {name};") {
+        if lines[i + 2].trim() != format!("{kw_return} {name};") {
             continue;
         }
         let literal = value.as_bytes()[0] as char;
         let indent: String = lines[i].chars().take_while(|c| c.is_whitespace()).collect();
         lines[i] = indent.clone();
-        lines[i + 2] = format!("{indent}return {literal};");
+        lines[i + 2] = format!("{indent}{kw_return} {literal};");
         let assignment_line_number = i + 1 - leading_sink_line;
         let return_line_number = i + 3 - leading_sink_line;
         for association in &mut markup.associations {
@@ -3328,12 +3354,13 @@ fn traced_cookie_rewrite(
     text: String,
     calls: &BTreeMap<u64, BTreeSet<String>>,
     markup: &mut crate::prettyprint::MarkupProvenance,
+    spelling: CookieSpelling,
 ) -> (String, Vec<crate::srcmap::CookieRewrite>) {
     if !unlace_emit::stagediff::stage_diff_enabled() {
-        return rewrite_cookie_literal_returns_with_edits(text, calls, markup);
+        return rewrite_cookie_literal_returns_with_edits(text, calls, markup, spelling);
     }
     let before = text.clone();
-    let (after, edits) = rewrite_cookie_literal_returns_with_edits(text, calls, markup);
+    let (after, edits) = rewrite_cookie_literal_returns_with_edits(text, calls, markup, spelling);
     unlace_emit::stagediff::trace_stage_diff(
         fd.get_name(),
         "cookie-literal-return",
@@ -3353,7 +3380,8 @@ pub fn print_c_with_provenance(arch: &mut Architecture, fd: &Funcdata) -> (Strin
             printer.doc_function_provenance(fd, arch),
         )
     });
-    let (out, _) = traced_cookie_rewrite(fd, out, &cookie_calls, &mut markup);
+    let spelling = CookieSpelling::of(arch.print());
+    let (out, _) = traced_cookie_rewrite(fd, out, &cookie_calls, &mut markup, spelling);
     align_markup_to_trimmed(&mut markup, &out);
     (out, resolve_markup_provenance(fd, &markup))
 }
@@ -3386,10 +3414,72 @@ pub fn print_c_with_srcmap(
             printer.doc_function_tokens(fd, arch),
         )
     });
-    let (out, edits) = traced_cookie_rewrite(fd, out, &cookie_calls, &mut markup);
-    crate::srcmap::apply_cookie_rewrites(&mut tokens, &edits);
+    let spelling = CookieSpelling::of(arch.print());
+    let (out, edits) = traced_cookie_rewrite(fd, out, &cookie_calls, &mut markup, spelling);
+    crate::srcmap::apply_cookie_rewrites(&mut tokens, &edits, spelling.kw_return);
     align_markup_to_trimmed(&mut markup, &out);
     (out, resolve_markup_provenance(fd, &markup), tokens)
+}
+
+/// What [`print_c_with_ctree`] recorded for the exported C syntax tree
+/// ([`crate::ctreeexport`]).
+pub struct TreeRender {
+    capture: crate::ctreeexport::Capture,
+    op_addresses: BTreeMap<u64, u64>,
+    /// The cookie-literal rewrite changed the text after it was printed.
+    rewritten: bool,
+}
+
+impl TreeRender {
+    /// The exported tree of the render: `tokens` and `untrimmed` as
+    /// [`print_c_with_ctree`] returned them, `code` the text reported for the
+    /// function. `Err` says why the function has no tree.
+    pub fn tree(
+        &self,
+        tokens: &[crate::prettyprint::EmitToken],
+        untrimmed: &str,
+        code: &str,
+    ) -> Result<crate::ctreeexport::ExportTree, String> {
+        if self.rewritten {
+            return Err(
+                "the text was rewritten after it was printed (a cookie-literal return)".to_string(),
+            );
+        }
+        crate::ctreeexport::build(tokens, &self.capture, &self.op_addresses, untrimmed, code)
+    }
+}
+
+/// [`print_c_with_srcmap`] whose markup pass also records the expression nodes
+/// and statement marks the exported C syntax tree is built from
+/// ([`TreeRender::tree`]). The text is the plain render, byte for byte.
+pub fn print_c_with_ctree(
+    arch: &mut Architecture,
+    fd: &Funcdata,
+) -> (
+    String,
+    CodeProvenance,
+    Vec<crate::prettyprint::EmitToken>,
+    TreeRender,
+) {
+    let cookie_calls = exact_cookie_call_evidence(fd, arch);
+    let (out, (mut markup, mut tokens, capture)) = arch.with_print(|printer, arch| {
+        (
+            printer.doc_function_full(fd, arch),
+            printer.doc_function_capture(fd, arch),
+        )
+    });
+    let spelling = CookieSpelling::of(arch.print());
+    let (out, edits) = traced_cookie_rewrite(fd, out, &cookie_calls, &mut markup, spelling);
+    crate::srcmap::apply_cookie_rewrites(&mut tokens, &edits, spelling.kw_return);
+    align_markup_to_trimmed(&mut markup, &out);
+    let op_addresses = op_addresses(fd);
+    let provenance = resolve_markup_provenance_with_addresses(&markup, &op_addresses);
+    let render = TreeRender {
+        capture,
+        op_addresses,
+        rewritten: !edits.is_empty(),
+    };
+    (out, provenance, tokens, render)
 }
 
 /// (unlace) Render every user-defined data-type in the architecture's type
@@ -4004,20 +4094,23 @@ fn named_high_varrefs(fd: &Funcdata, variable: &VarInfo) -> BTreeSet<u64> {
     varrefs
 }
 
-fn resolve_markup_provenance(
-    fd: &Funcdata,
-    markup: &crate::prettyprint::MarkupProvenance,
-) -> CodeProvenance {
-    let op_addresses: BTreeMap<u64, u64> = fd
-        .obank()
+/// The instruction address of every op of `fd`, by the `opref` markup names it with.
+fn op_addresses(fd: &Funcdata) -> BTreeMap<u64, u64> {
+    fd.obank()
         .iter_all()
         .filter_map(|(_, op_id)| {
             let op = fd.obank().get(op_id)?;
             op.get_addr().get_space()?;
             Some((op.get_time() as u64, op.get_addr().get_offset()))
         })
-        .collect();
-    resolve_markup_provenance_with_addresses(markup, &op_addresses)
+        .collect()
+}
+
+fn resolve_markup_provenance(
+    fd: &Funcdata,
+    markup: &crate::prettyprint::MarkupProvenance,
+) -> CodeProvenance {
+    resolve_markup_provenance_with_addresses(markup, &op_addresses(fd))
 }
 
 fn resolve_markup_provenance_with_addresses(
@@ -4132,6 +4225,7 @@ pub fn extract_variables(arch: &Architecture, fd: &Funcdata) -> Vec<VarInfo> {
             line_numbers: Vec::new(),
             addresses: Vec::new(),
             split_piece: false,
+            storage: Vec::new(),
         });
         arg_pos += 1;
     }
@@ -4171,6 +4265,7 @@ pub fn extract_variables(arch: &Architecture, fd: &Funcdata) -> Vec<VarInfo> {
                 line_numbers: Vec::new(),
                 addresses: Vec::new(),
                 split_piece: false,
+                storage: Vec::new(),
             });
         }
     }
@@ -4252,6 +4347,7 @@ pub fn extract_variables(arch: &Architecture, fd: &Funcdata) -> Vec<VarInfo> {
             line_numbers: Vec::new(),
             addresses: Vec::new(),
             split_piece: false,
+            storage: Vec::new(),
         });
     }
     let typed = type_filler_slots_from_stores(arch, fd, &mut out, first_slot, &declared);

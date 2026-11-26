@@ -460,6 +460,51 @@ fn modopt_positive_signed_constant_divisor() {
 }
 
 #[test]
+fn modopt_subpiece_truncated_quotient() {
+    // op = x sdiv 7 (8-byte quotient); sub = SUBPIECE(q, 0) (4-byte low half);
+    // multop = sub * (-7); addop = SUBPIECE(x, 0) + multop  =>  SUBPIECE(x SREM 7, 0)
+    let mut fd = build_fd();
+    let x = make_input(&mut fd, 0x100, 8);
+    let (op, divout) = make_op(&mut fd, 0x200, OpCode::CPUI_INT_SDIV, 2, 8);
+    wire(&mut fd, x, op, 0);
+    let d = konst(&mut fd, 8, 7);
+    wire(&mut fd, d, op, 1);
+
+    let (sub, subout) = make_op(&mut fd, 0x208, OpCode::CPUI_SUBPIECE, 2, 4);
+    wire(&mut fd, divout, sub, 0);
+    let z = konst(&mut fd, 4, 0);
+    wire(&mut fd, z, sub, 1);
+
+    let (multop, multout) = make_op(&mut fd, 0x210, OpCode::CPUI_INT_MULT, 2, 4);
+    wire(&mut fd, subout, multop, 0);
+    let neg7 = konst(&mut fd, 4, ((!7u64).wrapping_add(1)) & calc_mask(4));
+    wire(&mut fd, neg7, multop, 1);
+
+    let (lsub, lval) = make_op(&mut fd, 0x230, OpCode::CPUI_SUBPIECE, 2, 4);
+    wire(&mut fd, x, lsub, 0);
+    let z2 = konst(&mut fd, 4, 0);
+    wire(&mut fd, z2, lsub, 1);
+
+    let addop = make_op_noout(&mut fd, 0x220, OpCode::CPUI_INT_ADD, 2);
+    wire(&mut fd, lval, addop, 0);
+    wire(&mut fd, multout, addop, 1);
+
+    let root = fd.bblocks_ref().root.unwrap();
+    let bb = fd.bblocks_mut().new_block_basic(root);
+    fd.op_insert_end(addop, bb);
+    let mut rule = RuleModOpt::new();
+    assert_eq!(rule.apply_op(op, &mut fd), 1, "must fire");
+    assert_eq!(
+        op_of(&fd, addop),
+        OpCode::CPUI_SUBPIECE,
+        "addop -> SUBPIECE"
+    );
+    let rem_out = in_vn(&fd, addop, 0);
+    assert_ne!(rem_out, lval, "addop in0 is the new remainder");
+    assert_eq!(in_off(&fd, addop, 1), 0, "addop in1 = truncation 0");
+}
+
+#[test]
 fn modopt_negative_wrong_complement() {
     // multop's constant is NOT the 2's complement of d -> no fire.
     let mut fd = build_fd();

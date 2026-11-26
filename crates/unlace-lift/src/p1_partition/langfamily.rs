@@ -9,9 +9,11 @@
 //! address size; `ARM:LEBE:32:v8LEInstruction` has little-endian instructions;
 //! `z80` and `z8401x` are both processor `Z80`).
 
+use std::borrow::Cow;
+use std::cell::RefCell;
 use std::sync::Arc;
 
-use crate::sleigh_arch::LanguageDatabase;
+use crate::sleigh_arch::{LanguageDatabase, LanguageDescription, ldefs_registry};
 
 /// What FID compares between two languages.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,20 +23,21 @@ pub struct LanguageFamily {
     pub instruction_big_endian: bool,
 }
 
-/// Every language in `db`, by id, in `.ldefs` order.
+impl LanguageFamily {
+    fn of(d: &LanguageDescription) -> LanguageFamily {
+        LanguageFamily {
+            processor: d.get_processor().to_string(),
+            size: d.get_size(),
+            instruction_big_endian: d.is_instruction_big_endian(),
+        }
+    }
+}
+
+/// Every language `db` has read, by id, in `.ldefs` order.
 pub fn families(db: &LanguageDatabase) -> Arc<[(String, LanguageFamily)]> {
     db.descriptions()
         .iter()
-        .map(|d| {
-            (
-                d.get_id().to_string(),
-                LanguageFamily {
-                    processor: d.get_processor().to_string(),
-                    size: d.get_size(),
-                    instruction_big_endian: d.is_instruction_big_endian(),
-                },
-            )
-        })
+        .map(|d| (d.get_id().to_string(), LanguageFamily::of(d)))
         .collect()
 }
 
@@ -47,113 +50,85 @@ pub fn language_id(archid: &str) -> &str {
     }
 }
 
-/// (unlace) Every language the bootstrap's `.ldefs` scan found, by id: what decides whether a FID
+/// (unlace) The `.ldefs` languages a bootstrap can see, by id: what decides whether a FID
 /// database built for another language applies here; an
 /// [`ArchTable`](crate::archstate::ArchTable) on the architecture, empty for one that was not
 /// bootstrapped from `.ldefs`.
-pub struct LanguageFamilies(pub std::sync::Arc<[(String, LanguageFamily)]>);
+pub enum LanguageFamilies {
+    /// Every language of a database that has read all its `.ldefs`.
+    Table(Arc<[(String, LanguageFamily)]>),
+    /// A database that reads `.ldefs` one language at a time
+    /// ([`LanguageDatabase::load_language`]): the bootstrap read only the loaded language's
+    /// file, and another language's is read when FID asks for it.
+    Database(RefCell<LanguageDatabase>),
+}
 
 impl Default for LanguageFamilies {
     fn default() -> Self {
-        LanguageFamilies(std::sync::Arc::from(Vec::new()))
+        LanguageFamilies::Table(Arc::from(Vec::new()))
     }
 }
 
 crate::unlace_arch_table!(LanguageFamilies);
 
-/// (unlace) Record the `.ldefs` languages the bootstrap scanned.
-pub fn set_language_families(
-    arch: &mut crate::architecture::Architecture,
-    families: std::sync::Arc<[(String, LanguageFamily)]>,
-) {
-    arch.unlace_tables.get_mut::<LanguageFamilies>().0 = families;
+impl LanguageFamilies {
+    /// The languages `db` can name: all of them when it has read every `.ldefs`, else the
+    /// database itself, kept to read the rest on demand.
+    pub fn new(db: Cow<'_, LanguageDatabase>) -> LanguageFamilies {
+        if db.is_complete() {
+            LanguageFamilies::Table(families(&db))
+        } else {
+            LanguageFamilies::Database(RefCell::new(db.into_owned()))
+        }
+    }
+
+    /// The `.ldefs` facts of language `id`, `None` when no `.ldefs` defines it.
+    pub fn get(&self, id: &str) -> Option<LanguageFamily> {
+        match self {
+            LanguageFamilies::Table(all) => all
+                .iter()
+                .find(|(known, _)| known == id)
+                .map(|(_, family)| family.clone()),
+            LanguageFamilies::Database(db) => {
+                let mut db = db.borrow_mut();
+                db.load_language(id, &ldefs_registry()).ok()?;
+                db.descriptions()
+                    .iter()
+                    .find(|d| d.get_id() == id)
+                    .map(LanguageFamily::of)
+            }
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        match self {
+            LanguageFamilies::Table(all) => all.is_empty(),
+            LanguageFamilies::Database(_) => false,
+        }
+    }
 }
 
-/// (unlace) The scanned `.ldefs` facts for language `id`, `None` when no scanned `.ldefs`
+/// (unlace) Record the `.ldefs` languages the bootstrap can see.
+pub fn set_language_families(
+    arch: &mut crate::architecture::Architecture,
+    families: LanguageFamilies,
+) {
+    *arch.unlace_tables.get_mut::<LanguageFamilies>() = families;
+}
+
+/// (unlace) The `.ldefs` facts for language `id`, `None` when no `.ldefs` the bootstrap can see
 /// defines it.
-pub fn language_family<'a>(
-    arch: &'a crate::architecture::Architecture,
+pub fn language_family(
+    arch: &crate::architecture::Architecture,
     id: &str,
-) -> Option<&'a LanguageFamily> {
-    arch.unlace_tables
-        .get::<LanguageFamilies>()
-        .0
-        .iter()
-        .find(|(known, _)| known == id)
-        .map(|(_, family)| family)
+) -> Option<LanguageFamily> {
+    arch.unlace_tables.get::<LanguageFamilies>().get(id)
 }
 
 /// (unlace) Whether the bootstrap recorded any `.ldefs` languages.
 pub fn has_language_families(arch: &crate::architecture::Architecture) -> bool {
-    !arch.unlace_tables.get::<LanguageFamilies>().0.is_empty()
+    !arch.unlace_tables.get::<LanguageFamilies>().is_empty()
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use unlace_base::marshal::IdRegistry;
-
-    fn vendored(processor: &str, ldefs: &str) -> Arc<[(String, LanguageFamily)]> {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../specs/Ghidra/Processors")
-            .join(processor)
-            .join("data/languages")
-            .join(ldefs);
-        let mut registry = IdRegistry::with_base_ids();
-        unlace_sleigh::translate::register_translate_ids(&mut registry);
-        crate::sleigh_arch::register_sleigh_arch_ids(&mut registry);
-        let mut db = LanguageDatabase::new();
-        db.load_language_definitions(&std::fs::read(path).unwrap(), &registry)
-            .unwrap();
-        families(&db)
-    }
-
-    fn family(all: &[(String, LanguageFamily)], id: &str) -> (String, i32, bool) {
-        let (_, f) = all.iter().find(|(i, _)| i == id).unwrap();
-        (f.processor.clone(), f.size, f.instruction_big_endian)
-    }
-
-    #[test]
-    fn vendored_ldefs_state_instruction_order_and_size_apart_from_the_id() {
-        let arm = vendored("ARM", "ARM.ldefs");
-        assert_eq!(family(&arm, "ARM:LE:32:v8"), ("ARM".into(), 32, false));
-        assert_eq!(
-            family(&arm, "ARM:LEBE:32:v8LEInstruction"),
-            ("ARM".into(), 32, false)
-        );
-        assert_eq!(family(&arm, "ARM:BE:32:v8"), ("ARM".into(), 32, true));
-        let aarch64 = vendored("AARCH64", "AARCH64.ldefs");
-        assert_eq!(
-            family(&aarch64, "AARCH64:BE:64:v8A"),
-            ("AARCH64".into(), 64, false)
-        );
-        let nds32 = vendored("NDS32", "nds32.ldefs");
-        assert_eq!(
-            family(&nds32, "NDS32:LE:32:default"),
-            ("NDS32".into(), 32, true)
-        );
-        let mips = vendored("MIPS", "mips.ldefs");
-        assert_eq!(
-            family(&mips, "MIPS:BE:64:64-32addr"),
-            ("MIPS".into(), 32, true)
-        );
-        assert_eq!(
-            family(&mips, "MIPS:BE:64:default"),
-            ("MIPS".into(), 64, true)
-        );
-        let x86 = vendored("x86", "x86.ldefs");
-        assert_eq!(family(&x86, "x86:LE:64:default"), ("x86".into(), 64, false));
-        assert_eq!(family(&x86, "x86:LE:32:default"), ("x86".into(), 32, false));
-    }
-
-    #[test]
-    fn language_id_drops_the_compiler_spec() {
-        assert_eq!(language_id("x86:LE:64:default:gcc"), "x86:LE:64:default");
-        assert_eq!(
-            language_id("x86:LE:32:System Management Mode:default"),
-            "x86:LE:32:System Management Mode"
-        );
-        assert_eq!(language_id("ARM:LE:32:v8"), "ARM:LE:32:v8");
-        assert_eq!(language_id("raw"), "raw");
-    }
-}
+mod tests;

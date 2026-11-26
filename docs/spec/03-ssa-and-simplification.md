@@ -1587,12 +1587,25 @@ returning 1 is an invariant violation the pool reports as an engine error
 message rather than silently absorbing. The **local fixpoint** comes from the
 scheduler, not the pool: every pool node carries the repeat flag, so
 `action.rs (Action::perform)` re-sweeps the whole function until a sweep makes
-no change. There is no bound on the number of sweeps — quiescence is the
-contract, and the only backstop against a rule pair that feeds itself forever
-is the (unlace) cooperative deadline probed every 1024 op-visits
+no change. Quiescence is the contract. The backstops against a rule pair that
+feeds itself forever are (unlace) a limit of 100000 repeat passes in one run of
+a function (`action.rs (MAX_REPEATS)`), past which no action repeats and the
+function carries a header warning, and the cooperative deadline probed every
+1024 op-visits
 (`action.rs (POOL_DEADLINE_STRIDE)`, §0.6); exactly one such oscillation has
 occurred in unlace's history (the lowered-switch repair, §3.1), and it presented
-as mainloop reporting one change per iteration for good.
+as mainloop reporting one change per iteration for good. Two rules that turn
+one op into each other's pattern do not oscillate between sweeps: each changes
+the op's opcode, the walk rewinds, and it never returns to the sweep, where
+the pass count and that probe sit. So every rewind polls the budget
+(`crates/unlace-middle/src/substrate/budget.rs (budget_probe)`), and a spent one
+ends the walk and names the site (`action.rs (ActionPool::rewind_site)`). The
+walk remembers the last two rules that changed the opcode. When the rule that
+changes it now is the older of the two and another rule came between, the two
+undo each other on this op, and the site names both in pool order: `action
+oppool1 (rules subzext and lowbyte keep changing one op)`. Any other walk
+reports as the pool's own probe does, with the busiest rule. With no budget
+set such a walk does not end.
 
 (unlace dead-removal waves) Dead-op removal (`RuleEarlyRemoval`, first in
 every opcode's list) takes out an op only when the cursor reaches it, and the
@@ -1695,6 +1708,106 @@ append CPU-specific rules to oppool1 (`universalaction.rs (build_universal_actio
 takes `extra_pool_rules`); the engine currently always passes an empty list
 (`crates/unlace-middle/src/infra/architecture.rs
 (Architecture::build_action)`).
+
+**Rewrite rule files.** (unlace) A rule of these pools can be written as data.
+`crates/unlace-decomp/src/infra/rewritefile.rs` reads a TOML file of
+`[[rule]]` tables, each a `name`, a `group`, a `match` expression and a
+`replace` expression, and compiles every table into one generic rule
+(`crates/unlace-decomp/src/infra/rewritefile/rule.rs (RewriteRule)`) that it
+registers through the embedder hooks (§0.6): behind the last built-in rule of
+the named group, and belonging to that group. `docs/cli.md` ("`--rules FILE`")
+is the user's description of the file; there is no option, and without a file
+the pools are the ones above (`tests/stages/rewriterules.toml`).
+
+An expression (`rewritefile/pattern.rs (parse)`) is an op with its inputs
+(`INT_AND(x, 0xff)`), a capture (a lower-case name), a constant, or, in a
+pattern only, a masked constant `value/mask` that stands for every constant
+`c` with `c & mask == value`; `:N` after any of them fixes its size in bytes.
+An expression has at most 256 nodes (`pattern.rs (MAX_NODES)`): the checker
+and the rule walk it by recursion. The pattern is an op. The file is checked
+without a program (`rewritefile/sizes.rs (compile)`), and a rule that fails a
+check is refused with its name and the line of the key at fault; one refused
+rule refuses the file (`rewritefile.rs (parse_rules)`):
+
+- Each opcode is one whose effect is its inputs and its output only, with its
+  number of inputs (`sizes.rs (Shape)`): the integer, boolean and
+  floating-point arithmetic, comparisons and conversions, the extensions,
+  `PIECE`, `SUBPIECE`, `POPCOUNT` and `LZCOUNT`. An op that reads or writes
+  memory, changes control flow, calls, joins paths (`MULTIEQUAL`, `INDIRECT`)
+  or carries a data type (`PTRADD`, `PTRSUB`, `CAST`) is refused, and so is
+  `COPY`, which a rule writes as a replacement of one capture or constant.
+- Every node of both expressions has a size, known or not. The shape of an
+  opcode says which of its sizes are equal (both inputs and the output of
+  `INT_ADD`; the two inputs of a comparison, whose output is one byte), every
+  use of a capture is one size, and the replacement is as wide as the matched
+  op's output. Sizes that are equal are merged into one class, and two
+  different known sizes in a class refuse the rule. What merging cannot say is
+  checked on the classes afterwards: an extension's output is wider than its
+  input, a `PIECE` is as wide as its two inputs together (which also gives the
+  third size from two), a `SUBPIECE` and the bytes it skips lie inside its
+  input, and a constant has at most 8 bytes and fits them.
+- Every capture of the replacement is one the pattern names.
+- A class that holds a pattern node and has no known size is read from the
+  function when the rule fires (`sizes.rs (Size::Of)`). A replacement node in
+  a class with neither is refused, except a shift amount or a `SUBPIECE`
+  offset, which is 4 bytes wide as the built-in rules make it.
+- The pattern does not match the replacement or an op inside it
+  (`sizes.rs (Checker::refires)`), with a capture of the replacement standing
+  for a Varnode the pattern cannot look into. Such a rule would fire on what
+  it wrote, without end.
+- The name is not the name of a built-in rule or of another rule of the file
+  (`crates/unlace-decomp/src/infra/hooks.rs (rule_names)`), because a rule is
+  addressed by its name.
+
+The rule is offered every op of the pattern's root opcode. A pattern with an
+op two levels below its root reads the inputs of that op, further than a wave
+re-offers the root for, so its rule is far-walking
+(`rule.rs (RewriteRule::walks_far)`) and a wave offers it every op of the
+opcode. It matches a list of goals, each a pattern node and a Varnode,
+starting with the root and the op's output (`rule.rs (solve)`). An op node
+needs a Varnode written by an op of its opcode and number of inputs, and adds
+that op's inputs as goals; for a commutative op both input orders are tried,
+and what the first try bound is put back before the second. A capture takes any Varnode the first time, and
+later needs the same Varnode or, since each read of a constant is its own
+Varnode, a constant of the same size and value. A constant node needs a
+constant with its value at the Varnode's size (a negative value in two's
+complement), a masked one the masked comparison. Every node also needs the
+size of its class, known or equal to the size found at the class's first
+node.
+
+A match is then given its sizes (`rule.rs (RewriteRule::sized)`), and the rule
+does not fire when one does not fit: an extension that would not widen, a
+`PIECE` or `SUBPIECE` whose parts do not add up, a constant that does not fit
+or would be wider than 8 bytes, a floating-point op at a size the processor
+has no format for. It also does not fire when a capture the replacement reads
+is not in SSA form (`Varnode::is_heritage_known`): the storage of a free
+Varnode can be written between the read the pattern saw and the one the
+replacement would make. The definition of every other capture dominates the
+matched op, because each op on the pattern's path to it does, so reading the
+capture at the matched op is the same value.
+
+Firing keeps the matched op in its place with its output. The ops inside the
+replacement are created in front of it at its address, each with a new
+`unique` output; a captured constant is put in as a new constant with the
+captured one's symbol. The matched op takes the opcode and inputs of the
+replacement's root, or becomes a `COPY` of a replacement that is one capture
+or one constant. An op the pattern matched below the root is destroyed when
+nothing reads its output any more and dead-code removal would take it
+(`ruleaction_1.rs (RuleEarlyRemoval::removable)`), then the ones below it:
+oppool1 would remove them on its own, but nothing does behind a rule of the
+cleanup pool, and they would print as assignments nothing reads.
+
+The files are registered when the architecture is built and before any option
+is applied, in the order given: by `unlace decompile-all` and the `--json`
+path of `unlace decompile` in `crates/unlace-cli/src/decompile_all.rs
+(load_program_with_rust_profiles)`, by every `--jobs` worker from the same
+flag, by the `decomp_dbg` script of `unlace decompile` through the console
+command `rewrite rules FILE` (`crates/unlace-console/src/console.rs`), and by
+a library user through `crates/unlace/src/unstable/hooks.rs
+(Decompiler::with_rules_file)`, which keeps the compiled rules for every
+load. The command line checks the files while it parses its arguments
+(`decompile_all.rs (check_rule_files)`), a name two files share included, so a
+refused file ends the run before anything is loaded.
 
 **Binary64 sign-word operations.** (unlace) Before its commute logic,
 `RuleConcatCommute` recognizes the exact binary64 sign-word idioms in
@@ -1928,7 +2041,7 @@ multiply between the quotient and remainder. After `RuleDivOpt` recovers
 `x / 3`, the sibling `(high64(x * 0xaaaaaaaaaaaaaaab) & ~1)` is exactly twice
 that quotient. `RuleDivOpt` substitutes `(x / 3) * 2` only when the same
 `x / 3` node precedes it in the same basic block; the ordinary term collection
-and `RuleModOpt` rules can then recover `x % 3`. Other masks, reciprocals, widths, wide divisions, and
+and `RuleModOpt` rules can then recover `x % 3`. The quotient may also be truncated before its multiply: `SUBPIECE(x/c, 0) * -c` is matched when the addend is `SUBPIECE(x, 0)`, and it becomes `SUBPIECE(x % c, 0)` (`ruleaction_7.rs (RuleModOpt::apply_op)`). Other masks, reciprocals, widths, wide divisions, and
 multiply-without-a-matching-quotient forms are declined.
 
 The cleanup pool's `RuleExpandLoad` is upstream's rewrite of a LOAD narrower
@@ -1945,6 +2058,9 @@ when the caller's object ends at `+10` at the end of a page. The same held for a
 (`(unsigned short)a0[1]`), for the low half of the `long` one past a walk
 (`(int)a0[a1]`), and for a masked byte of an 8-byte element (`(q[1] & 0x30) !=
 0x10`).
+
+The guard that keeps a bare pointer's element type from widening a read is `is_field_reference`
+(`ruleaction_8.rs`): the pointer must be a PTRSUB, possibly indexed through PTRADDs, or point to an enum.
 
 unlace never takes the truncation form: the read prints at its own width and
 offset, `*(unsigned short *)&a0->field_0x8`, with the one cast the truncation
@@ -2072,6 +2188,13 @@ constant, out of a same-location copy, and into any marker over a `persist`
 global — a global already has heritage's persist `RETURN-COPY` (§3.1) keeping
 its last store printed, so the brake has nothing to add there.
 
+**Shared sums in `RulePtrsubUndo`** (a strict fix, no option). `getConstOffsetBack`
+(`ruleaction_6.rs (RulePtrsubUndo::get_const_offset_back)`) sums the constants behind a value only
+when that value has exactly one reader. A sum read by several ops keeps its constants in the shared
+expression, which `removeLocalAddRecurse` cannot fold. Counting them let `RulePtrsubUndo` undo a
+PTRSUB without changing its offset, and `RulePtrArith` then recreated it indefinitely. The multiplier
+is still collected from such a sum, so stride validation is unchanged.
+
 **Keeping a retyped local out of its readers** (a strict fix, no option). A
 `type` directive that retypes a printed pointer local to a pointer to a record
 is replayed by locking the new type on the local's own definitions before type
@@ -2151,6 +2274,10 @@ into a reader of the copy when a write lies between the copy and the reader, and
 chapter 06 keeps the copy as its own variable, so
 `r = gi; *pp2 = p + 1; return r[1];` keeps `r` where the binary loads it rather
 than reading `gi` after the second store.
+When `RulePushMulti` reuses an existing `MULTIEQUAL`, that value gains the new readers,
+so its consumed-bits mask is set to all bits (`ruleaction_1.rs (RulePushMulti::apply_op)`) until
+`ActionDeadCode` narrows it again. In the COPY case the reused value's mask is ORed with the merge's
+mask. Otherwise `RuleOrConsume` could drop an OR whose bits only the new readers use.
 
 These questions are asked again every time the rule pool visits a reader
 (issue #818). One search for an earlier value read after the store first sets
@@ -2267,6 +2394,12 @@ signedness, but `sink + 1 >> 4` shifts the way `sink` is declared, so a
 sign-sensitive reader of `u + 1` counts as a reader of `u`. Globals and
 constants end the walk, and a walk that visits more than 256 varnodes answers
 yes, which keeps the store and every load where the binary makes them.
+
+**Common terms in `RuleEqual2Zero`** (default on, no option). `0 == (U + W) + W * -1` cancels the
+shared term and becomes `0 == U` (`ruleaction_5.rs (RuleEqual2Zero::apply_op)`), unless a less-than
+comparison of the same two values pairs with the result (`is_paired_with_less`), since `RuleLessEqual`
+and `RuleLessNotEqual` merge such pairs. Before this, the two sign terms of a signed division's sign
+correction stayed on opposite sides of the comparison and never cancelled.
 
 The decision cannot wait for the other rules: once the `COPY` is gone, chapter
 06's join of the value into the global's marker is forced. So the walk also
@@ -2954,6 +3087,16 @@ become temporaries read by four MULTIEQUALs. The function used to fail with
 it now decompiles without that split
 (`tests/stages/lanedivide-freefanout.toml`). This is a correctness repair
 with no option.
+
+A lane trace that reaches a CALL, CALLIND, CALLOTHER or RETURN reads the value whole, so the
+lanes must be rebuilt before that op. The trace adds PIECE ops over the lane placeholders
+(`subflow.rs (LaneDivide::build_whole_input)`), and the op reads the rebuilt value in every input
+slot that held the original. An op is reattached once, however many slots it reads. A value the
+trace already reassembled for an op that is its only reader is not reattached again
+(`subflow.rs (LaneDivide::is_whole_reassembly)`). The trace fails when it reattached ops but
+changed no lane: a SUBPIECE that picks out one lane or ends the lanes, a STORE, or a NEGATE, AND,
+OR, XOR, shift or zero extension in the backward walk (`subflow.rs (LaneDivide::do_trace)`).
+Upstream Ghidra fixed the missing arm as GH-9745. This is a correctness repair with no option.
 
 When `SplitDatatype` divides a constant, `constantbytes.rs` extracts
 byte ranges from its 64-bit payload and returns zero beyond that payload.

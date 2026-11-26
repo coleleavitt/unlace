@@ -1688,7 +1688,7 @@ pub fn universal_sched_hooked(
     SchedNode::RestartGroup {
         flags: ONCE,
         name: UNIVERSAL_NAME,
-        max: 1,
+        max: 4,
         children: vec![
             settles(Maturity::Lifted, act!(ActionStart::boxed("base"))),
             hooks.boundary(UnlacePhase::P2),

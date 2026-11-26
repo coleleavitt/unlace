@@ -10,6 +10,9 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 unlace-base.workspace = true
 unlace-num.workspace = true
@@ -32,6 +35,3 @@ path = "src/bin/slacomp.rs"
 name = "integration"
 path = "tests/integration.rs"
 
-[[test]]
-name = "compiler_parity"
-path = "tests/compiler_parity.rs"

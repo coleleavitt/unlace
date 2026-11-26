@@ -53,19 +53,24 @@ pub struct CookieRewrite {
 }
 
 /// Apply the text rewrites to the tokens of the same render. The text rule
-/// fires only on a return line that reads exactly `return <v>;` and blanks the
-/// whole assignment line, so the return line's three tokens become `return`,
-/// the literal carried from the assignment, `;`, and the assignment's tokens
-/// go. A return line whose tokens are not exactly those three is left as it is
-/// (the text rule could not have fired on it; [`verify`] then says so).
-pub fn apply_cookie_rewrites(tokens: &mut Vec<EmitToken>, rewrites: &[CookieRewrite]) {
+/// fires only on a return line that reads exactly `return <v>;` (`kw_return` is
+/// the keyword as the printer spells it) and blanks the whole assignment line,
+/// so the return line's three tokens become the keyword, the literal carried
+/// from the assignment, `;`, and the assignment's tokens go. A return line whose
+/// tokens are not exactly those three is left as it is (the text rule could not
+/// have fired on it; [`verify`] then says so).
+pub fn apply_cookie_rewrites(
+    tokens: &mut Vec<EmitToken>,
+    rewrites: &[CookieRewrite],
+    kw_return: &str,
+) {
     for rw in rewrites {
         let returned: Vec<&EmitToken> =
             tokens.iter().filter(|t| t.line == rw.return_line).collect();
         let [keyword, _, semi] = returned.as_slice() else {
             continue;
         };
-        if keyword.text != "return" || semi.text != ";" {
+        if keyword.text != kw_return || semi.text != ";" {
             continue;
         }
         let (mut keyword, mut semi) = ((*keyword).clone(), (*semi).clone());
@@ -87,8 +92,8 @@ pub fn apply_cookie_rewrites(tokens: &mut Vec<EmitToken>, rewrites: &[CookieRewr
         tokens.retain(|t| t.line != rw.assignment_line && t.line != rw.return_line);
         keyword.col = rw.indent;
         value.line = rw.return_line;
-        value.col = rw.indent + 7;
-        semi.col = rw.indent + 8;
+        value.col = rw.indent + keyword.text.encode_utf16().count() + 1;
+        semi.col = value.col + 1;
         let at = tokens
             .iter()
             .position(|t| t.line > rw.return_line)
@@ -211,6 +216,91 @@ pub fn resolve(
             })
         })
         .collect()
+}
+
+/// Follow the pointer-argument casts a batch inserts after the render
+/// ([`crate::pointerargs::apply`]) into the token map of `code`, the text
+/// before they went in: each cast is a `(`, its type and a `)` at its site,
+/// and the tokens after it on that line move right by its length. `casts` are
+/// the insertions made, in position order. Returns the index of each cast's
+/// `(` in the new list; [`verify`] against the edited text decides whether the
+/// result ships.
+pub fn insert_casts(
+    tokens: &mut Vec<CodeToken>,
+    code: &str,
+    casts: &[crate::pointerargs::Insertion],
+) -> Vec<usize> {
+    let lines: Vec<&str> = code.split('\n').collect();
+    let column = |cast: &crate::pointerargs::Insertion| {
+        lines
+            .get(cast.position.line.checked_sub(1)?)?
+            .get(..cast.position.column)
+            .map(|before| before.encode_utf16().count())
+    };
+    let mut pending = casts
+        .iter()
+        .filter_map(|cast| Some((cast.position.line, column(cast)?, cast.spelling.as_str())))
+        .peekable();
+    let mut out = Vec::with_capacity(tokens.len() + 3 * casts.len());
+    let mut inserted = Vec::with_capacity(casts.len());
+    let (mut line, mut shift) = (0, 0);
+    let cast_tokens = |out: &mut Vec<CodeToken>, at: (usize, usize, &str), shift: usize| {
+        let (line, col, spelling) = at;
+        let token = |col: usize, kind: TokenKind, color: SyntaxHighlight, text: &str| CodeToken {
+            line,
+            col,
+            len: text.encode_utf16().count(),
+            kind,
+            color,
+            text: text.to_string(),
+            address: None,
+            callee: None,
+            var: None,
+            decl: None,
+            type_text: (kind == TokenKind::Type).then(|| text.to_string()),
+        };
+        let open = col + shift;
+        let width = spelling.encode_utf16().count();
+        out.push(token(
+            open,
+            TokenKind::Syntax,
+            SyntaxHighlight::NoColor,
+            "(",
+        ));
+        out.push(token(
+            open + 1,
+            TokenKind::Type,
+            SyntaxHighlight::TypeColor,
+            spelling,
+        ));
+        out.push(token(
+            open + 1 + width,
+            TokenKind::Syntax,
+            SyntaxHighlight::NoColor,
+            ")",
+        ));
+        width + 2
+    };
+    for mut token in tokens.drain(..) {
+        while let Some(&at) = pending
+            .peek()
+            .filter(|at| (at.0, at.1) <= (token.line, token.col))
+        {
+            pending.next();
+            if at.0 != line {
+                (line, shift) = (at.0, 0);
+            }
+            inserted.push(out.len());
+            shift += cast_tokens(&mut out, at, shift);
+        }
+        if token.line != line {
+            (line, shift) = (token.line, 0);
+        }
+        token.col += shift;
+        out.push(token);
+    }
+    *tokens = out;
+    inserted
 }
 
 /// How many line breaks `trim_matches('\n')` removes from the front of a render.

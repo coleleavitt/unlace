@@ -38,9 +38,11 @@ mod image;
 mod interior;
 mod jobs;
 mod jsonfmt;
+mod langfile;
 mod limits;
 mod loadtime;
 mod lumina;
+mod map;
 mod optname;
 mod output;
 mod paths;
@@ -69,6 +71,7 @@ const COMMANDS: &[(&str, CommandHandler)] = &[
     ("decompile-all", decompile_all::run),
     ("decompile-project", decompile_project::run),
     ("decompile-graph", decompile_graph::run),
+    ("map", |args| args::report(map::main(args))),
     ("functions", decompile_all::run_functions),
     ("disassemble", disassemble::run),
     ("raw-pcode", disassemble::raw_pcode::run),
@@ -197,10 +200,11 @@ fn usage() {
          this CLI well, embedded in the binary, no network -- for Claude Code, Codex and OpenCode\n\
          (`--dir DIR` for other agents).  `unlace install-skill --print` shows it without installing.\n\
          \n\
-         unlace decompile <binary> [--isa auto|arm|thumb] <func> [--addr] [--json] [--project FILE] [--no-vars] [--omit aliases,line_mappings,variables,types] [--slice ARCH] [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] [--option NAME VALUE]... [--kassert ARGS]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--max-fn-seconds N] [--max-fn-memory MiB] [--raw-image --target T --base VMA]\n\
-         unlace decompile-all <binary> [--isa auto|arm|thumb] [--json] [--project FILE] [--functions a,b,..] [--addr 0xVMA]... [--no-vars] [--omit aliases,line_mappings,variables,types] [--language auto|c|rust|java|go] [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
+         unlace decompile <binary> [--isa auto|arm|thumb] <func> [--addr] [--json] [--project FILE] [--no-vars] [--omit aliases,line_mappings,variables,types] [--tokens] [--storage] [--slice ARCH] [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] [--option NAME VALUE]... [--kassert ARGS]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--max-fn-seconds N] [--max-fn-memory MiB] [--raw-image --target T --base VMA]\n\
+         unlace decompile-all <binary> [--isa auto|arm|thumb] [--json] [--project FILE] [--functions a,b,..] [--addr 0xVMA]... [--no-vars] [--omit aliases,line_mappings,variables,types] [--tokens] [--storage] [--language auto|c|rust|java|go] [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
          unlace decompile-project <binary> [--isa auto|arm|thumb] [-o DIR] [--functions a,b,..] [--addr 0xVMA]... [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--assert DIRECTIVE|@FILE]... [--types FILE.h|DIR]... [--types-cpp CC] [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
          unlace decompile-graph <binary> [--isa auto|arm|thumb] [-o FILE] [--label TEXT] [--max-fn-seconds N] [--max-fn-memory MiB] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]...\n\
+         unlace map <binary> <name|0xaddr> (--line N | --span L1:C1-L2:C2 | --addr 0xADDR) [--json] [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] [--option N V]...   # output spans <-> instruction addresses, and the variables live at an address\n\
          unlace functions <binary> [--isa auto|arm|thumb] [--json] [--jobs N|auto] [--mode auto|reliable|aggressive|fast] [--option N V]... [--define-function S[-E][=N]|@FILE]... [--raw-image --target T --base VMA (--entry|--addr VMA)...]\n\
          unlace xrefs <binary> [--isa auto|arm|thumb] (--to <name|0xaddr> | --from <name|0xaddr>) [--json] [--kind call,jump,data,read,write,vcall] [--mode auto|reliable|aggressive|fast]\n\
          unlace crypto <binary> [--isa auto|arm|thumb] [--json] [--algorithm SUBSTR] [--section NAME] [--no-xrefs]\n\

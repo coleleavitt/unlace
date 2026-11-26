@@ -911,8 +911,10 @@ per-call prototype overrides abstain. A byte local of another signedness also
 retains the existing spelling. No text search identifies a call: each recorded
 position must still contain its recorded expression before its cast is added. A
 position that does not (an emitter defect) leaves only that argument uncast.
-The inserted text contains no newlines. No buffered driver captures token maps;
-a result that did would have its map withdrawn rather than left misaligned.
+The inserted text contains no newlines. A result that carries a token map
+(`decompile-all --json --tokens`) has each applied cast added to the map
+(§9.2, "The token map on the command line"), and the map ships only if it still
+rebuilds the edited text.
 Structure renaming first adjusts the recorded byte columns. Streamed exports, non-C output and standalone `decompile` do not
 reconcile incomplete batches. The worker path still matches
 serial output with `--option protoorder off` on both.
@@ -2278,6 +2280,55 @@ key's whole 64-bit form (`crates/unlace-emit/src/p9_emit/printlanguage.rs
 browser build — a `usize` would drop the key's version half and every reference
 resolved from it would dangle.
 
+**The token map on the command line** (unlace). `unlace decompile --json --tokens`
+and `unlace decompile-all --json --tokens` add `tokens` and `tokens_error` to
+every record. They are the browser study view's records: the flag sets
+`DecompileOptions::want_tokens`, the one request both front ends make, and
+`crates/unlace-cli/src/decompile_all/tokenmap.rs (fields)` writes what
+`crates/unlace-console/src/inspect.rs (FuncDetail::resolve)` returned, with a
+token's `global` address from `crates/unlace-console/src/project.rs
+(FuncResult::token_global)`, which the wasm serializer calls too. The flag is
+opt-in: without it no capture runs and the document is byte for byte what it
+was; with it a whole-binary run executes 1.1-2.4% more instructions (four
+x86-64 fixtures of 13 to 400 functions, user mode, one pinned core) and its
+document is 3.5 to 7.4 times as long. A `--jobs` worker's
+record has no place for the map, so `--tokens` with more than one job is an
+argument error.
+
+A whole-binary C run edits `code` once more after the render: where a callee
+declares a character pointer and a call passes a scalar address,
+`project.rs (reconcile_pointer_arguments)` inserts a cast at the argument. The
+map follows the edit:
+`srcmap.rs (insert_casts)` adds a `(`, a `type` token and a `)` at each cast
+that was applied, the kinds the printer gives a cast of its own, and moves the
+later tokens of that line right by the cast's length;
+`inspect.rs (FuncDetail::insert_casts)` keeps the per-token global references
+aligned and runs `verify` against the edited text, so the map still ships only
+when it rebuilds `code` exactly. Over the 1,399 ELF, PE and Mach-O fixtures of
+the repository that load without `--target`, decompiled whole through the CLI,
+all 47,205 function bodies verify (16.0 million tokens), and `code` is
+identical with and without the flag;
+`crates/unlace-cli/tests/tokens_cli.rs` holds the same checks as the
+console-path test over seven of them in C and Rust.
+
+`unlace map` (`crates/unlace-cli/src/map.rs`) asks the map two questions about
+one function, which it decompiles as `unlace decompile --json --tokens
+--storage` does. A span of the text maps to the set of `address` values of the
+tokens it touches: a token on `line` covers the half-open column range
+`[col, col + len)`, places are ordered by line and then column, and a token
+is touched when it starts before the span's end and ends after its start, so
+`--line N` is the span from `N:0` to `(N + 1):0`. An instruction address maps
+back to the runs of text that came from it: tokens with that `address` that
+follow one another on one line form one run, from the first one's start to the
+last one's end. The same answer lists the variables live at the address: every
+variable with a `storage` piece (`docs/spec/06-variables-and-merge.md`,
+"Variable storage") one of whose ranges holds it, with those pieces; the two
+rows a parameter and its spill slot have under one name answer as one variable.
+The `unlace` crate's `unstable::mapping` module
+(`crates/unlace/src/unstable/mapping.rs`) offers the same three queries as typed
+calls, through `crates/unlace-cli/src/embed/mapping.rs` and so through the same
+functions.
+
 **Literal format.** The remaining P9/`literal-format` knobs all act at the
 constant/type-name chokepoints of this walk: `option integerformat`
 (hex/dec/best — "best" scores which base makes the constant's digit pattern
@@ -3266,6 +3317,7 @@ separators, bidi markers, surrogates and private-use ranges as escape-worthy,
 and `printc.rs (print_unicode)` emits the named C escapes then falls to `print_char_hex_escape`, which emits only `\x` (zero-padded to 2/4/8 hex digits by codepoint magnitude). Internal strings
 (not in the loadimage) can be registered under a constant-space hash address
 and resolve through the same cache.
+Inside a double-quoted string literal, `printc.rs (print_unicode_in_string)` writes a single quote unescaped; char literals still escape it as `\'` (`print_unicode`).
 
 **Bounded literals** (unlace, `printc.rs (bounded_char_array)`). A Rust or Go
 literal committed as a length-bounded `char[N]` (chapter 01's `fatstrrecords`
@@ -3547,6 +3599,89 @@ it replaces, asserted field-by-field — and by pointer identity for the tokens,
 since `printlanguage.rs (parentheses)` decides parenthesization with `ptr::eq`.
 Reading the C profile therefore produces the identical token, so introducing the
 plane is a byte-identical rewrite and `docs/baseline.json` is never re-pinned.
+
+**(unlace) Language flavours.** A *flavour* is an output-language profile read from a TOML
+file (`p9_emit/langflavour.rs`): the file names one of the four languages as its `base` and
+overrides parts of that language's `LangProfile`. `printc.rs (PrintC::set_flavour)` selects
+the base language as `option setlanguage` does and then makes `PrintC::lang` return the
+flavour's profile; `PrintC::set_name` drops it, so selecting a language by name always
+renders the built-in one. `out_lang` stays the base, so the type speller, the statement
+emitters of `langrust.rs` and `langgo.rs`, and every pass that asks `OutLang` what a
+construct means behave as they do for the base language. A flavour changes what the printer
+writes and nothing about the recovered function. With no flavour, and with a file that sets
+only `base`, the output is the base language's byte for byte.
+A file may also set `name`: a string with some text in it, which the JSON document reports as
+`language_flavour`. `Flavour::name` returns it. Without `name` the CLI takes the file's stem
+(`crates/unlace-cli/src/langfile.rs`). The name does not change the printer.
+
+The profile is not the whole of a language. A statement emitter may write a keyword as text,
+a pass may test `out_lang` where a capability would do, and a form selects which language's
+emitter runs, not a spelling. So a field is overridable only for the base languages whose
+printer reads it at **every** site that prints the construct. The loader's tables
+(`KEYWORDS`, `OPERATORS`, `FORMS`, `CAPS`) record that per field and base, and
+`langflavour.rs (load)` refuses everything else with the field's name: an unknown key, a
+value the field does not take, an override the base language's printer cannot honour
+(`forms.switch: the c printer cannot honour "rust-match": ...`). Each row was established
+twice: by reading the field's readers, and by a corpus check per base language over 22
+native fixtures of `crates/unlace-analysis/tests/fixtures`, the Rust and Go fixtures of
+`tests/fixtures` and two DEX files. For a keyword or an operator the check sets the key to a
+marker and requires that the output equals the base language's except where the marker
+stands for the default spelling, and that no default spelling of the construct is left
+outside comments and constants. A key that leaves one behind is not offered for that base.
+
+- **Keywords** are the profile's `kw_*` fields and `null_literal`. C and Java take all
+  fourteen keys (`break`, `case`, `continue`, `default`, `do`, `else`, `for`, `goto`, `if`,
+  `null`, `return`, `switch`, `true`, `while`); `true` is printed only as the condition of
+  an endless loop. Rust takes `break`, `continue`, `default` (its `_` arm), `else`, `if`,
+  `null`, `return`, `switch` (its `match`) and `while`. Go takes `continue`, `else`, `goto`,
+  `null` and `switch`: its statement emitters and conversion closures write `if`, `return`,
+  `break`, `for`, `case` and `default` as text.
+- **Operators.** An `OpToken` is a static compared by identity (`printlanguage.rs
+  (parentheses)`), so a flavour does not replace tokens. It carries a spelling per token,
+  and every place that writes a token's opening text asks `printc.rs (PrintC::op_spelling)`:
+  the RPN emitter, and the statement emitters that write `!`, `&&`, `||` or `=` themselves.
+  Precedence, associativity, spacing and parenthesization stay the token's. A key covers the
+  C token and the token the base language's `map_token` puts in its place; where the base
+  prints two keys as one token (Go's `>>` for both right shifts) a file may set one of them.
+  Rust does not take `plus`, `minus` or `multiply` (integer arithmetic prints as
+  `wrapping_*` calls) nor `assign` (an array initialization writes its `=` as text). Go
+  does not take `boolean_not`, `boolean_or`, `not_equal`, `boolean_xor` or `assign`, which
+  its bottom-test loop header and its conversion closures write as text. The compound
+  assignments, `++`, the conditional, the unary minus, address-of, dereference, the member
+  and subscript tokens, the cast, the call, the comma and the or of enum constants have no
+  key.
+- **Forms.** A form picks which language's emitter prints a construct. That emitter writes
+  its own language's keywords and expects the structure its language was given, so most
+  forms cannot be mixed. Three can. C takes `member = "rust-deref-paren"`: `p->f` prints as
+  `(*p).f` at every member access, the constant-pool reference of `printc/cpoolprint.rs`
+  included. Rust takes `goto = "c-goto"` (with `keywords.goto`, which Rust lacks) and
+  `label = "c-colon"`: the jump Rust renders as a diverging marker prints as a `goto`
+  statement and its target as a label line, so no marker is counted.
+- **Capabilities.** C takes `implicit_bool_conditions = false`, which is `truthycond off`:
+  the capability is read at the one site that option acts on. No other capability is
+  overridable. Ten are read by nothing. `c_for`, `integer_promotion` and
+  `signed_text_byte` describe the base language to the passes, which ask `OutLang`, and to
+  the arithmetic of case labels. The rest are read at some of the sites that print the
+  construct and not at others: `brace_elision` leaves the one-line `if (c) break;`,
+  `integer_suffixes` the suffix of a pointer scale, `ternary` the guarded ARM shift and
+  `paren_conditions` the `while( true )` of an endless loop.
+- **Types.** There is no type table. The speller is chosen by `out_lang` (`langtypes.rs`),
+  not read from the profile, and a type's name is also its identity in the type factory.
+
+The one text pass after the printer, the cookie literal-return rewrite of
+`crates/unlace-decomp/src/infra/decompile_drive.rs`, matches and writes the printer's
+spellings of `=` and `return`, so it also applies under a flavour that respells them.
+Identifiers are still checked against the base language's reserved words
+(`LangProfile::sanitize_identifiers`).
+
+Three surfaces load a flavour. `--language-file FILE` on `decompile` and `decompile-all`
+(`crates/unlace-cli/src/langfile.rs`) reads and checks the file while the command line is
+parsed, selects its base language as `--language` would, so every reader of the options sees
+the base, and installs the flavour once the options are applied; `--language` and a
+`setlanguage` for another language are refused with it, and a `--jobs` worker reads the file
+again. The console command `language file <path>` does the same in a script. The facade's is
+`Decompiler::with_language_file` in `crates/unlace/src/unstable/flavour.rs`.
+`decompile-project` and `decompile-graph` refuse the flag: their output is C by contract.
 
 **(unlace) The rust-language back-end.** `option setlanguage rust-language` selects
 it (`p0_knowledge/options.rs (OptionSetLanguage)`, the upstream selector, which
@@ -6202,6 +6337,227 @@ through `emit_block`. At `built` each of these prints exactly the calls the
 block printer makes for the same block, so the output with the option on is the
 output with it off; a difference is a bug. The tree is dropped when the body is
 printed.
+
+**The tree schedule.** `PrintC::ctree_rewrite` is only a runner. Every rewrite of the
+tree described above is a row of one schedule (`tree_schedule`, `printc/ctreeprint.rs`):
+a name, the level the tree has when the row runs, and what it runs. The runner takes the
+levels in order (`built`, `statements`, `rewritten`, `final`). For each row it raises the
+tree to the row's level and runs it; within a level the callbacks an embedder registered
+at that level run first, in registration order, then the built-in rows that take the tree
+to the next level:
+
+| Level | Built-in rows, in order |
+|---|---|
+| `built` | `statements` (`split_statements`), `plans` (`ctree_take_plans`) |
+| `statements` | `tryforms`, `iteforms`, `boolreturn`, `retternary`, `noretfirst`, `returnruns` (the `boolreturn` folds), `orexit`, `nestedand` |
+| `rewritten` | `listtries`, `resttries`, `javarests`, `switcharms`, `labels` |
+| `final` | none: the tree prints |
+
+Each `if` row visits, in statement order, the statements that are their block's own node
+and whose block is a `BlockIf`, and skips one an earlier row gave a form (`tryforms`: a
+`Try` or `JavaTry`; `iteforms`: an assignment; `boolreturn` and `retternary`: a `return`),
+so the rows give the result the former single statement loop gave: the `try` forms, then
+the assignment forms, then, outside conditions, `boolreturn`, `retternary` and
+`noretfirst` in that order of precedence. A row whose option is off, or whose output
+language is not C where the option is C-only, does nothing.
+
+A registered callback (`TreeHookRegistry` on the architecture,
+`crates/unlace-ctree/src/ctreehooks.rs`; `ArchTreeHookExt::on_ctree`;
+`Decompiler::with_tree_hook` in `unlace::unstable::ctree`) gets the tree for writing and
+the function for reading. At `built` it sees one statement per structured block; at
+`statements` the split leaves with the print plans moved in; at `rewritten` the result of
+the built-in rewrites, before the label lines, the recorded `try` forms and the switch
+arms; at `final` the tree that prints. The printer prints from the tree and from the
+structured blocks its statements name, so it honours the edits the built-in rows make: an
+op taken out of a `Stmts` leaf is not printed, a graph or list sequence prints its
+statements in the tree's order, a statement turned into an empty sequence prints nothing,
+and the `return`, `&&`/`||` and moved-arm forms print as described above. A callback runs
+once per print of a function, and one decompile prints a function more than once when line
+mappings or tokens are asked for (the text, then the markup pass), so it must make the
+same edit each time. A panic in a callback is a panic while printing: the function fails
+with `panic while rendering C / extracting variables`, the printer is returned cleared
+(`ArchPrintExt::with_print`), and the callbacks stay registered for the next function. With no callback registered the schedule is the built-in rows alone
+and the output is unchanged. With `UNLACE_STAGE_DIFF` set, each row reports the lines of
+the tree's dump (`CTree::dump`) it changed, as stage `ctree:<row name>`.
+
+**The exported tree** (`--ctree`; `p9_emit/ctreeexport.rs`, `printc/ctreerecord.rs`). With
+`DecompileOptions::want_ctree` the markup render of a function is a *tree-capture render*
+(`PrintC::doc_function_capture`, reached through `print_c_with_ctree`): the token render
+of `doc_function_tokens`, in which the RPN driver also records one node per `push_op`
+(the operator token, the op, whether `parentheses_top` put it in parentheses) and one per
+`push_atom` (the atom's text, tag, op and Varnode), each with its parent (the entry on top
+of the RPN stack when it was pushed) and the range of captured tokens it printed, plus
+the token ranges the driver itself printed (`emit_op`, its parentheses). The emitter also
+marks where the function begins and where each `begin_statement`/`end_statement` pair
+lies in the token stream. The reported text is still the plain render; no other render
+records anything, and `code` is byte-identical with and without the capture.
+
+`ctreeexport::build` turns the capture into an `ExportTree` (a `function` node over
+typed nodes; the kinds and members are listed in `docs/cli.md`, "The JSON documents",
+`--ctree`):
+
+- A constant (`const` node) has a `type` when the printer printed it for a Varnode. The
+  constant branch of `push_vn_explicit_ir` records that Varnode and the op that reads it
+  (`rpn_constant`), and the type is `fd.vn_type_read_facing(vn, op)`: the type the printer chose
+  the spelling with, spelled as every other `type` in the tree (`declarator_parts`). A constant
+  the printer spells from a value alone has none: a subscript index, a call argument with no
+  Varnode behind it (the `0x10` of `memcpy(dst, src, 0x10)`), a `case` label, the `true` of a
+  `while`. On seven fixture binaries checked for this change (the sample and six x86-64 fixtures), 1,352 of
+  8,261 constants carry a type; 6,133 of the 6,909 untyped ones are subscript indexes, 764 call
+  arguments, 11 case labels and one `while` condition. The type does not change
+  the text: the reference printer prints the tree the same way with or without it.
+
+- An expression is the recorded node and the recorded nodes under it. A `HiddenFunction`
+  token is its one operand. A binary operator applied again to one of its own operands
+  with no parentheses between them (the operand is a recorded node with the same token
+  that the driver did not parenthesize) is one node: its children are the operands of the
+  whole chain in print order, and its `addresses` are those of every operator of the
+  chain. `a + b + c` is so one `add` node over three operands, whichever way the ops
+  nest; it reads as C reads the text, `(a + b) + c`. The same holds for a binary operator
+  applied again to its *first* operand in parentheses, which is how the driver writes
+  `||` and `&&` (`((a || b) || c) || d`): the node follows that spine of parenthesized
+  first operands, holds all the operands, and is `grouped`; the reference printer writes
+  the parentheses back. A 32-term byte-mask test in a vectorized string routine is so one
+  node, not 64 levels. An assignment token never chains (`a = b = c` groups to the right
+  and stays nested). The operators the builder reads outside the driver chain the same
+  way (`a || b || c`). A `FUNCTION_CALL` node becomes a `call` whose arguments are
+  the operands of its comma operators, in order. A node the driver parenthesized is a
+  `paren` over it. A recorded node is kept as `raw` text when the number of nodes under
+  it is not its token's operand count, or when it covers a token that neither an operand
+  nor the driver printed (the routine wrote it straight to the emitter).
+- Between recorded expressions the builder reads what `PrintC` writes outside the driver:
+  `=`, `?:`, `||`, `&&` and `!` (the `Assign`, `Ternary`, `Or`, `And` and `Not` forms of
+  the tree rewrites, each as `PrintC::op_spelling` spells it; a recorded operator's token
+  is its `op_spelling` too), parentheses, a function name followed by a parenthesized argument
+  list, and commas, which make a `list` (the statements a condition runs before its
+  test).
+- Statements are read from the tokens. A token outside every recorded expression that is
+  keyword-coloured and spells `if`, `else`, `while`, `do`, `for`, `switch`, `case`,
+  `default`, `try`, `return`, `goto`, `break` or `continue` opens that form; the
+  spellings are the profile's (`PrintC::lang`), so a language file over C that respells a
+  keyword changes the spelling and not the node, and the tree's `style.keywords` records
+  each respelled keyword by its C spelling (a `switch`
+  followed by `;` instead of a block is a jump through a table with no recovered target:
+  `switch(value);`); braces and
+  parentheses are matched over the tokens outside recorded expressions; a statement mark
+  that starts at a token gives the end of a `return`, a jump or an expression statement.
+  An `if` with its `else if` links is one `if` node: its children are, for the `if` and
+  for each link in turn, the condition and the part it guards, then the `else` part when
+  there is one. A condition is an expression and a part a `block` or a statement, which
+  tells a link from the `else` part; a chain is so one wide node whatever its length.
+  Tokens flagged as a declaration are a `decl` (its declared type is the declarator
+  without its identifier); a comment token is an `eol_comment` when it follows a token on
+  its line by one space, else a `comment`; a line that holds no token is a `blank_line`
+  when it is exactly its level's indentation. The lines above the prototype are comments
+  (column 0) or `raw`; the prototype is the tokens flagged as such.
+- A node's span is the position of its first and last token. A statement's `addresses`
+  are the instruction addresses of the ops its tokens name (`opref`), an expression
+  node's the address of its own op, both in output units (`output_code_offset`). A leaf's
+  `type` is its Varnode's type and a declaration's its declared type. An operator's is
+  the type of its op's output when it is the outermost node printed for that op, or the
+  right side of the assignment that op prints to its own output (`i = i + 1`: the sum has
+  `i`'s type); any other node printed for its parent's op is a part of the parent and has
+  no type of its own.
+
+A tree has at most `ExportTree::MAX_LEVELS` = 61 levels (the function node is level 1,
+its body block 2, the body's statements 3), so every walk of a tree has a bounded depth
+and the `--json` document, in which a node of level `d` is nested `3 + 2d` arrays and
+objects deep and its own arrays one more, nests at most 126: inside the limit of the
+project's JSON reader (`jsonfmt`, 128) and of `serde_json`'s default (128). The builder
+keeps the bound exactly. On the statement side it tracks the level of the statements it
+is building: a block's statements are two levels below the statement that owns the block,
+an unbraced arm and an `else if` one level, and a statement is built only on a level
+below the last (it needs one for its operands); a statement with no room for that fails
+to parse and is kept as `raw` lines under the rules below, so the 29th of 29 nested `if`s
+is text (an `else if` chain is one node and costs no level per link). On the expression side `clip` cuts each parsed expression: a node on level 61
+that has operands of its own becomes a `raw` node holding the text the reference printer
+prints for it. The expression parser itself recurses at most 61 calls deep; what needs
+more is past the last level and stays text. A chain costs one level whatever its length,
+so the bound is met only by real nesting. `insert_cast` clips the cast it writes in the
+same way, and the JSON reader refuses a node deeper than 61 levels.
+
+Every item of a block is accepted only if it starts at the column its kind prints at and
+the reference printer reproduces its text; otherwise the whole lines it covers are one
+`raw` item. Every expression is accepted only if the reference printer reproduces its
+text; otherwise its operands are checked one by one and it is `raw` if that does not
+help. The finished tree is printed once more and compared with `code`; a difference is
+reported as the function's `ctree_error` and no tree is exported. The reasons a function
+has no tree are: an output language other than C, a language file over one included (the
+statement reader knows C's forms);
+the cookie-literal return rewrite edited the text after it was printed; a token that is
+not at its recorded position in the text; a prototype that is not one line at column 0;
+a body that is not one brace pair; the final comparison. A batch that inserts
+pointer-argument casts into the text (`reconcile_pointer_arguments`) wraps the node of
+each cast argument in a `cast` node and moves the spans behind it
+(`ExportTree::insert_cast`, `FuncDetail::cast_tree_arguments`); if the tree then does
+not print back to the edited text it is dropped with that reason.
+
+**Languages.** The tree records its output language (`ExportTree::lang`; the JSON member
+`language`). The builder reads each language's statement forms from its profile: the test of
+`if`, `while` and `for` is parenthesised when `caps.paren_conditions` says so, a statement ends
+with the profile's `kw_semicolon` (Go has none, so a statement ends at its line), Go's `while`
+spelling is also its `for` (a header with a `;` is a three-part `for`), and Rust's `loop {` is a
+`while` with an empty test. Rust's `match` is a `switch` whose items are `arm` nodes (a pattern
+list and a block; the wildcard is text), and its header is bare. An attribute line above the
+prototype is an `attribute` node, and a line comment above the prototype or in a block is a
+comment node. The printer writes the same forms back, and a form the reader does not cover is
+kept as a `raw` node.
+
+The reference printer (`ctreeexport::CPrinter`, the defaults of the `Printer` trait)
+prints a tree as follows; it is the builder's check and what `print_c` and
+`unlace::unstable::printer` run. Header children print one per line; the prototype is
+its `text`; the body's opening brace follows `style.brace_function`. An item of a block
+starts a new line at its column (`item_column`): 0 for a label, `style.comment_indent`
+for a comment line, the block's indent for a statement, and inside a `switch` one level
+for `case`/`default` and blank lines and two for statements. An `eol_comment` is one
+space behind the item before it. A `raw` item is a line break and its text. `if` prints
+`if (`, the condition, `)`, its comments, then the part it guards: a `block` braced per
+`style.brace_ifelse`, a `goto`/`break`/`continue` after one space, any other statement on
+the next line one level deeper. For each child after that, `else` starts a line; a
+condition follows it as ` if (cond)` with its part, printed the same way (an `else if`
+link), and a part is the `else` part: a `block`, or a statement on the next line one
+level deeper. `while` and `do`-`while`
+print ` (cond)`, or `( true )` when the condition is the constant `true`; `for` prints
+`for (init; cond; step)`; `switch` prints `switch(value)` and its block, or
+`switch(value);` when it has none; `try` prints `try`, its
+block, a space, its header text and the handler block; `return` prints its value after a
+space; every simple statement ends in `;`. An operator prints its token around its
+children by `form` as `emit_op` does: `binary` pads the token with `spacing` spaces on
+each side, before each operand after the first (and its closing token likewise before
+the third, for `?:`); a `grouped` chain of `n` operands opens `n - 2` parentheses in
+front and closes one after each operand from the second to the one before the last, `prefix` prints the token then
+`spacing` spaces, `postsurround` prints the opening token after the first child and the
+closing token after the last, `presurround` prints the opening token, the first child,
+the closing token, then the second child, and `space` prints only its spacing. A `call`
+prints the callee, its opening token, the arguments separated by `sep`, its closing
+token; a `list` its children separated by `sep`; a `paren` its child in parentheses; any
+other node its `text`.
+
+`print_c_with_ctree` does not change the line width. A caller whose text may be wrapped
+(`option maxlinewidth`) suspends it around the call (`PrintC::suspend_line_size`), as
+every `--json` render does: the token positions are those of unbroken lines, and the tree
+has no node for a line break inside an expression, so wrapped text reports a token that is
+not at its recorded position and exports no tree.
+
+Corpus checks (2026-11-26). The harness's tree pass
+(`FunctionTestCollection::check_trees`, `Pass::Trees`; the on-request parity test
+`exported_trees_print_back_over_the_corpora`) runs every script of `tests/datatests` and
+`tests/stages` and, after each `print C`, exports the printed function's tree from a
+render with unbroken lines and prints it back: 5,344 functions are printed, 4,871 of them
+in C; all 4,871 export a tree that prints back byte for byte; 4,858 trees hold no `raw`
+node and 13 hold `raw` lines only above the prototype (132 lines of `structdefs` type
+definitions and the `bytearrayc` helper preamble). The
+test fails on a tree that prints back differently, on a function without a tree and on a
+C `raw` node inside a function body; the other languages' `raw` nodes are counted per
+language (`docs/architecture/ctree.md`, section 11).
+`crates/unlace/examples/ctree_roundtrip.rs` over `decompile-all --json --ctree` of every
+fixture binary in the repository (1,482 binaries, 47,525 functions with code): the
+38,332 functions printed in C all have a tree that prints back byte for byte; 38,327 of
+those trees hold no `raw` node and five hold nine between them, all of it text nested
+past level 61; The 9,193 functions printed in another output language are measured in
+section 11 of `docs/architecture/ctree.md`. The example
+exits 2 on a document or tree it cannot read, so a run that reads nothing is not a clean
+run.
 
 
 ## (unlace) Per-stage attribution of text cleanup removals (`UNLACE_STAGE_DIFF`)

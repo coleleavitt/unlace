@@ -2955,6 +2955,13 @@ impl Rule for RulePushMulti {
                 .expect("RulePushMulti: stale substitute")
                 .get_out()
                 .expect("RulePushMulti: substitute has no output");
+            // The reused value takes over the merge's readers, so its consumed bits cover theirs.
+            let merged = data.vbank().get(subout).unwrap().get_consume()
+                | data.vbank().get(outvn).unwrap().get_consume();
+            data.vbank_mut()
+                .get_mut(subout)
+                .unwrap()
+                .set_consume(merged);
             data.total_replace(outvn, subout)
                 .expect("RulePushMulti: totalReplace (COPY case)");
             data.op_destroy(op);
@@ -2989,7 +2996,16 @@ impl Rule for RulePushMulti {
                 .get_slot(buf1[0]);
             let substitute =
                 match RulePushMulti::find_substitute(data, buf1[0], buf2[0], bl, earliest) {
-                    Some(s) => s,
+                    Some(s) => {
+                        // An existing value gains a reader whose needs are not known: assume all bits.
+                        let sout = data.obank().get(s).unwrap().get_out().unwrap();
+                        let size = data.vbank().get(sout).unwrap().get_size();
+                        data.vbank_mut()
+                            .get_mut(sout)
+                            .unwrap()
+                            .set_consume(calc_mask(size));
+                        s
+                    }
                     None => {
                         let op_addr = data
                             .obank()

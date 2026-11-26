@@ -62,6 +62,7 @@
 
 mod error;
 mod types;
+pub mod unstable;
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
@@ -85,8 +86,11 @@ pub use types::{Decompiled, FunctionInfo, Language, Perms, Segment, Target};
 pub struct Decompiler {
     request: embed::Request,
     session: Option<embed::Session>,
+    /// The rules and phase callbacks of [`unstable::hooks`].
+    hooks: unstable::hooks::Hooks,
     /// The scratch copy of bytes handed over in memory; removed on drop.
     _scratch: Option<tempfile::TempPath>,
+    tree_hooks: unstable::ctree::TreeHooks,
 }
 
 impl Decompiler {
@@ -339,7 +343,9 @@ impl Decompiler {
                 ..embed::Request::default()
             },
             session: None,
+            hooks: unstable::hooks::Hooks::default(),
             _scratch: None,
+            tree_hooks: unstable::ctree::TreeHooks::default(),
         }
     }
 
@@ -643,8 +649,15 @@ impl Decompiler {
     fn session(&mut self) -> Result<&mut embed::Session> {
         if self.session.is_none() {
             let request = &self.request;
-            let loaded = catch_unwind(AssertUnwindSafe(|| embed::load(request)))
-                .map_err(|panic| Error::Panic(panic_message(panic.as_ref())))?;
+            let (hooks, tree_hooks) = (&self.hooks, &self.tree_hooks);
+            let loaded = catch_unwind(AssertUnwindSafe(|| {
+                embed::load_with(request, &mut |arch| {
+                    hooks.install(arch)?;
+                    tree_hooks.install(arch);
+                    Ok(())
+                })
+            }))
+            .map_err(|panic| Error::Panic(panic_message(panic.as_ref())))?;
             let session = loaded.map_err(|error| match error {
                 embed::LoadError::Arguments(message) => Error::Request(message),
                 embed::LoadError::Load(message) => Error::Load(message),

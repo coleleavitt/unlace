@@ -1400,22 +1400,60 @@ they are not part of either child.
 inflated and checksum-verified in full before a single element is decoded
 (`crates/unlace-sleigh/src/slaformat.rs (FormatDecode::ingest_stream)`).
 
-(unlace) **Constructor templates on first use.** Most of a `.sla` is the
-`<construct_tpl>` p-code template of every constructor, and a run builds p-code
-for few of them. The symbol-table decode therefore keeps each template's encoded
-bytes (`Decoder::skip_element_raw`, which only a byte-encoded decoder provides;
-an XML decoder decodes eagerly as before) and reads just its `section` and
-`delay` attributes, which place the handle in its constructor and answer
-instruction resolution's delay-slot question. The template itself is decoded
-by the eager `ConstructTpl::decode`, over the same bytes and against the
-engine's own address-space manager, the first time the p-code builder or an
-exported operand needs it
-(`crates/unlace-sleigh/src/lazytemplates.rs (LazyTemplates::get)`), and
-kept. Spaces keep the indices the `.sla` gave them, so the value is the one an
-eager decode makes, whenever it is made; encoding a lazily decoded spec decodes
-all of them first. The one visible difference is when a corrupt template is
+(unlace) **Subtables and operands on first use.** Most of a `.sla` is its
+subtables: the constructors, their `<construct_tpl>` p-code templates and the
+`<decision>` trees that pick among them (x86-64: 9,121 constructors, 80% of the
+inflated stream, nearly all of them in the one `instruction` table), then the
+`<operand_sym>` contents of those constructors' operands (26,603 of x86-64's
+30,579 symbols), and a run resolves a few dozen constructors. The load
+therefore keeps the inflated stream
+(`crates/unlace-sleigh/src/lazysla.rs (SlaSource)`) and walks the symbol
+contents once with a flat cursor that reads nothing but record boundaries
+(`crates/unlace-sleigh/src/slascan.rs (Scan::skip_element_with)`): every other
+symbol is copied out and decoded at load as before, each `<operand_sym>` is
+reduced to its id and byte range, and each `<subtable_sym>` to the byte range
+and template count of each constructor and the root decision node's field and
+children ranges (`crates/unlace-sleigh/src/lazysla.rs (Layout::walk)`). The
+symbol headers (name, id, scope) are read with the same cursor
+(`crates/unlace-sleigh/src/slghsymbol.rs (SymbolTable::scan_symbol_header)`)
+and checked and inserted as the packed decoder's path checks and inserts them.
+The regular decoders then run over the recorded byte ranges the first time
+something is read: a constructor when it is resolved, printed or built
+(`crates/unlace-sleigh/src/lazysla.rs (LazySubtable::constructor)`), which also
+keeps its templates' bytes in their handle slots; a template when the p-code
+builder or an exported operand needs it
+(`crates/unlace-sleigh/src/lazysla.rs (SlaSource::template)`); a decision node
+when a resolution walks through it (`crates/unlace-sleigh/src/lazysla.rs
+(LazyDecision::node)`), a terminal node whole and an inner node as its field
+plus pending children; an operand symbol when the table hands it out
+(`crates/unlace-sleigh/src/slghsymbol.rs (SymbolTable::symbol)`: every lookup
+by id or by name passes through it, so the symbol's payload accessors stay
+infallible and a corrupt operand is reported by the lookup). Template handles
+are allotted in stream order by the load
+walk, so they are the ones an eager decode allots; an `OperandValue` inside a
+constructor is validated against the live count of its own table and the
+`numct` of every other, as the eager decode validates it against the tables
+decoded so far. Constructor bodies and decision trees carry no address-space
+attribute, so they decode against an empty manager; templates decode against
+the engine's own, whose spaces keep the indices the `.sla` gave them. So every
+value is the one an eager decode makes, whenever it is made; encoding a lazily
+loaded spec decodes all of it first, and `SleighBase::has_context_commits`
+answers from the load walk (a `<commit>` child seen under a constructor)
+without decoding. The one visible difference is when a corrupt element is
 reported: at its first use instead of at load. `UNLACE_SLA_LAZY=0` decodes
-every template at load.
+the whole `.sla` at load, as an XML decoder always does.
+
+The walk is skipped when the `.sla` cache's uncompressed copy carries its
+result: `crates/unlace-slacomp/src/slacache.rs (read_image)` appends the
+encoded layout (`crates/unlace-sleigh/src/lazysla.rs (index_raw_image)`:
+every range above, the header and content offsets, the template count and the
+commit flag, as LEB128 integers) and a trailer naming the stream's and the layout's lengths to the
+`.slr` it writes, in the same rename as the stream, so the two cannot drift
+apart; a copy from before layouts were kept gets one on its next read.
+`SlaStream::inflate` reads the layout back when the trailer is present and its
+lengths add up, and walks the stream otherwise (a compressed `.sla`, a
+Ghidra-built one, a small image without a copy). The eager decoder takes the
+stream part of such an image and ignores the layout.
 The decompressed buffer is then *handed* to the packed decoder rather than
 copied into it (`crates/unlace-base/src/marshal.rs
 (PackedDecode::ingest_owned)`): the inflate buffer becomes the decoder's leading
@@ -1558,7 +1596,9 @@ vendored corpus and every script written before quoting existed parse exactly as
 before. The two producers — `decompile/script.rs (console_path)` and its mirror in
 `scripts/decompile.py` — quote only a path that needs it, which keeps the emitted
 script byte-identical for every path that works today, including for an older
-`decomp_dbg` reached through `--decomp-dbg` (DIV-100).
+`decomp_dbg` reached through `--decomp-dbg` (DIV-100). The `rewrite rules`
+command of `--rules FILE` (chapter 3, §3.2) reads its path the same way, and its
+lines come directly after the load, ahead of every `option` line.
 
 The redirect's own write is fallible for the same reason. `decomp_dbg` re-syncs
 the open redirect after every command
@@ -1727,7 +1767,9 @@ ran out: the first probe to see the expiry records its site
 and later ones leave it, so the site is the innermost polled loop that was
 running when the deadline passed — an action (a rule pool adds the rule that
 applied most since the function's reset, `crates/unlace-middle/src/infra/action.rs
-(ActionPool::budget_site)`), heritage, variable merging, region identification,
+(ActionPool::budget_site)`, or the two rules that undo each other on one op,
+`action.rs (ActionPool::rewind_site)`, chapter 3, §3.2), heritage,
+variable merging, region identification,
 region structuring, `action activeparam`'s trial scoring, a
 store-reachability walk or a jump-table step (`jump-table value walk` for
 the loop over a table's values). A walk that recurses too often
@@ -1946,9 +1988,11 @@ mode. `--jobs 1` is the default and is the in-process loop above, unchanged; the
 console and parity paths never see a pool.
 
 The record codec is isolated in `crates/unlace-cli/src/jobs/wire.rs`;
-it does not own worker processes or scheduling. Chunk specifications and result
-frames retain their existing version markers, little-endian fields and field
-order. A worker flushes each completed function's result, and the parent keeps
+it does not own worker processes or scheduling. Chunk specifications keep their
+version marker. A result frame is version 14: it carries the token map (`--tokens`)
+and the C syntax tree (`--ctree`) of each record when the parent asked for them, so
+those flags give the same document at every job count. Fields are little-endian and
+in a fixed order. A worker flushes each completed function's result, and the parent keeps
 every complete frame before a truncated tail. Wire counts reserve no more
 storage than the remaining bytes can justify. Literal-byte tests pin both
 formats independently of their decoders.
@@ -4123,16 +4167,22 @@ adjacency, root-filter behavior and the empty `UNPORTED_ALLOWLIST`
 require an intentional schedule change; matching it alone does not prove
 decompilation parity, which remains covered by the output regression suites.
 
-**Embedder hooks** (unlace). Code that links `unlace-decomp` can extend the default
+**Embedder hooks** (unlace). Code that links the engine can extend the default
 tree without replacing it, through a registry on the `Architecture`
 (`crates/unlace-decomp/src/infra/hooks.rs (HookRegistry)`,
 reached by `crates/unlace-middle/src/infra/architecture.rs
-(Architecture::add_rule, Architecture::on_phase)`). There is no option and no
-CLI surface for it. `add_rule(after_group, state, rule)` puts a rule directly
+(Architecture::add_rule, Architecture::on_phase)`). There is no option for it.
+`add_rule(after_group, state, rule)` puts a rule directly
 behind the last rule of `after_group`, in the first pool in schedule order
 (`oppool1`, `oppool2`, cleanup) that holds a rule of that group; rules added to
-the same group keep their registration order. The rule's own group, from its
+the same group keep their registration order. `hooks.rs (rule_groups)` lists
+the groups with the pool each resolves to; `typerecovery` has rules in both
+`oppool1` and `oppool2` and resolves to the first, so `stackvars` is the only
+group that reaches `oppool2`. The rule's own group, from its
 `RuleState`, decides which root variants keep it, as for every built-in rule.
+Its name is its own: a rule is addressed by its name (`option togglerule`, a
+breakpoint), so a registration under the name of a built-in rule
+(`hooks.rs (rule_names)`) or of a rule registered before is an error.
 `on_phase(phase, callback)` runs a callback with the function at one fixed
 schedule point per phase: P2 after `start`, when the ops are lifted and the CFG
 is built; P3, P4 and P5 together, in that order, after fullloop reaches its
@@ -4144,11 +4194,37 @@ registering for them is an error. Each point is a leaf action
 (`phasehook_p2` … `phasehook_p8`) in the group of its neighbours (`base`,
 `merge`, `blockrecovery`), so a root variant that does not run a phase does not
 run its callbacks; a jump-table recovery partial runs none, and a restart runs
-them again. A registration rebuilds the universal tree and derives the current
-root again: group lists survive, but breakpoints and disabled rules set on the
-old roots do not, so hooks are registered before those. With nothing registered
-the schedule holds no extra row and no extra leaf, and the tree, its listing
-and the output are the ones described above.
+them again, on the function the restart rebuilt. A registration rebuilds the
+universal tree and derives the current root again: group lists survive, but
+breakpoints and disabled rules set on the old roots do not, so hooks are
+registered before those. With nothing registered the schedule holds no extra
+row and no extra leaf, and the tree, its listing and the output are the ones
+described above.
+
+What a callback may change follows from where its point sits, and nothing checks
+it. At the P2 point the function is not in SSA form and the whole tree still
+runs, so a change to an op's opcode or inputs is simplified like lifted code.
+At the P3–P5 point fullloop has finished: a data-flow change is not simplified
+again, an op it leaves unread stays and prints (dead-code elimination is a
+mainloop member), and a Varnode it creates gets no inferred type. From the P6
+point on, the HighVariables, their covers and then the block structure are
+computed from the data flow, so a change there leaves them stale; those points
+are for reading. No point allows a change to control flow, which only a restart
+follows again.
+
+The `unlace` crate exposes the registry to a library user as
+`unlace::unstable::hooks`
+(`crates/unlace/src/unstable/hooks.rs (Decompiler::with_rule)`), outside the crate's
+stability promise. `with_rule` and `with_phase_hook` keep the rule and the
+callback on the `Decompiler`, because a builder call drops the loaded program,
+and register them on every load
+(`crates/unlace-cli/src/embed.rs (load_with)`) as soon as the architecture is
+built, before any option is applied. A registration the registry would refuse
+(a group no pool holds, a name that is taken, a rule that does not clone for
+its own group, a phase without a point) is refused by the builder call. That
+module's documentation is the contract a rule and a callback run under.
+`with_rules_file` adds the rules of a rewrite rule file the same way
+(chapter 3, §3.2).
 
 Flow-follow itself runs *before* the tree (the upstream `followFlow` →
 `startProcessing` order), bounded by the P0 flow options — decode-error policy
@@ -4404,6 +4480,11 @@ boundary between them, so maturity is not a property of the IR. It is a record o
 **how far the scheduler has got through one pass of the `universal` restart
 group** over this function. Facts become *settled* at fixed points of the tree, where
 the actions that could still change them never run again in that pass.
+
+The `universal` group may restart up to four times (`universalaction.rs (universal_sched)`, `max: 4`).
+A restart re-runs the whole group, so a chain of calls needs one restart per call: each call's
+prototype is known only after the previous call's return type is applied. Past the limit, the
+function prints `Exceeded maximum restarts with more pending` (chapter 02).
 
 **Levels**, in tree order. Each is reached when the node named in the second column
 *completes*:

@@ -479,6 +479,9 @@ mod verify_sectionlessextent;
 #[path = "verify_short_utf16_window.rs"]
 mod verify_short_utf16_window;
 
+#[path = "verify_ctree.rs"]
+mod verify_ctree;
+
 #[path = "verify_sparc_plt.rs"]
 mod verify_sparc_plt;
 
@@ -520,12 +523,6 @@ mod verify_unmappedentry;
 
 #[path = "verify_varsources.rs"]
 mod verify_varsources;
-
-#[path = "verify_w10_partial_types_console.rs"]
-mod verify_w10_partial_types_console;
-
-#[path = "verify_w10_union_truncation.rs"]
-mod verify_w10_union_truncation;
 
 #[path = "verify_w11_elf_loader.rs"]
 mod verify_w11_elf_loader;
@@ -610,3 +607,42 @@ mod verify_immutable_got;
 
 #[path = "verify_msvcvtabletypes.rs"]
 mod verify_msvcvtabletypes;
+
+#[path = "verify_budget_stop.rs"]
+mod verify_budget_stop;
+
+#[path = "verify_dwarfstructs.rs"]
+mod verify_dwarfstructs;
+
+#[path = "verify_dwarfvariants.rs"]
+mod verify_dwarfvariants;
+
+#[path = "verify_variantnames.rs"]
+mod verify_variantnames;
+
+#[path = "verify_msvcfpconst.rs"]
+mod verify_msvcfpconst;
+
+#[path = "verify_pdatachained.rs"]
+mod verify_pdatachained;
+
+#[path = "verify_rexthunk.rs"]
+mod verify_rexthunk;
+
+#[path = "verify_symbolnamebound.rs"]
+mod verify_symbolnamebound;
+
+#[path = "verify_symbolnamerepair.rs"]
+mod verify_symbolnamerepair;
+
+#[path = "verify_typedepth.rs"]
+mod verify_typedepth;
+
+#[path = "verify_goreg.rs"]
+mod verify_goreg;
+
+#[path = "verify_swiftdemangle.rs"]
+mod verify_swiftdemangle;
+
+#[path = "verify_gotypes.rs"]
+mod verify_gotypes;

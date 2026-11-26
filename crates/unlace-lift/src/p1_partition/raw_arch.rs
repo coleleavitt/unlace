@@ -244,6 +244,13 @@ impl RawBinaryArchitecture {
         &mut self,
         db: &crate::sleigh_arch::LanguageDatabase,
     ) -> UnlaceResult<()> {
+        let baseid = self.resolve_language_id()?;
+        self.sleigh.select_language(db, &baseid)
+    }
+
+    /// (unlace) The first half of [`Self::resolve_architecture`]: the \e language \e id the
+    /// target names ([`SleighArchitecture::resolve_language_id`]).
+    pub fn resolve_language_id(&mut self) -> UnlaceResult<String> {
         // archid = getTarget(); -- set archid so the base resolve copies it
         // verbatim (its `if (archid.empty())` branch is skipped).  We route the
         // target into archid via the base by setting target as the source; the
@@ -252,7 +259,7 @@ impl RawBinaryArchitecture {
         // archid through a dedicated setter on the base.
         let target = self.sleigh.get_target().to_string();
         self.sleigh.set_archid(&target);
-        self.sleigh.resolve_architecture(db, "")
+        self.sleigh.resolve_language_id("")
     }
 
     /// \brief Attach the default code space to the loader (the wired tail of C++

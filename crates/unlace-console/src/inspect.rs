@@ -29,6 +29,53 @@ pub struct FuncDetail {
     pub globals: Vec<GlobalRef>,
     /// Per token, the index in `globals` of the global it names.
     pub token_globals: Vec<Option<usize>>,
+    /// The exported C syntax tree of the code, or why it has none; `None` when
+    /// the caller did not ask for it (`DecompileOptions::want_ctree`). A caller
+    /// that asked for the tree and not for tokens gets a detail with no tokens.
+    pub ctree: Option<Result<unlace_decomp::ctreeexport::ExportTree, String>>,
+}
+
+impl FuncDetail {
+    /// Follow the pointer-argument casts `edits` put into `original` (the code the tree was
+    /// built from) in the tree: each cast that applies wraps its argument's node. A tree that
+    /// then does not print back to the edited code is dropped with the reason.
+    pub fn cast_tree_arguments(
+        &mut self,
+        original: &str,
+        edits: &[unlace_decomp::pointerargs::Insertion],
+    ) {
+        let Some(Ok(tree)) = self.ctree.as_mut() else {
+            return;
+        };
+        let applied = unlace_decomp::pointerargs::apply(original, edits);
+        let lines: Vec<&str> = original.split('\n').collect();
+        let columns = |text: &str| u32::try_from(text.encode_utf16().count()).unwrap_or(u32::MAX);
+        let mut followed = true;
+        for edit in edits.iter().rev() {
+            if applied.skipped.iter().any(|(skipped, _)| skipped == edit) {
+                continue;
+            }
+            let before = edit
+                .position
+                .line
+                .checked_sub(1)
+                .and_then(|line| lines.get(line)?.get(..edit.position.column));
+            followed &= before.is_some_and(|before| {
+                tree.insert_cast(
+                    u32::try_from(edit.position.line).unwrap_or(u32::MAX),
+                    columns(before),
+                    columns(&edit.expression),
+                    &edit.spelling,
+                )
+            });
+        }
+        if !followed || unlace_decomp::ctreeexport::print_c(tree) != applied.code {
+            self.ctree = Some(Err(
+                "pointer-argument casts were written into the text after the tree was built"
+                    .to_string(),
+            ));
+        }
+    }
 }
 
 /// A global data symbol the code names: its name, address, size and type.
@@ -69,6 +116,27 @@ impl FuncDetail {
             tokens_error: None,
             globals,
             token_globals,
+            ctree: None,
+        }
+    }
+
+    /// Follow the pointer-argument casts a batch inserted into `original`
+    /// (giving `edited`) into the tokens, which ship only if they rebuild
+    /// `edited`.
+    pub fn insert_casts(
+        &mut self,
+        original: &str,
+        casts: &[unlace_decomp::pointerargs::Insertion],
+        edited: &str,
+    ) {
+        for at in srcmap::insert_casts(&mut self.tokens, original, casts) {
+            let at = at.min(self.token_globals.len());
+            self.token_globals.splice(at..at, [None; 3]);
+        }
+        if let Err(error) = srcmap::verify(&self.tokens, edited) {
+            self.tokens.clear();
+            self.token_globals.clear();
+            self.tokens_error = Some(error);
         }
     }
 }
@@ -555,3 +623,6 @@ fn pointer_slots(file: &object::File, targets: &BTreeSet<u64>) -> BTreeMap<u64, 
     }
     out
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,0 +1,28 @@
+# ghidra#10272: a reused MULTIEQUAL gains a reader, so its consumed-bits mask must widen before
+# RuleOrConsume runs. Without the fix the OR with 0x180000 is dropped from the shifted value.
+# Raw 75-byte image from the PR; `f` at 0x100000 (test esi; or 0x180000 on both branches; shr 12).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'f' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '85f6741e0fb7c70d0000180089c1c1e90c894c24f8c704250000200001000000eb1c0fb7c70d0000180089c1c1e90c894c24f8c7042504002000020000000fb7c089028b4c24f8894a04c3'
+
+[script]
+commands = [
+    'lo fu f',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'ghidra#10272 the OR with 0x180000 stays in the shifted value'
+count = 1
+regex = '\| 0x180000\) >> 0xc'

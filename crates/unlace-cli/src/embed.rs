@@ -12,9 +12,16 @@
 use std::collections::BTreeSet;
 
 use unlace_console::engine::{ConsoleProgram, EntrySelector, FunctionEntry};
+use unlace_console::project::FuncResult;
+use unlace_decomp::architecture::Architecture;
+use unlace_decomp::ctreeexport::ExportTree;
 
 use crate::decompile_all::{self, Args, DriverDefaults};
 use crate::funcdecl::Declared;
+
+mod mapping;
+
+pub use mapping::{At, Held, Live, Mapped};
 
 /// A load request, in the command line's terms.
 #[derive(Clone, Debug, Default)]
@@ -31,6 +38,8 @@ pub struct Request {
     pub options: Vec<(String, String)>,
     /// `--language`.
     pub language: Option<String>,
+    /// `--language-file`: a language flavour file ([`check_language_file`]).
+    pub language_file: Option<String>,
     /// `--mode`.
     pub mode: Option<String>,
     /// `--target`: the SLEIGH language id.
@@ -47,6 +56,10 @@ pub struct Request {
     pub max_fn_memory: Option<u64>,
     /// `--omit` keys.
     pub omit: Vec<String>,
+    /// `--tokens`: every document carries the function's token map.
+    pub tokens: bool,
+    /// `--storage`: every document's variables carry their storage.
+    pub storage: bool,
     /// `--project`: a project file whose stored overrides apply first.
     pub project: Option<String>,
     /// Functions that never return, in the target's address units; each is
@@ -90,6 +103,7 @@ impl Request {
             ("--isa", &self.isa),
             ("--mode", &self.mode),
             ("--language", &self.language),
+            ("--language-file", &self.language_file),
             ("--project", &self.project),
         ] {
             if let Some(value) = value {
@@ -113,6 +127,11 @@ impl Request {
         }
         if !self.omit.is_empty() {
             push(&mut argv, "--omit", self.omit.join(","));
+        }
+        for (flag, asked) in [("--tokens", self.tokens), ("--storage", self.storage)] {
+            if asked {
+                argv.push(flag.to_string());
+            }
         }
         argv
     }
@@ -160,6 +179,14 @@ pub fn read_idb(path: &str, bytes: bool) -> Result<Idb, String> {
         noreturn: knowledge.noreturn,
         target,
     })
+}
+
+/// Check the text of a language flavour file (`--language-file`,
+/// `unlace_decomp::langflavour`); the error names the field at fault.
+pub fn check_language_file(text: &str) -> Result<(), String> {
+    unlace_decomp::langflavour::load(text)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// The SHA-256 of the file at `path`, the identity `unlace project` binds.
@@ -225,6 +252,15 @@ pub struct Output {
     pub prototype: Option<String>,
     /// The analysis warnings the body carries as comments.
     pub warnings: Vec<String>,
+    /// The exported C syntax tree, or why the function has none; `None` unless
+    /// the session exports it ([`Session::set_ctree`]).
+    pub ctree: Option<Result<ExportTree, String>>,
+}
+
+/// The tree the `ctree` member of a `--json --ctree` record holds, from its JSON text.
+pub fn ctree_from_json(text: &str) -> Result<ExportTree, String> {
+    let json = crate::jsonfmt::parse(text).ok_or("ctree: not JSON, or nested too deep")?;
+    decompile_all::ctreejson::from_json(&json)
 }
 
 /// Which function to decompile.
@@ -245,14 +281,23 @@ pub struct Session {
 
 /// Parse and load `request` once.
 pub fn load(request: &Request) -> Result<Session, LoadError> {
+    load_with(request, &mut |_| Ok(()))
+}
+
+/// [`load`], with `install` run on the architecture as soon as it is built,
+/// before any option is applied: where the `unlace` crate registers the rules,
+/// phase callbacks and tree callbacks of `unlace::unstable`. An `Err` from it
+/// fails the load.
+pub fn load_with(
+    request: &Request,
+    install: &mut dyn FnMut(&mut Architecture) -> Result<(), String>,
+) -> Result<Session, LoadError> {
     let args =
         decompile_all::parse_args(&request.argv(), "decompile").map_err(LoadError::Arguments)?;
     let segments = request.raw.as_ref().and_then(|raw| raw.segments.clone());
-    let mut prog = match segments {
-        Some(runs) => decompile_all::load_program_segments(&args, DriverDefaults::Decompile, runs),
-        None => decompile_all::load_program(&args, DriverDefaults::Decompile),
-    }
-    .map_err(LoadError::Load)?;
+    let mut prog =
+        decompile_all::load_program_embedded(&args, DriverDefaults::Decompile, segments, install)
+            .map_err(LoadError::Load)?;
     for &address in &request.noreturn {
         declare_no_return(&mut prog, address).map_err(LoadError::Load)?;
     }
@@ -295,6 +340,12 @@ impl Session {
         &self.prog.arch().archid
     }
 
+    /// Export the C syntax tree with each later decompile (`--ctree`): the
+    /// document's `ctree` member and [`Output::ctree`].
+    pub fn set_ctree(&mut self, on: bool) {
+        self.args.extra.ctree = on;
+    }
+
     /// The function inventory, one record per entry address, address-ordered
     /// (`unlace functions`).
     pub fn functions(&self) -> Vec<Entry> {
@@ -332,6 +383,11 @@ impl Session {
     /// Decompile one function, as `unlace decompile <selector> --json` does over
     /// this load.
     pub fn decompile(&mut self, selector: &Selector) -> Result<Output, String> {
+        self.run(selector).map(|(output, _)| output)
+    }
+
+    /// [`Self::decompile`], with the function's record less what the output took.
+    fn run(&mut self, selector: &Selector) -> Result<(Output, FuncResult), String> {
         let entry = self.resolve(selector)?;
         let interior = crate::interior::of_targets(&self.prog, std::slice::from_ref(&entry));
         let mut funcs = decompile_all::decompile_entries_with(
@@ -345,7 +401,7 @@ impl Session {
         if funcs.is_empty() {
             return Err("the decompiler returned no record".to_string());
         }
-        let function = funcs.swap_remove(0);
+        let mut function = funcs.swap_remove(0);
         let assertions = self.prog.assertion_outcomes();
         let mut failure = function.error.as_ref().map(|reason| {
             format!(
@@ -368,17 +424,27 @@ impl Session {
             &interior,
             &self.declared,
             self.args.omit,
+            self.args.extra,
+            self.args
+                .language_file
+                .as_ref()
+                .map(|file| file.name.as_str()),
         );
         let warnings = function.warnings.iter().map(|w| w.message()).collect();
-        Ok(Output {
+        let output = Output {
             document,
-            name: function.name,
+            name: function.name.clone(),
             address: function.address,
-            code: function.code,
+            code: function.code.take(),
             error: failure,
-            prototype: function.proto,
+            prototype: function.proto.take(),
             warnings,
-        })
+            ctree: function
+                .detail
+                .as_mut()
+                .and_then(|detail| detail.ctree.take()),
+        };
+        Ok((output, function))
     }
 
     fn resolve(&self, selector: &Selector) -> Result<FunctionEntry, String> {

@@ -407,7 +407,6 @@ impl CalleeEntryDead {
 
     /// Mark byte `b` of the register file written before every read of it, so
     /// a test can stand up a partial write followed by a wide read.
-    #[cfg(any(test, feature = "test-support"))]
     #[doc(hidden)]
     pub fn with_written_byte(mut self, b: u64) -> Self {
         self.live_read_bytes.remove(&(self.reg_idx, b));
@@ -629,7 +628,6 @@ impl CalleeEntryDead {
 
     /// Record one unnameable-transfer terminator, so a consumer of this
     /// evidence can unit-test the forwarding case without a translator.
-    #[cfg(any(test, feature = "test-support"))]
     #[doc(hidden)]
     pub fn with_opaque_cut(mut self, written: Vec<(int4, u64)>) -> Self {
         self.opaque_cuts.push(written.into_iter().collect());
@@ -637,7 +635,6 @@ impl CalleeEntryDead {
     }
 
     /// Record one system-call terminator, for the same reason.
-    #[cfg(any(test, feature = "test-support"))]
     #[doc(hidden)]
     pub fn with_trap_cut(mut self, written: Vec<(int4, u64)>) -> Self {
         let cut: ByteSet = written.into_iter().collect();
@@ -648,7 +645,6 @@ impl CalleeEntryDead {
     }
 
     /// Record one direct-call terminator, for the same reason.
-    #[cfg(any(test, feature = "test-support"))]
     #[doc(hidden)]
     pub fn with_named_cut(mut self, target: Address, written: Vec<(int4, u64)>) -> Self {
         self.named_cuts
@@ -658,7 +654,6 @@ impl CalleeEntryDead {
 
     /// Build a summary by hand, so a module that only CONSUMES this evidence can
     /// unit-test its own decisions without standing up a translator.
-    #[cfg(any(test, feature = "test-support"))]
     #[doc(hidden)]
     pub fn from_parts(
         reg_idx: int4,
@@ -695,7 +690,6 @@ impl CalleeEntryDead {
     }
 
     /// Turn the read of byte `b` into one that only stored it.
-    #[cfg(any(test, feature = "test-support"))]
     #[doc(hidden)]
     pub fn with_stored_byte(mut self, b: u64) -> Self {
         if self.live_read_bytes.remove(&(self.reg_idx, b)) {
@@ -707,7 +701,6 @@ impl CalleeEntryDead {
 
     /// Turn the read of byte `b` into a push nothing read back, so a consumer
     /// can unit-test `pads` without a translator.
-    #[cfg(any(test, feature = "test-support"))]
     #[doc(hidden)]
     pub fn with_padded_byte(mut self, b: u64) -> Self {
         self.unpadded_read_bytes.remove(&(self.reg_idx, b));
@@ -716,7 +709,6 @@ impl CalleeEntryDead {
 
     /// Record that some path met an undecodable instruction, so a consumer
     /// can unit-test its refusal without a translator.
-    #[cfg(any(test, feature = "test-support"))]
     #[doc(hidden)]
     pub fn with_undecodable(mut self) -> Self {
         self.undecodable = true;

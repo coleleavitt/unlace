@@ -7,6 +7,9 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 unlace-base.workspace = true
 unlace-num.workspace = true
@@ -29,7 +32,7 @@ memmap2 = "0.9"
 
 [dev-dependencies]
 unlace-slacomp.workspace = true
-object = { workspace = true, features = ["write"] }
+object.workspace = true
 
 [lints]
 workspace = true

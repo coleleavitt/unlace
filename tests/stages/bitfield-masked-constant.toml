@@ -1,0 +1,49 @@
+# ghidra#9836: a constant store written as (V & clear) | set, where the INT_AND keeps a field bit
+# that the INT_OR also sets, so neither operand alone covers the field.
+#
+# setb5 is gcc -O2 output for `s->b = 5` (and 0x07, or 0x28): the AND clears the whole field, the old path already handles it.
+# setb6 is hand-written (and 0x17, or 0x30) for `s->b = 6`: bit 4 survives the AND and is set by the OR, so the field value is the OR operand.
+# Before the port the decompiler left the store as a raw mask expression.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'setb5' },
+    { space = 'ram', offset = '0x100020', name = 'setb6' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'f30f1efa0fb60783e00783c8288807c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100020'
+readonly = true
+hex = '0fb60783e01783c8308807c3'
+
+[script]
+commands = [
+    'parse line struct S { uint1 a:3; uint1 b:5; };',
+    'parse line extern void setb5(S *s);',
+    'parse line extern void setb6(S *s);',
+    'lo fu setb5',
+    'decompile',
+    'print C',
+    'lo fu setb6',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'ghidra#9836 setb5 stores 5 into field b'
+count = 1
+literal = 'b = 5'
+
+[[match]]
+name = 'ghidra#9836 setb6 stores 6 into field b'
+count = 1
+literal = 'b = 6'

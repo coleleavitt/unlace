@@ -1,42 +1,7 @@
-//! Port of `decompiler/unittests/testtypes.cc` (8 TESTs).
-//!
-//! The upstream `TypeTestEnvironment` builds a full `Architecture`
-//! (`x86:LE:64:default:gcc`) and uses:
-//!   - `parse(text)` -> `parse_type(...)` — the C-type **grammar**
-//!     (`grammar.cc` / `grammar.y`), **not yet ported**, to build every type;
-//!   - `glb->inst[opc]->getInputCast(...)` via `CastStrategy` —
-//!     `CastStrategy` / `TypeOpCast` are **not yet ported**;
-//!   - `glb->print->getCastStrategy()->markExplicitLongSize(...)` — same;
-//!   - `dummyFunc->newOp/newUnique/...` — a live `Funcdata` with typed varnodes.
-//!
-//! Two of the eight TESTs — `enum_matching` / `enum_matching2` — depend only on
-//! `TypeEnum::getMatches`, which **is** ported (`Datatype::get_matches`,
-//! `dtype.rs`).  Those enums are built directly (the value->name map a decoded
-//! `TypeEnum` would hold), exactly as the C++ `parse("enum ...")` would, at the
-//! x86-64 default enum size of 8 bytes (`glb->getDefaultSize()`), so they are
-//! ported as real, asserting tests.
-//!
-//! The remaining six — `cast_basic`, `cast_pointer`, `cast_enum`,
-//! `cast_compare`, `type_ordering`, `cast_integertoken` — need the C-type
-//! grammar and/or `CastStrategy`/`TypeFactory` base-type catalog (none owned by
-//! this porter, none provided by this wave's foundation), so they are
-//! reproduced as same-named `#[ignore]`d tests to satisfy the `port_audit`
-//! name-match oracle while keeping the item gate green.  Their faithful
-//! assertion sequences are preserved in the doc comments.
-//!
-//! W7 TRIAGE (item w7-m1-closure): these six stay deferred.  W7 delivered the
-//! HighVariable / Cover / Merge / RegionId subsystems; none of those is on the
-//! blocking path.  The five `cast_*` tests drive
-//! `glb->inst[opc]->getInputCast(...)` / `markExplicitLongSize(...)` through
-//! `CastStrategy` + the print machinery — a W8 (`print`/`typeop`-cast) port —
-//! over operands built by the C-type grammar (`parse_type`, unported).
-//! `type_ordering` only exercises `Datatype::compare`/`compareDependency`
-//! (which ARE ported, `dtype.rs`), but every operand is a `parse(...)` of a
-//! named base type / typedef / struct / enum / pointer whose exact
-//! submetatype + flags + typedef naming the comparator keys on; faithfully
-//! reproducing those requires the W8 `TypeFactory` base-type catalog, and
-//! hand-guessing the flags would risk wrong (output-determining) orderings.
-//! Each test carries an inline `// DEFER(W8)`.
+//! Port of `decompiler/unittests/testtypes.cc`: the two TESTs that need only
+//! `TypeEnum::getMatches` (`Datatype::get_matches`, `dtype.rs`), `enum_matching`
+//! and `enum_matching2`. The enums are built directly (the value->name map a
+//! decoded `TypeEnum` would hold) at the x86-64 default enum size of 8 bytes.
 
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -60,62 +25,6 @@ fn make_enum(size: i32, entries: &[(u64, &str)]) -> Rc<Datatype> {
 // ===========================================================================
 // Cast TESTs — blocked on the C-type grammar + CastStrategy/TypeOpCast port.
 // ===========================================================================
-
-/// C++ `cast_basic`: 11 `castPrinted(CPUI_COPY, parse(t1), parse(t2))`
-/// assertions over int/uint/pointer/bool/float/typedef/char conversions.
-// DEFER(W8): CastStrategy::getInputCast + TypeOpCast (print machinery) over
-// parse_type operands; off the W7 (HighVariable/Cover/Merge) path.
-#[test]
-#[ignore = "DEFER(W8): C-type grammar (parse_type) + CastStrategy/TypeOpCast not ported"]
-fn cast_basic() {}
-
-/// C++ `cast_pointer`: pointer-to-pointer cast printing, incl. void*,
-/// struct*, typedef pointers, char* vs int1*.
-// DEFER(W8): CastStrategy::getInputCast + TypeOpCast (print machinery) over
-// parse_type operands; off the W7 (HighVariable/Cover/Merge) path.
-#[test]
-#[ignore = "DEFER(W8): C-type grammar (parse_type) + CastStrategy/TypeOpCast not ported"]
-fn cast_pointer() {}
-
-/// C++ `cast_enum`: enum-vs-integer cast printing (int8/uint8*/enum).
-// DEFER(W8): CastStrategy::getInputCast + TypeOpCast (print machinery) over
-// parse_type operands; off the W7 (HighVariable/Cover/Merge) path.
-#[test]
-#[ignore = "DEFER(W8): C-type grammar (parse_type) + CastStrategy/TypeOpCast not ported"]
-fn cast_enum() {}
-
-/// C++ `cast_compare`: comparison-op input casts (INT_LESS / INT_SLESS /
-/// INT_EQUAL / INT_NOTEQUAL across signed/unsigned/pointer/float).
-// DEFER(W8): CastStrategy::getInputCast + TypeOpCast (print machinery) over
-// parse_type operands; off the W7 (HighVariable/Cover/Merge) path.
-#[test]
-#[ignore = "DEFER(W8): C-type grammar (parse_type) + CastStrategy/TypeOpCast not ported"]
-fn cast_compare() {}
-
-/// C++ `type_ordering`: `Datatype::compare`/`compareDependency` total-order over
-/// uint4<int4, the int4/myint4 typedef tie, int1<char, wchar2<int2,
-/// wchar4<int4, uint1<char, enum<int8, struct1~struct2 dependency tie,
-/// uint4<uint2, float8<float4, bool<uint1, and the pointer orderings
-/// (uint4*<int4*, enum2*<int8*, int4*<void*, int2*<xunknown2*).
-///
-/// `compare`/`compare_dependency` ARE ported (`dtype.rs`); this test is blocked
-/// only because faithfully reproducing each `parse(...)` operand requires the
-/// TypeFactory base-type catalog (exact submetatype/flags/typedef naming the
-/// comparator keys on), which this porter does not own.
-// DEFER(W8): compare/compare_dependency ARE ported, but every operand is a
-// parse() of a named base type/typedef/struct/enum/pointer whose exact
-// submetatype+flags the comparator keys on -> needs the W8 TypeFactory catalog.
-#[test]
-#[ignore = "DEFER(W8): C-type grammar (parse_type) + TypeFactory base-type catalog not ported"]
-fn type_ordering() {}
-
-/// C++ `cast_integertoken`: `markExplicitLongSize` over INT_LEFT / INT_SRIGHT /
-/// INT_RIGHT shift-constant operands.
-// DEFER(W8): CastStrategy::markExplicitLongSize (print machinery) over
-// parse_type shift operands; off the W7 path.
-#[test]
-#[ignore = "DEFER(W8): C-type grammar (parse_type) + CastStrategy::markExplicitLongSize not ported"]
-fn cast_integertoken() {}
 
 // ===========================================================================
 // Enum getMatches TESTs — ported (TypeEnum::getMatches is available).

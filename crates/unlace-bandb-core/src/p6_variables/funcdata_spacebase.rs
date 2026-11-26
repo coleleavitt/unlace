@@ -33,8 +33,10 @@ use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
 use crate::varnode::varnode_flags;
 
-#[cfg(any(test, feature = "test-support"))]
-pub mod spacebase_tests;
+#[doc(hidden)]
+pub mod spacebase_fixtures;
+#[cfg(test)]
+mod spacebase_tests;
 
 /// [`Funcdata`] methods for stack and spacebase recovery.
 pub trait FuncdataSpacebaseExt {

@@ -134,7 +134,7 @@ Each `UNLACE_*` variable is also read under its old `UNLACE_*` name (a deprecate
 | `UNLACE_SPECS` | The SLEIGH tree passed as `-sleighpath` (`SLEIGHHOME` is the engine's own name for the same thing). Wins over a built-in tree. |
 | `UNLACE_DECOMP_DBG` | A separate `decomp_dbg` binary to run instead of the built-in console; a non-empty value also makes `catalog` query that build. `--decomp-dbg PATH` does the same for one `decompile` or `catalog` run, and wins over the variable. |
 | `UNLACE_SLA_CACHE` | Where compiled `.sla` images are cached (default `$XDG_CACHE_HOME/unlace/sla`, else `~/.cache/unlace/sla`). Content-addressed by the sources and the compiler; safe to delete. |
-| `UNLACE_SLA_LAZY` | `0` decodes every constructor's p-code template when the `.sla` loads, instead of on its first use. For A/B timing; the output is the same either way. |
+| `UNLACE_SLA_LAZY` | `0` decodes the whole `.sla` when it loads, instead of its subtables (constructors, p-code templates, decision trees) on their first use. For A/B timing; the output is the same either way. |
 | `UNLACE_SLACOMP` | A separate `slacomp` binary for `unlace specs` to run instead of the built-in compiler. |
 | `UNLACE_ROOT` | The repo root, when the binaries are not in-tree: `specs/` is read from it. |
 | `UNLACE_DECODE_JOBS` | Decode lanes for the discovery walk, without `--jobs` — what `--jobs N` exports for the duration of the load (capped at 32, forced to `1` in pool workers). |
@@ -245,7 +245,9 @@ flag, and exit 1 instead of spinning on.
 *The JSON documents* under `decompile-all`), and takes the same record
 selection: `--no-vars` and `--omit aliases,line_mappings,variables,types` behave as they
 do there. Without `--json` both are refused, since the C text carries none of
-those collections.
+those collections. `--tokens` and `--storage` add the token source map and each
+variable's storage to that record, as they do there, and are refused without
+`--json` too; `unlace map` (below) answers span and address questions from the two.
 
 `--cfg-dot` replaces the C on stdout with the function's basic-block graph as Graphviz DOT
 (`digraph`, one node per basic block labelled with its index and address range, one edge
@@ -279,6 +281,9 @@ unlace decompile ./a.out main --option realtypes zzz
 ```
 
 `unlace catalog` lists each option's accepted values.
+
+`--rules FILE` (repeatable) adds the p-code rewrite rules of a TOML rule file to the
+simplification pools for this run; see *`--rules FILE`* below for the file and its checks.
 
 **A generated name is a selector.** unlace calls a function no symbol covers
 `sub_<addr>`, and it prints such a name for entries the whole-binary inventory
@@ -1321,7 +1326,9 @@ structuring option (`unlace catalog`) can remove it instead. `--language` also w
 `decompile-all`; `decompile-project` is C-only -- it never auto-selects, and errors on an
 explicit non-C language -- and the Ghidra front-end pins its markup document to
 C. The browser decompiler carries the same three choices in its **Language**
-control. See `docs/spec/09-emission.md` §9.6.
+control. See `docs/spec/09-emission.md` §9.6. `--language-file FILE` prints through
+a profile read from a TOML file instead
+([Language files](#language-files---language-file)).
 Omitting `--mode` selects `auto`: files below 500 KiB use `aggressive`, files
 from 500 KiB up to 2 MiB use `reliable`, and files at least 2 MiB use `fast`.
 The raw on-disk byte length is used, with exact cutovers at 512,000 and
@@ -1370,6 +1377,104 @@ With no mode evidence, decoding uses the selected language's default context; us
 `--isa` to select another mode. `--isa` is refused where it could not apply —
 `strings --no-xrefs` decodes nothing, so the pair is a usage error rather than a
 silently dropped flag.
+
+### Language files (`--language-file`)
+
+`--language-file FILE` (`decompile`, `decompile-all`) prints through a **language flavour**: a
+TOML file that names one of the output languages as its base and overrides parts of that
+language's profile. The base language's printer does the printing, so the analysis, the
+types and the structure are the base language's; the file changes spellings and a few forms.
+
+```toml
+base = "c"                      # required: c, rust, go or java
+name = "pseudo"                 # optional: the JSON document's language_flavour (default: the file stem)
+
+[keywords]                      # how a keyword is spelled
+if = "when"
+else = "otherwise"
+goto = "jump"
+
+[operators]                     # how an operator is spelled; precedence and spacing stay
+assign = ":="
+boolean_and = "and"
+boolean_or = "or"
+boolean_not = "not "            # a prefix operator carries its own blank
+
+[forms]
+member = "rust-deref-paren"     # p->f prints as (*p).f
+```
+
+```bash
+unlace decompile ./ptx.o swallow_file_in_memory --language-file pseudo.toml
+#   when (((file_name) and (*file_name)) and ((*file_name != '-' or (file_name[1])))) {
+#     v1 := (char *)read_file(file_name,0,&used_length);
+#     (*block).start := v1;
+#     when (not v1) {
+#   label_400517:
+#       ...
+#     }
+#   }
+#   otherwise {
+#     ...
+#       jump label_400517;
+```
+
+The file names its base language, so `--language` does not apply with it, and an
+`--option setlanguage` or `outlang` for another language is an error. A `--json` document
+reports the base language in `"language"`. A run with a flavour adds `"language_flavour"`
+after it: the file's `name`, or the file stem when the file has no `name`. The name must have
+some text in it. Without `--language-file` the document has no `language_flavour` key. A `--jobs` worker and the console child of
+`decompile` read the file again from the same path. In a console script the command is
+`language file <path>`, after the `option` lines; a later `option setlanguage` renders the
+built-in language again.
+
+A field is overridable only for the base languages whose printer reads it from the profile at
+every place it prints the construct (`docs/spec/09-emission.md` §9.6 says how that was
+checked). Everything else is refused when the file is loaded, before the binary is, with the
+field's name, and the command exits `2`:
+
+```
+error: --language-file pseudo.toml: keywords.retrun: unknown keyword (the keywords are: break, case, ...)
+error: --language-file pseudo.toml: forms.member: unknown form "dot" (expected one of: c-arrow, rust-deref-paren)
+error: --language-file pseudo.toml: forms.switch: the c printer cannot honour "rust-match": the switch was structured for what `break` leaves in the base language
+error: --language-file pseudo.toml: caps.ternary: the c printer cannot honour false
+```
+
+| Table | Keys | Base languages |
+|---|---|---|
+| `[keywords]` | `continue`, `else`, `null`, `switch` | c, rust, go, java |
+| | `break`, `default`, `if`, `return`, `while` | c, rust, java |
+| | `goto` | c, go, java; rust with `forms.goto = "c-goto"` |
+| | `case`, `do`, `for`, `true` | c, java |
+| `[operators]` | `bitwise_and`, `bitwise_not`, `bitwise_or`, `bitwise_xor`, `boolean_and`, `divide`, `equal`, `greater_equal`, `greater_than`, `less_equal`, `less_than`, `modulo`, `shift_left`, `shift_right`, `shift_right_signed` | c, rust, go, java |
+| | `boolean_not`, `boolean_or`, `boolean_xor`, `not_equal` | c, rust, java |
+| | `minus`, `multiply`, `plus` | c, go, java |
+| | `assign` | c, java |
+| `[forms]` | `member`: `c-arrow`, `rust-deref-paren` | c |
+| | `goto`: `c-goto`, `unrepresentable`; `label`: `c-colon`, `comment-only` | rust |
+| `[caps]` | `implicit_bool_conditions = false` (what `--option truthycond off` does) | c |
+
+A keyword key names the construct, and the base language gives the default spelling: in a
+Rust flavour `switch` is `match`, `default` is the `_` arm and `null` is
+`core::ptr::null_mut()`. `true` is the condition of an endless loop (`while( true )`).
+`shift_right` is the logical shift and `shift_right_signed` the arithmetic one (both `>>` in
+C, `>>>` and `>>` in Java); `minus` is the binary operator. Where the base language prints
+two operators as one token (Go's `>>` for both shifts), set one of the two keys. A `[forms]`
+or `[caps]` key set to the base language's own value is accepted and changes nothing.
+
+What a flavour does not change: type names, declarations and type definitions (there is no
+`[types]` table: the type speller belongs to the base language), punctuation (braces, `;`,
+`,`, parentheses, `[]`), compound assignments and `++`, the conditional `?:`, unary minus,
+`&` and `*` as address-of and dereference, casts, calls, an or of enum constants (`A|B`),
+and anything a language's own emitters write as text (Rust's `loop`, `let` and `as`, Go's
+`func` and `:=`). Identifiers are checked against the base language's reserved words, not
+against the flavour's spellings. `decompile-project` and `decompile-graph` are C by contract
+and refuse the flag.
+
+In a Rust flavour, `forms.goto = "c-goto"` with `keywords.goto` and `forms.label = "c-colon"`
+print the jump Rust has no statement for as a `goto` and its target as a label line, where
+`--language rust` prints a `panic!` marker and a comment; such a document reports no
+`unstructured_gotos`.
 
 ### UEFI TE images
 
@@ -1845,6 +1950,9 @@ The whole-binary surface (the benchmark + LLM path). Runs **in-process**
 `decompile_func` + `print_c`), loading + analyzing the binary **once** instead of
 `unlace decompile`'s subprocess-per-function (≈10×+ faster on a many-function binary).
 
+`--rules FILE` (repeatable) adds the p-code rewrite rules of a TOML rule file to every function's
+run, in every `--jobs` worker too; see *`--rules FILE`* below.
+
 ### Triage — narrowing the run
 
 An unfiltered whole-binary answer is only usable if the caller can narrow it
@@ -2304,7 +2412,7 @@ function application uses the in-process engine for text and JSON and rejects
   The PE walk does not insist on the `MZ` magic, so an image whose DOS header
   was damaged is still named even though it does not load. Every other
   subcommand that takes a binary (`decompile`, `decompile-all`,
-  `decompile-project`, `decompile-graph`, `functions`, `disassemble`, `read`,
+  `decompile-project`, `decompile-graph`, `map`, `functions`, `disassemble`, `read`,
   `xrefs`, `strings`) prints each *actionable* row as one line on stderr before
   it runs, so a `--json` stdout stays the document:
 
@@ -2452,6 +2560,99 @@ scoring. `--no-vars` leaves `variables` empty but still emits function line mapp
 the empty array is indistinguishable from a function with no variables, which is
 what `--omit variables` below is for.
 
+**`--tokens`** (`decompile-all --json` and `decompile --json`) adds the token
+source map of `code` to every record: `tokens` and `tokens_error`, the records the
+browser's study view ships (`docs/web-integration.md`), from the same code
+(`unlace_console::inspect::FuncDetail`). The default document is unchanged; the
+flag is opt-in because of the map's size: with it the document of a whole binary
+is 3.5 to 7.4 times as long (six fixtures).
+`tokens` lists every token of `code` in reading order as
+`{line,col,len,kind,color,text}`: `line` is 1-based, `col` and `len` are in UTF-16
+code units, and `text` is exactly the `len` units of that line at `col`. Every
+code unit of `code` that no token covers is a space, so the tokens of a line
+joined with their gaps rebuild it. `kind` is `syntax`, `variable`, `value`,
+`op`, `funcname`, `type`, `field`, `comment` or `label`, and `color` the
+printer's highlight class (`keyword`, `comment`, `type`, `funcname`, `var`,
+`const`, `param`, `global`, `none`, `error` or `special`). A token carries more
+where it stands for something:
+`address` and `address_hex`, the instruction it came from (the same addresses
+`line_mappings` holds for its line); `callee` and `callee_hex`, the entry of the
+function a call's name refers to; `var`, the index of the variable's row in this
+record's `variables` (absent under `--no-vars` and `--omit variables`); `decl`, where a
+declaration token sits (`function`, `return`, `param`, `local`); `type`, the type
+a type token spells; `global` and `global_hex`, the address of the global data a
+token names. `tokens_error` is `null` when `tokens` is the map; when the map
+does not rebuild `code` exactly, `tokens` is `[]` and `tokens_error` says why, so
+a drifted map is never shipped. A record without `code` has `[]` and `null`.
+The casts a whole-binary C run adds after the render, to a scalar address passed
+where the callee declares a character pointer, are in the map as a `(`, a `type`
+token and a `)`. The map crosses `--jobs N` unchanged: a worker ships it in its
+result frame, so `--tokens` with `--jobs` is the same document as with `--jobs 1`. Over the 1,399
+ELF, PE and Mach-O fixtures of the repository that load without `--target`
+(47,205 function bodies), every map rebuilds its code and `code` is identical
+with and without the flag; a run executes 1.1-2.4% more instructions with it.
+
+```bash
+unlace decompile ./sample.elf sum_to --json --tokens
+#   "code": "long sum_to(int n)\n{\n  long acc; // stack - 0x10\n ...",
+#   "tokens": [
+#     {"line": 1, "col": 0, "len": 4, "kind": "type", "color": "type", "text": "long",
+#      "decl": "return", "type": "long"},
+#     {"line": 1, "col": 5, "len": 6, "kind": "funcname", "color": "funcname",
+#      "text": "sum_to", "decl": "function"},
+#     ...
+#     {"line": 8, "col": 4, "len": 3, "kind": "variable", "color": "var", "text": "acc",
+#      "address": 4482, "address_hex": "0x1182", "var": 3},
+#     ...],
+#   "tokens_error": null
+```
+
+**`--storage`** (`decompile-all --json` and `decompile --json`) adds a `storage`
+list to every variable row: where the variable lives in the machine, and when.
+It is opt-in for the same reason: with it the document of a whole binary grows by
+46-103% (73% over six fixtures) and the run executes 0.8-2.5% more instructions;
+without it the document and the cost are what they were. Each entry is one piece of
+storage, `{space,register,offset,size,ranges}`: `space` is the address space's
+name (`register`, `stack`, `ram`, ...); `register` is the name of the smallest
+register that contains the piece, lower case, and `null` where there is none, as
+outside the register space; `offset` is the
+signed frame offset of a stack piece (the stack pointer at the function's entry
+is 0, as for `stack_offset`), the address of a `ram` piece, and the register's
+offset in the register space otherwise; `size` is in bytes. `ranges` lists the
+instruction address ranges `{start,end}` (`end` not included, sorted, disjoint)
+in which that piece holds the variable: on entry to every instruction in them
+the variable is live (written before, read there or later) and the piece still
+has its value on every path there. A register stops holding a variable at the
+next instruction that writes it, whether or not that write shows in the C, and
+at a call whose convention does not preserve it; a variable that is in its frame
+slot and loaded into a register is in both until one of them changes. A row's
+declared home (a parameter's register or stack slot, a frame row's slot) is
+always listed, with empty `ranges` when no instruction has the variable live in
+it, as for a parameter the function never reads. Locations inside the declared
+home (an element of an array, a field of a structure) count as the home. The
+pieces are in `space`, `offset`, `size` order. The rows are the `variables` rows,
+so `--no-vars` and `--omit variables` leave nothing to carry them; a parameter
+and the frame slot it is spilled to are two rows of one name, and each lists its
+own declared home and the pieces the variable's instances give. `--jobs N`
+carries the list unchanged. It describes the decompiler's variable, which is not
+always the source's: where the compiler keeps one source variable in a frame slot
+and in a register, the C can have two variables for it. The algorithm, its
+limits and its measured agreement with DWARF location lists are in
+`docs/spec/06-variables-and-merge.md` ("Variable storage").
+
+```bash
+unlace decompile ./sample.elf sum_to --json --storage
+#   int i; // eax | stack - 0x14        for (i = 1; i <= n; i = i + 1) { acc += i; }
+#   {"name": "i", "type": "int", "kind": "stack", "stack_offset": -20, "size": 4, ...,
+#    "storage": [
+#      {"space": "register", "register": "eax", "offset": 0, "size": 4,
+#       "ranges": [{"start": 4477, "end": 4490}, {"start": 4493, "end": 4498}]},
+#      {"space": "stack", "register": null, "offset": -20, "size": 4,
+#       "ranges": [{"start": 4475, "end": 4498}]}]}
+#   0x117d loads i into eax, and eax is i until the increment at 0x1186 has run;
+#   0x118a reloads it, so eax is i again from 0x118d to the end of the loop test.
+```
+
 **`--omit KEY[,KEY]...`** (repeatable, `decompile-all --json` and
 `decompile --json`) leaves whole collections out of every record, for a caller
 that wants the function's identity, `code` and `error` and not the rest. The keys
@@ -2493,6 +2694,136 @@ decbench binaries (3,830 functions) the whole-binary document shrinks to 18% of 
 default size, and a whole-binary run of `cmp` or `ln` takes 3-6% less time. For a
 two-instruction function exported under 600 names of 177 bytes each, those three
 leave 114,080 bytes, and adding `aliases` takes it to 836 (its C is 217).
+
+**`--ctree`** (`decompile-all --json` and `decompile --json`) adds the **C syntax tree** of
+each function's `code` to its record: statements and expressions as nested nodes, each with
+its kind, its operands, its C type where the printer knows it, where its text is in `code`
+and the instruction addresses it came from. It is opt-in because the tree is many times the
+size of the code (coreutils `tr`, 185 functions, 135 KB of C: a 1.0 MB document without
+it, 16.6 MB with it; the run time is the same within noise, 3.5 s).
+The record gains two members after its last default one, `ctree` and `ctree_error`; every
+other member, `code` included, and the exit status are what they are without the flag.
+`--ctree` needs `--json`. With `--jobs N` each worker ships the tree in its result frame, so the
+document is the same as with `--jobs 1`.
+
+`ctree` is `{"language": "...", "style": {...}, "root": {...}}`, or `null` when the function has no tree;
+`language` is the output language the tree was printed in (`c-language`, `rust-language`,
+`go-language` or `java-language`, the `option setlanguage` names), and the tree prints in that
+language's layout and forms;
+`ctree_error` then says why (both are `null` on a record with no `code`). `root` is a
+`function` node. Every node is an object, and a member a node has no value for is absent:
+
+| Member | Meaning |
+|---|---|
+| `kind` | What the node is (the next table). |
+| `children` | The nodes under it, in the order they print. |
+| `text` | A leaf's spelling; a comment's, label's or prototype's text; a declaration's declarator; an operator's token; a call's opening token; the text of a `raw` node. |
+| `op`, `form`, `close`, `spacing` | On an `op` node: the operator's name (`assign`, `add`, `lt`, `cast`, `deref`, `addr_of`, `subscript`, `member`, `ptr_member`, `cond`, `add_assign`, ...; absent for a token that has no name), how its token sits around its children (`binary`: between them, and with more than two children the node is a chain, `a + b + c`, which reads as C reads it, `(a + b) + c`; `prefix`: before the one child; `postsurround`: `a[b]`; `presurround`: `(type)a`; `space`: only its spacing between two children), its closing token (`]`, `)`, the `:` of `?:`) and the number of spaces on each side of the token. |
+| `sep` | What separates the children of a `list` and the arguments of a `call`. |
+| `grouped` | `true` on a chain whose text groups it from the left in parentheses, as the printer writes `&&` and `\|\|`: `((a && b) && c) && d` is one `and` node with four children. |
+| `type` | The C type of the node's value, where the printer knows it: a variable's, a declaration's, a constant's (the type it was read with, when the printer printed it for a Varnode; a constant spelled from a value alone, such as a subscript index, has none), and the result of an operation (the type of the value the p-code op behind the node writes; a node that is only a part of what its op prints, and an operator `PrintC` writes outside its expression driver, has none). |
+| `line`, `col`, `end_line`, `end_col` | Where the node's text is in `code`: 1-based lines, UTF-16 columns, end exclusive. |
+| `addresses` | Instruction addresses in the target's address units, as in `line_mappings`. On an expression node: the instruction of the p-code op the node prints, and on a chain the instruction of each of its operators. On a statement: every instruction under it. |
+
+| `kind` | Children | Notes |
+|---|---|---|
+| `function` | comments and blank lines above the prototype, the `prototype`, its `eol_comment`s, the body `block` | |
+| `prototype` | the return `type`, the `func` name, one `decl` per parameter | `text` is the whole line |
+| `decl` | its `type` tokens and its `var` | `text` is the declarator (`char *p`), `type` the declared type (`char *`) |
+| `block` | the items between two braces | |
+| `if` | the condition and the part it guards, the same two for each `else if`, then the else part if any; an `eol_comment` follows the condition or part it is behind | a part is a `block` or one statement without braces, a condition is an expression: that tells an `else if` from the else part. An `else if` chain is one node whatever its length |
+| `while` | the condition, the body `block` | the condition `const` `true` prints `while( true )` |
+| `do_while` | the body `block`, the condition | |
+| `for` | the initializer, the condition, the step, the body `block` | an absent part is `empty` |
+| `switch` | the value, a `block` of `case`, `default` and statements (Rust: of `arm`s) | with no block: `switch(value);`, a jump through a table with no recovered target |
+| `arm` | the pattern (a `list` of its alternatives, `|` between them), the arm's `block` | a Rust `match` arm, `pattern => { ... }`; the wildcard `_` is `text` |
+| `attribute` | | an attribute line above the prototype (Rust `#[...]`); `text` is the line |
+| `case`, `default` | a `case`'s value | |
+| `try` | the guarded `block`, the handler `block` | `text` is the handler's header (`catch (int)`) |
+| `goto`, `label` | | `text` is the label |
+| `break`, `continue` | | |
+| `return` | the value, when it returns one | |
+| `expr` | the expression | an expression statement; with no child, an empty statement `;` |
+| `comment`, `eol_comment` | | a comment on a line of its own (at `style.comment_indent`), or behind the item before it |
+| `blank_line` | | an empty line |
+| `raw` | | text the kinds above do not cover, kept exactly as printed: as an item of a block its whole lines with their indentation, inside an expression that expression's text. Also what the text nests past the tree's last level (next paragraph) |
+| `var`, `const`, `func`, `type`, `field` | | a variable, a constant as spelled, a function name, a type name, a field name |
+| `text` | | any other atom, such as the name of a pseudo-operation (`ZEXT48`, `CONCAT44`) |
+| `empty` | | nothing: an absent part |
+| `paren` | one expression | its child in parentheses |
+| `list` | expressions | separated by `sep`: the statements a condition runs before its test (`(a = f(), a != 0)`) |
+| `call` | the callee, then the arguments | `text`, `sep` and `close` are `(`, `,` and `)` |
+| `op` | its operands | see `op`, `form`, `close`, `spacing` above. An operator applied again to one of its own operands with no parentheses between is one node over all the operands, so `a + b + c + d` is one `add` with four children; so is one applied again to its first operand in parentheses (`grouped`). An assignment is never chained (`a = b = c` nests to the right), and `?:` has exactly three children |
+
+A tree has at most **61 levels** (the `function` node is level 1, its body `block` 2, the
+body's statements 3). What the text nests deeper stays text: an operand that would have
+operands of its own on level 61 is a `raw` node, and a statement that has no room for its
+block and operands is `raw` lines. Chains of one operator and `else if` chains are wide,
+not deep, so only real nesting counts: 28 nested `if`s fit. A node of
+level `d` is nested `3 + 2d` arrays and objects deep in the document and its `children`
+and `addresses` one more, so the document nests at most 126, inside the default nesting
+limit of the common JSON readers (`serde_json`: 128).
+
+`style` holds what the print options and a language file decided and no node carries:
+`indent` (spaces per level), `comment_indent` (the column of a comment line),
+`brace_function`, `brace_ifelse`, `brace_loop`, `brace_switch` (`same_line`, `next_line` or
+`skip_line`) and `keywords`, the statement keywords a language file respelled, by their C
+spelling (`{}` without one; any of `break`, `case`, `continue`, `default`, `do`, `else`,
+`for`, `goto`, `if`, `return`, `switch`, `true`, `while`). With a language file over C
+(`--language-file`, "Language files") the nodes are the same and only spellings change: an
+`if` node is still `"kind": "if"` and `style.keywords.if` holds its spelling, and an `op`
+node keeps its `op` name with the respelled token in `text`.
+
+The tree is the printed text as data: it has the operators, the folding, the parentheses
+and the names the printer chose, and it prints back to `code` byte for byte. The exporter
+checks that itself with the reference printer: every statement and every expression is
+printed from its node and compared with the text it stands for, and a part that does not
+print back exactly is kept as a `raw` node holding its text, so the document never states
+a structure the text does not have. `cargo run -p unlace --example ctree_roundtrip` (the
+reference printer, `unlace::unstable::printer::CPrinter`, over a `--json --ctree`
+document) repeats the check from outside. Measured on 2026-11-26. For C, over the fixture binaries of this repository (1,482
+binaries; 38,332 functions printed in C), every tree prints back to its `code` byte for byte;
+38,327 hold no `raw` node and the other five hold nine between them, all of it text nested past
+level 61. The C figure predates the other languages. Over the two parity corpora every printed
+function exports a tree that prints back byte for byte, in each language. Without a `raw` node:
+C 4,681 of 4,694 trees (the other 13 hold `raw` lines above the prototype: the type definitions
+and helper preamble an option prints there); Go 196 of 201; Java 28 of 37; Rust 216 of 235. On
+seven fixture binaries (46 functions each): Java 46 of 46, Rust 41 of 46, Go 43 of 46. The
+`raw` nodes that remain are the text the typed vocabulary does not cover: Java's `try`,
+`catch`, `finally` and `synchronized` statements; Rust's `if !(...)` conditions, raw-pointer
+expressions and unstructured-goto `panic!` lines; Go's `for` loop temporaries and `fallthrough`.
+`ctree_error` is one of:
+
+- `the text was rewritten after it was printed (a cookie-literal return)`: the
+  stack-cookie presentation pass edited the text.
+- `pointer-argument casts were written into the text after the tree was built`: a
+  whole-program run inserted a cast the tree could not follow (normally it does: the
+  argument's node is wrapped in a `cast` node).
+- `the tree does not print back to the text (first difference on line N)` or a token
+  position error: the exporter's own check failed; the document reports that instead of
+  a wrong tree.
+
+```bash
+unlace decompile ./sample sum_to --json --ctree
+#   "code": "long sum_to(int n)\n{\n  long acc; ...\n  for (i = 1; i <= n; i = i + 1) {\n    acc += i;\n  }\n  return acc;\n}",
+#   "ctree": {"style": {"indent": 2, "comment_indent": 20, "brace_function": "next_line", ..., "keywords": {}},
+#     "root": {"kind": "function", "line": 1, "col": 0, "end_line": 11, "end_col": 1, "addresses": [4460, ...],
+#       "children": [
+#         {"kind": "prototype", "text": "long sum_to(int n)", ...},
+#         {"kind": "block", "children": [
+#           {"kind": "decl", "text": "long acc", "type": "long", ...},
+#           {"kind": "eol_comment", "text": "// stack - 0x10", ...}, ...,
+#           {"kind": "for", "line": 7, "col": 2, "end_line": 9, "end_col": 3, "addresses": [4468, 4480, 4482, 4486, 4496],
+#             "children": [
+#               {"kind": "op", "op": "assign", "form": "binary", "text": "=", "spacing": 1, "type": "int", ...},
+#               {"kind": "op", "op": "le", "form": "binary", "text": "<=", "spacing": 1, "type": "bool",
+#                "line": 7, "col": 14, "end_line": 7, "end_col": 20, "addresses": [4496],
+#                "children": [{"kind": "var", "text": "i", "type": "int", ...}, {"kind": "var", "text": "n", "type": "int", ...}]},
+#               {"kind": "op", "op": "assign", ...},
+#               {"kind": "block", "children": [{"kind": "expr", "children": [{"kind": "op", "op": "add_assign", ...}]}]}]},
+#           {"kind": "return", "children": [{"kind": "var", "text": "acc", "type": "long", ...}]}]}]}},
+#   "ctree_error": null
+```
 
 `types` is the layout side of the same record: one object per composite, enum or
 typedef the function's C names, carrying its name, its definition text (the same
@@ -2648,7 +2979,8 @@ Behaviors specific to `decompile-all`:
   (`"per-function decompile budget exceeded (N s) in <pass>"`), the batch
   continuing. `<pass>` is the first probe that saw the deadline pass, the
   innermost loop that was running: an action (a rule pool adds its busiest rule
-  this function), `heritage`, `region structuring`, or a jump-table step, and
+  this function, or `rules a and b keep changing one op` for two rules that undo
+  each other), `heritage`, `region structuring`, or a jump-table step, and
   anything inside a flow-time table recovery adds `during jump-table recovery at
   <indirect-jump address>`, e.g. `in action oppool1 (busiest rule earlyremoval)`
   or `in jump-table recovery at 0x1820e009b`. Printing the function and
@@ -2992,6 +3324,78 @@ apply to `unlace functions` — which never spawns a pool — exactly as they do
   sides of an A/B, or a function that finishes just inside the budget on one
   side and misses it on the other will move the document for reasons that have
   nothing to do with the lanes.
+
+## `unlace map` — which instructions a span came from, and what an address printed
+
+```bash
+unlace map ./a.out main --line 12                 # the instructions line 12 came from
+unlace map ./a.out main --span 12:5-14:20         # the same for a span of the text
+unlace map ./a.out main --addr 0x401020           # the text that instruction printed,
+                                                  # and the variables live there
+unlace map ./a.out 0x401000 --addr 0x401020 --json
+```
+
+One function is decompiled over its own load, exactly as `unlace decompile <binary>
+<func> --json --tokens --storage` decompiles it, and one question about its output
+is answered from that record (`crates/unlace-cli/src/map.rs`). The function is a
+name, or an address when it starts with `0x`, as for `unlace decompile`. Exactly one
+of the three queries is given:
+
+- `--line N`: the addresses of the instructions that line `N` of the code came from,
+  one `0x` address per line, ascending. Lines count from 1.
+- `--span L1:C1-L2:C2`: the same for the text from line `L1` column `C1` up to, not
+  including, line `L2` column `C2`. Columns count from 0 in UTF-16 code units, the
+  coordinates of the token map, so a token's span is `line:col-line:(col+len)`. The
+  answer is the instructions of every token the span touches; `--line N` is
+  `--span N:0-(N+1):0`.
+- `--addr 0xADDR`: the runs of text that came from the instruction at `ADDR`, one
+  `span L:C-L:C<TAB>text` line per run (tokens of that instruction next to each other
+  on one line are one run), then the variables live on entry to that instruction, one
+  `var NAME<TAB>TYPE<TAB>storage` line each. The storage is the pieces of the
+  variable's `storage` whose ranges hold the address, as `eax(4)`, `stack-0x14(4)`
+  or `ram:0x4010(8)`: the place and its size in bytes. A parameter and the frame slot
+  it is spilled to answer as one variable. An address that no token names prints no
+  span, which is the answer for an instruction whose effect the C shows nowhere (a
+  `push`, a register move that was folded away); its live variables are still
+  listed. An address outside the function prints nothing.
+
+The lines and columns index the text of this decompile, so give `map` the flags the
+text was made with: `--language`, `--language-file`, `--mode`, `--option NAME VALUE`,
+`--rules`, `--define-function`, `--assert` (and `--assert-strict`), `--project`,
+`--types`, `--types-cpp`, `--isa`, `--slice`, `--target`, `--sleighpath`,
+`--raw-image --base`, `--max-fn-seconds` and `--max-fn-memory` mean what they mean on
+`unlace decompile`, and so do `--image`, `--follow-images` and `--member`. A
+whole-binary `decompile-all` can print a function
+differently from the one-function decompile `map` runs (the pointer-argument casts,
+callee-first prototypes); ask about the text `unlace decompile` prints, or read the
+`code` of the `--json` answer.
+
+```bash
+unlace decompile ./sample.elf sum_to | cat -n
+#      7	  for (i = 1; i <= n; i = i + 1) {
+#      8	    acc += i;
+unlace map ./sample.elf sum_to --line 8
+#   0x1180
+#   0x1182
+unlace map ./sample.elf sum_to --addr 0x1182
+#   span 8:4-8:10	acc +=
+#   var n	int	edi(4), stack-0x1c(4)
+#   var i	int	eax(4), stack-0x14(4)
+#   var acc	long	stack-0x10(8)
+```
+
+`--json` prints one document instead:
+`{binary,function:{name,address,address_hex},query,code,error}` plus the answer.
+`query` repeats the question as `{start:{line,col},end:{line,col}}` or
+`{address,address_hex}`; `code` is the text the places index. A `--line` or `--span`
+answer adds `addresses` and `addresses_hex`; an `--addr` answer adds
+`spans: [{start:{line,col},end:{line,col},text}]` and
+`variables: [{name,type,kind,storage:[{space,register,offset,size}]}]`, the rows and
+pieces of *The JSON documents* above without their ranges. `error` is `null` on
+success. A function that does not exist, one that fails to decompile, and one whose
+token map does not rebuild its code (`tokens_error`) exit 1 with the reason on
+stderr and, under `--json`, in `error`, with `function` and `code` `null` when there
+is no function to name. A missing or doubled query and a malformed span exit 2.
 
 ## `unlace xrefs` — cross-references
 
@@ -5371,7 +5775,7 @@ is read, and a member whose path leaves that directory is named in a `note:`
 line when it loads. `--raw-image` reads the file as bytes and skips all of
 this. `--member`
 applies to `decompile`, `decompile-all`, `decompile-project`,
-`decompile-graph`, `functions`, `disassemble`, `raw-pcode`, `read`, `xrefs`,
+`decompile-graph`, `map`, `functions`, `disassemble`, `raw-pcode`, `read`, `xrefs`,
 `strings`, `crypto` and `blobs`; `unlace fid build` reads a whole archive itself.
 
 ### tar, zip and U-Boot FIT inputs
@@ -5421,6 +5825,159 @@ A tar or zip archive that holds no object file is left to the loader unless a
 member is named, so it fails as it did before. A gzip stream that is not a
 tar, and a device tree with no `/images` node, are not archives. A decoded member is
 limited to 1 GiB.
+
+## `--rules FILE` — p-code rewrite rules from a file
+
+```bash
+unlace decompile ./a.out right_context --rules rules.toml
+unlace decompile-all ./a.out --rules rules.toml --rules more.toml --json
+```
+
+A rule file adds p-code rewrite rules to the simplification pools for one run, without writing
+Rust. `unlace decompile` and `unlace decompile-all` take it, with and without `--json`, and each
+`--jobs` worker loads it too. The flag repeats: files, and the rules in each, are registered in the
+order given, before any `--option` is applied. A run without `--rules` is unchanged, and so is a
+run whose rules match nothing.
+
+```toml
+# The processor masks the count of a 64-bit shift to six bits, and the lifted code says so.
+[[rule]]
+name = "shiftmask64"
+group = "analysis"
+match = "INT_RIGHT(x:8, INT_AND(n:1, 0x3f))"
+replace = "INT_RIGHT(x, n)"
+```
+
+```
+$ unlace decompile ./a.out right_context
+  return p->i32[7L >> ((unsigned char)shift & 0x3f)];
+$ unlace decompile ./a.out right_context --rules rules.toml
+  return p->i32[7L >> (signed char)shift];
+```
+
+unlace checks that a rule is well formed. It does not check that the rule keeps the meaning of the
+code: the rule above drops a mask that changes the result for a count of 64 or more.
+
+### The file
+
+A file is TOML with one `[[rule]]` table per rule. Each table has exactly these four keys, all
+strings:
+
+| Key | Meaning |
+|---|---|
+| `name` | The rule's name in its pool: lower-case letters, digits and `_`. No other rule of the run has it, built-in rules included. A spent time budget names the rule by it. |
+| `group` | Where the rule runs: it is added behind the last built-in rule of this group, in the pool that holds the group (table below). |
+| `match` | The pattern: an op, the one the rule fires on. |
+| `replace` | What the op becomes: an op tree over the captures and constants, one capture, or one constant. |
+
+`match` and `replace` are expressions:
+
+| Form | Meaning |
+|---|---|
+| `OPCODE(a, b)` | An op and its inputs. Opcodes are spelled as `unlace raw-pcode` prints them. |
+| `x` | A capture: a lower-case name. In a pattern it matches any Varnode, a constant included. A name used twice is one Varnode, or two constants of one size and value. |
+| `0xff`, `255`, `-1` | A constant with this value at the size of its place, which is at most 8 bytes; a negative value is two's complement. |
+| `0x80/0xf0` | Pattern only: any constant `c` with `c & 0xf0 == 0x80`. `0/0` is any constant. |
+| `expr:N` | The same, `N` bytes wide: `x:1`, `0xff:4`, `INT_ZEXT(x):8` (an op's size is its output's). |
+
+An expression holds at most 256 ops, captures and constants.
+In a pattern an input written as an op must be written by an op of that opcode, in any block.
+The two inputs of a commutative op (`INT_ADD`, `INT_MULT`, `INT_AND`, `INT_OR`, `INT_XOR`,
+`INT_EQUAL`, `INT_NOTEQUAL`, `INT_CARRY`, `INT_SCARRY`, `BOOL_AND`, `BOOL_OR`, `BOOL_XOR`,
+`FLOAT_ADD`, `FLOAT_MULT`, `FLOAT_EQUAL`, `FLOAT_NOTEQUAL`) match in either order.
+
+A rule may use these opcodes. Their sizes must fit, in the file and in the function:
+
+| Opcodes | Sizes |
+|---|---|
+| `INT_ADD` `INT_SUB` `INT_MULT` `INT_DIV` `INT_SDIV` `INT_REM` `INT_SREM` `INT_AND` `INT_OR` `INT_XOR` `FLOAT_ADD` `FLOAT_SUB` `FLOAT_MULT` `FLOAT_DIV` | Two inputs; both are as wide as the output. |
+| `INT_NEGATE` `INT_2COMP` `FLOAT_NEG` `FLOAT_ABS` `FLOAT_SQRT` `CEIL` `FLOOR` `ROUND` | One input, as wide as the output. |
+| `INT_LEFT` `INT_RIGHT` `INT_SRIGHT` | The first input is as wide as the output; the shift amount has any size. |
+| `INT_EQUAL` `INT_NOTEQUAL` `INT_LESS` `INT_LESSEQUAL` `INT_SLESS` `INT_SLESSEQUAL` `INT_CARRY` `INT_SCARRY` `INT_SBORROW` `FLOAT_EQUAL` `FLOAT_NOTEQUAL` `FLOAT_LESS` `FLOAT_LESSEQUAL` | Two inputs of one size; the output is 1 byte. |
+| `BOOL_NEGATE` `BOOL_AND` `BOOL_OR` `BOOL_XOR` | Every input and the output is 1 byte. |
+| `INT_ZEXT` `INT_SEXT` | One input, narrower than the output. |
+| `SUBPIECE` | The output is a narrower part of the first input. The second input is a constant: the number of low bytes left out. |
+| `PIECE` | The output is the first input (the high part) joined to the second (the low part). |
+| `FLOAT_NAN` | One input; the output is 1 byte. |
+| `POPCOUNT` `LZCOUNT` `INT2FLOAT` `FLOAT2FLOAT` `TRUNC` | One input; the two sizes are not related. |
+
+Every other opcode is refused: `COPY`, the ones that read or write memory (`LOAD`, `STORE`),
+change control flow or call, and the ops only the decompiler writes (the joins of control-flow
+paths, pointer arithmetic, casts).
+
+**Sizes.** A size the file does not give follows from the opcodes and from the captures, and the
+replacement is as wide as the matched op's output. A size that is still open is read from the
+function: `INT_AND(x, 0xff)` matches at every size `0xff` fits, and a `1` in its replacement is
+then as wide as `x`. The rule does not fire where the sizes it finds do not fit its replacement,
+where a floating-point op would get a size the processor has no format for, or where a constant
+would be wider than 8 bytes. A shift amount or a `SUBPIECE` offset that the replacement gives no
+size is 4 bytes wide. Anything else in the replacement that gets a size from nowhere is an error:
+write it, as in `INT_ZEXT(SUBPIECE(x, 0):1)`.
+
+**What firing does.** The matched op keeps its place and its output and takes the opcode and the
+inputs of the replacement's root; a replacement that is one capture or one constant makes it a
+`COPY`. The ops inside the replacement are new ops in front of it, at its address. An op the
+pattern matched below the root is removed when nothing reads it any more, and stays when
+something does.
+
+### Where a rule runs
+
+| Pool | When it runs | Groups |
+|---|---|---|
+| `oppool1` | Inside the main loop, after each round of SSA construction and type inference, repeated until no rule fires. | `deadcode`, `analysis`, `nodejoin`, `canonicalcompare`, `subvar`, `conditionalexe`, `floatprecision`, `typerecovery`, `segment`, `protorecovery`, `doubleload`, `doubleprecis` |
+| `oppool2` | Later in the same loop, after block structuring. | `stackvars` |
+| `cleanup` | After the main loop has reached its fixed point, before variables are merged. | `cleanup`, `splitcopy`, `splitpointer`, `constsequence`, `bitfields` |
+
+`analysis` is the group for an ordinary simplification: the built-in rules run on its result.
+A rule in a `cleanup` pool group sees the final data flow, and nothing simplifies what it writes.
+The group also decides which pipelines keep the rule: jump-table recovery runs a reduced pipeline
+on a partial copy of the function with the groups `deadcode`, `analysis`, `canonicalcompare`,
+`subvar`, `conditionalexe`, `segment` and `stackvars`, so a rule in one of them fires there too.
+
+### A refused file
+
+The file is read and checked before anything is loaded. Every refused rule is reported on stderr
+as `FILE:LINE: rule "NAME": ...` with the line of the key at fault, and the run exits 2:
+
+```
+$ unlace decompile ./a.out main --rules bad.toml
+error: bad.toml:4: rule "unknownop": match: unknown opcode INT_ANDD at character 1 of `INT_ANDD(x, 0xff)`
+bad.toml:10: rule "sizes": match: size mismatch: both inputs of INT_AND are as wide as its output, but `x:1` is 1 byte and `y:2` is 2 bytes, in `INT_AND(x:1, y:2)`
+bad.toml:17: rule "unbound": replace: unbound capture `y`: the pattern does not name it
+bad.toml:23: rule "wider": replace: the replacement is not as wide as the matched op's output: the output of an extension is wider than its input, in `INT_ZEXT(x)`
+bad.toml:27: rule "nogroup": unknown group `nosuch`: the groups are deadcode, analysis, ...
+```
+
+The checks: the TOML syntax and the keys; the name, which no built-in rule and no other rule of
+the run's files has; the group; the expression syntax; that each
+opcode exists, can be used and has its number of inputs; the sizes of each side; that every
+capture of `replace` is named by `match`; that the replacement is as wide as the matched op's
+output; and that the pattern does not match a part of its own replacement, which would make the
+rule fire on what it wrote without end.
+
+### Rules that do not settle
+
+A pool repeats until no rule fires. Two rules that undo each other never get there, and a built-in
+rule can be one of the two: `INT_AND(x:4, 0xff)` to `INT_ZEXT(SUBPIECE(x, 0):1)` is undone by the
+built-in `subzext`. No check finds such a pair. The function ends in one of two ways:
+
+- When the two rules keep changing the opcode of one op, at its time budget (`--max-fn-seconds`),
+  as a failed function whose error names the pool and both rules. With the budget turned off
+  (`--max-fn-seconds 0`) such a run does not end.
+
+  ```
+  error: decompilation failed for f in ./a.out: per-function decompile budget exceeded (120 s) in action oppool1 (rules subzext and lowbyte keep changing one op)
+  ```
+
+- Otherwise at the engine's limit of 100000 repeated passes, with the warning `Stopped repeating
+  after 100000 passes that kept changing the function` on the function, whose code is what the
+  last pass left.
+
+### From the library and the console
+
+`Decompiler::with_rules_file(path)` (`unlace::unstable::hooks`, `docs/api.md`) adds a rule file to
+a `Decompiler`; it returns the same messages as an `Error::Request`. In `decomp_dbg` the command is
+`rewrite rules FILE`, given after the load and before any `option` line.
 
 ## `unlace fid` — function identification by fingerprint
 

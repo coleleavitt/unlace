@@ -9669,9 +9669,11 @@ both
   a database is matched against an image only when its header language has the
   image language's processor, address size and instruction byte order, the rule
   of Ghidra's `FidFile.canProcessLanguage`. Those facts are read from the
-  `.ldefs` entries the bootstrap scanned
-  (`crates/unlace-lift/src/p1_partition/langfamily.rs (families)`,
-  with the `instructionEndian` attribute the C++ decoder ignores), not from the
+  `.ldefs` entries the bootstrap can see
+  (`crates/unlace-lift/src/p1_partition/langfamily.rs (LanguageFamilies)`:
+  every language of a shared database, or, for a database scanned for one
+  load, the database's own language and any other read on demand; with the
+  `instructionEndian` attribute the C++ decoder ignores), not from the
   id's fields, which differ for some languages: `MIPS:BE:64:64-32addr` is 32-bit,
   and BE8 ARM (`ARM:LEBE:32:*`) and big-endian AArch64 have little-endian
   instructions. The variant and the compiler spec take no part, because the hash
@@ -15414,10 +15416,16 @@ the C++ inheritance chain modeled by composition:
   `.pspec` and `.cspec`, flat, form a complete root. The database mounts each
   table under an internal `unlace-memory://<n>` root and answers every listing,
   lookup and read under it from the table alone, never from the filesystem.
-  `crates/unlace-console/src/engine.rs (language_database)` scans a
-  list of roots once. A bootstrap over the result skips the `.ldefs` scan and
-  reads only its own language's `.sla`, `.pspec` and `.cspec`
-  (`LanguageDatabase::read_spec`), so threads may share one database.
+  (unlace) A bootstrap over spec roots reads only the `.ldefs` its language
+  needs (`LanguageDatabase::load_language`): it lists the `.ldefs` under the
+  roots, reads the files named for the id's processor field first
+  (`x86.ldefs` for `x86:LE:64:default`), then the rest in spec-path order,
+  and stops at the first that defines the id; the C++ parses every `.ldefs`
+  on each load. `crates/unlace-console/src/engine.rs (language_database)`
+  scans a list of roots once, reading every `.ldefs`. A bootstrap over the
+  result skips the `.ldefs` scan and reads only its own language's `.sla`,
+  `.pspec` and `.cspec` (`LanguageDatabase::read_spec`), so threads may share
+  one database.
 - `crates/unlace-lift/src/p1_partition/xml_arch.rs (XmlArchitecture)`
   binds the decompiler's XML `<binaryimage>` container — the datatest corpus's
   entire load path, and the reason the analysis tier can be default-on without

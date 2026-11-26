@@ -825,6 +825,15 @@ pub fn print_unicode(s: &mut String, onechar: int4) {
     }
 }
 
+/// One codepoint of a double-quoted C string body: a single quote needs no escape there.
+pub fn print_unicode_in_string(s: &mut String, onechar: int4) {
+    if onechar == 0x27 {
+        s.push('\'');
+    } else {
+        print_unicode(s, onechar);
+    }
+}
+
 /// The Rust spelling of one codepoint inside a double-quoted string body.
 ///
 /// (unlace outlang) Rust's escape set is a strict subset of C's in the ways that
@@ -1407,6 +1416,20 @@ impl PrintEmit {
             _ => Vec::new(),
         }
     }
+    /// How many tokens the markup leaf has captured; `0` on any other leaf.
+    pub fn token_count(&self) -> usize {
+        match self {
+            PrintEmit::Markup(e) => e.token_count(),
+            _ => 0,
+        }
+    }
+    /// Take the structural marks captured by the markup leaf.
+    pub fn take_markup_marks(&mut self) -> Vec<crate::prettyprint::CaptureMark> {
+        match self {
+            PrintEmit::Markup(e) => e.take_marks(),
+            _ => Vec::new(),
+        }
+    }
     /// Whether the plain-text statement-root sidecar is active.
     pub fn captures_plain_statement_provenance(&self) -> bool {
         match self {
@@ -1771,6 +1794,9 @@ pub struct PrintC {
     /// reads (`crate::lang`).  Refreshed per document alongside `rt_ctx`;
     /// `OutLang::C` until then, so an out-of-band print is never non-C.
     pub out_lang: crate::lang::OutLang,
+    /// (unlace) The flavour whose profile stands in for `out_lang`'s own
+    /// ([`set_flavour`](PrintC::set_flavour)); `None` renders the built-in language.
+    flavour: Option<&'static crate::langflavour::Flavour>,
     /// (unlace warnstyle, DIV-39) Warning slugs collected under `warn_inline` by
     /// [`emit_comment_group`](PrintC::emit_comment_group) /
     /// [`emit_comment_func_header`](PrintC::emit_comment_func_header), flushed
@@ -1837,6 +1863,12 @@ pub struct PrintC {
     label_names: std::collections::BTreeMap<BlockId, String>,
     /// (unlace `ctree`) The C syntax tree of the function being printed (none in flat printing).
     ctree: Option<crate::ctree::CTree>,
+    /// (unlace `ctreeexport`) The expression nodes the RPN driver prints, recorded during a
+    /// tree-capture render (`doc_function_capture`); `None` on every other render.
+    rpn_record: Option<ctreerecord::RpnRecord>,
+    /// The constant Varnode whose `push_vn_explicit_ir` is printing, so the atoms it pushes
+    /// can be recorded with it; `None` outside a constant.
+    rpn_constant: Option<crate::printlanguage::IrKey>,
     /// (unlace `noretfirst`) `CBRANCH` ops whose condition prints negated, for an `if` whose
     /// arms the tree swapped.
     flipped_branches: std::collections::BTreeSet<OpId>,
@@ -1880,6 +1912,7 @@ impl PrintC {
             switch_plans: Default::default(),
             rt_ctx: RealTypeCtx::OFF,
             out_lang: crate::lang::OutLang::C,
+            flavour: None,
             eol_warns: Vec::new(),
             warnings: Vec::new(),
             local_name_overrides: std::collections::HashMap::new(),
@@ -1904,6 +1937,8 @@ impl PrintC {
             named_globals: crate::namedglobals::References::default(),
             label_names: std::collections::BTreeMap::new(),
             ctree: None,
+            rpn_record: None,
+            rpn_constant: None,
             flipped_branches: std::collections::BTreeSet::new(),
         }
     }
@@ -1921,7 +1956,27 @@ impl PrintC {
     /// profile rather than a second emitter.
     #[inline]
     pub fn lang(&self) -> &'static crate::lang::LangProfile {
-        self.out_lang.profile()
+        match self.flavour {
+            Some(flavour) => flavour.profile(),
+            None => self.out_lang.profile(),
+        }
+    }
+
+    /// (unlace) Render `flavour`: its base language's printer over its profile. Selecting a
+    /// language by name ([`set_name`](PrintC::set_name)) drops it.
+    pub fn set_flavour(&mut self, flavour: &'static crate::langflavour::Flavour) {
+        self.set_name(flavour.base().print_name());
+        self.flavour = Some(flavour);
+    }
+
+    /// (unlace) The text the operator token `tok` opens with: its own, or the one the
+    /// flavour being rendered gives it.
+    #[inline]
+    pub fn op_spelling(&self, tok: &'static OpToken) -> &'static str {
+        match self.flavour {
+            Some(flavour) => flavour.spelling(tok),
+            None => tok.print1,
+        }
     }
 
     /// The printer name (C++ `PrintLanguage::getName`, `"c-language"`).
@@ -1941,6 +1996,7 @@ impl PrintC {
         self.name = name.to_string();
         self.out_lang =
             crate::lang::OutLang::from_print_name(name).unwrap_or(crate::lang::OutLang::C);
+        self.flavour = None;
         if self.plain_line_size.is_some() && !self.emit.emits_markup() {
             self.emit = self.plain_emit();
         }
@@ -2261,6 +2317,9 @@ impl PrintC {
         self.revpol.clear();
         self.nodepend.clear();
         self.pending = 0;
+        if let Some(record) = self.rpn_record.as_mut() {
+            record.reset_open();
+        }
     }
 
     /// C++ `PrintLanguage::clear` (printlanguage.cc:682), which `docFunction`
@@ -2268,9 +2327,9 @@ impl PrintC {
     /// drop what an interrupted document left behind, keeping every option.
     /// Beyond the upstream emitter/RPN/mod/scope reset this drops the unlace
     /// per-document state (the scoped `fd` pointer, unflushed end-of-line
-    /// warnings, the declared locals, the pointer-argument record) and returns a
-    /// markup render's back-end to plain text, the state every document starts
-    /// from.
+    /// warnings, the declared locals, the pointer-argument record, the
+    /// tree-capture record) and returns a markup render's back-end to plain text,
+    /// the state every document starts from.
     pub fn clear(&mut self) {
         if self.emit.emits_markup() {
             self.set_markup(false);
@@ -2280,6 +2339,7 @@ impl PrintC {
         self.emit.clear();
         self.context.clear();
         self.clear_rpn();
+        self.rpn_record = None;
         self.emit_fd = None;
         self.eol_warns.clear();
         self.warnings.clear();
@@ -2313,6 +2373,7 @@ impl PrintC {
         let id;
         if self.revpol.is_empty() {
             paren = false;
+            self.rpn_open(tok, op, paren);
             id = self.emit.open_group();
         } else {
             let back = self.revpol.last().unwrap().clone();
@@ -2320,8 +2381,11 @@ impl PrintC {
             // Reflect any id2 mutation emit_op performed back onto the stack.
             *self.revpol.last_mut().unwrap() = back;
             paren = self.parentheses_top(tok);
+            self.rpn_open(tok, op, paren);
             if paren {
+                let first = self.emit.token_count();
                 id = self.emit.open_paren(crate::printlanguage::OPEN_PAREN, 0);
+                self.rpn_engine_tokens(first);
             } else {
                 id = self.emit.open_group();
             }
@@ -2343,12 +2407,16 @@ impl PrintC {
             self.recurse();
         }
         if self.revpol.is_empty() {
+            self.rpn_leaf_open(atom);
             self.emit_atom(atom);
+            self.rpn_close();
         } else {
             let back = self.revpol.last().unwrap().clone();
             self.emit_op(&back);
             *self.revpol.last_mut().unwrap() = back;
+            self.rpn_leaf_open(atom);
             self.emit_atom(atom);
+            self.rpn_close();
             loop {
                 {
                     let top = self.revpol.last_mut().unwrap();
@@ -2360,12 +2428,15 @@ impl PrintC {
                 let entry = self.revpol.last().unwrap().clone();
                 self.emit_op(&entry);
                 if entry.paren {
+                    let first = self.emit.token_count();
                     self.emit
                         .close_paren(crate::printlanguage::CLOSE_PAREN, entry.id);
+                    self.rpn_engine_tokens(first);
                 } else {
                     self.emit.close_group(entry.id);
                 }
                 self.revpol.pop();
+                self.rpn_close();
                 if self.revpol.is_empty() {
                     break;
                 }
@@ -2513,6 +2584,13 @@ impl PrintC {
     /// spacing / parens for one RPN entry at its current stage.  Mutates the
     /// entry's `id2` for surround tokens (mirrored back by the callers).
     fn emit_op(&mut self, entry_in: &ReversePolish) {
+        let first = self.emit.token_count();
+        self.emit_op_tokens(entry_in);
+        self.rpn_engine_tokens(first);
+    }
+
+    /// The body of [`emit_op`](Self::emit_op).
+    fn emit_op_tokens(&mut self, entry_in: &ReversePolish) {
         let mut entry = entry_in.clone();
         // (unlace) The operator's markup (C++ `EmitMarkup::tagOp` derefs the entry's
         // `PcodeOp *` for `opref = getTime()`).  Resolved from the entry's arena
@@ -2522,7 +2600,7 @@ impl PrintC {
         match entry.tok.token_type {
             TokenType::Binary => {
                 let text = match entry.visited {
-                    1 => entry.tok.print1,
+                    1 => self.op_spelling(entry.tok),
                     2 if !entry.tok.print2.is_empty() => entry.tok.print2,
                     _ => return,
                 };
@@ -2556,8 +2634,11 @@ impl PrintC {
                         record.calls.push(candidate.call);
                     }
                 }
-                self.emit
-                    .tag_op(entry.tok.print1, SyntaxHighlight::NoColor, &op_markup);
+                self.emit.tag_op(
+                    self.op_spelling(entry.tok),
+                    SyntaxHighlight::NoColor,
+                    &op_markup,
+                );
                 self.emit.spaces(entry.tok.spacing, entry.tok.bump);
             }
             TokenType::Postsurround => {
@@ -4548,6 +4629,7 @@ impl PrintC {
     pub fn declarations_of(arch: &Architecture, fd: &Funcdata) -> PrintC {
         let mut print = PrintC::new();
         print.set_name(&arch.print().name);
+        print.flavour = arch.print().flavour;
         print.options = arch.print().options;
         print.doc_function_full(fd, arch);
         print
@@ -4990,9 +5072,6 @@ impl PrintC {
         } else {
             None
         };
-        if let Some(tree) = self.ctree.as_mut() {
-            crate::ctreebuild::split_statements(fd, tree);
-        }
         self.ctree_rewrite(fd, arch);
         if !self.emit_ctree_body(fd, arch, sroot) {
             self.emit_block_graph(fd, arch, sroot);
@@ -5227,7 +5306,7 @@ impl PrintC {
                     return;
                 }
                 self.emit.tag_op(
-                    tokens::BOOLEAN_NOT.print1,
+                    self.op_spelling(&tokens::BOOLEAN_NOT),
                     SyntaxHighlight::NoColor,
                     &MarkupRef::none(),
                 );
@@ -5248,14 +5327,12 @@ impl PrintC {
             ExprKind::And(left, right) | ExprKind::Or(left, right) => {
                 let and = matches!(kind, ExprKind::And(..));
                 self.emit_return_operand(fd, arch, left, and);
-                token(
-                    &mut self.emit,
-                    if and {
-                        tokens::BOOLEAN_AND.print1
-                    } else {
-                        tokens::BOOLEAN_OR.print1
-                    },
-                );
+                let text = self.op_spelling(if and {
+                    &tokens::BOOLEAN_AND
+                } else {
+                    &tokens::BOOLEAN_OR
+                });
+                token(&mut self.emit, text);
                 self.emit_return_operand(fd, arch, right, and);
             }
             _ => {}
@@ -6752,14 +6829,14 @@ impl PrintC {
         self.push_vn_explicit_ir(fd, arch, m.dest, m.assign_op);
         self.emit.spaces(1, 0);
         self.emit.tag_op(
-            tokens::ASSIGNMENT.print1,
+            self.op_spelling(&tokens::ASSIGNMENT),
             SyntaxHighlight::NoColor,
             &MarkupRef::none(),
         );
         self.emit.spaces(1, 0);
         if m.negate {
             self.emit.tag_op(
-                tokens::BOOLEAN_NOT.print1,
+                self.op_spelling(&tokens::BOOLEAN_NOT),
                 SyntaxHighlight::NoColor,
                 &MarkupRef::none(),
             );
@@ -6903,7 +6980,7 @@ impl PrintC {
         // ` = `
         self.emit.spaces(1, 0);
         self.emit.tag_op(
-            tokens::ASSIGNMENT.print1,
+            self.op_spelling(&tokens::ASSIGNMENT),
             SyntaxHighlight::NoColor,
             &MarkupRef::none(),
         );
@@ -6945,11 +7022,14 @@ impl PrintC {
         }
         // ` : B ` / ` } else { B }`
         self.emit.spaces(1, 0);
-        self.emit.tag_op(
-            if ternary { ":" } else { "} else {" },
-            SyntaxHighlight::NoColor,
-            &MarkupRef::none(),
-        );
+        if ternary {
+            self.emit
+                .tag_op(":", SyntaxHighlight::NoColor, &MarkupRef::none());
+        } else {
+            let separator = format!("}} {} {{", self.lang().kw_else);
+            self.emit
+                .tag_op(&separator, SyntaxHighlight::NoColor, &MarkupRef::none());
+        }
         self.emit.spaces(1, 0);
         self.op_push_ir(fd, arch, m.else_op, None);
         self.cast_implied.set_arm_drops(Vec::new());
@@ -14347,6 +14427,22 @@ impl PrintC {
         vn: VarnodeId,
         op: OpId,
     ) {
+        let constant = fd
+            .vbank()
+            .get(vn)
+            .is_some_and(|v| v.is_constant() && !v.is_annotation());
+        let outer = std::mem::replace(&mut self.rpn_constant, constant.then(|| vn_key(vn)));
+        self.push_vn_explicit_body(fd, arch, vn, op);
+        self.rpn_constant = outer;
+    }
+
+    fn push_vn_explicit_body(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        vn: VarnodeId,
+        op: OpId,
+    ) {
         let v = match fd.vbank().get(vn) {
             Some(v) => v,
             None => return,
@@ -14484,11 +14580,7 @@ impl PrintC {
                         } else {
                             TagType::VarToken
                         },
-                        if self.out_lang == crate::lang::OutLang::Go {
-                            crate::printlanguage::SyntaxHighlight::const_color
-                        } else {
-                            crate::printlanguage::SyntaxHighlight::var_color
-                        },
+                        crate::printlanguage::SyntaxHighlight::const_color,
                         op_key(op),
                         vn_key(vn),
                     ));
@@ -16283,7 +16375,7 @@ impl PrintC {
     /// One codepoint of a string literal, escaped for the output language.
     fn push_escaped_codepoint(&self, s: &mut String, codepoint: int4) {
         match self.lang().forms.string_escape {
-            crate::lang::StringEscape::CEscapes => print_unicode(s, codepoint),
+            crate::lang::StringEscape::CEscapes => print_unicode_in_string(s, codepoint),
             crate::lang::StringEscape::RustEscapes => print_unicode_rust(s, codepoint),
             crate::lang::StringEscape::JavaEscapes => {
                 crate::langjava::print_unicode_java(s, codepoint)
@@ -18263,6 +18355,7 @@ fn to_emit_hl(hl: crate::printlanguage::SyntaxHighlight) -> SyntaxHighlight {
 
 mod cpoolprint;
 mod ctreeprint;
+mod ctreerecord;
 mod javasyncprint;
 mod javatryprint;
 

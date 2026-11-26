@@ -1,0 +1,53 @@
+# Rewrite rule files: the console command `rewrite rules FILE` adds the p-code rewrites
+# of a TOML file to the rule pools (`unlace decompile --rules FILE`; docs/spec chapter 3,
+# section 3.2, "Rewrite rule files"). No option: without a file the pools are unchanged.
+#
+# Source:           int mix(int a, int b) { return (a | b) + (a & b); }
+# Bytes (as):       mov %edi,%eax ; or %esi,%eax ; and %esi,%edi ; add %edi,%eax ; ret
+# Phase:            P3, the oppool1 rule pool (group `analysis`).
+#
+# The script decompiles the function before and after it registers
+# fixtures/rewriterules/orandsum.toml. No built-in rule knows that the sum is
+# `a + b`, so assert #1 is the default output and assert #2 the rule firing.
+# Assert #3 is a file with a refused rule: the command fails and names the rule
+# and its line, and the pools keep what they had.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'mix' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '89f809f021f701f8c3'
+
+[script]
+commands = [
+    'parse line extern int4 mix(int4 a, int4 b);',
+    'lo fu mix',
+    'decompile',
+    'print C',
+    'rewrite rules tests/stages/fixtures/rewriterules/orandsum.toml',
+    'decompile',
+    'print C',
+    { com = 'rewrite rules tests/stages/fixtures/rewriterules/refused.toml', expect_error = true },
+    'quit',
+]
+
+[[match]]
+name = 'rewriterules #1: the default pools keep the OR and the AND'
+count = 1
+literal = 'return (a | b) + (a & b);'
+
+[[match]]
+name = 'rewriterules #2: the rule of the file folds the sum'
+count = 1
+literal = 'return a + b;'
+
+[[match]]
+name = 'rewriterules #3: a refused rule is reported with its file, line and name'
+count = 1
+literal = 'tests/stages/fixtures/rewriterules/refused.toml:8: rule "narrower": replace: the replacement is not as wide as the matched op'

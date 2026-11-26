@@ -117,6 +117,12 @@ mod local_array_bits;
 #[path = "array_record.rs"]
 mod array_record;
 
+#[path = "ctree_cli.rs"]
+mod ctree_cli;
+
+#[path = "jobs_document.rs"]
+mod jobs_document;
+
 #[path = "aif_lea_padding.rs"]
 mod aif_lea_padding;
 
@@ -597,6 +603,13 @@ mod stack_float_snapshot;
 #[path = "register_locals_json.rs"]
 mod register_locals_json;
 
+#[path = "map_cli.rs"]
+mod map_cli;
+#[path = "tokens_cli.rs"]
+mod tokens_cli;
+#[path = "variable_storage_cli.rs"]
+mod variable_storage_cli;
+
 #[path = "stack_object_discovery.rs"]
 mod stack_object_discovery;
 
@@ -672,6 +685,9 @@ mod unpack_pklite_cli;
 #[path = "unstructured_goto_cli.rs"]
 mod unstructured_goto_cli;
 
+#[path = "language_file_cli.rs"]
+mod language_file_cli;
+
 #[path = "variadic_return_register.rs"]
 mod variadic_return_register;
 
@@ -740,6 +756,8 @@ mod globalwidth;
 #[path = "xrefs_unflagged_cli.rs"]
 mod xrefs_unflagged_cli;
 
+#[path = "go_dwarf_storage_names.rs"]
+mod go_dwarf_storage_names;
 #[path = "zero_extended_returns.rs"]
 mod zero_extended_returns;
 
@@ -962,6 +980,9 @@ mod ppc32_pic_abi;
 
 #[path = "compact_json.rs"]
 mod compact_json;
+
+#[path = "rewrite_rules_cli.rs"]
+mod rewrite_rules_cli;
 
 #[path = "rust_probestack.rs"]
 mod rust_probestack;

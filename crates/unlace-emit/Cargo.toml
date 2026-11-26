@@ -7,6 +7,9 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 unlace-base.workspace = true
 unlace-num.workspace = true
@@ -19,6 +22,7 @@ unlace-bandb-core.workspace = true
 unlace-bandb.workspace = true
 unlace-ctree.workspace = true
 thiserror.workspace = true
+toml = { version = "1.1", default-features = false, features = ["parse", "serde", "std"] }
 smallvec.workspace = true
 slotmap.workspace = true
 

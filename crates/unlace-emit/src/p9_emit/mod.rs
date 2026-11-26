@@ -34,6 +34,7 @@ pub mod coreaction_casts;
 pub mod coreaction_render;
 pub mod cppshortnames; // (unlace) short spellings of standard C++ names
 pub mod cstringconst;
+pub mod ctreeexport; // (unlace) the printed function as a tree of typed nodes + the reference C printer
 pub mod ctypes; // (unlace) valid per-architecture C spelling of the core types
 pub mod declorder; // (unlace) the order local declarations print in
 pub mod dedupvardecls;
@@ -64,6 +65,7 @@ pub mod labelstmt; // (unlace) every printed C label labels a statement
 mod lanetrace;
 pub mod lang; // (unlace) the output-language plane: profile + capabilities
 pub mod langc; // (unlace) the c-language policy objects (CSpeller)
+pub mod langflavour; // (unlace) a profile read from a TOML file over a base language
 pub mod langgo;
 pub mod langjava; // (unlace) the java-language profile and type speller
 pub mod langrust; // (unlace) the rust-language policy objects (profile + caps)

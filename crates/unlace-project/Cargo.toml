@@ -7,6 +7,9 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 # The bundled feature compiles SQLite's amalgamation (C) with `cc`; no system library is needed.
 rusqlite = { version = "0.43", features = ["bundled"] }

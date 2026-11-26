@@ -372,16 +372,20 @@ pub fn bootstrap(c: &Case) -> Result<Bootstrap, String> {
 
     let mut db = LanguageDatabase::new();
     db.scan_for_sleigh_directories(root.join("specs").to_str().unwrap());
-    db.get_descriptions(&registry)
-        .map_err(|e| format!("collect ldefs: {e}"))?;
 
     let archattr = bi
         .get_attribute_value("arch")
         .map_err(|e| format!("binaryimage arch: {e}"))?;
     let arch_id = String::from_utf8_lossy(archattr).into_owned();
     arch.sleigh_mut().set_archid(&arch_id);
+    let baseid = arch
+        .sleigh_mut()
+        .resolve_language_id(&arch_id)
+        .map_err(|e| format!("resolve_architecture: {e}"))?;
+    db.load_language(&baseid, &registry)
+        .map_err(|e| format!("collect ldefs: {e}"))?;
     arch.sleigh_mut()
-        .resolve_architecture(&db, &arch_id)
+        .select_language(&db, &baseid)
         .map_err(|e| format!("resolve_architecture: {e}"))?;
     if arch.sleigh().language_index() < 0 {
         return Err("language index unresolved".to_string());
@@ -395,7 +399,7 @@ pub fn bootstrap(c: &Case) -> Result<Bootstrap, String> {
         .slafile
         .ok_or("build_spec_file did not resolve a .sla")?;
     let sla = db
-        .read_spec(&resolved_sla)
+        .read_sla_image(&resolved_sla)
         .map_err(|e| format!("read resolved sla: {e}"))?;
     arch.sleigh_mut()
         .build_translator(Box::new(DummyImg), &sla)

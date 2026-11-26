@@ -51,6 +51,7 @@ const IMAGE_COMMANDS: &[&str] = &[
     "decompile-all",
     "decompile-project",
     "decompile-graph",
+    "map",
     "functions",
     "disassemble",
     "raw-pcode",

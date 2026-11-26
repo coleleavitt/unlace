@@ -17,11 +17,12 @@
 
 use unlace_analysis::loader::firmware::{avrvectors, containers, cortexm, esp, svd};
 
-pub(crate) const RAW_COMMANDS: [&str; 4] = [
+pub(crate) const RAW_COMMANDS: [&str; 5] = [
     "decompile",
     "decompile-all",
     "decompile-project",
     "functions",
+    "map",
 ];
 const CORTEX_TARGET: &str = "ARM:LE:32:Cortex";
 /// The ARMv7-M/ARMv8-M Device memory regions: Peripheral and System (PPB).
@@ -282,7 +283,10 @@ pub fn prepare(
             (h.addr, named.unwrap_or_else(|| h.name.clone()))
         })
         .collect();
-    if sub != "decompile" && !has(out, "--entry") && !has(out, "--addr") && has(out, "--raw-image")
+    if !matches!(sub, "decompile" | "map")
+        && !has(out, "--entry")
+        && !has(out, "--addr")
+        && has(out, "--raw-image")
     {
         for addr in handlers
             .iter()

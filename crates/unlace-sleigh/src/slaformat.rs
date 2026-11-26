@@ -59,8 +59,14 @@ pub fn inflate_sla(s: &[u8]) -> UnlaceResult<Vec<u8>> {
     if !ok {
         return Err(UnlaceError::lowlevel("Missing SLA format header"));
     }
-    let mut decompressor = Decompress::new();
     let mut out: Vec<u8> = Vec::with_capacity(compressed.len().saturating_mul(8));
+    inflate_into(compressed, &mut out)?;
+    Ok(out)
+}
+
+/// Inflate the zlib stream `compressed` onto the end of `out`, checking the zlib checksum.
+fn inflate_into(compressed: &[u8], out: &mut Vec<u8>) -> UnlaceResult<()> {
+    let mut decompressor = Decompress::new();
     // The C++ `Decompress` keeps a `z_stream next_in` pointer INTO the
     // caller's buffer, so unconsumed input survives across `inflate`
     // calls.  The unlace `Decompress::input` instead REPLACES its internal
@@ -84,6 +90,25 @@ pub fn inflate_sla(s: &[u8]) -> UnlaceResult<Vec<u8>> {
             return Err(UnlaceError::lowlevel("Truncated SLA compressed stream"));
         }
     }
+    Ok(())
+}
+
+/// (unlace) The header of an uncompressed `.sla` image: `slr` and the format version, followed
+/// by the packed element stream itself, optionally followed by the stream's layout
+/// (`crate::lazysla::index_raw_image`). The `.sla` cache (`unlace_slacomp::slacache`) keeps one
+/// beside each compressed image it has loaded, so later loads skip the inflate;
+/// [`FormatDecode::ingest_stream`] takes either form.
+pub const RAW_SLA_HEADER: [u8; 4] = [b's', b'l', b'r', FORMAT_VERSION as u8];
+
+/// (unlace) The uncompressed image of a compressed `.sla`: [`RAW_SLA_HEADER`] and the inflated
+/// element stream.
+pub fn raw_sla_image(s: &[u8]) -> UnlaceResult<Vec<u8>> {
+    let (ok, compressed) = is_sla_format(s);
+    if !ok {
+        return Err(UnlaceError::lowlevel("Missing SLA format header"));
+    }
+    let mut out = RAW_SLA_HEADER.to_vec();
+    inflate_into(compressed, &mut out)?;
     Ok(out)
 }
 
@@ -171,9 +196,14 @@ impl<'a> FormatDecode<'a> {
     /// PackedDecode chunk buffers; the Rust decompresses into one `Vec<u8>`
     /// and transfers it with `ingest_owned`, which copies only the trailing
     /// partial chunk so `endIngest` has one to pad — every packed byte has its
-    /// high bit set, so the NUL-terminator scan never trips.
+    /// high bit set, so the NUL-terminator scan never trips.  (unlace) An
+    /// uncompressed image ([`RAW_SLA_HEADER`]) is taken as it is, without the
+    /// layout it may carry (`crate::lazysla::split_raw_image`).
     pub fn ingest_stream(&mut self, s: &[u8]) -> UnlaceResult<()> {
-        let out = inflate_sla(s)?;
+        let out = match crate::lazysla::split_raw_image(s) {
+            Some((packed, _)) => packed.to_vec(),
+            None => inflate_sla(s)?,
+        };
         self.inner.ingest_owned(out)
     }
 
@@ -275,80 +305,7 @@ impl Decoder for FormatDecode<'_> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use unlace_base::marshal::{ATTRIB_CONTENT, ELEM_DATA, Encoder};
-
-    fn compressed(payload: &[u8]) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        write_sla_header(&mut bytes).unwrap();
-        let mut compressor = CompressBuffer::new(&mut bytes, -1).unwrap();
-        compressor.write_all(payload).unwrap();
-        compressor.flush().unwrap();
-        bytes
-    }
-
-    #[test]
-    fn owned_sla_buffer_decodes_across_inflate_and_packed_boundaries() {
-        let manager = AddrSpaceManager::new();
-        for length in [1018, 1019, 1020, 4090, 4091, 4092, 8192, 20000] {
-            let payload: Vec<_> = (0..length).map(|i| (i % 255 + 1) as u8).collect();
-            let mut packed = Vec::new();
-            let mut enc = PackedEncode::new(&mut packed);
-            enc.open_element(&ELEM_DATA);
-            enc.write_string(&ATTRIB_CONTENT, &payload);
-            enc.close_element(&ELEM_DATA);
-            let bytes = compressed(&packed);
-            let mut dec = FormatDecode::new(&manager);
-            dec.ingest_stream(&bytes).unwrap();
-            let el = dec.open_element_id(&ELEM_DATA).unwrap();
-            assert_eq!(dec.read_string_id(&ATTRIB_CONTENT).unwrap(), payload);
-            dec.close_element(el).unwrap();
-            assert_eq!(dec.peek_element().unwrap(), 0);
-        }
-    }
-
-    #[test]
-    fn owned_sla_buffer_keeps_header_truncation_and_checksum_checks() {
-        let manager = AddrSpaceManager::new();
-        let bytes = compressed(&[0x41, 0x81]);
-        for end in 0..bytes.len() {
-            let mut dec = FormatDecode::new(&manager);
-            assert!(
-                dec.ingest_stream(&bytes[..end]).is_err(),
-                "truncation at {end}"
-            );
-        }
-        let mut corrupt = bytes.clone();
-        *corrupt.last_mut().unwrap() ^= 1;
-        assert!(FormatDecode::new(&manager).ingest_stream(&corrupt).is_err());
-        let mut wrong_header = bytes;
-        wrong_header[3] = 0;
-        assert!(
-            FormatDecode::new(&manager)
-                .ingest_stream(&wrong_header)
-                .is_err()
-        );
-        assert!(
-            FormatDecode::new(&manager)
-                .ingest_stream(&compressed(&[]))
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn nul_termination_does_not_skip_the_compressed_checksum() {
-        let manager = AddrSpaceManager::new();
-        let mut bytes = compressed(&[0x41, 0x81, 0, 0x41, 0x81]);
-        let mut dec = FormatDecode::new(&manager);
-        dec.ingest_stream(&bytes).unwrap();
-        let el = dec.open_element().unwrap();
-        dec.close_element(el).unwrap();
-        assert_eq!(dec.peek_element().unwrap(), 0);
-        *bytes.last_mut().unwrap() ^= 1;
-        assert!(FormatDecode::new(&manager).ingest_stream(&bytes).is_err());
-    }
-}
+mod tests;
 
 // The opcode-reading extension (unlace-num) — needed because ConstructTpl /
 // OpTpl decode through the OpcodeDecoder surface; forward to the inner

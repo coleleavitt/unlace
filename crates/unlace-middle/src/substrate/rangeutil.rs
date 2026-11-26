@@ -697,8 +697,8 @@ impl CircleRange {
         }
 
         // Treat original ranges as having step=1
-        let a_right = self.right.wsub(self.step as uintb).wadd(1);
-        let b_right = op2.right.wsub(op2.step as uintb).wadd(1);
+        let a_right = self.right.wsub(self.step as uintb).wadd(1) & self.mask;
+        let b_right = op2.right.wsub(op2.step as uintb).wadd(1) & op2.mask;
         self.step = 1;
         self.mask |= op2.mask;
         let vacant_size1;
@@ -960,16 +960,16 @@ impl CircleRange {
         if new_step == self.step {
             return;
         }
-        let mut a_right = self.right.wsub(self.step as uintb);
+        let mut a_right = self.right.wsub(self.step as uintb) & self.mask;
         self.step = new_step;
         if self.step == 1 {
             return; // No remainder to fill in
         }
         let mut cur_rem = self.left % (self.step as uintb);
-        self.left = self.left.wsub(cur_rem).wadd(rem);
+        self.left = self.left.wsub(cur_rem).wadd(rem) & self.mask;
         cur_rem = a_right % (self.step as uintb);
-        a_right = a_right.wsub(cur_rem).wadd(rem);
-        self.right = a_right.wadd(self.step as uintb);
+        a_right = a_right.wsub(cur_rem).wadd(rem) & self.mask;
+        self.right = a_right.wadd(self.step as uintb) & self.mask;
         if (!iseverything) && (self.left == self.right) {
             self.isempty = true;
         }
@@ -1011,6 +1011,9 @@ impl CircleRange {
             }
             OpCode::CPUI_INT_ZEXT => {
                 let val = calc_mask(in_size); // (smaller) input mask
+                if (self.step as uintb) > val {
+                    return false;
+                }
                 let rem = self.left % (self.step as uintb);
                 let mut zextrange = CircleRange::new_empty();
                 zextrange.left = rem;
@@ -1024,29 +1027,28 @@ impl CircleRange {
                 self.left &= val;
                 self.right &= val;
                 self.mask &= val; // Preserve the stride
+                self.normalize();
             }
             OpCode::CPUI_INT_SEXT => {
                 let val = calc_mask(in_size); // (smaller) input mask
-                let rem = self.left & (self.step as uintb);
+                if (self.step as uintb) > val {
+                    return false;
+                }
+                let rem = self.left % (self.step as uintb);
+                let high_bit = val ^ (val >> 1); // High order bit for (small) input space
                 let mut sextrange = CircleRange::new_empty();
-                sextrange.left = val ^ (val >> 1); // High order bit for (small) input space
-                sextrange.left = sextrange.left.wadd(rem);
-                sextrange.right = sign_extend_sized(sextrange.left, in_size, out_size);
+                sextrange.left = sign_extend_sized(high_bit, in_size, out_size).wadd(rem);
+                sextrange.right = high_bit.wadd(rem);
                 sextrange.mask = self.mask;
                 sextrange.step = self.step; // Keep the same stride
                 sextrange.isempty = false;
-                // C++ (rangeutil.cc:782-792): fail if the sext-domain intersect
-                // is two pieces, or if the resulting range is non-empty (the
-                // input range extended outside the sext domain).  `||`
-                // short-circuits so `is_empty()` is only read when intersect==0,
-                // matching the nested C++ else branch exactly.
-                if sextrange.intersect(self) != 0 || !sextrange.is_empty() {
+                if 0 != self.intersect(&sextrange) {
                     return false;
-                } else {
-                    self.left &= val;
-                    self.right &= val;
-                    self.mask &= val; // Preserve the stride
                 }
+                self.left &= val;
+                self.right &= val;
+                self.mask &= val; // Preserve the stride
+                self.normalize();
             }
             _ => return false,
         }
@@ -1205,8 +1207,10 @@ impl CircleRange {
                     self.left = self.left.wadd(val) & self.mask;
                     self.right = self.right.wadd(val) & self.mask;
                 } else {
-                    self.left = val.wsub(self.left) & self.mask;
-                    self.right = val.wsub(self.right) & self.mask;
+                    let tmp = val.wsub(self.left).wadd(self.step as uintb) & self.mask;
+                    self.left = val.wsub(self.right).wadd(self.step as uintb) & self.mask;
+                    self.right = tmp;
+                    self.normalize();
                 }
             }
             OpCode::CPUI_INT_RIGHT => {
@@ -1492,54 +1496,89 @@ impl CircleRange {
                 }
                 self.isempty = false;
                 self.mask = in1.mask;
+                if in2.get_min() >= (8 * out_size) as uintb {
+                    self.step = 1;
+                    self.left = 0;
+                    self.right = 1;
+                    return true;
+                }
                 self.step = in1.step;
                 let sa = in2.get_min() as uint4;
                 let mut tmp = sa;
-                while self.step < max_step && tmp > 0 {
+                while self.step < max_step && tmp > 0 && ((self.step as uintb) << 1) <= self.mask {
                     self.step <<= 1;
                     tmp -= 1;
                 }
-                self.left = (in1.left.wshl(sa)) & self.mask;
-                self.right = (in1.right.wshl(sa)) & self.mask;
-                let whole_size =
-                    8 * (std::mem::size_of::<uintb>() as int4) - count_leading_zeros(self.mask);
-                // mixed: int4 getMaxInfo() + uint4 sa > int4 wholeSize
-                if in1.get_max_info() + (sa as int4) > whole_size {
-                    self.right = self.left; // Covered everything
+                if in1.left == in1.right {
+                    self.left = in1.left.wshl(sa) % (self.step as uintb);
+                    self.right = self.left;
                     self.normalize();
                     return true;
                 }
+                let span = in1.right.wsub(in1.step as uintb).wsub(in1.left) & self.mask;
+                if span > self.mask.wsub(self.step as uintb).wshr(sa) {
+                    self.left = in1.left.wshl(sa) % (self.step as uintb);
+                    self.right = self.left;
+                    self.normalize();
+                    return true;
+                }
+                self.left = in1.left.wshl(sa) & self.mask;
+                self.right = in1
+                    .right
+                    .wsub(in1.step as uintb)
+                    .wshl(sa)
+                    .wadd(self.step as uintb)
+                    & self.mask;
+                self.normalize();
             }
             OpCode::CPUI_SUBPIECE => {
                 if !in2.is_single() {
                     return false;
                 }
                 self.isempty = false;
-                // C++ (rangeutil.cc:1283): `(int4)in2.left * 8`. The i32
-                // multiply wraps on x86 (in2.left is a non-negative single
-                // constant); use wmul so a large offset cannot panic in debug.
-                let sa = (in2.left as int4).wmul(8);
                 self.mask = calc_mask(out_size);
-                self.step = if sa == 0 { in1.step } else { 1 };
-                let range = if in1.left < in1.right {
-                    in1.right.wsub(in1.left)
-                } else {
-                    in1.left.wsub(in1.right)
-                };
-
-                // sa is a non-negative int4; x86 masks the shift count mod 64
-                // (rangeutil.cc:1288), so use wshr (a SUBPIECE offset 8 gives sa=64).
-                if range == 0 || (range.wshr(sa as u32) > self.mask) {
+                if in2.left >= std::mem::size_of::<uintb>() as uintb {
+                    self.step = 1;
                     self.left = 0;
-                    self.right = 0; // We cover everything
+                    self.right = 1;
+                    return true;
+                }
+                let sa = (in2.left as int4).wmul(8);
+                self.step = if sa == 0 && (in1.step as uintb) <= self.mask {
+                    in1.step
                 } else {
-                    self.left = in1.left.wshr(sa as u32); // x86 shift mod 64 (rangeutil.cc:1292/1308)
-                    self.right = (in1.right.wsub(in1.step as uintb))
+                    1
+                };
+                if in1.left == in1.right {
+                    self.left = if self.step != 1 {
+                        in1.left % (self.step as uintb)
+                    } else {
+                        0
+                    };
+                    self.right = self.left;
+                } else {
+                    let last_in = in1.right.wsub(in1.step as uintb) & in1.mask;
+                    let span = last_in.wsub(in1.left) & in1.mask;
+                    let low_mask = if sa > 0 {
+                        (1 as uintb).wshl(sa as u32).wsub(1)
+                    } else {
+                        0
+                    };
+                    let blocks = span
                         .wshr(sa as u32)
-                        .wadd(self.step as uintb); // rangeutil.cc:1293 (x86 shift mod 64)
-                    self.left &= self.mask;
-                    self.right &= self.mask;
-                    self.normalize();
+                        .wadd((in1.left & low_mask).wadd(span & low_mask).wshr(sa as u32));
+                    if blocks >= self.mask {
+                        self.left = if self.step != 1 {
+                            in1.left % (self.step as uintb)
+                        } else {
+                            0
+                        };
+                        self.right = self.left;
+                    } else {
+                        self.left = in1.left.wshr(sa as u32) & self.mask;
+                        self.right = last_in.wshr(sa as u32).wadd(self.step as uintb) & self.mask;
+                        self.normalize();
+                    }
                 }
             }
             OpCode::CPUI_INT_RIGHT => {
@@ -1547,19 +1586,29 @@ impl CircleRange {
                     return false;
                 }
                 self.isempty = false;
-                let sa = in2.left as int4;
                 self.mask = calc_mask(out_size);
+                if in2.left >= (8 * _in_size) as uintb {
+                    self.step = 1;
+                    self.left = 0;
+                    self.right = 1;
+                    return true;
+                }
+                let sa = in2.left as int4;
+                if sa == 0 && out_size == _in_size {
+                    *self = in1.clone();
+                    return true;
+                }
                 self.step = 1; // Lose any step
                 if in1.left < in1.right {
-                    self.left = in1.left.wshr(sa as u32); // x86 shift mod 64 (rangeutil.cc:1292/1308)
-                    self.right = (in1.right.wsub(in1.step as uintb)).wshr(sa as u32).wadd(1); // rangeutil.cc:1309 (x86 shift mod 64)
+                    self.left = in1.left.wshr(sa as u32) & self.mask;
+                    self.right =
+                        in1.right.wsub(in1.step as uintb).wshr(sa as u32).wadd(1) & self.mask;
+                    if self.left == self.right {
+                        self.right = self.left.wadd(1) & self.mask;
+                    }
                 } else {
                     self.left = 0;
-                    self.right = in1.mask.wshr(sa as u32); // rangeutil.cc:1313 (x86 shift mod 64)
-                }
-                if self.left == self.right {
-                    // Don't truncate accidentally to everything
-                    self.right = (self.left.wadd(1)) & self.mask;
+                    self.right = in1.mask.wshr(sa as u32).wadd(1) & self.mask;
                 }
             }
             OpCode::CPUI_INT_SRIGHT => {
@@ -1567,8 +1616,16 @@ impl CircleRange {
                     return false;
                 }
                 self.isempty = false;
-                let sa = in2.left as int4;
                 self.mask = calc_mask(out_size);
+                let sa = if in2.left >= (8 * _in_size) as uintb {
+                    8 * _in_size - 1
+                } else {
+                    in2.left as int4
+                };
+                if sa == 0 && out_size == _in_size {
+                    *self = in1.clone();
+                    return true;
+                }
                 self.step = 1; // Lose any step
                 let bit_pos = 8 * _in_size - 1;
                 let mut val_left = sign_extend(in1.left as intb, bit_pos);

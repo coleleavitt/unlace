@@ -7,7 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
-[dev-dependencies]
+# Normal, not dev-dependencies: the package has only a bench target, and this way the
+# features they turn on (libc extra_traits, rustix termios) are on in every build too,
+# so `cargo build` and `cargo test` compile the same units.
+[dependencies]
 unlace-slacomp.workspace = true
 unlace-base.workspace = true
 unlace-console.workspace = true

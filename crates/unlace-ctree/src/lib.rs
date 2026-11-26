@@ -9,6 +9,7 @@
 
 pub mod ctree;
 pub mod ctreebuild;
+pub mod ctreehooks;
 
 #[doc(hidden)]
 pub use unlace_middle::*;
@@ -17,16 +18,4 @@ pub use unlace_middle::*;
 /// themselves: the hooks of the crates below it, and a stub that panics, naming itself, for
 /// each hook a higher crate provides (`UnlaceHookSlots::finish_with_stubs`).
 #[cfg(test)]
-mod unprovided {
-    use unlace_middle::passhooks::{UnlaceHookSlots, UnlaceHooks};
-
-    #[unsafe(no_mangle)]
-    fn __unlace_default_pass_hooks() -> &'static UnlaceHooks {
-        static HOOKS: std::sync::OnceLock<UnlaceHooks> = std::sync::OnceLock::new();
-        HOOKS.get_or_init(|| {
-            let mut slots = UnlaceHookSlots::default();
-            unlace_middle::provide_all(&mut slots);
-            slots.finish_with_stubs()
-        })
-    }
-}
+mod unprovided;

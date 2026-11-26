@@ -59,6 +59,9 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_console::interface::{FileOut, IfaceError, IfaceStatus};
+use unlace_decomp::ctreeexport::{Kind, Node, print_c};
+use unlace_decomp::decompile_drive::print_c_with_ctree;
+use unlace_decomp::printc::ArchPrintExt as _;
 
 /// C++ `IfaceParseError` / `IfaceExecutionError` distinction at the file level:
 /// the two `catch` arms of `runTestFiles` produce different prefixes
@@ -696,24 +699,7 @@ impl FunctionTestCollection {
     pub fn run_tests(&mut self, late_stream: &mut Vec<String>) -> String {
         self.num_tests_applied = 0;
         self.num_tests_succeeded = 0;
-
-        // Re-seat the console's command feed for this file (the C++
-        // `commands`-by-reference equivalent), then rewind it.  The loaded
-        // program (`dcp->conf`, set by `build_program` during `load_test`) is
-        // carried across the console rebuild so the script's engine commands drive
-        // it (the C++ console is the SAME object across loadTest/runTests; the
-        // Rust rebuild for the fresh command feed must preserve the program).
-        let carried_conf = self.take_conf();
-        let mut console = build_console_with(self.commands.clone());
-        if let Some(dcp) = console_dcp_mut(&mut console) {
-            dcp.spec_roots = self.spec_roots.clone();
-            dcp.conf = carried_conf;
-        }
-        self.console = console;
-
-        // C++: console->optr = &midBuffer (discarded); console->fileoptr = &bulkout.
-        self.console.optr = String::new(); // midBuffer
-        self.console.fileoptr = Some(FileOut::default()); // bulkout
+        self.seat_console();
         let mut bulkout = String::new();
         if self.expected_errors.iter().any(|&expected| expected) {
             for &expected in &self.expected_errors {
@@ -811,6 +797,133 @@ impl FunctionTestCollection {
     fn take_conf(&mut self) -> Option<unlace_console::engine::ConsoleProgram> {
         self.dcp_mut().and_then(|dcp| dcp.conf.take())
     }
+
+    /// Re-seat the console's command feed for this file (the C++
+    /// `commands`-by-reference equivalent), then rewind it.  The loaded
+    /// program (`dcp->conf`, set by `build_program` during `load_test`) is
+    /// carried across the console rebuild so the script's engine commands drive
+    /// it (the C++ console is the SAME object across loadTest/runTests; the
+    /// Rust rebuild for the fresh command feed must preserve the program).
+    /// Command chatter then goes to `optr` (C++ `midBuffer`) and the bulk
+    /// `print C` output to `fileoptr` (C++ `bulkout`).
+    fn seat_console(&mut self) {
+        let carried_conf = self.take_conf();
+        let mut console = build_console_with(self.commands.clone());
+        if let Some(dcp) = console_dcp_mut(&mut console) {
+            dcp.spec_roots = self.spec_roots.clone();
+            dcp.conf = carried_conf;
+        }
+        self.console = console;
+        self.console.optr = String::new();
+        self.console.fileoptr = Some(FileOut::default());
+    }
+
+    /// (unlace `ctreeexport`) Run the script and check the exported C syntax tree
+    /// ([`unlace_decomp::ctreeexport`]) of every function a `print C` prints: the
+    /// function the command just printed is rendered once more for its tree, and
+    /// the reference printer prints the tree back. That render prints unbroken
+    /// lines, as every `--json` render does (`option maxlinewidth` wraps only the
+    /// console's own text, and the tree has no node for a wrapped line). The
+    /// result has one line per printed function:
+    ///
+    /// - `Tree -- <function>: <nodes> nodes, <raw> raw`: the tree prints back to
+    ///   the function's text byte for byte;
+    /// - `NoTree -- <function>: <reason>`: the function exports no tree;
+    /// - `Mismatch -- <function>: line <n>`: the tree prints back differently
+    ///   (also pushed on `failures`).
+    ///
+    /// Each `raw` node (text the typed kinds do not cover) adds a line
+    /// `Raw -- <function>: in <parent kind>: <its first line>`. Afterwards
+    /// [`get_tests_applied`](Self::get_tests_applied) is the number of functions
+    /// printed and [`get_tests_succeeded`](Self::get_tests_succeeded) the number
+    /// of trees that print back. A script command that fails ends the pass, as
+    /// it ends [`run_tests`](Self::run_tests).
+    pub fn check_trees(&mut self, failures: &mut Vec<String>) -> String {
+        self.num_tests_applied = 0;
+        self.num_tests_succeeded = 0;
+        self.seat_console();
+        let script: Vec<(String, bool)> = self
+            .commands
+            .iter()
+            .cloned()
+            .zip(self.expected_errors.iter().copied())
+            .collect();
+        let mut results = String::new();
+        for (command, expected) in script {
+            if self.console.is_stream_finished() {
+                break;
+            }
+            self.console.write_prompt();
+            execute(&mut self.console);
+            if self.console.is_in_error() {
+                if !expected {
+                    break;
+                }
+                self.console.inerror = false;
+                self.console.done = false;
+                continue;
+            }
+            let prints = self
+                .console
+                .resolve(&command)
+                .is_ok_and(|words| words == ["print", "C"]);
+            let Some(dcp) = self.dcp_mut().filter(|_| prints) else {
+                continue;
+            };
+            let (Some(fd), Some(prog)) = (dcp.fd.as_ref(), dcp.conf.as_mut()) else {
+                continue;
+            };
+            let line_size = prog.arch_mut().print_mut().suspend_line_size();
+            let (text, _, tokens, render) = print_c_with_ctree(prog.arch_mut(), fd);
+            prog.arch_mut().print_mut().restore_line_size(line_size);
+            let name = fd.get_name().to_string();
+            let code = text.trim_matches('\n');
+            let tree = render.tree(&tokens, &text, code);
+            self.num_tests_applied += 1;
+            match tree {
+                Err(reason) => results.push_str(&format!("NoTree -- {name}: {reason}\n")),
+                Ok(tree) => {
+                    let printed = print_c(&tree);
+                    if let Some(line) = printed
+                        .split('\n')
+                        .zip(code.split('\n'))
+                        .position(|(printed, code)| printed != code)
+                        .or((printed.len() != code.len()).then_some(0))
+                    {
+                        let line = format!("Mismatch -- {name}: line {}", line + 1);
+                        results.push_str(&line);
+                        results.push('\n');
+                        failures.push(format!("{}: {line}", self.file_name));
+                        continue;
+                    }
+                    self.num_tests_succeeded += 1;
+                    let mut raw = String::new();
+                    let nodes = count_nodes(&tree.root, "function", &name, &mut raw);
+                    let raws = raw.lines().count();
+                    let lang = tree.lang.print_name();
+                    results.push_str(&format!(
+                        "Tree -- {name}: {lang}, {nodes} nodes, {raws} raw\n"
+                    ));
+                    results.push_str(&raw);
+                }
+            }
+        }
+        results
+    }
+}
+
+/// The number of nodes under and including `node`; every `raw` node adds its
+/// `Raw -- ` line ([`FunctionTestCollection::check_trees`]) to `raw`.
+fn count_nodes(node: &Node, parent: &str, function: &str, raw: &mut String) -> usize {
+    if node.kind == Kind::Raw {
+        let first = node.text.trim_start().lines().next().unwrap_or_default();
+        raw.push_str(&format!("Raw -- {function}: in {parent}: {first}\n"));
+    }
+    1 + node
+        .children
+        .iter()
+        .map(|child| count_nodes(child, node.kind.name(), function, raw))
+        .sum::<usize>()
 }
 
 impl Default for FunctionTestCollection {
@@ -875,9 +988,24 @@ pub struct FileRun {
     pub wall_ms: u64,
 }
 
+/// What a corpus run does with each file's script.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pass {
+    /// Apply the file's assertions ([`FunctionTestCollection::run_tests`]).
+    Assertions,
+    /// Check the exported C syntax tree of every function the script prints
+    /// ([`FunctionTestCollection::check_trees`]).
+    Trees,
+}
+
 /// Run each file in turn through one collection (the loop of [`run_test_files_with_specs`]),
 /// keeping every file's results apart.
 pub fn run_test_files_each(test_files: &[String], spec_roots: &[String]) -> Vec<FileRun> {
+    run_files_each(test_files, spec_roots, Pass::Assertions)
+}
+
+/// [`run_test_files_each`] for either pass over the files.
+pub fn run_files_each(test_files: &[String], spec_roots: &[String], pass: Pass) -> Vec<FileRun> {
     let mut collection = FunctionTestCollection::with_spec_roots(spec_roots.to_vec());
     let mut runs = Vec::with_capacity(test_files.len());
     for file in test_files {
@@ -889,7 +1017,10 @@ pub fn run_test_files_each(test_files: &[String], spec_roots: &[String]) -> Vec<
         };
         match collection.load_test(file) {
             Ok(()) => {
-                run.output = collection.run_tests(&mut run.failures);
+                run.output = match pass {
+                    Pass::Assertions => collection.run_tests(&mut run.failures),
+                    Pass::Trees => collection.check_trees(&mut run.failures),
+                };
                 run.applied = collection.get_tests_applied();
                 run.succeeded = collection.get_tests_succeeded();
             }

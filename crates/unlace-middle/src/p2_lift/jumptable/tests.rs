@@ -777,3 +777,26 @@ fn dropped_model_labels_each_out_edge_by_its_table_values() {
         .collect();
     assert_eq!(pairs, vec![(0, 0), (0, 1), (1, 2), (2, 3)]);
 }
+
+#[test]
+fn find_unnormalized_walks_back_through_a_left_shift() {
+    let mut fd = build_fd();
+    let x = mk_input(&mut fd, 0x100);
+    let s = mk_vn(&mut fd, 0x10);
+    let shl = mk_op(&mut fd, 2, 0x100, OpCode::CPUI_INT_LEFT);
+    let amount = mk_const(&mut fd, 1);
+    fd.op_set_input(shl, x, 0).unwrap();
+    fd.op_set_input(shl, amount, 1).unwrap();
+    fd.op_set_output(shl, s).unwrap();
+    let add = mk_op(&mut fd, 2, 0x104, OpCode::CPUI_INT_ADD);
+    let base = mk_const(&mut fd, 0x400);
+    fd.op_set_input(add, s, 0).unwrap();
+    fd.op_set_input(add, base, 1).unwrap();
+
+    let path = vec![PcodeOpNode::new(add, 0), PcodeOpNode::new(shl, 0)];
+    let mut basic = JumpBasicModel::new();
+    basic.path_meld.set_path(&fd, &path);
+    basic.varnode_index = 0;
+    basic.find_unnormalized_basic(&mut fd, 3, 1, 3);
+    assert_eq!(basic.switchvn, Some(x));
+}

@@ -1990,6 +1990,16 @@ fn print_unicode_escapes_and_raw() {
     assert_eq!(s, "é");
 }
 
+#[test]
+fn print_unicode_in_string_leaves_single_quote_raw() {
+    let mut s = String::new();
+    print_unicode_in_string(&mut s, 0x27);
+    assert_eq!(s, "'");
+    let mut s = String::new();
+    print_unicode(&mut s, 0x27);
+    assert_eq!(s, "\\'");
+}
+
 // ---------------------------------------------------------------------------
 // Float constant formatting (printc.cc:1448-1492)
 // ---------------------------------------------------------------------------

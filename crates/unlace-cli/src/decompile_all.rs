@@ -9,14 +9,28 @@
 //! bodies is a run-level failure.
 
 mod callee_first;
+pub(crate) mod ctreejson;
 mod custom_reg_callers;
 mod functions_serialize;
 mod omit;
 mod result_store;
+pub(crate) mod storagejson;
+mod tokenmap;
 
 pub(crate) use callee_first::decompile_callee_first;
 use callee_first::decompile_entries_callee_first;
 pub(crate) use omit::Omit;
+
+/// The opt-in members of a `--json` record.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Extra {
+    /// `--tokens`: the token source map (`tokens`, `tokens_error`).
+    pub(crate) tokens: bool,
+    /// `--storage`: each variable's `storage` list.
+    pub(crate) storage: bool,
+    /// `--ctree`: the C syntax tree of the code (`ctree`, `ctree_error`).
+    pub(crate) ctree: bool,
+}
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
@@ -36,6 +50,7 @@ use unlace_console::project::{
 // `File::architecture()` (the ARM-discovery default, decbench) plus the
 // section/segment walks the zero-discovery diagnosis reads.
 use object::{Object, ObjectSection, ObjectSegment};
+use unlace_decomp::architecture::Architecture;
 use unlace_decomp::decompile_drive::{LineMapping, TypeInfo, VarInfo, print_c_types};
 use unlace_decomp::option_dispatch::UNLACE_OPTION_NAMES;
 use unlace_decomp::options::OptionDatabase;
@@ -77,6 +92,8 @@ pub(crate) struct Args {
     /// record collections left out of the document. Omitting `variables` also
     /// sets `no_vars`, so the extraction is skipped too.
     pub(crate) omit: Omit,
+    /// The opt-in record members (`decompile-all --json`, `decompile --json`).
+    pub(crate) extra: Extra,
     /// `--max-fn-seconds N` (decompile-all / decompile-project): per-function
     /// decompile watchdog budget in seconds; `0` disables.  A function that
     /// exceeds it is recorded as that function's `error` (the batch continues)
@@ -90,6 +107,13 @@ pub(crate) struct Args {
     /// disables. `None` (omitted) is the cgroup default. See [`arm_fn_budgets`].
     pub(crate) max_fn_memory: Option<u64>,
     pub(crate) options: Vec<(String, String)>,
+    /// `--language-file FILE` (`decompile`, `decompile-all`): the flavour the printer renders,
+    /// installed by [`load_program`] once the options are applied.
+    pub(crate) language_file: Option<crate::langfile::LanguageFile>,
+    /// `--rules FILE` (repeatable): rewrite rule files, registered by
+    /// [`load_program`] before any option is applied
+    /// (`unlace_decomp::rewritefile`).
+    pub(crate) rules: Vec<String>,
     /// `--define-function <start[-end][=name] | @file>` (repeatable): the
     /// caller-declared function boundaries, applied by [`load_program`] right
     /// after the analysis commit so they outrank discovery. Every surface that
@@ -138,6 +162,12 @@ pub(crate) struct Args {
     /// block is built from.
     pub(crate) jobs_proto: bool,
     pub(crate) jobs_provenance: bool,
+    /// Worker mode: fill each variable's storage (`--storage` in the parent).
+    pub(crate) jobs_storage: bool,
+    /// Worker mode: fill each record's token map (`--tokens` in the parent).
+    pub(crate) jobs_tokens: bool,
+    /// Worker mode: carry each function's C syntax tree (`--ctree` in the parent).
+    pub(crate) jobs_ctree: bool,
     pub(crate) jobs_types: bool,
     /// Report each function's callee hints — the `--stream` scheduler's
     /// frontier, asked for by `--jobs-callees`.
@@ -170,9 +200,12 @@ impl Args {
             entry_seeds: Vec::new(),
             no_vars: false,
             omit: Omit::default(),
+            extra: Extra::default(),
             max_fn_seconds: 0,
             max_fn_memory: Some(0),
             options: Vec::new(),
+            language_file: None,
+            rules: Vec::new(),
             func_decls: Vec::new(),
             assertions: Vec::new(),
             assert_strict: false,
@@ -190,6 +223,9 @@ impl Args {
             jobs_worker: None,
             jobs_proto: false,
             jobs_provenance: false,
+            jobs_storage: false,
+            jobs_tokens: false,
+            jobs_ctree: false,
             jobs_types: false,
             jobs_callees: false,
             jobs_pointerargs: false,
@@ -206,10 +242,10 @@ impl Args {
         )
     }
 
-    /// Whether the decompile runs the markup render: the `--json` line mappings
-    /// and the variables' `line_numbers`/`addresses` both come from it.
+    /// Whether the decompile runs the markup render: the `--json` line mappings,
+    /// the variables' `line_numbers`/`addresses` and the tokens all come from it.
     pub(crate) fn wants_provenance(&self) -> bool {
-        self.json && !(self.omit.line_mappings && self.no_vars)
+        self.json && (self.extra.tokens || !(self.omit.line_mappings && self.no_vars))
     }
 }
 
@@ -718,6 +754,8 @@ pub fn run(argv: &[String]) -> i32 {
                         &run.interior,
                         &run.declared,
                         args.omit,
+                        args.extra,
+                        args.language_file.as_ref().map(|file| file.name.as_str()),
                     )
                 }),
             };
@@ -849,8 +887,10 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
                 header_carries_types: args.jobs_types,
                 park_recovered_proto: false,
                 single_target: false,
-                want_tokens: false,
+                want_tokens: args.jobs_tokens,
+                want_storage: args.jobs_storage,
                 want_pointer_arguments: args.jobs_pointerargs,
+                want_ctree: args.jobs_ctree,
             };
             let mut pending = entries.into_iter();
             let mut pulled = 0usize;
@@ -1135,6 +1175,8 @@ pub(crate) fn pool_config<'a>(
         binary: &args.binary,
         mode: args.mode,
         options: &args.options,
+        language_file: args.language_file.as_ref().map(|file| file.path.as_str()),
+        rules: &args.rules,
         func_decls: args
             .func_decls
             .iter()
@@ -1143,6 +1185,9 @@ pub(crate) fn pool_config<'a>(
         no_vars: args.no_vars,
         want_proto,
         want_provenance,
+        want_storage: args.extra.storage,
+        want_tokens: args.extra.tokens,
+        want_ctree: args.extra.ctree,
         want_types,
         want_callee_hints,
         want_pointer_arguments: false,
@@ -1370,13 +1415,17 @@ fn run_summary(args: &Args, filters: &Filters) -> i32 {
         None => (None, None),
     };
     let loaded = match request {
-        Some(request) => {
-            load_program_with_rust_profiles(args, DriverDefaults::Functions, Some(request), None)
-                .map(|prog| {
-                    let all = prog.function_entries_canonical();
-                    (prog, all)
-                })
-        }
+        Some(request) => load_program_with_rust_profiles(
+            args,
+            DriverDefaults::Functions,
+            Some(request),
+            None,
+            &mut |_| Ok(()),
+        )
+        .map(|prog| {
+            let all = prog.function_entries_canonical();
+            (prog, all)
+        }),
         None => list_functions(args),
     };
     let (prog, all) = match loaded {
@@ -1623,7 +1672,10 @@ pub(crate) fn decompile_entries_with(
         want_proto,
         want_provenance: args.wants_provenance(),
         single_target: targets.len() == 1,
+        want_tokens: args.extra.tokens,
+        want_storage: args.extra.storage,
         want_pointer_arguments: pointer_arguments,
+        want_ctree: args.extra.ctree,
         ..DecompileOptions::default()
     };
     prog.arch_mut().unlace_tail_callee_batch = tail_callees;
@@ -1927,21 +1979,28 @@ pub(crate) fn load_program(
             crate::rust_signatures::load(std::path::Path::new(path)).map(|(request, _)| request)
         })
         .transpose()?;
-    load_program_with_rust_profiles(args, defaults, request, None)
+    load_program_with_rust_profiles(args, defaults, request, None, &mut |_| Ok(()))
 }
 
-/// [`load_program`] over disjoint runs of bytes an embedding caller already
-/// holds, each `(address, bytes, flags)`, in place of `args.binary`'s bytes.
-/// `args` must be a raw-image parse; its file still sizes the `auto` mode.
-pub(crate) fn load_program_segments(
+/// What an embedding caller does to the architecture of a load, before any
+/// option is applied to it: where its rules and phase callbacks are registered
+/// (`docs/spec/00-overview.md` §0.6, "Embedder hooks").
+pub(crate) type Install<'a> = &'a mut dyn FnMut(&mut Architecture) -> Result<(), String>;
+
+/// [`load_program`] for an embedding caller. `segments` are disjoint runs of
+/// bytes it already holds, each `(address, bytes, flags)`, in place of
+/// `args.binary`'s bytes; `args` must then be a raw-image parse, and its file
+/// still sizes the `auto` mode. `install` is run once on the architecture.
+pub(crate) fn load_program_embedded(
     args: &Args,
     defaults: DriverDefaults,
-    runs: Vec<(u64, Vec<u8>, u32)>,
+    segments: Option<Vec<(u64, Vec<u8>, u32)>>,
+    install: Install<'_>,
 ) -> Result<ConsoleProgram, String> {
-    if !args.raw_image {
+    if segments.is_some() && !args.raw_image {
         return Err("segments load only as a raw image".to_string());
     }
-    load_program_with_rust_profiles(args, defaults, None, Some(runs))
+    load_program_with_rust_profiles(args, defaults, None, segments, install)
 }
 
 fn load_program_with_rust_profiles(
@@ -1949,6 +2008,7 @@ fn load_program_with_rust_profiles(
     defaults: DriverDefaults,
     request: Option<unlace_analysis::flirt::rustprofiles::Request>,
     segments: Option<Vec<(u64, Vec<u8>, u32)>>,
+    install: Install<'_>,
 ) -> Result<ConsoleProgram, String> {
     let binary = std::fs::canonicalize(&args.binary)
         .map_err(|_| format!("binary not found: {}", args.binary))?
@@ -2037,6 +2097,13 @@ fn load_program_with_rust_profiles(
         format!("{msg}{raw_hint}")
     })?;
 
+    // Before any option: a registration rebuilds the action tree, which drops
+    // the breakpoints and disabled rules an option may set on it.
+    for path in &args.rules {
+        unlace_decomp::rewritefile::register_file(prog.arch_mut(), std::path::Path::new(path))?;
+    }
+    install(prog.arch_mut())?;
+
     let non_x86_64 = !prog.arch().archid.starts_with("x86:LE:64:");
     for (name, value) in driver_default_options_for_arch(
         non_x86_64,
@@ -2062,6 +2129,9 @@ fn load_program_with_rust_profiles(
     // BEFORE the gated analysis commit (the `option` < `read symbols` ordering
     // the script path enforces), so a per-pass gate takes effect.
     apply_runtime_options(&mut prog, &args.options)?;
+    if let Some(file) = &args.language_file {
+        file.install(&mut prog);
+    }
     // (unlace `--assert bytes`) The IMAGE-scoped directives, before the commit and
     // before any read of the addresses they name: a byte overlay states what the
     // running program put there, and every later decode has to see it. The
@@ -2548,9 +2618,21 @@ pub(crate) fn render_result_json(
     interior: &crate::interior::Interiors,
     declared: &crate::funcdecl::Declared,
     omit: Omit,
+    extra: Extra,
+    language_flavour: Option<&str>,
 ) -> String {
     render_selected_json(
-        binary, funcs, options, error, None, assertions, interior, declared, omit,
+        binary,
+        funcs,
+        options,
+        error,
+        None,
+        assertions,
+        interior,
+        declared,
+        omit,
+        extra,
+        language_flavour,
     )
 }
 
@@ -2573,10 +2655,23 @@ pub(crate) fn render_selected_json(
     interior: &crate::interior::Interiors,
     declared: &crate::funcdecl::Declared,
     omit: Omit,
+    extra: Extra,
+    language_flavour: Option<&str>,
 ) -> String {
     let mut out = Vec::new();
     write_selected_json(
-        &mut out, binary, funcs, options, error, total, assertions, interior, declared, omit,
+        &mut out,
+        binary,
+        funcs,
+        options,
+        error,
+        total,
+        assertions,
+        interior,
+        declared,
+        omit,
+        extra,
+        language_flavour,
     )
     .expect("rendering the document into memory");
     String::from_utf8(out).expect("the document is ASCII")
@@ -2596,17 +2691,27 @@ pub(crate) fn write_selected_json(
     interior: &crate::interior::Interiors,
     declared: &crate::funcdecl::Declared,
     omit: Omit,
+    extra: Extra,
+    language_flavour: Option<&str>,
 ) -> std::io::Result<()> {
     let language = crate::loadtime::explicit_output_language(options)
         .and_then(unlace_decomp::lang::OutLang::from_print_name)
         .map(|lang| lang.print_name())
         .unwrap_or("c-language");
     let (head, tail) = document_fields(
-        binary, funcs, language, error, total, assertions, declared, omit,
+        binary,
+        funcs,
+        language,
+        language_flavour,
+        error,
+        total,
+        assertions,
+        declared,
+        omit,
     );
     let records = funcs
         .iter()
-        .map(|f| function_json(f, interior, declared, omit));
+        .map(|f| function_json(f, interior, declared, omit, extra));
     crate::jsonfmt::write_indent2_streamed(out, &head, "functions", records, &tail)?;
     out.write_all(b"\n")
 }
@@ -2721,19 +2826,29 @@ fn result_json(
     binary: &str,
     funcs: &[FuncResult],
     language: &str,
+    language_flavour: Option<&str>,
     error: Option<&str>,
     total: Option<usize>,
     assertions: &[unlace_console::assertions::Outcome],
     interior: &crate::interior::Interiors,
     omit: Omit,
+    extra: Extra,
 ) -> Json {
     let declared = crate::funcdecl::Declared::default();
     let (mut fields, tail) = document_fields(
-        binary, funcs, language, error, total, assertions, &declared, omit,
+        binary,
+        funcs,
+        language,
+        language_flavour,
+        error,
+        total,
+        assertions,
+        &declared,
+        omit,
     );
     let functions = funcs
         .iter()
-        .map(|f| function_json(f, interior, &declared, omit))
+        .map(|f| function_json(f, interior, &declared, omit, extra))
         .collect();
     fields.push(("functions".to_string(), Json::Array(functions)));
     fields.extend(tail);
@@ -2752,6 +2867,7 @@ fn document_fields(
     binary: &str,
     funcs: &[FuncResult],
     language: &str,
+    language_flavour: Option<&str>,
     error: Option<&str>,
     total: Option<usize>,
     assertions: &[unlace_console::assertions::Outcome],
@@ -2765,6 +2881,14 @@ fn document_fields(
         // consumer cannot tell a Rust body from a C one without guessing.
         ("language".to_string(), Json::Str(language.to_string())),
     ];
+    // (unlace `langflavour`) The flavour `--language-file` applied over `language`,
+    // present only when one was.
+    if let Some(flavour) = language_flavour {
+        fields.push((
+            "language_flavour".to_string(),
+            Json::Str(flavour.to_string()),
+        ));
+    }
     if let Some(omitted) = omit.json() {
         fields.push(("omitted".to_string(), omitted));
     }
@@ -2817,6 +2941,7 @@ fn function_json(
     interior: &crate::interior::Interiors,
     declared: &crate::funcdecl::Declared,
     omit: Omit,
+    extra: Extra,
 ) -> Json {
     let mut record = vec![
         ("name".into(), Json::Str(f.name.clone())),
@@ -2865,7 +2990,12 @@ fn function_json(
     if !omit.variables {
         record.push((
             "variables".into(),
-            Json::Array(f.variables.iter().map(var_json).collect()),
+            Json::Array(
+                f.variables
+                    .iter()
+                    .map(|v| var_json(v, extra.storage))
+                    .collect(),
+            ),
         ));
     }
     // (unlace `structdefs`) The layout side: the definitions of the
@@ -2883,9 +3013,15 @@ fn function_json(
             Json::Array(f.stack_objects.iter().map(stack_object_json).collect()),
         ));
     }
+    if extra.tokens {
+        record.extend(tokenmap::fields(f));
+    }
     record.extend(declared.marker(f.byte_address));
     if let Some(inside) = interior.get(&f.byte_address) {
         record.push(("interior_to".into(), crate::interior::json(inside)));
+    }
+    if extra.ctree {
+        record.extend(ctreejson::fields(f));
     }
     Json::Object(record)
 }
@@ -3016,9 +3152,9 @@ fn type_json(t: &TypeInfo) -> Json {
 }
 
 /// One `VariableInfo`-shaped JSON object (the fields decbench's `type_match`
-/// consumes).
-fn var_json(v: &VarInfo) -> Json {
-    Json::Object(vec![
+/// consumes), with its `storage` when the caller asked for it.
+fn var_json(v: &VarInfo, storage: bool) -> Json {
+    let mut row = vec![
         ("name".into(), Json::Str(v.name.clone())),
         ("type".into(), Json::Str(v.type_name.clone())),
         ("kind".into(), Json::Str(v.kind().into())),
@@ -3053,314 +3189,15 @@ fn var_json(v: &VarInfo) -> Json {
                     .collect(),
             ),
         ),
-    ])
+    ];
+    if storage {
+        row.push(("storage".into(), storagejson::list(&v.storage)));
+    }
+    Json::Object(row)
 }
 
 #[cfg(test)]
-mod provenance_json_tests {
-    use super::*;
-
-    fn function() -> FuncResult {
-        FuncResult {
-            name: "f".into(),
-            address: 0x401000,
-            byte_address: 0x401000,
-            size: 12,
-            code: Some("int f(int x)\n{\n  return x;\n}".into()),
-            error: None,
-            proto: None,
-            emitted_c_name: None,
-            call_declarations: Vec::new(),
-            callwide_prototypes: Vec::new(),
-            variables: vec![VarInfo {
-                name: "x".into(),
-                type_name: "int".into(),
-                stack_offset: None,
-                size: 4,
-                is_param: true,
-                arg_index: Some(0),
-                line_numbers: vec![3],
-                addresses: vec![0x401004],
-                split_piece: false,
-            }],
-            types: vec![TypeInfo {
-                name: "mystruct".into(),
-                definition: "struct mystruct {\n    int a;\n};\n".into(),
-                size: 4,
-            }],
-            stack_objects: Vec::new(),
-            globals: Vec::new(),
-            field_calls: Vec::new(),
-            line_mappings: vec![LineMapping {
-                line_number: 3,
-                addresses: vec![0x401004, 0x401008],
-            }],
-            aliases: Vec::new(),
-            object_location: None,
-            callee_hints: Vec::new(),
-            synth: None,
-            pointerargs: None,
-            warnings: Vec::new(),
-            detail: None,
-        }
-    }
-
-    fn render(omit: Omit) -> serde_json::Value {
-        let text = dumps_indent2(&result_json(
-            "fixture",
-            &[function()],
-            "c-language",
-            None,
-            None,
-            &[],
-            &Default::default(),
-            omit,
-        ));
-        serde_json::from_str(&text).unwrap()
-    }
-
-    #[test]
-    fn result_schema_adds_line_and_variable_provenance() {
-        let rendered = dumps_indent2(&result_json(
-            "fixture",
-            &[function()],
-            "c-language",
-            None,
-            None,
-            &[],
-            &Default::default(),
-            Default::default(),
-        ));
-        assert!(!rendered.contains("\"omitted\""));
-        assert!(rendered.contains("\"address\": 4198400"));
-        assert!(rendered.contains("\"code\": \"int f(int x)\\n{\\n  return x;\\n}\""));
-        assert!(rendered.contains("\"line_mappings\": ["));
-        assert!(rendered.contains("\"line_number\": 3"));
-        assert!(rendered.contains("\"line_numbers\": [\n            3"));
-        assert!(rendered.contains("\"addresses\": [\n            4198404"));
-        // (unlace `structdefs`) The layout side of the record, additive to every
-        // key above it.
-        assert!(rendered.contains("\"types\": ["));
-        assert!(rendered.contains("\"definition\": \"struct mystruct {"));
-    }
-
-    #[test]
-    fn the_written_document_is_the_whole_one() {
-        let mut omit = Omit::default();
-        omit.add("types").unwrap();
-        let funcs = [
-            function(),
-            FuncResult {
-                code: None,
-                error: Some("boom".into()),
-                ..function()
-            },
-        ];
-        for (funcs, error, total, omit) in [
-            (&funcs[..], None, None, Omit::default()),
-            (&funcs[..1], Some("x"), Some(9), omit),
-            (&[][..], None, None, omit),
-        ] {
-            let whole = dumps_indent2(&result_json(
-                "fixture",
-                funcs,
-                "c-language",
-                error,
-                total,
-                &[],
-                &Default::default(),
-                omit,
-            ));
-            assert_eq!(
-                render_selected_json(
-                    "fixture",
-                    funcs,
-                    &[],
-                    error,
-                    total,
-                    &[],
-                    &Default::default(),
-                    &Default::default(),
-                    omit,
-                ),
-                whole + "\n"
-            );
-        }
-    }
-
-    #[test]
-    fn omitted_collections_leave_every_record_and_are_named() {
-        let mut omit = Omit::default();
-        omit.add("line_mappings,types").unwrap();
-        let doc = render(omit);
-        assert_eq!(
-            doc["omitted"],
-            serde_json::json!(["line_mappings", "types"])
-        );
-        let record = doc["functions"][0].as_object().unwrap();
-        assert!(!record.contains_key("line_mappings") && !record.contains_key("types"));
-        assert_eq!(
-            record["variables"][0]["line_numbers"],
-            serde_json::json!([3])
-        );
-        for key in [
-            "name",
-            "address",
-            "code",
-            "error",
-            "unstructured_gotos",
-            "warnings",
-        ] {
-            assert!(record.contains_key(key), "{key} must survive --omit");
-        }
-        assert_eq!(doc["language"], "c-language");
-
-        omit.add("variables").unwrap();
-        let doc = render(omit);
-        assert_eq!(
-            doc["omitted"],
-            serde_json::json!(["line_mappings", "variables", "types", "stack_objects"])
-        );
-        assert!(
-            !doc["functions"][0]
-                .as_object()
-                .unwrap()
-                .contains_key("variables")
-        );
-    }
-
-    #[test]
-    fn a_record_lists_its_warnings_and_a_failed_one_none() {
-        use unlace_decomp::functionwarnings::Warning;
-        let warned = FuncResult {
-            warnings: vec![
-                Warning {
-                    address: Some(0x401000),
-                    text: "WARNING: Subroutine does not return".into(),
-                    line: 1,
-                },
-                Warning {
-                    address: Some(0x401010),
-                    text: "WARNING: Function flows out of bounds".into(),
-                    line: 4,
-                },
-                Warning {
-                    address: None,
-                    text: "WARNING: structured blocks unavailable".into(),
-                    line: 5,
-                },
-            ],
-            ..function()
-        };
-        let failed = FuncResult {
-            code: None,
-            error: Some("boom".into()),
-            ..function()
-        };
-        let text = dumps_indent2(&result_json(
-            "fixture",
-            &[warned, failed],
-            "c-language",
-            None,
-            None,
-            &[],
-            &Default::default(),
-            Omit::default(),
-        ));
-        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(
-            doc["functions"][0]["warnings"],
-            serde_json::json!([
-                {"kind": "no-return", "message": "Subroutine does not return", "line": 1, "address": 0x401000},
-                {"kind": "out-of-bounds", "message": "Function flows out of bounds", "line": 4, "address": 0x401010},
-                {"kind": "structuring-declined", "message": "structured blocks unavailable", "line": 5, "address": null},
-            ])
-        );
-        assert_eq!(doc["functions"][1]["warnings"], serde_json::json!([]));
-        assert_eq!(
-            doc["warning_kinds"],
-            serde_json::json!({"no-return": 1, "out-of-bounds": 1, "structuring-declined": 1})
-        );
-    }
-
-    #[test]
-    fn warning_kinds_totals_each_kind_over_the_records() {
-        use unlace_decomp::functionwarnings::Warning;
-        let gap = |text: &str| Warning {
-            address: Some(0x401000),
-            text: text.into(),
-            line: 1,
-        };
-        let first = FuncResult {
-            warnings: vec![
-                gap(
-                    "WARNING: notmodelled: `vpdpbusd` has no p-code semantics; stepped over as a no-op",
-                ),
-                gap("WARNING: Bad instruction - Truncating control flow here"),
-            ],
-            ..function()
-        };
-        let second = FuncResult {
-            warnings: vec![gap(
-                "WARNING: notmodelled: `rdrand` has no p-code semantics; stepped over as a no-op",
-            )],
-            ..function()
-        };
-        let text = dumps_indent2(&result_json(
-            "fixture",
-            &[first, second, function()],
-            "c-language",
-            None,
-            None,
-            &[],
-            &Default::default(),
-            Omit::default(),
-        ));
-        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(
-            doc["warning_kinds"],
-            serde_json::json!({"bad-instruction": 1, "notmodelled": 2})
-        );
-        let empty = dumps_indent2(&result_json(
-            "fixture",
-            &[function()],
-            "c-language",
-            None,
-            None,
-            &[],
-            &Default::default(),
-            Omit::default(),
-        ));
-        let doc: serde_json::Value = serde_json::from_str(&empty).unwrap();
-        assert_eq!(doc["warning_kinds"], serde_json::json!({}));
-    }
-
-    #[test]
-    fn omitted_aliases_leave_the_record_and_keep_its_identity() {
-        let aliased = FuncResult {
-            aliases: vec!["sub_401000".into()],
-            ..function()
-        };
-        let mut omit = Omit::default();
-        omit.add("aliases").unwrap();
-        let text = dumps_indent2(&result_json(
-            "fixture",
-            &[aliased],
-            "c-language",
-            None,
-            None,
-            &[],
-            &Default::default(),
-            omit,
-        ));
-        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["omitted"], serde_json::json!(["aliases"]));
-        let record = doc["functions"][0].as_object().unwrap();
-        let keys: Vec<&str> = record.keys().map(String::as_str).take(4).collect();
-        assert_eq!(keys, ["name", "address", "address_hex", "object_location"]);
-        assert!(record.contains_key("line_mappings") && record.contains_key("variables"));
-    }
-}
+mod provenance_json_tests;
 
 // --- argument parsing --------------------------------------------------------
 
@@ -3503,9 +3340,12 @@ pub(crate) fn parse_args_with_filters(
     let mut entry_seeds: Vec<EntrySelector> = Vec::new();
     let mut no_vars = false;
     let mut omit = Omit::default();
+    let mut extra = Extra::default();
     let mut max_fn_seconds: Option<u64> = None;
     let mut max_fn_memory: Option<u64> = None;
     let mut options: Vec<(String, String)> = Vec::new();
+    let mut language_file: Option<crate::langfile::LanguageFile> = None;
+    let mut rules: Vec<String> = Vec::new();
     let mut func_decls: Vec<crate::funcdecl::FuncDecl> = Vec::new();
     let mut assertions: Vec<unlace_console::assertions::Directive> = Vec::new();
     let mut assert_strict = false;
@@ -3528,6 +3368,9 @@ pub(crate) fn parse_args_with_filters(
     let mut jobs_worker: Option<String> = None;
     let mut jobs_proto = false;
     let mut jobs_provenance = false;
+    let mut jobs_storage = false;
+    let mut jobs_tokens = false;
+    let mut jobs_ctree = false;
     let mut jobs_types = false;
     let mut jobs_callees = false;
     let mut jobs_pointerargs = false;
@@ -3557,9 +3400,12 @@ pub(crate) fn parse_args_with_filters(
                 }
             }
             "--no-vars" => no_vars = true,
+            "--ctree" if matches!(cmd, "decompile-all" | "decompile") => extra.ctree = true,
             "--omit" if matches!(cmd, "decompile-all" | "decompile") => {
                 omit.add(&take(argv, &mut i, "--omit")?)?
             }
+            "--tokens" if matches!(cmd, "decompile-all" | "decompile") => extra.tokens = true,
+            "--storage" if matches!(cmd, "decompile-all" | "decompile") => extra.storage = true,
             "--functions" => {
                 let v = take(argv, &mut i, "--functions")?;
                 names = Some(
@@ -3612,6 +3458,9 @@ pub(crate) fn parse_args_with_filters(
             }
             "--jobs-proto" if cmd == "decompile-all" => jobs_proto = true,
             "--jobs-provenance" if cmd == "decompile-all" => jobs_provenance = true,
+            "--jobs-storage" if cmd == "decompile-all" => jobs_storage = true,
+            "--jobs-tokens" if cmd == "decompile-all" => jobs_tokens = true,
+            "--jobs-ctree" if cmd == "decompile-all" => jobs_ctree = true,
             "--jobs-types" if cmd == "decompile-all" => jobs_types = true,
             "--jobs-callees" if cmd == "decompile-all" => jobs_callees = true,
             "--jobs-pointerargs" if cmd == "decompile-all" => jobs_pointerargs = true,
@@ -3680,6 +3529,9 @@ pub(crate) fn parse_args_with_filters(
                 }
             }
             "--option" => options.push(crate::args::take_option(argv, &mut i)?),
+            "--rules" if matches!(cmd, "decompile-all" | "decompile") => {
+                rules.push(take(argv, &mut i, "--rules")?)
+            }
             // (unlace outlang) `--language` is the first-class surface for the
             // output language; it lowers to the upstream `setlanguage` option, so
             // it reaches every downstream consumer (the console script here, the
@@ -3691,6 +3543,21 @@ pub(crate) fn parse_args_with_filters(
                     options.push(("setlanguage".into(), lang.into()));
                 }
                 saw_language = true;
+            }
+            // A flavour's base language is selected as `--language` selects one, so every
+            // reader of the options sees it; `load_program` installs the profile after them.
+            "--language-file" if matches!(cmd, "decompile-all" | "decompile") => {
+                let path = take(argv, &mut i, "--language-file")?;
+                let file = crate::langfile::LanguageFile::read(&path)?;
+                options.push(("setlanguage".into(), file.base_name().into()));
+                if language_file.replace(file).is_some() {
+                    return Err("duplicate --language-file".into());
+                }
+            }
+            "--language-file" => {
+                return Err(format!(
+                    "--language-file does not apply to {cmd}; use it with decompile or decompile-all"
+                ));
             }
             "--mode" => mode = Some(take(argv, &mut i, "--mode")?),
             "--slice" => slice = Some(take(argv, &mut i, "--slice")?),
@@ -3720,6 +3587,7 @@ pub(crate) fn parse_args_with_filters(
     }
 
     let binary = binary.ok_or_else(|| format!("{cmd} requires <binary>"))?;
+    check_rule_files(&rules)?;
     // `--project`: its overrides come first, so a command-line --assert still wins.
     if let Some(project) = &project_file {
         let mut stored = Vec::new();
@@ -3759,11 +3627,17 @@ pub(crate) fn parse_args_with_filters(
             return Err("--rust-signature-manifest requires an unmodified object image without raw, slice, target, ISA, image-selection, assertion, or function-definition overrides".into());
         }
     }
+    if extra.ctree && !json {
+        return Err("--ctree selects --json record keys; add --json".into());
+    }
     if !omit.is_empty() {
         if !json {
             return Err("--omit selects --json record keys; add --json".into());
         }
         no_vars |= omit.variables;
+    }
+    if (extra.tokens || extra.storage) && !json {
+        return Err("--tokens and --storage select --json record keys; add --json".into());
     }
 
     if raw_image {
@@ -3812,6 +3686,10 @@ pub(crate) fn parse_args_with_filters(
         if saw_entry {
             return Err("--entry requires --raw-image".into());
         }
+    }
+
+    if let Some(file) = &language_file {
+        file.check_selection(saw_language, &options)?;
     }
 
     // (unlace outlang, DIV-80) The auto policy: with no `--language` and no
@@ -3934,9 +3812,12 @@ pub(crate) fn parse_args_with_filters(
         entry_seeds,
         no_vars,
         omit,
+        extra,
         max_fn_seconds,
         max_fn_memory,
         options,
+        language_file,
+        rules,
         func_decls,
         assertions,
         assert_strict,
@@ -3954,6 +3835,9 @@ pub(crate) fn parse_args_with_filters(
         jobs_worker,
         jobs_proto,
         jobs_provenance,
+        jobs_storage,
+        jobs_tokens,
+        jobs_ctree,
         jobs_types,
         jobs_callees,
         jobs_pointerargs,
@@ -3964,6 +3848,24 @@ pub(crate) fn parse_args_with_filters(
         crate::rust_signatures::validate_application(&args)?;
     }
     Ok((args, filters))
+}
+
+/// Read and check every `--rules` file, and that no two of them name a rule
+/// alike: a bad rule file is a bad argument, reported before anything is
+/// loaded.
+pub(crate) fn check_rule_files(paths: &[String]) -> Result<(), String> {
+    let mut names = BTreeSet::new();
+    for path in paths {
+        for rule in unlace_decomp::rewritefile::read_rules(std::path::Path::new(path))? {
+            if !names.insert(rule.name().to_string()) {
+                return Err(format!(
+                    "{path}: rule \"{}\": a rule of an earlier --rules file has this name",
+                    rule.name()
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn parse_count(v: &str, flag: &str) -> Result<u64, String> {
@@ -3992,15 +3894,18 @@ fn parse_entry_selector(s: &str) -> Result<EntrySelector, String> {
 
 fn usage_decompile_all() {
     eprintln!(
-        "usage: unlace decompile-all <binary> [--json] [--project FILE] [--functions a,b,..] [--addr 0xVMA].. \\\n\
+        "usage: unlace decompile-all <binary> [--json] [--ctree] [--project FILE] [--functions a,b,..] [--addr 0xVMA].. \\\n\
          \x20                   [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
+         \x20                   [--tokens] [--storage] \\\n\
          \x20                   [--max-fn-seconds N] [--max-fn-memory MiB] \\\n\
          \x20                   [--mode auto|reliable|aggressive|fast] \\\n\
          \x20                   [--jobs N|auto] [--jobs-chunk N] [--jobs-full-load] \\\n\
          \x20                   [--filter REGEX] [--min-size N] [--max-size N] \\\n\
          \x20                   [--reachable-from <name|0xaddr>] [--sort addr|size|name] [--limit N] \\\n\
          \x20                   [--summary] [--define-function S[-E][=N]|@FILE].. \\\n\
-         \x20                   [--option N V].. [--isa auto|arm|thumb] [--slice ARCH] [--target T] [--sleighpath D]\n\
+         \x20                   [--language auto|c|rust|java|go | --language-file FILE] \\\n\
+         \x20                   [--option N V].. [--rules FILE].. [--isa auto|arm|thumb] [--slice ARCH] \\\n\
+         \x20                   [--target T] [--sleighpath D]\n\
          \x20                   [--raw-image --target T --base VMA (--entry|--addr VMA)..]\n\
          \n\
          Decompile every CODE-backed function in one in-process load (load-once,\n\
@@ -4010,11 +3915,24 @@ fn usage_decompile_all() {
          {{kind,message,line,address}}, each at the address it was recorded\n\
          at (a header warning at the entry); `error` is set only for a failed\n\
          function.\n\
+         --ctree (with --json) adds the C syntax tree of\n\
+         each function's code to its record: `ctree`, its statements and expressions\n\
+         as nested nodes with kind, operands, type, line span and addresses, and\n\
+         `ctree_error`, set when the function has no tree.\n\
          --omit KEY[,KEY].. (with --json) leaves those record collections out of\n\
          every record -- aliases, line_mappings, variables (with stack_objects),\n\
          types -- and lists them in a top-level `omitted` array, so an omitted\n\
          collection is never mistaken for an empty one.\n\
          --no-vars skips the variable extraction and leaves `variables` empty.\n\
+         --tokens (with --json) adds the token source map\n\
+         to every record: `tokens`, each token of `code` with its line, column,\n\
+         kind and the instruction, callee or variable it stands for, and\n\
+         `tokens_error`, set when the map could not be shipped.\n\
+         --storage (with --json) adds `storage` to every variable: the registers\n\
+         and stack slots that hold it, each with the instruction address ranges\n\
+         in which it does.\n\
+         --rules FILE (repeatable) adds the p-code rewrite rules of a TOML rule file\n\
+         to the rule pools for this run (`unlace docs cli`, \"--rules FILE\").\n\
          --max-fn-seconds N caps ONE function's decompile at N seconds (default 10\n\
          for unfiltered fast runs, 120 otherwise; 0 disables); a function over\n\
          budget becomes its own `error` record and the batch continues.\n\
@@ -4047,6 +3965,10 @@ fn usage_decompile_all() {
          --option values win.\n\
          An unfiltered run that discovers no function at all exits 1 with the\n\
          reason on stderr and in the document's run-level `error` field.\n\
+         --language selects the output language (omitted, it follows the binary);\n\
+         --language-file FILE prints through a language flavour instead, a TOML\n\
+         file that names a base language and overrides parts of its profile\n\
+         (`unlace docs cli`, \"Language files\").\n\
          \n\
          --define-function <start[-end][=name] | @file> (repeatable) declares where a\n\
          function starts and ends: start names an entry discovery missed, the\n\
@@ -4109,787 +4031,10 @@ fn usage_functions() {
 }
 
 #[cfg(test)]
-mod discovery_tests {
-    use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    static TEMP_ID: AtomicU64 = AtomicU64::new(0);
-
-    /// A minimal ELF64 executable: one `PF_X` `PT_LOAD` and NO section table —
-    /// the section-header-stripped PIE shape of the witness binary, where the
-    /// program header is the only evidence the image holds code.
-    fn stripped_executable(payload: &[u8]) -> Vec<u8> {
-        const EHDR: usize = 64;
-        const PHDR: usize = 56;
-        let mut out = vec![0u8; EHDR + PHDR + payload.len()];
-        out[..4].copy_from_slice(b"\x7fELF");
-        out[4] = 2; // ELFCLASS64
-        out[5] = 1; // ELFDATA2LSB
-        out[6] = 1; // EV_CURRENT
-        out[16..18].copy_from_slice(&2u16.to_le_bytes()); // e_type = ET_EXEC
-        out[18..20].copy_from_slice(&62u16.to_le_bytes()); // e_machine = EM_X86_64
-        out[20..24].copy_from_slice(&1u32.to_le_bytes()); // e_version
-        out[32..40].copy_from_slice(&(EHDR as u64).to_le_bytes()); // e_phoff
-        out[52..54].copy_from_slice(&(EHDR as u16).to_le_bytes()); // e_ehsize
-        out[54..56].copy_from_slice(&(PHDR as u16).to_le_bytes()); // e_phentsize
-        out[56..58].copy_from_slice(&1u16.to_le_bytes()); // e_phnum
-        let total = (EHDR + PHDR + payload.len()) as u64;
-        let p = EHDR;
-        out[p..p + 4].copy_from_slice(&1u32.to_le_bytes()); // p_type = PT_LOAD
-        out[p + 4..p + 8].copy_from_slice(&5u32.to_le_bytes()); // p_flags = PF_R|PF_X
-        out[p + 16..p + 24].copy_from_slice(&0x40_0000u64.to_le_bytes()); // p_vaddr
-        out[p + 32..p + 40].copy_from_slice(&total.to_le_bytes()); // p_filesz
-        out[p + 40..p + 48].copy_from_slice(&total.to_le_bytes()); // p_memsz
-        out[p + 48..p + 56].copy_from_slice(&0x1000u64.to_le_bytes()); // p_align
-        out[EHDR + PHDR..].copy_from_slice(payload);
-        out
-    }
-
-    /// A minimal ET_REL ELF64 whose only allocated section is `.data` — an
-    /// object file that legitimately holds no functions at all.
-    fn data_only_object() -> Vec<u8> {
-        const EHDR: usize = 64;
-        const SHDR: usize = 64;
-        let names: &[u8] = b"\0.data\0.shstrtab\0";
-        let shoff = EHDR;
-        let names_off = shoff + 3 * SHDR;
-        let data_off = names_off + names.len();
-        let mut out = vec![0u8; data_off + 4];
-        out[..4].copy_from_slice(b"\x7fELF");
-        out[4] = 2;
-        out[5] = 1;
-        out[6] = 1;
-        out[16..18].copy_from_slice(&1u16.to_le_bytes()); // e_type = ET_REL
-        out[18..20].copy_from_slice(&62u16.to_le_bytes());
-        out[20..24].copy_from_slice(&1u32.to_le_bytes());
-        out[40..48].copy_from_slice(&(shoff as u64).to_le_bytes()); // e_shoff
-        out[52..54].copy_from_slice(&(EHDR as u16).to_le_bytes());
-        out[58..60].copy_from_slice(&(SHDR as u16).to_le_bytes()); // e_shentsize
-        out[60..62].copy_from_slice(&3u16.to_le_bytes()); // e_shnum
-        out[62..64].copy_from_slice(&2u16.to_le_bytes()); // e_shstrndx
-        out[names_off..data_off].copy_from_slice(names);
-
-        fn shdr(out: &mut [u8], at: usize, name: u32, kind: u32, flags: u64, off: u64, size: u64) {
-            out[at..at + 4].copy_from_slice(&name.to_le_bytes());
-            out[at + 4..at + 8].copy_from_slice(&kind.to_le_bytes());
-            out[at + 8..at + 16].copy_from_slice(&flags.to_le_bytes());
-            out[at + 24..at + 32].copy_from_slice(&off.to_le_bytes());
-            out[at + 32..at + 40].copy_from_slice(&size.to_le_bytes());
-        }
-        // `.data`: SHT_PROGBITS, SHF_ALLOC|SHF_WRITE — allocated, never executed.
-        shdr(&mut out, shoff + SHDR, 1, 1, 0x3, data_off as u64, 4);
-        shdr(
-            &mut out,
-            shoff + 2 * SHDR,
-            7,
-            3,
-            0,
-            names_off as u64,
-            names.len() as u64,
-        );
-        out
-    }
-
-    fn temp_image(tag: &str, bytes: &[u8]) -> std::path::PathBuf {
-        let id = TEMP_ID.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "unlace-discovery-{tag}-{}-{id}.bin",
-            std::process::id()
-        ));
-        std::fs::write(&path, bytes).expect("write the discovery fixture");
-        path
-    }
-
-    #[test]
-    fn the_upx_magic_is_recognized_and_nothing_else_is() {
-        assert_eq!(detect_packer(b"....UPX!....."), Some("UPX"));
-        assert_eq!(detect_packer(b"UPX!"), Some("UPX"));
-        assert_eq!(detect_packer(b"a plain unpacked image, UPX-free"), None);
-        assert_eq!(detect_packer(b"UPX"), None, "the magic is four bytes");
-        assert_eq!(detect_packer(b""), None);
-    }
-
-    /// A section-header-stripped executable still shows its code through the
-    /// program headers, so zero functions there is a failure — and a packed one
-    /// is named, because that is the cause the caller can act on.
-    #[test]
-    fn a_packed_image_names_the_packer_in_the_failure() {
-        let packed = temp_image("packed", &stripped_executable(b"UPX!\x00\x00\x00\x00"));
-        let message = zero_discovery_error(packed.to_str().unwrap())
-            .expect("an executable image that yielded nothing is a failure");
-        assert!(message.contains("no functions"), "{message}");
-        assert!(message.contains("UPX-packed"), "{message}");
-        assert!(message.contains("unlace unpack"), "{message}");
-        std::fs::remove_file(packed).expect("remove the discovery fixture");
-
-        let plain = temp_image("plain", &stripped_executable(b"\x55\x48\x89\xe5\x5d\xc3"));
-        let message = zero_discovery_error(plain.to_str().unwrap())
-            .expect("an executable image that yielded nothing is a failure");
-        assert!(message.contains("no functions"), "{message}");
-        assert!(
-            !message.contains("packed"),
-            "no packer, no packer claim: {message}"
-        );
-        std::fs::remove_file(plain).expect("remove the discovery fixture");
-    }
-
-    /// The legitimate empty case: an image with no executable content has no
-    /// functions to find, so the empty inventory stays a success.
-    #[test]
-    fn an_image_with_no_code_keeps_its_honest_empty_answer() {
-        let bytes = data_only_object();
-        assert!(matches!(classify_code_evidence(&bytes), CodeEvidence::None));
-        let path = temp_image("dataonly", &bytes);
-        assert_eq!(zero_discovery_error(path.to_str().unwrap()), None);
-        std::fs::remove_file(path).expect("remove the discovery fixture");
-    }
-
-    /// Anything `object` cannot parse is not evidence of innocence: a run that
-    /// found nothing in it still failed.
-    #[test]
-    fn an_unparseable_image_is_still_a_failure() {
-        assert!(matches!(
-            classify_code_evidence(b"not an object file at all"),
-            CodeEvidence::Flagged
-        ));
-        assert!(matches!(classify_code_evidence(&[]), CodeEvidence::Flagged));
-    }
-
-    /// The packer shape: nothing flagged executable anywhere, and the entry
-    /// point in one of those data sections. Reporting `count: 0` in a
-    /// successful run's voice there is the thing this must not do — the image
-    /// says where execution starts, so the run failed.
-    #[test]
-    fn an_entry_point_in_a_data_section_is_still_executable_content() {
-        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../unlace-analysis/tests/fixtures/pe_datasection_entry_i386.exe");
-        let bytes = std::fs::read(&fixture).expect("the fixture is checked in");
-        let CodeEvidence::EntryPointOnly { entry, section } = classify_code_evidence(&bytes) else {
-            panic!("an all-data PE with an entry point is not the honest empty case");
-        };
-        assert_eq!(entry, 0x402001);
-        assert_eq!(section, "section .stub");
-
-        let message = zero_discovery_error(fixture.to_str().unwrap())
-            .expect("an image that declares an entry point and yielded nothing is a failure");
-        assert!(message.contains("no functions"), "{message}");
-        assert!(message.contains("0x402001"), "{message}");
-        assert!(message.contains("--define-function"), "{message}");
-    }
-
-    /// The checked-in x86-64 fixture the acceptance probes use: real code, real
-    /// sections — the shape that must fail loudly if discovery ever returns
-    /// nothing for it.
-    #[test]
-    fn a_real_fixture_carries_executable_content() {
-        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../unlace-analysis/tests/fixtures/aif_gap_x86_64");
-        let bytes = std::fs::read(fixture).expect("the fixture is checked in");
-        assert!(matches!(
-            classify_code_evidence(&bytes),
-            CodeEvidence::Flagged
-        ));
-        assert_eq!(detect_packer(&bytes), None);
-    }
-
-    /// The run-level `error` field is present on every document, so a consumer
-    /// reads it unconditionally rather than inferring failure from `count`.
-    #[test]
-    fn the_run_level_error_field_is_always_present() {
-        let healthy = functions_json(
-            "fixture",
-            &[],
-            0,
-            None,
-            None,
-            &|address| address,
-            &Default::default(),
-        );
-        assert!(healthy.contains("\"error\": null"), "{healthy}");
-        let failed = functions_json(
-            "fixture",
-            &[],
-            0,
-            Some("no functions discovered in fixture"),
-            None,
-            &|address| address,
-            &Default::default(),
-        );
-        assert!(
-            failed.contains("\"error\": \"no functions discovered in fixture\""),
-            "{failed}"
-        );
-        let decompiled = render_result_json(
-            "fixture",
-            &[],
-            &[],
-            Some("boom"),
-            &[],
-            &Default::default(),
-            &Default::default(),
-            Default::default(),
-        );
-        assert!(decompiled.contains("\"error\": \"boom\""), "{decompiled}");
-        assert!(
-            render_result_json(
-                "fixture",
-                &[],
-                &[],
-                None,
-                &[],
-                &Default::default(),
-                &Default::default(),
-                Default::default()
-            )
-            .contains("\"error\": null")
-        );
-    }
-
-    /// `--language` reaches the document through the same last-write-wins lookup
-    /// every other option uses.
-    #[test]
-    fn the_document_reports_the_selected_language() {
-        let options = vec![
-            ("setlanguage".into(), "rust-language".into()),
-            ("setlanguage".into(), "c-language".into()),
-        ];
-        assert!(
-            render_result_json(
-                "f",
-                &[],
-                &options,
-                None,
-                &[],
-                &Default::default(),
-                &Default::default(),
-                Default::default()
-            )
-            .contains("\"c-language\"")
-        );
-        assert!(
-            render_result_json(
-                "f",
-                &[],
-                &[],
-                None,
-                &[],
-                &Default::default(),
-                &Default::default(),
-                Default::default()
-            )
-            .contains("\"c-language\"")
-        );
-        let mut aliases = options.clone();
-        aliases.push(("outlang".into(), "go".into()));
-        assert!(
-            render_result_json(
-                "f",
-                &[],
-                &aliases,
-                None,
-                &[],
-                &Default::default(),
-                &Default::default(),
-                Default::default()
-            )
-            .contains("\"go-language\"")
-        );
-        aliases.push(("setlanguage".into(), "rust-language".into()));
-        assert!(
-            render_result_json(
-                "f",
-                &[],
-                &aliases,
-                None,
-                &[],
-                &Default::default(),
-                &Default::default(),
-                Default::default()
-            )
-            .contains("\"rust-language\"")
-        );
-    }
-}
+mod discovery_tests;
 
 #[cfg(test)]
-mod mode_tests {
-    use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    static TEMP_ID: AtomicU64 = AtomicU64::new(0);
-
-    fn sparse_binary(size: u64) -> std::path::PathBuf {
-        let id = TEMP_ID.fetch_add(1, Ordering::Relaxed);
-        let path =
-            std::env::temp_dir().join(format!("unlace-auto-mode-{}-{id}.bin", std::process::id()));
-        let file = std::fs::File::create(&path).expect("create auto-mode fixture");
-        file.set_len(size).expect("size auto-mode fixture");
-        path
-    }
-
-    #[test]
-    fn omitted_and_explicit_auto_select_the_same_concrete_presets() {
-        for (size, concrete) in [
-            (0, "aggressive"),
-            (unlace_decomp::modes::AUTO_RELIABLE_MIN_BYTES, "reliable"),
-            (unlace_decomp::modes::AUTO_FAST_MIN_BYTES, "fast"),
-        ] {
-            let mut expected = vec![("ctypes".to_string(), "on".to_string())];
-            expected.extend(mode_override_pairs(concrete).unwrap());
-            for requested in [None, Some("auto")] {
-                let resolved = resolved_mode(requested, size).unwrap();
-                assert_eq!(resolved.name, concrete);
-                assert_eq!(resolved.options, expected);
-            }
-        }
-    }
-
-    #[test]
-    fn explicit_concrete_mode_ignores_binary_metadata() {
-        let missing = std::env::temp_dir().join(format!(
-            "unlace-auto-mode-missing-{}.bin",
-            std::process::id()
-        ));
-        let options =
-            mode_options_for_binary(Some("fast"), missing.to_str().unwrap(), Vec::new()).unwrap();
-        assert_eq!(options, mode_override_pairs("fast").unwrap());
-    }
-
-    #[test]
-    fn shared_parsers_default_to_auto_and_keep_user_options_last() {
-        let path = sparse_binary(unlace_decomp::modes::AUTO_FAST_MIN_BYTES);
-        let binary = path.to_string_lossy().into_owned();
-        for cmd in ["decompile-all", "decompile-project", "functions"] {
-            let argv = vec![
-                binary.clone(),
-                "--option".into(),
-                "listing".into(),
-                "on".into(),
-            ];
-            let args = parse_args(&argv, cmd).unwrap();
-            let listing: Vec<&str> = args
-                .options
-                .iter()
-                .filter(|(name, _)| name == "listing")
-                .map(|(_, value)| value.as_str())
-                .collect();
-            assert_eq!(listing, vec!["off", "on"], "{cmd} precedence");
-        }
-        std::fs::remove_file(path).expect("remove auto-mode fixture");
-    }
-
-    #[test]
-    fn shared_surfaces_parse_arm_isa_override() {
-        let path = sparse_binary(1);
-        let binary = path.to_string_lossy().into_owned();
-        for cmd in [
-            "decompile-all",
-            "decompile-project",
-            "decompile-graph",
-            "functions",
-        ] {
-            let args = parse_args(&[binary.clone(), "--isa".into(), "thumb".into()], cmd).unwrap();
-            assert_eq!(args.isa, Some(ArmIsa::Thumb), "{cmd}");
-        }
-        let error = parse_args(&[binary, "--isa".into(), "mixed".into()], "functions")
-            .err()
-            .expect("invalid ISA must fail");
-        assert!(error.contains("expected auto, arm, or thumb"));
-        std::fs::remove_file(path).expect("remove auto-mode fixture");
-    }
-
-    #[test]
-    fn unfiltered_fast_batches_default_to_ten_seconds_per_function() {
-        let path = sparse_binary(unlace_decomp::modes::AUTO_FAST_MIN_BYTES);
-        let binary = path.to_string_lossy().into_owned();
-        for cmd in ["decompile-all", "decompile-project"] {
-            let args = parse_args(std::slice::from_ref(&binary), cmd).unwrap();
-            assert_eq!(
-                args.max_fn_seconds,
-                unlace_console::project::FAST_WHOLE_BINARY_FN_BUDGET_SECONDS,
-                "{cmd}"
-            );
-
-            let selected = parse_args(
-                &[
-                    binary.clone(),
-                    "--addr".into(),
-                    "0x1234".into(),
-                    "--mode".into(),
-                    "fast".into(),
-                ],
-                cmd,
-            )
-            .unwrap();
-            assert_eq!(
-                selected.max_fn_seconds,
-                unlace_console::project::DEFAULT_FN_BUDGET_SECONDS,
-                "{cmd} selected"
-            );
-            let named = parse_args(
-                &[
-                    binary.clone(),
-                    "--functions".into(),
-                    "sub_1234".into(),
-                    "--mode".into(),
-                    "fast".into(),
-                ],
-                cmd,
-            )
-            .unwrap();
-            assert_eq!(
-                named.max_fn_seconds,
-                unlace_console::project::DEFAULT_FN_BUDGET_SECONDS,
-                "{cmd} named"
-            );
-
-            let disabled = parse_args(
-                &[
-                    binary.clone(),
-                    "--mode".into(),
-                    "fast".into(),
-                    "--max-fn-seconds".into(),
-                    "0".into(),
-                ],
-                cmd,
-            )
-            .unwrap();
-            assert_eq!(disabled.max_fn_seconds, 0, "{cmd} explicit override");
-            let explicit = parse_args(
-                &[
-                    binary.clone(),
-                    "--mode".into(),
-                    "fast".into(),
-                    "--max-fn-seconds".into(),
-                    "17".into(),
-                ],
-                cmd,
-            )
-            .unwrap();
-            assert_eq!(explicit.max_fn_seconds, 17, "{cmd} explicit budget");
-        }
-
-        for mode in ["reliable", "aggressive"] {
-            let args = parse_args(
-                &[binary.clone(), "--mode".into(), mode.into()],
-                "decompile-all",
-            )
-            .unwrap();
-            assert_eq!(
-                args.max_fn_seconds,
-                unlace_console::project::DEFAULT_FN_BUDGET_SECONDS,
-                "{mode}"
-            );
-        }
-        let functions = parse_args(&[binary], "functions").unwrap();
-        assert_eq!(
-            functions.max_fn_seconds,
-            unlace_console::project::DEFAULT_FN_BUDGET_SECONDS
-        );
-        std::fs::remove_file(path).expect("remove auto-mode fixture");
-    }
-
-    #[test]
-    fn address_selection_skips_preset_discovery_but_names_do_not() {
-        let path = sparse_binary(unlace_decomp::modes::AUTO_FAST_MIN_BYTES);
-        let binary = path.to_string_lossy().into_owned();
-        let address_args = parse_args(
-            &[
-                binary.clone(),
-                "--addr".into(),
-                "0x1234".into(),
-                "--mode".into(),
-                "fast".into(),
-            ],
-            "decompile-project",
-        )
-        .unwrap();
-        assert_eq!(
-            last_option_value(&address_args.options, "fast_funcdisc"),
-            Some("off")
-        );
-
-        let explicit_args = parse_args(
-            &[
-                binary.clone(),
-                "--addr".into(),
-                "0x1234".into(),
-                "--mode".into(),
-                "fast".into(),
-                "--option".into(),
-                "fast_funcdisc".into(),
-                "on".into(),
-            ],
-            "decompile-project",
-        )
-        .unwrap();
-        assert_eq!(
-            last_option_value(&explicit_args.options, "fast_funcdisc"),
-            Some("on")
-        );
-
-        let named_args = parse_args(
-            &[
-                binary,
-                "--functions".into(),
-                "sub_1234".into(),
-                "--mode".into(),
-                "fast".into(),
-            ],
-            "decompile-project",
-        )
-        .unwrap();
-        assert_eq!(
-            last_option_value(&named_args.options, "fast_funcdisc"),
-            Some("on")
-        );
-        std::fs::remove_file(path).expect("remove auto-mode fixture");
-    }
-
-    #[test]
-    fn loadtime_gates_use_the_last_named_option() {
-        let options = vec![
-            ("ppcapu".into(), "on".into()),
-            ("ifuncfpret".into(), "on".into()),
-            ("macho-arm64e".into(), "on".into()),
-            ("ppcapu".into(), "off".into()),
-            ("ifuncfpret".into(), "off".into()),
-            ("macho-arm64e".into(), "off".into()),
-        ];
-        assert_eq!(last_option_value(&options, "ppcapu"), Some("off"));
-        assert_eq!(last_option_value(&options, "ifuncfpret"), Some("off"));
-        assert_eq!(last_option_value(&options, "macho-arm64e"), Some("off"));
-    }
-}
+mod mode_tests;
 
 #[cfg(test)]
-mod triage_tests {
-    use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    static TEMP_ID: AtomicU64 = AtomicU64::new(0);
-
-    /// `parse_args` reads the file's size to resolve the `auto` mode, so the
-    /// triage parse needs a real path — the bytes are never looked at.
-    fn sparse_binary() -> std::path::PathBuf {
-        let id = TEMP_ID.fetch_add(1, Ordering::Relaxed);
-        let path =
-            std::env::temp_dir().join(format!("unlace-triage-{}-{id}.bin", std::process::id()));
-        std::fs::File::create(&path)
-            .expect("create triage fixture")
-            .set_len(1024)
-            .expect("size triage fixture");
-        path
-    }
-
-    fn parse(cmd: &str, extra: &[&str]) -> Result<(Args, Filters), String> {
-        let path = sparse_binary();
-        let mut argv = vec![path.to_string_lossy().into_owned()];
-        argv.extend(extra.iter().map(|s| (*s).to_string()));
-        let parsed = parse_args_with_filters(&argv, cmd);
-        std::fs::remove_file(path).expect("remove triage fixture");
-        parsed
-    }
-
-    /// `Args`/`Filters` are not `Debug`, so a rejected parse is unwrapped here.
-    fn err(parsed: Result<(Args, Filters), String>) -> String {
-        match parsed {
-            Ok(_) => panic!("expected the parse to be rejected"),
-            Err(e) => e,
-        }
-    }
-
-    #[test]
-    fn sort_keys_are_the_three_documented_ones() {
-        assert_eq!(SortKey::parse("addr").unwrap(), SortKey::Addr);
-        assert_eq!(SortKey::parse("ADDRESS").unwrap(), SortKey::Addr);
-        assert_eq!(SortKey::parse(" size ").unwrap(), SortKey::Size);
-        assert_eq!(SortKey::parse("name").unwrap(), SortKey::Name);
-        assert!(SortKey::parse("entropy").is_err());
-        assert_eq!(SortKey::default(), SortKey::Addr);
-    }
-
-    #[test]
-    fn rust_signature_application_keeps_discovery_independent_of_selection() {
-        let common = [
-            "--mode",
-            "reliable",
-            "--apply-rust-signatures",
-            "trusted.json",
-        ];
-        let (inventory, _) = parse("functions", &common).unwrap();
-        let flags: Vec<_> = common.into_iter().chain(["--addr", "0x1000"]).collect();
-        let (addressed, _) = parse("decompile", &flags).unwrap();
-        assert_eq!(inventory.options, addressed.options);
-        assert_eq!(
-            addressed.apply_rust_signatures.as_deref(),
-            Some("trusted.json")
-        );
-        for extra in [
-            vec!["--jobs", "2"],
-            vec!["--jobs", "auto"],
-            vec!["--apply-rust-signatures", "second.json"],
-            vec![
-                "--summary",
-                "--json",
-                "--rust-signature-manifest",
-                "report.json",
-            ],
-            vec!["--assert", "bytes 0x1000 90"],
-        ] {
-            let flags: Vec<_> = common.into_iter().chain(extra).collect();
-            assert!(parse("functions", &flags).is_err(), "{flags:?}");
-        }
-        for command in ["decompile-all", "decompile-project", "decompile-graph"] {
-            assert!(parse(command, &common).is_err(), "{command}");
-        }
-    }
-
-    #[test]
-    fn rust_signature_manifest_requires_the_unmodified_json_summary_surface() {
-        let valid = [
-            "--summary",
-            "--json",
-            "--rust-signature-manifest",
-            "manifest.json",
-        ];
-        let (_, filters) = parse("functions", &valid).unwrap();
-        assert_eq!(
-            filters.rust_signature_manifest.as_deref(),
-            Some("manifest.json")
-        );
-        for cmd in [
-            "decompile-all",
-            "decompile-project",
-            "decompile-graph",
-            "decompile",
-        ] {
-            assert!(parse(cmd, &valid).is_err(), "{cmd}");
-        }
-        for flags in [
-            vec!["--rust-signature-manifest", "manifest.json"],
-            vec!["--summary", "--rust-signature-manifest", "manifest.json"],
-            vec!["--json", "--rust-signature-manifest", "manifest.json"],
-        ] {
-            assert!(
-                err(parse("functions", &flags)).contains("requires functions --summary --json")
-            );
-        }
-        for extra in [
-            vec!["--rust-signature-manifest", "second.json"],
-            vec!["--raw-image"],
-            vec!["--slice", "x86_64"],
-            vec!["--target", "x86:LE:64:default"],
-            vec!["--isa", "arm"],
-            vec!["--define-function", "0x1000=probe"],
-            vec!["--option", "dyldimage", "probe"],
-        ] {
-            let flags: Vec<_> = valid.iter().copied().chain(extra).collect();
-            assert!(parse("functions", &flags).is_err(), "{flags:?}");
-        }
-    }
-
-    /// An unnarrowed run must keep every pre-existing behaviour, so `narrows()`
-    /// is what gates the whole feature and has to be false by default.
-    #[test]
-    fn a_bare_run_narrows_nothing() {
-        let (_, filters) = parse("functions", &[]).unwrap();
-        assert!(!filters.narrows());
-        assert!(!filters.summary);
-        for flag in [
-            vec!["--filter", "main"],
-            vec!["--min-size", "1"],
-            vec!["--max-size", "1"],
-            vec!["--reachable-from", "main"],
-            vec!["--limit", "1"],
-            vec!["--sort", "size"],
-        ] {
-            let (_, filters) = parse("functions", &flag).unwrap();
-            assert!(filters.narrows(), "{flag:?}");
-        }
-    }
-
-    #[test]
-    fn the_triage_flags_parse_on_both_whole_binary_surfaces() {
-        for cmd in ["functions", "decompile-all"] {
-            let (_, filters) = parse(
-                cmd,
-                &[
-                    "--filter",
-                    "^auth",
-                    "--min-size",
-                    "16",
-                    "--max-size",
-                    "256",
-                    "--reachable-from",
-                    "0x1000",
-                    "--sort",
-                    "size",
-                    "--limit",
-                    "4",
-                    "--summary",
-                ],
-            )
-            .unwrap_or_else(|e| panic!("{cmd}: {e}"));
-            assert!(
-                filters.name.as_ref().unwrap().is_match("authenticate"),
-                "{cmd}"
-            );
-            assert!(!filters.name.as_ref().unwrap().is_match("deauth"), "{cmd}");
-            assert_eq!(filters.min_size, Some(16), "{cmd}");
-            assert_eq!(filters.max_size, Some(256), "{cmd}");
-            assert_eq!(filters.reachable_from.as_deref(), Some("0x1000"), "{cmd}");
-            assert_eq!(filters.sort, SortKey::Size, "{cmd}");
-            assert_eq!(filters.limit, Some(4), "{cmd}");
-            assert!(filters.summary, "{cmd}");
-            assert_eq!(filters.largest_wanted(), 4, "{cmd}");
-        }
-    }
-
-    /// `decompile-project` does not act on a narrowing, so it must reject one
-    /// rather than silently discard it.
-    #[test]
-    fn decompile_project_rejects_the_triage_flags() {
-        let e = err(parse("decompile-project", &["--filter", "main"]));
-        assert!(e.contains("unknown option --filter"), "{e}");
-        assert!(parse("decompile-project", &["--summary"]).is_err());
-    }
-
-    #[test]
-    fn bad_triage_values_are_rejected_at_parse_time() {
-        assert!(parse("functions", &["--filter", "("]).is_err());
-        assert!(parse("functions", &["--limit", "-1"]).is_err());
-        assert!(parse("functions", &["--min-size", "big"]).is_err());
-        let e = err(parse("functions", &["--min-size", "10", "--max-size", "9"]));
-        assert!(e.contains("greater than --max-size"), "{e}");
-        assert!(parse("functions", &["--min-size", "9", "--max-size", "9"]).is_ok());
-    }
-
-    /// The histogram has to partition the whole size domain: a function that
-    /// falls in no bucket would silently vanish from the summary.
-    #[test]
-    fn the_size_buckets_partition_every_extent() {
-        for size in [
-            0u64,
-            1,
-            15,
-            16,
-            63,
-            64,
-            255,
-            256,
-            1023,
-            1024,
-            4095,
-            4096,
-            u64::MAX,
-        ] {
-            let hits = SIZE_BUCKETS
-                .iter()
-                .filter(|(_, lo, hi)| size >= *lo && size <= *hi)
-                .count();
-            assert_eq!(hits, 1, "size {size} lands in {hits} buckets");
-        }
-        assert_eq!(DEFAULT_SUMMARY_LARGEST, 10);
-    }
-}
+mod triage_tests;

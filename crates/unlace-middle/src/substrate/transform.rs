@@ -364,12 +364,14 @@ impl LanedRegister {
 
     /// Add a new \e size to the allowed list (C++ `addLaneSize`).
     pub fn add_lane_size(&mut self, size: int4) {
-        self.size_bit_mask |= 1u32.wshl(size as u32);
+        if (0..32).contains(&size) {
+            self.size_bit_mask |= 1u32 << size;
+        }
     }
 
     /// Is \e size among the allowed lane sizes (C++ `allowedLane`).
     pub fn allowed_lane(&self, size: int4) -> bool {
-        (self.size_bit_mask.wshr(size as u32) & 1) != 0
+        (0..32).contains(&size) && (self.size_bit_mask >> size) & 1 != 0
     }
 
     /// Iterate over the permissible lane sizes, least to greatest (C++

@@ -146,6 +146,15 @@ pub fn register_sleigh_arch_ids(registry: &mut IdRegistry) {
     registry.register_element(&ELEM_LANGUAGE_DEFINITIONS);
 }
 
+/// (unlace) A registry holding every id an `.ldefs` decode needs: the base ids, the translate
+/// ids (`<truncate_space>`) and the sleigh_arch ids.
+pub fn ldefs_registry() -> IdRegistry {
+    let mut registry = IdRegistry::with_base_ids();
+    unlace_sleigh::translate::register_translate_ids(&mut registry);
+    register_sleigh_arch_ids(&mut registry);
+    registry
+}
+
 // ---------------------------------------------------------------------------
 // CompilerTag
 // ---------------------------------------------------------------------------
@@ -420,13 +429,17 @@ impl LanguageDescription {
 /// output, and each `SleighArchitecture` owns its own built `Sleigh`.
 #[derive(Debug, Clone, Default)]
 pub struct LanguageDatabase {
-    /// List of languages we know about (C++ `description`).
+    /// The languages read so far (C++ `description`, which holds every language once
+    /// `collectSpecFiles` has run; here [`Self::load_language`] reads one `.ldefs` at a time).
     description: Vec<LanguageDescription>,
     /// Known directories that contain .ldefs files (C++ `specpaths`).
     specpaths: FileManage,
     /// (unlace) Spec trees held in memory, each reached through the
     /// `specpaths` entries under its internal root.
     mounts: Vec<MemorySpecs>,
+    /// (unlace) The `.ldefs` files under `specpaths` not yet read into `description`, in
+    /// spec-path order; `None` until a lookup lists them.
+    unread: Option<Vec<String>>,
 }
 
 impl LanguageDatabase {
@@ -460,10 +473,76 @@ impl LanguageDatabase {
         memoryspecs::read(&self.mounts, path)
     }
 
-    /// All parsed language descriptions, in `.ldefs` document then file order
-    /// (C++ `description`).
+    /// (unlace) The image to decode for a resolved `.sla` ([`BuildSpecFiles::slafile`]): a
+    /// file on disk through `unlace_slacomp::slacache::read_image` (the cache's uncompressed
+    /// copy when it has one), a mounted one as [`Self::read_spec`] reads it.
+    pub fn read_sla_image(&self, path: &str) -> std::io::Result<Cow<'_, [u8]>> {
+        if std::path::Path::new(path).is_file() {
+            return unlace_slacomp::slacache::read_image(path).map(Cow::Owned);
+        }
+        self.read_spec(path)
+    }
+
+    /// The language descriptions read so far, in `.ldefs` document then file order (C++
+    /// `description`): every language under the spec paths after
+    /// [`Self::get_descriptions`], else the files [`Self::load_language`] read.
     pub fn descriptions(&self) -> &[LanguageDescription] {
         &self.description
+    }
+
+    /// Whether every `.ldefs` under the spec paths has been read into
+    /// [`Self::descriptions`].
+    pub fn is_complete(&self) -> bool {
+        self.unread.as_ref().is_some_and(Vec::is_empty)
+    }
+
+    /// The `.ldefs` files under the spec paths that have not been read yet, listing them the
+    /// first time (the C++ `collectSpecFiles` listing). A spec path added later is not listed,
+    /// as the C++ scan runs once.
+    fn unread(&mut self) -> &mut Vec<String> {
+        if self.unread.is_none() {
+            let mut testspecs: Vec<String> = Vec::new();
+            for path in self.specpaths.path_list() {
+                memoryspecs::match_list_dir(&self.mounts, &mut testspecs, ".ldefs", path);
+            }
+            self.unread = Some(testspecs);
+        }
+        self.unread.as_mut().expect("listed above")
+    }
+
+    /// (unlace) Read the `.ldefs` that defines language `id` into [`Self::descriptions`],
+    /// unless one already read does. The files whose name is the language's processor field
+    /// (`x86.ldefs` for `x86:LE:64:default`) are read first, then the rest in spec-path order,
+    /// stopping at the first that defines `id`; a language no file defines reads them all. A
+    /// file that does not parse is an error, as in [`Self::get_descriptions`].
+    pub fn load_language(&mut self, id: &str, registry: &IdRegistry) -> UnlaceResult<()> {
+        if self.description.iter().any(|d| d.get_id() == id) {
+            return Ok(());
+        }
+        let processor = id.split(':').next().unwrap_or(id).to_ascii_lowercase();
+        let named_for = |spec: &str| {
+            std::path::Path::new(spec)
+                .file_stem()
+                .is_some_and(|stem| stem.to_string_lossy().eq_ignore_ascii_case(&processor))
+        };
+        let mut errs = String::new();
+        for named_first in [true, false] {
+            while let Some(i) = self
+                .unread()
+                .iter()
+                .position(|spec| named_for(spec) == named_first)
+            {
+                let spec = self.unread().remove(i);
+                self.load_language_description(&spec, &mut errs, registry);
+                if !errs.is_empty() {
+                    return Err(UnlaceError::lowlevel(errs));
+                }
+                if self.description.iter().any(|d| d.get_id() == id) {
+                    return Ok(());
+                }
+            }
+        }
+        Ok(())
     }
 
     /// \brief Read a SLEIGH .ldefs file (C++
@@ -547,17 +626,10 @@ impl LanguageDatabase {
     /// `SleighArchitecture::collectSpecFiles`, `sleigh_arch.cc:451`).
     ///
     /// Run once when spinning up the decompiler: look for the root `.ldefs`
-    /// files within the spec paths and parse them.  Idempotent — if the
-    /// description list is already populated, returns immediately (C++ `if
-    /// (!description.empty()) return;`).
+    /// files within the spec paths and parse them.  Idempotent: a file already
+    /// read is not read again (C++ `if (!description.empty()) return;`).
     pub fn collect_spec_files(&mut self, errs: &mut String, registry: &IdRegistry) {
-        if !self.description.is_empty() {
-            return; // Have we already collected before
-        }
-        let mut testspecs: Vec<String> = Vec::new();
-        for path in self.specpaths.path_list() {
-            memoryspecs::match_list_dir(&self.mounts, &mut testspecs, ".ldefs", path);
-        }
+        let testspecs = std::mem::take(self.unread());
         for spec in &testspecs {
             self.load_language_description(spec, errs, registry);
         }
@@ -795,6 +867,15 @@ impl SleighArchitecture {
         db: &LanguageDatabase,
         arch_type: &str,
     ) -> UnlaceResult<()> {
+        let baseid = self.resolve_language_id(arch_type)?;
+        self.select_language(db, &baseid)
+    }
+
+    /// (unlace) The first half of [`Self::resolve_architecture`]: settle `archid` and return
+    /// the \e language \e id it names (the id minus its compiler field), so a caller can read
+    /// that language's `.ldefs` ([`LanguageDatabase::load_language`]) before
+    /// [`Self::select_language`].
+    pub fn resolve_language_id(&mut self, arch_type: &str) -> UnlaceResult<String> {
         if self.archid.is_empty() {
             if self.target.is_empty() || self.target == "default" {
                 self.archid = arch_type.to_string();
@@ -809,10 +890,15 @@ impl SleighArchitecture {
         }
 
         self.archid = normalize_architecture(&self.archid)?;
-        let baseid = match self.archid.rfind(':') {
+        Ok(match self.archid.rfind(':') {
             Some(pos) => self.archid[..pos].to_string(),
             None => self.archid.clone(),
-        };
+        })
+    }
+
+    /// (unlace) The second half of [`Self::resolve_architecture`]: locate `baseid`, from
+    /// [`Self::resolve_language_id`], among the languages `db` has read.
+    pub fn select_language(&mut self, db: &LanguageDatabase, baseid: &str) -> UnlaceResult<()> {
         self.languageindex = -1;
         let descs = db.descriptions();
         let mut i: int4 = 0;

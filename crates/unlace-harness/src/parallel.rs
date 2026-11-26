@@ -14,10 +14,21 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::testfunction::{FileRun, run_test_files_each};
+use crate::testfunction::{FileRun, Pass, run_files_each};
 
 /// The `decomp_test_dbg` argument that turns it into a worker.
 pub const WORKER_FLAG: &str = "-worker";
+
+/// The `decomp_test_dbg` argument that turns it into a worker of the tree pass
+/// ([`Pass::Trees`]).
+pub const TREE_WORKER_FLAG: &str = "-treeworker";
+
+fn worker_flag(pass: Pass) -> &'static str {
+    match pass {
+        Pass::Assertions => WORKER_FLAG,
+        Pass::Trees => TREE_WORKER_FLAG,
+    }
+}
 
 /// The line a worker prints when a file's result is on disk.
 const DONE: &str = "@@unlace-worker-done ";
@@ -25,9 +36,9 @@ const DONE: &str = "@@unlace-worker-done ";
 /// Stack for the thread a file runs on (the parity test's in-process runner uses the same).
 const STACK: usize = 256 << 20;
 
-/// The worker loop: read `<result path>\t<test file>` lines from stdin, run each file, write
-/// its [`FileRun`] to the result path and print [`DONE`]. Ends at end of input.
-pub fn worker_main(spec_roots: &[String]) {
+/// The worker loop: read `<result path>\t<test file>` lines from stdin, run `pass` over each
+/// file, write its [`FileRun`] to the result path and print [`DONE`]. Ends at end of input.
+pub fn worker_main(spec_roots: &[String], pass: Pass) {
     let roots = spec_roots.to_vec();
     let worker = std::thread::Builder::new()
         .name("datatest-worker".into())
@@ -39,7 +50,7 @@ pub fn worker_main(spec_roots: &[String]) {
                 let Some((result, test)) = line.split_once('\t') else {
                     continue;
                 };
-                let run = run_test_files_each(&[test.to_string()], &roots)
+                let run = run_files_each(&[test.to_string()], &roots, pass)
                     .pop()
                     .unwrap_or_default();
                 let written = std::fs::write(result, encode(&run)).is_ok();
@@ -105,9 +116,9 @@ struct Worker {
     stdout: BufReader<ChildStdout>,
 }
 
-fn spawn(exe: &Path, spec_roots: &[String]) -> std::io::Result<Worker> {
+fn spawn(exe: &Path, spec_roots: &[String], pass: Pass) -> std::io::Result<Worker> {
     let mut cmd = Command::new(exe);
-    cmd.arg(WORKER_FLAG);
+    cmd.arg(worker_flag(pass));
     for r in spec_roots {
         cmd.arg("-sleighpath").arg(r);
     }
@@ -188,15 +199,26 @@ fn longest_first(files: &[String], known: &std::collections::BTreeMap<String, f6
 
 /// Run `files` across `jobs` worker processes of `exe` (a `decomp_test_dbg`); the runs come
 /// back in file order. With `jobs <= 1` the files run in this process, as
-/// [`run_test_files_each`] runs them.
+/// [`run_test_files_each`](crate::testfunction::run_test_files_each) runs them.
 pub fn run_test_files_parallel(
     files: &[String],
     spec_roots: &[String],
     jobs: usize,
     exe: &Path,
 ) -> Vec<FileRun> {
+    run_files_parallel(files, spec_roots, jobs, exe, Pass::Assertions)
+}
+
+/// [`run_test_files_parallel`] for either pass over the files.
+pub fn run_files_parallel(
+    files: &[String],
+    spec_roots: &[String],
+    jobs: usize,
+    exe: &Path,
+    pass: Pass,
+) -> Vec<FileRun> {
     if jobs <= 1 || files.len() <= 1 {
-        return run_test_files_each(files, spec_roots);
+        return run_files_each(files, spec_roots, pass);
     }
     let dir: PathBuf =
         std::env::temp_dir().join(format!("unlace-datatests-{}", std::process::id()));
@@ -214,7 +236,7 @@ pub fn run_test_files_parallel(
                 (&next, &runs, &dir, timed, &order, &elapsed);
             s.spawn(move || {
                 let result = dir.join(format!("worker-{slot}.run"));
-                let mut worker = spawn(exe, spec_roots).ok();
+                let mut worker = spawn(exe, spec_roots, pass).ok();
                 loop {
                     let Some(&i) = order.get(next.fetch_add(1, Ordering::Relaxed)) else {
                         break;
@@ -226,7 +248,7 @@ pub fn run_test_files_parallel(
                         Some(w) => match run_on(w, file, &result) {
                             Ok(run) => run,
                             Err(why) => {
-                                worker = spawn(exe, spec_roots).ok();
+                                worker = spawn(exe, spec_roots, pass).ok();
                                 died(file, &why)
                             }
                         },
@@ -262,35 +284,4 @@ pub fn run_test_files_parallel(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_slowest_known_files_go_first_and_unknown_ones_before_them() {
-        let files: Vec<String> = ["a", "b", "c", "d"].map(String::from).to_vec();
-        let known =
-            std::collections::BTreeMap::from([("a".to_string(), 1.0), ("c".to_string(), 9.0)]);
-        assert_eq!(longest_first(&files, &known), [1, 3, 2, 0]);
-    }
-
-    #[test]
-    fn a_run_round_trips_through_its_result_file() {
-        let run = FileRun {
-            file: "a.toml".into(),
-            output: "Success -- x\nFAIL -- y\n".into(),
-            failures: vec![
-                "y".into(),
-                "Execution failed for a.toml\nwith a newline".into(),
-            ],
-            applied: 2,
-            succeeded: 1,
-            wall_ms: 0,
-        };
-        let back = decode("a.toml", &encode(&run)).unwrap();
-        assert_eq!(
-            (back.output, back.failures, back.applied, back.succeeded),
-            (run.output, run.failures, run.applied, run.succeeded)
-        );
-        assert!(decode("a.toml", b"1 1 3\n2\nab").is_none());
-    }
-}
+mod tests;

@@ -87,6 +87,155 @@ The public items of `crates/unlace` are the stable surface: methods and fields a
 changed; `Error`, `Language`, `FunctionInfo` and `Decompiled` are `#[non_exhaustive]`. The JSON
 document only gains keys. Option names and their values follow the catalog and can change between
 releases; `unlace catalog --check` reports drift. `unlace_cli::embed` is not stable.
+`unlace::unstable` is outside this promise: each part below can change or go away in any release.
+
+### unlace::unstable::ctree — callbacks on the C syntax tree
+
+The engine prints every function from a C syntax tree (`docs/architecture/ctree.md`) that it takes
+through four levels: `Built`, `Statements`, `Rewritten`, `Final`. `Decompiler::with_tree_hook(level,
+callback)` runs `callback(&mut CTree, &Funcdata)` on every printed function when its tree reaches
+`level`, before the built-in rewrites of that level; the module re-exports the tree types (`CTree`,
+`CMaturity`, `Stmt`, `StmtKind`, `Expr`, `ExprKind`, the ids) and `Funcdata`.
+
+```rust
+use unlace::unstable::ctree::{CMaturity, StmtKind};
+
+// Print each function without its calls to `log_debug`.
+let mut decompiler = unlace::Decompiler::open("a.out")?.with_tree_hook(
+    CMaturity::Statements,
+    |tree, fd| {
+        let hidden: Vec<_> = (0..fd.num_calls())
+            .map(|i| fd.get_call_specs(i))
+            .filter(|call| call.get_name() == "log_debug")
+            .map(|call| call.get_op())
+            .collect();
+        for id in tree.stmt_ids() {
+            if let StmtKind::Stmts { ops, .. } = &mut tree.stmt_mut(id).kind {
+                ops.retain(|op| !hidden.contains(op));
+            }
+        }
+    },
+);
+```
+
+Runnable: `cargo run -p unlace --example tree_hook -- /usr/bin/true main __stack_chk_fail`. Which
+edits the printer honours, and that a callback runs once per print (twice per `decompile`, which
+prints the text and then the line map), is in `docs/architecture/ctree.md` section 10. A hook
+survives the reload a later builder method causes.
+
+### unlace::unstable::flavour — language files
+
+`Decompiler::with_language_file(path)?` prints through a language flavour, the TOML file
+`--language-file` takes (`docs/cli.md`, "Language files"): a base language (`c`, `rust`, `go`,
+`java`) with keyword and operator spellings, forms and capabilities overridden. The file is
+read and checked when the method is called. An unknown field, a value its field does not take
+or an override the base language's printer cannot honour is `Error::Request` naming the field;
+an unreadable file is `Error::Io`. The file names its base language, so `with_language` does
+not apply with it: the load refuses the pair. `Decompiled::json` reports the base language in
+`"language"` and the flavour's name in `"language_flavour"`.
+
+```rust
+let mut decompiler = unlace::Decompiler::open("a.out")?.with_language_file("pseudo.toml")?;
+println!("{}", decompiler.decompile_named("main")?.c);
+```
+
+### unlace::unstable::hooks — custom passes and rewrite rule files
+
+Three builder methods on `Decompiler`. The types they take (`Rule`, `RuleState`, `Funcdata`,
+`OpCode`, `UnlacePhase`, ...) are the engine's own, re-exported from `unlace::unstable::hooks`:
+
+| Method | What it adds to the default pipeline |
+|---|---|
+| `.with_rule(after_group, RuleState::new(group, 0, name), rule)?` | A p-code `Rule`, directly behind the last built-in rule of `after_group`, in the rule pool that holds that group. `group` decides which pipeline variants keep it. |
+| `.with_phase_hook(UnlacePhase::P2..=P8, \|function\| ..)?` | A callback run with each function at the boundary of that phase. |
+| `.with_rules_file(path)?` | The rules of a rewrite rule file: p-code rewrites written as TOML, the file `unlace decompile --rules FILE` takes (`docs/cli.md`, "`--rules FILE`"). An unreadable file is `Error::Io`; a refused rule is an `Error::Request` with one line per problem. |
+
+```rust
+use unlace::unstable::hooks::{RuleState, UnlacePhase};
+
+let mut decompiler = unlace::Decompiler::open("a.out")?
+    .with_rule("analysis", RuleState::new("analysis", 0, "orandsum"), OrAndSum)?
+    .with_phase_hook(UnlacePhase::P6, |function| eprintln!("{} is merged", function.get_name()))?
+    .with_rules_file("rules.toml")?;
+```
+
+`cargo run -p unlace --example custom_pass` is the runnable version, with the rule written out.
+The module's rustdoc is the contract: the rule groups by pool (`rule_groups()` returns them),
+what a rule must keep true, where each phase callback runs and what it may change there
+(`P2`: ops in place before SSA; `P3`-`P5`: data flow, final; `P6`-`P8`: nothing), that a restart
+runs every callback again on the rebuilt function, that no callback runs during jump-table
+recovery, and that rules and callbacks must be deterministic. Rules and callbacks are registered
+again on every load, before any option is applied; with none registered the pipeline and its
+output are the default ones. `docs/spec/00-overview.md` §0.6 describes the mechanism.
+
+### unlace::unstable::mapping — what the text corresponds to
+
+`Decompiler::map(address)` and `map_named(name)` decompile one function as `unlace map` does
+(`docs/cli.md`, "unlace map") and return a `Mapped`: the `Decompiled` function, whose document
+carries the token map (`functions[0].tokens`) and each variable's `storage`, and three queries
+over them. Lines count from 1 and columns from 0 in UTF-16 code units, as in the token map.
+
+```rust
+use unlace::Decompiler;
+use unlace::unstable::mapping::Span;
+
+let mut decompiler = Decompiler::open("a.out")?;
+let main = decompiler.map_named("main")?;
+for address in main.addresses(Span::line(7)) {        // line 7 came from these instructions
+    for site in main.spans(address) {                   // and each of them printed this text
+        println!("{address:#x} {}:{} {}", site.span.start.line, site.span.start.col, site.text);
+    }
+    for variable in main.live(address) {                // while these variables were live
+        println!("{address:#x} {} in {:?}", variable.name, variable.storage);
+    }
+}
+```
+
+`Decompiler::with_tokens()` and `with_storage()` add the same two members to every document the
+decompiler returns (`--tokens`, `--storage`); without them the documents are unchanged. A function
+whose token map does not rebuild its text is an `Error::Decompile` from `map` that says why.
+
+### unlace::unstable::printer — the printed function as a tree, and printers over it
+
+`Decompiler::tree(address)` and `tree_named(name)` decompile one function and return its text as a
+`Tree`: nested `Node`s for the prototype, the declarations, the statements and the expressions,
+each with its `kind`, its children, its C type where the printer knows it (`ty`), where its text is
+in the code (`span`) and the instruction addresses it came from. It is the tree
+`unlace decompile --json --ctree` writes as the record's `ctree` member (`docs/cli.md`, "The JSON
+documents", `--ctree`); `tree_from_json` reads that member back. A function has a tree when its output
+language is C; otherwise the call returns `TreeError::Unavailable` with the reason.
+
+`Printer` prints a tree. Its methods (`function`, `prototype`, `declaration`, `item`, `statement`,
+`expr`) each have a default that prints C in the decompiler's own layout and calls back into the
+printer for the nodes underneath. `CPrinter` is the defaults and nothing else: `print_c(&tree)`
+is the function's code, byte for byte. A printer for another flavour overrides what it prints
+differently:
+
+```rust
+use unlace::unstable::printer::{Kind, Node, Printer, Writer, print};
+
+struct LetBindings;
+
+impl Printer for LetBindings {
+    // `long acc;` becomes `let mut acc: long;`.
+    fn declaration(&mut self, w: &mut Writer, node: &Node) {
+        let name = node.children.iter().find(|child| child.kind == Kind::Var);
+        w.push(&format!(
+            "let mut {}: {};",
+            name.map_or("_", |name| name.text.as_str()),
+            node.ty.as_deref().unwrap_or("_"),
+        ));
+    }
+}
+
+let tree = unlace::Decompiler::open("a.out")?.tree_named("main")?;
+println!("{}", print(&mut LetBindings, &tree));
+```
+
+Runnable: `cargo run -p unlace --example let_flavour -- /usr/bin/true main` (prototype, `let`
+bindings and casts in another flavour) and `unlace decompile-all a.out --json --ctree | cargo run
+-p unlace --example ctree_roundtrip` (prints every exported tree back and compares it with the
+code). The node kinds and the layout rules are in `docs/architecture/ctree.md` section 11.
 
 ## For a framework with its own loader (fugue-style integration)
 

@@ -21,6 +21,14 @@
 //! - **Concurrency.** An image is written to a unique temporary file in the cache directory and
 //!   renamed into place, so concurrent test processes never read a partial file; two that race
 //!   both compile, and the last rename wins with identical bytes.
+//! - **Uncompressed copy.** The first load of a cached image of at least 2 MiB leaves
+//!   `<cache>/<lang>-<key>.slr` beside it: the same packed element stream behind an `slr` header
+//!   (`unlace_sleigh::slaformat::RAW_SLA_HEADER`), followed by the stream's layout (where its
+//!   constructors and decision trees lie, `unlace_sleigh::lazysla::index_raw_image`), with the
+//!   same key, so it is current exactly when the `.sla` is; the copies of that language under
+//!   earlier keys are removed then. [`read_image`] returns the copy when it exists, else the
+//!   `.sla`; the decoder takes either and decodes the same elements, and the copy skips the
+//!   inflate and the layout walk of each later load.
 //! - **Prebuilt images.** A `.sla` that exists as a regular file (not a symlink) and is at least
 //!   as new as its `.slaspec` and every include is used as is (a `SLEIGHHOME` or
 //!   `--sleighpath` directory of prebuilt images, or an in-tree build). A `.sla` with no
@@ -32,6 +40,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::SystemTime;
+
+use unlace_sleigh::lazysla::{index_raw_image, split_raw_image};
+use unlace_sleigh::slaformat::{RAW_SLA_HEADER, raw_sla_image};
 
 use crate::slgh_compile::SleighCompile;
 
@@ -393,6 +404,74 @@ pub fn compile_cached_in(dir: &Path, slaspec: &Path) -> io::Result<PathBuf> {
     }
     fs::rename(&temp, &target)?;
     Ok(target)
+}
+
+/// The extension of the uncompressed copy beside a cached `.sla`.
+const RAW_EXTENSION: &str = "slr";
+
+/// The smallest image that gets a copy: inflating a smaller one takes under two milliseconds
+/// (about 0.9 ms per MiB inflated in the dev profile), not worth the disk.
+const MIN_RAW_IMAGE: usize = 2 << 20;
+
+/// The bytes to decode for the `.sla` at `sla` (a path from [`sla_path`]): for a cached image
+/// of at least [`MIN_RAW_IMAGE`], its uncompressed copy `<lang>-<key>.slr` with its layout, made
+/// beside it on first read (best effort; the copy and the image share the key, so the copy is
+/// current exactly when the image is), else the `.sla` itself. Both decode to the same elements;
+/// the copy skips the inflate and the layout walk. A copy without a layout (from an earlier
+/// unlace) gets one.
+pub fn read_image(sla: impl AsRef<Path>) -> io::Result<Vec<u8>> {
+    let sla = sla.as_ref();
+    let raw = sla.with_extension(RAW_EXTENSION);
+    if let Ok(mut image) = fs::read(&raw)
+        && let Some((_, layout)) = split_raw_image(&image)
+    {
+        if layout.is_none() && index_raw_image(&mut image).is_ok() {
+            write_raw_image(&raw, &image);
+        }
+        return Ok(image);
+    }
+    let compressed = fs::read(sla)?;
+    if sla.parent() != Some(cache_dir().as_path()) {
+        return Ok(compressed);
+    }
+    match raw_sla_image(&compressed) {
+        Ok(mut image) => {
+            if image.len() >= MIN_RAW_IMAGE && index_raw_image(&mut image).is_ok() {
+                write_raw_image(&raw, &image);
+            }
+            Ok(image)
+        }
+        Err(_) => Ok(compressed),
+    }
+}
+
+/// Write `image` to `raw` through a temporary file in the same directory, and remove the
+/// copies of the same language left by earlier keys.
+fn write_raw_image(raw: &Path, image: &[u8]) {
+    let temp = raw.with_extension(format!("{RAW_EXTENSION}.{}.tmp", std::process::id()));
+    if fs::write(&temp, image).is_err() || fs::rename(&temp, raw).is_err() {
+        let _ = fs::remove_file(&temp);
+        return;
+    }
+    let (Some(dir), Some(name)) = (raw.parent(), raw.file_name().and_then(|n| n.to_str())) else {
+        return;
+    };
+    let Some((stem, _)) = name.rsplit_once('-') else {
+        return;
+    };
+    for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        let stale = path.extension().is_some_and(|e| e == RAW_EXTENSION)
+            && path != raw
+            && path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .and_then(|n| n.rsplit_once('-'))
+                .is_some_and(|(s, _)| s == stem);
+        if stale {
+            let _ = fs::remove_file(&path);
+        }
+    }
 }
 
 /// The `.sla` to load for `sla` (a path such as `specs/.../x86-64.sla`): a current prebuilt

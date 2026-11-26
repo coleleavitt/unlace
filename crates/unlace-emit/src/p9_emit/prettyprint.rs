@@ -293,6 +293,18 @@ pub struct EmitToken {
     pub in_proto: bool,
 }
 
+/// A structural mark of a captured token stream. Each carries the number of
+/// tokens captured before it, so it sits between two tokens of the stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaptureMark {
+    /// `begin_function`: the tokens before it are printed above the function.
+    FunctionBegin(usize),
+    /// `begin_statement`, with the statement's root op (`opref`).
+    StatementBegin(usize, Option<uintb>),
+    /// `end_statement`.
+    StatementEnd(usize),
+}
+
 /// The column model of [`EmitNoMarkup`] replayed beside [`EmitMarkup`]: a line
 /// break moves to the indent, and every emitted text advances the column.
 #[derive(Debug, Default)]
@@ -304,6 +316,7 @@ struct TokenCapture {
     proto: usize,
     mute: usize,
     out: Vec<EmitToken>,
+    marks: Vec<CaptureMark>,
 }
 
 impl TokenCapture {
@@ -1050,6 +1063,23 @@ impl EmitMarkup {
             .map(|c| std::mem::take(&mut c.out))
             .unwrap_or_default()
     }
+    /// How many tokens are captured so far; `0` when capture is off.
+    pub fn token_count(&self) -> usize {
+        self.capture.as_ref().map_or(0, |c| c.out.len())
+    }
+    /// Take the structural marks captured since the last reset.
+    pub fn take_marks(&mut self) -> Vec<CaptureMark> {
+        self.capture
+            .as_mut()
+            .map(|c| std::mem::take(&mut c.marks))
+            .unwrap_or_default()
+    }
+
+    fn mark(&mut self, make: impl FnOnce(usize) -> CaptureMark) {
+        if let Some(c) = self.capture.as_mut() {
+            c.marks.push(make(c.out.len()));
+        }
+    }
 
     fn capture(
         &mut self,
@@ -1206,6 +1236,7 @@ impl Emit for EmitMarkup {
         self.with_encoder(|e| e.close_element(&ids::ELEM_CLANG_DOCUMENT));
     }
     fn begin_function(&mut self) -> int4 {
+        self.mark(CaptureMark::FunctionBegin);
         self.with_encoder(|e| e.open_element(&ids::ELEM_FUNCTION));
         0
     }
@@ -1292,6 +1323,7 @@ impl Emit for EmitMarkup {
     fn begin_statement(&mut self, markup: &MarkupRef) -> int4 {
         self.record_association(markup);
         let op = markup.opref;
+        self.mark(|at| CaptureMark::StatementBegin(at, op));
         self.with_encoder(|e| {
             e.open_element(&ids::ELEM_STATEMENT);
             if let Some(o) = op {
@@ -1301,6 +1333,7 @@ impl Emit for EmitMarkup {
         0
     }
     fn end_statement(&mut self, _id: int4) {
+        self.mark(CaptureMark::StatementEnd);
         self.with_encoder(|e| e.close_element(&ids::ELEM_STATEMENT));
     }
     fn begin_func_proto(&mut self) -> int4 {

@@ -17,5 +17,6 @@ mod lift_tests;
 #[cfg(test)]
 mod middle_tests;
 pub mod paramid;
+pub mod rewritefile;
 pub mod signature;
 pub mod universalaction;

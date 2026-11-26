@@ -23,7 +23,9 @@ Spec: `docs/spec/09-emission.md`, "Printing through the C syntax tree".
 Status (2026-11-26): the rewrites run from one schedule (section 10): every built-in rewrite is a
 named row at a `CMaturity` level, embedder callbacks are rows of the same schedule
 (`crates/unlace-ctree/src/ctreehooks.rs`, `Decompiler::with_tree_hook` in `unlace::unstable`), and
-the tree now reaches `final` before it prints.
+the tree now reaches `final` before it prints. The printed function is also exported as data, a tree
+of typed statement and expression nodes with a reference printer and a `Printer` trait over it
+(section 11; `--ctree`, `unlace::unstable::printer`).
 
 Today the printer walks the structured block graph and the p-code ops directly and writes text as it
 goes. Every C-level cleanup (a diamond printed as a ternary, an if-chain printed as a switch, a goto
@@ -350,3 +352,92 @@ callback must make the same edit each time it is called for a function.
 
 **Tracing.** With `UNLACE_STAGE_DIFF` set, each row reports on stderr the lines of `CTree::dump` it
 added or removed, as stage `ctree:<row name>` (a registered callback's row is named `hook`).
+
+## 11. The exported tree and printers over it
+
+Section 2 put the expression side off: an expression statement is a leaf whose ops print through
+the RPN driver. Custom printers and output mapping (`notes/extensibility-plan.md` 1.2, 1.3, 3.4) need
+the whole function as data, expressions included, and they need it to be exactly what was printed.
+The exported tree (`crates/unlace-emit/src/p9_emit/ctreeexport.rs`, type `ExportTree`) is that: a
+second, read-only tree made at export time from what the printer did. It does not replace `CTree`
+and the printer does not print from it.
+
+**Where it comes from.** A tree-capture render (`PrintC::doc_function_capture`,
+`printc/ctreerecord.rs`) is the token render of `doc_function_tokens` plus one record. The RPN
+driver (`push_op`, `push_atom`) notes a node for every operator token it pushes and every atom it
+prints: its parent (the entry on top of the RPN stack), the tokens it printed, its `OpToken`, the op
+and Varnode behind it, whether the driver put it in parentheses, and which tokens the driver itself
+printed (operator tokens and parentheses). That record is the expression tree the driver builds
+implicitly while it prints, so it has the precedence, the folding and the names of the text by
+construction. Nothing is recorded on any other render, and the text is still the plain render.
+
+**How it is built** (`ctreeexport/build.rs`). Expressions come from the record. Statements are read
+from the token stream: keywords, braces, the statement marks the emitter brackets each statement
+with, the declaration and prototype flags, and each token's line and column. `PrintC` writes some
+operators outside the RPN driver (the `&&`/`||`/`!`/`?:`/`=` of the tree rewrites, the commas of a
+condition's leading statements); a small parser reads those between the recorded expressions.
+Spans are token positions. A statement's addresses are the instructions of every op its tokens were
+printed for; an expression node's address is its op's.
+
+**The check.** The builder prints every statement and every expression it has typed with the
+reference printer and compares the result with the text the node stands for. What does not print
+back exactly is kept as a `raw` node holding its text: an expression inside its statement, or a
+statement as whole lines. A recorded node whose routine wrote tokens straight to the emitter (not
+through the driver) is `raw` for the same reason. The finished tree is printed once more and must
+equal `code`, else the function reports `ctree_error` and no tree. So a tree, when there is one,
+always prints back to `code` byte for byte, and `raw` marks what the typed vocabulary does not
+cover. Text edits made after printing are followed or reported: a pointer-argument cast a batch
+inserts wraps its argument's node in a `cast` node (`ExportTree::insert_cast`); the cookie-literal
+rewrite gives `ctree_error`.
+
+**Why not walk `CTree`.** The arena describes statements by structured block and falls back to the
+block printer for the kinds it does not model, and what a line looks like (elided braces, `else if`
+chains, comments, label lines, the forms of section 4) is decided while printing. A tree that must
+equal the text has to be read from the text; the arena could only supply block ids, which no
+consumer has asked for. When printing moves onto the tree (steps 6 and 7 of section 2), the capture
+can move with it.
+
+**Printers** (`ctreeexport/printer.rs`). `Printer` has one method per syntactic category
+(`function`, `prototype`, `declaration`, `item`, `statement`, `expr`). Each default prints C in
+the decompiler's layout and calls back into the printer for the nodes underneath. `CPrinter` is
+the defaults and nothing else: the reference printer, and the builder's check. The layout rules it
+implements are the emitter's: a block item on its own line at its level's indent (`style.indent`
+per level), labels at column 0, comment lines at `style.comment_indent`, braces per `style`, an
+unbraced arm on the next line one level deeper except a jump (`goto`, `break`, `continue`), which
+stays on the `if` line, `case` labels one level inside the `switch` and their statements two,
+`while( true )` for a loop that never tests, and operator tokens placed by `form` and `spacing` as
+`PrintC::emit_op` places them.
+
+**Surfaces.** `unlace decompile --json --ctree` and `decompile-all --json --ctree` write the tree as
+the record's `ctree` member (`docs/cli.md`, "The JSON documents", `--ctree`; the JSON is
+`crates/unlace-cli/src/decompile_all/ctreejson.rs`, which also reads it back).
+`unlace::unstable::printer` re-exports the tree and the `Printer` trait and adds `Decompiler::tree`
+and `tree_from_json` (`docs/api.md`). `crates/unlace/examples/let_flavour.rs` prints another
+flavour; `crates/unlace/examples/ctree_roundtrip.rs` prints a document's trees back and compares
+them with its code.
+
+**Limits.** C output only: the statement reader knows C's statement forms, so a function printed
+as Rust, Go or Java reports `ctree_error` (pass `--language c`). One process only (`--jobs 1`). The
+capture render takes the place of the markup render `--json` already runs, so the flag adds the
+token capture, the record and the build: 3% of the run time on a 185-function binary. Types are the printer's: a variable's, an operation's
+result, a declaration's; a constant has none, and an operator written outside the RPN driver has
+none.
+
+Measured (2026-11-26):
+
+- The parity corpora, through the harness's tree pass (`cargo test -p unlace-harness --test parity --
+  --ignored trees --nocapture`, `docs/dev-setup.md`): `tests/datatests` prints 177 functions and
+  `tests/stages` 5,165. All 4,869 printed in C export a tree that prints back byte for byte. 4,856
+  of those trees hold no `raw` node; the other 13 hold `raw` lines only above the prototype (132
+  lines: the type definitions `structdefs` prints there and the helper preamble of `bytearrayc`).
+  The 473 functions printed in Go, Rust or Java have no tree.
+- The fixture binaries in the repository, through `unlace decompile-all --json --ctree` piped into
+  `ctree_roundtrip`: 1,482 binaries, 45,246 functions with code. 36,055 are printed in C: every
+  tree (5.2 million nodes in all) prints back byte for byte and none holds a `raw` node. The other
+  9,191 are printed in another output language.
+
+What cannot print back, and why: text wrapped by `option maxlinewidth` (the tree has no node for
+a line break inside an expression; every `--json` render prints unbroken lines, so `--ctree` never
+meets it, and the harness pass prints unbroken lines too), and text edited after printing that the
+tree cannot follow (the cookie-literal return rewrite). Both report `ctree_error`; neither occurs
+in the corpora above.

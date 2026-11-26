@@ -6243,6 +6243,113 @@ same edit each time. With no callback registered the schedule is the built-in ro
 and the output is unchanged. With `UNLACE_STAGE_DIFF` set, each row reports the lines of
 the tree's dump (`CTree::dump`) it changed, as stage `ctree:<row name>`.
 
+**The exported tree** (`--ctree`; `p9_emit/ctreeexport.rs`, `printc/ctreerecord.rs`). With
+`DecompileOptions::want_ctree` the markup render of a function is a *tree-capture render*
+(`PrintC::doc_function_capture`, reached through `print_c_with_ctree`): the token render
+of `doc_function_tokens`, in which the RPN driver also records one node per `push_op`
+(the operator token, the op, whether `parentheses_top` put it in parentheses) and one per
+`push_atom` (the atom's text, tag, op and Varnode), each with its parent (the entry on top
+of the RPN stack when it was pushed) and the range of captured tokens it printed, plus
+the token ranges the driver itself printed (`emit_op`, its parentheses). The emitter also
+marks where the function begins and where each `begin_statement`/`end_statement` pair
+lies in the token stream. The reported text is still the plain render; no other render
+records anything, and `code` is byte-identical with and without the capture.
+
+`ctreeexport::build` turns the capture into an `ExportTree` (a `function` node over
+typed nodes; the kinds and members are listed in `docs/cli.md`, "The JSON documents",
+`--ctree`):
+
+- An expression is the recorded node and the recorded nodes under it. A `HiddenFunction`
+  token is its one operand. A `FUNCTION_CALL` node becomes a `call` whose arguments are
+  the operands of its comma operators, in order. A node the driver parenthesized is a
+  `paren` over it. A recorded node is kept as `raw` text when the number of nodes under
+  it is not its token's operand count, or when it covers a token that neither an operand
+  nor the driver printed (the routine wrote it straight to the emitter).
+- Between recorded expressions the builder reads what `PrintC` writes outside the driver:
+  `=`, `?:`, `||`, `&&` and `!` (the `Assign`, `Ternary`, `Or`, `And` and `Not` forms of
+  the tree rewrites), parentheses, a function name followed by a parenthesized argument
+  list, and commas, which make a `list` (the statements a condition runs before its
+  test).
+- Statements are read from the tokens. A token outside every recorded expression that is
+  keyword-coloured and spells `if`, `else`, `while`, `do`, `for`, `switch`, `case`,
+  `default`, `try`, `return`, `goto`, `break` or `continue` opens that form (a `switch`
+  followed by `;` instead of a block is a jump through a table with no recovered target:
+  `switch(value);`); braces and
+  parentheses are matched over the tokens outside recorded expressions; a statement mark
+  that starts at a token gives the end of a `return`, a jump or an expression statement.
+  Tokens flagged as a declaration are a `decl` (its declared type is the declarator
+  without its identifier); a comment token is an `eol_comment` when it follows a token on
+  its line by one space, else a `comment`; a line that holds no token is a `blank_line`
+  when it is exactly its level's indentation. The lines above the prototype are comments
+  (column 0) or `raw`; the prototype is the tokens flagged as such.
+- A node's span is the position of its first and last token. A statement's `addresses`
+  are the instruction addresses of the ops its tokens name (`opref`), an expression
+  node's the address of its own op, both in output units (`output_code_offset`). A leaf's
+  `type` is its Varnode's type, an operator's the type of its op's output when it is the
+  outermost node of that op, a declaration's its declared type.
+
+Every item of a block is accepted only if it starts at the column its kind prints at and
+the reference printer reproduces its text; otherwise the whole lines it covers are one
+`raw` item. Every expression is accepted only if the reference printer reproduces its
+text; otherwise its operands are checked one by one and it is `raw` if that does not
+help. The finished tree is printed once more and compared with `code`; a difference is
+reported as the function's `ctree_error` and no tree is exported. The reasons a function
+has no tree are: an output language other than C (the statement reader knows C's forms);
+the cookie-literal return rewrite edited the text after it was printed; a token that is
+not at its recorded position in the text; a prototype that is not one line at column 0;
+a body that is not one brace pair; the final comparison. A batch that inserts
+pointer-argument casts into the text (`reconcile_pointer_arguments`) wraps the node of
+each cast argument in a `cast` node and moves the spans behind it
+(`ExportTree::insert_cast`, `FuncDetail::cast_tree_arguments`); if the tree then does
+not print back to the edited text it is dropped with that reason.
+
+The reference printer (`ctreeexport::CPrinter`, the defaults of the `Printer` trait)
+prints a tree as follows; it is the builder's check and what `print_c` and
+`unlace::unstable::printer` run. Header children print one per line; the prototype is
+its `text`; the body's opening brace follows `style.brace_function`. An item of a block
+starts a new line at its column (`item_column`): 0 for a label, `style.comment_indent`
+for a comment line, the block's indent for a statement, and inside a `switch` one level
+for `case`/`default` and blank lines and two for statements. An `eol_comment` is one
+space behind the item before it. A `raw` item is a line break and its text. `if` prints
+`if (`, the condition, `)`, its comments, then the then part: a `block` braced per
+`style.brace_ifelse`, a `goto`/`break`/`continue` after one space, any other statement on
+the next line one level deeper; `else` starts a line and takes a `block`, an `if` after
+one space, or a statement on the next line one level deeper. `while` and `do`-`while`
+print ` (cond)`, or `( true )` when the condition is the constant `true`; `for` prints
+`for (init; cond; step)`; `switch` prints `switch(value)` and its block, or
+`switch(value);` when it has none; `try` prints `try`, its
+block, a space, its header text and the handler block; `return` prints its value after a
+space; every simple statement ends in `;`. An operator prints its token around its
+children by `form` as `emit_op` does: `binary` pads the token with `spacing` spaces on
+each side (and its closing token likewise, for `?:`), `prefix` prints the token then
+`spacing` spaces, `postsurround` prints the opening token after the first child and the
+closing token after the last, `presurround` prints the opening token, the first child,
+the closing token, then the second child, and `space` prints only its spacing. A `call`
+prints the callee, its opening token, the arguments separated by `sep`, its closing
+token; a `list` its children separated by `sep`; a `paren` its child in parentheses; any
+other node its `text`.
+
+`print_c_with_ctree` does not change the line width. A caller whose text may be wrapped
+(`option maxlinewidth`) suspends it around the call (`PrintC::suspend_line_size`), as
+every `--json` render does: the token positions are those of unbroken lines, and the tree
+has no node for a line break inside an expression, so wrapped text reports a token that is
+not at its recorded position and exports no tree.
+
+Corpus checks (2026-11-26). The harness's tree pass
+(`FunctionTestCollection::check_trees`, `Pass::Trees`; the on-request parity test
+`exported_trees_print_back_over_the_corpora`) runs every script of `tests/datatests` and
+`tests/stages` and, after each `print C`, exports the printed function's tree from a
+render with unbroken lines and prints it back: 5,342 functions are printed, 4,869 of them
+in C; all 4,869 export a tree that prints back byte for byte; 4,856 trees hold no `raw`
+node and 13 hold `raw` lines only above the prototype (132 lines of `structdefs` type
+definitions and the `bytearrayc` helper preamble); the 473 functions printed in Go, Rust
+or Java export no tree. The test fails on a tree that prints back differently, on a C
+function without a tree and on a `raw` node inside a function body.
+`crates/unlace/examples/ctree_roundtrip.rs` over `decompile-all --json --ctree` of every
+fixture binary in the repository (1,482 binaries, 45,246 functions with code): the
+36,055 functions printed in C all have a tree that prints back byte for byte, with no
+`raw` node; 9,191 are printed in another output language.
+
 
 ## (unlace) Per-stage attribution of text cleanup removals (`UNLACE_STAGE_DIFF`)
 

@@ -34,6 +34,7 @@ pub mod coreaction_casts;
 pub mod coreaction_render;
 pub mod cppshortnames; // (unlace) short spellings of standard C++ names
 pub mod cstringconst;
+pub mod ctreeexport; // (unlace) the printed function as a tree of typed nodes + the reference C printer
 pub mod ctypes; // (unlace) valid per-architecture C spelling of the core types
 pub mod declorder; // (unlace) the order local declarations print in
 pub mod dedupvardecls;

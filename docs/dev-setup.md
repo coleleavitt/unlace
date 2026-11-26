@@ -182,6 +182,15 @@ baseline only for a sanctioned change, with `UNLACE_BLESS=1` on the same command
 `UNLACE_BLESS=1 cargo test -p unlace-harness --test parity datatests` (stages have no baseline to bless).
 It refuses while any assertion fails.
 
+A third test in the parity target runs on request: `cargo test -p unlace-harness --test parity --
+--ignored trees --nocapture` (`exported_trees_print_back_over_the_corpora`, about half a minute
+on six workers). It runs every script of both corpora once more and, after each `print C`, exports
+the printed function's C syntax tree (`--ctree`, `docs/architecture/ctree.md` section 11) and
+prints it back with the reference printer. It fails when a tree prints back differently from the
+function's text, when a function printed in C has no tree, or when a statement or expression is
+kept as untyped `raw` text; it prints the counts per corpus. Run it after changing what the printer
+emits or the tree export.
+
 A run fails on a baseline assertion that no longer passes (listed under `REGRESSED`), on any
 failing assertion, and on a test file that cannot be parsed or run; assertions that pass but are
 not in the baseline are listed as newly passing and do not fail. A bless rewrites the `data:`

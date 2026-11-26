@@ -9,6 +9,7 @@
 //! bodies is a run-level failure.
 
 mod callee_first;
+pub(crate) mod ctreejson;
 mod custom_reg_callers;
 mod functions_serialize;
 mod omit;
@@ -17,6 +18,13 @@ mod result_store;
 pub(crate) use callee_first::decompile_callee_first;
 use callee_first::decompile_entries_callee_first;
 pub(crate) use omit::Omit;
+
+/// The opt-in members of a `--json` record.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Extra {
+    /// `--ctree`: the C syntax tree of the code (`ctree`, `ctree_error`).
+    pub(crate) ctree: bool,
+}
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
@@ -77,6 +85,8 @@ pub(crate) struct Args {
     /// record collections left out of the document. Omitting `variables` also
     /// sets `no_vars`, so the extraction is skipped too.
     pub(crate) omit: Omit,
+    /// The opt-in record members (`decompile-all --json`, `decompile --json`).
+    pub(crate) extra: Extra,
     /// `--max-fn-seconds N` (decompile-all / decompile-project): per-function
     /// decompile watchdog budget in seconds; `0` disables.  A function that
     /// exceeds it is recorded as that function's `error` (the batch continues)
@@ -170,6 +180,7 @@ impl Args {
             entry_seeds: Vec::new(),
             no_vars: false,
             omit: Omit::default(),
+            extra: Extra::default(),
             max_fn_seconds: 0,
             max_fn_memory: Some(0),
             options: Vec::new(),
@@ -718,6 +729,7 @@ pub fn run(argv: &[String]) -> i32 {
                         &run.interior,
                         &run.declared,
                         args.omit,
+                        args.extra,
                     )
                 }),
             };
@@ -851,6 +863,7 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
                 single_target: false,
                 want_tokens: false,
                 want_pointer_arguments: args.jobs_pointerargs,
+                want_ctree: false,
             };
             let mut pending = entries.into_iter();
             let mut pulled = 0usize;
@@ -1624,6 +1637,7 @@ pub(crate) fn decompile_entries_with(
         want_provenance: args.wants_provenance(),
         single_target: targets.len() == 1,
         want_pointer_arguments: pointer_arguments,
+        want_ctree: args.extra.ctree,
         ..DecompileOptions::default()
     };
     prog.arch_mut().unlace_tail_callee_batch = tail_callees;
@@ -2548,9 +2562,10 @@ pub(crate) fn render_result_json(
     interior: &crate::interior::Interiors,
     declared: &crate::funcdecl::Declared,
     omit: Omit,
+    extra: Extra,
 ) -> String {
     render_selected_json(
-        binary, funcs, options, error, None, assertions, interior, declared, omit,
+        binary, funcs, options, error, None, assertions, interior, declared, omit, extra,
     )
 }
 
@@ -2573,10 +2588,11 @@ pub(crate) fn render_selected_json(
     interior: &crate::interior::Interiors,
     declared: &crate::funcdecl::Declared,
     omit: Omit,
+    extra: Extra,
 ) -> String {
     let mut out = Vec::new();
     write_selected_json(
-        &mut out, binary, funcs, options, error, total, assertions, interior, declared, omit,
+        &mut out, binary, funcs, options, error, total, assertions, interior, declared, omit, extra,
     )
     .expect("rendering the document into memory");
     String::from_utf8(out).expect("the document is ASCII")
@@ -2596,6 +2612,7 @@ pub(crate) fn write_selected_json(
     interior: &crate::interior::Interiors,
     declared: &crate::funcdecl::Declared,
     omit: Omit,
+    extra: Extra,
 ) -> std::io::Result<()> {
     let language = crate::loadtime::explicit_output_language(options)
         .and_then(unlace_decomp::lang::OutLang::from_print_name)
@@ -2606,7 +2623,7 @@ pub(crate) fn write_selected_json(
     );
     let records = funcs
         .iter()
-        .map(|f| function_json(f, interior, declared, omit));
+        .map(|f| function_json(f, interior, declared, omit, extra));
     crate::jsonfmt::write_indent2_streamed(out, &head, "functions", records, &tail)?;
     out.write_all(b"\n")
 }
@@ -2726,6 +2743,7 @@ fn result_json(
     assertions: &[unlace_console::assertions::Outcome],
     interior: &crate::interior::Interiors,
     omit: Omit,
+    extra: Extra,
 ) -> Json {
     let declared = crate::funcdecl::Declared::default();
     let (mut fields, tail) = document_fields(
@@ -2733,7 +2751,7 @@ fn result_json(
     );
     let functions = funcs
         .iter()
-        .map(|f| function_json(f, interior, &declared, omit))
+        .map(|f| function_json(f, interior, &declared, omit, extra))
         .collect();
     fields.push(("functions".to_string(), Json::Array(functions)));
     fields.extend(tail);
@@ -2817,6 +2835,7 @@ fn function_json(
     interior: &crate::interior::Interiors,
     declared: &crate::funcdecl::Declared,
     omit: Omit,
+    extra: Extra,
 ) -> Json {
     let mut record = vec![
         ("name".into(), Json::Str(f.name.clone())),
@@ -2886,6 +2905,9 @@ fn function_json(
     record.extend(declared.marker(f.byte_address));
     if let Some(inside) = interior.get(&f.byte_address) {
         record.push(("interior_to".into(), crate::interior::json(inside)));
+    }
+    if extra.ctree {
+        record.extend(ctreejson::fields(f));
     }
     Json::Object(record)
 }
@@ -3200,6 +3222,7 @@ pub(crate) fn parse_args_with_filters(
     let mut entry_seeds: Vec<EntrySelector> = Vec::new();
     let mut no_vars = false;
     let mut omit = Omit::default();
+    let mut extra = Extra::default();
     let mut max_fn_seconds: Option<u64> = None;
     let mut max_fn_memory: Option<u64> = None;
     let mut options: Vec<(String, String)> = Vec::new();
@@ -3254,6 +3277,7 @@ pub(crate) fn parse_args_with_filters(
                 }
             }
             "--no-vars" => no_vars = true,
+            "--ctree" if matches!(cmd, "decompile-all" | "decompile") => extra.ctree = true,
             "--omit" if matches!(cmd, "decompile-all" | "decompile") => {
                 omit.add(&take(argv, &mut i, "--omit")?)?
             }
@@ -3456,6 +3480,9 @@ pub(crate) fn parse_args_with_filters(
             return Err("--rust-signature-manifest requires an unmodified object image without raw, slice, target, ISA, image-selection, assertion, or function-definition overrides".into());
         }
     }
+    if extra.ctree && !json {
+        return Err("--ctree selects --json record keys; add --json".into());
+    }
     if !omit.is_empty() {
         if !json {
             return Err("--omit selects --json record keys; add --json".into());
@@ -3568,6 +3595,13 @@ pub(crate) fn parse_args_with_filters(
                 "--jobs does not apply to --raw-image input (the entry seeds are the load)".into(),
             );
         }
+        if extra.ctree {
+            return Err(
+                "--ctree and --jobs are exclusive: a worker's record does not carry the tree. \
+                 Re-run with --jobs 1."
+                    .into(),
+            );
+        }
         if !assertions.is_empty() {
             return Err(
                 "--assert and --jobs are exclusive: assertion outcomes are per-load state the \
@@ -3631,6 +3665,7 @@ pub(crate) fn parse_args_with_filters(
         entry_seeds,
         no_vars,
         omit,
+        extra,
         max_fn_seconds,
         max_fn_memory,
         options,
@@ -3689,7 +3724,7 @@ fn parse_entry_selector(s: &str) -> Result<EntrySelector, String> {
 
 fn usage_decompile_all() {
     eprintln!(
-        "usage: unlace decompile-all <binary> [--json] [--project FILE] [--functions a,b,..] [--addr 0xVMA].. \\\n\
+        "usage: unlace decompile-all <binary> [--json] [--ctree] [--project FILE] [--functions a,b,..] [--addr 0xVMA].. \\\n\
          \x20                   [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
          \x20                   [--max-fn-seconds N] [--max-fn-memory MiB] \\\n\
          \x20                   [--mode auto|reliable|aggressive|fast] \\\n\
@@ -3707,6 +3742,10 @@ fn usage_decompile_all() {
          {{kind,message,line,address}}, each at the address it was recorded\n\
          at (a header warning at the entry); `error` is set only for a failed\n\
          function.\n\
+         --ctree (with --json, not with --jobs above 1) adds the C syntax tree of\n\
+         each function's code to its record: `ctree`, its statements and expressions\n\
+         as nested nodes with kind, operands, type, line span and addresses, and\n\
+         `ctree_error`, set when the function has no tree.\n\
          --omit KEY[,KEY].. (with --json) leaves those record collections out of\n\
          every record -- aliases, line_mappings, variables (with stack_objects),\n\
          types -- and lists them in a top-level `omitted` array, so an omitted\n\

@@ -189,6 +189,9 @@ pub fn reconcile_pointer_arguments(results: &mut [FuncResult]) {
         if edits.is_empty() {
             continue;
         }
+        if let Some(detail) = result.detail.as_mut() {
+            detail.cast_tree_arguments(original, &edits);
+        }
         let applied = pointerargs::apply(original, &edits);
         if applied.code != original {
             if let Some(detail) = result.detail.as_mut().filter(|d| d.tokens_error.is_none()) {
@@ -281,6 +284,11 @@ pub struct DecompileOptions {
     /// returns its results ([`decompile_targets_with`]) reconciles them itself;
     /// a pulled caller owns that step.
     pub want_pointer_arguments: bool,
+    /// Export the C syntax tree of the printed text ([`FuncDetail::ctree`] in
+    /// [`FuncResult::detail`]); implies the provenance render.
+    ///
+    /// [`FuncDetail::ctree`]: crate::inspect::FuncDetail::ctree
+    pub want_ctree: bool,
 }
 
 /// Decompile each `(name, entry)` target in turn against the already-loaded
@@ -311,6 +319,7 @@ pub fn decompile_targets(
         single_target: targets.len() == 1,
         want_tokens: false,
         want_pointer_arguments: false,
+        want_ctree: false,
     };
     decompile_batch(prog, targets, &opts, &mut |_| {})
 }
@@ -364,6 +373,7 @@ pub fn export_options(single_target: bool) -> DecompileOptions {
         single_target,
         want_tokens: false,
         want_pointer_arguments: true,
+        want_ctree: false,
     }
 }
 
@@ -691,6 +701,7 @@ pub fn decompile_pulled(
         single_target,
         want_tokens,
         want_pointer_arguments,
+        want_ctree,
         ..
     } = *opts;
     prog.arch_mut().unlace_float_scan_batch = !single_target;
@@ -1074,7 +1085,16 @@ pub fn decompile_pulled(
                     // Trim the surrounding newlines the same way `unlace decompile`
                     // does (`decompile.rs::trim_newlines`), so the per-function
                     // `code` is byte-identical to the single-shot path.
-                    let (untrimmed, provenance, raw_tokens) = if want_tokens {
+                    let mut tree_render = None;
+                    let (untrimmed, provenance, raw_tokens) = if want_ctree {
+                        let (text, provenance, tokens, render) =
+                            unlace_decomp::decompile_drive::print_c_with_ctree(
+                                prog.arch_mut(),
+                                &fd,
+                            );
+                        tree_render = Some(render);
+                        (text, provenance, tokens)
+                    } else if want_tokens {
                         print_c_with_srcmap(prog.arch_mut(), &fd)
                     } else if want_provenance {
                         let (text, provenance) = print_c_with_provenance(prog.arch_mut(), &fd);
@@ -1149,6 +1169,20 @@ pub fn decompile_pulled(
                             &variables,
                         ))
                     });
+                    let detail = match tree_render {
+                        Some(render) => {
+                            let mut detail = detail.unwrap_or_default();
+                            detail.ctree = Some(render.tree(&raw_tokens, &untrimmed, &code).map(
+                                |mut tree| {
+                                    let output = |address| prog.output_code_offset(address);
+                                    tree.root.map_addresses(&output);
+                                    tree
+                                },
+                            ));
+                            Some(detail)
+                        }
+                        None => detail,
+                    };
                     for variable in &mut variables {
                         for address in &mut variable.addresses {
                             *address = prog.output_code_offset(*address);

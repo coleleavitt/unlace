@@ -1117,6 +1117,10 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
                 record_flag = Some("--no-vars");
                 forwarded.push(a.into());
             }
+            "--ctree" => {
+                record_flag = Some("--ctree");
+                forwarded.push(a.into());
+            }
             "--omit" => {
                 let value = take_value(argv, &mut i, "--omit")?;
                 decompile_all::Omit::default().add(&value)?;
@@ -1373,7 +1377,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
 
 fn usage() {
     eprintln!(
-        "usage: unlace decompile <binary> <name|0xaddr> [--addr] [--json] [--raw] [--regions] [--trace] [--cfg-dot] \\\n\
+        "usage: unlace decompile <binary> <name|0xaddr> [--addr] [--json] [--ctree] [--raw] [--regions] [--trace] [--cfg-dot] \\\n\
          \x20                     [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
          \x20                     [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] \\\n\
          \x20                     [--option N V].. [--kassert ARGS].. \\\n\
@@ -1398,6 +1402,9 @@ fn usage() {
          pass reached and the facts settled there (`phase status`); stdout is unchanged.\n\
          --cfg-dot prints the function's basic-block graph as Graphviz DOT on stdout\n\
          instead of the C (pipe it to `dot -Tsvg`); it is refused with --json.\n\
+         --ctree (with --json) adds the C syntax tree of the code to the record:\n\
+         `ctree`, its statements and expressions as nested nodes with kind, operands,\n\
+         type, line span and addresses, and `ctree_error`, set when it has no tree.\n\
          \n\
          --apply-rust-signatures PATH trusts an explicit hashed Rust signature manifest;\n\
          only a complete unique profile and both-bank name/address agreement propose names.\n\
@@ -1554,6 +1561,7 @@ fn run_in_process(req: &SingleRequest) -> i32 {
                     &Default::default(),
                     &declared,
                     args.omit,
+                    args.extra,
                 )
             } else {
                 String::new()
@@ -1642,6 +1650,7 @@ fn decompile_one(
             &interior,
             &declared,
             args.omit,
+            args.extra,
         )
     } else {
         funcs

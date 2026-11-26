@@ -7677,10 +7677,16 @@ at a direct, unlocked, non-variadic CALL is an argument when all of these hold:
   the call or block start before it, is SysV's vector-register count (`xor
   %eax,%eax`), and a variadic callee may state an optional tail register it saves
   (gnulib `open_safer(char const *,int,...)` saves only `rdx`);
-- the calling function is not variadic itself: its entry block does not read that
-  return-only register before writing it or calling anything (`test %al,%al`). Its
-  own recovery would read every register its prologue saves, and one argument
-  supplied here is enough to tip the saved tail into its list;
+- the calling function is not variadic itself: its entry block does not read the
+  least significant byte of that return-only register, where the count lives,
+  before writing it or calling anything (`test %al,%al`). Its own recovery would
+  read every register its prologue saves, and one argument supplied here is
+  enough to tip the saved tail into its list. gcc's `sete %al; ...; or
+  %edx,%eax` reads the upper bytes of an `eax` whose `al` the function wrote
+  itself, and reads no count (coreutils ls's dirs-first comparators open that
+  way, and a whole-register test took them for variadic and left them without
+  any claim; by default, across coreutils 9.11 at gcc -O2, the three copies of
+  `rev_xstrcoll_df_version` now pass `filevercmp` its second argument);
 - the callee's read of `R` is for something other than a **variadic tail**
   (`varargtail.rs`). A stated parameter whose value, through
   value-preserving operations (copies, phis, width changes, a mask by a
@@ -8451,6 +8457,30 @@ the storage is a single register and every own RETURN passes
   of it (a `mov %eax,g(%rip)` lifts to a COPY into the global's varnode and
   counts as one), a CALLOTHER or BRANCHIND reading it, or another call while
   it sits in an argument register refuses.
+
+An own RETURN that hands back a constant needs no test (`returns_constant`):
+climbing its single-predecessor chain through the copies and extensions that
+carry the register (`RAX = zext(EAX)`), the last write is a COPY of a constant,
+and no op on the way reads the register, as `mov $1,%eax; mov %eax,g(%rip);
+ret` would to store it. That is a comparator's `return -1;` beside `return
+strcmp(..);`. The first condition still holds it to the callee's width, and a
+COPY of a constant counts as the bytes its value needs, so AArch64's `mov
+w0,#-1`, which lifts to `x0 = 0xffffffff`, is four bytes. Where the RETURN's
+block is a join that the register passes through untouched and no call sits
+in (`climb_starts`), both climbs start at the end of each predecessor instead,
+reading that block's branch toward the join as their first step up, and every
+path must pass. gcc gives coreutils ls's dirs-first comparators one `ret` for
+`mov $-1,%eax` and for the `sub %edx,%eax; jne` of `1 - is_dir(a)`: the first
+path returns its constant, the second the difference it tested on the way to
+`jmp strcmp`, so `strcmp_df_name` returns `int` and `return -1;` where it
+printed `unsigned long` and `return 0xffffffff;`
+(`tests/stages/mixedtailret-shared-ret.toml`). Over the 103 programs of
+coreutils 9.11 built by gcc -O2 for x86-64 (20,531 functions), the option on
+changes 93 functions beyond the three the default changes (the vararg-count
+read under `passthrough` above): 90 signatures, every one `unsigned long` to `int` where DWARF says
+`int` (the 30 dirs-first comparators in each of `ls`, `dir` and `vdir`), and
+three `target_directory_operand`s whose `AT_FDCWD` prints `return -100;` where
+it printed `return 0xffffff9c;`; none is DWARF `void`.
 
 The last two turn away some of what a `void` function leaves in its return
 register, not all of it. A first version of the rule had only the first

@@ -24,13 +24,14 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::error::{UnlaceError, UnlaceResult};
-use unlace_base::marshal::{Decoder, Encoder};
+use unlace_base::marshal::{Decoder, Encoder, PackedDecode};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::Wrap;
 use unlace_num::opcodes::{OpcodeDecoder, OpcodeEncoder};
 use unlace_num::pcoderaw::VarnodeData;
 
 use crate::context::{FixedHandle, Token};
+use crate::lazysla::{LazySubtable, SlaSource, SlaStream};
 use crate::semantics::{ConstTpl, ConstType, ConstructTpl, VarnodeTpl};
 use crate::slghpatexpress::{
     ConstantValue, ContextField, EndInstructionValue, EqId, EquationArena, Next2InstructionValue,
@@ -812,6 +813,10 @@ pub struct SubtableSymbol {
     beingbuilt: bool,
     /// (unlace build side) C++ `bool errors`.
     errors: bool,
+    /// (unlace) The table as its `.sla` bytes when it was loaded lazily
+    /// (`crate::lazysla`): `construct` and `decisiontree` stay empty and
+    /// every read goes through it.
+    lazy: Option<LazySubtable>,
 }
 
 impl SubtableSymbol {
@@ -846,15 +851,34 @@ impl SubtableSymbol {
     /// C++ `SubtableSymbol::getNumConstructors` (`size_t` returned as
     /// `int4`).
     pub fn get_num_constructors(&self) -> i32 {
-        self.construct.len() as i32 // size_t -> int4 as in C++
+        match &self.lazy {
+            Some(lazy) => lazy.num_constructors(),
+            None => self.construct.len() as i32, // size_t -> int4 as in C++
+        }
     }
 
     /// C++ `SubtableSymbol::getConstructor(uintm id)` — unchecked vector
     /// indexing in C++ (UB out of range); an error here.
     #[inline]
     pub fn get_constructor(&self, id: u32) -> UnlaceResult<&Constructor> {
+        if let Some(lazy) = &self.lazy {
+            return lazy.constructor(id);
+        }
         self.construct.get(id as usize).ok_or_else(|| {
             UnlaceError::sleigh("constructor id out of range (C++ indexes unchecked)")
+        })
+    }
+
+    /// (unlace) Does any constructor commit context (`ContextChange::Commit`)?
+    /// A lazily loaded table answers from its load scan, without decoding.
+    pub fn has_context_commits(&self) -> bool {
+        if let Some(lazy) = &self.lazy {
+            return lazy.has_commits();
+        }
+        self.construct.iter().any(|ct| {
+            ct.get_context_changes()
+                .iter()
+                .any(|c| matches!(c, ContextChange::Commit(_)))
         })
     }
 
@@ -870,7 +894,9 @@ impl SubtableSymbol {
         self.construct.get_mut(id as usize)
     }
 
-    /// The decoded decision tree (None for an undecoded shell).
+    /// The decision tree of a built or eagerly decoded table (None for an
+    /// undecoded shell, and for a lazily loaded table, whose tree is walked
+    /// through [`Self::resolve_matched`]).
     pub fn get_decision_tree(&self) -> Option<&DecisionNode> {
         self.decisiontree.as_ref()
     }
@@ -889,6 +915,9 @@ impl SubtableSymbol {
         &self,
         walker: &(impl SymbolWalker + ?Sized),
     ) -> UnlaceResult<&(DisjointPattern, u32)> {
+        if let Some(lazy) = &self.lazy {
+            return lazy.resolve_matched(walker);
+        }
         let tree = self
             .decisiontree
             .as_ref()
@@ -3298,21 +3327,24 @@ impl SleighSymbol {
                 encoder.close_element(&sla::ELEM_NEXT2_SYM);
             }
             SymbolKind::Subtable(v) => {
-                if v.decisiontree.is_none() {
+                // A lazily loaded table is decoded whole here, for this encode.
+                let (construct, decisiontree): (Vec<&Constructor>, Option<DecisionNode>) =
+                    match &v.lazy {
+                        Some(lazy) => (lazy.constructors()?, lazy.decision_tree()?),
+                        None => (v.construct.iter().collect(), None),
+                    };
+                let Some(decisiontree) = decisiontree.as_ref().or(v.decisiontree.as_ref()) else {
                     return Ok(()); // Not fully formed
-                }
+                };
                 encoder.open_element(&sla::ELEM_SUBTABLE_SYM);
                 encoder.write_unsigned_integer(&sla::ATTRIB_ID, u64::from(self.id));
                 // C++ writeSignedInteger(ATTRIB_NUMCT, construct.size()):
                 // size_t -> intb
-                encoder.write_signed_integer(&sla::ATTRIB_NUMCT, v.construct.len() as i64);
-                for ct in &v.construct {
+                encoder.write_signed_integer(&sla::ATTRIB_NUMCT, construct.len() as i64);
+                for ct in construct {
                     ct.encode(encoder, templates)?;
                 }
-                v.decisiontree
-                    .as_ref()
-                    .expect("checked above")
-                    .encode(encoder);
+                decisiontree.encode(encoder);
                 encoder.close_element(&sla::ELEM_SUBTABLE_SYM);
             }
             // SleighSymbol::encode base: not directly encodable
@@ -4453,6 +4485,73 @@ impl SymbolTable {
         decoder: &mut dyn OpcodeDecoder,
         trans: &mut dyn SleighBaseTrans,
     ) -> UnlaceResult<()> {
+        let el = self.decode_scopes_and_headers(decoder)?;
+        // Now decode the symbol content
+        self.decode_contents(decoder, trans)?;
+        decoder.close_element(el)?;
+        Ok(())
+    }
+
+    /// (unlace) [`Self::decode`] for a lazy load (`crate::lazysla`): `decoder`
+    /// holds the stream up to the symbol contents; the contents come from
+    /// `stream`, whose subtables are kept as bytes and whose other symbols are
+    /// decoded now. Returns the shared source the subtables decode from.
+    pub fn decode_lazy(
+        &mut self,
+        decoder: &mut dyn OpcodeDecoder,
+        stream: SlaStream,
+        trans: &mut dyn SleighBaseTrans,
+    ) -> UnlaceResult<Rc<SlaSource>> {
+        self.decode_scopes_and_headers(decoder)?;
+        let (source, subtables, rest) = stream.scan_contents(trans.get_constant_space())?;
+        for (id, lazy) in subtables {
+            match &mut self
+                .symbollist
+                .get_mut(id as usize)
+                .and_then(|slot| slot.as_mut())
+                .ok_or_else(|| {
+                    UnlaceError::decoder(format!(
+                        "symbol content references undefined id {id} (C++ dereferences unchecked)"
+                    ))
+                })?
+                .kind
+            {
+                SymbolKind::Subtable(v) => v.lazy = Some(lazy),
+                _ => {
+                    return Err(UnlaceError::decoder(format!(
+                        "subtable content for symbol {id}, which is not a subtable"
+                    )));
+                }
+            }
+        }
+        if !rest.is_empty() {
+            let mut contents = PackedDecode::new(decoder.get_addr_space_manager());
+            contents.ingest_owned(rest)?;
+            self.decode_contents(&mut contents, trans)?;
+        }
+        Ok(source)
+    }
+
+    /// The symbol-content loop of C++ `SymbolTable::decode`: every element up
+    /// to the end of the stream or the enclosing close.
+    fn decode_contents(
+        &mut self,
+        decoder: &mut dyn OpcodeDecoder,
+        trans: &mut dyn SleighBaseTrans,
+    ) -> UnlaceResult<()> {
+        while decoder.peek_element()? != 0 {
+            decoder.open_element()?;
+            let id = decoder.read_unsigned_integer_id(&sla::ATTRIB_ID)? as u32; // C++ implicit uintb -> uintm
+            // C++ findSymbol(id)->decode(...): unchecked symbollist[id]
+            self.decode_symbol_content(decoder, trans, id)?;
+            // Tag closed by the per-kind decode
+        }
+        Ok(())
+    }
+
+    /// The first half of C++ `SymbolTable::decode`: the `<symbol_table>`
+    /// element (returned open), its scopes and the symbol headers.
+    fn decode_scopes_and_headers(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<u32> {
         let el = decoder.open_element_id(&sla::ELEM_SYMBOL_TABLE)?;
         let table_size = decoder.read_signed_integer_id(&sla::ATTRIB_SCOPESIZE)?;
         let symbol_size = decoder.read_signed_integer_id(&sla::ATTRIB_SYMBOLSIZE)?;
@@ -4512,16 +4611,7 @@ impl SymbolTable {
         for _ in 0..self.symbollist.len() {
             self.decode_symbol_header(decoder)?;
         }
-        // Now decode the symbol content
-        while decoder.peek_element()? != 0 {
-            decoder.open_element()?;
-            let id = decoder.read_unsigned_integer_id(&sla::ATTRIB_ID)? as u32; // C++ implicit uintb -> uintm
-            // C++ findSymbol(id)->decode(...): unchecked symbollist[id]
-            self.decode_symbol_content(decoder, trans, id)?;
-            // Tag closed by the per-kind decode
-        }
-        decoder.close_element(el)?;
-        Ok(())
+        Ok(el)
     }
 
     /// C++ `SymbolTable::decodeSymbolHeader`: put the shell of a symbol in

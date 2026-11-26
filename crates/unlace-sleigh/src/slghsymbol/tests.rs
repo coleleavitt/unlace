@@ -1,6 +1,8 @@
 use unlace_base::marshal::{PackedDecode, PackedEncode};
 use unlace_base::space::{AddrSpaceManager, ConstantSpace, addrspace_flags};
 
+use crate::lazysla::{SlaSource, SlaStream};
+use crate::semantics::ConstructTpl;
 use crate::slghpatexpress::TokenField;
 use crate::slghpattern::{InstructionPattern, PatternBlock};
 
@@ -754,6 +756,144 @@ fn full_table_decode_and_reencode_roundtrip() {
         table.encode(&mut enc, &[]).unwrap();
     }
     assert_eq!(reenc, buf);
+}
+
+/// The hand-built table inside a `<sleigh>` element, as a lazy load sees it.
+fn decode_full_table_lazily(manager: &AddrSpaceManager) -> (SymbolTable, Rc<SlaSource>) {
+    let mut buf = Vec::new();
+    PackedEncode::new(&mut buf).open_element(&sla::ELEM_SLEIGH);
+    buf.extend_from_slice(&encode_full_table(manager));
+    PackedEncode::new(&mut buf).close_element(&sla::ELEM_SLEIGH);
+    let stream = SlaStream::new(buf).unwrap();
+    let mut dec = PackedDecode::new(manager);
+    stream.ingest_prefix(&mut dec).unwrap();
+    dec.open_element_id(&sla::ELEM_SLEIGH).unwrap();
+    let mut table = SymbolTable::new();
+    let source = table
+        .decode_lazy(&mut dec, stream, &mut TestTrans::new(manager))
+        .unwrap();
+    (table, source)
+}
+
+#[test]
+fn lazy_decode_reads_the_same_table_as_the_eager_one() {
+    let manager = test_manager();
+    let (eager, buf) = decode_full_table(&manager);
+    let (lazy, source) = decode_full_table_lazily(&manager);
+    assert_eq!(source.num_templates(), 0);
+    assert_eq!(lazy.num_scopes(), eager.num_scopes());
+    assert_eq!(lazy.num_symbols(), eager.num_symbols());
+    for id in 0..eager.num_symbols() as u32 {
+        let (e, l) = (eager.symbol(id).unwrap(), lazy.symbol(id).unwrap());
+        assert_eq!(l.get_name(), e.get_name());
+        match (e.kind(), l.kind()) {
+            (SymbolKind::Subtable(e), SymbolKind::Subtable(l)) => {
+                assert_eq!(l.get_num_constructors(), e.get_num_constructors());
+                assert!(l.get_decision_tree().is_none());
+                for ct in 0..e.get_num_constructors() as u32 {
+                    assert_eq!(
+                        format!("{:?}", l.get_constructor(ct).unwrap()),
+                        format!("{:?}", e.get_constructor(ct).unwrap())
+                    );
+                }
+                assert!(l.get_constructor(2).is_err());
+            }
+            _ => assert_eq!(format!("{l:?}"), format!("{e:?}")),
+        }
+    }
+    let inst = lazy.find_global_symbol(b"instruction").unwrap();
+    for (byte, expect) in [(0x00, Some(0)), (0x80, Some(1))] {
+        let mut walker = TestWalker::from_bytes(&[byte, 0, 0, 0]);
+        walker.addr = Some(Address::new(ram(&manager), 0x1000));
+        assert_eq!(inst.resolve(&walker).unwrap(), expect);
+    }
+    let mut walker = TestWalker::from_bytes(&[0xc0, 0, 0, 0]);
+    walker.addr = Some(Address::new(ram(&manager), 0x1000));
+    let err = inst.resolve(&walker).expect_err("must fail to resolve");
+    assert!(format!("{err}").contains("Unable to resolve constructor"));
+    // Encoding decodes the rest and reproduces the stream.
+    let mut reenc = Vec::new();
+    lazy.encode(&mut PackedEncode::new(&mut reenc), &[])
+        .unwrap();
+    assert_eq!(reenc, buf);
+}
+
+#[test]
+fn lazy_constructor_templates_decode_on_first_use() {
+    let manager = test_manager();
+    let mut tpl = ConstructTpl::new();
+    tpl.set_num_labels(3);
+    let mut buf = Vec::new();
+    {
+        let mut enc = PackedEncode::new(&mut buf);
+        enc.open_element(&sla::ELEM_SLEIGH);
+        enc.open_element(&sla::ELEM_SYMBOL_TABLE);
+        enc.write_signed_integer(&sla::ATTRIB_SCOPESIZE, 1);
+        enc.write_signed_integer(&sla::ATTRIB_SYMBOLSIZE, 1);
+        enc.open_element(&sla::ELEM_SCOPE);
+        enc.write_unsigned_integer(&sla::ATTRIB_ID, 0);
+        enc.write_unsigned_integer(&sla::ATTRIB_PARENT, 0);
+        enc.close_element(&sla::ELEM_SCOPE);
+        enc.open_element(&sla::ELEM_SUBTABLE_SYM_HEAD);
+        enc.write_string(&sla::ATTRIB_NAME, b"instruction");
+        enc.write_unsigned_integer(&sla::ATTRIB_ID, 0);
+        enc.write_unsigned_integer(&sla::ATTRIB_SCOPE, 0);
+        enc.close_element(&sla::ELEM_SUBTABLE_SYM_HEAD);
+        enc.open_element(&sla::ELEM_SUBTABLE_SYM);
+        enc.write_unsigned_integer(&sla::ATTRIB_ID, 0);
+        enc.write_signed_integer(&sla::ATTRIB_NUMCT, 1);
+        enc.open_element(&sla::ELEM_CONSTRUCTOR);
+        enc.write_unsigned_integer(&sla::ATTRIB_PARENT, 0);
+        enc.write_signed_integer(&sla::ATTRIB_FIRST, -1);
+        enc.write_signed_integer(&sla::ATTRIB_LENGTH, 1);
+        enc.write_signed_integer(&sla::ATTRIB_SOURCE, 0);
+        enc.write_signed_integer(&sla::ATTRIB_LINE, 5);
+        enc.open_element(&sla::ELEM_PRINT);
+        enc.write_string(&sla::ATTRIB_PIECE, b"nop");
+        enc.close_element(&sla::ELEM_PRINT);
+        tpl.encode(&mut enc, 2);
+        tpl.encode(&mut enc, -1);
+        enc.close_element(&sla::ELEM_CONSTRUCTOR);
+        enc.open_element(&sla::ELEM_DECISION);
+        enc.write_signed_integer(&sla::ATTRIB_NUMBER, 1);
+        enc.write_bool(&sla::ATTRIB_CONTEXT, false);
+        enc.write_signed_integer(&sla::ATTRIB_STARTBIT, 0);
+        enc.write_signed_integer(&sla::ATTRIB_SIZE, 0);
+        enc.open_element(&sla::ELEM_PAIR);
+        enc.write_signed_integer(&sla::ATTRIB_ID, 0);
+        InstructionPattern::new_always(true).encode(&mut enc);
+        enc.close_element(&sla::ELEM_PAIR);
+        enc.close_element(&sla::ELEM_DECISION);
+        enc.close_element(&sla::ELEM_SUBTABLE_SYM);
+        enc.close_element(&sla::ELEM_SYMBOL_TABLE);
+        enc.close_element(&sla::ELEM_SLEIGH);
+    }
+    let stream = SlaStream::new(buf).unwrap();
+    let mut dec = PackedDecode::new(&manager);
+    stream.ingest_prefix(&mut dec).unwrap();
+    dec.open_element_id(&sla::ELEM_SLEIGH).unwrap();
+    let mut table = SymbolTable::new();
+    let source = table
+        .decode_lazy(&mut dec, stream, &mut TestTrans::new(&manager))
+        .unwrap();
+    assert_eq!(source.num_templates(), 2);
+    let SymbolKind::Subtable(sub) = table.symbol(0).unwrap().kind() else {
+        panic!("expected subtable");
+    };
+    assert!(!sub.has_context_commits());
+    // The slots fill when the constructor is decoded, not before.
+    assert!(source.template_delay_slot(0).is_err());
+    let ct = sub.get_constructor(0).unwrap();
+    assert_eq!(ct.get_templ(), Some(1));
+    assert_eq!(ct.get_named_templ(2), Some(0));
+    assert_eq!(source.template_delay_slot(1).unwrap(), 0);
+    for handle in [0, 1] {
+        assert_eq!(source.template(handle, &manager).unwrap().num_labels(), 3);
+    }
+    assert!(source.template(2, &manager).is_err());
+    let mut walker = TestWalker::from_bytes(&[0x00, 0, 0, 0]);
+    walker.addr = Some(Address::new(ram(&manager), 0x1000));
+    assert_eq!(table.symbol(0).unwrap().resolve(&walker).unwrap(), Some(0));
 }
 
 #[test]

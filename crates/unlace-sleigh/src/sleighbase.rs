@@ -26,12 +26,12 @@ use unlace_num::opcodes::{OpcodeDecoder, OpcodeEncoder};
 
 use unlace_num::pcoderaw::VarnodeData;
 
-use crate::lazytemplates::{self, LazyTemplates};
+use crate::lazysla::{SlaSource, SlaStream};
 use crate::semantics::ConstructTpl;
 use crate::slaformat as sla;
 use crate::slghpatexpress::PatternValue;
 use crate::slghsymbol::{
-    ConstructTplHandle, ContextChange, SleighBaseTrans, SleighSymbol, SymbolKind, SymbolTable,
+    ConstructTplHandle, SleighBaseTrans, SleighSymbol, SubtableSymbol, SymbolKind, SymbolTable,
     SymbolType,
 };
 use crate::translate::{TranslateBase, storage_from_varnode_data};
@@ -155,9 +155,9 @@ pub struct SleighBase {
     pub(crate) symtab: SymbolTable,
     /// Backing store for `ConstructTpl` (the `ConstructTplHandle` index space).
     pub(crate) templates: Vec<ConstructTpl>,
-    /// (unlace) The template store of a lazily decoded `.sla`; when it is not
-    /// empty it holds the handle space instead of `templates`.
-    lazy_templates: LazyTemplates,
+    /// (unlace) The source of a lazily decoded `.sla` (`crate::lazysla`); when
+    /// set it holds the template handle space instead of `templates`.
+    lazy: Option<Rc<SlaSource>>,
     /// C++ `maxdelayslotbytes`.
     pub(crate) maxdelayslotbytes: u32,
     /// C++ `unique_allocatemask`.
@@ -180,7 +180,7 @@ impl SleighBase {
             root: None,
             symtab: SymbolTable::new(),
             templates: Vec::new(),
-            lazy_templates: LazyTemplates::new(),
+            lazy: None,
             maxdelayslotbytes: 0,
             unique_allocatemask: 0,
             num_sections: 0,
@@ -434,6 +434,59 @@ impl SleighBase {
         decoder: &mut dyn OpcodeDecoder,
         register_context: impl FnMut(&[u8], i32, i32) -> UnlaceResult<()>,
     ) -> UnlaceResult<()> {
+        let el = self.decode_prefix(decoder)?;
+        // SymbolTable::decode needs the SleighBaseTrans boundary disjoint from the
+        // &mut symtab borrow.  Move the symtab and templates out, decode, and
+        // restore (the constant space is cloned out of the manager first).
+        let const_space = self.constant_space_rc()?;
+        let mut symtab = std::mem::take(&mut self.symtab);
+        let mut templates = std::mem::take(&mut self.templates);
+        let mut trans = TemplateDecoder {
+            const_space,
+            templates: &mut templates,
+        };
+        let decode_res = symtab.decode(decoder, &mut trans);
+        self.symtab = symtab;
+        self.templates = templates;
+        decode_res?;
+        decoder.close_element(el)?;
+        self.finish_decode(register_context)
+    }
+
+    /// (unlace) [`Self::decode`] for a lazy load (`crate::lazysla`): `decoder`
+    /// holds the stream up to the symbol contents; the subtables stay in
+    /// `stream` as bytes and are decoded on first use.
+    pub fn decode_lazy(
+        &mut self,
+        decoder: &mut dyn OpcodeDecoder,
+        stream: SlaStream,
+        register_context: impl FnMut(&[u8], i32, i32) -> UnlaceResult<()>,
+    ) -> UnlaceResult<()> {
+        self.decode_prefix(decoder)?;
+        let const_space = self.constant_space_rc()?;
+        let mut symtab = std::mem::take(&mut self.symtab);
+        // Only the constant space is used: no constructor is decoded at load.
+        let mut trans = TemplateDecoder {
+            const_space,
+            templates: &mut Vec::new(),
+        };
+        let decode_res = symtab.decode_lazy(decoder, stream, &mut trans);
+        self.symtab = symtab;
+        self.lazy = Some(decode_res?);
+        self.finish_decode(register_context)
+    }
+
+    /// The constant space, cloned out of the manager.
+    fn constant_space_rc(&self) -> UnlaceResult<Rc<AddrSpace>> {
+        self.manager
+            .get_constant_space()
+            .cloned()
+            .ok_or_else(|| UnlaceError::sleigh("constant space not registered"))
+    }
+
+    /// The `<sleigh>` element (returned open), its attributes, source files
+    /// and spaces: everything before the symbol table.
+    fn decode_prefix(&mut self, decoder: &mut dyn OpcodeDecoder) -> UnlaceResult<u32> {
         self.maxdelayslotbytes = 0;
         self.unique_allocatemask = 0;
         self.num_sections = 0;
@@ -466,37 +519,15 @@ impl SleighBase {
         let big_end = self.base.is_big_endian();
         self.indexer.decode(decoder)?;
         self.decode_sla_spaces(decoder, big_end)?;
+        Ok(el)
+    }
 
-        // SymbolTable::decode needs the SleighBaseTrans boundary disjoint from the
-        // &mut symtab borrow.  Move the symtab and templates out, decode, and
-        // restore (the constant space is cloned out of the manager first).
-        let const_space = self
-            .manager
-            .get_constant_space()
-            .cloned()
-            .ok_or_else(|| UnlaceError::sleigh("constant space not registered"))?;
-        let mut symtab = std::mem::take(&mut self.symtab);
-        let mut templates = std::mem::take(&mut self.templates);
-        let mut lazy = LazyTemplates::new();
-        let decode_res = if lazytemplates::lazy_enabled() {
-            let mut trans = LazyTemplateDecoder {
-                const_space,
-                templates: &mut lazy,
-            };
-            symtab.decode(decoder, &mut trans)
-        } else {
-            let mut trans = TemplateDecoder {
-                const_space,
-                templates: &mut templates,
-            };
-            symtab.decode(decoder, &mut trans)
-        };
-        self.symtab = symtab;
-        self.templates = templates;
-        self.lazy_templates = lazy;
-        decode_res?;
-
-        decoder.close_element(el)?;
+    /// The tail of C++ `SleighBase::decode` after the symbol table: the root
+    /// table and the cross-references.
+    fn finish_decode(
+        &mut self,
+        register_context: impl FnMut(&[u8], i32, i32) -> UnlaceResult<()>,
+    ) -> UnlaceResult<()> {
         self.root = self
             .symtab
             .get_global_scope()
@@ -596,11 +627,24 @@ impl SleighBase {
         self.manager
             .get_constant_space()
             .ok_or_else(|| UnlaceError::sleigh("constant space not registered"))?;
-        if self.lazy_templates.is_empty() {
-            self.symtab.encode(encoder, &self.templates)?;
-        } else {
-            let templates = self.lazy_templates.all(&self.manager)?;
-            self.symtab.encode(encoder, &templates)?;
+        match &self.lazy {
+            None => self.symtab.encode(encoder, &self.templates)?,
+            Some(source) => {
+                // Every constructor must be decoded before its templates can be.
+                for id in 0..self.symtab.num_symbols() {
+                    if let Some(sub) = self
+                        .symtab
+                        .find_symbol_by_id(id as u32) // cast: symbol id, `symbollist` is indexed by uintm
+                        .and_then(SleighSymbol::as_subtable)
+                    {
+                        for ct in 0..sub.get_num_constructors() {
+                            sub.get_constructor(ct as u32)?; // cast: constructor id, C++ `uintm`
+                        }
+                    }
+                }
+                let templates = source.all_templates(&self.manager)?;
+                self.symtab.encode(encoder, &templates)?;
+            }
         }
 
         encoder.close_element(&sla::ELEM_SLEIGH);
@@ -777,26 +821,6 @@ impl SleighBaseTrans for TemplateDecoder<'_> {
     }
 }
 
-/// (unlace) [`TemplateDecoder`] for a lazily decoded `.sla`
-/// (`unlace_lazytemplates`): keeps each template's bytes for its first use.
-struct LazyTemplateDecoder<'a> {
-    const_space: Rc<AddrSpace>,
-    templates: &'a mut LazyTemplates,
-}
-
-impl SleighBaseTrans for LazyTemplateDecoder<'_> {
-    fn get_constant_space(&self) -> Rc<AddrSpace> {
-        Rc::clone(&self.const_space)
-    }
-
-    fn decode_construct_tpl(
-        &mut self,
-        decoder: &mut dyn OpcodeDecoder,
-    ) -> UnlaceResult<(i32, ConstructTplHandle)> {
-        self.templates.take(decoder)
-    }
-}
-
 impl SleighBase {
     /// Convenience: the manager owning the spaces (for the engine).
     pub fn manager(&self) -> &AddrSpaceManager {
@@ -863,24 +887,24 @@ impl SleighBase {
     }
 
     /// (unlace) The template behind `handle`, from either store; a lazily decoded
-    /// one is decoded on its first use (`unlace_lazytemplates`).
+    /// one is decoded on its first use (`crate::lazysla`).
     pub fn template(&self, handle: ConstructTplHandle) -> UnlaceResult<&ConstructTpl> {
-        if self.lazy_templates.is_empty() {
-            return self
+        match &self.lazy {
+            Some(source) => source.template(handle, &self.manager),
+            None => self
                 .templates
                 .get(handle)
-                .ok_or_else(|| UnlaceError::sleigh("bad ConstructTpl handle"));
+                .ok_or_else(|| UnlaceError::sleigh("bad ConstructTpl handle")),
         }
-        self.lazy_templates.get(handle, &self.manager)
     }
 
     /// (unlace) The delay-slot count of the template behind `handle`, without
     /// decoding a lazy one.
     pub fn template_delay_slot(&self, handle: ConstructTplHandle) -> UnlaceResult<u32> {
-        if self.lazy_templates.is_empty() {
-            return self.template(handle).map(ConstructTpl::delay_slot);
+        match &self.lazy {
+            Some(source) => source.template_delay_slot(handle),
+            None => self.template(handle).map(ConstructTpl::delay_slot),
         }
-        self.lazy_templates.delay_slot(handle)
     }
 
     /// Mutable access to an arena-owned template by its handle.
@@ -933,27 +957,12 @@ impl SleighBase {
     /// answer `false`; ARM, MIPS, PowerPC, PA-RISC, PIC, M16C and 16-bit x86
     /// (its real-mode code segment) answer `true`.
     pub fn has_context_commits(&self) -> bool {
-        for id in 0..self.symtab.num_symbols() {
-            let Some(sym) = self.symtab.find_symbol_by_id(id as u32) else {
-                continue; // cast: symbol id, `symbollist` is indexed by uintm
-            };
-            let Some(sub) = sym.as_subtable() else {
-                continue;
-            };
-            for i in 0..sub.get_num_constructors() {
-                let Ok(ct) = sub.get_constructor(i as u32) else {
-                    continue; // cast: constructor id, C++ `uintm`
-                };
-                if ct
-                    .get_context_changes()
-                    .iter()
-                    .any(|c| matches!(c, ContextChange::Commit(_)))
-                {
-                    return true;
-                }
-            }
-        }
-        false
+        (0..self.symtab.num_symbols()).any(|id| {
+            self.symtab
+                .find_symbol_by_id(id as u32) // cast: symbol id, `symbollist` is indexed by uintm
+                .and_then(SleighSymbol::as_subtable)
+                .is_some_and(SubtableSymbol::has_context_commits)
+        })
     }
 
     /// Bump the maximum delay-slot byte count (C++ `maxdelayslotbytes`).

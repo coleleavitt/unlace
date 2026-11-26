@@ -10,6 +10,11 @@
 # reads reach, and one per guarded range a later read sees on top of its
 # stack, 51,311 fewer ops for the same live IR and body. The fixture's
 # source and provenance are beside it.
+#
+# The counts are measured with option stackguard off: gather's canary
+# check runs through the 65 calls' INDIRECTs, which the P7 strip has
+# followed since its walk reached depth 256, and stripping it moves the
+# op counts these heritage assertions compare.
 
 [image]
 arch = 'x86:LE:64:default:gcc'
@@ -19,6 +24,7 @@ commands = [
     'clear architecture',
     'load file crates/unlace-analysis/tests/fixtures/loadguardreads_x86_64',
     'read symbols',
+    'option stackguard off',
     'load function gather',
     'decompile',
     'print C',

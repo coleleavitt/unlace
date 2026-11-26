@@ -2353,14 +2353,13 @@ classified:
   13 passes now take 15 s in all.
 
   Taking the matching piece of a PIECE, or a SUBPIECE whose input the value
-  overlaps, costs no level, but only for up to 64 such steps in a row
-  (`FREE_STEPS`); the 65th costs a level. Valid SSA has no cycle through
-  PIECE and SUBPIECE alone, so no real chain reaches the cap, but on IR with
-  such a cycle the free steps no longer recurse until the native stack
-  overflows. Internally the walk counts a budget of `FREE_STEPS + 1` units per
-  level, a free step costing one unit and a level step dropping to the top of
-  the next level; a smaller budget reaches no state a larger one does not, so
-  the memo's level bound compares budgets.
+  overlaps, costs no level, however long the chain: heritage joins of a wide
+  struct build PIECE chains of one step per field. Only these steps keep the
+  level, so reaching a Varnode, offset and level already on the path is a
+  cycle through PIECE and SUBPIECE alone. Valid SSA has none; on IR with one
+  (the random graphs of the memo tests) the revisit ends that path with no
+  use, bounded, instead of recursing until the native stack overflows. The
+  revisit walks nothing the first visit does not, so the answer is unchanged.
 
   *(unlace decompile-all watchdog)* Every `ancestor_op_use` step and every step
   of an `only_op_use` walk also probes the drive's budget through

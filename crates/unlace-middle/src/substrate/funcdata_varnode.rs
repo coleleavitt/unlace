@@ -2850,16 +2850,8 @@ impl Funcdata {
             call_result_root: (self.hooks().callresultuse_scores_trial)(self, invn, op),
             ..AncestorMemo::default()
         };
-        self.ancestor_op_use_in(
-            &mut memo,
-            level_budget(maxlevel),
-            invn,
-            op,
-            trial,
-            offset,
-            main_flags,
-        )
-        .is_used()
+        self.ancestor_op_use_in(&mut memo, maxlevel, invn, op, trial, offset, main_flags)
+            .is_used()
     }
 
     /// [`ancestor_op_use`](Self::ancestor_op_use), or with `every_path` the
@@ -2882,15 +2874,7 @@ impl Funcdata {
             ..AncestorMemo::default()
         };
         let used = self
-            .ancestor_op_use_in(
-                &mut memo,
-                level_budget(maxlevel),
-                invn,
-                op,
-                trial,
-                offset,
-                main_flags,
-            )
+            .ancestor_op_use_in(&mut memo, maxlevel, invn, op, trial, offset, main_flags)
             .is_used();
         (used, memo.steps)
     }
@@ -2902,28 +2886,58 @@ impl Funcdata {
     fn ancestor_op_use_in(
         &mut self,
         memo: &mut AncestorMemo,
-        budget: int4,
+        maxlevel: int4,
         invn: VarnodeId,
         op: OpId,
         trial: &mut crate::fspec::ParamTrial,
         offset: int4,
         main_flags: unlace_base::types::uint4,
     ) -> Ancestry {
-        if budget <= FREE_STEPS || crate::budget::budget_probe() {
+        if maxlevel == 0 || crate::budget::budget_probe() {
             return Ancestry::Unused {
                 cut: 0,
                 bounded: true,
             };
         }
         let key = memo.key(invn, offset, main_flags);
-        if let Some(found) = key.and_then(|k| memo.recall(self, k, budget)) {
+        if let Some(found) = key.and_then(|k| memo.recall(self, k, maxlevel)) {
             return found;
         }
         memo.steps += 1;
-        let found = self.ancestor_op_step(memo, budget, invn, op, trial, offset, main_flags);
+        let found = self.ancestor_op_step(memo, maxlevel, invn, op, trial, offset, main_flags);
         if let Some(k) = key {
-            memo.remember(k, budget, found);
+            memo.remember(k, maxlevel, found);
         }
+        found
+    }
+
+    /// A PIECE or SUBPIECE step of [`ancestor_op_use`](Self::ancestor_op_use),
+    /// which costs no level. Only these steps keep the level, so a state already
+    /// on the path at the same level is a cycle through them alone: valid SSA has
+    /// none, and on IR with one the revisit ends the path instead of recursing
+    /// until the native stack overflows. The revisit walks nothing the first
+    /// visit does not, so the answer is the full walk's.
+    #[allow(clippy::too_many_arguments)]
+    fn ancestor_free_step(
+        &mut self,
+        memo: &mut AncestorMemo,
+        maxlevel: int4,
+        invn: VarnodeId,
+        op: OpId,
+        trial: &mut crate::fspec::ParamTrial,
+        offset: int4,
+        main_flags: unlace_base::types::uint4,
+    ) -> Ancestry {
+        let state = (invn, offset, maxlevel);
+        if memo.free_path.contains(&state) {
+            return Ancestry::Unused {
+                cut: 0,
+                bounded: true,
+            };
+        }
+        memo.free_path.push(state);
+        let found = self.ancestor_op_use_in(memo, maxlevel, invn, op, trial, offset, main_flags);
+        memo.free_path.pop();
         found
     }
 
@@ -2933,7 +2947,7 @@ impl Funcdata {
     fn ancestor_op_step(
         &mut self,
         memo: &mut AncestorMemo,
-        budget: int4,
+        maxlevel: int4,
         invn: VarnodeId,
         op: OpId,
         trial: &mut crate::fspec::ParamTrial,
@@ -3005,7 +3019,7 @@ impl Funcdata {
                 if let Some(in0) = in0 {
                     return self.ancestor_op_use_in(
                         memo,
-                        next_level(budget),
+                        maxlevel - 1,
                         in0,
                         op,
                         trial,
@@ -3035,7 +3049,7 @@ impl Funcdata {
                     if let Some(ink) = ink {
                         match self.ancestor_op_use_in(
                             memo,
-                            next_level(budget),
+                            maxlevel - 1,
                             ink,
                             op,
                             trial,
@@ -3087,7 +3101,7 @@ impl Funcdata {
                     if let Some(in0) = in0 {
                         return self.ancestor_op_use_in(
                             memo,
-                            next_level(budget),
+                            maxlevel - 1,
                             in0,
                             op,
                             trial,
@@ -3100,8 +3114,7 @@ impl Funcdata {
             }
             OpCode::CPUI_PIECE => {
                 // (unlace) Selecting a piece of a PIECE, or the matching
-                // SUBPIECE of a whole below, costs no level (up to `FREE_STEPS` in
-                // a row): heritage joins a
+                // SUBPIECE of a whole below, costs no level: heritage joins a
                 // narrow write into a wider tracked range as PIECE(SUBPIECE(..),
                 // new) chains, and an AArch64 `faddp s0, v0.2s` after a 128-bit
                 // write left the returned lane six steps down, past
@@ -3113,30 +3126,16 @@ impl Funcdata {
                     .unwrap_or(0);
                 if offset == 0 {
                     if let Some(in1) = in1 {
-                        return self.ancestor_op_use_in(
-                            memo,
-                            budget - 1,
-                            in1,
-                            op,
-                            trial,
-                            0,
-                            main_flags,
-                        );
+                        return self
+                            .ancestor_free_step(memo, maxlevel, in1, op, trial, 0, main_flags);
                     }
                     return Ancestry::NONE;
                 }
                 if offset == in1_size {
                     let in0 = self.obank().get(def).and_then(|o| o.get_in(0));
                     if let Some(in0) = in0 {
-                        return self.ancestor_op_use_in(
-                            memo,
-                            budget - 1,
-                            in0,
-                            op,
-                            trial,
-                            0,
-                            main_flags,
-                        );
+                        return self
+                            .ancestor_free_step(memo, maxlevel, in0, op, trial, 0, main_flags);
                     }
                 }
                 Ancestry::NONE
@@ -3197,9 +3196,9 @@ impl Funcdata {
                     .unwrap_or(false);
                 if space_internal || incidental || in0_incid || overlap_match {
                     if let Some(in0) = in0 {
-                        return self.ancestor_op_use_in(
+                        return self.ancestor_free_step(
                             memo,
-                            budget - 1,
+                            maxlevel,
                             in0,
                             op,
                             trial,
@@ -3223,29 +3222,6 @@ impl Funcdata {
 // ===========================================================================
 // (unlace) The no-use memo of one ancestor_op_use call
 // ===========================================================================
-
-/// The PIECE and SUBPIECE steps of [`Funcdata::ancestor_op_use`] that may run in
-/// a row without costing a level. Valid SSA has no cycle through them alone, so
-/// a real chain is far shorter; the cap keeps the walk finite on IR that has one.
-const FREE_STEPS: int4 = 64;
-
-/// The step budget of `maxlevel` levels: a level is `FREE_STEPS + 1` budget
-/// units, and the low part counts the free steps left before the next level is
-/// charged. A free step costs one unit, a level step drops to the top of the next
-/// level, and a budget of at most `FREE_STEPS` (level 0) ends the walk. A lower
-/// budget reaches no state a higher one does not, so the memo's level bound
-/// compares budgets as it compared levels.
-fn level_budget(maxlevel: int4) -> int4 {
-    maxlevel
-        .max(0)
-        .saturating_mul(FREE_STEPS + 1)
-        .saturating_add(FREE_STEPS)
-}
-
-/// The budget after a step that costs a level.
-fn next_level(budget: int4) -> int4 {
-    (budget / (FREE_STEPS + 1) - 1) * (FREE_STEPS + 1) + FREE_STEPS
-}
 
 /// What one [`Funcdata::ancestor_op_use`] step found above a Varnode.
 #[derive(Clone, Copy)]
@@ -3273,8 +3249,8 @@ impl Ancestry {
     }
 }
 
-/// A recorded no-use answer: it holds at every step budget up to `bound` (any
-/// budget when `None`) while every MULTIEQUAL in `cut` is marked.
+/// A recorded no-use answer: it holds at every `maxlevel` up to `bound` (any
+/// level when `None`) while every MULTIEQUAL in `cut` is marked.
 struct UnusedAbove {
     bound: Option<int4>,
     cut: smallvec::SmallVec<[OpId; 4]>,
@@ -3298,6 +3274,9 @@ type AncestorKey = (VarnodeId, int4, uint4);
 struct AncestorMemo {
     /// The MULTIEQUALs marked on the current path, outermost first.
     path: Vec<OpId>,
+    /// The Varnode, offset and level of each PIECE or SUBPIECE step on the
+    /// current path.
+    free_path: Vec<(VarnodeId, int4, int4)>,
     /// (unlace) `callresultuse`: the trial's root is a call result on every
     /// path, so a CALL output or creation ends a path as a use.
     call_result_root: bool,

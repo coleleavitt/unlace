@@ -1,4 +1,4 @@
-# SLEIGH load cost: every load re-decodes the spec (2026-11-25)
+# SLEIGH load cost: every load re-decodes the spec (2026-11-25, updated 2026-11-26)
 
 ## Project
 unlace is a decompiler in Rust (a port of Ghidra's decompiler), a ~30-crate cargo workspace.
@@ -113,6 +113,54 @@ so the profile is from callgrind (instruction counts, not time).
 - nextest runs every test in its own process, so an in-process cache only helps when one
   process loads more than once (cargo test, the `unlace` library, decompile-all, the harness).
   Each spawned `unlace` would still decode once.
+
+## Status after #1530-#1532 (2026-11-26)
+
+Three changes landed:
+- #1530 decodes constructors, their templates and decision nodes on first use (candidate 2 below).
+- #1531 reads one `.ldefs` per load, and keeps an uncompressed copy of every cached `.sla` of
+  2 MiB or more (candidate 3, and the inflate).
+- #1532 removed an allocation per comparison in `avxintrin::intrinsic_sized`, which engine setup
+  calls for every AVX user-op (7,268 calls, 117 M instructions before).
+
+Same benchmark, same host (load average about 8), median of 3; "before" is the engine before #1530:
+
+| Mode | before | after |
+|---|---|---|
+| `spawn`: start `unlace decompile` per function | 127.6 ms | 71.2 ms |
+| `inproc-fresh`: `Decompiler::open` + decompile per function | 103.7 ms | 52.6 ms |
+| `raw-fresh`: load + decompile a 5-byte x86-64 blob | 101.2 ms | 41.3 ms |
+| `inproc-shared`: load once, decompile each function | 6.8 ms | 4.3 ms |
+| callgrind instructions, `raw-fresh`, one load | 1,505 M | 530 M |
+
+Where the 530 M instructions go now (inclusive, recursive functions counted once):
+
+| Share | What |
+|---|---|
+| 28% | contents of the non-subtable symbols (operand, value, varnode symbols; `decode_expression` alone 13%) |
+| 22% | symbol headers and scopes (`decode_symbol_header`, name-map inserts) |
+| 21% | the flat walk over the subtable bytes (`SlaStream::scan_contents`, `Scan::skip_element_with`) |
+| 9% | `Architecture::init_post_engine`, of which AVX intrinsic naming is 6% |
+| 6% | the decompile itself |
+| 4% | parsing the `.pspec`/`.cspec` XML (`xml_tree`) |
+| 2% | reading the uncompressed `.sla` copy |
+
+What is left, with its cost:
+- **The walk (21%)** has to look at every byte, because the packed format stores no lengths.
+  The uncompressed copy is unlace's own file, so it could also store the byte ranges the walk
+  records, and a load would skip the walk. Medium-sized change; the cached copy gets a second
+  part that must stay in step with the stream.
+- **Operand symbols on first use (28%).** About 40 call sites read `OperandSymbol` fields
+  directly; they would have to go through a decode-on-first-read accessor. Large change.
+- **Symbol headers (22%)** are what name lookups use, so they cannot simply be skipped.
+- **AVX naming at setup (6%)** is front-loaded on purpose: the masked user-op names must be
+  registered before printing. Making it lazy changes the user-op registry.
+- **A flat cache (rkyv) or tables compiled into the binary** would replace all of the decode
+  (73% of what is left) and is the only way to get a load near 1 ms. It means changing the
+  types the SLEIGH runtime reads, in every user of `SymbolTable`, `Constructor` and
+  `DecisionNode`.
+
+A process start is about 20 ms of the 71 ms per `unlace` spawn.
 
 ## Candidate fixes (to evaluate)
 Ordered by measured share of a load.

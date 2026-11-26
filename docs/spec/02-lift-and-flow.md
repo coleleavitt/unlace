@@ -2420,6 +2420,10 @@ dropped and the arguments cut to the table's count:
   a Mach trap (`mach_msg_trap`, `task_self_trap`);
 - ARM `svc #0` uses the Linux EABI numbering.
 
+The same table also sets how many argument registers `syscallregs` makes the call
+read, written or not, while they reach it unchanged; with `syscallnames off` the
+call reads only the registers the function wrote, as before this option existed.
+
 `tools/gen_syscall_tables.py` generates the four tables. The Linux numbers come
 from the uapi `unistd` headers. The Darwin BSD numbers come from the `SYS_*`
 macros of IDA 9.5's XNU 12377 type library. The Mach traps and their argument

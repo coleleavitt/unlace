@@ -102,6 +102,7 @@ b0402de90050a0e10370a0e31100a0e30510a0e10420a0e3000000ef0040a0e1
 
 [script]
 commands = [
+    'option syscallnames off',
     'map addr r0x100100 int sink',
     'option syscallregs on',
     'lo fu pair',

@@ -245,7 +245,9 @@ flag, and exit 1 instead of spinning on.
 *The JSON documents* under `decompile-all`), and takes the same record
 selection: `--no-vars` and `--omit aliases,line_mappings,variables,types` behave as they
 do there. Without `--json` both are refused, since the C text carries none of
-those collections.
+those collections. `--tokens` and `--storage` add the token source map and each
+variable's storage to that record, as they do there, and are refused without
+`--json` too; `unlace map` (below) answers span and address questions from the two.
 
 `--cfg-dot` replaces the C on stdout with the function's basic-block graph as Graphviz DOT
 (`digraph`, one node per basic block labelled with its index and address range, one edge
@@ -2452,6 +2454,96 @@ scoring. `--no-vars` leaves `variables` empty but still emits function line mapp
 the empty array is indistinguishable from a function with no variables, which is
 what `--omit variables` below is for.
 
+**`--tokens`** (`decompile-all --json` and `decompile --json`) adds the token
+source map of `code` to every record: `tokens` and `tokens_error`, the records the
+browser's study view ships (`docs/web-integration.md`), from the same code
+(`unlace_console::inspect::FuncDetail`). The default document is unchanged; the
+flag is opt-in because of the map's size: with it the document of a whole binary
+is 3.5 to 7.4 times as long (six fixtures).
+`tokens` lists every token of `code` in reading order as
+`{line,col,len,kind,color,text}`: `line` is 1-based, `col` and `len` are in UTF-16
+code units, and `text` is exactly the `len` units of that line at `col`. Every
+code unit of `code` that no token covers is a space, so the tokens of a line
+joined with their gaps rebuild it. `kind` is `syntax`, `variable`, `value`,
+`op`, `funcname`, `type`, `field`, `comment` or `label`, and `color` the
+printer's highlight class. A token carries more where it stands for something:
+`address` and `address_hex`, the instruction it came from (the same addresses
+`line_mappings` holds for its line); `callee` and `callee_hex`, the entry of the
+function a call's name refers to; `var`, the index of the variable's row in this
+record's `variables` (absent under `--omit variables`); `decl`, where a
+declaration token sits (`function`, `return`, `param`, `local`); `type`, the type
+a type token spells; `global` and `global_hex`, the address of the global data a
+token names. `tokens_error` is `null` when `tokens` is the map; when the map
+does not rebuild `code` exactly, `tokens` is `[]` and `tokens_error` says why, so
+a drifted map is never shipped. A record without `code` has `[]` and `null`.
+The casts a whole-binary C run adds after the render, to a scalar address passed
+where the callee declares a character pointer, are in the map as a `(`, a `type`
+token and a `)`. A `--jobs N` worker's record does not carry the map, so
+`--tokens` with `--jobs` above 1 exits 2 and names `--jobs 1`. Over 1,389 ELF,
+PE and Mach-O fixtures of the repository (37,977 function bodies), every map
+rebuilds its code and `code` is identical with and without the flag; a run
+executes 1.1-2.4% more instructions with it.
+
+```bash
+unlace decompile ./sample.elf sum_to --json --tokens
+#   "code": "long sum_to(int n)\n{\n  long acc; // stack - 0x10\n ...",
+#   "tokens": [
+#     {"line": 1, "col": 0, "len": 4, "kind": "type", "color": "type", "text": "long",
+#      "decl": "return", "type": "long"},
+#     {"line": 1, "col": 5, "len": 6, "kind": "funcname", "color": "funcname",
+#      "text": "sum_to", "decl": "function"},
+#     ...
+#     {"line": 8, "col": 4, "len": 3, "kind": "variable", "color": "var", "text": "acc",
+#      "address": 4482, "address_hex": "0x1182", "var": 3},
+#     ...],
+#   "tokens_error": null
+```
+
+**`--storage`** (`decompile-all --json` and `decompile --json`) adds a `storage`
+list to every variable row: where the variable lives in the machine, and when.
+It is opt-in for the same reason: with it the document of a whole binary grows by
+46-103% (73% over six fixtures) and the run executes 0.8-2.5% more instructions;
+without it the document and the cost are what they were. Each entry is one piece of
+storage, `{space,register,offset,size,ranges}`: `space` is the address space's
+name (`register`, `stack`, `ram`, ...); `register` is the name of the register
+the piece is, lower case, and `null` outside the register space; `offset` is the
+signed frame offset of a stack piece (the stack pointer at the function's entry
+is 0, as for `stack_offset`), the address of a `ram` piece, and the register's
+offset in the register space otherwise; `size` is in bytes. `ranges` lists the
+instruction address ranges `{start,end}` (`end` not included, sorted, disjoint)
+in which that piece holds the variable: on entry to every instruction in them
+the variable is live (written before, read there or later) and the piece still
+has its value on every path there. A register stops holding a variable at the
+next instruction that writes it, whether or not that write shows in the C, and
+at a call whose convention does not preserve it; a variable that is in its frame
+slot and loaded into a register is in both until one of them changes. A row's
+declared home (a parameter's register or stack slot, a frame row's slot) is
+always listed, with empty `ranges` when no instruction has the variable live in
+it, as for a parameter the function never reads. Locations inside the declared
+home (an element of an array, a field of a structure) count as the home. The
+pieces are in `space`, `offset`, `size` order. The rows are the `variables` rows,
+so `--no-vars` and `--omit variables` leave nothing to carry them; a parameter
+and the frame slot it is spilled to are two rows of one name, and each lists its
+own declared home and the pieces the variable's instances give. `--jobs N`
+carries the list unchanged. It describes the decompiler's variable, which is not
+always the source's: where the compiler keeps one source variable in a frame slot
+and in a register, the C can have two variables for it. The algorithm, its
+limits and its measured agreement with DWARF location lists are in
+`docs/spec/06-variables-and-merge.md` ("Variable storage").
+
+```bash
+unlace decompile ./sample.elf sum_to --json --storage
+#   int i; // eax | stack - 0x14        for (i = 1; i <= n; i = i + 1) { acc += i; }
+#   {"name": "i", "type": "int", "kind": "stack", "stack_offset": -20, "size": 4, ...,
+#    "storage": [
+#      {"space": "register", "register": "eax", "offset": 0, "size": 4,
+#       "ranges": [{"start": 4477, "end": 4490}, {"start": 4493, "end": 4498}]},
+#      {"space": "stack", "register": null, "offset": -20, "size": 4,
+#       "ranges": [{"start": 4475, "end": 4498}]}]}
+#   0x117d loads i into eax, and eax is i until the increment at 0x1186 has run;
+#   0x118a reloads it, so eax is i again from 0x118d to the end of the loop test.
+```
+
 **`--omit KEY[,KEY]...`** (repeatable, `decompile-all --json` and
 `decompile --json`) leaves whole collections out of every record, for a caller
 that wants the function's identity, `code` and `error` and not the rest. The keys
@@ -2992,6 +3084,77 @@ apply to `unlace functions` — which never spawns a pool — exactly as they do
   sides of an A/B, or a function that finishes just inside the budget on one
   side and misses it on the other will move the document for reasons that have
   nothing to do with the lanes.
+
+## `unlace map` — which instructions a span came from, and what an address printed
+
+```bash
+unlace map ./a.out main --line 12                 # the instructions line 12 came from
+unlace map ./a.out main --span 12:5-14:20         # the same for a span of the text
+unlace map ./a.out main --addr 0x401020           # the text that instruction printed,
+                                                  # and the variables live there
+unlace map ./a.out 0x401000 --addr 0x401020 --json
+```
+
+One function is decompiled over its own load, exactly as `unlace decompile <binary>
+<func> --json --tokens --storage` decompiles it, and one question about its output
+is answered from that record (`crates/unlace-cli/src/map.rs`). The function is a
+name, or an address when it starts with `0x`, as for `unlace decompile`. Exactly one
+of the three queries is given:
+
+- `--line N`: the addresses of the instructions that line `N` of the code came from,
+  one `0x` address per line, ascending. Lines count from 1.
+- `--span L1:C1-L2:C2`: the same for the text from line `L1` column `C1` up to, not
+  including, line `L2` column `C2`. Columns count from 0 in UTF-16 code units, the
+  coordinates of the token map, so a token's span is `line:col-line:(col+len)`. The
+  answer is the instructions of every token the span touches; `--line N` is
+  `--span N:0-(N+1):0`.
+- `--addr 0xADDR`: the runs of text that came from the instruction at `ADDR`, one
+  `span L:C-L:C<TAB>text` line per run (tokens of that instruction next to each other
+  on one line are one run), then the variables live on entry to that instruction, one
+  `var NAME<TAB>TYPE<TAB>storage` line each. The storage is the pieces of the
+  variable's `storage` whose ranges hold the address, as `eax(4)`, `stack-0x14(4)`
+  or `ram:0x4010(8)`: the place and its size in bytes. A parameter and the frame slot
+  it is spilled to answer as one variable. An address inside the function that no
+  token names prints no span, which is the answer for an instruction whose effect
+  the C shows nowhere (a `push`, a register move that was folded away); its live
+  variables are still listed.
+
+The lines and columns index the text of this decompile, so give `map` the flags the
+text was made with: `--language`, `--mode`, `--option NAME VALUE`, `--define-function`,
+`--assert` (and `--assert-strict`), `--project`, `--types`, `--types-cpp`, `--isa`,
+`--slice`, `--target`, `--sleighpath`, `--raw-image --base`, `--max-fn-seconds` and
+`--max-fn-memory` mean what they mean on `unlace decompile`, and so do `--image`,
+`--follow-images` and `--member`. A whole-binary `decompile-all` can print a function
+differently from the one-function decompile `map` runs (the pointer-argument casts,
+callee-first prototypes); ask about the text `unlace decompile` prints, or read the
+`code` of the `--json` answer.
+
+```bash
+unlace decompile ./sample.elf sum_to | cat -n
+#      7	  for (i = 1; i <= n; i = i + 1) {
+#      8	    acc += i;
+unlace map ./sample.elf sum_to --line 8
+#   0x1180
+#   0x1182
+unlace map ./sample.elf sum_to --addr 0x1182
+#   span 8:4-8:10	acc +=
+#   var n	int	edi(4), stack-0x1c(4)
+#   var i	int	eax(4), stack-0x14(4)
+#   var acc	long	stack-0x10(8)
+```
+
+`--json` prints one document instead:
+`{binary,function:{name,address,address_hex},query,code,error}` plus the answer.
+`query` repeats the question as `{start:{line,col},end:{line,col}}` or
+`{address,address_hex}`; `code` is the text the places index. A `--line` or `--span`
+answer adds `addresses` and `addresses_hex`; an `--addr` answer adds
+`spans: [{start:{line,col},end:{line,col},text}]` and
+`variables: [{name,type,kind,storage:[{space,register,offset,size}]}]`, the rows and
+pieces of *The JSON documents* above without their ranges. `error` is `null` on
+success. A function that does not exist, one that fails to decompile, and one whose
+token map does not rebuild its code (`tokens_error`) exit 1 with the reason on
+stderr and, under `--json`, in `error`, with `function` and `code` `null` when there
+is no function to name. A missing or doubled query and a malformed span exit 2.
 
 ## `unlace xrefs` — cross-references
 

@@ -4255,6 +4255,18 @@ impl Funcdata {
         })
     }
 
+    /// The address ranges basic block `bl`'s instructions were read from, in
+    /// address order (C++ `BlockBasic::cover`): each ends at the address of its
+    /// last instruction.
+    pub fn bb_ranges(&self, bl: BlockId) -> impl Iterator<Item = &unlace_base::address::Range> {
+        match self.bblocks.block(bl).kind() {
+            BlockKind::Basic(b) => Some(b.cover.iter()),
+            _ => None,
+        }
+        .into_iter()
+        .flatten()
+    }
+
     /// Iterate the ops of basic block `bl` in list order (head..tail).
     pub fn bb_ops(&self, bl: BlockId) -> Vec<OpId> {
         let mut out = Vec::with_capacity(self.bb_op_len(bl));

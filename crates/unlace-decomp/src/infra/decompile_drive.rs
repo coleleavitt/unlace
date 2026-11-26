@@ -4,6 +4,7 @@
 //! and printer, following upstream `IfcDecompile` and `IfcPrintC`.
 
 mod varrefs;
+pub mod varstorage;
 
 use crate::elfmaindecl::FuncdataElfmaindeclExt;
 use crate::inputhints::FuncdataInputhintsExt;
@@ -4122,6 +4123,7 @@ pub fn extract_variables(arch: &Architecture, fd: &Funcdata) -> Vec<VarInfo> {
             line_numbers: Vec::new(),
             addresses: Vec::new(),
             split_piece: false,
+            storage: Vec::new(),
         });
         arg_pos += 1;
     }
@@ -4161,6 +4163,7 @@ pub fn extract_variables(arch: &Architecture, fd: &Funcdata) -> Vec<VarInfo> {
                 line_numbers: Vec::new(),
                 addresses: Vec::new(),
                 split_piece: false,
+                storage: Vec::new(),
             });
         }
     }
@@ -4242,6 +4245,7 @@ pub fn extract_variables(arch: &Architecture, fd: &Funcdata) -> Vec<VarInfo> {
             line_numbers: Vec::new(),
             addresses: Vec::new(),
             split_piece: false,
+            storage: Vec::new(),
         });
     }
     let typed = type_filler_slots_from_stores(arch, fd, &mut out, first_slot, &declared);

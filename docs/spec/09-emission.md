@@ -2278,6 +2278,54 @@ key's whole 64-bit form (`crates/unlace-emit/src/p9_emit/printlanguage.rs
 browser build — a `usize` would drop the key's version half and every reference
 resolved from it would dangle.
 
+**The token map on the command line** (unlace). `unlace decompile --json --tokens`
+and `unlace decompile-all --json --tokens` add `tokens` and `tokens_error` to
+every record. They are the browser study view's records: the flag sets
+`DecompileOptions::want_tokens`, the one request both front ends make, and
+`crates/unlace-cli/src/decompile_all/tokenmap.rs (fields)` writes what
+`crates/unlace-console/src/inspect.rs (FuncDetail::resolve)` returned, with a
+token's `global` address from `crates/unlace-console/src/project.rs
+(FuncResult::token_global)`, which the wasm serializer calls too. The flag is
+opt-in: without it no capture runs and the document is byte for byte what it
+was; with it a whole-binary run executes 1.1-2.4% more instructions (four
+x86-64 fixtures of 13 to 400 functions, user mode, one pinned core) and its
+document is 3.5 to 7.4 times as long. A `--jobs` worker's
+record has no place for the map, so `--tokens` with more than one job is an
+argument error.
+
+A whole-binary C run edits `code` once more after the render: where a callee
+declares a character pointer and a call passes a scalar address,
+`project.rs (reconcile_pointer_arguments)` inserts a cast at the argument. The
+map used to be withheld for such a function. It now follows the edit:
+`srcmap.rs (insert_casts)` adds a `(`, a `type` token and a `)` at each cast
+that was applied, the kinds the printer gives a cast of its own, and moves the
+later tokens of that line right by the cast's length;
+`inspect.rs (FuncDetail::insert_casts)` keeps the per-token global references
+aligned and runs `verify` against the edited text, so the map still ships only
+when it rebuilds `code` exactly. Over 1,389 ELF, PE and Mach-O fixtures of the
+repository, decompiled whole through the CLI, all 37,977 function bodies
+verify, and `code` is identical with and without the flag;
+`crates/unlace-cli/tests/tokens_cli.rs` holds the same checks as the
+console-path test over seven of them in C and Rust.
+
+`unlace map` (`crates/unlace-cli/src/map.rs`) asks the map two questions about
+one function, which it decompiles as `unlace decompile --json --tokens
+--storage` does. A span of the text maps to the set of `address` values of the
+tokens it touches: a token on `line` covers the half-open column range
+`[col, col + len)`, places are ordered by line and then column, and a token
+is touched when it starts before the span's end and ends after its start, so
+`--line N` is the span from `N:0` to `(N + 1):0`. An instruction address maps
+back to the runs of text that came from it: tokens with that `address` that
+follow one another on one line form one run, from the first one's start to the
+last one's end. The same answer lists the variables live at the address: every
+variable with a `storage` piece (`docs/spec/06-variables-and-merge.md`,
+"Variable storage") one of whose ranges holds it, with those pieces; the two
+rows a parameter and its spill slot have under one name answer as one variable.
+The `unlace` crate's `unstable::mapping` module
+(`crates/unlace/src/unstable/mapping.rs`) offers the same three queries as typed
+calls, through `crates/unlace-cli/src/embed/mapping.rs` and so through the same
+functions.
+
 **Literal format.** The remaining P9/`literal-format` knobs all act at the
 constant/type-name chokepoints of this walk: `option integerformat`
 (hex/dec/best — "best" scores which base makes the constant's digit pattern

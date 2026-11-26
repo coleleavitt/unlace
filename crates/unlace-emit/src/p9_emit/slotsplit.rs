@@ -114,6 +114,7 @@ fn piece(row: &VarInfo, off: i64, size: i64, type_name: String) -> VarInfo {
         line_numbers: Vec::new(),
         addresses: Vec::new(),
         split_piece: false,
+        storage: Vec::new(),
     }
 }
 

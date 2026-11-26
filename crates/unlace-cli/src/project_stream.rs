@@ -1027,6 +1027,7 @@ fn export(
         // every function of the export.
         single_target: false,
         want_tokens: false,
+        want_storage: false,
         want_pointer_arguments: false,
     };
 

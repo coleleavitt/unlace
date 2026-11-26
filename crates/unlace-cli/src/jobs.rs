@@ -178,6 +178,8 @@ pub(crate) struct PoolConfig<'a> {
     pub(crate) no_vars: bool,
     pub(crate) want_proto: bool,
     pub(crate) want_provenance: bool,
+    /// Ask each worker for every variable's storage (`--storage`).
+    pub(crate) want_storage: bool,
     /// Ask each worker for its rendered user-defined type definitions — the
     /// `decompile-project` `.h` block, which is a whole-program artifact built
     /// after the loop from types the loop itself interns.
@@ -1199,6 +1201,9 @@ impl Worker {
         }
         if cfg.want_provenance {
             cmd.arg("--jobs-provenance");
+        }
+        if cfg.want_storage {
+            cmd.arg("--jobs-storage");
         }
         if cfg.want_types {
             cmd.arg("--jobs-types");

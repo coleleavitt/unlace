@@ -213,6 +213,91 @@ pub fn resolve(
         .collect()
 }
 
+/// Follow the pointer-argument casts a batch inserts after the render
+/// ([`crate::pointerargs::apply`]) into the token map of `code`, the text
+/// before they went in: each cast is a `(`, its type and a `)` at its site,
+/// and the tokens after it on that line move right by its length. `casts` are
+/// the insertions made, in position order. Returns the index of each cast's
+/// `(` in the new list; [`verify`] against the edited text decides whether the
+/// result ships.
+pub fn insert_casts(
+    tokens: &mut Vec<CodeToken>,
+    code: &str,
+    casts: &[crate::pointerargs::Insertion],
+) -> Vec<usize> {
+    let lines: Vec<&str> = code.split('\n').collect();
+    let column = |cast: &crate::pointerargs::Insertion| {
+        lines
+            .get(cast.position.line.checked_sub(1)?)?
+            .get(..cast.position.column)
+            .map(|before| before.encode_utf16().count())
+    };
+    let mut pending = casts
+        .iter()
+        .filter_map(|cast| Some((cast.position.line, column(cast)?, cast.spelling.as_str())))
+        .peekable();
+    let mut out = Vec::with_capacity(tokens.len() + 3 * casts.len());
+    let mut inserted = Vec::with_capacity(casts.len());
+    let (mut line, mut shift) = (0, 0);
+    let cast_tokens = |out: &mut Vec<CodeToken>, at: (usize, usize, &str), shift: usize| {
+        let (line, col, spelling) = at;
+        let token = |col: usize, kind: TokenKind, color: SyntaxHighlight, text: &str| CodeToken {
+            line,
+            col,
+            len: text.encode_utf16().count(),
+            kind,
+            color,
+            text: text.to_string(),
+            address: None,
+            callee: None,
+            var: None,
+            decl: None,
+            type_text: (kind == TokenKind::Type).then(|| text.to_string()),
+        };
+        let open = col + shift;
+        let width = spelling.encode_utf16().count();
+        out.push(token(
+            open,
+            TokenKind::Syntax,
+            SyntaxHighlight::NoColor,
+            "(",
+        ));
+        out.push(token(
+            open + 1,
+            TokenKind::Type,
+            SyntaxHighlight::TypeColor,
+            spelling,
+        ));
+        out.push(token(
+            open + 1 + width,
+            TokenKind::Syntax,
+            SyntaxHighlight::NoColor,
+            ")",
+        ));
+        width + 2
+    };
+    for mut token in tokens.drain(..) {
+        while let Some(&at) = pending
+            .peek()
+            .filter(|at| (at.0, at.1) <= (token.line, token.col))
+        {
+            pending.next();
+            if at.0 != line {
+                (line, shift) = (at.0, 0);
+            }
+            inserted.push(out.len());
+            shift += cast_tokens(&mut out, at, shift);
+        }
+        if token.line != line {
+            (line, shift) = (token.line, 0);
+        }
+        token.col += shift;
+        out.push(token);
+    }
+    *tokens = out;
+    inserted
+}
+
 /// How many line breaks `trim_matches('\n')` removes from the front of a render.
 fn leading_breaks(untrimmed: &str) -> usize {
     untrimmed.len() - untrimmed.trim_start_matches('\n').len()

@@ -194,21 +194,7 @@ fn function_json(
                 if let Some(ty) = &t.type_text {
                     o = o.str("type", ty);
                 }
-                let named = detail
-                    .token_globals
-                    .get(i)
-                    .copied()
-                    .flatten()
-                    .and_then(|g| detail.globals.get(g));
-                let minted = || {
-                    let plain = t.kind == unlace_decomp::prettyprint::TokenKind::Variable
-                        && t.var.is_none();
-                    f.globals.iter().find(|g| plain && g.name == t.text)
-                };
-                if let Some(address) = named
-                    .map(|g| g.address)
-                    .or_else(|| minted().map(|g| g.address))
-                {
+                if let Some(address) = f.token_global(i) {
                     o = o.addr("global", address);
                 }
                 o.end()

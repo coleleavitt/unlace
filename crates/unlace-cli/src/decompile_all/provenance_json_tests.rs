@@ -22,6 +22,7 @@ fn function() -> FuncResult {
             line_numbers: vec![3],
             addresses: vec![0x401004],
             split_piece: false,
+            storage: Vec::new(),
         }],
         types: vec![TypeInfo {
             name: "mystruct".into(),
@@ -55,6 +56,7 @@ fn render(omit: Omit) -> serde_json::Value {
         &[],
         &Default::default(),
         omit,
+        Default::default(),
     ));
     serde_json::from_str(&text).unwrap()
 }
@@ -69,6 +71,7 @@ fn result_schema_adds_line_and_variable_provenance() {
         None,
         &[],
         &Default::default(),
+        Default::default(),
         Default::default(),
     ));
     assert!(!rendered.contains("\"omitted\""));
@@ -110,6 +113,7 @@ fn the_written_document_is_the_whole_one() {
             &[],
             &Default::default(),
             omit,
+            Default::default(),
         ));
         assert_eq!(
             render_selected_json(
@@ -122,6 +126,7 @@ fn the_written_document_is_the_whole_one() {
                 &Default::default(),
                 &Default::default(),
                 omit,
+                Default::default(),
             ),
             whole + "\n"
         );
@@ -206,6 +211,7 @@ fn a_record_lists_its_warnings_and_a_failed_one_none() {
         &[],
         &Default::default(),
         Omit::default(),
+        Default::default(),
     ));
     let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
     assert_eq!(
@@ -255,6 +261,7 @@ fn warning_kinds_totals_each_kind_over_the_records() {
         &[],
         &Default::default(),
         Omit::default(),
+        Default::default(),
     ));
     let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
     assert_eq!(
@@ -270,6 +277,7 @@ fn warning_kinds_totals_each_kind_over_the_records() {
         &[],
         &Default::default(),
         Omit::default(),
+        Default::default(),
     ));
     let doc: serde_json::Value = serde_json::from_str(&empty).unwrap();
     assert_eq!(doc["warning_kinds"], serde_json::json!({}));
@@ -292,6 +300,7 @@ fn omitted_aliases_leave_the_record_and_keep_its_identity() {
         &[],
         &Default::default(),
         omit,
+        Default::default(),
     ));
     let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
     assert_eq!(doc["omitted"], serde_json::json!(["aliases"]));

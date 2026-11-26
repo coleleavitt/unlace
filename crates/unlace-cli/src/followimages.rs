@@ -55,7 +55,7 @@ fn address(token: &str) -> Option<u64> {
 /// rewrite a stub address to the function it jumps to.
 pub(crate) fn apply(sub: &str, argv: &mut [String], limit: usize) {
     let through_stubs = match sub {
-        "decompile" | "disassemble" => true,
+        "decompile" | "disassemble" | "map" => true,
         "xrefs" => false,
         _ => return,
     };

@@ -33,6 +33,24 @@ pub(super) fn sample_result() -> FuncResult {
                 line_numbers: vec![3, 4],
                 addresses: vec![0x401004, 0x401008],
                 split_piece: false,
+                // (unlace `--storage`) A register and a negative frame offset
+                // with two ranges, so the codec's storage block is exercised.
+                storage: vec![
+                    unlace_decomp::funcreport::StoragePiece {
+                        space: "register".into(),
+                        register: Some("rdi".into()),
+                        offset: 0x38,
+                        size: 8,
+                        ranges: vec![(0x401000, 0x401008)],
+                    },
+                    unlace_decomp::funcreport::StoragePiece {
+                        space: "stack".into(),
+                        register: None,
+                        offset: -0x18,
+                        size: 8,
+                        ranges: vec![(0x401004, 0x401010), (0x401020, 0x401024)],
+                    },
+                ],
             },
             VarInfo {
                 name: "local_18".into(),
@@ -44,6 +62,7 @@ pub(super) fn sample_result() -> FuncResult {
                 line_numbers: Vec::new(),
                 addresses: Vec::new(),
                 split_piece: false,
+                storage: Vec::new(),
             },
             // (unlace `reglocals`) A local outside the frame: its `kind` is
             // carried by `is_param` and `stack_offset` alone.
@@ -57,6 +76,7 @@ pub(super) fn sample_result() -> FuncResult {
                 line_numbers: vec![5],
                 addresses: vec![0x40100c],
                 split_piece: false,
+                storage: Vec::new(),
             },
         ],
         // (unlace `structdefs`) One recovered type definition, so the frame
@@ -158,6 +178,7 @@ fn same(a: &FuncResult, b: &FuncResult) -> bool {
                 && x.line_numbers == y.line_numbers
                 && x.addresses == y.addresses
                 && x.split_piece == y.split_piece
+                && x.storage == y.storage
         })
 }
 
@@ -311,7 +332,7 @@ fn result_encoding_matches_the_version_twelve_wire_layout() {
         detail: None,
     };
     let expected = [
-        b"UNLACEJOBR12\x01\x55\0\0\0".as_slice(),
+        b"UNLACEJOBR13\x01\x55\0\0\0".as_slice(),
         b"\x10\0\0\0\0\0\0\0\x20\0\0\0\0\0\0\0",
         b"\xff\xff\xff\xff\xff\xff\xff\xff",
         b"\x01\0\0\0f\0\x01\x01\0\0\0e\0\0",
@@ -1051,6 +1072,7 @@ pub(super) fn cfg(max_fn_seconds: u64, load_seconds: f64) -> PoolConfig<'static>
         no_vars: false,
         want_proto: false,
         want_provenance: false,
+        want_storage: false,
         want_types: false,
         want_callee_hints: false,
         want_pointer_arguments: false,

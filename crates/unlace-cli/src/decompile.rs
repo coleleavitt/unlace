@@ -107,7 +107,7 @@ fn defers_fast_funcdisc(target: &str, explicit: bool, options: &[(String, String
     walk_on && !explicit && !placeholder
 }
 
-fn parse_cli_address(value: &str) -> Result<u64, String> {
+pub(crate) fn parse_cli_address(value: &str) -> Result<u64, String> {
     let value = value.trim();
     let digits = value
         .strip_prefix("0x")
@@ -1124,6 +1124,10 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
                 forwarded.push("--omit".into());
                 forwarded.push(value);
             }
+            "--tokens" | "--storage" => {
+                record_flag = Some(a);
+                forwarded.push(a.into());
+            }
             "--raw" => raw = true,
             "--raw-image" => raw_image = true,
             "--base" => base = Some(parse_cli_address(&take_value(argv, &mut i, "--base")?)?),
@@ -1264,7 +1268,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
 
     if json || idb || apply_rust_signatures.is_some() {
         if !json && record_flag.is_some() {
-            return Err("--omit and --no-vars require --json".into());
+            return Err("--omit, --no-vars, --tokens and --storage require --json".into());
         }
         // Refused, not ignored: each of these is a `decomp_dbg` transcript the
         // in-process JSON path never produces, and silently dropping half a
@@ -1375,6 +1379,7 @@ fn usage() {
     eprintln!(
         "usage: unlace decompile <binary> <name|0xaddr> [--addr] [--json] [--raw] [--regions] [--trace] [--cfg-dot] \\\n\
          \x20                     [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
+         \x20                     [--tokens] [--storage] \\\n\
          \x20                     [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] \\\n\
          \x20                     [--option N V].. [--kassert ARGS].. \\\n\
          \x20                     [--define-function S[-E][=N]|@FILE].. \\\n\
@@ -1393,7 +1398,12 @@ fn usage() {
          record collections out (aliases, line_mappings, variables -- with\n\
          stack_objects -- and types) and lists them in a top-level `omitted` array;\n\
          name and address always stay.  --no-vars skips the variable extraction\n\
-         and leaves `variables` empty, as on decompile-all.\n\
+         and leaves `variables` empty, as on decompile-all.  --tokens adds the token\n\
+         source map (`tokens`, `tokens_error`): every token of `code` with its line,\n\
+         column, kind and the instruction, callee or variable it stands for.\n\
+         --storage adds `storage` to every variable: the registers and stack slots\n\
+         that hold it, each with the instruction address ranges in which it does.\n\
+         `unlace map` answers span and address questions from the two.\n\
          --trace prints, on stderr after the C, the maturity the function's last\n\
          pass reached and the facts settled there (`phase status`); stdout is unchanged.\n\
          --cfg-dot prints the function's basic-block graph as Graphviz DOT on stdout\n\
@@ -1459,77 +1469,83 @@ fn usage() {
 
 /// The shared in-process request: output form, selection, and every
 /// flag `decompile-all` also understands.
-struct SingleRequest<'a> {
-    binary: &'a str,
-    json: bool,
-    apply_rust_signatures: Option<&'a str>,
-    target: &'a str,
-    by_address: bool,
+pub(crate) struct SingleRequest<'a> {
+    pub(crate) binary: &'a str,
+    pub(crate) json: bool,
+    pub(crate) apply_rust_signatures: Option<&'a str>,
+    pub(crate) target: &'a str,
+    pub(crate) by_address: bool,
     /// The `--option` / `--language` tokens, in argv order.
-    forwarded: &'a [String],
-    mode: Option<&'a str>,
-    bfd_target: Option<&'a str>,
-    slice: Option<&'a str>,
-    sleighpath: Option<&'a str>,
-    raw_image: bool,
-    base: Option<u64>,
+    pub(crate) forwarded: &'a [String],
+    pub(crate) mode: Option<&'a str>,
+    pub(crate) bfd_target: Option<&'a str>,
+    pub(crate) slice: Option<&'a str>,
+    pub(crate) sleighpath: Option<&'a str>,
+    pub(crate) raw_image: bool,
+    pub(crate) base: Option<u64>,
+}
+
+impl SingleRequest<'_> {
+    /// The request as `decompile-all` arguments.
+    ///
+    /// The selection is expressed as a `decompile-all` argument list and re-parsed by
+    /// [`decompile_all::parse_args`] on purpose: the mode presets, the `--language`
+    /// auto policy, option precedence, the address-selection `fast_funcdisc` default
+    /// and the per-function watchdog budget then all resolve exactly once, in the
+    /// parser that owns them, instead of being re-derived here where they would
+    /// drift.
+    pub(crate) fn args(&self) -> Result<AllArgs, String> {
+        let mut argv: Vec<String> = vec![self.binary.to_string()];
+        if self.json {
+            argv.push("--json".into());
+        }
+        if let Some(path) = self.apply_rust_signatures {
+            argv.extend(["--apply-rust-signatures".into(), path.into()]);
+        }
+        if self.by_address {
+            argv.push("--addr".into());
+            argv.push(if looks_like_addr(self.target) {
+                self.target.to_string()
+            } else {
+                format!("0x{}", self.target)
+            });
+        } else {
+            argv.push("--functions".into());
+            argv.push(self.target.to_string());
+        }
+        if self.raw_image {
+            argv.push("--raw-image".into());
+            argv.push("--base".into());
+            argv.push(format!(
+                "0x{:x}",
+                self.base.expect("raw parser requires --base")
+            ));
+        }
+        argv.extend(self.forwarded.iter().cloned());
+        for (flag, value) in [
+            ("--mode", self.mode),
+            ("--target", self.bfd_target),
+            ("--slice", self.slice),
+            ("--sleighpath", self.sleighpath),
+        ] {
+            if let Some(value) = value {
+                argv.push(flag.into());
+                argv.push(value.to_string());
+            }
+        }
+        let command = if self.apply_rust_signatures.is_some() {
+            "decompile"
+        } else {
+            "decompile-all"
+        };
+        decompile_all::parse_args(&argv, command)
+    }
 }
 
 /// `unlace decompile --json`: `decompile-all`'s in-process load narrowed to the one
 /// selected function, emitted through `decompile-all`'s own serializer.
-///
-/// The selection is expressed as a `decompile-all` argument list and re-parsed by
-/// [`decompile_all::parse_args`] on purpose: the mode presets, the `--language`
-/// auto policy, option precedence, the address-selection `fast_funcdisc` default
-/// and the per-function watchdog budget then all resolve exactly once, in the
-/// parser that owns them, instead of being re-derived here where they would
-/// drift.
 fn run_in_process(req: &SingleRequest) -> i32 {
-    let mut argv: Vec<String> = vec![req.binary.to_string()];
-    if req.json {
-        argv.push("--json".into());
-    }
-    if let Some(path) = req.apply_rust_signatures {
-        argv.extend(["--apply-rust-signatures".into(), path.into()]);
-    }
-    if req.by_address {
-        argv.push("--addr".into());
-        argv.push(if looks_like_addr(req.target) {
-            req.target.to_string()
-        } else {
-            format!("0x{}", req.target)
-        });
-    } else {
-        argv.push("--functions".into());
-        argv.push(req.target.to_string());
-    }
-    if req.raw_image {
-        argv.push("--raw-image".into());
-        argv.push("--base".into());
-        argv.push(format!(
-            "0x{:x}",
-            req.base.expect("raw parser requires --base")
-        ));
-    }
-    argv.extend(req.forwarded.iter().cloned());
-    for (flag, value) in [
-        ("--mode", req.mode),
-        ("--target", req.bfd_target),
-        ("--slice", req.slice),
-        ("--sleighpath", req.sleighpath),
-    ] {
-        if let Some(value) = value {
-            argv.push(flag.into());
-            argv.push(value.to_string());
-        }
-    }
-
-    let command = if req.apply_rust_signatures.is_some() {
-        "decompile"
-    } else {
-        "decompile-all"
-    };
-    let args = match decompile_all::parse_args(&argv, command) {
+    let args = match req.args() {
         Ok(args) => args,
         Err(e) => {
             eprintln!("error: {e}");
@@ -1554,6 +1570,7 @@ fn run_in_process(req: &SingleRequest) -> i32 {
                     &Default::default(),
                     &declared,
                     args.omit,
+                    args.extra,
                 )
             } else {
                 String::new()
@@ -1568,19 +1585,28 @@ fn run_in_process(req: &SingleRequest) -> i32 {
     status
 }
 
-/// Load once, resolve the one selected function, decompile it, and render the
-/// requested text or JSON document.
+/// One selected function decompiled over its own load.
+pub(crate) struct Selected {
+    pub(crate) funcs: Vec<unlace_console::project::FuncResult>,
+    pub(crate) assertions: Vec<unlace_console::assertions::Outcome>,
+    pub(crate) interior: crate::interior::Interiors,
+    pub(crate) declared: crate::funcdecl::Declared,
+    /// Why the run failed: the function's pipeline aborted, or a directive was
+    /// refused. It is the document's run-level `error` too.
+    pub(crate) failure: Option<String>,
+    /// A directive was rejected, which `--assert-strict` makes the verdict.
+    pub(crate) rejected: bool,
+}
+
+/// Load once, resolve the one selected function and decompile it.
 ///
-/// Returns the rendered text plus the failure the caller reports on stderr and exits
-/// `1` on. A function whose pipeline aborted is a failed run here — `decompile`
-/// was asked about exactly that function — so `--json` cannot turn the text
-/// surface's non-zero verdict into a success; the reason is in the document too,
-/// as the record's `error` and as the run-level one. A failure keeps the
+/// A function whose pipeline aborted is a failed run here — the caller asked
+/// about exactly that function. A failure to load or select keeps the
 /// declarations' notes for the document that reports it.
-fn decompile_one(
+pub(crate) fn decompile_selected(
     args: &AllArgs,
     target: &str,
-) -> Result<(String, Option<String>), (String, crate::funcdecl::Declared)> {
+) -> Result<Selected, (String, crate::funcdecl::Declared)> {
     let mut prog = decompile_all::load_program(args, DriverDefaults::Decompile)
         .map_err(|message| (message, Default::default()))?;
     let declared = crate::funcdecl::Declared::of(&prog);
@@ -1632,6 +1658,34 @@ fn decompile_one(
             args.binary
         ));
     }
+    Ok(Selected {
+        funcs,
+        assertions,
+        interior,
+        declared,
+        failure,
+        rejected,
+    })
+}
+
+/// [`decompile_selected`], rendered as the requested text or JSON document.
+///
+/// Returns the rendered text plus the failure the caller reports on stderr and exits
+/// `1` on, so `--json` cannot turn the text surface's non-zero verdict into a
+/// success; the reason is in the document too, as the record's `error` and as
+/// the run-level one.
+fn decompile_one(
+    args: &AllArgs,
+    target: &str,
+) -> Result<(String, Option<String>), (String, crate::funcdecl::Declared)> {
+    let Selected {
+        funcs,
+        assertions,
+        interior,
+        declared,
+        mut failure,
+        rejected,
+    } = decompile_selected(args, target)?;
     let text = if args.json {
         decompile_all::render_result_json(
             &args.binary,
@@ -1642,6 +1696,7 @@ fn decompile_one(
             &interior,
             &declared,
             args.omit,
+            args.extra,
         )
     } else {
         funcs

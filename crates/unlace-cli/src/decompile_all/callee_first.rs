@@ -28,7 +28,8 @@ pub(super) fn decompile_entries_callee_first(
         header_carries_types: false,
         park_recovered_proto: false,
         single_target: targets.len() == 1,
-        want_tokens: false,
+        want_tokens: args.extra.tokens,
+        want_storage: args.extra.storage,
         want_pointer_arguments: true,
     };
     decompile_callee_first(prog, args, targets, explicit, base, &mut |_| {})

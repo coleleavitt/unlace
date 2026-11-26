@@ -52,6 +52,7 @@ fn variable(offset: i64, size: i64) -> VarInfo {
         line_numbers: vec![],
         addresses: vec![],
         split_piece: false,
+        storage: Vec::new(),
     }
 }
 

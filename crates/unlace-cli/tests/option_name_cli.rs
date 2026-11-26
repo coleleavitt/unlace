@@ -14,11 +14,13 @@ use std::process::{Command, Output};
 /// name is judged before any positional is missed. `read` shares
 /// `disassemble`'s parser, and `decompile-project`/`decompile-graph`/`functions`
 /// share `decompile-all`'s, but a template each keeps a future split honest.
+/// `map` has its own parser and forwards to `decompile-all`'s.
 const SURFACES: &[&[&str]] = &[
     &["decompile", "/nonexistent/unlace-binary", "main"],
     &["decompile-all", "/nonexistent/unlace-binary"],
     &["decompile-project", "/nonexistent/unlace-binary"],
     &["decompile-graph", "/nonexistent/unlace-binary"],
+    &["map", "/nonexistent/unlace-binary", "main", "--line", "1"],
     &["functions", "/nonexistent/unlace-binary"],
     &["disassemble", "/nonexistent/unlace-binary", "main"],
     &["read", "/nonexistent/unlace-binary", "main"],

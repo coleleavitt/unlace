@@ -35,6 +35,28 @@ pub struct VarInfo {
     /// than the first piece of that row: the rows without it are the rows
     /// reported before the split.
     pub split_piece: bool,
+    /// Where the variable lives in the machine: one entry per piece of storage,
+    /// in space, offset and size order. Empty until the driver fills it
+    /// (`decompile_drive::varstorage`).
+    pub storage: Vec<StoragePiece>,
+}
+
+/// One piece of machine storage a reported variable occupies, and the code
+/// that runs while the piece holds it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoragePiece {
+    /// The address space's name: `register`, `stack`, `ram`, ...
+    pub space: String,
+    /// The smallest named register containing the piece, lower case.
+    pub register: Option<String>,
+    /// The signed frame offset of a stack piece (the stack pointer at entry is
+    /// 0), else the piece's offset in its space.
+    pub offset: i128,
+    /// Size in bytes.
+    pub size: i64,
+    /// The instruction address ranges `[start, end)` in which the piece holds
+    /// the variable on entry to each instruction: sorted and disjoint.
+    pub ranges: Vec<(u64, u64)>,
 }
 
 impl VarInfo {

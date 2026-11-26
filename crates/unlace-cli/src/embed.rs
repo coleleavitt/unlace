@@ -12,9 +12,14 @@
 use std::collections::BTreeSet;
 
 use unlace_console::engine::{ConsoleProgram, EntrySelector, FunctionEntry};
+use unlace_console::project::FuncResult;
 
 use crate::decompile_all::{self, Args, DriverDefaults};
 use crate::funcdecl::Declared;
+
+mod mapping;
+
+pub use mapping::{At, Held, Live, Mapped};
 
 /// A load request, in the command line's terms.
 #[derive(Clone, Debug, Default)]
@@ -47,6 +52,10 @@ pub struct Request {
     pub max_fn_memory: Option<u64>,
     /// `--omit` keys.
     pub omit: Vec<String>,
+    /// `--tokens`: every document carries the function's token map.
+    pub tokens: bool,
+    /// `--storage`: every document's variables carry their storage.
+    pub storage: bool,
     /// `--project`: a project file whose stored overrides apply first.
     pub project: Option<String>,
     /// Functions that never return, in the target's address units; each is
@@ -113,6 +122,11 @@ impl Request {
         }
         if !self.omit.is_empty() {
             push(&mut argv, "--omit", self.omit.join(","));
+        }
+        for (flag, asked) in [("--tokens", self.tokens), ("--storage", self.storage)] {
+            if asked {
+                argv.push(flag.to_string());
+            }
         }
         argv
     }
@@ -332,6 +346,11 @@ impl Session {
     /// Decompile one function, as `unlace decompile <selector> --json` does over
     /// this load.
     pub fn decompile(&mut self, selector: &Selector) -> Result<Output, String> {
+        self.run(selector).map(|(output, _)| output)
+    }
+
+    /// [`Self::decompile`], with the function's record less what the output took.
+    fn run(&mut self, selector: &Selector) -> Result<(Output, FuncResult), String> {
         let entry = self.resolve(selector)?;
         let interior = crate::interior::of_targets(&self.prog, std::slice::from_ref(&entry));
         let mut funcs = decompile_all::decompile_entries_with(
@@ -345,7 +364,7 @@ impl Session {
         if funcs.is_empty() {
             return Err("the decompiler returned no record".to_string());
         }
-        let function = funcs.swap_remove(0);
+        let mut function = funcs.swap_remove(0);
         let assertions = self.prog.assertion_outcomes();
         let mut failure = function.error.as_ref().map(|reason| {
             format!(
@@ -368,17 +387,19 @@ impl Session {
             &interior,
             &self.declared,
             self.args.omit,
+            self.args.extra,
         );
         let warnings = function.warnings.iter().map(|w| w.message()).collect();
-        Ok(Output {
+        let output = Output {
             document,
-            name: function.name,
+            name: function.name.clone(),
             address: function.address,
-            code: function.code,
+            code: function.code.take(),
             error: failure,
-            prototype: function.proto,
+            prototype: function.proto.take(),
             warnings,
-        })
+        };
+        Ok((output, function))
     }
 
     fn resolve(&self, selector: &Selector) -> Result<FunctionEntry, String> {

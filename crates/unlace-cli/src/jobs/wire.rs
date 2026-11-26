@@ -9,12 +9,13 @@ use std::io::{BufWriter, Write};
 use unlace_console::engine::{EntryProvenance, ObjectLocation};
 use unlace_console::project::FuncResult;
 use unlace_decomp::decompile_drive::{GlobalInfo, LineMapping, TypeInfo, VarInfo};
+use unlace_decomp::funcreport::StoragePiece;
 use unlace_decomp::structsynth::shard::FunctionRecord;
 
 use super::TargetSpec;
 
 const SPEC_MAGIC: &[u8; 12] = b"UNLACEJOBSP3";
-pub(super) const RESULT_MAGIC: &[u8; 12] = b"UNLACEJOBR12";
+pub(super) const RESULT_MAGIC: &[u8; 12] = b"UNLACEJOBR13";
 
 /// Result-stream frame kinds.  The envelope is what lets a truncated tail be
 /// dropped rather than guessed.
@@ -331,6 +332,18 @@ pub(crate) fn encode_result(r: &FuncResult) -> Vec<u8> {
             put_u64(&mut body, n as u64);
         }
         put_u64s(&mut body, &v.addresses);
+        put_u32(&mut body, v.storage.len() as u32);
+        for piece in &v.storage {
+            put_str(&mut body, &piece.space);
+            put_opt_str(&mut body, piece.register.as_deref());
+            body.extend_from_slice(&piece.offset.to_le_bytes());
+            body.extend_from_slice(&piece.size.to_le_bytes());
+            put_u32(&mut body, piece.ranges.len() as u32);
+            for &(start, end) in &piece.ranges {
+                put_u64(&mut body, start);
+                put_u64(&mut body, end);
+            }
+        }
     }
     // (unlace `structdefs`) The recovered type definitions travel with the
     // record: a pooled worker renders the C, so the parent has no `Funcdata`
@@ -504,6 +517,26 @@ pub(crate) fn decode_result(body: &[u8]) -> Option<FuncResult> {
             line_numbers.push(r.u64()? as usize);
         }
         let addresses = r.u64s()?;
+        let np = r.u32()? as usize;
+        let mut storage = r.sized(np);
+        for _ in 0..np {
+            let space = r.string()?;
+            let register = r.opt_string()?;
+            let offset = i128::from_le_bytes(r.take(16)?.try_into().ok()?);
+            let size = r.i64()?;
+            let nr = r.u32()? as usize;
+            let mut ranges = r.sized(nr);
+            for _ in 0..nr {
+                ranges.push((r.u64()?, r.u64()?));
+            }
+            storage.push(StoragePiece {
+                space,
+                register,
+                offset,
+                size,
+                ranges,
+            });
+        }
         variables.push(VarInfo {
             name: vname,
             type_name,
@@ -514,6 +547,7 @@ pub(crate) fn decode_result(body: &[u8]) -> Option<FuncResult> {
             line_numbers,
             addresses,
             split_piece,
+            storage,
         });
     }
     let nt = r.u32()? as usize;

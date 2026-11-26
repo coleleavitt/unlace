@@ -160,6 +160,7 @@ pub fn register_locals(arch: &Architecture, fd: &Funcdata, reported: &[VarInfo])
                 line_numbers: Vec::new(),
                 addresses: Vec::new(),
                 split_piece: false,
+                storage: Vec::new(),
             }
         })
         .collect()

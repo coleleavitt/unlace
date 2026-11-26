@@ -490,6 +490,7 @@ fn streamed(proto: &str, param_type: &str) -> FuncResult {
             line_numbers: vec![],
             addresses: vec![],
             split_piece: false,
+            storage: Vec::new(),
         }],
         types: vec![],
         stack_objects: Vec::new(),
@@ -518,6 +519,7 @@ fn a_register_local_has_no_asm_variable_comment() {
         line_numbers: vec![],
         addresses: vec![],
         split_piece: false,
+        storage: Vec::new(),
     };
     let mut r = streamed("long sub_1000(long);", "long");
     r.variables

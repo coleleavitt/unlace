@@ -86,7 +86,7 @@ pub use types::{Decompiled, FunctionInfo, Language, Perms, Segment, Target};
 pub struct Decompiler {
     request: embed::Request,
     session: Option<embed::Session>,
-    /// The rules and phase callbacks of [`unstable::hooks::DecompilerHooks`].
+    /// The rules and phase callbacks of [`unstable::hooks`].
     hooks: unstable::hooks::Hooks,
     /// The scratch copy of bytes handed over in memory; removed on drop.
     _scratch: Option<tempfile::TempPath>,

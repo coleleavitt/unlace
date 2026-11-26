@@ -1717,25 +1717,25 @@ takes `extra_pool_rules`); the engine currently always passes an empty list
 registers through the embedder hooks (§0.6): behind the last built-in rule of
 the named group, and belonging to that group. `docs/cli.md` ("`--rules FILE`")
 is the user's description of the file; there is no option, and without a file
-the pools are the ones above.
+the pools are the ones above (`tests/stages/rewriterules.toml`).
 
 An expression (`rewritefile/pattern.rs (parse)`) is an op with its inputs
 (`INT_AND(x, 0xff)`), a capture (a lower-case name), a constant, or, in a
 pattern only, a masked constant `value/mask` that stands for every constant
 `c` with `c & mask == value`; `:N` after any of them fixes its size in bytes.
 An expression has at most 256 nodes (`pattern.rs (MAX_NODES)`): the checker
-and the rule walk it by recursion.
-The pattern is an op. The file is checked without a program
-(`rewritefile/sizes.rs (compile)`), and a rule that fails a check is refused
-with its name and the line of the key at fault; one refused rule refuses the
-file (`rewritefile.rs (parse_rules)`):
+and the rule walk it by recursion. The pattern is an op. The file is checked
+without a program (`rewritefile/sizes.rs (compile)`), and a rule that fails a
+check is refused with its name and the line of the key at fault; one refused
+rule refuses the file (`rewritefile.rs (parse_rules)`):
 
 - Each opcode is one whose effect is its inputs and its output only, with its
   number of inputs (`sizes.rs (Shape)`): the integer, boolean and
-  floating-point arithmetic and comparisons, the extensions, `PIECE`,
-  `SUBPIECE`, `POPCOUNT` and `LZCOUNT`. An op that reads or writes memory,
-  changes control flow, calls, joins paths (`MULTIEQUAL`, `INDIRECT`) or
-  carries a data type (`PTRADD`, `PTRSUB`, `CAST`) is refused.
+  floating-point arithmetic, comparisons and conversions, the extensions,
+  `PIECE`, `SUBPIECE`, `POPCOUNT` and `LZCOUNT`. An op that reads or writes
+  memory, changes control flow, calls, joins paths (`MULTIEQUAL`, `INDIRECT`)
+  or carries a data type (`PTRADD`, `PTRSUB`, `CAST`) is refused, and so is
+  `COPY`, which a rule writes as a replacement of one capture or constant.
 - Every node of both expressions has a size, known or not. The shape of an
   opcode says which of its sizes are equal (both inputs and the output of
   `INT_ADD`; the two inputs of a comparison, whose output is one byte), every
@@ -1763,12 +1763,11 @@ The rule is offered every op of the pattern's root opcode. A pattern with an
 op two levels below its root reads the inputs of that op, further than a wave
 re-offers the root for, so its rule is far-walking
 (`rule.rs (RewriteRule::walks_far)`) and a wave offers it every op of the
-opcode. It matches a list
-of goals, each a pattern node and a Varnode, starting with the root and the
-op's output (`rule.rs (solve)`). An op node needs a Varnode written by an op
-of its opcode and number of inputs, and adds that op's inputs as goals; for a
-commutative op both input orders are tried, and what the first try bound is
-put back before the second. A capture takes any Varnode the first time, and
+opcode. It matches a list of goals, each a pattern node and a Varnode,
+starting with the root and the op's output (`rule.rs (solve)`). An op node
+needs a Varnode written by an op of its opcode and number of inputs, and adds
+that op's inputs as goals; for a commutative op both input orders are tried,
+and what the first try bound is put back before the second. A capture takes any Varnode the first time, and
 later needs the same Varnode or, since each read of a constant is its own
 Varnode, a constant of the same size and value. A constant node needs a
 constant with its value at the Varnode's size (a negative value in two's
@@ -1802,11 +1801,10 @@ The files are registered when the architecture is built and before any option
 is applied, in the order given: by `unlace decompile-all` and the `--json`
 path of `unlace decompile` in `crates/unlace-cli/src/decompile_all.rs
 (load_program_with_rust_profiles)`, by every `--jobs` worker from the same
-flag, by the
-`decomp_dbg` script of `unlace decompile` through the console command
-`rewrite rules FILE` (`crates/unlace-console/src/console.rs`), and by a
-library user through `crates/unlace/src/unstable/hooks.rs
-(DecompilerHooks::with_rules_file)`, which keeps the compiled rules for every
+flag, by the `decomp_dbg` script of `unlace decompile` through the console
+command `rewrite rules FILE` (`crates/unlace-console/src/console.rs`), and by
+a library user through `crates/unlace/src/unstable/hooks.rs
+(Decompiler::with_rules_file)`, which keeps the compiled rules for every
 load. The command line checks the files while it parses its arguments
 (`decompile_all.rs (check_rule_files)`), a name two files share included, so a
 refused file ends the run before anything is loaded.

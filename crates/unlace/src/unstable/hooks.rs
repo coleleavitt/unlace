@@ -1,10 +1,13 @@
 //! Custom passes: a p-code [`Rule`] in one of the rule pools, and a callback
 //! that gets the function at a phase boundary, both added to the default
-//! pipeline of a [`Decompiler`] through [`DecompilerHooks`].
-//! `cargo run -p unlace --example custom_pass` shows both.
+//! pipeline of a [`Decompiler`] by the builder methods this module gives it
+//! ([`with_rule`](Decompiler::with_rule),
+//! [`with_phase_hook`](Decompiler::with_phase_hook),
+//! [`with_rules_file`](Decompiler::with_rules_file)).
+//! `cargo run -p unlace --example custom_pass` shows the first two.
 //!
 //! ```no_run
-//! use unlace::unstable::hooks::{DecompilerHooks, UnlacePhase};
+//! use unlace::unstable::hooks::UnlacePhase;
 //!
 //! let mut decompiler = unlace::Decompiler::open("a.out")?
 //!     .with_phase_hook(UnlacePhase::P6, |function| {
@@ -25,7 +28,7 @@
 //!
 //! A rule is offered one op at a time and either rewrites around it and
 //! returns non-zero, or returns `0` having changed nothing. It is added
-//! behind a *group*: [`with_rule`](DecompilerHooks::with_rule) puts it
+//! behind a *group*: [`with_rule`](Decompiler::with_rule) puts it
 //! directly behind the last built-in rule of that group, in the first pool
 //! that holds the group. [`rule_groups`] returns the groups; they are:
 //!
@@ -70,12 +73,12 @@
 //! - Its name is its own: no built-in rule and no other added rule has it.
 //!
 //! A rewrite that is one op pattern and one replacement needs no Rust:
-//! [`with_rules_file`](DecompilerHooks::with_rules_file) loads such rules
+//! [`with_rules_file`](Decompiler::with_rules_file) loads such rules
 //! from a TOML file, the one `unlace decompile --rules FILE` takes.
 //!
 //! # Phase callbacks
 //!
-//! [`with_phase_hook`](DecompilerHooks::with_phase_hook) runs a callback on
+//! [`with_phase_hook`](Decompiler::with_phase_hook) runs a callback on
 //! every function at one fixed point of the pipeline per phase. The level is
 //! what [`Funcdata::maturity`] reports there.
 //!
@@ -120,7 +123,7 @@ use std::rc::Rc;
 
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::hooks::HookRegistry;
-use unlace_decomp::rewritefile::read_rules;
+use unlace_decomp::rewritefile::rules_of;
 
 pub use unlace_decomp::action::{ActionGroupList, Rule, RuleState};
 pub use unlace_decomp::context::{OpId, VarnodeId};
@@ -177,8 +180,8 @@ fn fresh(rule: &dyn Rule, state: &RuleState) -> Result<Box<dyn Rule>, String> {
 }
 
 /// The groups a rule can be added behind, as `(pool, group)` pairs in the
-/// order the pools run. The pool is the one [`DecompilerHooks::with_rule`]
-/// puts a rule in when it is given that group.
+/// order the pools run. The pool is the one [`Decompiler::with_rule`] puts a
+/// rule in when it is given that group.
 ///
 /// ```
 /// let groups = unlace::unstable::hooks::rule_groups();
@@ -188,17 +191,11 @@ pub fn rule_groups() -> Vec<(&'static str, String)> {
     unlace_decomp::hooks::rule_groups()
 }
 
-mod sealed {
-    pub trait Sealed {}
-    impl Sealed for crate::Decompiler {}
-}
-
-/// The hook methods of a [`Decompiler`]. Import the trait to call them.
-///
-/// Each method drops the current load, as every builder method does; the
-/// rules and callbacks are registered again on every load, before any option
-/// is applied. The contract they run under is in the [module docs](self).
-pub trait DecompilerHooks: sealed::Sealed + Sized {
+/// The hook methods. Each drops the current load, as every builder method
+/// does; the rules and callbacks are registered again on every load, before
+/// any option is applied. The contract they run under is in the
+/// [module docs](self).
+impl Decompiler {
     /// Add a p-code rule to the default pipeline, directly behind the last
     /// rule of `after_group` in the rule pool that holds that group.
     ///
@@ -214,7 +211,7 @@ pub trait DecompilerHooks: sealed::Sealed + Sized {
     ///
     /// ```no_run
     /// use unlace::unstable::hooks::{
-    ///     ActionGroupList, DecompilerHooks, Funcdata, OpCode, OpId, Rule, RuleState, VarnodeId,
+    ///     ActionGroupList, Funcdata, OpCode, OpId, Rule, RuleState, VarnodeId,
     /// };
     ///
     /// /// `(x | y) + (x & y)  =>  x + y`.
@@ -251,54 +248,7 @@ pub trait DecompilerHooks: sealed::Sealed + Sized {
     ///     .with_rule("analysis", RuleState::new("analysis", 0, "orandsum"), OrAndSum)?;
     /// # Ok::<(), unlace::Error>(())
     /// ```
-    fn with_rule(
-        self,
-        after_group: &str,
-        state: RuleState,
-        rule: impl Rule + 'static,
-    ) -> Result<Self>;
-
-    /// Run `callback` on every function at the boundary of `phase`; the
-    /// callbacks of one phase run in the order they were added.
-    ///
-    /// Errors with [`Error::Request`] for a phase that has no boundary inside
-    /// the action tree (`P0`, `P1`, `P9`, `Infra`).
-    ///
-    /// ```no_run
-    /// use unlace::unstable::hooks::{DecompilerHooks, UnlacePhase};
-    ///
-    /// let decompiler = unlace::Decompiler::open("a.out")?.with_phase_hook(UnlacePhase::P2, |data| {
-    ///     let lifted = data.obank().iter_alive().count();
-    ///     eprintln!("{}: {lifted} ops lifted", data.get_name());
-    /// })?;
-    /// # Ok::<(), unlace::Error>(())
-    /// ```
-    fn with_phase_hook(
-        self,
-        phase: UnlacePhase,
-        callback: impl FnMut(&mut Funcdata) + 'static,
-    ) -> Result<Self>;
-
-    /// Add the rules of a rewrite rule file (`--rules FILE`): p-code rewrites
-    /// written as TOML, each compiled into a [`Rule`] and added behind the
-    /// group it names, as [`with_rule`](Self::with_rule) adds one.
-    /// `docs/cli.md` ("`--rules FILE`") describes the file.
-    ///
-    /// The file is read and checked here. Errors with [`Error::Request`] when
-    /// it cannot be read or a rule in it is refused; the message has one line
-    /// per problem, with the path, the line and the rule's name.
-    ///
-    /// ```no_run
-    /// use unlace::unstable::hooks::DecompilerHooks;
-    ///
-    /// let decompiler = unlace::Decompiler::open("a.out")?.with_rules_file("rules.toml")?;
-    /// # Ok::<(), unlace::Error>(())
-    /// ```
-    fn with_rules_file(self, path: impl AsRef<Path>) -> Result<Self>;
-}
-
-impl DecompilerHooks for Decompiler {
-    fn with_rule(
+    pub fn with_rule(
         mut self,
         after_group: &str,
         state: RuleState,
@@ -329,7 +279,22 @@ impl DecompilerHooks for Decompiler {
         Ok(self)
     }
 
-    fn with_phase_hook(
+    /// Run `callback` on every function at the boundary of `phase`; the
+    /// callbacks of one phase run in the order they were added.
+    ///
+    /// Errors with [`Error::Request`] for a phase that has no boundary inside
+    /// the action tree (`P0`, `P1`, `P9`, `Infra`).
+    ///
+    /// ```no_run
+    /// use unlace::unstable::hooks::UnlacePhase;
+    ///
+    /// let decompiler = unlace::Decompiler::open("a.out")?.with_phase_hook(UnlacePhase::P2, |data| {
+    ///     let lifted = data.obank().iter_alive().count();
+    ///     eprintln!("{}: {lifted} ops lifted", data.get_name());
+    /// })?;
+    /// # Ok::<(), unlace::Error>(())
+    /// ```
+    pub fn with_phase_hook(
         mut self,
         phase: UnlacePhase,
         callback: impl FnMut(&mut Funcdata) + 'static,
@@ -344,8 +309,26 @@ impl DecompilerHooks for Decompiler {
         Ok(self)
     }
 
-    fn with_rules_file(self, path: impl AsRef<Path>) -> Result<Self> {
-        let rules = read_rules(path.as_ref()).map_err(Error::Request)?;
+    /// Add the rules of a rewrite rule file (`--rules FILE`): p-code rewrites
+    /// written as TOML, each compiled into a [`Rule`] and added behind the
+    /// group it names, as [`with_rule`](Self::with_rule) adds one.
+    /// `docs/cli.md` ("`--rules FILE`") describes the file.
+    ///
+    /// The file is read and checked now. A file that cannot be read is an
+    /// [`Error::Io`]. A refused rule is an [`Error::Request`] whose message
+    /// has one line per problem, with the path, the line and the rule's name.
+    ///
+    /// ```no_run
+    /// let decompiler = unlace::Decompiler::open("a.out")?.with_rules_file("rules.toml")?;
+    /// # Ok::<(), unlace::Error>(())
+    /// ```
+    pub fn with_rules_file(self, path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        let text = std::fs::read_to_string(path).map_err(|source| Error::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        let rules = rules_of(path, &text).map_err(Error::Request)?;
         rules.into_iter().try_fold(self, |decompiler, rule| {
             let state = RuleState::new(rule.group(), 0, rule.name());
             let group = rule.group().to_string();

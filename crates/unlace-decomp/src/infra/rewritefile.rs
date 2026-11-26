@@ -212,11 +212,17 @@ fn rule_of(
 }
 
 /// Read and check the rule file at `path`. The error is one line per
-/// problem, each starting with the path and the line.
+/// problem, each starting with the path.
 pub fn read_rules(path: &Path) -> Result<Vec<RewriteRule>, String> {
     let source = std::fs::read_to_string(path)
         .map_err(|error| format!("{}: cannot read the rule file: {error}", path.display()))?;
-    parse_rules(&source).map_err(|errors| {
+    rules_of(path, &source)
+}
+
+/// [`parse_rules`] for the text of the file at `path`. The error is one line
+/// per problem, each starting with the path and the line.
+pub fn rules_of(path: &Path, source: &str) -> Result<Vec<RewriteRule>, String> {
+    parse_rules(source).map_err(|errors| {
         let lines: Vec<String> = errors
             .iter()
             .map(|error| format!("{}:{}: {error}", path.display(), error.line))

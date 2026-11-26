@@ -5675,9 +5675,9 @@ built-in `subzext`. No check finds such a pair. The function ends in one of two 
 
 ### From the library and the console
 
-`unlace::unstable::hooks::DecompilerHooks::with_rules_file(path)` adds a rule file to a
-`Decompiler` (`docs/api.md`); it returns the same messages as an `Error::Request`. In `decomp_dbg`
-the command is `rewrite rules FILE`, given after the load and before any `option` line.
+`Decompiler::with_rules_file(path)` (`unlace::unstable::hooks`, `docs/api.md`) adds a rule file to
+a `Decompiler`; it returns the same messages as an `Error::Request`. In `decomp_dbg` the command is
+`rewrite rules FILE`, given after the load and before any `option` line.
 
 ## `unlace fid` — function identification by fingerprint
 

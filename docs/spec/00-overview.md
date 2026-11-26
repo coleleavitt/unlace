@@ -4192,11 +4192,12 @@ registering for them is an error. Each point is a leaf action
 (`phasehook_p2` … `phasehook_p8`) in the group of its neighbours (`base`,
 `merge`, `blockrecovery`), so a root variant that does not run a phase does not
 run its callbacks; a jump-table recovery partial runs none, and a restart runs
-them again, on the function the restart rebuilt. A registration rebuilds the universal tree and derives the current
-root again: group lists survive, but breakpoints and disabled rules set on the
-old roots do not, so hooks are registered before those. With nothing registered
-the schedule holds no extra row and no extra leaf, and the tree, its listing
-and the output are the ones described above.
+them again, on the function the restart rebuilt. A registration rebuilds the
+universal tree and derives the current root again: group lists survive, but
+breakpoints and disabled rules set on the old roots do not, so hooks are
+registered before those. With nothing registered the schedule holds no extra
+row and no extra leaf, and the tree, its listing and the output are the ones
+described above.
 
 What a callback may change follows from where its point sits, and nothing checks
 it. At the P2 point the function is not in SSA form and the whole tree still
@@ -4211,16 +4212,17 @@ follows again.
 
 The `unlace` crate exposes the registry to a library user as
 `unlace::unstable::hooks`
-(`crates/unlace/src/unstable/hooks.rs (DecompilerHooks)`), outside the crate's
+(`crates/unlace/src/unstable/hooks.rs (Decompiler::with_rule)`), outside the crate's
 stability promise. `with_rule` and `with_phase_hook` keep the rule and the
 callback on the `Decompiler`, because a builder call drops the loaded program,
 and register them on every load
 (`crates/unlace-cli/src/embed.rs (load_with)`) as soon as the architecture is
 built, before any option is applied. A registration the registry would refuse
-(a group no pool holds, a rule that does not clone for its own group, a phase
-without a point) is refused by the builder call. That module's documentation
-is the contract a rule and a callback run under. `with_rules_file` adds the
-rules of a rewrite rule file the same way (chapter 3, §3.2).
+(a group no pool holds, a name that is taken, a rule that does not clone for
+its own group, a phase without a point) is refused by the builder call. That
+module's documentation is the contract a rule and a callback run under.
+`with_rules_file` adds the rules of a rewrite rule file the same way
+(chapter 3, §3.2).
 
 Flow-follow itself runs *before* the tree (the upstream `followFlow` →
 `startProcessing` order), bounded by the P0 flow options — decode-error policy

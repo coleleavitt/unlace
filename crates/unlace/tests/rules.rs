@@ -1,8 +1,7 @@
-//! Rewrite rule files through `DecompilerHooks::with_rules_file`: what a
+//! Rewrite rule files through `Decompiler::with_rules_file`: what a
 //! pattern matches, what a replacement builds, and what a refused file says
 //! (needs the checkout's `specs/`, as every workspace integration test does).
 
-use unlace::unstable::hooks::DecompilerHooks;
 use unlace::{Decompiler, Error, Target};
 
 /// `mov eax, edi; or eax, esi; and edi, esi; add eax, edi; ret`
@@ -296,5 +295,5 @@ replace = \"x\"
     );
 
     let missing = function(LOW).with_rules_file("/nonexistent/unlace-rules.toml");
-    assert!(matches!(missing, Err(Error::Request(_))));
+    assert!(matches!(missing, Err(Error::Io { .. })));
 }

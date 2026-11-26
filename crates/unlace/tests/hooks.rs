@@ -6,8 +6,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use unlace::unstable::hooks::{
-    ActionGroupList, DecompilerHooks, Funcdata, OpCode, OpId, Rule, RuleState, UnlacePhase,
-    VarnodeId, rule_groups,
+    ActionGroupList, Funcdata, OpCode, OpId, Rule, RuleState, UnlacePhase, VarnodeId, rule_groups,
 };
 use unlace::{Decompiler, Error, Target};
 

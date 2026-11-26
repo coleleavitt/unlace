@@ -107,17 +107,17 @@ println!("{}", decompiler.decompile_named("main")?.c);
 
 ### unlace::unstable::hooks — custom passes and rewrite rule files
 
-The hook types are the engine's own. `use unlace::unstable::hooks::DecompilerHooks` adds three
-builder methods to `Decompiler`:
+Three builder methods on `Decompiler`. The types they take (`Rule`, `RuleState`, `Funcdata`,
+`OpCode`, `UnlacePhase`, ...) are the engine's own, re-exported from `unlace::unstable::hooks`:
 
 | Method | What it adds to the default pipeline |
 |---|---|
 | `.with_rule(after_group, RuleState::new(group, 0, name), rule)?` | A p-code `Rule`, directly behind the last built-in rule of `after_group`, in the rule pool that holds that group. `group` decides which pipeline variants keep it. |
 | `.with_phase_hook(UnlacePhase::P2..=P8, \|function\| ..)?` | A callback run with each function at the boundary of that phase. |
-| `.with_rules_file(path)?` | The rules of a rewrite rule file: p-code rewrites written as TOML, the file `unlace decompile --rules FILE` takes (`docs/cli.md`, "`--rules FILE`"). A file that cannot be read or holds a refused rule is an `Error::Request` with one line per problem. |
+| `.with_rules_file(path)?` | The rules of a rewrite rule file: p-code rewrites written as TOML, the file `unlace decompile --rules FILE` takes (`docs/cli.md`, "`--rules FILE`"). An unreadable file is `Error::Io`; a refused rule is an `Error::Request` with one line per problem. |
 
 ```rust
-use unlace::unstable::hooks::{DecompilerHooks, RuleState, UnlacePhase};
+use unlace::unstable::hooks::{RuleState, UnlacePhase};
 
 let mut decompiler = unlace::Decompiler::open("a.out")?
     .with_rule("analysis", RuleState::new("analysis", 0, "orandsum"), OrAndSum)?

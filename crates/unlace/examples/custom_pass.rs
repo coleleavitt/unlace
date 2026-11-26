@@ -11,8 +11,7 @@
 //! contract the rule and the callbacks run under.
 
 use unlace::unstable::hooks::{
-    ActionGroupList, DecompilerHooks, Funcdata, OpCode, OpId, Rule, RuleState, UnlacePhase,
-    VarnodeId,
+    ActionGroupList, Funcdata, OpCode, OpId, Rule, RuleState, UnlacePhase, VarnodeId,
 };
 use unlace::{Decompiler, Target};
 

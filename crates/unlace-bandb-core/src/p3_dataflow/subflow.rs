@@ -81,7 +81,7 @@
 #![allow(clippy::needless_late_init)]
 
 use crate::funcdata_merge::FuncdataMergeExt;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_base::address::{
     Address, calc_mask, leastsigbit_set, mostsigbit_set, sign_extend_sized,
@@ -2987,7 +2987,15 @@ impl SubvariableFlow {
             data.op_insert_after(sub, def);
         }
 
-        // Define all the outputs first
+        // Define all the outputs first.  A logical op whose output a copy patch pulls back into the
+        // op it is anchored on (the BOOL_NEGATE a bit test against the set bit builds) must precede
+        // that op, which becomes a COPY of it; every other logical op follows its anchor.
+        let pulled_by_anchor: BTreeSet<(OpId, RvId)> = self
+            .patchlist
+            .iter()
+            .filter(|p| p.typ == PatchType::CopyPatch)
+            .map(|p| (p.patch_op, p.in1))
+            .collect();
         for idx in 0..self.oplist.len() {
             let op = self.oplist[idx]
                 .op
@@ -3008,7 +3016,11 @@ impl SubvariableFlow {
                 .expect("do_replacement: ReplaceOp has no output");
             let outvn = self.get_replace_varnode(data, rout)?;
             data.op_set_output(newop, outvn)?;
-            data.op_insert_after(newop, op);
+            if pulled_by_anchor.contains(&(op, rout)) {
+                data.op_insert_before(newop, op);
+            } else {
+                data.op_insert_after(newop, op);
+            }
         }
 
         // Set all the inputs

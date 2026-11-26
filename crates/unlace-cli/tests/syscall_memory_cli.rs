@@ -211,7 +211,14 @@ fn decompile(function: &str, userland: bool, option: Option<&str>) -> String {
 fn decompile_image(function: &str, image: Vec<u8>, option: Option<&str>) -> String {
     let path = common::scratch_file("syscall-memory", "o");
     std::fs::write(&path, image).unwrap();
-    let mut args = vec!["decompile", path.to_str().unwrap(), function];
+    let mut args = vec![
+        "decompile",
+        path.to_str().unwrap(),
+        function,
+        "--option",
+        "syscallnames",
+        "off",
+    ];
     if let Some(value) = option {
         args.extend(["--option", "syscallregs", value]);
     }

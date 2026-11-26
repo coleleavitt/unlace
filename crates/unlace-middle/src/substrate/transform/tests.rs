@@ -685,3 +685,14 @@ fn preserve_address_rules() {
     // misaligned lsbOffset → false regardless.
     assert!(!tm.preserve_address(&fd, ram_vn, 16, 4));
 }
+
+#[test]
+fn lane_sizes_outside_the_word_are_ignored() {
+    let mut laned = LanedRegister::new();
+    laned.add_lane_size(40);
+    laned.add_lane_size(-1);
+    assert!(!laned.allowed_lane(40));
+    assert!(!laned.allowed_lane(-1));
+    laned.add_lane_size(4);
+    assert!(laned.allowed_lane(4));
+}

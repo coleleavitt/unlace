@@ -1704,8 +1704,10 @@ pub fn calc_int_max(size: i32) -> u64 {
 /// Get the smallest signed integer value for the given size.
 /// \param size of the integer in bytes
 pub fn calc_int_min(size: i32) -> u64 {
-    // (uintb)1 << (size*8-1); size 0 is UB in C++ (wrapping shift here)
-    1u64.wshl((size * 8 - 1) as u32)
+    if size <= 0 {
+        return 0;
+    }
+    1u64.wshl((size.min(8) * 8 - 1) as u32)
 }
 
 /// Perform a CPUI_INT_RIGHT on the given val.
@@ -1753,6 +1755,9 @@ pub fn minimalmask(val: u64) -> u64 {
 /// \param val is the value to be sign-extended
 /// \param bit is the index of the bit to extend from (0=least significant bit)
 pub fn sign_extend(val: i64, bit: i32) -> i64 {
+    if bit < 0 {
+        return 0;
+    }
     let sa = 64 - (bit + 1);
     val.wshl(sa as u32).wshr(sa as u32)
 }
@@ -1763,6 +1768,9 @@ pub fn sign_extend(val: i64, bit: i32) -> i64 {
 /// \param val is the value to be zero extended
 /// \param bit is the index of the bit to extend from (0=least significant bit)
 pub fn zero_extend(val: i64, bit: i32) -> i64 {
+    if bit < 0 {
+        return 0;
+    }
     let sa = 64 - (bit + 1);
     ((val as u64).wshl(sa as u32).wshr(sa as u32)) as i64
 }

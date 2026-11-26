@@ -4438,7 +4438,7 @@ from `TypeBitField` in `dtype.rs`): `RuleBitFieldStore`/`RuleBitFieldOut`
 trace backward from a store (or mapped write) through the OR/AND/SHIFT web and
 re-express it as explicit `INSERT` ops per field
 (`crates/unlace-bandb-core/src/p5_types/bitfield/insert.rs
-(BitFieldInsertTransform)`); `RuleBitFieldLoad`/`RuleBitFieldIn` trace forward
+(BitFieldInsertTransform)`); a constant written as an INT_AND/INT_OR mask pair (`(V & clear) | set` or `(V | set) & clear`) is one such insert when the two constants determine every bit of the field, and its value is the INT_OR constant (`bitfield/insert.rs (masked_constant)`); `RuleBitFieldLoad`/`RuleBitFieldIn` trace forward
 from a load and re-express the extractions as sign/zero `PULL` ops
 (`bitfield/pull.rs (BitFieldPullTransform)`); `RulePullAbsorb`/
 `RuleInsertAbsorb` (`bitfield/absorb.rs`) then consolidate a shared byte

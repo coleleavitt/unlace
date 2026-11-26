@@ -426,7 +426,7 @@ pub fn cookie_check_op(
 /// or a locked `void`? Such a checker is stated to produce no value, so the
 /// return register and every register it does not touch pass through it.
 #[doc(hidden)]
-pub fn call_has_locked_void_output(data: &Funcdata, op: OpId) -> bool {
+pub fn call_declares_no_output(data: &Funcdata, op: OpId) -> bool {
     let Some(index) = data.get_call_specs_index(op) else {
         return false;
     };
@@ -439,13 +439,13 @@ pub fn call_has_locked_void_output(data: &Funcdata, op: OpId) -> bool {
 fn cookie_check_calls(
     data: &Funcdata,
     sp: &(Rc<AddrSpace>, uintb, int4),
-    require_locked_void: bool,
+    require_no_output: bool,
     skip_marked: bool,
 ) -> Vec<(OpId, Vec<OpId>)> {
     let mut found = Vec::new();
     for i in 0..data.num_calls() {
         let op = data.get_call_specs(i).get_op();
-        if require_locked_void && !call_has_locked_void_output(data, op) {
+        if require_no_output && !call_declares_no_output(data, op) {
             continue;
         }
         if skip_marked {
@@ -518,16 +518,6 @@ impl Action for ActionStripMsvcStackGuard {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
-        {
-            use std::io::Write;
-            if let Ok(mut f) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("/tmp/claude-1000/dbg.txt")
-            {
-                let _ = writeln!(f, "C {}", grouplist.contains(self.get_group()));
-            }
-        };
         if !grouplist.contains(self.get_group()) {
             return None;
         }
@@ -538,21 +528,6 @@ impl Action for ActionStripMsvcStackGuard {
     }
 
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        {
-            use std::io::Write;
-            if let Ok(mut f) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("/tmp/claude-1000/dbg.txt")
-            {
-                let _ = writeln!(
-                    f,
-                    "A nc={} sp={}",
-                    data.num_calls(),
-                    stack_pointer_storage(data).is_some()
-                );
-            }
-        };
         let strip = self.enabled
             || data
                 .get_arch()
@@ -566,22 +541,6 @@ impl Action for ActionStripMsvcStackGuard {
             return 0;
         };
         let mut calls = cookie_check_calls(data, &sp, !strip, !strip);
-        {
-            use std::io::Write;
-            if let Ok(mut f) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("/tmp/claude-1000/dbg.txt")
-            {
-                let _ = writeln!(
-                    f,
-                    "X nc={} found={} strip={}",
-                    data.num_calls(),
-                    calls.len(),
-                    strip
-                );
-            }
-        };
         if !strip {
             if calls.is_empty() {
                 return 0;

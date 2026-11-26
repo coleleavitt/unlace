@@ -26,7 +26,8 @@
 # rely only on its exact `(K ^ SP) ^ SP`, one-direct-call recognition seed.
 #
 # Two passes flip `msvcstackguard`.  OFF retains exactly the raw checker
-# call and cookie algebra.  ON removes the boilerplate and keeps the two
+# call and cookie algebra, and since the checker declares no output it
+# still leaves RAX unchanged, so both values survive.  ON removes the boilerplate and keeps the two
 # machine return values (canonically rendered as `a0 != 0`).  The two
 # arm-specific calls keep the control-flow split observable.  This pins the
 # option-owned P7-to-P3 restart handoff independently of the generic
@@ -105,8 +106,8 @@ count = 1
 literal = 'dat_2200 ^'
 
 [[match]]
-name = 'MSVCSTACKGUARD-RETURN #3: option on keeps failure one and success zero'
-count = 1
+name = 'MSVCSTACKGUARD-RETURN #3: both passes keep failure one and success zero (the kept checker declares no output)'
+count = 2
 literal = 'return a0 != 0;'
 
 [[match]]

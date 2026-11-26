@@ -49,6 +49,7 @@ fn decompile(userland: bool, option: Option<&str>) -> String {
     std::fs::write(&path, image(userland)).unwrap();
     let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command.args(["decompile", path.to_str().unwrap(), "pair"]);
+    command.args(["--option", "syscallnames", "off"]);
     if let Some(value) = option {
         command.args(["--option", "syscallregs", value]);
     }

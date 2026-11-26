@@ -62,6 +62,7 @@
 
 mod error;
 mod types;
+pub mod unstable;
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;

@@ -263,6 +263,14 @@ fn registration_errors_name_the_missing_anchor() {
         )
         .unwrap_err();
     assert!(format!("{err}").contains("does not clone"), "{err}");
+    let err = hooks
+        .add_rule(
+            "analysis",
+            RuleState::new("analysis", 0, "andmask"),
+            Box::new(RuleOrAndSum),
+        )
+        .unwrap_err();
+    assert!(format!("{err}").contains("already named"), "{err}");
     for phase in [
         UnlacePhase::Infra,
         UnlacePhase::P0,

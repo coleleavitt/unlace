@@ -139,6 +139,35 @@ let mut decompiler = unlace::Decompiler::open("a.out")?.with_language_file("pseu
 println!("{}", decompiler.decompile_named("main")?.c);
 ```
 
+### unlace::unstable::hooks — custom passes and rewrite rule files
+
+Three builder methods on `Decompiler`. The types they take (`Rule`, `RuleState`, `Funcdata`,
+`OpCode`, `UnlacePhase`, ...) are the engine's own, re-exported from `unlace::unstable::hooks`:
+
+| Method | What it adds to the default pipeline |
+|---|---|
+| `.with_rule(after_group, RuleState::new(group, 0, name), rule)?` | A p-code `Rule`, directly behind the last built-in rule of `after_group`, in the rule pool that holds that group. `group` decides which pipeline variants keep it. |
+| `.with_phase_hook(UnlacePhase::P2..=P8, \|function\| ..)?` | A callback run with each function at the boundary of that phase. |
+| `.with_rules_file(path)?` | The rules of a rewrite rule file: p-code rewrites written as TOML, the file `unlace decompile --rules FILE` takes (`docs/cli.md`, "`--rules FILE`"). An unreadable file is `Error::Io`; a refused rule is an `Error::Request` with one line per problem. |
+
+```rust
+use unlace::unstable::hooks::{RuleState, UnlacePhase};
+
+let mut decompiler = unlace::Decompiler::open("a.out")?
+    .with_rule("analysis", RuleState::new("analysis", 0, "orandsum"), OrAndSum)?
+    .with_phase_hook(UnlacePhase::P6, |function| eprintln!("{} is merged", function.get_name()))?
+    .with_rules_file("rules.toml")?;
+```
+
+`cargo run -p unlace --example custom_pass` is the runnable version, with the rule written out.
+The module's rustdoc is the contract: the rule groups by pool (`rule_groups()` returns them),
+what a rule must keep true, where each phase callback runs and what it may change there
+(`P2`: ops in place before SSA; `P3`-`P5`: data flow, final; `P6`-`P8`: nothing), that a restart
+runs every callback again on the rebuilt function, that no callback runs during jump-table
+recovery, and that rules and callbacks must be deterministic. Rules and callbacks are registered
+again on every load, before any option is applied; with none registered the pipeline and its
+output are the default ones. `docs/spec/00-overview.md` §0.6 describes the mechanism.
+
 ### unlace::unstable::printer — the printed function as a tree, and printers over it
 
 `Decompiler::tree(address)` and `tree_named(name)` decompile one function and return its text as a

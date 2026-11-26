@@ -112,8 +112,10 @@ Opt-in or unfinished. Each is off by default or marked above:
   `unlace::unstable::mapping`): which instructions a span of the output came from, and where each
   variable is in the machine and when. Both record members are opt-in, and the library types can
   change. `storage` describes the decompiler's variables: checked against DWARF it agrees for 93-99%
-  of the bytes where both name a location, and in Go output it names one for 15% of the bytes DWARF
-  does. [`docs/cli.md`, "The JSON documents" and "unlace map"; `docs/spec/06-variables-and-merge.md`,
+  of the bytes where both name a location. DWARF's location lists cover availability and `storage`
+  covers liveness, so the share DWARF covers is not a defect measure; in Go output DWARF names
+  1.32 M bytes that `storage` does not (1.86 M before a Go local took its name at its register
+  range; the rest are Go parameters' frame slots, a known limit). [`docs/cli.md`, "The JSON documents" and "unlace map"; `docs/spec/06-variables-and-merge.md`,
   "Variable storage"]
 - **Tier 3 architectures**: decompile without an output check.
 

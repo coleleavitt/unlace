@@ -442,14 +442,19 @@ number is chosen for the JSON: a node of level `d` is nested `3 + 2d` arrays and
 `--json` document and its own arrays one more, 126 at most, which the project's JSON reader and a
 default `serde_json` (both stop at 128) still read. Before chains were wide and the bound exact, two
 fixture binaries (`loadguardreads_x86_64`, `globalcallranges_x86_64`) exported documents that
-`serde_json` refused with `recursion limit exceeded`. Measured over the fixture binaries now, the
-deepest tree has 41 levels; `/usr/bin/tr`'s has 36, from twelve nested statements.
+`serde_json` refused with `recursion limit exceeded`. What still meets the bound in the fixture
+binaries is real nesting, in five functions: 128 `if`s inside one another (`big` of
+`globalptrstores`), a 50-step `(((a + 1 ^ 2) + 3 ^ 4) ...` guard, a 30-term Horner hash
+`(v13 + (v12 + (...) * 0x1f) * 0x1f)`, and one operand under 27 nested `if`s and loops of glibc's
+`_dl_build_local_scope` (in two binaries). Their trees print back like every other; the part past
+level 61 is text. The deepest tree of coreutils `tr` has 36 levels, from twelve nested statements.
 
 **Limits.** C output only: the statement reader knows C's statement forms, so a function printed
 as Rust, Go or Java (or through a language file over one of them) reports `ctree_error` (pass
-`--language c`). One process only (`--jobs 1`). The
-capture render takes the place of the markup render `--json` already runs, so the flag adds the
-token capture, the record and the build: 3% of the run time on a 185-function binary. Types are the printer's: a variable's, an operation's
+`--language c`). One process only (`--jobs 1`). The capture render takes the place of the markup
+render `--json` already runs, so the flag adds the token capture, the record and the build: no
+difference in run time outside the noise on a 185-function binary (3.5 s with and without). Types
+are the printer's: a variable's, an operation's
 result, a declaration's; a constant has none, and an operator written outside the RPN driver has
 none.
 
@@ -462,9 +467,10 @@ Measured (2026-11-26):
   lines: the type definitions `structdefs` prints there and the helper preamble of `bytearrayc`).
   The 473 functions printed in Go, Rust or Java have no tree.
 - The fixture binaries in the repository, through `unlace decompile-all --json --ctree` piped into
-  `ctree_roundtrip`: 1,482 binaries, 45,246 functions with code. 36,055 are printed in C: every
-  tree (5.2 million nodes in all) prints back byte for byte and none holds a `raw` node. The other
-  9,191 are printed in another output language.
+  `ctree_roundtrip`: 1,482 binaries, 47,525 functions with code. 38,332 are printed in C: every
+  tree (7.5 million nodes in all) prints back byte for byte. 38,327 hold no `raw` node; the other
+  five hold nine between them, all of it text nested past level 61 (the five functions named under
+  "Chains and depth"). The other 9,193 are printed in another output language.
 
 What cannot print back, and why: text wrapped by `option maxlinewidth` (the tree has no node for
 a line break inside an expression; every `--json` render prints unbroken lines, so `--ctree` never

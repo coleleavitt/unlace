@@ -6473,9 +6473,12 @@ definitions and the `bytearrayc` helper preamble); the 473 functions printed in 
 or Java export no tree. The test fails on a tree that prints back differently, on a C
 function without a tree and on a `raw` node inside a function body.
 `crates/unlace/examples/ctree_roundtrip.rs` over `decompile-all --json --ctree` of every
-fixture binary in the repository (1,482 binaries, 45,246 functions with code): the
-36,055 functions printed in C all have a tree that prints back byte for byte, with no
-`raw` node; 9,191 are printed in another output language.
+fixture binary in the repository (1,482 binaries, 47,525 functions with code): the
+38,332 functions printed in C all have a tree that prints back byte for byte; 38,327 of
+those trees hold no `raw` node and five hold nine between them, all of it text nested
+past level 61; 9,193 functions are printed in another output language. The example
+exits 2 on a document or tree it cannot read, so a run that reads nothing is not a clean
+run.
 
 
 ## (unlace) Per-stage attribution of text cleanup removals (`UNLACE_STAGE_DIFF`)

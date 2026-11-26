@@ -2601,8 +2601,8 @@ leave 114,080 bytes, and adding `aliases` takes it to 836 (its C is 217).
 each function's `code` to its record: statements and expressions as nested nodes, each with
 its kind, its operands, its C type where the printer knows it, where its text is in `code`
 and the instruction addresses it came from. It is opt-in because the tree is many times the
-size of the code (coreutils `tr`, 185 functions: a 1.0 MB document without it, 16.6 MB
-with it, in 3% more time).
+size of the code (coreutils `tr`, 185 functions, 135 KB of C: a 1.0 MB document without
+it, 16.6 MB with it; the run time is the same within noise, 3.5 s).
 The record gains two members after its last default one, `ctree` and `ctree_error`; every
 other member, `code` included, and the exit status are what they are without the flag.
 `--ctree` needs `--json`, and one process: with `--jobs N` above 1 it is an argument error,
@@ -2679,10 +2679,11 @@ print back exactly is kept as a `raw` node holding its text, so the document nev
 a structure the text does not have. `cargo run -p unlace --example ctree_roundtrip` (the
 reference printer, `unlace::unstable::printer::CPrinter`, over a `--json --ctree`
 document) repeats the check from outside. Measured on 2026-11-26 over the fixture binaries
-of this repository (1,482 binaries; 36,055 functions printed in C), every tree prints back
-to its `code` byte for byte and none holds a `raw` node; over the two parity corpora
-(4,871 functions printed in C) every tree prints back, and the only `raw` nodes are the
-lines `structdefs` and `bytearrayc` print above a function (type definitions, a helper
+of this repository (1,482 binaries; 38,332 functions printed in C), every tree prints back
+to its `code` byte for byte; 38,327 hold no `raw` node and the other five hold nine
+between them, all of it text nested past level 61. Over the two parity corpora (4,871
+functions printed in C) every tree prints back, and the only `raw` nodes are the lines
+`structdefs` and `bytearrayc` print above a function (type definitions, a helper
 preamble). `ctree_error` is one of:
 
 - `the tree is exported for C output only`: the function printed in another output

@@ -576,9 +576,7 @@ fn snapshot_unit_with_go(
                     .flatten()
             });
             if dwarfscopes::enabled() {
-                if snap.fbreg_location.is_none() {
-                    snap.reg_location = dwarfscopes::register_location(dwarf, unit, &loc);
-                }
+                snap.reg_location = dwarfscopes::register_location(dwarf, unit, &loc);
                 if snap.tag == gimli::DW_TAG_formal_parameter {
                     let entry = parent_off
                         .and_then(|parent| map.get(&parent))
@@ -1475,26 +1473,35 @@ fn collect_fbreg_locals(
         let Some(ty) = build_datatype(type_ref, dies, types, word_size, &mut walk, false) else {
             continue;
         };
-        match (child.fbreg_location, base, child.reg_location) {
-            (Some(fbreg), Some(base), _) => out.push(crate::pass::LocalFact {
+        let reg = child
+            .reg_location
+            .filter(|_| child.tag == gimli::DW_TAG_variable && ty.get_size() > 0);
+        let stack = child
+            .fbreg_location
+            .zip(base)
+            .map(|(fbreg, base)| base.wrapping_add(fbreg))
+            .filter(|_| reg.is_none());
+        if stack.is_none() && reg.is_none() {
+            continue;
+        }
+        let unique = names.unique(&name);
+        if let Some(stack_offset) = stack {
+            out.push(crate::pass::LocalFact {
                 func_addr,
-                name: names.unique(&name),
+                name: unique.clone(),
+                type_: ty.clone(),
+                stack_offset,
+            });
+        }
+        if let Some((dwarf_reg, lo)) = reg {
+            regs.push(crate::pass::RegLocalFact {
+                func_addr,
+                name: unique,
                 type_: ty,
-                stack_offset: base.wrapping_add(fbreg),
-            }),
-            (None, _, Some((reg, lo)))
-                if child.tag == gimli::DW_TAG_variable && ty.get_size() > 0 =>
-            {
-                regs.push(crate::pass::RegLocalFact {
-                    func_addr,
-                    name: names.unique(&name),
-                    type_: ty,
-                    dwarf_reg: reg,
-                    reg: String::new(),
-                    start: lo.unwrap_or(func_addr),
-                })
-            }
-            _ => {}
+                dwarf_reg,
+                reg: String::new(),
+                start: lo.unwrap_or(func_addr),
+            });
         }
     }
 }

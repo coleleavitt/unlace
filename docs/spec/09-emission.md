@@ -3596,6 +3596,86 @@ since `printlanguage.rs (parentheses)` decides parenthesization with `ptr::eq`.
 Reading the C profile therefore produces the identical token, so introducing the
 plane is a byte-identical rewrite and `docs/baseline.json` is never re-pinned.
 
+**(unlace) Language flavours.** A *flavour* is an output-language profile read from a TOML
+file (`p9_emit/langflavour.rs`): the file names one of the four languages as its `base` and
+overrides parts of that language's `LangProfile`. `printc.rs (PrintC::set_flavour)` selects
+the base language as `option setlanguage` does and then makes `PrintC::lang` return the
+flavour's profile; `PrintC::set_name` drops it, so selecting a language by name always
+renders the built-in one. `out_lang` stays the base, so the type speller, the statement
+emitters of `langrust.rs` and `langgo.rs`, and every pass that asks `OutLang` what a
+construct means behave as they do for the base language. A flavour changes what the printer
+writes and nothing about the recovered function. With no flavour, and with a file that sets
+only `base`, the output is the base language's byte for byte.
+
+The profile is not the whole of a language. A statement emitter may write a keyword as text,
+a pass may test `out_lang` where a capability would do, and a form selects which language's
+emitter runs, not a spelling. So a field is overridable only for the base languages whose
+printer reads it at **every** site that prints the construct. The loader's tables
+(`KEYWORDS`, `OPERATORS`, `FORMS`, `CAPS`) record that per field and base, and
+`langflavour.rs (load)` refuses everything else with the field's name: an unknown key, a
+value the field does not take, an override the base language's printer cannot honour
+(`forms.switch: the c printer cannot honour "rust-match": ...`). Each row was established
+twice: by reading the field's readers, and by a corpus check per base language over 22
+native fixtures of `crates/unlace-analysis/tests/fixtures`, the Rust and Go fixtures of
+`tests/fixtures` and two DEX files. For a keyword or an operator the check sets the key to a
+marker and requires that the output equals the base language's except where the marker
+stands for the default spelling, and that no default spelling of the construct is left
+outside comments and constants. A key that leaves one behind is not offered for that base.
+
+- **Keywords** are the profile's `kw_*` fields and `null_literal`. C and Java take all
+  fourteen keys (`break`, `case`, `continue`, `default`, `do`, `else`, `for`, `goto`, `if`,
+  `null`, `return`, `switch`, `true`, `while`); `true` is printed only as the condition of
+  an endless loop. Rust takes `break`, `continue`, `default` (its `_` arm), `else`, `if`,
+  `null`, `return`, `switch` (its `match`) and `while`. Go takes `continue`, `else`, `goto`,
+  `null` and `switch`: its statement emitters and conversion closures write `if`, `return`,
+  `break`, `for`, `case` and `default` as text.
+- **Operators.** An `OpToken` is a static compared by identity (`printlanguage.rs
+  (parentheses)`), so a flavour does not replace tokens. It carries a spelling per token,
+  and every place that writes a token's opening text asks `printc.rs (PrintC::op_spelling)`:
+  the RPN emitter, and the statement emitters that write `!`, `&&`, `||` or `=` themselves.
+  Precedence, associativity, spacing and parenthesization stay the token's. A key covers the
+  C token and the token the base language's `map_token` puts in its place; where the base
+  prints two keys as one token (Go's `>>` for both right shifts) a file may set one of them.
+  Rust does not take `plus`, `minus` or `multiply` (integer arithmetic prints as
+  `wrapping_*` calls) nor `assign` (an array initialization writes its `=` as text). Go
+  does not take `boolean_not`, `boolean_or`, `not_equal`, `boolean_xor` or `assign`, which
+  its bottom-test loop header and its conversion closures write as text. The compound
+  assignments, `++`, the conditional, the unary minus, address-of, dereference, the member
+  and subscript tokens, the cast, the call, the comma and the or of enum constants have no
+  key.
+- **Forms.** A form picks which language's emitter prints a construct. That emitter writes
+  its own language's keywords and expects the structure its language was given, so most
+  forms cannot be mixed. Three can. C takes `member = "rust-deref-paren"`: `p->f` prints as
+  `(*p).f` at every member access, the constant-pool reference of `printc/cpoolprint.rs`
+  included. Rust takes `goto = "c-goto"` (with `keywords.goto`, which Rust lacks) and
+  `label = "c-colon"`: the jump Rust renders as a diverging marker prints as a `goto`
+  statement and its target as a label line, so no marker is counted.
+- **Capabilities.** C takes `implicit_bool_conditions = false`, which is `truthycond off`:
+  the capability is read at the one site that option acts on. No other capability is
+  overridable. Ten are read by nothing. `c_for`, `integer_promotion` and
+  `signed_text_byte` describe the base language to the passes, which ask `OutLang`, and to
+  the arithmetic of case labels. The rest are read at some of the sites that print the
+  construct and not at others: `brace_elision` leaves the one-line `if (c) break;`,
+  `integer_suffixes` the suffix of a pointer scale, `ternary` the guarded ARM shift and
+  `paren_conditions` the `while( true )` of an endless loop.
+- **Types.** There is no type table. The speller is chosen by `out_lang` (`langtypes.rs`),
+  not read from the profile, and a type's name is also its identity in the type factory.
+
+The one text pass after the printer, the cookie literal-return rewrite of
+`crates/unlace-decomp/src/infra/decompile_drive.rs`, matches and writes the printer's
+spellings of `=` and `return`, so it also applies under a flavour that respells them.
+Identifiers are still checked against the base language's reserved words
+(`LangProfile::sanitize_identifiers`).
+
+Three surfaces load a flavour. `--language-file FILE` on `decompile` and `decompile-all`
+(`crates/unlace-cli/src/langfile.rs`) reads and checks the file while the command line is
+parsed, selects its base language as `--language` would, so every reader of the options sees
+the base, and installs the flavour once the options are applied; `--language` and a
+`setlanguage` for another language are refused with it, and a `--jobs` worker reads the file
+again. The console command `language file <path>` does the same in a script. The facade's is
+`Decompiler::with_language_file` in `crates/unlace/src/unstable/flavour.rs`.
+`decompile-project` and `decompile-graph` refuse the flag: their output is C by contract.
+
 **(unlace) The rust-language back-end.** `option setlanguage rust-language` selects
 it (`p0_knowledge/options.rs (OptionSetLanguage)`, the upstream selector, which
 now rejects a name no back-end claims rather than silently keeping C). The

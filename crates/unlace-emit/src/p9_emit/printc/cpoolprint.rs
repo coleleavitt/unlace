@@ -115,12 +115,15 @@ impl PrintC {
                 match relative {
                     None => self.push_atom(&atom(token, TagType::VarToken, color)),
                     Some(vn) => {
-                        let member = if self.java() {
-                            &tokens::OBJECT_MEMBER
-                        } else {
-                            &tokens::POINTER_MEMBER
-                        };
-                        self.push_op(member, Some(op_key(op)));
+                        let key = Some(op_key(op));
+                        match self.out_lang {
+                            OutLang::Java => self.push_op(&tokens::OBJECT_MEMBER, key),
+                            // C's member form, which a language flavour may change.
+                            OutLang::C => self.push_member_through_pointer(key),
+                            OutLang::Rust | OutLang::Go => {
+                                self.push_op(&tokens::POINTER_MEMBER, key);
+                            }
+                        }
                         self.push_vn_ir(fd, arch, vn, op);
                         self.push_atom(&atom(token, TagType::Syntax, color));
                     }

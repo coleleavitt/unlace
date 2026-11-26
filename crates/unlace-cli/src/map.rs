@@ -429,8 +429,9 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
                 forwarded.extend(argv[i - 2..=i].iter().cloned());
             }
             "--assert-strict" => forwarded.push(a.into()),
-            "--language" | "--isa" | "--define-function" | "--assert" | "--project" | "--types"
-            | "--types-cpp" | "--max-fn-seconds" | "--max-fn-memory" => {
+            "--language" | "--language-file" | "--rules" | "--isa" | "--define-function"
+            | "--assert" | "--project" | "--types" | "--types-cpp" | "--max-fn-seconds"
+            | "--max-fn-memory" => {
                 let value = take_value(argv, &mut i, a)?;
                 forwarded.extend([a.to_string(), value]);
             }
@@ -535,8 +536,9 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
 }
 
 const USAGE: &str = "usage: unlace map <binary> <name|0xaddr> (--line N | --span L1:C1-L2:C2 | --addr 0xADDR) [--json] \\\n\
-         \x20               [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] \\\n\
-         \x20               [--option N V].. [--define-function S[-E][=N]|@FILE].. \\\n\
+         \x20               [--language auto|c|rust|java|go | --language-file FILE] \\\n\
+         \x20               [--mode auto|reliable|aggressive|fast] [--option N V].. [--rules FILE].. \\\n\
+         \x20               [--define-function S[-E][=N]|@FILE].. \\\n\
          \x20               [--assert DIRECTIVE|@FILE].. [--assert-strict] [--project FILE] \\\n\
          \x20               [--types FILE.h|DIR].. [--types-cpp CC] [--isa auto|arm|thumb] \\\n\
          \x20               [--slice ARCH] [--target T] [--sleighpath D] [--max-fn-memory MiB] \\\n\

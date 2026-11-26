@@ -13,6 +13,7 @@ use std::collections::BTreeSet;
 
 use unlace_console::engine::{ConsoleProgram, EntrySelector, FunctionEntry};
 use unlace_console::project::FuncResult;
+use unlace_decomp::architecture::Architecture;
 
 use crate::decompile_all::{self, Args, DriverDefaults};
 use crate::funcdecl::Declared;
@@ -36,6 +37,8 @@ pub struct Request {
     pub options: Vec<(String, String)>,
     /// `--language`.
     pub language: Option<String>,
+    /// `--language-file`: a language flavour file ([`check_language_file`]).
+    pub language_file: Option<String>,
     /// `--mode`.
     pub mode: Option<String>,
     /// `--target`: the SLEIGH language id.
@@ -99,6 +102,7 @@ impl Request {
             ("--isa", &self.isa),
             ("--mode", &self.mode),
             ("--language", &self.language),
+            ("--language-file", &self.language_file),
             ("--project", &self.project),
         ] {
             if let Some(value) = value {
@@ -174,6 +178,14 @@ pub fn read_idb(path: &str, bytes: bool) -> Result<Idb, String> {
         noreturn: knowledge.noreturn,
         target,
     })
+}
+
+/// Check the text of a language flavour file (`--language-file`,
+/// `unlace_decomp::langflavour`); the error names the field at fault.
+pub fn check_language_file(text: &str) -> Result<(), String> {
+    unlace_decomp::langflavour::load(text)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// The SHA-256 of the file at `path`, the identity `unlace project` binds.
@@ -259,14 +271,22 @@ pub struct Session {
 
 /// Parse and load `request` once.
 pub fn load(request: &Request) -> Result<Session, LoadError> {
+    load_with(request, &mut |_| Ok(()))
+}
+
+/// [`load`], with `install` run on the architecture as soon as it is built,
+/// before any option is applied: where the `unlace` crate registers the rules
+/// and phase callbacks of `unlace::unstable`. An `Err` from it fails the load.
+pub fn load_with(
+    request: &Request,
+    install: &mut dyn FnMut(&mut Architecture) -> Result<(), String>,
+) -> Result<Session, LoadError> {
     let args =
         decompile_all::parse_args(&request.argv(), "decompile").map_err(LoadError::Arguments)?;
     let segments = request.raw.as_ref().and_then(|raw| raw.segments.clone());
-    let mut prog = match segments {
-        Some(runs) => decompile_all::load_program_segments(&args, DriverDefaults::Decompile, runs),
-        None => decompile_all::load_program(&args, DriverDefaults::Decompile),
-    }
-    .map_err(LoadError::Load)?;
+    let mut prog =
+        decompile_all::load_program_embedded(&args, DriverDefaults::Decompile, segments, install)
+            .map_err(LoadError::Load)?;
     for &address in &request.noreturn {
         declare_no_return(&mut prog, address).map_err(LoadError::Load)?;
     }

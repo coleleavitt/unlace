@@ -46,6 +46,12 @@ pub struct DecompileArgs {
     /// instead of the C.
     pub cfg_dot: bool,
     pub options: Vec<(String, String)>,
+    /// `--language-file FILE`: the flavour the console is told to print through
+    /// (`language file`, after the options).
+    pub(crate) language_file: Option<crate::langfile::LanguageFile>,
+    /// `--rules FILE` (repeatable): rewrite rule files, lowered to `rewrite
+    /// rules` lines ahead of the options.
+    pub rules: Vec<String>,
     /// Run the first by-name attempt with `fast_funcdisc off` after every other
     /// option; a name miss retries without it ([`defers_fast_funcdisc`]).
     pub defer_fast_funcdisc: bool,
@@ -211,6 +217,15 @@ fn option_failure(out: &str) -> Option<String> {
     None
 }
 
+/// Why a `rewrite rules` line was refused: the rule file changed or went away
+/// after the command line checked it. The run would otherwise print C the
+/// rules were never applied to.
+fn rule_file_failure(out: &str) -> Option<String> {
+    command_failures(out)
+        .into_iter()
+        .find_map(|(command, reason)| reason.filter(|_| command.starts_with("rewrite rules ")))
+}
+
 /// The reason the analysis commit failed, recovered from the transcript.
 ///
 /// `IfcReadSymbols` maps a failed `commit_pending_analysis` to an
@@ -333,8 +348,14 @@ fn check_errors(
             ),
         });
     }
+    if let Some(reason) = rule_file_failure(out) {
+        return Some(reason);
+    }
     if let Some(reason) = option_failure(out) {
         return Some(reason);
+    }
+    if let Some(reason) = language_file_failure(out) {
+        return Some(format!("--language-file {reason}"));
     }
     if let Some(reason) = read_symbols_failure(out) {
         return Some(format!("read symbols (analysis commit) failed: {reason}"));
@@ -538,6 +559,14 @@ fn command_failures(out: &str) -> std::collections::BTreeMap<&str, Option<String
     failures
 }
 
+/// The reason the console refused the `language file` command (the file changed or went away
+/// after this process validated it), or `None` when it ran clean or was not issued.
+fn language_file_failure(out: &str) -> Option<String> {
+    command_failures(out)
+        .into_iter()
+        .find_map(|(command, reason)| reason.filter(|_| command.starts_with("language file ")))
+}
+
 /// The diagnostic the console printed for the command `line`, or `None` when it
 /// ran clean.  `Some` for a command whose echo never appears at all — a script
 /// that stopped early did not apply it.
@@ -661,6 +690,9 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
         .map_err(|_| format!("binary not found: {}", args.binary))?;
     let binary = binary.to_string_lossy().to_string();
     reject_unquotable("binary path", &binary)?;
+    for rules in &args.rules {
+        reject_unquotable("rule file path", rules)?;
+    }
 
     let engine = match &args.decomp_dbg {
         Some(d) if !Path::new(d).exists() => {
@@ -713,6 +745,9 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
     }
     if let Some(tp) = &trace_path {
         reject_unquotable("temp directory", &tp.display().to_string())?;
+    }
+    if let Some(file) = &args.language_file {
+        reject_unquotable("language file path", &file.path)?;
     }
 
     // (unlace, RE-need `analysis-generated-function-name`) The driver defaults, split
@@ -1082,8 +1117,10 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
     // rather than in two that can disagree.
     let mut forwarded: Vec<String> = Vec::new();
     let mut saw_language = false;
+    let mut language_file: Option<crate::langfile::LanguageFile> = None;
     let mut mode: Option<String> = None;
     let mut kasserts: Vec<String> = Vec::new();
+    let mut rules: Vec<String> = Vec::new();
     let mut func_decls: Vec<crate::funcdecl::FuncDecl> = Vec::new();
     let mut assertions: Vec<unlace_console::assertions::Directive> = Vec::new();
     let mut assert_strict = false;
@@ -1154,7 +1191,23 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
                 forwarded.push(value);
                 saw_language = true;
             }
+            "--language-file" => {
+                let value = take_value(argv, &mut i, "--language-file")?;
+                let file = crate::langfile::LanguageFile::read(&value)?;
+                options.push(("setlanguage".into(), file.base_name().into()));
+                if language_file.replace(file).is_some() {
+                    return Err("duplicate --language-file".into());
+                }
+                forwarded.push("--language-file".into());
+                forwarded.push(value);
+            }
             "--mode" => mode = Some(take_value(argv, &mut i, "--mode")?),
+            "--rules" => {
+                let value = take_value(argv, &mut i, "--rules")?;
+                rules.push(value.clone());
+                forwarded.push("--rules".into());
+                forwarded.push(value);
+            }
             "--kassert" => kasserts.push(take_value(argv, &mut i, "--kassert")?),
             "--define-function" => {
                 let value = take_value(argv, &mut i, "--define-function")?;
@@ -1311,6 +1364,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
     if let Some(flag) = record_flag {
         return Err(format!("{flag} selects --json record keys; add --json"));
     }
+    decompile_all::check_rule_files(&rules)?;
     // `--project`: its overrides come first, so a command-line --assert still wins.
     if let Some(project) = &project_file {
         let mut stored = Vec::new();
@@ -1328,6 +1382,10 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
         types_cpp.as_deref(),
     )?;
     let assertions = crate::assertdecl::with_types(&types, types_cpp.as_deref(), sdk, assertions)?;
+
+    if let Some(file) = &language_file {
+        file.check_selection(saw_language, &options)?;
+    }
 
     // (unlace outlang, DIV-80) The auto policy -- follow the binary when the caller
     // named no language. See `decompile_all::detected_output_language`.
@@ -1358,6 +1416,8 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
         trace,
         cfg_dot,
         options,
+        language_file,
+        rules,
         defer_fast_funcdisc,
         kasserts,
         func_decls,
@@ -1380,8 +1440,9 @@ fn usage() {
         "usage: unlace decompile <binary> <name|0xaddr> [--addr] [--json] [--raw] [--regions] [--trace] [--cfg-dot] \\\n\
          \x20                     [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
          \x20                     [--tokens] [--storage] \\\n\
-         \x20                     [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] \\\n\
-         \x20                     [--option N V].. [--kassert ARGS].. \\\n\
+         \x20                     [--language auto|c|rust|java|go | --language-file FILE] \\\n\
+         \x20                     [--mode auto|reliable|aggressive|fast] \\\n\
+         \x20                     [--option N V].. [--rules FILE].. [--kassert ARGS].. \\\n\
          \x20                     [--define-function S[-E][=N]|@FILE].. \\\n\
          \x20                     [--assert DIRECTIVE|@FILE].. [--assert-strict] [--project FILE] \\\n\
          \x20                     [--types FILE.h|DIR].. [--types-cpp CC] \\\n\
@@ -1419,6 +1480,11 @@ fn usage() {
          --mode applies an option preset (`unlace modes`); omitted, `auto` picks one by\n\
          input size.  Explicit --option values win over the preset.\n\
          --language selects the output language; omitted, it follows the binary.\n\
+         --language-file FILE prints through a language flavour instead: a TOML file\n\
+         that names a base language and overrides keyword and operator spellings,\n\
+         forms and capabilities of its profile (`unlace docs cli`, \"Language files\").\n\
+         --rules FILE (repeatable) adds the p-code rewrite rules of a TOML rule file to\n\
+         the rule pools for this run (`unlace docs cli`, \"--rules FILE\").\n\
          --max-fn-memory MiB stops the decompile once the process doing it holds\n\
          more than MiB resident and the function added 64 MiB or more, and\n\
          reports that instead of being killed by the system (omitted: under a\n\

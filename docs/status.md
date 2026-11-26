@@ -68,6 +68,10 @@ no row checks its output, so treat its results as unverified. [`specs/Ghidra/Pro
 - **Output (`--option outlang`).** `c` is the default. `rust` and `go` are selectable. The printer also
   has a Java output language in code, but `outlang` does not accept it, so it is not supported.
   [`crates/unlace-decomp/phases.toml` (`outlang`); `crates/unlace-emit/src/p9_emit/lang.rs`]
+- **Language files (`--language-file`).** A TOML file over one of the output languages that respells
+  keywords and operators and changes a few forms; each field is accepted only for the base languages
+  whose printer honours it everywhere. Experimental.
+  [`crates/unlace-emit/src/p9_emit/langflavour.rs`; `docs/cli.md`, "Language files"]
 
 ## Front ends
 
@@ -89,10 +93,16 @@ Opt-in or unfinished. Each is off by default or marked above:
 
 - **`egraph` option** (default off): equality saturation over mixed boolean-arithmetic trees. It helps
   obfuscated code together with `mba`; it stays opt-in because it costs time on ordinary output.
+- **Custom passes and rewrite rule files** (`unlace::unstable::hooks`, `--rules FILE`): p-code rules
+  and phase callbacks added from Rust ([docs/api.md](api.md)), and p-code rewrites loaded from a
+  TOML file ([docs/cli.md](cli.md)). Both are outside the library's stability promise, and the
+  rule-file format can change.
 - **Source-language plane for Rust, Go and Swift**: a [PROPOSAL] in `docs/multilang.md`, not built.
 - **Ghidra front end**: 5 unchecked items in `docs/ghidra-integration.md`.
 - **Known failures** listed under Architectures.
 - **Java output language** in the printer: not reachable through `outlang`.
+- **Language files** (`--language-file`, `unlace::unstable::flavour`): the format and the set of
+  overridable fields can change.
 - **Tier 3 architectures**: decompile without an output check.
 
 Option-level status (tier, default, what each flip does) is in [docs/options.md](options.md), which is

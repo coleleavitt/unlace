@@ -47,6 +47,7 @@ use unlace_console::project::{
 // `File::architecture()` (the ARM-discovery default, decbench) plus the
 // section/segment walks the zero-discovery diagnosis reads.
 use object::{Object, ObjectSection, ObjectSegment};
+use unlace_decomp::architecture::Architecture;
 use unlace_decomp::decompile_drive::{LineMapping, TypeInfo, VarInfo, print_c_types};
 use unlace_decomp::option_dispatch::UNLACE_OPTION_NAMES;
 use unlace_decomp::options::OptionDatabase;
@@ -103,6 +104,13 @@ pub(crate) struct Args {
     /// disables. `None` (omitted) is the cgroup default. See [`arm_fn_budgets`].
     pub(crate) max_fn_memory: Option<u64>,
     pub(crate) options: Vec<(String, String)>,
+    /// `--language-file FILE` (`decompile`, `decompile-all`): the flavour the printer renders,
+    /// installed by [`load_program`] once the options are applied.
+    pub(crate) language_file: Option<crate::langfile::LanguageFile>,
+    /// `--rules FILE` (repeatable): rewrite rule files, registered by
+    /// [`load_program`] before any option is applied
+    /// (`unlace_decomp::rewritefile`).
+    pub(crate) rules: Vec<String>,
     /// `--define-function <start[-end][=name] | @file>` (repeatable): the
     /// caller-declared function boundaries, applied by [`load_program`] right
     /// after the analysis commit so they outrank discovery. Every surface that
@@ -189,6 +197,8 @@ impl Args {
             max_fn_seconds: 0,
             max_fn_memory: Some(0),
             options: Vec::new(),
+            language_file: None,
+            rules: Vec::new(),
             func_decls: Vec::new(),
             assertions: Vec::new(),
             assert_strict: false,
@@ -1154,6 +1164,8 @@ pub(crate) fn pool_config<'a>(
         binary: &args.binary,
         mode: args.mode,
         options: &args.options,
+        language_file: args.language_file.as_ref().map(|file| file.path.as_str()),
+        rules: &args.rules,
         func_decls: args
             .func_decls
             .iter()
@@ -1390,13 +1402,17 @@ fn run_summary(args: &Args, filters: &Filters) -> i32 {
         None => (None, None),
     };
     let loaded = match request {
-        Some(request) => {
-            load_program_with_rust_profiles(args, DriverDefaults::Functions, Some(request), None)
-                .map(|prog| {
-                    let all = prog.function_entries_canonical();
-                    (prog, all)
-                })
-        }
+        Some(request) => load_program_with_rust_profiles(
+            args,
+            DriverDefaults::Functions,
+            Some(request),
+            None,
+            &mut |_| Ok(()),
+        )
+        .map(|prog| {
+            let all = prog.function_entries_canonical();
+            (prog, all)
+        }),
         None => list_functions(args),
     };
     let (prog, all) = match loaded {
@@ -1949,21 +1965,28 @@ pub(crate) fn load_program(
             crate::rust_signatures::load(std::path::Path::new(path)).map(|(request, _)| request)
         })
         .transpose()?;
-    load_program_with_rust_profiles(args, defaults, request, None)
+    load_program_with_rust_profiles(args, defaults, request, None, &mut |_| Ok(()))
 }
 
-/// [`load_program`] over disjoint runs of bytes an embedding caller already
-/// holds, each `(address, bytes, flags)`, in place of `args.binary`'s bytes.
-/// `args` must be a raw-image parse; its file still sizes the `auto` mode.
-pub(crate) fn load_program_segments(
+/// What an embedding caller does to the architecture of a load, before any
+/// option is applied to it: where its rules and phase callbacks are registered
+/// (`docs/spec/00-overview.md` §0.6, "Embedder hooks").
+pub(crate) type Install<'a> = &'a mut dyn FnMut(&mut Architecture) -> Result<(), String>;
+
+/// [`load_program`] for an embedding caller. `segments` are disjoint runs of
+/// bytes it already holds, each `(address, bytes, flags)`, in place of
+/// `args.binary`'s bytes; `args` must then be a raw-image parse, and its file
+/// still sizes the `auto` mode. `install` is run once on the architecture.
+pub(crate) fn load_program_embedded(
     args: &Args,
     defaults: DriverDefaults,
-    runs: Vec<(u64, Vec<u8>, u32)>,
+    segments: Option<Vec<(u64, Vec<u8>, u32)>>,
+    install: Install<'_>,
 ) -> Result<ConsoleProgram, String> {
-    if !args.raw_image {
+    if segments.is_some() && !args.raw_image {
         return Err("segments load only as a raw image".to_string());
     }
-    load_program_with_rust_profiles(args, defaults, None, Some(runs))
+    load_program_with_rust_profiles(args, defaults, None, segments, install)
 }
 
 fn load_program_with_rust_profiles(
@@ -1971,6 +1994,7 @@ fn load_program_with_rust_profiles(
     defaults: DriverDefaults,
     request: Option<unlace_analysis::flirt::rustprofiles::Request>,
     segments: Option<Vec<(u64, Vec<u8>, u32)>>,
+    install: Install<'_>,
 ) -> Result<ConsoleProgram, String> {
     let binary = std::fs::canonicalize(&args.binary)
         .map_err(|_| format!("binary not found: {}", args.binary))?
@@ -2059,6 +2083,13 @@ fn load_program_with_rust_profiles(
         format!("{msg}{raw_hint}")
     })?;
 
+    // Before any option: a registration rebuilds the action tree, which drops
+    // the breakpoints and disabled rules an option may set on it.
+    for path in &args.rules {
+        unlace_decomp::rewritefile::register_file(prog.arch_mut(), std::path::Path::new(path))?;
+    }
+    install(prog.arch_mut())?;
+
     let non_x86_64 = !prog.arch().archid.starts_with("x86:LE:64:");
     for (name, value) in driver_default_options_for_arch(
         non_x86_64,
@@ -2084,6 +2115,9 @@ fn load_program_with_rust_profiles(
     // BEFORE the gated analysis commit (the `option` < `read symbols` ordering
     // the script path enforces), so a per-pass gate takes effect.
     apply_runtime_options(&mut prog, &args.options)?;
+    if let Some(file) = &args.language_file {
+        file.install(&mut prog);
+    }
     // (unlace `--assert bytes`) The IMAGE-scoped directives, before the commit and
     // before any read of the addresses they name: a byte overlay states what the
     // running program put there, and every later decode has to see it. The
@@ -3243,6 +3277,8 @@ pub(crate) fn parse_args_with_filters(
     let mut max_fn_seconds: Option<u64> = None;
     let mut max_fn_memory: Option<u64> = None;
     let mut options: Vec<(String, String)> = Vec::new();
+    let mut language_file: Option<crate::langfile::LanguageFile> = None;
+    let mut rules: Vec<String> = Vec::new();
     let mut func_decls: Vec<crate::funcdecl::FuncDecl> = Vec::new();
     let mut assertions: Vec<unlace_console::assertions::Directive> = Vec::new();
     let mut assert_strict = false;
@@ -3421,6 +3457,9 @@ pub(crate) fn parse_args_with_filters(
                 }
             }
             "--option" => options.push(crate::args::take_option(argv, &mut i)?),
+            "--rules" if matches!(cmd, "decompile-all" | "decompile") => {
+                rules.push(take(argv, &mut i, "--rules")?)
+            }
             // (unlace outlang) `--language` is the first-class surface for the
             // output language; it lowers to the upstream `setlanguage` option, so
             // it reaches every downstream consumer (the console script here, the
@@ -3432,6 +3471,21 @@ pub(crate) fn parse_args_with_filters(
                     options.push(("setlanguage".into(), lang.into()));
                 }
                 saw_language = true;
+            }
+            // A flavour's base language is selected as `--language` selects one, so every
+            // reader of the options sees it; `load_program` installs the profile after them.
+            "--language-file" if matches!(cmd, "decompile-all" | "decompile") => {
+                let path = take(argv, &mut i, "--language-file")?;
+                let file = crate::langfile::LanguageFile::read(&path)?;
+                options.push(("setlanguage".into(), file.base_name().into()));
+                if language_file.replace(file).is_some() {
+                    return Err("duplicate --language-file".into());
+                }
+            }
+            "--language-file" => {
+                return Err(format!(
+                    "--language-file does not apply to {cmd}; use it with decompile or decompile-all"
+                ));
             }
             "--mode" => mode = Some(take(argv, &mut i, "--mode")?),
             "--slice" => slice = Some(take(argv, &mut i, "--slice")?),
@@ -3461,6 +3515,7 @@ pub(crate) fn parse_args_with_filters(
     }
 
     let binary = binary.ok_or_else(|| format!("{cmd} requires <binary>"))?;
+    check_rule_files(&rules)?;
     // `--project`: its overrides come first, so a command-line --assert still wins.
     if let Some(project) = &project_file {
         let mut stored = Vec::new();
@@ -3556,6 +3611,10 @@ pub(crate) fn parse_args_with_filters(
         if saw_entry {
             return Err("--entry requires --raw-image".into());
         }
+    }
+
+    if let Some(file) = &language_file {
+        file.check_selection(saw_language, &options)?;
     }
 
     // (unlace outlang, DIV-80) The auto policy: with no `--language` and no
@@ -3689,6 +3748,8 @@ pub(crate) fn parse_args_with_filters(
         max_fn_seconds,
         max_fn_memory,
         options,
+        language_file,
+        rules,
         func_decls,
         assertions,
         assert_strict,
@@ -3717,6 +3778,24 @@ pub(crate) fn parse_args_with_filters(
         crate::rust_signatures::validate_application(&args)?;
     }
     Ok((args, filters))
+}
+
+/// Read and check every `--rules` file, and that no two of them name a rule
+/// alike: a bad rule file is a bad argument, reported before anything is
+/// loaded.
+pub(crate) fn check_rule_files(paths: &[String]) -> Result<(), String> {
+    let mut names = BTreeSet::new();
+    for path in paths {
+        for rule in unlace_decomp::rewritefile::read_rules(std::path::Path::new(path))? {
+            if !names.insert(rule.name().to_string()) {
+                return Err(format!(
+                    "{path}: rule \"{}\": a rule of an earlier --rules file has this name",
+                    rule.name()
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn parse_count(v: &str, flag: &str) -> Result<u64, String> {
@@ -3754,7 +3833,9 @@ fn usage_decompile_all() {
          \x20                   [--filter REGEX] [--min-size N] [--max-size N] \\\n\
          \x20                   [--reachable-from <name|0xaddr>] [--sort addr|size|name] [--limit N] \\\n\
          \x20                   [--summary] [--define-function S[-E][=N]|@FILE].. \\\n\
-         \x20                   [--option N V].. [--isa auto|arm|thumb] [--slice ARCH] [--target T] [--sleighpath D]\n\
+         \x20                   [--language auto|c|rust|java|go | --language-file FILE] \\\n\
+         \x20                   [--option N V].. [--rules FILE].. [--isa auto|arm|thumb] [--slice ARCH] \\\n\
+         \x20                   [--target T] [--sleighpath D]\n\
          \x20                   [--raw-image --target T --base VMA (--entry|--addr VMA)..]\n\
          \n\
          Decompile every CODE-backed function in one in-process load (load-once,\n\
@@ -3776,6 +3857,8 @@ fn usage_decompile_all() {
          --storage (with --json) adds `storage` to every variable: the registers\n\
          and stack slots that hold it, each with the instruction address ranges\n\
          in which it does.\n\
+         --rules FILE (repeatable) adds the p-code rewrite rules of a TOML rule file\n\
+         to the rule pools for this run (`unlace docs cli`, \"--rules FILE\").\n\
          --max-fn-seconds N caps ONE function's decompile at N seconds (default 10\n\
          for unfiltered fast runs, 120 otherwise; 0 disables); a function over\n\
          budget becomes its own `error` record and the batch continues.\n\
@@ -3808,6 +3891,10 @@ fn usage_decompile_all() {
          --option values win.\n\
          An unfiltered run that discovers no function at all exits 1 with the\n\
          reason on stderr and in the document's run-level `error` field.\n\
+         --language selects the output language (omitted, it follows the binary);\n\
+         --language-file FILE prints through a language flavour instead, a TOML\n\
+         file that names a base language and overrides parts of its profile\n\
+         (`unlace docs cli`, \"Language files\").\n\
          \n\
          --define-function <start[-end][=name] | @file> (repeatable) declares where a\n\
          function starts and ends: start names an entry discovery missed, the\n\

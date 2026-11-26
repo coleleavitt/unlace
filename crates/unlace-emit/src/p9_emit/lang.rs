@@ -433,6 +433,7 @@ pub struct LangCaps {
 /// the [`OpToken`]s whose *spelling* varies. The other ~40 operator tokens —
 /// arithmetic, comparison, shifts, the ten `op=` forms — are identical across
 /// every language unlace targets and stay in `printc::tokens`, un-churned.
+#[derive(Clone, Copy)]
 pub struct LangProfile {
     /// The `option setlanguage` name.
     pub name: &'static str,

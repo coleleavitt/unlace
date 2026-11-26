@@ -79,6 +79,8 @@ fn script_args(binary: &str, target: &str) -> super::DecompileArgs {
         trace: false,
         cfg_dot: false,
         options: Vec::new(),
+        language_file: None,
+        rules: Vec::new(),
         defer_fast_funcdisc: false,
         kasserts: Vec::new(),
         func_decls: Vec::new(),
@@ -182,6 +184,65 @@ fn deferred_fast_funcdisc_outranks_the_preset() {
     );
 }
 
+/// A flavour goes in after the options: `option setlanguage` selects a language by name,
+/// which drops a flavour installed before it.
+#[test]
+fn the_language_file_command_follows_the_language_options() {
+    let file = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
+    std::fs::write(file.path(), "base = \"c\"\n").unwrap();
+    let path = file.path().to_str().unwrap();
+    let mut args = script_args("/x/a.out", "main");
+    args.options = vec![("setlanguage".into(), "c-language".into())];
+    args.language_file = Some(crate::langfile::LanguageFile::read(path).unwrap());
+    let script = build_script(&args, Path::new("/tmp/unlace_c_x.c"), LISTING, None);
+    let lines: Vec<&str> = script.lines().collect();
+    let command = format!("language file {path}");
+    let at = lines
+        .iter()
+        .position(|line| *line == command)
+        .unwrap_or_else(|| panic!("no {command:?} in:\n{script}"));
+    assert!(
+        lines[..at].contains(&"option setlanguage c-language"),
+        "{script}"
+    );
+    assert!(
+        lines[at..]
+            .iter()
+            .all(|line| !line.starts_with("option setlanguage")
+                && !line.starts_with("option outlang")),
+        "{script}"
+    );
+    let read_symbols = lines.iter().position(|line| *line == "read symbols");
+    assert!(read_symbols.is_some_and(|read| at < read), "{script}");
+}
+
+/// Recorded `decomp_dbg` transcript: the flavour file was replaced after `unlace` checked it.
+const REFUSED_LANGUAGE_FILE: &str = "\
+[decomp]> load file /x/fauxware
+/x/fauxware successfully loaded: x86:LE:64:default:gcc
+[decomp]> option setlanguage c-language
+Decompiler produces c-language
+[decomp]> language file /x/pseudo.toml
+Execution error: /x/pseudo.toml: keywords.retrun: unknown keyword (the keywords are: break)
+[decomp]> read symbols
+[decomp]> quit
+";
+
+#[test]
+fn reports_a_language_file_the_console_refused() {
+    assert_eq!(
+        super::language_file_failure(REFUSED_LANGUAGE_FILE).as_deref(),
+        Some("/x/pseudo.toml: keywords.retrun: unknown keyword (the keywords are: break)")
+    );
+    let accepted = REFUSED_LANGUAGE_FILE.replace(
+        "Execution error: /x/pseudo.toml: keywords.retrun: unknown keyword (the keywords are: break)\n",
+        "",
+    );
+    assert_eq!(super::language_file_failure(&accepted), None);
+    // Another command's diagnostic is not this one's.
+    assert_eq!(super::language_file_failure(EMPTY_SCOPE), None);
+}
+
 /// Recorded `decomp_dbg` transcript: the empty-scope load failure (DIV-88),
 /// as the console reported it before the degenerate component was skipped.
 const EMPTY_SCOPE: &str = "\
@@ -246,6 +307,33 @@ Decompiling sub_26a0
 Decompilation complete
 [decomp]> quit
 ";
+
+/// Recorded transcript: the rule file went away after the command line
+/// checked it. The console refuses the `rewrite rules` line and carries on to
+/// print C the rules were not applied to.
+const RULE_FILE_GONE: &str = "\
+[decomp]> load file /x/a.out
+/x/a.out successfully loaded: x86:LE:64:default:gcc
+[decomp]> rewrite rules /x/gone.toml
+Execution error: /x/gone.toml: cannot read the rule file: No such file or directory (os error 2)
+[decomp]> option listing on
+Listing/xref disassembly tier turned on
+[decomp]> read symbols
+[decomp]> load function main
+[decomp]> decompile
+Clearing old decompilation
+Decompiling main
+Decompilation complete
+[decomp]> quit
+";
+
+#[test]
+fn reports_a_rule_file_the_console_refused() {
+    assert_eq!(
+        check_errors(RULE_FILE_GONE, "main", "/x/a.out", false, false).as_deref(),
+        Some("/x/gone.toml: cannot read the rule file: No such file or directory (os error 2)")
+    );
+}
 
 #[test]
 fn recovers_the_real_load_failure_reason() {
@@ -557,6 +645,34 @@ fn console_path_quotes_whitespace() {
     assert_eq!(
         console_path("/odd \"name\"/a.out"),
         r#""/odd \"name\"/a.out""#
+    );
+}
+
+/// `--rules` files are registered directly after the image load and before
+/// every `option` line, the injected defaults included: a registration
+/// rebuilds the action tree and would drop what an option set on it.
+#[test]
+fn build_script_registers_rule_files_before_every_option() {
+    let script = build_script(
+        &super::DecompileArgs {
+            rules: vec!["/tmp/a.toml".into(), "/tmp/my rules/b.toml".into()],
+            options: vec![("ctypes".into(), "on".into())],
+            ..script_args("/tmp/a.out", "main")
+        },
+        Path::new("/tmp/unlace.c"),
+        LISTING,
+        None,
+    );
+    let lines: Vec<&str> = script.lines().collect();
+    assert_eq!(
+        lines[..4],
+        [
+            "load file /tmp/a.out",
+            "rewrite rules /tmp/a.toml",
+            "rewrite rules \"/tmp/my rules/b.toml\"",
+            "option errortoomanyinstructions off",
+        ],
+        "{script}"
     );
 }
 

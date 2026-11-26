@@ -38,6 +38,7 @@ mod image;
 mod interior;
 mod jobs;
 mod jsonfmt;
+mod langfile;
 mod limits;
 mod loadtime;
 mod lumina;

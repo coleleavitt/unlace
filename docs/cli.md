@@ -282,6 +282,9 @@ unlace decompile ./a.out main --option realtypes zzz
 
 `unlace catalog` lists each option's accepted values.
 
+`--rules FILE` (repeatable) adds the p-code rewrite rules of a TOML rule file to the
+simplification pools for this run; see *`--rules FILE`* below for the file and its checks.
+
 **A generated name is a selector.** unlace calls a function no symbol covers
 `sub_<addr>`, and it prints such a name for entries the whole-binary inventory
 does not hold — a recovered tail call renders `sub_1170(a0)`, and `unlace strings`
@@ -1323,7 +1326,9 @@ structuring option (`unlace catalog`) can remove it instead. `--language` also w
 `decompile-all`; `decompile-project` is C-only -- it never auto-selects, and errors on an
 explicit non-C language -- and the Ghidra front-end pins its markup document to
 C. The browser decompiler carries the same three choices in its **Language**
-control. See `docs/spec/09-emission.md` §9.6.
+control. See `docs/spec/09-emission.md` §9.6. `--language-file FILE` prints through
+a profile read from a TOML file instead
+([Language files](#language-files---language-file)).
 Omitting `--mode` selects `auto`: files below 500 KiB use `aggressive`, files
 from 500 KiB up to 2 MiB use `reliable`, and files at least 2 MiB use `fast`.
 The raw on-disk byte length is used, with exact cutovers at 512,000 and
@@ -1372,6 +1377,101 @@ With no mode evidence, decoding uses the selected language's default context; us
 `--isa` to select another mode. `--isa` is refused where it could not apply —
 `strings --no-xrefs` decodes nothing, so the pair is a usage error rather than a
 silently dropped flag.
+
+### Language files (`--language-file`)
+
+`--language-file FILE` (`decompile`, `decompile-all`) prints through a **language flavour**: a
+TOML file that names one of the output languages as its base and overrides parts of that
+language's profile. The base language's printer does the printing, so the analysis, the
+types and the structure are the base language's; the file changes spellings and a few forms.
+
+```toml
+base = "c"                      # required: c, rust, go or java
+
+[keywords]                      # how a keyword is spelled
+if = "when"
+else = "otherwise"
+goto = "jump"
+
+[operators]                     # how an operator is spelled; precedence and spacing stay
+assign = ":="
+boolean_and = "and"
+boolean_or = "or"
+boolean_not = "not "            # a prefix operator carries its own blank
+
+[forms]
+member = "rust-deref-paren"     # p->f prints as (*p).f
+```
+
+```bash
+unlace decompile ./ptx.o swallow_file_in_memory --language-file pseudo.toml
+#   when (((file_name) and (*file_name)) and ((*file_name != '-' or (file_name[1])))) {
+#     v1 := (char *)read_file(file_name,0,&used_length);
+#     (*block).start := v1;
+#     when (not v1) {
+#   label_400517:
+#       ...
+#     }
+#   }
+#   otherwise {
+#     ...
+#       jump label_400517;
+```
+
+The file names its base language, so `--language` does not apply with it, and an
+`--option setlanguage` or `outlang` for another language is an error. A `--json` document
+reports the base language in `"language"`. A `--jobs` worker and the console child of
+`decompile` read the file again from the same path. In a console script the command is
+`language file <path>`, after the `option` lines; a later `option setlanguage` renders the
+built-in language again.
+
+A field is overridable only for the base languages whose printer reads it from the profile at
+every place it prints the construct (`docs/spec/09-emission.md` §9.6 says how that was
+checked). Everything else is refused when the file is loaded, before the binary is, with the
+field's name, and the command exits `2`:
+
+```
+error: --language-file pseudo.toml: keywords.retrun: unknown keyword (the keywords are: break, case, ...)
+error: --language-file pseudo.toml: forms.member: unknown form "dot" (expected one of: c-arrow, rust-deref-paren)
+error: --language-file pseudo.toml: forms.switch: the c printer cannot honour "rust-match": the switch was structured for what `break` leaves in the base language
+error: --language-file pseudo.toml: caps.ternary: the c printer cannot honour false
+```
+
+| Table | Keys | Base languages |
+|---|---|---|
+| `[keywords]` | `continue`, `else`, `null`, `switch` | c, rust, go, java |
+| | `break`, `default`, `if`, `return`, `while` | c, rust, java |
+| | `goto` | c, go, java; rust with `forms.goto = "c-goto"` |
+| | `case`, `do`, `for`, `true` | c, java |
+| `[operators]` | `bitwise_and`, `bitwise_not`, `bitwise_or`, `bitwise_xor`, `boolean_and`, `divide`, `equal`, `greater_equal`, `greater_than`, `less_equal`, `less_than`, `modulo`, `shift_left`, `shift_right`, `shift_right_signed` | c, rust, go, java |
+| | `boolean_not`, `boolean_or`, `boolean_xor`, `not_equal` | c, rust, java |
+| | `minus`, `multiply`, `plus` | c, go, java |
+| | `assign` | c, java |
+| `[forms]` | `member`: `c-arrow`, `rust-deref-paren` | c |
+| | `goto`: `c-goto`, `unrepresentable`; `label`: `c-colon`, `comment-only` | rust |
+| `[caps]` | `implicit_bool_conditions = false` (what `--option truthycond off` does) | c |
+
+A keyword key names the construct, and the base language gives the default spelling: in a
+Rust flavour `switch` is `match`, `default` is the `_` arm and `null` is
+`core::ptr::null_mut()`. `true` is the condition of an endless loop (`while( true )`).
+`shift_right` is the logical shift and `shift_right_signed` the arithmetic one (both `>>` in
+C, `>>>` and `>>` in Java); `minus` is the binary operator. Where the base language prints
+two operators as one token (Go's `>>` for both shifts), set one of the two keys. A `[forms]`
+or `[caps]` key set to the base language's own value is accepted and changes nothing.
+
+What a flavour does not change: type names, declarations and type definitions (there is no
+`[types]` table: the type speller belongs to the base language), punctuation (braces, `;`,
+`,`, parentheses, `[]`), compound assignments and `++`, the conditional `?:`, unary minus,
+`&` and `*` as address-of and dereference, casts, calls, an or of enum constants (`A|B`),
+and anything a language's own emitters write as text (Rust's `loop`, `let` and `as`, Go's
+`func` and `:=`). Identifiers are checked against the base language's reserved words, not
+against the flavour's spellings. `decompile-project` and `decompile-graph` are C by contract
+and refuse the flag.
+
+In a Rust flavour, `forms.goto = "c-goto"` with `keywords.goto` and `forms.label = "c-colon"`
+print the jump Rust has no statement for as a `goto` and its target as a label line, where
+`--language rust` prints a `panic!` marker and a comment; such a document reports no
+`unstructured_gotos`.
 
 ### UEFI TE images
 
@@ -1846,6 +1946,9 @@ The whole-binary surface (the benchmark + LLM path). Runs **in-process**
 (`unlace_console::engine::bootstrap_from_object` → `commit_pending_analysis` → loop
 `decompile_func` + `print_c`), loading + analyzing the binary **once** instead of
 `unlace decompile`'s subprocess-per-function (≈10×+ faster on a many-function binary).
+
+`--rules FILE` (repeatable) adds the p-code rewrite rules of a TOML rule file to every function's
+run, in every `--jobs` worker too; see *`--rules FILE`* below.
 
 ### Triage — narrowing the run
 
@@ -2740,7 +2843,8 @@ Behaviors specific to `decompile-all`:
   (`"per-function decompile budget exceeded (N s) in <pass>"`), the batch
   continuing. `<pass>` is the first probe that saw the deadline pass, the
   innermost loop that was running: an action (a rule pool adds its busiest rule
-  this function), `heritage`, `region structuring`, or a jump-table step, and
+  this function, or `rules a and b keep changing one op` for two rules that undo
+  each other), `heritage`, `region structuring`, or a jump-table step, and
   anything inside a flow-time table recovery adds `during jump-table recovery at
   <indirect-jump address>`, e.g. `in action oppool1 (busiest rule earlyremoval)`
   or `in jump-table recovery at 0x1820e009b`. Printing the function and
@@ -3120,11 +3224,12 @@ of the three queries is given:
   variables are still listed.
 
 The lines and columns index the text of this decompile, so give `map` the flags the
-text was made with: `--language`, `--mode`, `--option NAME VALUE`, `--define-function`,
-`--assert` (and `--assert-strict`), `--project`, `--types`, `--types-cpp`, `--isa`,
-`--slice`, `--target`, `--sleighpath`, `--raw-image --base`, `--max-fn-seconds` and
-`--max-fn-memory` mean what they mean on `unlace decompile`, and so do `--image`,
-`--follow-images` and `--member`. A whole-binary `decompile-all` can print a function
+text was made with: `--language`, `--language-file`, `--mode`, `--option NAME VALUE`,
+`--rules`, `--define-function`, `--assert` (and `--assert-strict`), `--project`,
+`--types`, `--types-cpp`, `--isa`, `--slice`, `--target`, `--sleighpath`,
+`--raw-image --base`, `--max-fn-seconds` and `--max-fn-memory` mean what they mean on
+`unlace decompile`, and so do `--image`, `--follow-images` and `--member`. A
+whole-binary `decompile-all` can print a function
 differently from the one-function decompile `map` runs (the pointer-argument casts,
 callee-first prototypes); ask about the text `unlace decompile` prints, or read the
 `code` of the `--json` answer.
@@ -5584,6 +5689,159 @@ A tar or zip archive that holds no object file is left to the loader unless a
 member is named, so it fails as it did before. A gzip stream that is not a
 tar, and a device tree with no `/images` node, are not archives. A decoded member is
 limited to 1 GiB.
+
+## `--rules FILE` — p-code rewrite rules from a file
+
+```bash
+unlace decompile ./a.out right_context --rules rules.toml
+unlace decompile-all ./a.out --rules rules.toml --rules more.toml --json
+```
+
+A rule file adds p-code rewrite rules to the simplification pools for one run, without writing
+Rust. `unlace decompile` and `unlace decompile-all` take it, with and without `--json`, and each
+`--jobs` worker loads it too. The flag repeats: files, and the rules in each, are registered in the
+order given, before any `--option` is applied. A run without `--rules` is unchanged, and so is a
+run whose rules match nothing.
+
+```toml
+# The processor masks the count of a 64-bit shift to six bits, and the lifted code says so.
+[[rule]]
+name = "shiftmask64"
+group = "analysis"
+match = "INT_RIGHT(x:8, INT_AND(n:1, 0x3f))"
+replace = "INT_RIGHT(x, n)"
+```
+
+```
+$ unlace decompile ./a.out right_context
+  return p->i32[7L >> ((unsigned char)shift & 0x3f)];
+$ unlace decompile ./a.out right_context --rules rules.toml
+  return p->i32[7L >> (signed char)shift];
+```
+
+unlace checks that a rule is well formed. It does not check that the rule keeps the meaning of the
+code: the rule above drops a mask that changes the result for a count of 64 or more.
+
+### The file
+
+A file is TOML with one `[[rule]]` table per rule. Each table has exactly these four keys, all
+strings:
+
+| Key | Meaning |
+|---|---|
+| `name` | The rule's name in its pool: lower-case letters, digits and `_`. No other rule of the run has it, built-in rules included. A spent time budget names the rule by it. |
+| `group` | Where the rule runs: it is added behind the last built-in rule of this group, in the pool that holds the group (table below). |
+| `match` | The pattern: an op, the one the rule fires on. |
+| `replace` | What the op becomes: an op tree over the captures and constants, one capture, or one constant. |
+
+`match` and `replace` are expressions:
+
+| Form | Meaning |
+|---|---|
+| `OPCODE(a, b)` | An op and its inputs. Opcodes are spelled as `unlace raw-pcode` prints them. |
+| `x` | A capture: a lower-case name. In a pattern it matches any Varnode, a constant included. A name used twice is one Varnode, or two constants of one size and value. |
+| `0xff`, `255`, `-1` | A constant with this value at the size of its place, which is at most 8 bytes; a negative value is two's complement. |
+| `0x80/0xf0` | Pattern only: any constant `c` with `c & 0xf0 == 0x80`. `0/0` is any constant. |
+| `expr:N` | The same, `N` bytes wide: `x:1`, `0xff:4`, `INT_ZEXT(x):8` (an op's size is its output's). |
+
+An expression holds at most 256 ops, captures and constants.
+In a pattern an input written as an op must be written by an op of that opcode, in any block.
+The two inputs of a commutative op (`INT_ADD`, `INT_MULT`, `INT_AND`, `INT_OR`, `INT_XOR`,
+`INT_EQUAL`, `INT_NOTEQUAL`, `INT_CARRY`, `INT_SCARRY`, `BOOL_AND`, `BOOL_OR`, `BOOL_XOR`,
+`FLOAT_ADD`, `FLOAT_MULT`, `FLOAT_EQUAL`, `FLOAT_NOTEQUAL`) match in either order.
+
+A rule may use these opcodes. Their sizes must fit, in the file and in the function:
+
+| Opcodes | Sizes |
+|---|---|
+| `INT_ADD` `INT_SUB` `INT_MULT` `INT_DIV` `INT_SDIV` `INT_REM` `INT_SREM` `INT_AND` `INT_OR` `INT_XOR` `FLOAT_ADD` `FLOAT_SUB` `FLOAT_MULT` `FLOAT_DIV` | Two inputs; both are as wide as the output. |
+| `INT_NEGATE` `INT_2COMP` `FLOAT_NEG` `FLOAT_ABS` `FLOAT_SQRT` `CEIL` `FLOOR` `ROUND` | One input, as wide as the output. |
+| `INT_LEFT` `INT_RIGHT` `INT_SRIGHT` | The first input is as wide as the output; the shift amount has any size. |
+| `INT_EQUAL` `INT_NOTEQUAL` `INT_LESS` `INT_LESSEQUAL` `INT_SLESS` `INT_SLESSEQUAL` `INT_CARRY` `INT_SCARRY` `INT_SBORROW` `FLOAT_EQUAL` `FLOAT_NOTEQUAL` `FLOAT_LESS` `FLOAT_LESSEQUAL` | Two inputs of one size; the output is 1 byte. |
+| `BOOL_NEGATE` `BOOL_AND` `BOOL_OR` `BOOL_XOR` | Every input and the output is 1 byte. |
+| `INT_ZEXT` `INT_SEXT` | One input, narrower than the output. |
+| `SUBPIECE` | The output is a narrower part of the first input. The second input is a constant: the number of low bytes left out. |
+| `PIECE` | The output is the first input (the high part) joined to the second (the low part). |
+| `FLOAT_NAN` | One input; the output is 1 byte. |
+| `POPCOUNT` `LZCOUNT` `INT2FLOAT` `FLOAT2FLOAT` `TRUNC` | One input; the two sizes are not related. |
+
+Every other opcode is refused: `COPY`, the ones that read or write memory (`LOAD`, `STORE`),
+change control flow or call, and the ops only the decompiler writes (the joins of control-flow
+paths, pointer arithmetic, casts).
+
+**Sizes.** A size the file does not give follows from the opcodes and from the captures, and the
+replacement is as wide as the matched op's output. A size that is still open is read from the
+function: `INT_AND(x, 0xff)` matches at every size `0xff` fits, and a `1` in its replacement is
+then as wide as `x`. The rule does not fire where the sizes it finds do not fit its replacement,
+where a floating-point op would get a size the processor has no format for, or where a constant
+would be wider than 8 bytes. A shift amount or a `SUBPIECE` offset that the replacement gives no
+size is 4 bytes wide. Anything else in the replacement that gets a size from nowhere is an error:
+write it, as in `INT_ZEXT(SUBPIECE(x, 0):1)`.
+
+**What firing does.** The matched op keeps its place and its output and takes the opcode and the
+inputs of the replacement's root; a replacement that is one capture or one constant makes it a
+`COPY`. The ops inside the replacement are new ops in front of it, at its address. An op the
+pattern matched below the root is removed when nothing reads it any more, and stays when
+something does.
+
+### Where a rule runs
+
+| Pool | When it runs | Groups |
+|---|---|---|
+| `oppool1` | Inside the main loop, after each round of SSA construction and type inference, repeated until no rule fires. | `deadcode`, `analysis`, `nodejoin`, `canonicalcompare`, `subvar`, `conditionalexe`, `floatprecision`, `typerecovery`, `segment`, `protorecovery`, `doubleload`, `doubleprecis` |
+| `oppool2` | Later in the same loop, after block structuring. | `stackvars` |
+| `cleanup` | After the main loop has reached its fixed point, before variables are merged. | `cleanup`, `splitcopy`, `splitpointer`, `constsequence`, `bitfields` |
+
+`analysis` is the group for an ordinary simplification: the built-in rules run on its result.
+A rule in a `cleanup` pool group sees the final data flow, and nothing simplifies what it writes.
+The group also decides which pipelines keep the rule: jump-table recovery runs a reduced pipeline
+on a partial copy of the function with the groups `deadcode`, `analysis`, `canonicalcompare`,
+`subvar`, `conditionalexe`, `segment` and `stackvars`, so a rule in one of them fires there too.
+
+### A refused file
+
+The file is read and checked before anything is loaded. Every refused rule is reported on stderr
+as `FILE:LINE: rule "NAME": ...` with the line of the key at fault, and the run exits 2:
+
+```
+$ unlace decompile ./a.out main --rules bad.toml
+error: bad.toml:4: rule "unknownop": match: unknown opcode INT_ANDD at character 1 of `INT_ANDD(x, 0xff)`
+bad.toml:10: rule "sizes": match: size mismatch: both inputs of INT_AND are as wide as its output, but `x:1` is 1 byte and `y:2` is 2 bytes, in `INT_AND(x:1, y:2)`
+bad.toml:17: rule "unbound": replace: unbound capture `y`: the pattern does not name it
+bad.toml:23: rule "wider": replace: the replacement is not as wide as the matched op's output: the output of an extension is wider than its input, in `INT_ZEXT(x)`
+bad.toml:27: rule "nogroup": unknown group `nosuch`: the groups are deadcode, analysis, ...
+```
+
+The checks: the TOML syntax and the keys; the name, which no built-in rule and no other rule of
+the run's files has; the group; the expression syntax; that each
+opcode exists, can be used and has its number of inputs; the sizes of each side; that every
+capture of `replace` is named by `match`; that the replacement is as wide as the matched op's
+output; and that the pattern does not match a part of its own replacement, which would make the
+rule fire on what it wrote without end.
+
+### Rules that do not settle
+
+A pool repeats until no rule fires. Two rules that undo each other never get there, and a built-in
+rule can be one of the two: `INT_AND(x:4, 0xff)` to `INT_ZEXT(SUBPIECE(x, 0):1)` is undone by the
+built-in `subzext`. No check finds such a pair. The function ends in one of two ways:
+
+- When the two rules keep changing the opcode of one op, at its time budget (`--max-fn-seconds`),
+  as a failed function whose error names the pool and both rules. With the budget turned off
+  (`--max-fn-seconds 0`) such a run does not end.
+
+  ```
+  error: decompilation failed for f in ./a.out: per-function decompile budget exceeded (120 s) in action oppool1 (rules subzext and lowbyte keep changing one op)
+  ```
+
+- Otherwise at the engine's limit of 100000 repeated passes, with the warning `Stopped repeating
+  after 100000 passes that kept changing the function` on the function, whose code is what the
+  last pass left.
+
+### From the library and the console
+
+`Decompiler::with_rules_file(path)` (`unlace::unstable::hooks`, `docs/api.md`) adds a rule file to
+a `Decompiler`; it returns the same messages as an `Error::Request`. In `decomp_dbg` the command is
+`rewrite rules FILE`, given after the load and before any `option` line.
 
 ## `unlace fid` — function identification by fingerprint
 

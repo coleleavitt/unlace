@@ -1278,6 +1278,8 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "unlace-cli",
+ "unlace-decomp",
+ "unlace-num",
 ]
 
 [[package]]
@@ -1467,6 +1469,7 @@ dependencies = [
  "slotmap",
  "smallvec",
  "thiserror 2.0.21",
+ "toml",
  "unlace-bandb",
  "unlace-bandb-base",
  "unlace-bandb-core",

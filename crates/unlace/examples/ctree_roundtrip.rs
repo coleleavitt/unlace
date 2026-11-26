@@ -10,8 +10,8 @@
 //! record with `code`, the `ctree` member is read back and printed by the reference C printer
 //! (`unlace::unstable::printer::CPrinter`); the result must be `code`, byte for byte. The
 //! report counts the functions, the trees, the exact round trips, the trees with no `raw` node
-//! (text the typed vocabulary does not cover), the `raw` nodes by the kind of node they are in,
-//! and each reason a function has no tree. The exit status is 1 when a tree does not print
+//! (text the typed vocabulary does not cover), the nodes, the levels of the deepest tree, the
+//! `raw` nodes by the kind of node they are in, and each reason a function has no tree. The exit status is 1 when a tree does not print
 //! back. `unlace::unstable` is not covered by a stability promise.
 
 use std::collections::BTreeMap;
@@ -26,20 +26,22 @@ struct Report {
     exact: usize,
     fully_typed: usize,
     nodes: usize,
+    deepest: usize,
     raw_in: BTreeMap<&'static str, usize>,
     no_tree: BTreeMap<String, usize>,
     mismatches: Vec<String>,
 }
 
-fn count_raw(node: &Node, parent: &'static str, report: &mut Report) -> usize {
+fn count_raw(node: &Node, parent: &'static str, depth: usize, report: &mut Report) -> usize {
     report.nodes += 1;
+    report.deepest = report.deepest.max(depth);
     let mut raw = 0;
     if node.kind == Kind::Raw {
         *report.raw_in.entry(parent).or_default() += 1;
         raw += 1;
     }
     for child in &node.children {
-        raw += count_raw(child, node.kind.name(), report);
+        raw += count_raw(child, node.kind.name(), depth + 1, report);
     }
     raw
 }
@@ -62,7 +64,7 @@ fn check(source: &str, text: &str, report: &mut Report) -> Result<(), Box<dyn st
         }
         report.trees += 1;
         let tree = tree_from_json(&function["ctree"].to_string())?;
-        if count_raw(&tree.root, "tree", report) == 0 {
+        if count_raw(&tree.root, "tree", 1, report) == 0 {
             report.fully_typed += 1;
         }
         let printed = print_c(&tree);
@@ -99,6 +101,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("print back byte for byte: {}", report.exact);
     println!("without raw nodes: {}", report.fully_typed);
     println!("nodes: {}", report.nodes);
+    println!("deepest tree: {}", report.deepest);
     for (parent, count) in &report.raw_in {
         println!("raw nodes in {parent}: {count}");
     }

@@ -6375,6 +6375,11 @@ typed nodes; the kinds and members are listed in `docs/cli.md`, "The JSON docume
   `i`'s type); any other node printed for its parent's op is a part of the parent and has
   no type of its own.
 
+The builder nests at most 128 levels of statements and expressions (`MAX_DEPTH`): an
+item, an operand or an `else if` link that would nest deeper is not parsed and stays
+text under the rules below (an `else if` chain longer than that is `raw` as a whole), so
+every walk of a tree and of its JSON has a bounded depth.
+
 Every item of a block is accepted only if it starts at the column its kind prints at and
 the reference printer reproduces its text; otherwise the whole lines it covers are one
 `raw` item. Every expression is accepted only if the reference printer reproduces its

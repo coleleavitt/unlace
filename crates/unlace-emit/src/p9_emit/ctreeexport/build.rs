@@ -1,6 +1,7 @@
 //! Builds the exported tree of one function from its tree-capture render, checking every part
 //! against the text with the reference printer ([`super::print_c`]).
 
+use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::printer::print_item_text;
@@ -66,6 +67,10 @@ pub fn build(
     Ok(tree)
 }
 
+/// How deep statements and expressions nest in a tree. What the text nests deeper stays text
+/// (a `raw` node), so a walk of the tree, or of its JSON, has a bounded depth.
+const MAX_DEPTH: u32 = 128;
+
 struct Builder<'a> {
     toks: &'a [EmitToken],
     capture: &'a Capture,
@@ -85,6 +90,8 @@ struct Builder<'a> {
     stmt_end: BTreeMap<u32, u32>,
     function_begin: usize,
     style: &'a Style,
+    /// How many statements and expressions enclose the one being built.
+    depth: Cell<u32>,
 }
 
 type Parsed = Option<(Node, usize)>;
@@ -188,6 +195,7 @@ impl<'a> Builder<'a> {
             stmt_end,
             function_begin,
             style: &capture.style,
+            depth: Cell::new(0),
         })
     }
 
@@ -271,6 +279,18 @@ impl<'a> Builder<'a> {
         let mut w = Writer::new(self.style);
         print(&mut CPrinter, &mut w);
         w.out
+    }
+
+    /// `build` one level deeper, or nothing at [`MAX_DEPTH`].
+    fn nested<T>(&self, build: impl FnOnce() -> Option<T>) -> Option<T> {
+        let depth = self.depth.get();
+        if depth >= MAX_DEPTH {
+            return None;
+        }
+        self.depth.set(depth + 1);
+        let built = build();
+        self.depth.set(depth);
+        built
     }
 
     // --- tokens -------------------------------------------------------------------------------
@@ -399,6 +419,10 @@ impl<'a> Builder<'a> {
     /// `?:`, `||`, `&&`, loosest first, each as the render spells it. A node's token is the
     /// spelling the emitter got, which keeps spaces the captured token does not.
     fn binary(&self, at: &mut usize, limit: usize, min: u32) -> Option<Node> {
+        self.nested(|| self.binary_at(at, limit, min))
+    }
+
+    fn binary_at(&self, at: &mut usize, limit: usize, min: u32) -> Option<Node> {
         let first = *at;
         let mut left = self.unary(at, limit)?;
         let loose = &self.capture.loose;
@@ -443,7 +467,7 @@ impl<'a> Builder<'a> {
         if self.loose_op(*at, limit) == Some(not.trim()) {
             let first = *at;
             *at += 1;
-            let operand = self.unary(at, limit)?;
+            let operand = self.nested(|| self.unary(at, limit))?;
             return Some(Node {
                 addresses: self.token_address(first).into_iter().collect(),
                 span: self.span(first, *at),
@@ -522,6 +546,14 @@ impl<'a> Builder<'a> {
     /// that neither an operand nor the RPN engine printed: the routine that pushed it wrote
     /// that token straight to the emitter.
     fn recorded(&self, id: u32) -> Node {
+        self.nested(|| Some(self.recorded_at(id)))
+            .unwrap_or_else(|| {
+                let expr = &self.capture.exprs[id as usize];
+                self.leaf(Kind::Raw, expr.first as usize, expr.end as usize)
+            })
+    }
+
+    fn recorded_at(&self, id: u32) -> Node {
         let expr = &self.capture.exprs[id as usize];
         let (first, end) = (expr.first as usize, expr.end as usize);
         let address = expr.op.and_then(|op| self.addresses.get(&op)).copied();
@@ -839,6 +871,10 @@ impl<'a> Builder<'a> {
     /// statement opened by its keyword, a `case` or `default` label, an empty statement, a
     /// statement the emitter bracketed, or a label line.
     fn item(&self, i: usize, end: usize, place: Place) -> Parsed {
+        self.nested(|| self.item_at(i, end, place))
+    }
+
+    fn item_at(&self, i: usize, end: usize, place: Place) -> Parsed {
         let tok = &self.toks[i];
         let indent = place.indent;
         if tok.kind == TokenKind::Comment {
@@ -1105,7 +1141,7 @@ impl<'a> Builder<'a> {
         if at < end && self.kw(at, Keyword::Else) && self.first_on_line(at) {
             let chained = self.kw(at + 1, Keyword::If) && self.line_of[at + 1] == self.line_of[at];
             let (els, next) = if chained {
-                self.if_statement(at + 1, end, indent)?
+                self.nested(|| self.if_statement(at + 1, end, indent))?
             } else {
                 self.arm(at + 1, end, indent)?
             };

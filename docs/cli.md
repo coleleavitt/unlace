@@ -2635,7 +2635,7 @@ because a worker's record does not carry the tree.
 | `expr` | the expression | an expression statement; with no child, an empty statement `;` |
 | `comment`, `eol_comment` | | a comment on a line of its own (at `style.comment_indent`), or behind the item before it |
 | `blank_line` | | an empty line |
-| `raw` | | text the kinds above do not cover, kept exactly as printed: as an item of a block its whole lines with their indentation, inside an expression that expression's text |
+| `raw` | | text the kinds above do not cover, kept exactly as printed: as an item of a block its whole lines with their indentation, inside an expression that expression's text. Also what nests more than 128 statements and expressions deep, so that a walk of the tree has a bounded depth |
 | `var`, `const`, `func`, `type`, `field` | | a variable, a constant as spelled, a function name, a type name, a field name |
 | `text` | | any other atom, such as the name of a pseudo-operation (`ZEXT48`, `CONCAT44`) |
 | `empty` | | nothing: an absent part |

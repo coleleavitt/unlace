@@ -667,6 +667,46 @@ fn respelled_keywords_and_operators_are_read_as_what_they_stand_for() {
     assert_eq!(when, 6);
 }
 
+/// The deepest node under `node`, counting `node` as 1.
+fn depth(node: &Node) -> usize {
+    1 + node.children.iter().map(depth).max().unwrap_or(0)
+}
+
+#[test]
+fn what_nests_too_deep_stays_text() {
+    let open = "(".repeat(300);
+    let close = ")".repeat(300);
+    let code: &'static str =
+        Box::leak(format!("void f(void)\n{{\n  return {open}a{close};\n  return (a);\n}}").into());
+    let mut lex = Lexed::new(code);
+    lex.prototype();
+    let mut marks = Vec::new();
+    let mut atoms = Vec::new();
+    for parens in [300, 1] {
+        let keyword = lex.keyword("return");
+        for _ in 0..parens {
+            lex.syntax("(");
+        }
+        atoms.push(atom(lex.var("a"), "a", None));
+        for _ in 0..parens {
+            lex.syntax(")");
+        }
+        let semi = lex.syntax(";");
+        marks.push(CaptureMark::StatementBegin(keyword as usize, None));
+        marks.push(CaptureMark::StatementEnd(semi as usize));
+    }
+    lex.syntax("}");
+    let tree = lex.build(&capture(atoms, marks)).expect("a tree");
+    assert_eq!(print_c(&tree), code);
+    let [deep, shallow] = tree.root.children[1].children.as_slice() else {
+        panic!("{:?}", kinds(&tree.root.children[1]));
+    };
+    assert_eq!(kinds(deep), [Kind::Raw]);
+    assert_eq!(deep.children[0].text.len(), 601);
+    assert_eq!(kinds(shallow), [Kind::Paren]);
+    assert!(depth(&tree.root) < 10);
+}
+
 #[test]
 fn a_render_that_is_not_the_reported_text_has_no_tree() {
     let code = "void f(void)\n{\n  return;\n}";

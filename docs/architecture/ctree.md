@@ -355,8 +355,8 @@ added or removed, as stage `ctree:<row name>` (a registered callback's row is na
 
 ## 11. The exported tree and printers over it
 
-Section 2 put the expression side off: an expression statement is a leaf whose ops print through
-the RPN driver. Custom printers and output mapping (`notes/extensibility-plan.md` 1.2, 1.3, 3.4) need
+Section 3 leaves expressions where they are: an expression statement is a leaf whose ops print
+through the RPN driver. Custom printers and output mapping (`notes/extensibility-plan.md` 1.2, 1.3, 3.4) need
 the whole function as data, expressions included, and they need it to be exactly what was printed.
 The exported tree (`crates/unlace-emit/src/p9_emit/ctreeexport.rs`, type `ExportTree`) is that: a
 second, read-only tree made at export time from what the printer did. It does not replace `CTree`
@@ -394,8 +394,8 @@ rewrite gives `ctree_error`.
 block printer for the kinds it does not model, and what a line looks like (elided braces, `else if`
 chains, comments, label lines, the forms of section 4) is decided while printing. A tree that must
 equal the text has to be read from the text; the arena could only supply block ids, which no
-consumer has asked for. When printing moves onto the tree (steps 6 and 7 of section 2), the capture
-can move with it.
+consumer has asked for. Once every statement kind prints from the arena (section 9, step 5), the
+statement side of the export can be read from it instead of from the tokens.
 
 **Printers** (`ctreeexport/printer.rs`). `Printer` has one method per syntactic category
 (`function`, `prototype`, `declaration`, `item`, `statement`, `expr`). Each default prints C in
@@ -421,6 +421,10 @@ respells keywords and operators and leaves C's statement forms alone, so its out
 same nodes. The capture carries the spellings: an operator node's token is `PrintC::op_spelling`,
 the builder reads the statement keywords from the profile (`PrintC::lang`), and `style.keywords`
 holds the respelled ones so that a printer can write them back. An `if` stays an `if`.
+
+**Depth.** The builder nests at most 128 levels of statements and expressions; what the text nests
+deeper stays `raw` text. The tree, its JSON and every recursive walk of either then have a bounded
+depth, whatever the function (the deepest tree of `/usr/bin/tr` has 36 levels).
 
 **Limits.** C output only: the statement reader knows C's statement forms, so a function printed
 as Rust, Go or Java (or through a language file over one of them) reports `ctree_error` (pass

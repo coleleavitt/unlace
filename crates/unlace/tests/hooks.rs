@@ -67,6 +67,72 @@ impl Rule for OrAndSum {
     }
 }
 
+/// `x >> (n & 0x3f)  =>  x >> n` for a 64-bit `x`: the processor masks the
+/// count of a 64-bit shift itself.
+struct ShiftMask;
+
+impl Rule for ShiftMask {
+    fn get_op_list(&self) -> Vec<OpCode> {
+        vec![OpCode::CPUI_INT_RIGHT]
+    }
+    fn clone_rule(&self, groups: &ActionGroupList) -> Option<Box<dyn Rule>> {
+        groups
+            .contains("analysis")
+            .then(|| Box::new(ShiftMask) as Box<dyn Rule>)
+    }
+    fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> i32 {
+        let Some(shift) = data.obank().get(op) else {
+            return 0;
+        };
+        let (Some(value), Some(count)) = (shift.get_in(0), shift.get_in(1)) else {
+            return 0;
+        };
+        let Some((n, mask)) = OrAndSum::operands(data, count, OpCode::CPUI_INT_AND) else {
+            return 0;
+        };
+        let size = |vn| data.vbank().get(vn).map(|vn| vn.get_size());
+        let six_bits = data
+            .vbank()
+            .get(mask)
+            .is_some_and(|mask| mask.is_constant() && mask.get_offset() == 0x3f);
+        if size(value) != Some(8) || !six_bits {
+            return 0;
+        }
+        data.op_set_input(op, n, 1).expect("slot 1");
+        1
+    }
+}
+
+#[test]
+fn a_rule_fires_on_a_function_of_a_real_binary() {
+    let fixture = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../unlace-analysis/tests/fixtures/array_index_x86_64"
+    );
+    let mut plain = Decompiler::open(fixture).unwrap();
+    let mut ruled = Decompiler::open(fixture)
+        .unwrap()
+        .with_rule(
+            "analysis",
+            RuleState::new("analysis", 0, "shiftmask"),
+            ShiftMask,
+        )
+        .unwrap();
+    // `right_context` shifts a 64-bit value right by a masked count.
+    let before = plain.decompile_named("right_context").unwrap().c;
+    assert!(
+        before.contains("7L >> ((unsigned char)shift & 0x3f)"),
+        "{before}"
+    );
+    let after = ruled.decompile_named("right_context").unwrap().c;
+    assert!(after.contains("7L >> (signed char)shift"), "{after}");
+    // `signed_context` shifts arithmetically, which the rule leaves alone.
+    assert_eq!(
+        plain.decompile_named("signed_context").unwrap().c,
+        ruled.decompile_named("signed_context").unwrap().c
+    );
+}
+
 /// A rule that looks at every op and changes none.
 struct Inert;
 

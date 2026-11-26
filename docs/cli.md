@@ -2610,8 +2610,9 @@ It is opt-in for the same reason: with it the document of a whole binary grows b
 46-103% (73% over six fixtures) and the run executes 0.8-2.5% more instructions;
 without it the document and the cost are what they were. Each entry is one piece of
 storage, `{space,register,offset,size,ranges}`: `space` is the address space's
-name (`register`, `stack`, `ram`, ...); `register` is the name of the register
-the piece is, lower case, and `null` outside the register space; `offset` is the
+name (`register`, `stack`, `ram`, ...); `register` is the name of the smallest
+register that contains the piece, lower case, and `null` where there is none, as
+outside the register space; `offset` is the
 signed frame offset of a stack piece (the stack pointer at the function's entry
 is 0, as for `stack_offset`), the address of a `ram` piece, and the register's
 offset in the register space otherwise; `size` is in bytes. `ranges` lists the

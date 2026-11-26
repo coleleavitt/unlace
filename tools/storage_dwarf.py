@@ -161,6 +161,8 @@ def type_size(die):
         seen += 1
         if "DW_AT_byte_size" in die.attributes:
             return count * die.attributes["DW_AT_byte_size"].value
+        if die.tag in ("DW_TAG_pointer_type", "DW_TAG_reference_type", "DW_TAG_rvalue_reference_type"):
+            return count * die.cu["address_size"]
         if die.tag == "DW_TAG_array_type":
             for bound in die.iter_children():
                 if "DW_AT_count" in bound.attributes:
@@ -268,14 +270,25 @@ class Dwarf:
                 if base[0] == "stack":
                     yield a, b, ("stack", base[1] + part[1], width)
 
-    def frame_base(self, die):
-        attr = die.attributes.get("DW_AT_frame_base")
-        if attr is None or not self.locs.attribute_has_location(attr, die.cu["version"]):
-            return lambda lo, hi: iter(())
+    def location(self, attr, die):
+        """An attribute's location: one expression, a location list, or None.
+
+        A block form is an expression in every DWARF version: Go writes one in
+        version 4, where pyelftools expects `DW_FORM_exprloc`.
+        """
+        if attr is None:
+            return None
+        if attr.form.startswith("DW_FORM_block"):
+            return LocationExpr(attr.value)
         try:
-            loc = self.locs.parse_from_attribute(attr, die.cu["version"], die)
+            if self.locs.attribute_has_location(attr, die.cu["version"]):
+                return self.locs.parse_from_attribute(attr, die.cu["version"], die)
         except Exception:  # noqa: BLE001
-            return lambda lo, hi: iter(())
+            return None
+        return None
+
+    def frame_base(self, die):
+        loc = self.location(die.attributes.get("DW_AT_frame_base"), die)
         if not isinstance(loc, LocationExpr):
             return lambda lo, hi: iter(())
 
@@ -300,12 +313,8 @@ class Dwarf:
         return base
 
     def variable(self, die, scopes, frame_base, cu_base):
-        attr = die.attributes.get("DW_AT_location")
-        if attr is None or not self.locs.attribute_has_location(attr, die.cu["version"]):
-            return []
-        try:
-            loc = self.locs.parse_from_attribute(attr, die.cu["version"], die)
-        except Exception:  # noqa: BLE001
+        loc = self.location(die.attributes.get("DW_AT_location"), die)
+        if loc is None:
             return []
         type_die = None
         holder = die if "DW_AT_type" in die.attributes else origin(die)

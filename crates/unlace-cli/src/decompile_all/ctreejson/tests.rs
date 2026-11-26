@@ -21,7 +21,19 @@ fn tree() -> ExportTree {
     call.children = vec![callee, argument];
     let mut value = Node::with_text(Kind::Var, "v");
     value.ty = Some("long".into());
-    let mut assign = Node::op("assign", Form::Binary, "=", 1, vec![value, call]);
+    let mut sum = Node::op(
+        "add",
+        Form::Binary,
+        "+",
+        1,
+        vec![
+            call,
+            Node::with_text(Kind::Const, "1"),
+            Node::with_text(Kind::Const, "2"),
+        ],
+    );
+    sum.grouped = true;
+    let mut assign = Node::op("assign", Form::Binary, "=", 1, vec![value, sum]);
     assign.ty = Some("long".into());
     assign.addresses = vec![0x1004];
     let mut statement = Node::new(Kind::Expr);
@@ -58,7 +70,10 @@ fn the_document_reads_back_as_the_tree_it_was_written_from() {
     assert!(text.contains("\"keywords\": {\n      \"while\": \"aslongas\"\n    }"));
     let read = from_json(&jsonfmt::parse(&text).expect("JSON")).expect("a tree");
     assert_eq!(read, tree);
-    assert_eq!(print_c(&read), "void f(int a)\n{\n  v = g(a);\n  \n}");
+    assert_eq!(
+        print_c(&read),
+        "void f(int a)\n{\n  v = (g(a) + 1) + 2;\n  \n}"
+    );
 }
 
 #[test]
@@ -93,26 +108,44 @@ fn a_node_writes_only_the_members_it_has() {
           "type": "long"
         },
         {
-          "kind": "call",
-          "text": "(",
-          "close": ")",
-          "sep": ",",
+          "kind": "op",
+          "op": "add",
+          "form": "binary",
+          "text": "+",
+          "grouped": true,
+          "spacing": 1,
           "children": [
             {
-              "kind": "func",
-              "text": "g",
-              "addresses": [
-                4100
+              "kind": "call",
+              "text": "(",
+              "close": ")",
+              "sep": ",",
+              "children": [
+                {
+                  "kind": "func",
+                  "text": "g",
+                  "addresses": [
+                    4100
+                  ]
+                },
+                {
+                  "kind": "var",
+                  "text": "a",
+                  "type": "int",
+                  "line": 3,
+                  "col": 8,
+                  "end_line": 3,
+                  "end_col": 9
+                }
               ]
             },
             {
-              "kind": "var",
-              "text": "a",
-              "type": "int",
-              "line": 3,
-              "col": 8,
-              "end_line": 3,
-              "end_col": 9
+              "kind": "const",
+              "text": "1"
+            },
+            {
+              "kind": "const",
+              "text": "2"
             }
           ]
         }

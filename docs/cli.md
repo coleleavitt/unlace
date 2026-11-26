@@ -2601,7 +2601,8 @@ leave 114,080 bytes, and adding `aliases` takes it to 836 (its C is 217).
 each function's `code` to its record: statements and expressions as nested nodes, each with
 its kind, its operands, its C type where the printer knows it, where its text is in `code`
 and the instruction addresses it came from. It is opt-in because the tree is many times the
-size of the code (`/usr/bin/tr`, 185 functions: a 1.0 MB document without it, 16.6 MB with it, in 3% more time).
+size of the code (coreutils `tr`, 185 functions: a 1.0 MB document without it, 16.6 MB
+with it, in 3% more time).
 The record gains two members after its last default one, `ctree` and `ctree_error`; every
 other member, `code` included, and the exit status are what they are without the flag.
 `--ctree` needs `--json`, and one process: with `--jobs N` above 1 it is an argument error,
@@ -2618,6 +2619,7 @@ because a worker's record does not carry the tree.
 | `text` | A leaf's spelling; a comment's, label's or prototype's text; a declaration's declarator; an operator's token; a call's opening token; the text of a `raw` node. |
 | `op`, `form`, `close`, `spacing` | On an `op` node: the operator's name (`assign`, `add`, `lt`, `cast`, `deref`, `addr_of`, `subscript`, `member`, `ptr_member`, `cond`, `add_assign`, ...; absent for a token that has no name), how its token sits around its children (`binary`: between them, and with more than two children the node is a chain, `a + b + c`, which reads as C reads it, `(a + b) + c`; `prefix`: before the one child; `postsurround`: `a[b]`; `presurround`: `(type)a`; `space`: only its spacing between two children), its closing token (`]`, `)`, the `:` of `?:`) and the number of spaces on each side of the token. |
 | `sep` | What separates the children of a `list` and the arguments of a `call`. |
+| `grouped` | `true` on a chain whose text groups it from the left in parentheses, as the printer writes `&&` and `\|\|`: `((a && b) && c) && d` is one `and` node with four children. |
 | `type` | The C type of the node's value, where the printer knows it: a variable's, a declaration's, and the result of an operation (the type of the value the p-code op behind the node writes; a node that is only a part of what its op prints, and an operator `PrintC` writes outside its expression driver, has none). |
 | `line`, `col`, `end_line`, `end_col` | Where the node's text is in `code`: 1-based lines, UTF-16 columns, end exclusive. |
 | `addresses` | Instruction addresses in the target's address units, as in `line_mappings`. On an expression node: the instruction of the p-code op the node prints, and on a chain the instruction of each of its operators. On a statement: every instruction under it. |
@@ -2628,7 +2630,7 @@ because a worker's record does not carry the tree.
 | `prototype` | the return `type`, the `func` name, one `decl` per parameter | `text` is the whole line |
 | `decl` | its `type` tokens and its `var` | `text` is the declarator (`char *p`), `type` the declared type (`char *`) |
 | `block` | the items between two braces | |
-| `if` | the condition, the `eol_comment`s behind it, the then part, the `eol_comment`s behind that, the else part if any | a part is a `block`, one statement without braces, or (else only) another `if` |
+| `if` | the condition and the part it guards, the same two for each `else if`, then the else part if any; an `eol_comment` follows the condition or part it is behind | a part is a `block` or one statement without braces, a condition is an expression: that tells an `else if` from the else part. An `else if` chain is one node whatever its length |
 | `while` | the condition, the body `block` | the condition `const` `true` prints `while( true )` |
 | `do_while` | the body `block`, the condition | |
 | `for` | the initializer, the condition, the step, the body `block` | an absent part is `empty` |
@@ -2648,13 +2650,13 @@ because a worker's record does not carry the tree.
 | `paren` | one expression | its child in parentheses |
 | `list` | expressions | separated by `sep`: the statements a condition runs before its test (`(a = f(), a != 0)`) |
 | `call` | the callee, then the arguments | `text`, `sep` and `close` are `(`, `,` and `)` |
-| `op` | its operands | see `op`, `form`, `close`, `spacing` above. An operator applied again to one of its own operands with no parentheses between is one node over all the operands, so `a + b + c + d` is one `add` with four children; an assignment is never chained (`a = b = c` nests to the right), and `?:` has exactly three children |
+| `op` | its operands | see `op`, `form`, `close`, `spacing` above. An operator applied again to one of its own operands with no parentheses between is one node over all the operands, so `a + b + c + d` is one `add` with four children; so is one applied again to its first operand in parentheses (`grouped`). An assignment is never chained (`a = b = c` nests to the right), and `?:` has exactly three children |
 
 A tree has at most **61 levels** (the `function` node is level 1, its body `block` 2, the
 body's statements 3). What the text nests deeper stays text: an operand that would have
 operands of its own on level 61 is a `raw` node, and a statement that has no room for its
-block and operands is `raw` lines. Chains are wide, not deep, so only real nesting counts:
-the deepest tree of the corpus below has 41 levels, and 28 nested `if`s fit. A node of
+block and operands is `raw` lines. Chains of one operator and `else if` chains are wide,
+not deep, so only real nesting counts: 28 nested `if`s fit. A node of
 level `d` is nested `3 + 2d` arrays and objects deep in the document and its `children`
 and `addresses` one more, so the document nests at most 126, inside the default nesting
 limit of the common JSON readers (`serde_json`: 128).

@@ -2,11 +2,11 @@
 //! tree (`unlace_decomp::ctreeexport`) as JSON, and back.
 //!
 //! A node is an object. `kind` is always there; every other member is left out when it is
-//! empty: `op` (an operator's name), `form`, `text`, `close`, `sep`, `spacing`, `type`,
-//! `line`/`col`/`end_line`/`end_col` (where the node's text is in `code`: 1-based lines,
-//! UTF-16 columns, end exclusive), `addresses` and `children`. [`from_json`] reads back exactly
-//! what [`to_json`] writes, so the reference printer over the parsed document reproduces
-//! `code`.
+//! empty: `op` (an operator's name), `form`, `text`, `close`, `sep`, `grouped`, `spacing`,
+//! `type`, `line`/`col`/`end_line`/`end_col` (where the node's text is in `code`: 1-based
+//! lines, UTF-16 columns, end exclusive), `addresses` and `children`. [`from_json`] reads back
+//! exactly what [`to_json`] writes, so the reference printer over the parsed document
+//! reproduces `code`.
 
 use unlace_console::project::FuncResult;
 use unlace_decomp::ctreeexport::{Brace, ExportTree, Form, Keyword, Kind, Node, Span, Style};
@@ -83,6 +83,9 @@ fn node_json(node: &Node) -> Json {
     text("text", &node.text);
     text("close", &node.close);
     text("sep", &node.sep);
+    if node.grouped {
+        out.push(("grouped".into(), Json::Bool(true)));
+    }
     if node.spacing != 0 {
         out.push(("spacing".into(), number(node.spacing)));
     }
@@ -196,6 +199,7 @@ fn node_from(json: &Json, level: u32) -> Result<Node, String> {
     node.close = owned("close");
     node.sep = owned("sep");
     node.form = form;
+    node.grouped = matches!(member(json, "grouped"), Some(Json::Bool(true)));
     node.spacing = number_of(json, "spacing").unwrap_or(0);
     node.ty = text_of(json, "type").map(str::to_string);
     node.span = Span {

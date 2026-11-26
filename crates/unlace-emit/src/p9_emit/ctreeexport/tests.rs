@@ -101,6 +101,14 @@ fn the_reference_printer_lays_statements_out_as_the_decompiler_does() {
         ],
     );
     try_.text = "catch (int)".into();
+    let mut grouped_or = Node::op(
+        "or",
+        Form::Binary,
+        "||",
+        1,
+        vec![var("a"), var("b"), var("c"), var("i")],
+    );
+    grouped_or.grouped = true;
     let body = vec![
         leaf(Kind::Decl, "int i"),
         leaf(Kind::EolComment, "// eax"),
@@ -113,19 +121,21 @@ fn the_reference_printer_lays_statements_out_as_the_decompiler_does() {
                     Kind::Block,
                     vec![stmt(binary("assign", "=", var("i"), cast))],
                 ),
-                with(
-                    Kind::If,
-                    vec![
-                        var("i"),
-                        leaf(Kind::EolComment, "// branch-flip"),
-                        stmt(binary("assign", "=", subscript, cond)),
-                        leaf(Kind::EolComment, "// dupe"),
-                        stmt(call("h", vec![var("i"), num("2")])),
-                    ],
-                ),
+                var("i"),
+                leaf(Kind::EolComment, "// branch-flip"),
+                stmt(binary("assign", "=", subscript, cond)),
+                leaf(Kind::EolComment, "// dupe"),
+                stmt(call("h", vec![var("i"), num("2")])),
             ],
         ),
-        with(Kind::If, vec![var("a"), leaf(Kind::Goto, "out")]),
+        with(
+            Kind::If,
+            vec![
+                var("a"),
+                leaf(Kind::Goto, "out"),
+                with(Kind::If, vec![var("b"), Node::new(Kind::Break)]),
+            ],
+        ),
         with(
             Kind::While,
             vec![
@@ -173,6 +183,7 @@ fn the_reference_printer_lays_statements_out_as_the_decompiler_does() {
         ),
         try_,
         with(Kind::Switch, vec![var("i")]),
+        stmt(grouped_or),
         leaf(Kind::Label, "out"),
         leaf(Kind::Comment, "/* done */"),
         with(Kind::Return, vec![var("i")]),
@@ -191,6 +202,8 @@ int f(int a,char *p)
   else
     h(i,2);
   if (a) goto out;
+  else
+    if (b) break;
   while( true ) {
     if ((i = next(), i != 0)) break;
   }
@@ -213,6 +226,7 @@ int f(int a,char *p)
     return 1;
   }
   switch(i);
+  ((a || b) || c) || i;
 out:
                     /* done */
   return i;
@@ -675,8 +689,8 @@ fn respelled_keywords_and_operators_are_read_as_what_they_stand_for() {
 
 #[test]
 fn an_operator_applied_again_to_its_own_operand_is_one_wide_node() {
-    // Line 3: `+` nested on both sides, no parentheses. Line 4: the same sum with its left
-    // part in parentheses. Line 5: `=` groups to the right and stays nested.
+    // Line 3: `+` nested on both sides, no parentheses. Line 4: a sum of a sum in parentheses,
+    // which is a chain too (`Node::grouped`). Line 5: `=` groups to the right and stays nested.
     let code = "void f(void)\n{\n  a + b + c + d;\n  (a + b) + c;\n  a = b = c;\n}";
     let mut lex = Lexed::new(code);
     lex.prototype();
@@ -780,15 +794,122 @@ fn an_operator_applied_again_to_its_own_operand_is_one_wide_node() {
         ("add", Some("int"))
     );
     let grouped = &grouped.children[0];
-    assert_eq!(kinds(grouped), [Kind::Paren, Kind::Var]);
-    assert_eq!(
-        kinds(&grouped.children[0].children[0]),
-        [Kind::Var, Kind::Var]
-    );
-    assert_eq!(grouped.addresses, [0x20]);
+    assert_eq!(kinds(grouped), [Kind::Var; 3]);
+    assert!(grouped.grouped && !wide.grouped);
+    assert_eq!(grouped.addresses, [0x10, 0x20]);
     let assigned = &assigned.children[0];
     assert_eq!(kinds(assigned), [Kind::Var, Kind::Op]);
     assert_eq!(kinds(&assigned.children[1]), [Kind::Var, Kind::Var]);
+}
+
+#[test]
+fn an_operator_applied_again_to_its_parenthesized_first_operand_is_one_grouped_node() {
+    let code = "void f(void)\n{\n  ((a || b) || c) || d;\n}";
+    let mut lex = Lexed::new(code);
+    lex.prototype();
+    let mut engine = Vec::new();
+    let mut tokens = Vec::new();
+    for word in ["(", "(", "a", "||", "b", ")", "||", "c", ")", "||", "d"] {
+        let at = match word {
+            "(" | ")" => lex.syntax(word),
+            "||" => lex.push(word, TokenKind::Op, SyntaxHighlight::NoColor),
+            _ => lex.var(word),
+        };
+        if !matches!(word, "a" | "b" | "c" | "d") {
+            engine.push((at, at + 1));
+        }
+        tokens.push(at);
+    }
+    let semi = lex.syntax(";");
+    lex.syntax("}");
+    let or = |first: usize, end: usize, parent, paren| CapturedExpr {
+        parent,
+        first: tokens[first],
+        end: tokens[end] + 1,
+        shape: ExprShape::Op {
+            name: "or",
+            form: Form::Binary,
+            open: "||",
+            close: "",
+            spacing: 1,
+            operands: 2,
+        },
+        paren,
+        op: None,
+        ty: None,
+    };
+    let exprs = vec![
+        or(0, 10, None, false),
+        or(0, 8, Some(0), true),
+        or(1, 5, Some(1), true),
+        atom(tokens[2], "a", Some(2)),
+        atom(tokens[4], "b", Some(2)),
+        atom(tokens[7], "c", Some(1)),
+        atom(tokens[10], "d", Some(0)),
+    ];
+    let mut capture = capture(
+        exprs,
+        vec![
+            CaptureMark::StatementBegin(tokens[0] as usize, None),
+            CaptureMark::StatementEnd(semi as usize),
+        ],
+    );
+    capture.engine_tokens = engine;
+    let tree = lex.build(&capture).expect("a tree");
+    assert_eq!(print_c(&tree), code);
+    let chain = &tree.root.children[1].children[0].children[0];
+    assert_eq!((chain.name.as_str(), chain.grouped), ("or", true));
+    assert_eq!(kinds(chain), [Kind::Var; 4]);
+}
+
+#[test]
+fn an_else_if_chain_is_one_wide_node() {
+    let links = 80;
+    let mut text = String::from("void f(void)\n{\n  if (a) {\n    return;\n  }\n");
+    for _ in 0..links {
+        text += "  else if (a) {\n    return;\n  }\n";
+    }
+    text += "  else\n    return;\n}";
+    let code: &'static str = Box::leak(text.into());
+    let mut lex = Lexed::new(code);
+    lex.prototype();
+    let mut marks = Vec::new();
+    let mut returns = |lex: &mut Lexed| {
+        let keyword = lex.keyword("return");
+        let semi = lex.syntax(";");
+        marks.push(CaptureMark::StatementBegin(keyword as usize, None));
+        marks.push(CaptureMark::StatementEnd(semi as usize));
+    };
+    for link in 0..=links {
+        if link > 0 {
+            lex.keyword("else");
+        }
+        lex.keyword("if");
+        lex.syntax("(");
+        lex.var("a");
+        lex.syntax(")");
+        lex.syntax("{");
+        returns(&mut lex);
+        lex.syntax("}");
+    }
+    lex.keyword("else");
+    returns(&mut lex);
+    lex.syntax("}");
+    let tree = lex.build(&capture(Vec::new(), marks)).expect("a tree");
+    assert_eq!(print_c(&tree), code);
+    let [chain] = tree.root.children[1].children.as_slice() else {
+        panic!("{:?}", kinds(&tree.root.children[1]));
+    };
+    assert_eq!(chain.kind, Kind::If);
+    let parts = kinds(chain);
+    assert_eq!(parts.len(), 2 * (links + 1) + 1);
+    assert!(
+        parts[..parts.len() - 1]
+            .chunks(2)
+            .all(|pair| pair == [Kind::Var, Kind::Block])
+    );
+    assert_eq!(parts[parts.len() - 1], Kind::Return);
+    assert_eq!(depth(&tree.root), 5);
 }
 
 /// The deepest node under `node`, counting `node` as 1.

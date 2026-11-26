@@ -40,8 +40,9 @@ pub enum Kind {
     Decl,
     /// Statements between braces.
     Block,
-    /// `if`: the condition, the then part, the `else` part when there is one; an
-    /// `eol_comment` behind the condition or the then part follows it.
+    /// `if`: the condition and the part it guards, the same two for each `else if`, then the
+    /// `else` part when there is one. A part is a `block` or one statement; a condition is
+    /// an expression. An `eol_comment` behind a condition or a part follows it.
     If,
     /// `while`: the condition, then the body `block`.
     While,
@@ -184,8 +185,8 @@ pub enum Form {
     #[default]
     None,
     /// Between its children: `a + b`. More than two children are a left-associative chain,
-    /// `a + b + c` for `(a + b) + c`; with a closing token the third child follows it
-    /// (`a ? b : c`).
+    /// `a + b + c` for `(a + b) + c` ([`Node::grouped`] when the text has those parentheses);
+    /// with a closing token the third child follows it (`a ? b : c`).
     Binary,
     /// Before its child: `-a`.
     Prefix,
@@ -363,6 +364,8 @@ pub struct Node {
     /// What separates the children of a `list` and the arguments of a `call`.
     pub sep: String,
     pub form: Form,
+    /// A chain whose text groups it from the left in parentheses: `((a || b) || c) || d`.
+    pub grouped: bool,
     /// Spaces on each side of a binary operator's token (after a prefix token, before an
     /// opening surround token).
     pub spacing: u32,

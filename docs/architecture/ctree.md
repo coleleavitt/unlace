@@ -430,7 +430,11 @@ holds the respelled ones so that a printer can write them back. An `if` stays an
 long: 31 nested `|` in one Go runtime function, 140 nested `+` in the stage test `loadguardreads`.
 An operator applied again to one of its own operands with no parentheses between them is therefore
 exported as one node over all the operands (the comma operators of a call are its arguments in the
-same way), with the addresses of every operator of the chain; an assignment is never chained. Depth
+same way), with the addresses of every operator of the chain; an assignment is never chained. The
+printer writes `||` and `&&` with their first operand in parentheses (`((a || b) || c) || d`: the
+32-term byte-mask tests of glibc's vectorized string routines); that is one node too, marked
+`grouped`, and the reference printer writes the parentheses back. An `if` with its `else if` links
+is one node as well: condition and part for each link, then the `else` part. Depth
 then comes from real nesting only, and it is bounded exactly: a tree has at most
 `ExportTree::MAX_LEVELS` = 61 levels. An operand that would have operands of its own on the last
 level is a `raw` node, and a statement with no room for its block and operands is `raw` lines. The

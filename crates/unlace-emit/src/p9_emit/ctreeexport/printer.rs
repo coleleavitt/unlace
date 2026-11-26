@@ -242,6 +242,17 @@ pub fn print_braced<P: Printer + ?Sized>(
     w.push("}");
 }
 
+/// The comments behind what was just printed, each after one space.
+fn eol_comments<'a>(
+    w: &mut Writer,
+    parts: &mut std::iter::Peekable<impl Iterator<Item = &'a Node>>,
+) {
+    while let Some(comment) = parts.next_if(|part| part.kind == Kind::EolComment) {
+        w.push(" ");
+        w.push(&comment.text);
+    }
+}
+
 /// The parenthesized test of a loop: `( true )` glued to the keyword for a loop that never
 /// tests, else a space and the condition in parentheses.
 fn loop_test<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, cond: &Node) {
@@ -291,47 +302,45 @@ pub fn print_statement<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &No
         }
         Kind::If => {
             let mut parts = node.children.iter().peekable();
-            w.keyword(Keyword::If);
-            w.push(" (");
-            if let Some(cond) = parts.next() {
-                p.expr(w, cond);
-            }
-            w.push(")");
-            while let Some(comment) = parts.next_if(|part| part.kind == Kind::EolComment) {
-                w.push(" ");
-                w.push(&comment.text);
-            }
-            if let Some(then) = parts.next() {
-                match then.kind {
-                    Kind::Block => print_braced(p, w, then, w.style.brace_ifelse, indent),
-                    Kind::Goto | Kind::Break | Kind::Continue => {
-                        w.push(" ");
-                        p.statement(w, then, indent);
-                    }
-                    _ => {
-                        w.line(indent + step);
-                        p.statement(w, then, indent + step);
+            loop {
+                w.keyword(Keyword::If);
+                w.push(" (");
+                if let Some(cond) = parts.next() {
+                    p.expr(w, cond);
+                }
+                w.push(")");
+                eol_comments(w, &mut parts);
+                if let Some(then) = parts.next() {
+                    match then.kind {
+                        Kind::Block => print_braced(p, w, then, w.style.brace_ifelse, indent),
+                        Kind::Goto | Kind::Break | Kind::Continue => {
+                            w.push(" ");
+                            p.statement(w, then, indent);
+                        }
+                        _ => {
+                            w.line(indent + step);
+                            p.statement(w, then, indent + step);
+                        }
                     }
                 }
-            }
-            while let Some(comment) = parts.next_if(|part| part.kind == Kind::EolComment) {
-                w.push(" ");
-                w.push(&comment.text);
-            }
-            if let Some(els) = parts.next() {
+                eol_comments(w, &mut parts);
+                let Some(next) = parts.peek() else {
+                    break;
+                };
                 w.line(indent);
                 w.keyword(Keyword::Else);
-                match els.kind {
-                    Kind::Block => print_braced(p, w, els, w.style.brace_ifelse, indent),
-                    Kind::If => {
-                        w.push(" ");
-                        p.statement(w, els, indent);
-                    }
+                if !next.kind.is_statement() {
+                    w.push(" ");
+                    continue;
+                }
+                match next.kind {
+                    Kind::Block => print_braced(p, w, next, w.style.brace_ifelse, indent),
                     _ => {
                         w.line(indent + step);
-                        p.statement(w, els, indent + step);
+                        p.statement(w, next, indent + step);
                     }
                 }
+                break;
             }
         }
         Kind::While => {
@@ -432,9 +441,17 @@ pub fn print_expr<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &Node) {
             }
         }
         Kind::Op => {
+            let groups = match node.grouped {
+                true => node.children.len().saturating_sub(2),
+                false => 0,
+            };
+            w.push(&"(".repeat(groups));
             for (visited, child) in node.children.iter().enumerate() {
                 op_token(w, node, visited);
                 p.expr(w, child);
+                if (1..=groups).contains(&visited) {
+                    w.push(")");
+                }
             }
             op_token(w, node, node.children.len());
         }

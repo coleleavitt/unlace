@@ -433,7 +433,9 @@ impl<'a> Builder<'a> {
 
     /// The operators the printer writes between expressions outside the RPN driver: `=`,
     /// `?:`, `||`, `&&`, loosest first, each as the render spells it. A node's token is the
-    /// spelling the emitter got, which keeps spaces the captured token does not.
+    /// spelling the emitter got, which keeps spaces the captured token does not. `||` and `&&`
+    /// applied again to their own result are one node over all the operands (`a || b || c`),
+    /// as a recorded chain is.
     fn binary(&self, at: &mut usize, limit: usize, min: u32) -> Option<Node> {
         self.nested(|| self.binary_at(at, limit, min))
     }
@@ -442,8 +444,6 @@ impl<'a> Builder<'a> {
         let first = *at;
         let mut left = self.unary(at, limit)?;
         let loose = &self.capture.loose;
-        // The operator of the chain `left` is, when this loop built it: `a || b || c` is one
-        // node over three operands, as a recorded chain is.
         let mut chain = None;
         while let Some(op) = self.loose_op(*at, limit) {
             let known = [
@@ -577,7 +577,9 @@ impl<'a> Builder<'a> {
     /// that token straight to the emitter. A binary operator applied again to one of its own
     /// operands, with no parentheses between, is one node over all the operands in print order
     /// (`a + b + c`), with the addresses of every operator of the chain; so a long chain is
-    /// wide, not deep. An assignment is never part of a chain: it groups to the right.
+    /// wide, not deep. So is one applied again to its first operand in parentheses, as the
+    /// printer writes `||` and `&&` (`((a || b) || c) || d`): one [`Node::grouped`] node. An
+    /// assignment is never part of a chain: it groups to the right.
     fn recorded(&self, id: u32) -> Node {
         self.nested(|| Some(self.recorded_at(id)))
             .unwrap_or_else(|| {
@@ -649,20 +651,33 @@ impl<'a> Builder<'a> {
             return self.leaf(Kind::Raw, first, end);
         }
         let chains = form == Form::Binary && close.is_empty() && !name.ends_with("assign");
-        let (mut links, mut operands) = (Vec::new(), Vec::new());
-        let mut pending = vec![id];
-        while let Some(at) = pending.pop() {
-            let part = &self.capture.exprs[at as usize];
-            let link = at == id
-                || (chains
-                    && !part.paren
-                    && part.shape == expr.shape
-                    && self.operands(at).is_some());
-            if link {
-                links.push(at);
-                pending.extend(self.kids[at as usize].iter().rev());
-            } else {
-                operands.push(at);
+        let exprs = &self.capture.exprs;
+        let same = |at: u32| {
+            chains && exprs[at as usize].shape == expr.shape && self.operands(at).is_some()
+        };
+        let grouped_under = |at: u32| {
+            let first = *self.kids[at as usize].first()?;
+            (same(first) && exprs[first as usize].paren).then_some(first)
+        };
+        let (mut links, mut operands) = (vec![id], Vec::new());
+        let grouped = grouped_under(id).is_some();
+        if grouped {
+            while let Some(first) = grouped_under(links[links.len() - 1]) {
+                links.push(first);
+            }
+            operands.extend(&self.kids[links[links.len() - 1] as usize]);
+            for &link in links.iter().rev().skip(1) {
+                operands.extend(self.kids[link as usize].iter().skip(1));
+            }
+        } else {
+            let mut pending: Vec<u32> = self.kids[id as usize].iter().rev().copied().collect();
+            while let Some(at) = pending.pop() {
+                if same(at) && !exprs[at as usize].paren {
+                    links.push(at);
+                    pending.extend(self.kids[at as usize].iter().rev());
+                } else {
+                    operands.push(at);
+                }
             }
         }
         let mut children: Vec<Node> = operands.iter().map(|&kid| self.recorded(kid)).collect();
@@ -683,6 +698,7 @@ impl<'a> Builder<'a> {
             },
             _ => Node {
                 close: close.to_string(),
+                grouped,
                 ty: expr.ty.clone(),
                 addresses: addresses.into_iter().collect(),
                 span: self.span(inner_first, inner_end),
@@ -1172,39 +1188,42 @@ impl<'a> Builder<'a> {
         ))
     }
 
-    /// The `if` at token `i`: its condition, the comments behind it, the then arm, the `else`
-    /// arm if any. Comments at the end of the then arm's last line are the `if`'s when an
-    /// `else` follows; otherwise they stay items of the block.
+    /// The `if` at token `i` with its `else if` links and its `else` arm: for the `if` and for
+    /// each link the condition, the comments behind it and the arm, then the `else` arm if any.
+    /// The links are parts of the one node, so a chain is wide whatever its length. Comments
+    /// at the end of an arm's last line are the `if`'s when an `else` follows; otherwise they
+    /// stay items of the block.
     fn if_statement(&self, i: usize, end: usize, indent: u32) -> Parsed {
-        let close = self
-            .close_of(i + 1, end, "(", ")")
-            .filter(|_| self.sym(i + 1, "("))?;
-        let mut children = vec![self.expr(i + 2, close)];
-        let mut at = close + 1;
-        while at < end && self.eol_comment(at) {
-            children.push(self.leaf(Kind::EolComment, at, at + 1));
-            at += 1;
-        }
-        let (body, next) = self.arm(at, end, indent)?;
-        children.push(body);
-        at = next;
-        let mut after = at;
-        while after < end && self.eol_comment(after) {
-            after += 1;
-        }
-        if after > at && self.kw(after, Keyword::Else) && self.first_on_line(after) {
-            children.extend((at..after).map(|i| self.leaf(Kind::EolComment, i, i + 1)));
-            at = after;
-        }
-        if at < end && self.kw(at, Keyword::Else) && self.first_on_line(at) {
-            let chained = self.kw(at + 1, Keyword::If) && self.line_of[at + 1] == self.line_of[at];
-            let (els, next) = if chained {
-                self.deeper(1, || self.if_statement(at + 1, end, indent))?
-            } else {
-                self.arm(at + 1, end, indent)?
-            };
-            children.push(els);
+        let mut children = Vec::new();
+        let mut at = i;
+        loop {
+            let close = self
+                .close_of(at + 1, end, "(", ")")
+                .filter(|_| self.sym(at + 1, "("))?;
+            children.push(self.expr(at + 2, close));
+            at = close + 1;
+            while at < end && self.eol_comment(at) {
+                children.push(self.leaf(Kind::EolComment, at, at + 1));
+                at += 1;
+            }
+            let (body, next) = self.arm(at, end, indent)?;
+            children.push(body);
             at = next;
+            let mut after = at;
+            while after < end && self.eol_comment(after) {
+                after += 1;
+            }
+            if !(self.kw(after, Keyword::Else) && self.first_on_line(after)) {
+                break;
+            }
+            children.extend((at..after).map(|i| self.leaf(Kind::EolComment, i, i + 1)));
+            at = after + 1;
+            if !(self.kw(at, Keyword::If) && self.line_of[at] == self.line_of[after]) {
+                let (els, next) = self.arm(at, end, indent)?;
+                children.push(els);
+                at = next;
+                break;
+            }
         }
         Some((
             Node {

@@ -6347,9 +6347,14 @@ typed nodes; the kinds and members are listed in `docs/cli.md`, "The JSON docume
   that the driver did not parenthesize) is one node: its children are the operands of the
   whole chain in print order, and its `addresses` are those of every operator of the
   chain. `a + b + c` is so one `add` node over three operands, whichever way the ops
-  nest; it reads as C reads the text, `(a + b) + c`. An assignment token never chains
-  (`a = b = c` groups to the right and stays nested). The operators the builder reads
-  outside the driver chain the same way (`a || b || c`). A `FUNCTION_CALL` node becomes a `call` whose arguments are
+  nest; it reads as C reads the text, `(a + b) + c`. The same holds for a binary operator
+  applied again to its *first* operand in parentheses, which is how the driver writes
+  `||` and `&&` (`((a || b) || c) || d`): the node follows that spine of parenthesized
+  first operands, holds all the operands, and is `grouped`; the reference printer writes
+  the parentheses back. A 32-term byte-mask test in a vectorized string routine is so one
+  node, not 64 levels. An assignment token never chains (`a = b = c` groups to the right
+  and stays nested). The operators the builder reads outside the driver chain the same
+  way (`a || b || c`). A `FUNCTION_CALL` node becomes a `call` whose arguments are
   the operands of its comma operators, in order. A node the driver parenthesized is a
   `paren` over it. A recorded node is kept as `raw` text when the number of nodes under
   it is not its token's operand count, or when it covers a token that neither an operand
@@ -6370,6 +6375,10 @@ typed nodes; the kinds and members are listed in `docs/cli.md`, "The JSON docume
   `switch(value);`); braces and
   parentheses are matched over the tokens outside recorded expressions; a statement mark
   that starts at a token gives the end of a `return`, a jump or an expression statement.
+  An `if` with its `else if` links is one `if` node: its children are, for the `if` and
+  for each link in turn, the condition and the part it guards, then the `else` part when
+  there is one. A condition is an expression and a part a `block` or a statement, which
+  tells a link from the `else` part; a chain is so one wide node whatever its length.
   Tokens flagged as a declaration are a `decl` (its declared type is the declarator
   without its identifier); a comment token is an `eol_comment` when it follows a token on
   its line by one space, else a `comment`; a line that holds no token is a `blank_line`
@@ -6394,7 +6403,7 @@ is building: a block's statements are two levels below the statement that owns t
 an unbraced arm and an `else if` one level, and a statement is built only on a level
 below the last (it needs one for its operands); a statement with no room for that fails
 to parse and is kept as `raw` lines under the rules below, so the 29th of 29 nested `if`s
-is text. On the expression side `clip` cuts each parsed expression: a node on level 61
+is text (an `else if` chain is one node and costs no level per link). On the expression side `clip` cuts each parsed expression: a node on level 61
 that has operands of its own becomes a `raw` node holding the text the reference printer
 prints for it. The expression parser itself recurses at most 61 calls deep; what needs
 more is past the last level and stays text. A chain costs one level whatever its length,
@@ -6425,10 +6434,12 @@ starts a new line at its column (`item_column`): 0 for a label, `style.comment_i
 for a comment line, the block's indent for a statement, and inside a `switch` one level
 for `case`/`default` and blank lines and two for statements. An `eol_comment` is one
 space behind the item before it. A `raw` item is a line break and its text. `if` prints
-`if (`, the condition, `)`, its comments, then the then part: a `block` braced per
+`if (`, the condition, `)`, its comments, then the part it guards: a `block` braced per
 `style.brace_ifelse`, a `goto`/`break`/`continue` after one space, any other statement on
-the next line one level deeper; `else` starts a line and takes a `block`, an `if` after
-one space, or a statement on the next line one level deeper. `while` and `do`-`while`
+the next line one level deeper. For each child after that, `else` starts a line; a
+condition follows it as ` if (cond)` with its part, printed the same way (an `else if`
+link), and a part is the `else` part: a `block`, or a statement on the next line one
+level deeper. `while` and `do`-`while`
 print ` (cond)`, or `( true )` when the condition is the constant `true`; `for` prints
 `for (init; cond; step)`; `switch` prints `switch(value)` and its block, or
 `switch(value);` when it has none; `try` prints `try`, its
@@ -6436,7 +6447,8 @@ block, a space, its header text and the handler block; `return` prints its value
 space; every simple statement ends in `;`. An operator prints its token around its
 children by `form` as `emit_op` does: `binary` pads the token with `spacing` spaces on
 each side, before each operand after the first (and its closing token likewise before
-the third, for `?:`), `prefix` prints the token then
+the third, for `?:`); a `grouped` chain of `n` operands opens `n - 2` parentheses in
+front and closes one after each operand from the second to the one before the last, `prefix` prints the token then
 `spacing` spaces, `postsurround` prints the opening token after the first child and the
 closing token after the last, `presurround` prints the opening token, the first child,
 the closing token, then the second child, and `space` prints only its spacing. A `call`

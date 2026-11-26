@@ -205,6 +205,26 @@ Costs of the changes:
   only large images get one). #1535 adds the layout to each copy, about 400 KB for x86-64
   (8.5 MB -> 8.9 MB). Deleting the cache is always safe.
 
+## The CLI tests after the changes (2026-11-26)
+`cargo nextest run -p unlace-cli --profile ci` on `main` at `5a199c672a`, against the run of
+2026-11-25 17:18 before the load-time work. The 1,841 tests that ran in both took 1,610
+test-seconds against 2,195 (-27%); `unlace-cli::integration` 1,352 against 1,837,
+`decompile_all_cli` 255 against 349. The run took 81 s of wall time on 24 threads. The old run
+was part of a full workspace run, so the machines' load differed; treat the figure as rough.
+No new failures: 26 tests failed in the new run only because `-p unlace-cli` does not build
+`decomp_dbg`, and all 26 pass once `unlace-console` and `unlace-harness` are built.
+
+Compilers in those tests: in 40 random tests from files that compile C, a `PATH` shim timed
+every `cc`/`gcc`/`clang`/`rustc`/`go`/`zig` call. Compilers took 9.3 s of the tests' 43 s
+(22%), measured with the old, slower `unlace`, so their share is larger now. A cache keyed on
+the source and flags would only help a second run on the same machine; CI starts cold.
+
+Rerunning only what failed: nextest has it as `cargo nextest run -R latest` (there is no
+`--failed`). It needs run recording, which is experimental: `[experimental] record = true` and
+`[record] enabled = true` in `~/.config/nextest/config.toml`. Recordings made by nextest 0.9.149
+or older cannot be replayed by 0.9.150 and later, which fixed a code-execution issue with
+crafted recordings (GHSA-vc25-qg58-w57c).
+
 ## What is left
 Where the 255 M instructions of one load go after #1535 (inclusive, recursive
 functions counted once):

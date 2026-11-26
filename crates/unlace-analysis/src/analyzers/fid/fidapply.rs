@@ -141,15 +141,15 @@ pub fn applies(db_language: &str, arch: &Architecture) -> Result<(), String> {
             ))
         };
     };
-    let differs = differences(db, image);
+    let differs = differences(&db, &image);
     if differs.is_empty() {
         Ok(())
     } else {
         Err(format!(
             "database language {db_language} ({}) does not apply to image language \
              {image_language} ({}): the {} differs",
-            describe(db),
-            describe(image),
+            describe(&db),
+            describe(&image),
             differs.join(" and the ")
         ))
     }

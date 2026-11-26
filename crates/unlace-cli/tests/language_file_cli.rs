@@ -180,6 +180,215 @@ fn a_respelled_keyword_is_the_only_difference() {
     assert_eq!(flavoured, plain.replace("while", "WHILE"));
 }
 
+/// `text` with comments and string and character constants blanked, so a scan sees only
+/// code.
+fn code_only(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '/' if chars.peek() == Some(&'/') => {
+                if chars.by_ref().any(|c| c == '\n') {
+                    out.push('\n');
+                }
+            }
+            '/' if chars.peek() == Some(&'*') => {
+                let mut star = false;
+                for c in chars.by_ref().skip(1) {
+                    if star && c == '/' {
+                        break;
+                    }
+                    star = c == '*';
+                }
+            }
+            '"' | '\'' => {
+                while let Some(inner) = chars.next() {
+                    match inner {
+                        '\\' => {
+                            chars.next();
+                        }
+                        '\n' => {
+                            out.push('\n');
+                            break;
+                        }
+                        _ if inner == c => break,
+                        _ => {}
+                    }
+                }
+                out.push(' ');
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// Whether `code` holds `spelling`: as a whole word when it is one, anywhere otherwise.
+fn holds(code: &str, spelling: &str) -> bool {
+    let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    if !spelling.chars().all(word) {
+        return code.contains(spelling);
+    }
+    code.match_indices(spelling).any(|(at, _)| {
+        !code[..at].chars().next_back().is_some_and(word)
+            && !code[at + spelling.len()..].chars().next().is_some_and(word)
+    })
+}
+
+/// A base language with the keywords it accepts and the two-character operators it accepts,
+/// each with the text its default spelling leaves in the code, and what else the file needs.
+struct Accepted {
+    base: &'static str,
+    keywords: &'static [(&'static str, &'static str)],
+    operators: &'static [(&'static str, &'static str)],
+    rest: &'static str,
+}
+
+const C_OPERATORS: &[(&str, &str)] = &[
+    ("boolean_and", "&&"),
+    ("boolean_or", "||"),
+    ("equal", "=="),
+    ("greater_equal", ">="),
+    ("less_equal", "<="),
+    ("not_equal", "!="),
+];
+
+const ACCEPTED: [Accepted; 4] = [
+    Accepted {
+        base: "c",
+        keywords: &[
+            ("break", "break"),
+            ("case", "case"),
+            ("continue", "continue"),
+            ("default", "default"),
+            ("do", "do"),
+            ("else", "else"),
+            ("for", "for"),
+            ("goto", "goto"),
+            ("if", "if"),
+            ("null", "NULL"),
+            ("return", "return"),
+            ("switch", "switch"),
+            ("true", "true"),
+            ("while", "while"),
+        ],
+        operators: C_OPERATORS,
+        rest: "",
+    },
+    Accepted {
+        base: "java",
+        keywords: &[
+            ("break", "break"),
+            ("case", "case"),
+            ("continue", "continue"),
+            ("default", "default"),
+            ("do", "do"),
+            ("else", "else"),
+            ("for", "for"),
+            ("goto", "goto"),
+            ("if", "if"),
+            ("null", "null"),
+            ("return", "return"),
+            ("switch", "switch"),
+            ("true", "true"),
+            ("while", "while"),
+        ],
+        operators: C_OPERATORS,
+        rest: "",
+    },
+    Accepted {
+        base: "rust",
+        keywords: &[
+            ("break", "break"),
+            ("continue", "continue"),
+            ("default", "_ =>"),
+            ("else", "else"),
+            ("goto", "panic!"),
+            ("if", "if"),
+            ("null", "core::ptr::null_mut()"),
+            ("return", "return"),
+            ("switch", "match"),
+            ("while", "while"),
+        ],
+        operators: C_OPERATORS,
+        rest: "[forms]\ngoto = \"c-goto\"\nlabel = \"c-colon\"\n",
+    },
+    Accepted {
+        base: "go",
+        keywords: &[
+            ("continue", "continue"),
+            ("else", "else"),
+            ("goto", "goto"),
+            ("null", "nil"),
+            ("switch", "switch"),
+        ],
+        operators: &[
+            ("boolean_and", "&&"),
+            ("equal", "=="),
+            ("greater_equal", ">="),
+            ("less_equal", "<="),
+        ],
+        rest: "",
+    },
+];
+
+/// The claim behind the loader's tables (spec 9.6), on three functions of `ptx` that use
+/// every keyword: with all of a base language's keywords and its two-character operators
+/// respelled, none of their default spellings is left in the code. A printer site that
+/// starts writing one as text fails here. The one-character operators share their spelling
+/// with declarators and patterns, so they are not scanned for.
+#[test]
+fn accepted_keywords_and_operators_are_respelled_everywhere() {
+    for accepted in ACCEPTED {
+        let mut text = format!("base = \"{}\"\n[keywords]\n", accepted.base);
+        for (key, _) in accepted.keywords {
+            text += &format!("{key} = \"KW_{key}\"\n");
+        }
+        text += "[operators]\n";
+        for (key, _) in accepted.operators {
+            text += &format!("{key} = \"OP_{key}\"\n");
+        }
+        text += accepted.rest;
+        let file = flavour(&text);
+        let (out, stderr, status) = run_unlace(&[
+            "decompile-all",
+            &ptx(),
+            "--functions",
+            "main,generate_all_output,find_occurs_in_text",
+            "--language-file",
+            path(&file),
+        ]);
+        assert_eq!(status, Some(0), "{}: {stderr}", accepted.base);
+        let code = code_only(&out);
+        for (key, left) in accepted.keywords {
+            assert!(
+                holds(&code, &format!("KW_{key}")),
+                "{}: keywords.{key} is not used in:\n{out}",
+                accepted.base
+            );
+            assert!(
+                !holds(&code, left),
+                "{}: keywords.{key} left {left:?} in:\n{out}",
+                accepted.base
+            );
+        }
+        // A binary operator stands alone between blanks or at the end of a wrapped line.
+        let alone: std::collections::BTreeSet<&str> = code.split_whitespace().collect();
+        for (key, left) in accepted.operators {
+            assert!(
+                alone.contains(format!("OP_{key}").as_str()),
+                "{}: operators.{key} is not used in:\n{out}",
+                accepted.base
+            );
+            assert!(
+                !alone.contains(left),
+                "{}: operators.{key} left {left:?} in:\n{out}",
+                accepted.base
+            );
+        }
+    }
+}
+
 #[test]
 fn output_is_unchanged_with_a_file_that_overrides_nothing() {
     let fauxware = fixture("fauxware");

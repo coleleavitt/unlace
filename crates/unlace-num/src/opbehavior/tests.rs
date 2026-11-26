@@ -243,3 +243,24 @@ fn test_opbehavior_ptradd_ternary() {
         1
     );
 }
+
+#[test]
+fn recover_shift_by_zero_of_a_full_word_keeps_the_value() {
+    assert_eq!(
+        OpBehaviorIntLeft
+            .recover_input_binary(0, 8, 0x1234, 8, 0)
+            .unwrap(),
+        0x1234
+    );
+    assert_eq!(
+        OpBehaviorIntRight
+            .recover_input_binary(0, 8, 0x1234, 8, 0)
+            .unwrap(),
+        0x1234
+    );
+    assert!(
+        OpBehaviorIntRight
+            .recover_input_binary(0, 1, 0x100, 1, 0)
+            .is_err()
+    );
+}

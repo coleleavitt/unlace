@@ -132,6 +132,21 @@ above exported (dev binaries land in `target/debug/`).
 
 5. Before the commit, run the full gates in the next section.
 
+To rerun only the tests that failed (or did not run) in the last nextest run, use
+`cargo nextest run -R latest`. It needs nextest's run recording, which is experimental and
+set in the user config `~/.config/nextest/config.toml`:
+
+```toml
+[experimental]
+record = true
+
+[record]
+enabled = true
+```
+
+Use nextest 0.9.150 or newer: it cannot replay recordings made by older versions, and it
+fixed a code-execution issue with crafted recordings (GHSA-vc25-qg58-w57c).
+
 ## Gates
 
 Each gate is one command, run from the repository root on dev binaries:

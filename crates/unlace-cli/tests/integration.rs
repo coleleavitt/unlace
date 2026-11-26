@@ -753,6 +753,8 @@ mod globalwidth;
 #[path = "xrefs_unflagged_cli.rs"]
 mod xrefs_unflagged_cli;
 
+#[path = "go_dwarf_storage_names.rs"]
+mod go_dwarf_storage_names;
 #[path = "zero_extended_returns.rs"]
 mod zero_extended_returns;
 

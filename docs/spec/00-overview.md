@@ -1400,22 +1400,39 @@ they are not part of either child.
 inflated and checksum-verified in full before a single element is decoded
 (`crates/unlace-sleigh/src/slaformat.rs (FormatDecode::ingest_stream)`).
 
-(unlace) **Constructor templates on first use.** Most of a `.sla` is the
-`<construct_tpl>` p-code template of every constructor, and a run builds p-code
-for few of them. The symbol-table decode therefore keeps each template's encoded
-bytes (`Decoder::skip_element_raw`, which only a byte-encoded decoder provides;
-an XML decoder decodes eagerly as before) and reads just its `section` and
-`delay` attributes, which place the handle in its constructor and answer
-instruction resolution's delay-slot question. The template itself is decoded
-by the eager `ConstructTpl::decode`, over the same bytes and against the
-engine's own address-space manager, the first time the p-code builder or an
-exported operand needs it
-(`crates/unlace-sleigh/src/lazytemplates.rs (LazyTemplates::get)`), and
-kept. Spaces keep the indices the `.sla` gave them, so the value is the one an
-eager decode makes, whenever it is made; encoding a lazily decoded spec decodes
-all of them first. The one visible difference is when a corrupt template is
+(unlace) **Subtables on first use.** Most of a `.sla` is its subtables: the
+constructors, their `<construct_tpl>` p-code templates and the `<decision>`
+trees that pick among them (x86-64: 9,121 constructors, 80% of the inflated
+stream, nearly all of them in the one `instruction` table), and a run resolves
+a few dozen constructors. The load therefore keeps the inflated stream
+(`crates/unlace-sleigh/src/lazysla.rs (SlaSource)`) and walks the symbol
+contents once with a flat cursor that reads nothing but record boundaries
+(`crates/unlace-sleigh/src/slascan.rs (Scan::skip_element_with)`): every other
+symbol is copied out and decoded at load as before, while each `<subtable_sym>`
+is reduced to its `numct`, the byte range and template count of each
+constructor, and the root decision node's field and children ranges
+(`crates/unlace-sleigh/src/lazysla.rs (SlaStream::scan_contents)`). The regular
+decoders then run over those byte ranges the first time something is read: a
+constructor when it is resolved, printed or built
+(`crates/unlace-sleigh/src/lazysla.rs (LazySubtable::constructor)`), which also
+keeps its templates' bytes in their handle slots; a template when the p-code
+builder or an exported operand needs it
+(`crates/unlace-sleigh/src/lazysla.rs (SlaSource::template)`); a decision node
+when a resolution walks through it (`crates/unlace-sleigh/src/lazysla.rs
+(LazyDecision::node)`), a terminal node whole and an inner node as its field
+plus pending children. Template handles are allotted in stream order by the load
+walk, so they are the ones an eager decode allots; an `OperandValue` inside a
+constructor is validated against the live count of its own table and the
+`numct` of every other, as the eager decode validates it against the tables
+decoded so far. Constructor bodies and decision trees carry no address-space
+attribute, so they decode against an empty manager; templates decode against
+the engine's own, whose spaces keep the indices the `.sla` gave them. So every
+value is the one an eager decode makes, whenever it is made; encoding a lazily
+loaded spec decodes all of it first, and `SleighBase::has_context_commits`
+answers from the load walk (a `<commit>` child seen under a constructor)
+without decoding. The one visible difference is when a corrupt element is
 reported: at its first use instead of at load. `UNLACE_SLA_LAZY=0` decodes
-every template at load.
+the whole `.sla` at load, as an XML decoder always does.
 The decompressed buffer is then *handed* to the packed decoder rather than
 copied into it (`crates/unlace-base/src/marshal.rs
 (PackedDecode::ingest_owned)`): the inflate buffer becomes the decoder's leading

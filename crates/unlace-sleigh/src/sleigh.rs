@@ -20,6 +20,7 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask};
 use unlace_base::error::{UnlaceError, UnlaceResult};
+use unlace_base::marshal::PackedDecode;
 use unlace_base::space::{AddrSpace, AddrSpaceManager, RegisterLookup, VarnodeStorage, spacetype};
 use unlace_base::xml::DocumentStorage;
 
@@ -1912,13 +1913,22 @@ impl Sleigh {
             // strictly before any `read_space` the symbol-table decode issues,
             // so no manager read and mutation overlap in time.
             let manager_ptr: *const AddrSpaceManager = &*self.base.manager;
-            let mut decoder = crate::slaformat::FormatDecode::new(unsafe { &*manager_ptr });
-            decoder.ingest_stream(sla_bytes)?;
+            let manager = unsafe { &*manager_ptr };
             let db_cell = &self.context_db;
             let register_context = |nm: &[u8], sb: i32, eb: i32| -> UnlaceResult<()> {
                 db_cell.borrow_mut().register_variable(nm, sb, eb)
             };
-            self.base.decode(&mut decoder, register_context)?;
+            if crate::lazysla::lazy_enabled() {
+                let stream = crate::lazysla::SlaStream::inflate(sla_bytes)?;
+                let mut decoder = PackedDecode::new(manager);
+                stream.ingest_prefix(&mut decoder)?;
+                self.base
+                    .decode_lazy(&mut decoder, stream, register_context)?;
+            } else {
+                let mut decoder = crate::slaformat::FormatDecode::new(manager);
+                decoder.ingest_stream(sla_bytes)?;
+                self.base.decode(&mut decoder, register_context)?;
+            }
             return Ok(());
         }
         // Re-registration path (engine reused with a new program): re-register

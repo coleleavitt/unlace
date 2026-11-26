@@ -115,13 +115,25 @@ so the profile is from callgrind (instruction counts, not time).
   Each spawned `unlace` would still decode once.
 
 ## Candidate fixes (to evaluate)
-Ordered by measured share of a load. None is built yet.
+Ordered by measured share of a load.
 1. **A faster packed reader.** About 41% of a load runs inside `PackedDecode` itself, mostly
    skipping and looking up attributes (`skip_attribute`, `find_matching_attribute`). The format
    stays the same, so nothing else changes. The gain is unknown until it is profiled again.
 2. **Do not walk past every template at load.** `LazyTemplates::take` still scans each
    constructor's template bytes (19%) just to learn where they end. The `.sla` writer could record
    each template's length or offset, so the reader can jump over it without parsing it.
+   Done 2026-11-26 without a format change (branch `perf/sleigh-lazydecode`): the whole
+   subtable body is left as bytes. One flat walk of the inflated stream
+   (`crates/unlace-sleigh/src/slascan.rs`, about 13 instructions per byte against 71 for
+   `PackedDecode::skip_element_raw`) records each constructor's byte range and the decision
+   tree's root; constructors, templates and decision nodes decode on first use
+   (`crates/unlace-sleigh/src/lazysla.rs`). x86-64 is almost one table (`instruction` holds
+   7,680 of the 9,121 constructors and 95% of the subtable bytes), so per-subtable laziness
+   alone would have gained nothing. Result: 1.505 G -> 0.763 G instructions per fresh load
+   (`initialize_from_sla` 1.178 G -> 0.485 G); 98 ms -> 56 ms per load+decompile, interleaved
+   A/B on the loaded machine. What remains of the load: operand symbols and the other
+   non-subtable contents 151 M, symbol headers and scopes 118 M, the walk 114 M, inflate 82 M,
+   `scan_language_database` 70 M.
 3. **Find the language without reading all 205 `.ldefs` files.** About 5% of the instructions,
    plus most of the 10 ms of system time per load. An index of `.ldefs` contents in the `.sla`
    cache, or stopping at the file that names the language, removes it.

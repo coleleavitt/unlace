@@ -1,0 +1,8 @@
+# A rule file tests/stages/rewriterules.toml expects to be refused: the replacement
+# is one byte narrower than the output of the extension it would replace.
+
+[[rule]]
+name = "narrower"
+group = "analysis"
+match = "INT_ZEXT(x:1):2"
+replace = "x"

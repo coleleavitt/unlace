@@ -1048,6 +1048,7 @@ pub(super) fn cfg(max_fn_seconds: u64, load_seconds: f64) -> PoolConfig<'static>
         mode: "fast",
         options: &[],
         language_file: None,
+        rules: &[],
         func_decls: Vec::new(),
         no_vars: false,
         want_proto: false,

@@ -176,6 +176,8 @@ pub(crate) struct PoolConfig<'a> {
     pub(crate) options: &'a [(String, String)],
     /// `--language-file`: the flavour file each worker reads again.
     pub(crate) language_file: Option<&'a str>,
+    /// `--rules` files: a worker registers them on its own load.
+    pub(crate) rules: &'a [String],
     pub(crate) func_decls: Vec<String>,
     pub(crate) no_vars: bool,
     pub(crate) want_proto: bool,
@@ -1227,6 +1229,9 @@ impl Worker {
         }
         for decl in &cfg.func_decls {
             cmd.arg("--define-function").arg(decl);
+        }
+        for rules in cfg.rules {
+            cmd.arg("--rules").arg(rules);
         }
         // The parent's resolved options, verbatim — except the one decision a
         // worker must NOT inherit.  `fast_funcdisc` is the whole-binary function

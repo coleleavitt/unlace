@@ -12,6 +12,7 @@
 use std::collections::BTreeSet;
 
 use unlace_console::engine::{ConsoleProgram, EntrySelector, FunctionEntry};
+use unlace_decomp::architecture::Architecture;
 
 use crate::decompile_all::{self, Args, DriverDefaults};
 use crate::funcdecl::Declared;
@@ -256,14 +257,22 @@ pub struct Session {
 
 /// Parse and load `request` once.
 pub fn load(request: &Request) -> Result<Session, LoadError> {
+    load_with(request, &mut |_| Ok(()))
+}
+
+/// [`load`], with `install` run on the architecture as soon as it is built,
+/// before any option is applied: where the `unlace` crate registers the rules
+/// and phase callbacks of `unlace::unstable`. An `Err` from it fails the load.
+pub fn load_with(
+    request: &Request,
+    install: &mut dyn FnMut(&mut Architecture) -> Result<(), String>,
+) -> Result<Session, LoadError> {
     let args =
         decompile_all::parse_args(&request.argv(), "decompile").map_err(LoadError::Arguments)?;
     let segments = request.raw.as_ref().and_then(|raw| raw.segments.clone());
-    let mut prog = match segments {
-        Some(runs) => decompile_all::load_program_segments(&args, DriverDefaults::Decompile, runs),
-        None => decompile_all::load_program(&args, DriverDefaults::Decompile),
-    }
-    .map_err(LoadError::Load)?;
+    let mut prog =
+        decompile_all::load_program_embedded(&args, DriverDefaults::Decompile, segments, install)
+            .map_err(LoadError::Load)?;
     for &address in &request.noreturn {
         declare_no_return(&mut prog, address).map_err(LoadError::Load)?;
     }

@@ -13,6 +13,8 @@ use std::path::PathBuf;
 
 use unlace_fuzz::{FuzzResult, fuzz_iteration};
 
+mod sweeps;
+
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }

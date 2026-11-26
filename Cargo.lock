@@ -1487,6 +1487,7 @@ name = "unlace-fuzz"
 version = "0.1.0"
 dependencies = [
  "unlace",
+ "unlace-analysis",
 ]
 
 [[package]]

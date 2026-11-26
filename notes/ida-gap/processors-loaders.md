@@ -41,7 +41,7 @@ Each IDA module maps to unlace as follows:
 | ad218x, dsp56k, tms32028, tms32054, tms320c3, tms320c5, tms320c6, pdp11 | | `ADSP218x`, `DSP56000`/`DSP56300`, `tms320c28`, `TMS320C54x`, `TMS320C3x`, `TMS320C5x`, `C6000`, `PDP-11` | have |
 | cli, dalvik, java, wasm | bytecode | `CIL`, `Dalvik:*`, `JVM`, `Wasm` | have (see loaders for .class) |
 | **arc** | ARCtangent-A4/A5, ARCompact (ARC600/700), ARCv2 | `ARC:*:ARCv2` only (`specs/Ghidra/Processors/ARC`, "ARCv2 (ARC EM / HS)") | **partial**: no ARCompact |
-| **78k0, 78k0s** | NEC 78K0 / 78K0S | `upd78` is the uCOM-87AD (uPD78C1x), a different ISA | **missing** |
+| **78k0, 78k0s** | NEC 78K0 / 78K0S | `78K0:LE:16:default`, `78K0S:LE:16:default` (`specs/Ghidra/Processors/78K0`); `upd78` is the uCOM-87AD (uPD78C1x), a different ISA | **done** (78K0 test row; 78K0S compiles only) |
 | **tms32055** | TMS320C55x | none (C54x only) | **missing** |
 | **tms320c1** | TMS320C1x | `TMS320C1x` (`TMS320C1x:BE:16:default`, `:LE:`) | **done** |
 | oakdsp | CEVA OakDSP | `oakdsp:LE:16:default`/`modulo`, generated from `teak` (TeakLite II) restricted to Oak's encodings (`tools/gen_oakdsp.py`) | have |

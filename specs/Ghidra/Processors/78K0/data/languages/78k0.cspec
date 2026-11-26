@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<compiler_spec>
+  <data_organization>
+    <pointer_size value="2"/>
+    <char_size value="1"/>
+    <short_size value="1"/>
+    <integer_size value="1"/>
+    <long_size value="2"/>
+  </data_organization>
+  <global>
+    <range space="ram"/>
+  </global>
+  <stackpointer register="SP" space="ram" growth="negative"/>
+  <default_proto>
+    <prototype name="__78k0" extrapop="2" stackshift="2">
+      <input>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="1">
+          <register name="A"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="SP"/>
+      </unaffected>
+    </prototype>
+  </default_proto>
+</compiler_spec>

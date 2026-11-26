@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="78K0" endian="little" size="16" variant="default" version="1.0"
+            slafile="78k0.sla" processorspec="78k0.pspec" id="78K0:LE:16:default">
+    <description>NEC 78K/0 8-bit microcontroller series (uPD78xx)</description>
+    <compiler name="default" spec="78k0.cspec" id="default"/>
+  </language>
+  <language processor="78K0S" endian="little" size="16" variant="default" version="1.0"
+            slafile="78k0s.sla" processorspec="78k0s.pspec" id="78K0S:LE:16:default">
+    <description>NEC 78K/0S 8-bit microcontroller series (uPD78Fxxx, 78K0S/Kx1 and Kx2)</description>
+    <compiler name="default" spec="78k0s.cspec" id="default"/>
+  </language>
+</language_definitions>

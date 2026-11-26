@@ -13,6 +13,13 @@
 # (docs/processor-tests.md).
 
 [images]
+# NEC 78K0 (LE): 0x00 call !0x10; ret. 0x10 mov a,#5; add a,#3; mov !0x8000,a; ret.
+# 0x20 loop: mov a,#0; add a,#1; bnz loop; ret.
+k78_routines = """
+9a1000af000000000000000000000000
+a1050d039e0080af0000000000000000
+a1000d01bdfcaf
+"""
 # TeakLite II / OakDSP (16-bit words): mov #5,a0; add #3,a0; mov a0l,(r0); ret
 teak_oak_acc_store = """
 185e0500c0860300401b80450000
@@ -4717,3 +4724,27 @@ expect = [
     "} while (",    # BANZ on AR1 closes the loop
     "dat_20 = ",    # SACL 0x10 (word 0x10 = byte 0x20) on page 0
 ]
+
+# NEC 78K0: a call into a routine that adds two immediates and stores the sum to an absolute
+# address, and a BNZ loop (0x20). The 78K0S language has different opcode bytes and is not run here.
+[[family]]
+name = "k78"
+language = "78K0:LE:16:default"
+base = "0x0"
+image = "k78_routines"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "k78_call_reaches_store_routine"
+address = "0x0"
+expect = ["sub_10();"]
+
+[[family.function]]
+test = "k78_immediate_add_then_absolute_store"
+address = "0x10"
+expect = ["dat_8000 = 8;"]
+
+[[family.function]]
+test = "k78_bnz_loop"
+address = "0x20"
+expect = ["} while ("]

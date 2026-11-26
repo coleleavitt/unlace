@@ -21,8 +21,8 @@
 //! - **Concurrency.** An image is written to a unique temporary file in the cache directory and
 //!   renamed into place, so concurrent test processes never read a partial file; two that race
 //!   both compile, and the last rename wins with identical bytes.
-//! - **Uncompressed copy.** The first load of a cached image leaves `<cache>/<lang>-<key>.slr`
-//!   beside it: the same packed element stream behind an `slr` header
+//! - **Uncompressed copy.** The first load of a cached image of at least 2 MiB leaves
+//!   `<cache>/<lang>-<key>.slr` beside it: the same packed element stream behind an `slr` header
 //!   (`unlace_sleigh::slaformat::RAW_SLA_HEADER`), with the same key, so it is current exactly
 //!   when the `.sla` is; the copies of that language under earlier keys are removed then.
 //!   [`read_image`] returns the copy when it exists, else the `.sla`; the decoder takes either
@@ -406,10 +406,15 @@ pub fn compile_cached_in(dir: &Path, slaspec: &Path) -> io::Result<PathBuf> {
 /// The extension of the uncompressed copy beside a cached `.sla`.
 const RAW_EXTENSION: &str = "slr";
 
-/// The bytes to decode for the `.sla` at `sla` (a path from [`sla_path`]): for a cached image,
-/// its uncompressed copy `<lang>-<key>.slr`, made beside it on first read (best effort; the
-/// copy and the image share the key, so the copy is current exactly when the image is), else
-/// the `.sla` itself. Both decode to the same elements; the copy skips the inflate.
+/// The smallest image that gets a copy: inflating a smaller one takes under two milliseconds
+/// (about 0.9 ms per MiB inflated in the dev profile), not worth the disk.
+const MIN_RAW_IMAGE: usize = 2 << 20;
+
+/// The bytes to decode for the `.sla` at `sla` (a path from [`sla_path`]): for a cached image
+/// of at least [`MIN_RAW_IMAGE`], its uncompressed copy `<lang>-<key>.slr`, made beside it on
+/// first read (best effort; the copy and the image share the key, so the copy is current exactly
+/// when the image is), else the `.sla` itself. Both decode to the same elements; the copy skips
+/// the inflate.
 pub fn read_image(sla: impl AsRef<Path>) -> io::Result<Vec<u8>> {
     let sla = sla.as_ref();
     let raw = sla.with_extension(RAW_EXTENSION);
@@ -424,7 +429,9 @@ pub fn read_image(sla: impl AsRef<Path>) -> io::Result<Vec<u8>> {
     }
     match raw_sla_image(&compressed) {
         Ok(image) => {
-            write_raw_image(&raw, &image);
+            if image.len() >= MIN_RAW_IMAGE {
+                write_raw_image(&raw, &image);
+            }
             Ok(image)
         }
         Err(_) => Ok(compressed),

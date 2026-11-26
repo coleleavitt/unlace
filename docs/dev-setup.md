@@ -23,9 +23,9 @@ they run on dev binaries, which is faster to build and gives the same results.
   shared safely by every checkout and reused until a source or the compiler changes; a first
   compile takes a fraction of a second to a few seconds per language. It lives in
   `$UNLACE_SLA_CACHE`, else `$XDG_CACHE_HOME/unlace/sla` (default `~/.cache/unlace/sla`), and
-  deleting it is always safe. Each compile also leaves an uncompressed `.slr` copy of the image
-  beside the `.sla`, under the same key; a load reads the copy and skips the inflate (the `.sla`
-  stays the file to embed or hand to Ghidra). A `SLEIGHHOME`/`UNLACE_SPECS`/`--sleighpath` directory of prebuilt
+  deleting it is always safe. The first load of an image of 2 MiB or more also leaves an
+  uncompressed `.slr` copy beside the `.sla`, under the same key; later loads read the copy and
+  skip the inflate (the `.sla` stays the file to embed or hand to Ghidra). A `SLEIGHHOME`/`UNLACE_SPECS`/`--sleighpath` directory of prebuilt
   `.sla` still wins: a `.sla` that is a regular file at least as new as its sources is used as is
   (a symlinked `.sla` never is).
 - Older checkouts may still have `.sla` files or per-file `.sla` symlinks under `specs/` from

@@ -70,11 +70,11 @@ fn element_ids(bytes: &[u8]) -> Vec<u32> {
 
 #[test]
 fn the_first_read_of_a_cached_image_leaves_an_uncompressed_copy() {
-    let spec = repo_specs().join("Toy/data/languages/toy_builder_le.slaspec");
+    let spec = repo_specs().join("x86/data/languages/x86-64.slaspec");
     let sla = compile_cached(&spec).expect("compile into the cache");
     let raw = sla.with_extension("slr");
     let _ = fs::remove_file(&raw);
-    let stale = raw.with_file_name("toy_builder_le-stale.slr");
+    let stale = raw.with_file_name("x86-64-stale.slr");
     fs::write(&stale, RAW_SLA_HEADER).expect("a copy under an earlier key");
     let compressed = fs::read(&sla).expect("read .sla");
 
@@ -84,6 +84,15 @@ fn the_first_read_of_a_cached_image_leaves_an_uncompressed_copy() {
     assert!(!stale.exists(), "the earlier key's copy is removed");
     assert_eq!(read_image(&sla).expect("second read"), image);
     assert_eq!(element_ids(&image), element_ids(&compressed));
+
+    let small = compile_cached(&repo_specs().join("Toy/data/languages/toy_builder_le.slaspec"))
+        .expect("compile into the cache");
+    let image = read_image(&small).expect("read");
+    assert!(image.starts_with(&RAW_SLA_HEADER), "inflated all the same");
+    assert!(
+        !small.with_extension("slr").exists(),
+        "an image under {MIN_RAW_IMAGE} bytes gets no copy"
+    );
 }
 
 #[test]

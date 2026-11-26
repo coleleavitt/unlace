@@ -599,6 +599,17 @@ crate::unlace_flag!(
 );
 
 crate::unlace_flag!(
+    /// (unlace `noreturntrap`, unlace#837) One call site sealed by an x86 `int3` pad that
+    /// runs into the next function, with no call site the compiler continued after, is
+    /// enough for `noreturn_disc` to conclude the callee no-return. Listing-gated; default on.
+    Noreturntrap,
+    "noreturntrap",
+    "int3-sealed call no-return evidence",
+    unset: false,
+    shipped: true
+);
+
+crate::unlace_flag!(
     /// (unlace) Gate the MSVC RTTI / vftable recovery pass (`rtti`); default **off**.
     /// The unlace analog of Ghidra's `RttiAnalyzer` (a Microsoft-PE analyzer): on a
     /// Windows PE it parses the `CompleteObjectLocator` → RTTI3/2/1 → RTTI0 graph in

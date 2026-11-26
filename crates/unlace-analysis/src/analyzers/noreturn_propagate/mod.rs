@@ -148,6 +148,7 @@ impl AnalysisPass for NoReturnPropagatePass {
             .0;
         let resuming_entry = crate::pclntab::gomcall::resuming_entry(ctx, listing);
         let slot_calls = terminal_slot_calls(listing, ctx.file, &imports);
+        let discovered = discovered_seeds(ctx, listing);
         for fact in propagate_noreturn(
             listing,
             &error_recog,
@@ -155,6 +156,7 @@ impl AnalysisPass for NoReturnPropagatePass {
             reach,
             &stubs,
             resuming_entry,
+            &discovered,
         ) {
             out.noreturn.push(fact);
         }
@@ -165,6 +167,27 @@ impl AnalysisPass for NoReturnPropagatePass {
         out.no_fallthru_calls = collect_error_noreturn_callsites(listing, &error_recog);
         out
     }
+}
+
+/// The functions `noreturn_disc` concludes over the same Listing, when it is on. The
+/// two consumers run side by side over one Listing, so without this a wrapper of a
+/// routine only the evidence tally finds (MSVC's `terminate` around `abort`, around
+/// `_exit`) never reached the propagation's terminal set.
+fn discovered_seeds(ctx: &AnalysisCtx, listing: &Listing) -> BTreeSet<u64> {
+    let options = &ctx.arch.unlace_options;
+    if !options
+        .get::<unlace_decomp::analysisgates::NoreturnDisc>()
+        .0
+    {
+        return BTreeSet::new();
+    }
+    let trap = options
+        .get::<unlace_decomp::analysisgates::Noreturntrap>()
+        .0;
+    crate::analyzers::noreturn_disc::discover_noreturn(listing, trap.then_some(ctx.file))
+        .into_iter()
+        .map(|fact| fact.addr)
+        .collect()
 }
 
 /// (unlace, Ghidra-gap) Every `call error(nonzero,…)` / `error_at_line(nonzero,…)`
@@ -224,6 +247,7 @@ struct ErrorRecognizer {
 trait InstructionBody {
     fn instruction_at(&self, vma: u64) -> Option<&Insn>;
     fn instruction_before(&self, vma: u64) -> Option<(u64, &Insn)>;
+    fn shared_code_at(&self, vma: u64) -> Option<&Insn>;
 }
 
 struct ListingInstructionBody<'a> {
@@ -255,6 +279,13 @@ impl<'a> InstructionBody for ListingInstructionBody<'a> {
         }
     }
 
+    fn shared_code_at(&self, vma: u64) -> Option<&Insn> {
+        if self.contains(vma) || self.listing.function_at(vma).is_some() {
+            return None;
+        }
+        self.listing.instruction_at(vma)
+    }
+
     fn instruction_before(&self, vma: u64) -> Option<(u64, &Insn)> {
         if !self.contains(vma) {
             return None;
@@ -274,6 +305,10 @@ impl<'a> InstructionBody for BTreeMap<u64, &'a Insn> {
         self.range(..vma)
             .next_back()
             .map(|(&address, &insn)| (address, insn))
+    }
+
+    fn shared_code_at(&self, _vma: u64) -> Option<&Insn> {
+        None
     }
 }
 
@@ -589,11 +624,15 @@ fn function_reaches_only_noreturn(
 }
 
 /// The reachability walk core (extracted for unit testing): from `entry`, walk the
-/// instruction-level reachable graph of `body` (bounded `[entry, next)`), treating
-/// a call/jump to a callee in `terminal` (or a value-conditional `error(nonzero,…)`
-/// tail) as a dead transfer, and return true iff **no `RETURN` is reachable** and at
-/// least one reachable path ends at such a transfer. Conservative: every uncertainty
-/// returns false. See [`function_reaches_only_noreturn`].
+/// instruction-level reachable graph of `body`, treating a call/jump to a callee in
+/// `terminal` (or a value-conditional `error(nonzero,…)` tail) as a dead transfer,
+/// and return true iff **no `RETURN` is reachable** and at least one reachable path
+/// ends at such a transfer. A transfer out of `[entry, next)` to another function's
+/// entry that is not terminal is a tail call that may return; one to code that is
+/// no function's entry (a shared tail such as MSVC's `terminate`, which its callers
+/// reach only by `jmp`, so the walk filed it inside a neighbour's span) is followed
+/// like the function's own code. Conservative: every uncertainty returns false. See
+/// [`function_reaches_only_noreturn`].
 fn reaches_only_noreturn_walk<B: InstructionBody + ?Sized>(
     body: &B,
     entry: u64,
@@ -625,6 +664,8 @@ fn reaches_only_noreturn_walk<B: InstructionBody + ?Sized>(
             Succ::Follow(vma)
         } else if terminal.contains(&vma) {
             Succ::NoReturn
+        } else if body.shared_code_at(vma).is_some() {
+            Succ::Follow(vma)
         } else {
             Succ::Escape
         }
@@ -634,7 +675,10 @@ fn reaches_only_noreturn_walk<B: InstructionBody + ?Sized>(
         if !visited.insert(vma) {
             continue;
         }
-        let Some(insn) = body.instruction_at(vma) else {
+        let Some(insn) = body
+            .instruction_at(vma)
+            .or_else(|| body.shared_code_at(vma))
+        else {
             // Fell out of the body without a modelled transfer (should be caught by
             // the successor classifier, but stay safe).
             return false;
@@ -940,7 +984,7 @@ fn is_store_or_branch(w: u32) -> bool {
 }
 
 /// The `len` file bytes at `vma`, from the section that holds them.
-fn bytes_at<'a>(file: &'a object::File, vma: u64, len: usize) -> Option<&'a [u8]> {
+pub(crate) fn bytes_at<'a>(file: &'a object::File, vma: u64, len: usize) -> Option<&'a [u8]> {
     use object::read::{Object, ObjectSection};
     let sec = file
         .sections()
@@ -962,6 +1006,7 @@ pub(crate) fn propagate_exits(listing: &Listing, sites: &[u64], reach: bool) -> 
         reach,
         &BTreeSet::new(),
         None,
+        &BTreeSet::new(),
     )
 }
 
@@ -969,7 +1014,7 @@ pub(crate) fn propagate_exits(listing: &Listing, sites: &[u64], reach: bool) -> 
 /// concluded functions as [`NoReturnFact`]s.
 ///
 /// Seed the terminal set from the Known-list no-return functions
-/// (`has_no_return`), then sweep the candidate functions to a fixpoint: each
+/// (`has_no_return`) and `seeds` (what `noreturn_disc` concluded), then sweep the candidate functions to a fixpoint: each
 /// newly-concluded function joins the terminal set so a caller whose last act is a
 /// call to *it* is re-evaluated next sweep (a wrapper-of-a-wrapper converges).
 /// A Go scheduler entry can resume its caller without a machine return.
@@ -981,6 +1026,7 @@ fn propagate_noreturn(
     reach: bool,
     stubs: &BTreeSet<u64>,
     resuming_entry: Option<u64>,
+    seeds: &BTreeSet<u64>,
 ) -> Vec<NoReturnFact> {
     let mut discovered: BTreeMap<u64, NoReturnFact> = BTreeMap::new();
     // The "already no-return" anchor set: the Known-seeded functions plus
@@ -990,6 +1036,7 @@ fn propagate_noreturn(
         .functions()
         .filter(|(_, f)| f.has_no_return)
         .map(|(&entry, _)| entry)
+        .chain(seeds.iter().copied())
         .collect();
 
     let candidates: Vec<u64> = listing.functions().map(|(&entry, _)| entry).collect();

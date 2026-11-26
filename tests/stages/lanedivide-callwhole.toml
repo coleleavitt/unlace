@@ -1,0 +1,53 @@
+# A vector scaled lane by lane (two float lanes stored to out) and handed whole to a byte shuffle
+# the decompiler keeps opaque. The lane split of the value must still divide it for the stores, and
+# the shuffle reads the value reassembled from its lanes. Ghidra#9745: LaneDivide::traceForward had
+# no arm for CALL, CALLIND, CALLOTHER or RETURN, so the trace stopped at the shuffle and the lanes
+# were never divided. The source and compiler: scaleshuffle in the upstream callwhole datatest,
+# x86-64 gcc with SSSE3 intrinsics.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'scaleshuffle' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '554889e50f100e0fc6c0000f59c10f1107660f38000500000000f30f7f47105dc3'
+
+[script]
+commands = [
+    'parse line extern void scaleshuffle(float4 *out, float4 *in, float4 s);',
+    'lo fu scaleshuffle',
+    'option lanefuse off',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CallWhole #1: the first stored lane is divided'
+count = 1
+regex = '\*out = s \* v1;'
+
+[[match]]
+name = 'CallWhole #2: the second stored lane is divided'
+count = 1
+regex = 'out\[3\] = s \* v4;'
+
+[[match]]
+name = 'CallWhole #3: the shuffle reads the reassembled value'
+count = 1
+regex = '= pshufb\('
+
+[[match]]
+name = 'CallWhole #4: the shuffle does not write the lanes back'
+count = 0
+regex = '\[16\]\)out = '
+
+[[match]]
+name = 'CallWhole #5: the multiply is not repeated on the whole value'
+count = 0
+regex = '= s \* \*in;'

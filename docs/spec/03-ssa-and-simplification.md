@@ -3068,6 +3068,16 @@ it now decompiles without that split
 (`tests/stages/lanedivide-freefanout.toml`). This is a correctness repair
 with no option.
 
+A lane trace that reaches a CALL, CALLIND, CALLOTHER or RETURN reads the value whole, so the
+lanes must be rebuilt before that op. The trace adds PIECE ops over the lane placeholders
+(`subflow.rs (LaneDivide::build_whole_input)`), and the op reads the rebuilt value in every input
+slot that held the original. An op is reattached once, however many slots it reads. A value the
+trace already reassembled for an op that is its only reader is not reattached again
+(`subflow.rs (LaneDivide::is_whole_reassembly)`). The trace fails when it reattached ops but
+changed no lane: a SUBPIECE that picks out one lane or ends the lanes, a STORE, or a NEGATE, AND,
+OR, XOR, shift or zero extension in the backward walk (`subflow.rs (LaneDivide::do_trace)`).
+Upstream Ghidra fixed the missing arm as GH-9745. This is a correctness repair with no option.
+
 When `SplitDatatype` divides a constant, `constantbytes.rs` extracts
 byte ranges from its 64-bit payload and returns zero beyond that payload.
 For `PIECE` and `INT_ZEXT`, extraction respects the low operand's declared

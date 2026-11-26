@@ -14551,11 +14551,7 @@ impl PrintC {
                         } else {
                             TagType::VarToken
                         },
-                        if self.out_lang == crate::lang::OutLang::Go {
-                            crate::printlanguage::SyntaxHighlight::const_color
-                        } else {
-                            crate::printlanguage::SyntaxHighlight::var_color
-                        },
+                        crate::printlanguage::SyntaxHighlight::const_color,
                         op_key(op),
                         vn_key(vn),
                     ));

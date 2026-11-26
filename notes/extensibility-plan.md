@@ -200,18 +200,34 @@ What came out differently from the plan:
     binaries, plus 4,871 corpus functions.
   - A node that does not print back stays `raw`. That covers nesting past 61 levels and
     the `structdefs` / `bytearrayc` preambles.
-  - Only C output has a tree.
+  - Rust, Go and Java output have trees too (#1549). Typed trees on the parity corpora:
+    Java 28/37, Go 196/201, Rust 216/235. Still `raw`:
+    - Java `try`, `catch`, `finally` and `synchronized`;
+    - Rust `if !(...)`, `&raw mut` expressions and goto `panic!` lines;
+    - Go loop temporaries and `fallthrough`;
+    - Rust and Go `// label_...:` lines.
+  - Constants carry the type the printer read them with (#1549). Subscript indexes and
+    call arguments with no Varnode stay untyped.
 - **Built-in tree rewrites (2.2):** they stay printer functions, run from the same schedule
   as callbacks, because they read printer state a callback cannot see. A callback can make
   the edits the built-ins make, nothing more.
 - **Storage (3.2):** opt-in (`--storage`). Always on, it grows the document by 46–103%.
-  - Agreement with the DWARF location information is 94–97% of bytes for C/C++/Rust and
-    93–99% for Go.
-  - Go names a location for only 15% of the bytes DWARF does. This is a naming gap in the
-    Go output (spec 06).
+  - Agreement with the DWARF location information, on the bytes both name, is 94–97% for
+    C/C++/Rust and 93–99% for Go.
+  - DWARF location lists cover availability (the register keeps the value until it is
+    overwritten), while `storage` covers liveness (until the last read). So the share of
+    DWARF's bytes that `storage` covers is not a defect measure.
+  - A Go local that DWARF places first in a register now takes its name from the register
+    range (#1545). On the arm64 Go fixtures, the bytes both name went from about 90,000
+    to about 176,000 per binary. Go parameters still take the frame slot.
 - **Language flavours (1.4):** a key is accepted only where the printer honours it
   everywhere.
   - Type spellings, most statement forms, and a set of keywords and operators per
     language are refused; `docs/spec/09-emission.md` §9.6 lists them.
-  - The JSON `language` key still names the base language.
-- **`--jobs`:** `--tokens` and `--ctree` cross `--jobs` workers in the result frame (version 14), so the document is the same at every job count.
+  - The JSON `language` key names the printer's base language, and `language_flavour`
+    names the flavour when one is applied (#1546).
+- **`--jobs`:** `--tokens` and `--ctree` cross `--jobs` workers in the result frame (version
+  14), so the document is the same at every job count (#1546). Without `--option protoorder
+  off`, `--jobs` output can still differ from a serial run, as before.
+
+A walkthrough with real output is in [`extensibility-demo.md`](extensibility-demo.md).

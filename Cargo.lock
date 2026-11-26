@@ -1467,6 +1467,7 @@ dependencies = [
  "slotmap",
  "smallvec",
  "thiserror 2.0.21",
+ "toml",
  "unlace-bandb",
  "unlace-bandb-base",
  "unlace-bandb-core",

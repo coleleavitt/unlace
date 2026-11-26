@@ -90,6 +90,9 @@ pub(crate) struct Args {
     /// disables. `None` (omitted) is the cgroup default. See [`arm_fn_budgets`].
     pub(crate) max_fn_memory: Option<u64>,
     pub(crate) options: Vec<(String, String)>,
+    /// `--language-file FILE` (`decompile`, `decompile-all`): the flavour the printer renders,
+    /// installed by [`load_program`] once the options are applied.
+    pub(crate) language_file: Option<crate::langfile::LanguageFile>,
     /// `--define-function <start[-end][=name] | @file>` (repeatable): the
     /// caller-declared function boundaries, applied by [`load_program`] right
     /// after the analysis commit so they outrank discovery. Every surface that
@@ -173,6 +176,7 @@ impl Args {
             max_fn_seconds: 0,
             max_fn_memory: Some(0),
             options: Vec::new(),
+            language_file: None,
             func_decls: Vec::new(),
             assertions: Vec::new(),
             assert_strict: false,
@@ -1135,6 +1139,7 @@ pub(crate) fn pool_config<'a>(
         binary: &args.binary,
         mode: args.mode,
         options: &args.options,
+        language_file: args.language_file.as_ref().map(|file| file.path.as_str()),
         func_decls: args
             .func_decls
             .iter()
@@ -2062,6 +2067,9 @@ fn load_program_with_rust_profiles(
     // BEFORE the gated analysis commit (the `option` < `read symbols` ordering
     // the script path enforces), so a per-pass gate takes effect.
     apply_runtime_options(&mut prog, &args.options)?;
+    if let Some(file) = &args.language_file {
+        file.install(&mut prog);
+    }
     // (unlace `--assert bytes`) The IMAGE-scoped directives, before the commit and
     // before any read of the addresses they name: a byte overlay states what the
     // running program put there, and every later decode has to see it. The
@@ -3203,6 +3211,7 @@ pub(crate) fn parse_args_with_filters(
     let mut max_fn_seconds: Option<u64> = None;
     let mut max_fn_memory: Option<u64> = None;
     let mut options: Vec<(String, String)> = Vec::new();
+    let mut language_file: Option<crate::langfile::LanguageFile> = None;
     let mut func_decls: Vec<crate::funcdecl::FuncDecl> = Vec::new();
     let mut assertions: Vec<unlace_console::assertions::Directive> = Vec::new();
     let mut assert_strict = false;
@@ -3389,6 +3398,21 @@ pub(crate) fn parse_args_with_filters(
                 }
                 saw_language = true;
             }
+            // A flavour's base language is selected as `--language` selects one, so every
+            // reader of the options sees it; `load_program` installs the profile after them.
+            "--language-file" if matches!(cmd, "decompile-all" | "decompile") => {
+                let path = take(argv, &mut i, "--language-file")?;
+                let file = crate::langfile::LanguageFile::read(&path)?;
+                options.push(("setlanguage".into(), file.base_name().into()));
+                if language_file.replace(file).is_some() {
+                    return Err("duplicate --language-file".into());
+                }
+            }
+            "--language-file" => {
+                return Err(format!(
+                    "--language-file does not apply to {cmd}; use it with decompile or decompile-all"
+                ));
+            }
             "--mode" => mode = Some(take(argv, &mut i, "--mode")?),
             "--slice" => slice = Some(take(argv, &mut i, "--slice")?),
             "--isa" => isa = ArmIsa::parse(&take(argv, &mut i, "--isa")?)?,
@@ -3509,6 +3533,10 @@ pub(crate) fn parse_args_with_filters(
         if saw_entry {
             return Err("--entry requires --raw-image".into());
         }
+    }
+
+    if let Some(file) = &language_file {
+        file.check_selection(saw_language, &options)?;
     }
 
     // (unlace outlang, DIV-80) The auto policy: with no `--language` and no
@@ -3634,6 +3662,7 @@ pub(crate) fn parse_args_with_filters(
         max_fn_seconds,
         max_fn_memory,
         options,
+        language_file,
         func_decls,
         assertions,
         assert_strict,
@@ -3697,6 +3726,7 @@ fn usage_decompile_all() {
          \x20                   [--filter REGEX] [--min-size N] [--max-size N] \\\n\
          \x20                   [--reachable-from <name|0xaddr>] [--sort addr|size|name] [--limit N] \\\n\
          \x20                   [--summary] [--define-function S[-E][=N]|@FILE].. \\\n\
+         \x20                   [--language auto|c|rust|java|go | --language-file FILE] \\\n\
          \x20                   [--option N V].. [--isa auto|arm|thumb] [--slice ARCH] [--target T] [--sleighpath D]\n\
          \x20                   [--raw-image --target T --base VMA (--entry|--addr VMA)..]\n\
          \n\
@@ -3744,6 +3774,10 @@ fn usage_decompile_all() {
          --option values win.\n\
          An unfiltered run that discovers no function at all exits 1 with the\n\
          reason on stderr and in the document's run-level `error` field.\n\
+         --language selects the output language (omitted, it follows the binary);\n\
+         --language-file FILE prints through a language flavour instead, a TOML\n\
+         file that names a base language and overrides parts of its profile\n\
+         (`unlace docs cli`, \"Language files\").\n\
          \n\
          --define-function <start[-end][=name] | @file> (repeatable) declares where a\n\
          function starts and ends: start names an entry discovery missed, the\n\

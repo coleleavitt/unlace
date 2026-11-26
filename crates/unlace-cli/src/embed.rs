@@ -31,6 +31,8 @@ pub struct Request {
     pub options: Vec<(String, String)>,
     /// `--language`.
     pub language: Option<String>,
+    /// `--language-file`: a language flavour file ([`check_language_file`]).
+    pub language_file: Option<String>,
     /// `--mode`.
     pub mode: Option<String>,
     /// `--target`: the SLEIGH language id.
@@ -90,6 +92,7 @@ impl Request {
             ("--isa", &self.isa),
             ("--mode", &self.mode),
             ("--language", &self.language),
+            ("--language-file", &self.language_file),
             ("--project", &self.project),
         ] {
             if let Some(value) = value {
@@ -160,6 +163,14 @@ pub fn read_idb(path: &str, bytes: bool) -> Result<Idb, String> {
         noreturn: knowledge.noreturn,
         target,
     })
+}
+
+/// Check the text of a language flavour file (`--language-file`,
+/// `unlace_decomp::langflavour`); the error names the field at fault.
+pub fn check_language_file(text: &str) -> Result<(), String> {
+    unlace_decomp::langflavour::load(text)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// The SHA-256 of the file at `path`, the identity `unlace project` binds.

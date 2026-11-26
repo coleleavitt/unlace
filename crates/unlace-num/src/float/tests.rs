@@ -282,3 +282,12 @@ fn test_edge_get_class_table() {
     assert_eq!(fmt4.get_class(0xff80_0001), floatclass::nan); // signaling-bit pattern
     assert_eq!(fmt4.get_exponent(0x3f80_0000), 0);
 }
+
+#[test]
+fn print_decimal_double_max_takes_the_round_trip_digits() {
+    let fmt8 = FloatFormat::new(8);
+    assert_eq!(
+        fmt8.print_decimal(f64::MAX, false),
+        "1.7976931348623157e+308"
+    );
+}

@@ -598,8 +598,7 @@ impl PrintC {
                         self.goto_rewrites
                             .case_gototype(arm.owner, case.block, case.gototype)
                     });
-                    let ends_on_label = Some(i) == last
-                        && self.arm_ends_on_label(fd, arm, case);
+                    let ends_on_label = Some(i) == last && self.arm_ends_on_label(fd, arm, case);
                     Some(crate::ctree::ArmRecord {
                         exit_break: case.isexit && Some(i) != last,
                         goto,

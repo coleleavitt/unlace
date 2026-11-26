@@ -417,4 +417,5 @@ fn collect(
 }
 
 #[cfg(test)]
+#[path = "buildstamp_fingerprint/tests.rs"]
 mod tests;

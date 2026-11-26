@@ -312,10 +312,7 @@ fn unchanged_write_expressions_append_native_bytes_and_preserve_success() {
             .filter(|line| line.contains("use std::fmt::Write as _;"))
             .collect();
         assert_eq!(expressions.len(), 1, "{name}: {body}");
-        let expression = expressions[0]
-            .trim()
-            .strip_prefix("if ")
-            .unwrap();
+        let expression = expressions[0].trim().strip_prefix("if ").unwrap();
         // The branch polarity follows the lifted compare: the != 0 form is the unwrap failure arm,
         // and the assertion below checks the same write result either way.
         let expression = expression

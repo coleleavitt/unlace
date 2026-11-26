@@ -1011,17 +1011,16 @@ fn a_keyword_or_type_name_is_refused() {
         ("name v6 uint4", "`uint4` names a type"),
         ("type v6 unsigned int while", "`while` is a C keyword"),
     ] {
-        let (text, stderr, code) =
-            common::run_unlace(&[
-                "decompile",
-                binary.as_str(),
-                "mix",
-                "--option",
-                "typemerge",
-                "on",
-                "--assert",
-                directive,
-            ]);
+        let (text, stderr, code) = common::run_unlace(&[
+            "decompile",
+            binary.as_str(),
+            "mix",
+            "--option",
+            "typemerge",
+            "on",
+            "--assert",
+            directive,
+        ]);
         assert_eq!(code, 0, "{directive}: {stderr}");
         assert!(
             stderr.contains("rejected") && stderr.contains(reason),

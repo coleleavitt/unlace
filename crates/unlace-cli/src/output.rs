@@ -59,4 +59,5 @@ fn emit_to(writer: &mut dyn Write, bytes: &[u8]) -> io::Result<()> {
 }
 
 #[cfg(test)]
+#[path = "output/tests.rs"]
 mod tests;

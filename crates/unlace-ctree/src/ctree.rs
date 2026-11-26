@@ -371,7 +371,9 @@ impl CTree {
                 }
                 swap(body, old, new);
             }
-            StmtKind::DoWhile { body, .. } | StmtKind::For { body, .. } | StmtKind::Loop { body } => {
+            StmtKind::DoWhile { body, .. }
+            | StmtKind::For { body, .. }
+            | StmtKind::Loop { body } => {
                 swap(body, old, new);
             }
             _ => {}

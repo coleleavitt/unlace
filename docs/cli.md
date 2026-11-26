@@ -2409,7 +2409,7 @@ function application uses the in-process engine for text and JSON and rejects
   The PE walk does not insist on the `MZ` magic, so an image whose DOS header
   was damaged is still named even though it does not load. Every other
   subcommand that takes a binary (`decompile`, `decompile-all`,
-  `decompile-project`, `decompile-graph`, `functions`, `disassemble`, `read`,
+  `decompile-project`, `decompile-graph`, `map`, `functions`, `disassemble`, `read`,
   `xrefs`, `strings`) prints each *actionable* row as one line on stderr before
   it runs, so a `--json` stdout stays the document:
 
@@ -2569,7 +2569,9 @@ code units, and `text` is exactly the `len` units of that line at `col`. Every
 code unit of `code` that no token covers is a space, so the tokens of a line
 joined with their gaps rebuild it. `kind` is `syntax`, `variable`, `value`,
 `op`, `funcname`, `type`, `field`, `comment` or `label`, and `color` the
-printer's highlight class. A token carries more where it stands for something:
+printer's highlight class (`keyword`, `comment`, `type`, `funcname`, `var`,
+`const`, `param`, `global`, `none`, `error` or `special`). A token carries more
+where it stands for something:
 `address` and `address_hex`, the instruction it came from (the same addresses
 `line_mappings` holds for its line); `callee` and `callee_hex`, the entry of the
 function a call's name refers to; `var`, the index of the variable's row in this
@@ -5639,7 +5641,7 @@ is read, and a member whose path leaves that directory is named in a `note:`
 line when it loads. `--raw-image` reads the file as bytes and skips all of
 this. `--member`
 applies to `decompile`, `decompile-all`, `decompile-project`,
-`decompile-graph`, `functions`, `disassemble`, `raw-pcode`, `read`, `xrefs`,
+`decompile-graph`, `map`, `functions`, `disassemble`, `raw-pcode`, `read`, `xrefs`,
 `strings`, `crypto` and `blobs`; `unlace fid build` reads a whole archive itself.
 
 ### tar, zip and U-Boot FIT inputs

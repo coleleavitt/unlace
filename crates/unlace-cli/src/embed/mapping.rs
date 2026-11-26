@@ -6,7 +6,6 @@ use unlace_decomp::funcreport::VarInfo;
 use unlace_decomp::srcmap::CodeToken;
 
 use super::{Output, Selector, Session};
-use crate::decompile_all::Extra;
 use crate::map::{Place, Span, address_spans, live_variables, span_addresses, span_text};
 
 /// One function decompiled as `unlace decompile --json --tokens --storage`
@@ -50,12 +49,9 @@ pub type At = (usize, usize);
 impl Session {
     /// Decompile one function with its token map and variable storage.
     pub fn map(&mut self, selector: &Selector) -> Result<Mapped, String> {
-        let wanted = Extra {
-            tokens: true,
-            storage: true,
-            ..self.args.extra
-        };
-        let asked = std::mem::replace(&mut self.args.extra, wanted);
+        let asked = self.args.extra;
+        self.args.extra.tokens = true;
+        self.args.extra.storage = true;
         let ran = self.run(selector);
         self.args.extra = asked;
         let (output, function) = ran?;

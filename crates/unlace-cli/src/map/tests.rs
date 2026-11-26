@@ -71,7 +71,7 @@ fn an_address_gives_one_span_per_run_of_its_tokens() {
         [span((3, 2), (3, 5)), span((4, 9), (4, 10))]
     );
     assert_eq!(address_spans(&tokens, 0x14), [span((3, 6), (3, 11))]);
-    assert_eq!(address_spans(&tokens, 0x99), [Span::line(1); 0]);
+    assert!(address_spans(&tokens, 0x99).is_empty());
     let code = "\n\n  a = b + 1;\n  return a;";
     assert_eq!(span_text(code, &span((3, 6), (3, 11))), "b + 1");
 }

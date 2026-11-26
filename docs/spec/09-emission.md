@@ -911,8 +911,10 @@ per-call prototype overrides abstain. A byte local of another signedness also
 retains the existing spelling. No text search identifies a call: each recorded
 position must still contain its recorded expression before its cast is added. A
 position that does not (an emitter defect) leaves only that argument uncast.
-The inserted text contains no newlines. No buffered driver captures token maps;
-a result that did would have its map withdrawn rather than left misaligned.
+The inserted text contains no newlines. A result that carries a token map
+(`decompile-all --json --tokens`) has each applied cast added to the map
+(§9.2, "The token map on the command line"), and the map ships only if it still
+rebuilds the edited text.
 Structure renaming first adjusts the recorded byte columns. Streamed exports, non-C output and standalone `decompile` do not
 reconcile incomplete batches. The worker path still matches
 serial output with `--option protoorder off` on both.

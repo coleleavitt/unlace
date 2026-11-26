@@ -978,6 +978,11 @@ impl<'a> Builder<'a> {
                 j + term,
             ));
         }
+        if self.capture.lang.profile().forms.switch == crate::lang::SwitchForm::RustMatch
+            && let Some(arm) = self.match_arm(i, end, indent)
+        {
+            return Some(arm);
+        }
         if self.kw(i, Keyword::If) {
             return self.if_statement(i, end, indent);
         }
@@ -1061,8 +1066,10 @@ impl<'a> Builder<'a> {
                 ));
             }
             let step = self.style.indent;
+            let arms =
+                self.capture.lang.profile().forms.switch == crate::lang::SwitchForm::RustMatch;
             let inside = Place {
-                indent: indent + 2 * step,
+                indent: indent + if arms { step } else { 2 * step },
                 blank: indent + step,
             };
             let (body, next) = self.braces(after, end, inside)?;
@@ -1214,6 +1221,45 @@ impl<'a> Builder<'a> {
             && (at + 1..end)
                 .take_while(|&k| !self.sym(k, "{"))
                 .any(|k| self.sym(k, ";"))
+    }
+
+    /// A `match` arm at token `i`, `pattern => {`, its patterns separated by `|`, and its block
+    /// (an arm with no block is not an arm). `indent` is the column of the arm.
+    fn match_arm(&self, i: usize, end: usize, indent: u32) -> Parsed {
+        let arrow = (i..end).find(|&k| self.line_of[k] == self.line_of[i] && self.sym(k, "=>"))?;
+        if !self.sym(arrow + 1, "{") {
+            return None;
+        }
+        let mut alternatives = Vec::new();
+        let mut from = i;
+        for k in i..arrow {
+            if self.sym(k, "|") {
+                alternatives.push(self.pattern(from, k));
+                from = k + 1;
+            }
+        }
+        alternatives.push(self.pattern(from, arrow));
+        let pattern = Node {
+            sep: " | ".to_string(),
+            children: alternatives,
+            ..self.node(Kind::List, i, arrow)
+        };
+        let (body, next) = self.block(arrow + 1, end, indent)?;
+        let arm_node = Node {
+            children: vec![pattern, body],
+            ..self.node(Kind::Arm, i, next)
+        };
+        Some((arm_node, next))
+    }
+
+    /// One alternative of a `match` pattern: the wildcard `_` is text, anything else an
+    /// expression.
+    fn pattern(&self, a: usize, b: usize) -> Node {
+        if b == a + 1 && self.toks[a].text == "_" {
+            self.leaf(Kind::Text, a, b)
+        } else {
+            self.expr(a, b)
+        }
     }
 
     /// The test of the statement keyword at `at`, and the token after it: `(test)` in a language

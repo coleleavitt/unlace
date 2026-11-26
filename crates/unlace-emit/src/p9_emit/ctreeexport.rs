@@ -77,6 +77,9 @@ pub enum Kind {
     EolComment,
     /// An attribute line above the prototype (Rust `#[...]`); `text` is the line.
     Attribute,
+    /// A `match` arm (Rust): its children are the pattern (a `list` of the alternatives, `|`
+    /// between them) and the arm's `block`.
+    Arm,
     /// An empty line.
     BlankLine,
     /// Text the typed vocabulary does not cover, kept as printed.
@@ -106,7 +109,7 @@ pub enum Kind {
     Op,
 }
 
-const KIND_NAMES: [(Kind, &str); 34] = [
+const KIND_NAMES: [(Kind, &str); 35] = [
     (Kind::Function, "function"),
     (Kind::Prototype, "prototype"),
     (Kind::Decl, "decl"),
@@ -128,6 +131,7 @@ const KIND_NAMES: [(Kind, &str); 34] = [
     (Kind::Comment, "comment"),
     (Kind::EolComment, "eol_comment"),
     (Kind::Attribute, "attribute"),
+    (Kind::Arm, "arm"),
     (Kind::BlankLine, "blank_line"),
     (Kind::Raw, "raw"),
     (Kind::Var, "var"),

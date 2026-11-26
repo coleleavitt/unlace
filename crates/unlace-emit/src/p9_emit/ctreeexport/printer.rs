@@ -419,8 +419,9 @@ pub fn print_statement<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &No
                         w.push(")");
                     }
                     open_brace(w, w.style.brace_switch, indent);
+                    let arms = w.lang.profile().forms.switch == crate::lang::SwitchForm::RustMatch;
                     let place = Place {
-                        indent: indent + 2 * step,
+                        indent: indent + if arms { step } else { 2 * step },
                         blank: indent + step,
                     };
                     for item in &body.children {
@@ -437,6 +438,17 @@ pub fn print_statement<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &No
                     w.terminator();
                 }
                 _ => {}
+            }
+        }
+        Kind::Arm => {
+            if let [pattern, body] = node.children.as_slice() {
+                p.expr(w, pattern);
+                w.push(" =>");
+                if body.children.is_empty() {
+                    w.push(" {}");
+                } else {
+                    print_braced(p, w, body, w.style.brace_switch, indent);
+                }
             }
         }
         Kind::Try => {

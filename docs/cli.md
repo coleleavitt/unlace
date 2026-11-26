@@ -2573,7 +2573,7 @@ printer's highlight class. A token carries more where it stands for something:
 `address` and `address_hex`, the instruction it came from (the same addresses
 `line_mappings` holds for its line); `callee` and `callee_hex`, the entry of the
 function a call's name refers to; `var`, the index of the variable's row in this
-record's `variables` (absent under `--omit variables`); `decl`, where a
+record's `variables` (absent under `--no-vars` and `--omit variables`); `decl`, where a
 declaration token sits (`function`, `return`, `param`, `local`); `type`, the type
 a type token spells; `global` and `global_hex`, the address of the global data a
 token names. `tokens_error` is `null` when `tokens` is the map; when the map
@@ -3218,10 +3218,10 @@ of the three queries is given:
   `var NAME<TAB>TYPE<TAB>storage` line each. The storage is the pieces of the
   variable's `storage` whose ranges hold the address, as `eax(4)`, `stack-0x14(4)`
   or `ram:0x4010(8)`: the place and its size in bytes. A parameter and the frame slot
-  it is spilled to answer as one variable. An address inside the function that no
-  token names prints no span, which is the answer for an instruction whose effect
-  the C shows nowhere (a `push`, a register move that was folded away); its live
-  variables are still listed.
+  it is spilled to answer as one variable. An address that no token names prints no
+  span, which is the answer for an instruction whose effect the C shows nowhere (a
+  `push`, a register move that was folded away); its live variables are still
+  listed. An address outside the function prints nothing.
 
 The lines and columns index the text of this decompile, so give `map` the flags the
 text was made with: `--language`, `--language-file`, `--mode`, `--option NAME VALUE`,

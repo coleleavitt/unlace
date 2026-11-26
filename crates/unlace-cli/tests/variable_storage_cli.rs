@@ -176,6 +176,44 @@ fn a_delay_slot_belongs_to_its_branch() {
     );
 }
 
+/// A conditional move is one instruction per path for the walk, so its write
+/// counts only where it is made (`unlace disassemble ptx.o compare_words`):
+///
+/// ```text
+/// 400017: mov 0x8(%rsi),%r10    40001b: mov 0x8(%rdi),%r9     40001f: cmp %r9,%r10
+/// 400022: mov %r9,%rcx          400025: cmovle %r10,%rcx      400029: cmpb $0x0,ignore_case
+/// ```
+#[test]
+fn a_conditional_move_writes_on_the_path_that_makes_it() {
+    let doc = run_on(
+        &common::fixture("ptx.o"),
+        &["decompile", "compare_words", "--storage"],
+    );
+    let in_rcx = |address: u64| -> Vec<&str> {
+        let holds = |piece: &Value| {
+            let ranges = piece["ranges"].as_array().expect("ranges").iter();
+            piece["register"] == "rcx"
+                && ranges.clone().any(|r| {
+                    r["start"].as_u64() <= Some(address) && Some(address) < r["end"].as_u64()
+                })
+        };
+        doc["functions"][0]["variables"]
+            .as_array()
+            .expect("variables")
+            .iter()
+            .filter(|v| v["storage"].as_array().expect("storage").iter().any(holds))
+            .map(|v| v["name"].as_str().expect("name"))
+            .collect()
+    };
+    // After the move rcx is `length`, the smaller of the two, on both paths.
+    assert_eq!(in_rcx(0x400029), ["length"]);
+    // On entry to it rcx is the copy of r9 alone: not yet `length`, and never
+    // the r10 the move may take.
+    let before = in_rcx(0x400025);
+    assert_eq!(before.len(), 1, "{before:?}");
+    assert_ne!(before[0], "length");
+}
+
 /// The key is opt-in, so a document that does not ask for it is the document
 /// it was, and it goes where the variables go.
 #[test]

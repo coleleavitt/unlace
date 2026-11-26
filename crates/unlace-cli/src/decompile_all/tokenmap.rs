@@ -39,14 +39,8 @@ fn token_json(t: &CodeToken, global: Option<u64>) -> Json {
         ("color".to_string(), Json::Str(t.color.name().into())),
         ("text".to_string(), Json::Str(t.text.clone())),
     ];
-    let mut address = |key: &str, value: Option<u64>| {
-        if let Some(value) = value {
-            fields.push((key.to_string(), Json::Number(value.to_string())));
-            fields.push((format!("{key}_hex"), Json::Str(format!("0x{value:x}"))));
-        }
-    };
-    address("address", t.address);
-    address("callee", t.callee);
+    push_address(&mut fields, "address", t.address);
+    push_address(&mut fields, "callee", t.callee);
     if let Some(var) = t.var {
         fields.push(("var".to_string(), number(var)));
     }
@@ -56,9 +50,14 @@ fn token_json(t: &CodeToken, global: Option<u64>) -> Json {
     if let Some(type_text) = &t.type_text {
         fields.push(("type".to_string(), Json::Str(type_text.clone())));
     }
-    if let Some(global) = global {
-        fields.push(("global".to_string(), Json::Number(global.to_string())));
-        fields.push(("global_hex".to_string(), Json::Str(format!("0x{global:x}"))));
-    }
+    push_address(&mut fields, "global", global);
     Json::Object(fields)
+}
+
+/// An address and its `<key>_hex` twin, when there is one.
+fn push_address(fields: &mut Vec<(String, Json)>, key: &str, value: Option<u64>) {
+    if let Some(value) = value {
+        fields.push((key.to_string(), Json::Number(value.to_string())));
+        fields.push((format!("{key}_hex"), Json::Str(format!("0x{value:x}"))));
+    }
 }

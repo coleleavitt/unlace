@@ -217,11 +217,15 @@ pub fn reconcile_pointer_arguments(results: &mut [FuncResult]) {
         if applied.code != original
             && let Some(detail) = result.detail.as_mut().filter(|d| d.tokens_error.is_none())
         {
-            let inserted: Vec<_> = edits
-                .iter()
-                .filter(|edit| !applied.skipped.iter().any(|(skipped, _)| skipped == *edit))
-                .cloned()
-                .collect();
+            let mut skipped: Vec<_> = applied.skipped.iter().map(|(edit, _)| edit).collect();
+            let mut inserted = edits.clone();
+            inserted.retain(|edit| match skipped.iter().position(|left| *left == edit) {
+                Some(at) => {
+                    skipped.swap_remove(at);
+                    false
+                }
+                None => true,
+            });
             detail.insert_casts(original, &inserted, &applied.code);
         }
         result.code = Some(applied.code);

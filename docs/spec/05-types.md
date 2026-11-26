@@ -4271,6 +4271,10 @@ The live rule uses `StringSequence` for collection and replacement. The legacy
 constructor; fixture-only construction and inspection helpers live with its
 unit tests. Both paths use the same fill predicate.
 
+Collection scans from the sequence's start address (not one character before the root). A COPY that
+reaches the root from an earlier element is rejected. A wide COPY confined to an earlier element is
+skipped, not rejected (`constseq.rs (StringSequence::collect_copy_ops)`).
+
 **(unlace) Read-only string block copy —**
 [`rodatastring`](../options.md)**, default on** (DIV-113).
 `crates/unlace-bandb-base/src/p5_types/rodatastring.rs
@@ -4438,7 +4442,7 @@ from `TypeBitField` in `dtype.rs`): `RuleBitFieldStore`/`RuleBitFieldOut`
 trace backward from a store (or mapped write) through the OR/AND/SHIFT web and
 re-express it as explicit `INSERT` ops per field
 (`crates/unlace-bandb-core/src/p5_types/bitfield/insert.rs
-(BitFieldInsertTransform)`); `RuleBitFieldLoad`/`RuleBitFieldIn` trace forward
+(BitFieldInsertTransform)`); a constant written as an INT_AND/INT_OR mask pair (`(V & clear) | set` or `(V | set) & clear`) is one such insert when the two constants determine every bit of the field, and its value is the INT_OR constant (`bitfield/insert.rs (masked_constant)`); `RuleBitFieldLoad`/`RuleBitFieldIn` trace forward
 from a load and re-express the extractions as sign/zero `PULL` ops
 (`bitfield/pull.rs (BitFieldPullTransform)`); `RulePullAbsorb`/
 `RuleInsertAbsorb` (`bitfield/absorb.rs`) then consolidate a shared byte

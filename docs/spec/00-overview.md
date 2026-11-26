@@ -4481,6 +4481,11 @@ boundary between them, so maturity is not a property of the IR. It is a record o
 group** over this function. Facts become *settled* at fixed points of the tree, where
 the actions that could still change them never run again in that pass.
 
+The `universal` group may restart up to four times (`universalaction.rs (universal_sched)`, `max: 4`).
+A restart re-runs the whole group, so a chain of calls needs one restart per call: each call's
+prototype is known only after the previous call's return type is applied. Past the limit, the
+function prints `Exceeded maximum restarts with more pending` (chapter 02).
+
 **Levels**, in tree order. Each is reached when the node named in the second column
 *completes*:
 

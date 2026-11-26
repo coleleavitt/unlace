@@ -305,7 +305,13 @@ impl BitFieldInsertTransform {
     /// Create InsertRecord writing a constant into the field (C++
     /// `addConstantWrite`, bitfield.cc:199-216).
     fn add_constant_write(&mut self, data: &Funcdata, state: &mut BitFieldNodeState) -> bool {
-        let mut value = data.vbank().get(state.node).unwrap().get_offset();
+        let value = data.vbank().get(state.node).unwrap().get_offset();
+        self.add_constant_value(state, value)
+    }
+
+    /// Create InsertRecord writing the field's bits of a constant (C++
+    /// `addConstantValue`, bitfield.cc:199-216).
+    fn add_constant_value(&mut self, state: &mut BitFieldNodeState, mut value: uintb) -> bool {
         state.node = VarnodeId::default();
         let field = match state.field() {
             Some(f) => f.clone(),
@@ -398,7 +404,61 @@ impl BitFieldInsertTransform {
         if res == 0 {
             return self.add_zero_out(state);
         }
+        let other = data.obank().get(op).unwrap().get_in(0).unwrap();
+        let mut value = 0;
+        if self.masked_constant(data, state, other, cval, OpCode::CPUI_INT_OR, &mut value) {
+            return self.add_constant_value(state, value);
+        }
         false
+    }
+
+    /// Recognize a constant written as an INT_AND/INT_OR mask pair (C++
+    /// `maskedConstant`, bitfield.cc:251-268 region). `other` is the operand opposite the
+    /// constant `c`; it must be defined by `inner` with a constant operand, and between them
+    /// every bit of the field must be determined.
+    fn masked_constant(
+        &self,
+        data: &Funcdata,
+        state: &BitFieldNodeState,
+        other: VarnodeId,
+        c: uintb,
+        inner: OpCode,
+        value: &mut uintb,
+    ) -> bool {
+        if state.field().is_none() {
+            return false;
+        }
+        if !data
+            .vbank()
+            .get(other)
+            .map(|v| v.is_written())
+            .unwrap_or(false)
+        {
+            return false;
+        }
+        let inner_op = data
+            .obank()
+            .get(data.vbank().get(other).unwrap().get_def().unwrap())
+            .unwrap();
+        if inner_op.code() != inner {
+            return false;
+        }
+        let k = data.vbank().get(inner_op.get_in(1).unwrap()).unwrap();
+        if !k.is_constant() {
+            return false;
+        }
+        let k = k.get_offset();
+        let (and_mask, or_mask) = if inner == OpCode::CPUI_INT_AND {
+            (k, c)
+        } else {
+            (c, k)
+        };
+        let mask = state.bits_field.get_mask();
+        if ((!and_mask | or_mask) & mask) != mask {
+            return false;
+        }
+        *value = or_mask;
+        true
     }
 
     /// Follow bitfield back through one branch of INT_OR (C++ `handleOrBack`,
@@ -420,10 +480,16 @@ impl BitFieldInsertTransform {
                 .get(vn1)
                 .map(|v| v.is_constant())
                 .unwrap_or(false)
-                && (nz1 & mask) == mask
             {
-                state.node = vn1;
-                return true;
+                if (nz1 & mask) == mask {
+                    state.node = vn1;
+                    return true;
+                }
+                let mut value = 0;
+                let c = data.vbank().get(vn1).unwrap().get_offset();
+                if self.masked_constant(data, state, vn0, c, OpCode::CPUI_INT_AND, &mut value) {
+                    return self.add_constant_value(state, value);
+                }
             }
             return false;
         }

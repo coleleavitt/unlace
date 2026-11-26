@@ -253,6 +253,8 @@ fn get_const_offset_back_add_of_constants() {
     set_in(&mut fd, add, c0, 0);
     set_in(&mut fd, add, c1, 1);
     let out = give_output(&mut fd, add, 0x30, 8);
+    let user = mk_op(&mut fd, 1, 0x200, OpCode::CPUI_COPY);
+    set_in(&mut fd, user, out, 0);
     let (r, m) = RulePtrsubUndo::get_const_offset_back(&fd, out, RulePtrsubUndo::DEPTH_LIMIT);
     assert_eq!(r, 0x30);
     assert_eq!(m, 0);
@@ -275,6 +277,26 @@ fn get_const_offset_back_mult_sets_multiplier() {
 }
 
 #[test]
+fn get_const_offset_back_shared_sum_drops_constant() {
+    // INT_ADD(0x10, 0x20) read twice: the constant sum is not folded, the multiplier still is.
+    let mut fd = build_fd();
+    let add = mk_op(&mut fd, 2, 0x100, OpCode::CPUI_INT_ADD);
+    let c0 = mk_const(&mut fd, 8, 0x10);
+    let c1 = mk_const(&mut fd, 8, 0x20);
+    set_in(&mut fd, add, c0, 0);
+    set_in(&mut fd, add, c1, 1);
+    let out = give_output(&mut fd, add, 0x30, 8);
+    let user1 = mk_op(&mut fd, 1, 0x200, OpCode::CPUI_COPY);
+    set_in(&mut fd, user1, out, 0);
+    let (r_lone, _) = RulePtrsubUndo::get_const_offset_back(&fd, out, RulePtrsubUndo::DEPTH_LIMIT);
+    assert_eq!(r_lone, 0x30);
+    let user2 = mk_op(&mut fd, 1, 0x204, OpCode::CPUI_COPY);
+    set_in(&mut fd, user2, out, 0);
+    let (r_shared, _) =
+        RulePtrsubUndo::get_const_offset_back(&fd, out, RulePtrsubUndo::DEPTH_LIMIT);
+    assert_eq!(r_shared, 0, "a shared sum contributes no constant");
+}
+
 fn get_const_offset_back_depth_limit_stops() {
     // A written non-const, non-add/mult op at depth 0 -> 0 (maxLevel guard).
     let mut fd = build_fd();

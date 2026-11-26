@@ -362,6 +362,8 @@ impl RulePtrsubUndo {
     /// Recursively search for additive/multiplicative constants behind a
     /// Varnode, returning the sum of additive constants and passing back the
     /// biggest constant coefficient (C++ `RulePtrsubUndo::getConstOffsetBack`).
+    /// A sum with more than one reader contributes no constant: its constants stay in
+    /// the shared expression, which `removeLocalAddRecurse` cannot fold.
     ///
     /// Pure / read-only — fully transcribed.  Returns `(retval, multiplier)`.
     pub fn get_const_offset_back(data: &Funcdata, vn: VarnodeId, max_level: int4) -> (int8, int8) {
@@ -379,6 +381,7 @@ impl RulePtrsubUndo {
         let op = def_of(data, vn).expect("get_const_offset_back: written vn has no def");
         let opc = code(data, op);
         let mut retval: int8 = 0;
+        let foldable = data.lone_descend(vn).is_some();
         if opc == OpCode::CPUI_INT_ADD {
             let (r0, sub0) = Self::get_const_offset_back(data, in_vn(data, op, 0), max_level);
             retval = retval.wadd(r0);
@@ -401,7 +404,7 @@ impl RulePtrsubUndo {
                 multiplier = multiplier.wmul(sub); // Only contribute to the multiplier
             }
         }
-        (retval, multiplier)
+        (if foldable { retval } else { 0 }, multiplier)
     }
 
     /// Collect constants and the biggest multiplier in the additive expression

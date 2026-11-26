@@ -813,6 +813,58 @@ fn equal2zero_const_form() {
 }
 
 #[test]
+fn equal2zero_cancels_common_term() {
+    // 0 == (U + W) + W*-1  =>  U == 0   (the sign-correction term W cancels)
+    let mut fd = build_fd();
+    let src = mk_input(&mut fd, 0x8, 4);
+    let wdef = mk_op(&mut fd, 1, 0x70, OpCode::CPUI_COPY);
+    fd.op_set_input(wdef, src, 0).unwrap();
+    let w = mk_vn(&mut fd, 0x40, 4);
+    set_def(&mut fd, w, wdef);
+    fd.vbank_mut()
+        .get_mut(w)
+        .unwrap()
+        .set_flags_pub(crate::varnode::varnode_flags::insert);
+    let m1 = mk_const(&mut fd, 0xffff_ffff, 4);
+    let mult = mk_op(&mut fd, 2, 0x80, OpCode::CPUI_INT_MULT);
+    fd.op_set_input(mult, w, 0).unwrap();
+    fd.op_set_input(mult, m1, 1).unwrap();
+    let negvn = mk_vn(&mut fd, 0x18, 4);
+    set_def(&mut fd, negvn, mult);
+
+    let u = mk_input(&mut fd, 0x10, 4);
+    let inner = mk_op(&mut fd, 2, 0x84, OpCode::CPUI_INT_ADD);
+    fd.op_set_input(inner, u, 0).unwrap();
+    fd.op_set_input(inner, w, 1).unwrap();
+    let sumvn = mk_vn(&mut fd, 0x30, 4);
+    set_def(&mut fd, sumvn, inner);
+    fd.vbank_mut()
+        .get_mut(sumvn)
+        .unwrap()
+        .set_flags_pub(crate::varnode::varnode_flags::insert);
+
+    let add = mk_op(&mut fd, 2, 0x90, OpCode::CPUI_INT_ADD);
+    fd.op_set_input(add, sumvn, 0).unwrap();
+    fd.op_set_input(add, negvn, 1).unwrap();
+    let addvn = mk_vn(&mut fd, 0x20, 4);
+    set_def(&mut fd, addvn, add);
+
+    let op = mk_op(&mut fd, 2, 0x100, OpCode::CPUI_INT_EQUAL);
+    let zero = mk_const(&mut fd, 0, 4);
+    fd.op_set_input(op, zero, 0).unwrap();
+    fd.op_set_input(op, addvn, 1).unwrap();
+
+    let eqout = mk_vn(&mut fd, 0x50, 1);
+    set_def(&mut fd, eqout, op);
+    let mut rule = RuleEqual2Zero::new("analysis");
+    assert_eq!(rule.apply_op(op, &mut fd), 1);
+    assert_eq!(fd.obank().get(op).unwrap().get_in(0), Some(u));
+    let i1 = fd.obank().get(op).unwrap().get_in(1).unwrap();
+    assert!(is_const(&fd, i1));
+    assert_eq!(off_of(&fd, i1), 0);
+}
+
+#[test]
 fn equal2zero_mult_form() {
     // 0 == (V + W*-1)  =>  V == W   (negvn = W * mask)
     let mut fd = build_fd();

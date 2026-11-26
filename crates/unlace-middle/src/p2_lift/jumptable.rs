@@ -6172,6 +6172,32 @@ impl JumpBasicModel {
 
         JumpBasic::find_determining_varnodes(fd, &mut self.path_meld, multiop, 1 - path)?;
         self.find_normalized(fd, rootbl, pathout, matchsize, maxtablesize, _indop)?;
+        if std::env::var("UNLACE_JT_DUMP").ok().as_deref() == Some(&format!("{at:#x}")) {
+            let vs = |vn: VarnodeId| {
+                fd.vbank().get(vn).map_or(String::from("?"), |v| {
+                    format!(
+                        "({}:{:#x}:{})#{:?}",
+                        v.get_space().get_name(),
+                        v.get_offset(),
+                        v.get_size(),
+                        vn
+                    )
+                })
+            };
+            for op in fd.obank().iter_alive() {
+                let o = fd.obank().get(op).unwrap();
+                let mut s = format!("{:#x} {:?} ", o.get_addr().get_offset(), o.code());
+                if let Some(out) = o.get_out() {
+                    s.push_str(&vs(out));
+                    s.push_str(" = ");
+                }
+                for i in 0..o.num_input() {
+                    s.push_str(&o.get_in(i).map_or(String::new(), vs));
+                    s.push(' ');
+                }
+                eprintln!("JTDUMP {s}");
+            }
+        }
         jt_trace!(
             "model2 at {at:#x}: default value {extravalue:#x}, range size {}, {} guard(s)",
             self.jrange().get_size(),

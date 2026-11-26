@@ -5292,6 +5292,9 @@ truncating the fall-through here"
                 .get(op)
                 .map_or(0, |o| o.get_addr().get_offset());
             let _scope = crate::budget::JumpTableScope::enter(at);
+            if unlace_base::env::var_os("UNLACE_JUMPTABLE_TRACE").is_some() {
+                eprintln!("jumptable: DBG flow table at {at:#x} inline={for_inline}");
+            }
             if !for_inline && self.is_stated_tail_call(op) {
                 self.stated_tail_call(op)?;
                 continue;
@@ -5304,6 +5307,9 @@ truncating the fall-through here"
             let mut mode = if crate::budget::deadline_passed_in("jump-table recovery")
                 || self.jt_work_exhausted(op)
             {
+                if unlace_base::env::var_os("UNLACE_JUMPTABLE_TRACE").is_some() {
+                    eprintln!("jumptable: recovery at {at:#x}: skipped (deadline or work bound)");
+                }
                 Ok(None)
             } else {
                 let mode = self.data.recover_jump_table_flow(

@@ -792,7 +792,12 @@ impl AliasChecker {
         };
         let spacebase = match access.find_spacebase_input(&space) {
             Some(vn) => vn,
-            None => return, // No possible alias
+            None => {
+                if crate::heritage::unlace_jt_trace() {
+                    eprintln!("jt-trace alias gather: no spacebase input");
+                }
+                return; // No possible alias
+            }
         };
 
         access.gather_additive_base(spacebase, &mut self.add_base);
@@ -823,6 +828,9 @@ impl AliasChecker {
             if offset < self.alias_boundary {
                 self.alias_boundary = offset;
             }
+        }
+        if crate::heritage::unlace_jt_trace() {
+            eprintln!("jt-trace alias gather done alias={:x?}", self.alias);
         }
     }
 

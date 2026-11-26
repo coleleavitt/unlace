@@ -1,25 +1,44 @@
-# SLEIGH load cost: every load re-decodes the spec (2026-11-25, updated 2026-11-26)
+# SLEIGH load cost: why every test paid ~110 ms, and what was done (2026-11-25/26)
+
+## Summary
+- A decompiler load used to cost about 110 ms of CPU whatever the input, against about 8 ms for
+  the decompile itself. Almost all of it was decoding the compiled SLEIGH spec (`.sla`) into
+  memory. Every test process and every `unlace` run paid it.
+- Three changes (#1530, #1531, #1532) brought one
+  `unlace decompile` call from 128 ms to 71 ms and a fresh load from 101 ms to 41 ms
+  (1,505 M -> 530 M instructions). Output is unchanged.
+- What is left of a load, and what each remaining fix would cost, is in
+  [What is left](#what-is-left).
 
 ## Project
 unlace is a decompiler in Rust (a port of Ghidra's decompiler), a ~30-crate cargo workspace.
-Code: github.com/coleleavitt/unlace, branch `main` (local checkout
-~/RustProjects/active/unlace). Paths below are relative to the repository root.
-Toolchain: nightly rustc, 24-core Linux box, tests run with cargo-nextest (one process per test).
+Code: github.com/coleleavitt/unlace, branch `main` (local checkout `~/RustProjects/active/unlace`).
+Paths below are relative to the repository root. Toolchain: nightly rustc, 24-core Linux host,
+tests run with cargo-nextest (one process per test).
 
-## Already done (merged as unlace PR #1526)
-- `cargo build` and `cargo test` now share compiled crates (before: 0 of 201 units shared;
-  after: 208 of 223). Cause was `[profile.test] opt-level = 1` vs dev 0, and features turned
-  on only by dev-dependencies.
-- Doc tests off, 1,148 old port-verification tests and dead `#[ignore]` stubs deleted,
-  one CI test list, 615 inline `#[cfg(test)] mod {}` blocks moved to their own files.
-
-## Measured: where test time goes
+## The test suite
+Measured before the load-time work:
 - Last full run: 12,654 tests, 3,612 test-seconds, 164 s wall on 24 threads (near ideal).
 - `unlace-cli` integration tests: 1,678 tests, 1,853 test-seconds (half the suite), median
-  0.52 s each. Each test starts the `unlace` binary (`Command::new(env!("CARGO_BIN_EXE_unlace"))`)
-  at least once; about 130 test files also compile C with `cc`.
-- nextest vs `cargo test`: nextest 69 s vs 110 s on unlace-console (cargo test runs test
-  binaries one after another). For tiny unit tests they are equal (2.9 s vs 2.0 s).
+  0.52 s each.
+- nextest against `cargo test`: 69 s against 110 s on unlace-console, because `cargo test` runs
+  the test binaries one after another. For tiny unit tests they are equal (2.9 s against 2.0 s).
+  Keep nextest.
+- How many processes a CLI test starts (30 random `unlace-cli` tests, one at a time, under
+  `strace -f -e trace=execve`):
+  - `unlace` starts per test: median 2, mean 7.1. One test starts it 96 times and takes 12.6 s
+    by itself; one starts it none.
+  - 7 of the 30 compile C, with a median of 12 compiler runs each; those 7 took 24 of the
+    sample's 52 seconds. No test caches the C it compiles (90 test files build C at test time).
+- insta snapshots against `assert_eq!`: no run-time difference (200 tests, 0.02-0.04 s either
+  way, 0.07 s more compile time for insta). Snapshots only change how expected output is
+  updated, not speed.
+
+Done in #1526: `cargo build` and `cargo test` share compiled crates (0 of 201 units shared
+before, 208 of 223 after: `[profile.test] opt-level = 1` against dev 0, and features turned on
+only by dev-dependencies); doc tests off; 1,148 port-verification tests and dead `#[ignore]`
+stubs deleted; one CI test list; 615 inline `#[cfg(test)] mod {}` blocks moved to their own
+files (#1529 fixed `cargo fmt` for four of them that are also included through `#[path]`).
 
 ## Benchmark (`notes/sleigh-load-bench`, real decompiler, opt-level 1)
 Same 20 functions of a small x86-64 ELF (`fauxware`), 3 runs each:
@@ -36,7 +55,7 @@ Same 20 functions of a small x86-64 ELF (`fauxware`), 3 runs each:
 So: process start ~20 ms, decompile ~8 ms, and ~110 ms per LOAD regardless of input size.
 insta snapshots vs assert_eq: no run-time difference (200 tests 0.02-0.04 s each way).
 
-## Profile of one fresh load
+## Profile of one fresh load, before the changes (2026-11-25)
 
 Measured 2026-11-25 with valgrind callgrind on the `raw-fresh` mode of the benchmark: load a
 5-byte x86-64 blob and decompile it once. That is 1.50 G instructions, about 105 ms. The process
@@ -114,16 +133,37 @@ so the profile is from callgrind (instruction counts, not time).
   process loads more than once (cargo test, the `unlace` library, decompile-all, the harness).
   Each spawned `unlace` would still decode once.
 
-## Status after #1530-#1532 (2026-11-26)
+## What was done (2026-11-26)
+- **#1530: decode subtables on first use.** The load keeps the inflated stream and walks the
+  subtable bodies once with a flat cursor (`crates/unlace-sleigh/src/slascan.rs`, about 13
+  instructions per byte against 71 for `PackedDecode::skip_element_raw`), recording where each
+  constructor and decision node lies (`crates/unlace-sleigh/src/lazysla.rs`, replacing
+  `lazytemplates.rs`). Constructors, their templates and decision nodes are decoded with the
+  same decoders the first time instruction resolution, printing or p-code building reads them.
+  Per-subtable laziness alone would have gained nothing: x86-64's `instruction` table holds
+  7,680 of the 9,121 constructors and 95% of the subtable bytes. Ghidra-built `.sla` files load
+  unchanged; `UNLACE_SLA_LAZY=0` decodes everything at load. 1,505 M -> 763 M instructions.
+- **#1531: one `.ldefs` per load, no inflate for large specs.** `LanguageDatabase` lists the
+  `.ldefs` files once and reads the one named for the language id's processor first, stopping
+  at the first that defines the id; listing every language still reads them all, and FID's
+  language-family table reads another `.ldefs` only when asked. The `.sla` cache keeps an
+  uncompressed copy (`slr` header) beside each cached image of 2 MiB or more (7.2 ms -> 1.0 ms
+  to read x86-64's). It also fixed `build_sleigh_for_loader`'s default-model fallback (PE
+  `:windows`), which could never run. Its last commit makes the lazy load read the uncompressed
+  form (without it, x86-64 loads failed with "Missing SLA format header").
+- **#1532: no allocation per comparison in `avxintrin::intrinsic_sized`.** It compared the
+  mnemonic against `format!("{op}{ty}")` for 44 combinations; engine setup names every AVX
+  user-op of x86-64 (7,268 calls), so a load made about 173,000 allocations, 117 M of the
+  616 M instructions it then cost. 616 M -> 530 M.
 
-Three changes landed:
-- #1530 decodes constructors, their templates and decision nodes on first use (candidate 2 below).
-- #1531 reads one `.ldefs` per load, and keeps an uncompressed copy of every cached `.sla` of
-  2 MiB or more (candidate 3, and the inflate).
-- #1532 removed an allocation per comparison in `avxintrin::intrinsic_sized`, which engine setup
-  calls for every AVX user-op (7,268 calls, 117 M instructions before).
+Verification: `cargo test` of every crate each change touched; parity (`cargo test -p
+unlace-harness --test parity`) after #1530 and after #1530+#1531: datatests match
+`docs/baseline.json`, and `tests/stages` fails the same 5 assertions as `main` did before
+(6061/6066: globalpointee #15, INDEXEDSTOREGUARD #16, three mixed-width record assertions).
+The PRs were merged with `--admin` while the CI runners were queued, so CI did not run on them.
 
-Same benchmark, same host (load average about 8), median of 3; "before" is the engine before #1530:
+## Results
+Same benchmark and host (load average about 8), median of 3; "before" is the engine before #1530:
 
 | Mode | before | after |
 |---|---|---|
@@ -133,7 +173,15 @@ Same benchmark, same host (load average about 8), median of 3; "before" is the e
 | `inproc-shared`: load once, decompile each function | 6.8 ms | 4.3 ms |
 | callgrind instructions, `raw-fresh`, one load | 1,505 M | 530 M |
 
-Where the 530 M instructions go now (inclusive, recursive functions counted once):
+Costs of the changes:
+- Memory: an engine keeps the inflated x86-64 stream, 8.5 MB, where it kept 3.6 MB of template
+  bytes before. `decodekit::EngineRecipe` also holds the 8.5 MB image per engine.
+- Disk: the uncompressed copies of every image of 2 MiB or more come to about 412 MB in
+  `~/.cache/unlace/sla` if all of them are loaded (556 MB for all 464 languages, which is why
+  only large images get one). Deleting the cache is always safe.
+
+## What is left
+Where the 530 M instructions of one load go now (inclusive, recursive functions counted once):
 
 | Share | What |
 |---|---|
@@ -145,63 +193,40 @@ Where the 530 M instructions go now (inclusive, recursive functions counted once
 | 4% | parsing the `.pspec`/`.cspec` XML (`xml_tree`) |
 | 2% | reading the uncompressed `.sla` copy |
 
-What is left, with its cost:
-- **The walk (21%)** has to look at every byte, because the packed format stores no lengths.
-  The uncompressed copy is unlace's own file, so it could also store the byte ranges the walk
-  records, and a load would skip the walk. Medium-sized change; the cached copy gets a second
-  part that must stay in step with the stream.
+A process start is about 20 ms of the 71 ms per `unlace` spawn. The remaining fixes, none built:
+- **Skip the walk (21%).** It has to look at every byte because the packed format stores no
+  lengths. The uncompressed copy is unlace's own file, so it could also store the byte ranges
+  the walk records. Medium change; the copy gets a second part that must stay in step with the
+  stream.
 - **Operand symbols on first use (28%).** About 40 call sites read `OperandSymbol` fields
-  directly; they would have to go through a decode-on-first-read accessor. Large change.
+  directly and would have to go through a decode-on-first-read accessor. Large change.
 - **Symbol headers (22%)** are what name lookups use, so they cannot simply be skipped.
 - **AVX naming at setup (6%)** is front-loaded on purpose: the masked user-op names must be
   registered before printing. Making it lazy changes the user-op registry.
 - **A flat cache (rkyv) or tables compiled into the binary** would replace all of the decode
-  (73% of what is left) and is the only way to get a load near 1 ms. It means changing the
-  types the SLEIGH runtime reads, in every user of `SymbolTable`, `Constructor` and
-  `DecisionNode`.
+  (73% of what is left) and is the only way to a load near 1 ms. It changes the types the SLEIGH
+  runtime reads, in every user of `SymbolTable`, `Constructor` and `DecisionNode`.
+- **A process-wide cache of the decoded spec** (per thread, because of `Rc`) would make the 2nd
+  and later loads in one process about 8 ms. It does not help a spawned `unlace`.
+- **Test side:** a few tests start `unlace` dozens of times or compile a lot of C (above); fixing
+  those, or moving tests that only decompile a byte snippet into `tests/stages` (954 files,
+  6,066 checks in one process in about 35-40 s), helps the tests but not users.
 
-A process start is about 20 ms of the 71 ms per `unlace` spawn.
+## Ideas that were considered and not taken
+- **Not freeing the spec at exit.** Its real cost is 2.5% (about 3 ms), not the 17% the first
+  version of this note claimed (see the correction above).
+- **A faster generic packed reader (`PackedDecode`).** After #1530 the subtable bodies no
+  longer go through it, and its self cost fell from 41% to about 25% of a (smaller) load. An attempt at a rewrite was
+  stopped and discarded.
+- **Replacing SLEIGH** with SAIL models or hand-written lifters: SLEIGH gives every architecture
+  in `specs/` and the decompile after a load is already 4-8 ms; the cost was decoding the
+  compiled spec, not the spec language. SAIL covers few architectures and is built for proof
+  tools. The old unlace (tag `unlace-v1-final`) had hand-written lifters and moved to SLEIGH.
 
-## Candidate fixes (to evaluate)
-Ordered by measured share of a load.
-1. **A faster packed reader.** About 41% of a load runs inside `PackedDecode` itself, mostly
-   skipping and looking up attributes (`skip_attribute`, `find_matching_attribute`). The format
-   stays the same, so nothing else changes. The gain is unknown until it is profiled again.
-2. **Do not walk past every template at load.** `LazyTemplates::take` still scans each
-   constructor's template bytes (19%) just to learn where they end. The `.sla` writer could record
-   each template's length or offset, so the reader can jump over it without parsing it.
-   Done 2026-11-26 without a format change (branch `perf/sleigh-lazydecode`): the whole
-   subtable body is left as bytes. One flat walk of the inflated stream
-   (`crates/unlace-sleigh/src/slascan.rs`, about 13 instructions per byte against 71 for
-   `PackedDecode::skip_element_raw`) records each constructor's byte range and the decision
-   tree's root; constructors, templates and decision nodes decode on first use
-   (`crates/unlace-sleigh/src/lazysla.rs`). x86-64 is almost one table (`instruction` holds
-   7,680 of the 9,121 constructors and 95% of the subtable bytes), so per-subtable laziness
-   alone would have gained nothing. Result: 1.505 G -> 0.763 G instructions per fresh load
-   (`initialize_from_sla` 1.178 G -> 0.485 G); 98 ms -> 56 ms per load+decompile, interleaved
-   A/B on the loaded machine. What remains of the load: operand symbols and the other
-   non-subtable contents 151 M, symbol headers and scopes 118 M, the walk 114 M, inflate 82 M,
-   `scan_language_database` 70 M.
-3. **Find the language without reading all 205 `.ldefs` files.** About 5% of the instructions,
-   plus most of the 10 ms of system time per load. An index of `.ldefs` contents in the `.sla`
-   cache, or stopping at the file that names the language, removes it.
-4. **A process-wide cache of the decoded spec** (per thread, because of `Rc`), keyed by the
-   `.sla` content hash and reused through the existing re-registration path. The 2nd and later
-   loads in one process become about 8 ms. It does not help a spawned `unlace`, which loads once.
-5. **A different cache format** (flat index-based tables, for example rkyv). It skips the
-   generic reader (1-2 above). The engine would have to read the archived form directly to also
-   skip the 12% of allocation; that changes every user of `SymbolTable`, `Constructor` and
-   `DecisionNode`, which is a large change.
-6. **Not freeing the spec at exit**: about 2.5% (3 ms). Small.
-7. **Test-side only**: fewer `unlace` spawns per test, or moving tests that only decompile a byte
-   snippet into the TOML stage-file corpus (`tests/stages`: 954 files, 6,066 checks, run in one
-   process in about 35-40 s). Helps the tests, not users.
-
-## Open questions
-- How many times does a typical `unlace-cli` test start `unlace`? Not counted. 0.52 s per test
-  against 0.14 s per spawn suggests several, but those tests also compile C and write files.
-- Ghidra has the same load cost: it also decodes the `.sla` stream into objects. It hides it
-  by staying loaded (GUI, or `analyzeHeadless` over many functions).
+## Known problems not touched here
+- `verify_pdbtypes::pdbtypes_names_parameters_and_locals` fails on `main`: `rect_area`'s frame
+  array `buf` is folded away, the same symptom as stage assertion INDEXEDSTOREGUARD #16. A
+  decompiler-output regression, not a load-time one; not bisected.
 
 ## Rerunning the benchmark
 ```sh
@@ -209,4 +234,8 @@ cd notes/sleigh-load-bench && cargo build
 UNLACE_SPECS=$PWD/../../specs target/debug/sleigh-load-bench <mode> \
   ../../crates/unlace-analysis/tests/fixtures/fauxware <path to a built unlace binary> 0x400664 0x40071d ...
 ```
-`<mode>` is `spawn`, `inproc-fresh`, `inproc-shared`, `load-only`, `raw-fresh` or `cc`.
+`<mode>` is `spawn`, `inproc-fresh`, `inproc-shared`, `load-only`, `raw-fresh` or `cc`. For an
+instruction profile, run one `raw-fresh` load under
+`valgrind --tool=callgrind --callgrind-out-file=cg.out` and read it with `callgrind_annotate`
+(`--inclusive=yes` for inclusive costs, `--tree=caller` for callers). Do not quote the inclusive
+cost of a recursive function (a `'2` suffix): callgrind counts it once per recursion level.

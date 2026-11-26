@@ -538,14 +538,18 @@ marking (below), three passes fuse variables to reduce clutter:
   after upstream's own trims of a MULTIEQUAL, which inputs are values of their
   own, and gives each upstream's `trimOpInput` COPY at the end of its
   predecessor. An input qualifies when the join variable is not address-tied,
-  persistent or an input and a non-marker op reads it; its predecessor is not
-  dominated by the join block (a back edge keeps its induction value in the
-  loop variable); it is written by an op that is not a COPY, MULTIEQUAL or
+  persistent or an input and a non-marker op reads it; the join is not a loop
+  variable, which means its block is no loop head (a block that dominates one
+  of its predecessors) and no COPY or MULTIEQUAL output of it reaches a
+  MULTIEQUAL in a loop head, so neither an induction update nor the value a
+  loop starts from is split from the loop variable; it is written by an op that is not a COPY, MULTIEQUAL or
   INDIRECT and does not read the join value; and an op other than the
   MULTIEQUAL, not a marker, reads it; and it is not loop-carried: no COPY or
-  MULTIEQUAL output of it reaches a MULTIEQUAL along a back edge
-  (`phiarm.rs (loop_carried)`), so the value a loop counter holds at its exit
-  stays the loop variable instead of a second one. The pair (arm value, join output) is
+  MULTIEQUAL output of it reaches a MULTIEQUAL in a loop head
+  (`phiarm.rs (loop_carried)`, `phiarm.rs (loop_head)`), so the value a loop
+  counter holds at its exit, and the value a loop starts from (a value computed
+  after one loop that enters the next on its entry edge, gcc's `zero_pad` shape
+  in openssh), stay the loop variable instead of a second one. The pair (arm value, join output) is
   recorded, and `phiarm.rs (keeps_apart)`, asked by `Merge::merge` and
   `Merge::merge_test`, refuses any later merge that would join the two again,
   so a later forced merge trims instead and `ActionMergeCopy` does not undo the

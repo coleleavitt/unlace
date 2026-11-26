@@ -2392,6 +2392,12 @@ sign-sensitive reader of `u + 1` counts as a reader of `u`. Globals and
 constants end the walk, and a walk that visits more than 256 varnodes answers
 yes, which keeps the store and every load where the binary makes them.
 
+**Common terms in `RuleEqual2Zero`** (default on, no option). `0 == (U + W) + W * -1` cancels the
+shared term and becomes `0 == U` (`ruleaction_5.rs (RuleEqual2Zero::apply_op)`), unless a less-than
+comparison of the same two values pairs with the result (`is_paired_with_less`), since `RuleLessEqual`
+and `RuleLessNotEqual` merge such pairs. Before this, the two sign terms of a signed division's sign
+correction stayed on opposite sides of the comparison and never cancelled.
+
 The decision cannot wait for the other rules: once the `COPY` is gone, chapter
 06's join of the value into the global's marker is forced. So the walk also
 counts a reader that a rule running later turns sign-sensitive. A fold moves a

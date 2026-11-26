@@ -763,12 +763,87 @@ impl Rule for RuleEqual2Zero {
         if !data.vbank().get(unnegvn).unwrap().is_heritage_known() {
             return 0;
         }
+        if data.vbank().get(unnegvn).unwrap().is_written()
+            && data.vbank().get(posvn).unwrap().is_written()
+            && data
+                .obank()
+                .get(data.vbank().get(posvn).unwrap().get_def().unwrap())
+                .unwrap()
+                .code()
+                == OpCode::CPUI_INT_ADD
+            && !is_paired_with_less(data, op, posvn, unnegvn)
+        {
+            // Cancel a term common to both sides: (U + W) + W * -1 == 0  =>  U == 0
+            let sumop = data.vbank().get(posvn).unwrap().get_def().unwrap();
+            for i in 0..2 {
+                let term = data.obank().get(sumop).unwrap().get_in(i).unwrap();
+                let mut buf1 = [term, term];
+                let mut buf2 = [unnegvn, unnegvn];
+                if crate::expression::functional_equality_level(
+                    term,
+                    unnegvn,
+                    &mut buf1,
+                    &mut buf2,
+                    data.vbank(),
+                    data.obank(),
+                ) != 0
+                {
+                    continue;
+                }
+                let other = data.obank().get(sumop).unwrap().get_in(1 - i).unwrap();
+                if !data.vbank().get(other).unwrap().is_heritage_known() {
+                    break;
+                }
+                let size = data.vbank().get(other).unwrap().get_size();
+                let zero = data.new_constant(size, 0);
+                data.op_set_input(op, other, 0)
+                    .expect("RuleEqual2Zero: opSetInput");
+                data.op_set_input(op, zero, 1)
+                    .expect("RuleEqual2Zero: opSetInput");
+                return 1;
+            }
+        }
         data.op_set_input(op, posvn, 0)
             .expect("RuleEqual2Zero: opSetInput");
         data.op_set_input(op, unnegvn, 1)
             .expect("RuleEqual2Zero: opSetInput");
         1
     }
+}
+
+/// Is the comparison's result combined with a less-than comparison of the same two Varnodes?
+/// (C++ `RuleEqual2Zero::isPairedWithLess`). RuleLessEqual and RuleLessNotEqual merge such
+/// pairs, so the comparison keeps V and W as its inputs.
+fn is_paired_with_less(data: &Funcdata, op: OpId, vn1: VarnodeId, vn2: VarnodeId) -> bool {
+    let outvn = data.obank().get(op).unwrap().get_out().unwrap();
+    for boolop in data.descend_snapshot(outvn) {
+        let bo = data.obank().get(boolop).unwrap();
+        if bo.code() != OpCode::CPUI_BOOL_AND && bo.code() != OpCode::CPUI_BOOL_OR {
+            continue;
+        }
+        let other = bo.get_in(1 - bo.get_slot(outvn)).unwrap();
+        if !data.vbank().get(other).unwrap().is_written() {
+            continue;
+        }
+        let less = data
+            .obank()
+            .get(data.vbank().get(other).unwrap().get_def().unwrap())
+            .unwrap();
+        if !matches!(
+            less.code(),
+            OpCode::CPUI_INT_LESS
+                | OpCode::CPUI_INT_SLESS
+                | OpCode::CPUI_INT_LESSEQUAL
+                | OpCode::CPUI_INT_SLESSEQUAL
+        ) {
+            continue;
+        }
+        let (a, b) = (less.get_in(0).unwrap(), less.get_in(1).unwrap());
+        if (a == vn1 && b == vn2) || (a == vn2 && b == vn1) {
+            return true;
+        }
+    }
+    false
 }
 
 // =============================================================================

@@ -60,21 +60,22 @@ fn run_one(line: &str) -> String {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn registers_all_twenty_six_unlace_commands() {
+fn registers_all_twenty_seven_unlace_commands() {
     // register_decomp_commands registers 107 (see ifacedecomp/tests.rs); the
-    // unlace capability adds 26: phase list/map/status/catalog (plus the four
+    // unlace capability adds 27: phase list/map/status/catalog (plus the four
     // deprecated `stage ...` alias registrations), kassert, restarts,
     // pipeline, mode, quality, functions, region tree/blocks/walk,
     // `function bounds`/`function symbol`/`function noreturn`/`function containing`,
     // `map prototype`
-    // `override bytes`, `override indirect`, `callwide prepare` and `cfg dot`.
+    // `override bytes`, `override indirect`, `callwide prepare`, `rewrite rules`
+    // and `cfg dot`.
     let only_unlace = {
         let mut st = ConsoleCommands::into_status(vec![]);
         register_unlace_commands(&mut st);
         st.num_commands()
     };
-    assert_eq!(only_unlace, 26);
-    assert_eq!(console(&[]).num_commands(), 107 + 26);
+    assert_eq!(only_unlace, 27);
+    assert_eq!(console(&[]).num_commands(), 107 + 27);
 }
 
 #[test]

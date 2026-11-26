@@ -55,8 +55,7 @@
 //!
 //! # Stability
 //!
-//! The types and methods of this crate are the stable surface, except the
-//! [`unstable`] module, which promises nothing. The document in
+//! The types and methods of this crate are the stable surface. The document in
 //! [`Decompiled::json`] follows the `unlace decompile --json` schema
 //! (`docs/cli.md`), which only adds keys. Option names and values are the
 //! catalog's (`unlace catalog --json`), which can change between releases.

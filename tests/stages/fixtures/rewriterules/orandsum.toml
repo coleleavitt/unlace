@@ -1,0 +1,9 @@
+# The rule file of tests/stages/rewriterules.toml. Nothing builds it: it is the test's input.
+
+# (x | y) + (x & y) is x + y: the OR holds every bit either operand has, the AND
+# the bits both have, so their sum counts each operand's bits once.
+[[rule]]
+name = "orandsum"
+group = "analysis"
+match = "INT_ADD(INT_OR(x, y), INT_AND(x, y))"
+replace = "INT_ADD(x, y)"

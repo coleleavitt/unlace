@@ -1405,8 +1405,27 @@ impl ActionPool {
         }
     }
 
+    /// Where a budget that ran out in the rule walk of one op is reported.
+    /// `rewinders` are the two rules that changed the op's opcode before
+    /// `last` did, oldest first. When `last` is the older one and another rule
+    /// came between, the two undo each other on this op, which is what keeps a
+    /// walk from ending, and both are named, in pool order; any other walk
+    /// reports as the pool does ([`budget_site`](Self::budget_site)).
+    fn rewind_site(&self, rewinders: [Option<usize>; 2], last: usize) -> String {
+        match rewinders {
+            [Some(older), Some(between)] if older == last && between != last => format!(
+                "action {} (rules {} and {} keep changing one op)",
+                self.base.name,
+                self.allrules[last.min(between)].state.name,
+                self.allrules[last.max(between)].state.name
+            ),
+            _ => self.budget_site(),
+        }
+    }
+
     /// Apply the next possible Rule(s) to a PcodeOp (C++ `ActionPool::processOp`,
-    /// `action.cc:822-877`) — transcribed exactly.
+    /// `action.cc:822-877`) — transcribed exactly, plus the budget probe on a
+    /// rewind.
     ///
     /// Returns `0` if no breakpoint, `-1` on a breakpoint (the caller then
     /// re-enters to resume).  The `op_state` cursor and `rule_index` carry the
@@ -1432,6 +1451,8 @@ impl ActionPool {
             .get(op)
             .expect("process_op: live op vanished")
             .code();
+        // The last two rules that changed the op's opcode during this walk.
+        let mut rewinders: [Option<usize>; 2] = [None, None];
         while self.rule_index < self.perop_len(opc) {
             let rl_idx = self.perop_idx(opc, self.rule_index);
             self.rule_index += 1;
@@ -1484,6 +1505,14 @@ impl ActionPool {
                     // Set of rules to apply to this op has changed
                     opc = newopc;
                     self.rule_index = 0;
+                    // (unlace) Two rules that turn one op into each other's
+                    // pattern never leave this walk, so it polls the budget
+                    // that every other loop of the pool polls from outside.
+                    if crate::budget::budget_probe() {
+                        crate::budget::note_budget_site(|| self.rewind_site(rewinders, rl_idx));
+                        break;
+                    }
+                    rewinders = [rewinders[1], Some(rl_idx)];
                 }
             } else {
                 let newopc = match data.obank().get(op) {

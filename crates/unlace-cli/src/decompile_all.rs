@@ -91,6 +91,10 @@ pub(crate) struct Args {
     /// disables. `None` (omitted) is the cgroup default. See [`arm_fn_budgets`].
     pub(crate) max_fn_memory: Option<u64>,
     pub(crate) options: Vec<(String, String)>,
+    /// `--rules FILE` (repeatable): rewrite rule files, registered by
+    /// [`load_program`] before any option is applied
+    /// (`unlace_decomp::rewritefile`).
+    pub(crate) rules: Vec<String>,
     /// `--define-function <start[-end][=name] | @file>` (repeatable): the
     /// caller-declared function boundaries, applied by [`load_program`] right
     /// after the analysis commit so they outrank discovery. Every surface that
@@ -174,6 +178,7 @@ impl Args {
             max_fn_seconds: 0,
             max_fn_memory: Some(0),
             options: Vec::new(),
+            rules: Vec::new(),
             func_decls: Vec::new(),
             assertions: Vec::new(),
             assert_strict: false,
@@ -1136,6 +1141,7 @@ pub(crate) fn pool_config<'a>(
         binary: &args.binary,
         mode: args.mode,
         options: &args.options,
+        rules: &args.rules,
         func_decls: args
             .func_decls
             .iter()
@@ -2052,6 +2058,9 @@ fn load_program_with_rust_profiles(
 
     // Before any option: a registration rebuilds the action tree, which drops
     // the breakpoints and disabled rules an option may set on it.
+    for path in &args.rules {
+        unlace_decomp::rewritefile::register_file(prog.arch_mut(), std::path::Path::new(path))?;
+    }
     install(prog.arch_mut())?;
 
     let non_x86_64 = !prog.arch().archid.starts_with("x86:LE:64:");
@@ -3220,6 +3229,7 @@ pub(crate) fn parse_args_with_filters(
     let mut max_fn_seconds: Option<u64> = None;
     let mut max_fn_memory: Option<u64> = None;
     let mut options: Vec<(String, String)> = Vec::new();
+    let mut rules: Vec<String> = Vec::new();
     let mut func_decls: Vec<crate::funcdecl::FuncDecl> = Vec::new();
     let mut assertions: Vec<unlace_console::assertions::Directive> = Vec::new();
     let mut assert_strict = false;
@@ -3394,6 +3404,9 @@ pub(crate) fn parse_args_with_filters(
                 }
             }
             "--option" => options.push(crate::args::take_option(argv, &mut i)?),
+            "--rules" if matches!(cmd, "decompile-all" | "decompile") => {
+                rules.push(take(argv, &mut i, "--rules")?)
+            }
             // (unlace outlang) `--language` is the first-class surface for the
             // output language; it lowers to the upstream `setlanguage` option, so
             // it reaches every downstream consumer (the console script here, the
@@ -3434,6 +3447,7 @@ pub(crate) fn parse_args_with_filters(
     }
 
     let binary = binary.ok_or_else(|| format!("{cmd} requires <binary>"))?;
+    check_rule_files(&rules)?;
     // `--project`: its overrides come first, so a command-line --assert still wins.
     if let Some(project) = &project_file {
         let mut stored = Vec::new();
@@ -3651,6 +3665,7 @@ pub(crate) fn parse_args_with_filters(
         max_fn_seconds,
         max_fn_memory,
         options,
+        rules,
         func_decls,
         assertions,
         assert_strict,
@@ -3678,6 +3693,24 @@ pub(crate) fn parse_args_with_filters(
         crate::rust_signatures::validate_application(&args)?;
     }
     Ok((args, filters))
+}
+
+/// Read and check every `--rules` file, and that no two of them name a rule
+/// alike: a bad rule file is a bad argument, reported before anything is
+/// loaded.
+pub(crate) fn check_rule_files(paths: &[String]) -> Result<(), String> {
+    let mut names = BTreeSet::new();
+    for path in paths {
+        for rule in unlace_decomp::rewritefile::read_rules(std::path::Path::new(path))? {
+            if !names.insert(rule.name().to_string()) {
+                return Err(format!(
+                    "{path}: rule \"{}\": a rule of an earlier --rules file has this name",
+                    rule.name()
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn parse_count(v: &str, flag: &str) -> Result<u64, String> {
@@ -3714,7 +3747,8 @@ fn usage_decompile_all() {
          \x20                   [--filter REGEX] [--min-size N] [--max-size N] \\\n\
          \x20                   [--reachable-from <name|0xaddr>] [--sort addr|size|name] [--limit N] \\\n\
          \x20                   [--summary] [--define-function S[-E][=N]|@FILE].. \\\n\
-         \x20                   [--option N V].. [--isa auto|arm|thumb] [--slice ARCH] [--target T] [--sleighpath D]\n\
+         \x20                   [--option N V].. [--rules FILE].. [--isa auto|arm|thumb] [--slice ARCH] \\\n\
+         \x20                   [--target T] [--sleighpath D]\n\
          \x20                   [--raw-image --target T --base VMA (--entry|--addr VMA)..]\n\
          \n\
          Decompile every CODE-backed function in one in-process load (load-once,\n\
@@ -3729,6 +3763,8 @@ fn usage_decompile_all() {
          types -- and lists them in a top-level `omitted` array, so an omitted\n\
          collection is never mistaken for an empty one.\n\
          --no-vars skips the variable extraction and leaves `variables` empty.\n\
+         --rules FILE (repeatable) adds the p-code rewrite rules of a TOML rule file\n\
+         to the rule pools for this run (`unlace docs cli`, \"--rules FILE\").\n\
          --max-fn-seconds N caps ONE function's decompile at N seconds (default 10\n\
          for unfiltered fast runs, 120 otherwise; 0 disables); a function over\n\
          budget becomes its own `error` record and the batch continues.\n\

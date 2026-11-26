@@ -74,6 +74,7 @@ pub(super) fn build_script_for_input(
         base,
         raw,
         options,
+        rules,
         kasserts,
         func_decls,
         assertions,
@@ -108,6 +109,11 @@ pub(super) fn build_script_for_input(
             }
             _ => lines.push(format!("load file {image}")),
         }
+    }
+    // Rule files before the options: a registration rebuilds the action tree,
+    // which drops what an option set on it (a disabled rule, a breakpoint).
+    for file in rules {
+        lines.push(format!("rewrite rules {}", console_path(file)));
     }
     // `option` lines MUST precede `read symbols`: the unlace_analysis passes are
     // committed (gated by the per-pass `--option <id> on|off` flags) inside

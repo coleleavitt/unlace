@@ -25,7 +25,7 @@
 
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use unlace_base::error::{UnlaceError, UnlaceResult};
@@ -65,17 +65,27 @@ impl HookRegistry {
     /// pool of the schedule that holds a rule of that group.  `state` names
     /// the rule and gives the group that decides which roots keep it.
     ///
-    /// Errors when no pool holds `after_group`, or when `rule` does not clone
-    /// for its own group.
+    /// Errors when no pool holds `after_group`, when a rule of the default
+    /// tree or a registered one already has the name, or when `rule` does not
+    /// clone for its own group.
     pub fn add_rule(
         &mut self,
         after_group: &str,
         state: RuleState,
         rule: Box<dyn Rule>,
     ) -> UnlaceResult<()> {
-        if !rule_groups().iter().any(|(_, group)| group == after_group) {
+        let rows = rule_rows();
+        if !rows.iter().any(|(_, group, _)| group == after_group) {
             return Err(UnlaceError::lowlevel(format!(
                 "No rule pool holds the group: {after_group}"
+            )));
+        }
+        if rows.iter().any(|(_, _, name)| *name == state.name)
+            || self.rules.iter().any(|hook| hook.state.name == state.name)
+        {
+            return Err(UnlaceError::lowlevel(format!(
+                "A rule is already named: {}",
+                state.name
             )));
         }
         let own = ActionGroupList::from_names([state.basegroup.as_str()]);
@@ -186,28 +196,43 @@ fn boundary_group(phase: UnlacePhase) -> Option<&'static str> {
 /// order: every group of the default tree's rule rows, with the first pool
 /// that holds a rule of it, which is the pool [`HookRegistry::add_rule`] picks.
 pub fn rule_groups() -> Vec<(&'static str, String)> {
-    let mut groups = Vec::new();
-    collect_rule_groups(&universal_sched(None, None, Vec::new(), false), &mut groups);
+    let mut groups: Vec<(&'static str, String)> = Vec::new();
+    for (pool, group, _) in rule_rows() {
+        if !groups.iter().any(|(_, known)| *known == group) {
+            groups.push((pool, group));
+        }
+    }
     groups
 }
 
-fn collect_rule_groups(node: &SchedNode, groups: &mut Vec<(&'static str, String)>) {
-    match node {
-        SchedNode::Pool { name, rules, .. } => {
-            for row in rules {
-                if !groups.iter().any(|(_, group)| *group == row.group) {
-                    groups.push((name, row.group.to_string()));
+/// The names of the default tree's rules. A rule is addressed by its name
+/// (`option togglerule`, a breakpoint), so an added rule takes none of them.
+pub fn rule_names() -> BTreeSet<String> {
+    rule_rows().into_iter().map(|(_, _, name)| name).collect()
+}
+
+/// Every rule row of the default tree as `(pool, group, name)`, in schedule
+/// order.
+fn rule_rows() -> Vec<(&'static str, String, String)> {
+    fn collect(node: &SchedNode, rows: &mut Vec<(&'static str, String, String)>) {
+        match node {
+            SchedNode::Pool { name, rules, .. } => rows.extend(
+                rules
+                    .iter()
+                    .map(|row| (*name, row.group.to_string(), row.name.to_string())),
+            ),
+            SchedNode::Group { children, .. } | SchedNode::RestartGroup { children, .. } => {
+                for child in children {
+                    collect(child, rows);
                 }
             }
+            SchedNode::Settles(_, node) => collect(node, rows),
+            SchedNode::Action(_) | SchedNode::Empty => {}
         }
-        SchedNode::Group { children, .. } | SchedNode::RestartGroup { children, .. } => {
-            for child in children {
-                collect_rule_groups(child, groups);
-            }
-        }
-        SchedNode::Settles(_, node) => collect_rule_groups(node, groups),
-        SchedNode::Action(_) | SchedNode::Empty => {}
     }
+    let mut rows = Vec::new();
+    collect(&universal_sched(None, None, Vec::new(), false), &mut rows);
+    rows
 }
 
 /// The leaf action that runs the callbacks of one phase boundary.

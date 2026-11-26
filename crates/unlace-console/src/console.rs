@@ -1841,6 +1841,31 @@ impl IfaceCommandAction for IfcUnlaceRegionWalk {
     }
 }
 
+/// (unlace) `rewrite rules <file>`: add the rules of a rewrite rule file to the
+/// pipeline (`unlace_decomp::rewritefile`); what `unlace decompile --rules`
+/// sends. It goes before the `option` lines, which a registration would undo
+/// where they disable a rule or set a breakpoint.
+struct IfcUnlaceRewriteRules;
+
+impl IfaceCommandAction for IfcUnlaceRewriteRules {
+    fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
+        let path = s.read_filename();
+        if path.is_empty() {
+            return Err(IfaceError::parse("Missing rule file"));
+        }
+        let prog = dcp_mut(status)?
+            .conf
+            .as_mut()
+            .ok_or_else(|| IfaceError::execution("No load image present"))?;
+        unlace_decomp::rewritefile::register_file(prog.arch_mut(), std::path::Path::new(&path))
+            .map_err(IfaceError::execution)
+    }
+
+    fn module(&self) -> String {
+        DECOMPILE_MODULE.to_string()
+    }
+}
+
 /// (unlace) `functions`: print the canonical executable function inventory.
 pub struct IfcUnlaceFunctions;
 
@@ -2204,6 +2229,7 @@ pub fn register_unlace_commands(status: &mut IfaceStatus) {
     status.register_com(Box::new(IfcUnlaceQuality), &["quality"]);
     status.register_com(Box::new(IfcUnlaceFunctions), &["functions"]);
     status.register_com(Box::new(IfcCallwidePrepare), &["callwide", "prepare"]);
+    status.register_com(Box::new(IfcUnlaceRewriteRules), &["rewrite", "rules"]);
     status.register_com(Box::new(IfcUnlaceRegionTree), &["region", "tree"]);
     status.register_com(Box::new(IfcUnlaceRegionBlocks), &["region", "blocks"]);
     status.register_com(Box::new(IfcUnlaceRegionWalk), &["region", "walk"]);

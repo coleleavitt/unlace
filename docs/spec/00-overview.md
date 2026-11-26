@@ -1596,7 +1596,9 @@ vendored corpus and every script written before quoting existed parse exactly as
 before. The two producers — `decompile/script.rs (console_path)` and its mirror in
 `scripts/decompile.py` — quote only a path that needs it, which keeps the emitted
 script byte-identical for every path that works today, including for an older
-`decomp_dbg` reached through `--decomp-dbg` (DIV-100).
+`decomp_dbg` reached through `--decomp-dbg` (DIV-100). The `rewrite rules`
+command of `--rules FILE` (chapter 3, §3.2) reads its path the same way, and its
+lines come directly after the load, ahead of every `option` line.
 
 The redirect's own write is fallible for the same reason. `decomp_dbg` re-syncs
 the open redirect after every command
@@ -1765,7 +1767,9 @@ ran out: the first probe to see the expiry records its site
 and later ones leave it, so the site is the innermost polled loop that was
 running when the deadline passed — an action (a rule pool adds the rule that
 applied most since the function's reset, `crates/unlace-middle/src/infra/action.rs
-(ActionPool::budget_site)`), heritage, variable merging, region identification,
+(ActionPool::budget_site)`, or the two rules that undo each other on one op,
+`action.rs (ActionPool::rewind_site)`, chapter 3, §3.2), heritage,
+variable merging, region identification,
 region structuring, `action activeparam`'s trial scoring, a
 store-reachability walk or a jump-table step (`jump-table value walk` for
 the loop over a table's values). A walk that recurses too often
@@ -4174,6 +4178,9 @@ the groups with the pool each resolves to; `typerecovery` has rules in both
 `oppool1` and `oppool2` and resolves to the first, so `stackvars` is the only
 group that reaches `oppool2`. The rule's own group, from its
 `RuleState`, decides which root variants keep it, as for every built-in rule.
+Its name is its own: a rule is addressed by its name (`option togglerule`, a
+breakpoint), so a registration under the name of a built-in rule
+(`hooks.rs (rule_names)`) or of a rule registered before is an error.
 `on_phase(phase, callback)` runs a callback with the function at one fixed
 schedule point per phase: P2 after `start`, when the ops are lifted and the CFG
 is built; P3, P4 and P5 together, in that order, after fullloop reaches its
@@ -4212,7 +4219,8 @@ and register them on every load
 built, before any option is applied. A registration the registry would refuse
 (a group no pool holds, a rule that does not clone for its own group, a phase
 without a point) is refused by the builder call. That module's documentation
-is the contract a rule and a callback run under.
+is the contract a rule and a callback run under. `with_rules_file` adds the
+rules of a rewrite rule file the same way (chapter 3, §3.2).
 
 Flow-follow itself runs *before* the tree (the upstream `followFlow` →
 `startProcessing` order), bounded by the P0 flow options — decode-error policy

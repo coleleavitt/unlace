@@ -79,6 +79,7 @@ fn script_args(binary: &str, target: &str) -> super::DecompileArgs {
         trace: false,
         cfg_dot: false,
         options: Vec::new(),
+        rules: Vec::new(),
         defer_fast_funcdisc: false,
         kasserts: Vec::new(),
         func_decls: Vec::new(),
@@ -246,6 +247,33 @@ Decompiling sub_26a0
 Decompilation complete
 [decomp]> quit
 ";
+
+/// Recorded transcript: the rule file went away after the command line
+/// checked it. The console refuses the `rewrite rules` line and carries on to
+/// print C the rules were not applied to.
+const RULE_FILE_GONE: &str = "\
+[decomp]> load file /x/a.out
+/x/a.out successfully loaded: x86:LE:64:default:gcc
+[decomp]> rewrite rules /x/gone.toml
+Execution error: /x/gone.toml: cannot read the rule file: No such file or directory (os error 2)
+[decomp]> option listing on
+Listing/xref disassembly tier turned on
+[decomp]> read symbols
+[decomp]> load function main
+[decomp]> decompile
+Clearing old decompilation
+Decompiling main
+Decompilation complete
+[decomp]> quit
+";
+
+#[test]
+fn reports_a_rule_file_the_console_refused() {
+    assert_eq!(
+        check_errors(RULE_FILE_GONE, "main", "/x/a.out", false, false).as_deref(),
+        Some("/x/gone.toml: cannot read the rule file: No such file or directory (os error 2)")
+    );
+}
 
 #[test]
 fn recovers_the_real_load_failure_reason() {
@@ -557,6 +585,34 @@ fn console_path_quotes_whitespace() {
     assert_eq!(
         console_path("/odd \"name\"/a.out"),
         r#""/odd \"name\"/a.out""#
+    );
+}
+
+/// `--rules` files are registered directly after the image load and before
+/// every `option` line, the injected defaults included: a registration
+/// rebuilds the action tree and would drop what an option set on it.
+#[test]
+fn build_script_registers_rule_files_before_every_option() {
+    let script = build_script(
+        &super::DecompileArgs {
+            rules: vec!["/tmp/a.toml".into(), "/tmp/my rules/b.toml".into()],
+            options: vec![("ctypes".into(), "on".into())],
+            ..script_args("/tmp/a.out", "main")
+        },
+        Path::new("/tmp/unlace.c"),
+        LISTING,
+        None,
+    );
+    let lines: Vec<&str> = script.lines().collect();
+    assert_eq!(
+        lines[..4],
+        [
+            "load file /tmp/a.out",
+            "rewrite rules /tmp/a.toml",
+            "rewrite rules \"/tmp/my rules/b.toml\"",
+            "option errortoomanyinstructions off",
+        ],
+        "{script}"
     );
 }
 

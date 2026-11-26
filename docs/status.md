@@ -89,6 +89,10 @@ Opt-in or unfinished. Each is off by default or marked above:
 
 - **`egraph` option** (default off): equality saturation over mixed boolean-arithmetic trees. It helps
   obfuscated code together with `mba`; it stays opt-in because it costs time on ordinary output.
+- **Custom passes and rewrite rule files** (`unlace::unstable::hooks`, `--rules FILE`): p-code rules
+  and phase callbacks added from Rust ([docs/api.md](api.md)), and p-code rewrites loaded from a
+  TOML file ([docs/cli.md](cli.md)). Both are outside the library's stability promise, and the
+  rule-file format can change.
 - **Source-language plane for Rust, Go and Swift**: a [PROPOSAL] in `docs/multilang.md`, not built.
 - **Ghidra front end**: 5 unchecked items in `docs/ghidra-integration.md`.
 - **Known failures** listed under Architectures.

@@ -46,6 +46,9 @@ pub struct DecompileArgs {
     /// instead of the C.
     pub cfg_dot: bool,
     pub options: Vec<(String, String)>,
+    /// `--rules FILE` (repeatable): rewrite rule files, lowered to `rewrite
+    /// rules` lines ahead of the options.
+    pub rules: Vec<String>,
     /// Run the first by-name attempt with `fast_funcdisc off` after every other
     /// option; a name miss retries without it ([`defers_fast_funcdisc`]).
     pub defer_fast_funcdisc: bool,
@@ -211,6 +214,15 @@ fn option_failure(out: &str) -> Option<String> {
     None
 }
 
+/// Why a `rewrite rules` line was refused: the rule file changed or went away
+/// after the command line checked it. The run would otherwise print C the
+/// rules were never applied to.
+fn rule_file_failure(out: &str) -> Option<String> {
+    command_failures(out)
+        .into_iter()
+        .find_map(|(command, reason)| reason.filter(|_| command.starts_with("rewrite rules ")))
+}
+
 /// The reason the analysis commit failed, recovered from the transcript.
 ///
 /// `IfcReadSymbols` maps a failed `commit_pending_analysis` to an
@@ -332,6 +344,9 @@ fn check_errors(
                 "could not build an architecture for {binary} (unsupported/!recognized binary)"
             ),
         });
+    }
+    if let Some(reason) = rule_file_failure(out) {
+        return Some(reason);
     }
     if let Some(reason) = option_failure(out) {
         return Some(reason);
@@ -661,6 +676,9 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
         .map_err(|_| format!("binary not found: {}", args.binary))?;
     let binary = binary.to_string_lossy().to_string();
     reject_unquotable("binary path", &binary)?;
+    for rules in &args.rules {
+        reject_unquotable("rule file path", rules)?;
+    }
 
     let engine = match &args.decomp_dbg {
         Some(d) if !Path::new(d).exists() => {
@@ -1084,6 +1102,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
     let mut saw_language = false;
     let mut mode: Option<String> = None;
     let mut kasserts: Vec<String> = Vec::new();
+    let mut rules: Vec<String> = Vec::new();
     let mut func_decls: Vec<crate::funcdecl::FuncDecl> = Vec::new();
     let mut assertions: Vec<unlace_console::assertions::Directive> = Vec::new();
     let mut assert_strict = false;
@@ -1151,6 +1170,12 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
                 saw_language = true;
             }
             "--mode" => mode = Some(take_value(argv, &mut i, "--mode")?),
+            "--rules" => {
+                let value = take_value(argv, &mut i, "--rules")?;
+                rules.push(value.clone());
+                forwarded.push("--rules".into());
+                forwarded.push(value);
+            }
             "--kassert" => kasserts.push(take_value(argv, &mut i, "--kassert")?),
             "--define-function" => {
                 let value = take_value(argv, &mut i, "--define-function")?;
@@ -1307,6 +1332,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
     if let Some(flag) = record_flag {
         return Err(format!("{flag} selects --json record keys; add --json"));
     }
+    decompile_all::check_rule_files(&rules)?;
     // `--project`: its overrides come first, so a command-line --assert still wins.
     if let Some(project) = &project_file {
         let mut stored = Vec::new();
@@ -1354,6 +1380,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
         trace,
         cfg_dot,
         options,
+        rules,
         defer_fast_funcdisc,
         kasserts,
         func_decls,
@@ -1376,7 +1403,7 @@ fn usage() {
         "usage: unlace decompile <binary> <name|0xaddr> [--addr] [--json] [--raw] [--regions] [--trace] [--cfg-dot] \\\n\
          \x20                     [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
          \x20                     [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] \\\n\
-         \x20                     [--option N V].. [--kassert ARGS].. \\\n\
+         \x20                     [--option N V].. [--rules FILE].. [--kassert ARGS].. \\\n\
          \x20                     [--define-function S[-E][=N]|@FILE].. \\\n\
          \x20                     [--assert DIRECTIVE|@FILE].. [--assert-strict] [--project FILE] \\\n\
          \x20                     [--types FILE.h|DIR].. [--types-cpp CC] \\\n\
@@ -1409,6 +1436,8 @@ fn usage() {
          --mode applies an option preset (`unlace modes`); omitted, `auto` picks one by\n\
          input size.  Explicit --option values win over the preset.\n\
          --language selects the output language; omitted, it follows the binary.\n\
+         --rules FILE (repeatable) adds the p-code rewrite rules of a TOML rule file to\n\
+         the rule pools for this run (`unlace docs cli`, \"--rules FILE\").\n\
          --max-fn-memory MiB stops the decompile once the process doing it holds\n\
          more than MiB resident and the function added 64 MiB or more, and\n\
          reports that instead of being killed by the system (omitted: under a\n\

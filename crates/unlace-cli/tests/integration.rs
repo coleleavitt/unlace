@@ -963,6 +963,9 @@ mod ppc32_pic_abi;
 #[path = "compact_json.rs"]
 mod compact_json;
 
+#[path = "rewrite_rules_cli.rs"]
+mod rewrite_rules_cli;
+
 #[path = "rust_probestack.rs"]
 mod rust_probestack;
 

@@ -16,6 +16,11 @@
 //!
 //! With nothing registered the pipeline and its output are the default ones.
 //!
+//! The types re-exported here are the engine's own (`unlace-decomp`), so
+//! their methods are the engine's internal API and change with it. A program
+//! that needs more of the engine than is re-exported depends on
+//! `unlace-decomp` at the same revision.
+//!
 //! # Rules
 //!
 //! A rule is offered one op at a time and either rewrites around it and
@@ -42,8 +47,11 @@
 //! - It returns non-zero exactly when it changed the function. The pool
 //!   sweeps all ops again until a sweep changes nothing, so a rule whose
 //!   result matches its own pattern, or two rules that undo each other, run
+//!   until the engine's limit of 100000 repeated passes stops them with a
+//!   warning on the function, or, when they keep changing one op's opcode,
 //!   until the function's time budget
-//!   ([`with_max_fn_seconds`](Decompiler::with_max_fn_seconds)) stops them.
+//!   ([`with_max_fn_seconds`](Decompiler::with_max_fn_seconds)) does with an
+//!   error that names them.
 //! - The function stays in SSA form. The rule edits through the op methods
 //!   of [`Funcdata`] (`op_set_input`, `op_set_opcode_code`,
 //!   `op_remove_input`, `new_op`, `new_unique_out`, `op_insert_before`,
@@ -52,6 +60,11 @@
 //! - It does not change control flow: no block, edge or branch target.
 //! - One instance serves every function of a load. State it keeps between
 //!   ops is cleared in [`Rule::reset`], which runs before each function.
+//! - Its name is its own: no built-in rule and no other added rule has it.
+//!
+//! A rewrite that is one op pattern and one replacement needs no Rust:
+//! [`with_rules_file`](DecompilerHooks::with_rules_file) loads such rules
+//! from a TOML file, the one `unlace decompile --rules FILE` takes.
 //!
 //! # Phase callbacks
 //!
@@ -94,10 +107,12 @@
 //! returns [`Error::Panic`] and the load is dropped.
 
 use std::cell::RefCell;
+use std::path::Path;
 use std::rc::Rc;
 
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::hooks::HookRegistry;
+use unlace_decomp::rewritefile::read_rules;
 
 pub use unlace_decomp::action::{ActionGroupList, Rule, RuleState};
 pub use unlace_decomp::context::{OpId, VarnodeId};
@@ -185,7 +200,8 @@ pub trait DecompilerHooks: sealed::Sealed + Sized {
     /// keep the order they were added in.
     ///
     /// Errors with [`Error::Request`] when no rule pool holds `after_group`
-    /// ([`rule_groups`] lists them) or when `rule` does not clone for the
+    /// ([`rule_groups`] lists them), when a built-in rule or one added
+    /// before has the name of `state`, or when `rule` does not clone for the
     /// group of `state`.
     ///
     /// ```no_run
@@ -254,6 +270,23 @@ pub trait DecompilerHooks: sealed::Sealed + Sized {
         phase: UnlacePhase,
         callback: impl FnMut(&mut Funcdata) + 'static,
     ) -> Result<Self>;
+
+    /// Add the rules of a rewrite rule file (`--rules FILE`): p-code rewrites
+    /// written as TOML, each compiled into a [`Rule`] and added behind the
+    /// group it names, as [`with_rule`](Self::with_rule) adds one.
+    /// `docs/cli.md` ("`--rules FILE`") describes the file.
+    ///
+    /// The file is read and checked here. Errors with [`Error::Request`] when
+    /// it cannot be read or a rule in it is refused; the message has one line
+    /// per problem, with the path, the line and the rule's name.
+    ///
+    /// ```no_run
+    /// use unlace::unstable::hooks::DecompilerHooks;
+    ///
+    /// let decompiler = unlace::Decompiler::open("a.out")?.with_rules_file("rules.toml")?;
+    /// # Ok::<(), unlace::Error>(())
+    /// ```
+    fn with_rules_file(self, path: impl AsRef<Path>) -> Result<Self>;
 }
 
 impl DecompilerHooks for Decompiler {
@@ -268,6 +301,17 @@ impl DecompilerHooks for Decompiler {
         HookRegistry::default()
             .add_rule(after_group, state.clone(), probe)
             .map_err(|e| Error::Request(e.explain().to_string()))?;
+        if self
+            .hooks
+            .rules
+            .iter()
+            .any(|hook| hook.state.name == state.name)
+        {
+            return Err(Error::Request(format!(
+                "a rule is already named {}",
+                state.name
+            )));
+        }
         self.hooks.rules.push(RuleHook {
             after_group: after_group.to_string(),
             state,
@@ -290,5 +334,14 @@ impl DecompilerHooks for Decompiler {
             .push((phase, Rc::new(RefCell::new(callback))));
         self.session = None;
         Ok(self)
+    }
+
+    fn with_rules_file(self, path: impl AsRef<Path>) -> Result<Self> {
+        let rules = read_rules(path.as_ref()).map_err(Error::Request)?;
+        rules.into_iter().try_fold(self, |decompiler, rule| {
+            let state = RuleState::new(rule.group(), 0, rule.name());
+            let group = rule.group().to_string();
+            decompiler.with_rule(&group, state, rule)
+        })
     }
 }

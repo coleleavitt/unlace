@@ -335,6 +335,23 @@ fn a_bad_registration_is_a_request_error() {
         "{:?}",
         foreign.err()
     );
+    // A rule is addressed by its name: a built-in rule's is taken, and so is
+    // the name of a rule added before.
+    let builtin = mix().with_rule("cleanup", RuleState::new("cleanup", 0, "andmask"), Inert);
+    assert!(
+        matches!(&builtin, Err(Error::Request(message)) if message.contains("andmask")),
+        "{:?}",
+        builtin.err()
+    );
+    let twice = mix()
+        .with_rule("cleanup", RuleState::new("cleanup", 0, "inert"), Inert)
+        .unwrap()
+        .with_rule("cleanup", RuleState::new("cleanup", 0, "inert"), Inert);
+    assert!(
+        matches!(&twice, Err(Error::Request(message)) if message.contains("inert")),
+        "{:?}",
+        twice.err()
+    );
     for phase in [
         UnlacePhase::Infra,
         UnlacePhase::P0,

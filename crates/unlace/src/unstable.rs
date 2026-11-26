@@ -1,9 +1,8 @@
-//! Extension points with no stability promise.
+//! Extension surfaces that are not covered by the crate's stability promise.
 //!
-//! Everything under this module can change or go away in any release. The
-//! types it re-exports are the engine's own (`unlace-decomp`), so their
-//! methods are the engine's internal API and change with it. A program that
-//! needs more of the engine than is re-exported here depends on
-//! `unlace-decomp` at the same revision.
+//! Everything under this module can change shape or disappear between
+//! releases without a major version: it exists so the extension points
+//! (`notes/extensibility-plan.md`) can be used and corrected before they are
+//! promised. The rest of the crate is the stable surface.
 
 pub mod hooks;

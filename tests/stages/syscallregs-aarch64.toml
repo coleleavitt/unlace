@@ -50,6 +50,7 @@ e90301aae10300aae00309aa08088052010000d4c0035fd6e90300aa88158052
 
 [script]
 commands = [
+    'option syscallnames off',
     'option syscallregs on',
     'lo fu pair',
     'decompile',

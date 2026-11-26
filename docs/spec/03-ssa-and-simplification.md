@@ -2041,7 +2041,7 @@ multiply between the quotient and remainder. After `RuleDivOpt` recovers
 `x / 3`, the sibling `(high64(x * 0xaaaaaaaaaaaaaaab) & ~1)` is exactly twice
 that quotient. `RuleDivOpt` substitutes `(x / 3) * 2` only when the same
 `x / 3` node precedes it in the same basic block; the ordinary term collection
-and `RuleModOpt` rules can then recover `x % 3`. Other masks, reciprocals, widths, wide divisions, and
+and `RuleModOpt` rules can then recover `x % 3`. The quotient may also be truncated before its multiply: `SUBPIECE(x/c, 0) * -c` is matched when the addend is `SUBPIECE(x, 0)`, and it becomes `SUBPIECE(x % c, 0)` (`ruleaction_7.rs (RuleModOpt::apply_op)`). Other masks, reciprocals, widths, wide divisions, and
 multiply-without-a-matching-quotient forms are declined.
 
 The cleanup pool's `RuleExpandLoad` is upstream's rewrite of a LOAD narrower

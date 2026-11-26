@@ -801,12 +801,36 @@ impl Rule for RuleModOpt {
         let x = op_in(data, op, 0).expect("modopt: in0");
         let div = op_in(data, op, 1).expect("modopt: in1");
         let outvn = op_out(data, op).expect("modopt: out");
-        for multop in vn_descend(data, outvn) {
-            if op_code(data, multop) != OpCode::CPUI_INT_MULT {
+        for multop_first in vn_descend(data, outvn) {
+            let mut multop = multop_first;
+            let mut sub_op: Option<OpId> = None;
+            let mut qvn = outvn;
+            if op_code(data, multop) == OpCode::CPUI_SUBPIECE
+                && op_in(data, multop, 0) == Some(outvn)
+                && vn_is_constant(data, div)
+            {
+                sub_op = Some(multop);
+                qvn = op_out(data, multop).expect("modopt: subpiece out");
+                let mut found: Option<OpId> = None;
+                let mut ambiguous = false;
+                for d in vn_descend(data, qvn) {
+                    if op_code(data, d) == OpCode::CPUI_INT_MULT {
+                        if found.is_some() {
+                            ambiguous = true;
+                            break;
+                        }
+                        found = Some(d);
+                    }
+                }
+                match found {
+                    Some(m) if !ambiguous => multop = m,
+                    _ => continue,
+                }
+            } else if op_code(data, multop) != OpCode::CPUI_INT_MULT {
                 continue;
             }
             let mut div2 = op_in(data, multop, 1).expect("modopt: multop in1");
-            if div2 == outvn {
+            if div2 == qvn {
                 div2 = op_in(data, multop, 0).expect("modopt: multop in0");
             }
             // Check that div is 2's complement of div2
@@ -839,6 +863,38 @@ impl Rule for RuleModOpt {
                 let mut lvn = op_in(data, addop, 0).expect("modopt: addop in0");
                 if lvn == outvn2 {
                     lvn = op_in(data, addop, 1).expect("modopt: addop in1");
+                }
+                if let Some(sub) = sub_op {
+                    let suboffset =
+                        vn_offset(data, op_in(data, sub, 1).expect("modopt: subpiece in1"));
+                    if vn_is_written(data, lvn) {
+                        let ldef = vn_def(data, lvn).expect("modopt: lvn def");
+                        if op_code(data, ldef) == OpCode::CPUI_SUBPIECE
+                            && op_in(data, ldef, 0) == Some(x)
+                            && vn_is_constant(
+                                data,
+                                op_in(data, ldef, 1).expect("modopt: subpiece in1"),
+                            )
+                            && vn_offset(data, op_in(data, ldef, 1).expect("modopt: subpiece in1"))
+                                == suboffset
+                        {
+                            let remopc = if op_code(data, op) == OpCode::CPUI_INT_DIV {
+                                OpCode::CPUI_INT_REM
+                            } else {
+                                OpCode::CPUI_INT_SREM
+                            };
+                            let remop = data.new_op_before(addop, remopc, x, div, None);
+                            let remout = op_out(data, remop).expect("modopt: rem out");
+                            data.op_set_opcode(addop, typeop_for(OpCode::CPUI_SUBPIECE));
+                            data.op_set_input(addop, remout, 0)
+                                .expect("modopt: opSetInput rem");
+                            let c4 = data.new_constant(4, suboffset);
+                            data.op_set_input(addop, c4, 1)
+                                .expect("modopt: opSetInput subpiece size");
+                            return 1;
+                        }
+                    }
+                    continue;
                 }
                 if lvn != x {
                     continue;

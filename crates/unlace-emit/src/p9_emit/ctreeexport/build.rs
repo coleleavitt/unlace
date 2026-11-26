@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::printer::print_item_text;
 use super::{
-    CPrinter, Capture, ExportTree, ExprShape, Form, Kind, LeafKind, Node, Place, Printer, Span,
-    Style, Writer, item_column, print_c,
+    CPrinter, Capture, ExportTree, ExprShape, Form, Keyword, Kind, LeafKind, Node, Place, Printer,
+    Span, Style, Writer, item_column, print_c,
 };
 use crate::prettyprint::{CaptureMark, EmitToken, SyntaxHighlight, TokenKind};
 
@@ -48,7 +48,7 @@ pub fn build(
     let mut root = builder.function()?;
     builder.statement_addresses(&mut root);
     let tree = ExportTree {
-        style: capture.style,
+        style: capture.style.clone(),
         root,
     };
     let printed = print_c(&tree);
@@ -84,7 +84,7 @@ struct Builder<'a> {
     /// The end of the statement mark that begins at a token.
     stmt_end: BTreeMap<u32, u32>,
     function_begin: usize,
-    style: Style,
+    style: &'a Style,
 }
 
 type Parsed = Option<(Node, usize)>;
@@ -187,7 +187,7 @@ impl<'a> Builder<'a> {
             engine,
             stmt_end,
             function_begin,
-            style: capture.style,
+            style: &capture.style,
         })
     }
 
@@ -268,7 +268,7 @@ impl<'a> Builder<'a> {
     }
 
     fn printed(&self, print: impl FnOnce(&mut CPrinter, &mut Writer)) -> String {
-        let mut w = Writer::new(&self.style);
+        let mut w = Writer::new(self.style);
         print(&mut CPrinter, &mut w);
         w.out
     }
@@ -288,11 +288,16 @@ impl<'a> Builder<'a> {
         })
     }
 
-    /// Is token `i` the keyword `text`?
-    fn kw(&self, i: usize, text: &str) -> bool {
+    /// Is token `i` the keyword-coloured word `text`, outside every recorded expression?
+    fn word(&self, i: usize, text: &str) -> bool {
         self.toks.get(i).is_some_and(|tok| {
             self.loose(i) && tok.text == text && tok.color == SyntaxHighlight::KeywordColor
         })
+    }
+
+    /// Is token `i` `keyword`, as the text spells it?
+    fn kw(&self, i: usize, keyword: Keyword) -> bool {
+        self.word(i, self.style.keyword(keyword))
     }
 
     fn first_on_line(&self, i: usize) -> bool {
@@ -391,22 +396,25 @@ impl<'a> Builder<'a> {
     }
 
     /// The operators the printer writes between expressions outside the RPN driver: `=`,
-    /// `?:`, `||`, `&&`, loosest first.
+    /// `?:`, `||`, `&&`, loosest first, each as the render spells it. A node's token is the
+    /// spelling the emitter got, which keeps spaces the captured token does not.
     fn binary(&self, at: &mut usize, limit: usize, min: u32) -> Option<Node> {
         let first = *at;
         let mut left = self.unary(at, limit)?;
+        let loose = &self.capture.loose;
         while let Some(op) = self.loose_op(*at, limit) {
-            let (level, name) = match op {
-                "=" => (1, "assign"),
-                "?" => (2, "cond"),
-                "||" => (3, "or"),
-                "&&" => (4, "and"),
-                _ => break,
-            };
-            if level < min {
+            let known = [
+                (1, "assign", loose.assign),
+                (2, "cond", "?"),
+                (3, "or", loose.or),
+                (4, "and", loose.and),
+            ];
+            let Some((level, name, token)) = known
+                .into_iter()
+                .find(|(level, _, spelled)| spelled.trim() == op && *level >= min)
+            else {
                 break;
-            }
-            let token = op.to_string();
+            };
             let addresses = self.token_address(*at).into_iter().collect();
             *at += 1;
             let mut children = vec![left];
@@ -424,21 +432,22 @@ impl<'a> Builder<'a> {
                 close,
                 addresses,
                 span: self.span(first, *at),
-                ..Node::op(name, Form::Binary, &token, 1, children)
+                ..Node::op(name, Form::Binary, token, 1, children)
             };
         }
         Some(left)
     }
 
     fn unary(&self, at: &mut usize, limit: usize) -> Option<Node> {
-        if self.loose_op(*at, limit) == Some("!") {
+        let not = self.capture.loose.not;
+        if self.loose_op(*at, limit) == Some(not.trim()) {
             let first = *at;
             *at += 1;
             let operand = self.unary(at, limit)?;
             return Some(Node {
                 addresses: self.token_address(first).into_iter().collect(),
                 span: self.span(first, *at),
-                ..Node::op("not", Form::Prefix, "!", 0, vec![operand])
+                ..Node::op("not", Form::Prefix, not, 0, vec![operand])
             });
         }
         self.primary(at, limit)
@@ -775,7 +784,7 @@ impl<'a> Builder<'a> {
             }
             self.blank_lines(&mut out, prev_line, line, place.blank);
             let parsed = self.item(i, end, place).filter(|(node, next)| {
-                self.toks[i].col as u32 == item_column(&self.style, node.kind, place)
+                self.toks[i].col as u32 == item_column(self.style, node.kind, place)
                     && self.printed(|p, w| print_item_text(p, w, node, self.toks[i].col as u32))
                         == self.text(i, *next)
             });
@@ -849,10 +858,10 @@ impl<'a> Builder<'a> {
                 j + 1,
             ));
         }
-        if self.kw(i, "if") {
+        if self.kw(i, Keyword::If) {
             return self.if_statement(i, end, indent);
         }
-        if self.kw(i, "while") {
+        if self.kw(i, Keyword::While) {
             let close = self
                 .close_of(i + 1, end, "(", ")")
                 .filter(|_| self.sym(i + 1, "("))?;
@@ -866,11 +875,11 @@ impl<'a> Builder<'a> {
                 next,
             ));
         }
-        if self.kw(i, "do") {
+        if self.kw(i, Keyword::Do) {
             let (body, at) = self.block(i + 1, end, indent)?;
             let close = self
                 .close_of(at + 1, end, "(", ")")
-                .filter(|_| self.kw(at, "while") && self.sym(at + 1, "("))?;
+                .filter(|_| self.kw(at, Keyword::While) && self.sym(at + 1, "("))?;
             if !self.sym(close + 1, ";") {
                 return None;
             }
@@ -883,7 +892,7 @@ impl<'a> Builder<'a> {
                 close + 2,
             ));
         }
-        if self.kw(i, "for") {
+        if self.kw(i, Keyword::For) {
             let close = self
                 .close_of(i + 1, end, "(", ")")
                 .filter(|_| self.sym(i + 1, "("))?;
@@ -903,7 +912,7 @@ impl<'a> Builder<'a> {
                 next,
             ));
         }
-        if self.kw(i, "switch") {
+        if self.kw(i, Keyword::Switch) {
             let close = self
                 .close_of(i + 1, end, "(", ")")
                 .filter(|_| self.sym(i + 1, "("))?;
@@ -938,7 +947,7 @@ impl<'a> Builder<'a> {
                 last + 1,
             ));
         }
-        if self.kw(i, "try") {
+        if self.word(i, "try") {
             let (body, at) = self.block(i + 1, end, indent)?;
             let header = at < end
                 && self.loose(at)
@@ -954,7 +963,7 @@ impl<'a> Builder<'a> {
                 next,
             ));
         }
-        if self.kw(i, "case") {
+        if self.kw(i, Keyword::Case) {
             let colon = (i + 1..end)
                 .take_while(|&k| self.line_of[k] == self.line_of[i])
                 .find(|&k| self.sym(k, ":"))?;
@@ -966,7 +975,7 @@ impl<'a> Builder<'a> {
                 colon + 1,
             ));
         }
-        if self.kw(i, "default") && self.sym(i + 1, ":") {
+        if self.kw(i, Keyword::Default) && self.sym(i + 1, ":") {
             return Some((self.node(Kind::Default, i, i + 2), i + 2));
         }
         if self.sym(i, ";") {
@@ -1014,12 +1023,15 @@ impl<'a> Builder<'a> {
     /// A statement the printer bracketed as one (the mark `i..mark`): a jump, a `return` or an
     /// expression statement.
     fn simple(&self, i: usize, mark: usize, end: usize) -> Parsed {
-        for (keyword, kind) in [("break", Kind::Break), ("continue", Kind::Continue)] {
+        for (keyword, kind) in [
+            (Keyword::Break, Kind::Break),
+            (Keyword::Continue, Kind::Continue),
+        ] {
             if self.kw(i, keyword) && mark == i + 2 && self.sym(i + 1, ";") {
                 return Some((self.node(kind, i, mark), mark));
             }
         }
-        if self.kw(i, "goto") && mark == i + 3 && self.sym(i + 2, ";") {
+        if self.kw(i, Keyword::Goto) && mark == i + 3 && self.sym(i + 2, ";") {
             return Some((
                 Node {
                     span: self.span(i, mark),
@@ -1031,7 +1043,7 @@ impl<'a> Builder<'a> {
         if mark >= end || !self.sym(mark, ";") {
             return None;
         }
-        let (kind, from) = if self.kw(i, "return") {
+        let (kind, from) = if self.kw(i, Keyword::Return) {
             (Kind::Return, i + 1)
         } else {
             (Kind::Expr, i)
@@ -1086,12 +1098,12 @@ impl<'a> Builder<'a> {
         while after < end && self.eol_comment(after) {
             after += 1;
         }
-        if after > at && self.kw(after, "else") && self.first_on_line(after) {
+        if after > at && self.kw(after, Keyword::Else) && self.first_on_line(after) {
             children.extend((at..after).map(|i| self.leaf(Kind::EolComment, i, i + 1)));
             at = after;
         }
-        if at < end && self.kw(at, "else") && self.first_on_line(at) {
-            let chained = self.kw(at + 1, "if") && self.line_of[at + 1] == self.line_of[at];
+        if at < end && self.kw(at, Keyword::Else) && self.first_on_line(at) {
+            let chained = self.kw(at + 1, Keyword::If) && self.line_of[at + 1] == self.line_of[at];
             let (els, next) = if chained {
                 self.if_statement(at + 1, end, indent)?
             } else {

@@ -1,7 +1,7 @@
 //! Printers over the exported tree: the [`Printer`] trait, whose defaults print C in the
 //! decompiler's layout, and [`CPrinter`], the reference printer that is those defaults.
 
-use super::{Brace, ExportTree, Form, Kind, Node, Style};
+use super::{Brace, ExportTree, Form, Keyword, Kind, Node, Style};
 
 /// The text a [`Printer`] writes and the layout it writes it in.
 pub struct Writer<'a> {
@@ -21,6 +21,11 @@ impl<'a> Writer<'a> {
     /// Append `text`.
     pub fn push(&mut self, text: &str) {
         self.out.push_str(text);
+    }
+
+    /// Append `keyword` as the style spells it.
+    pub fn keyword(&mut self, keyword: Keyword) {
+        self.out.push_str(self.style.keyword(keyword));
     }
 
     /// Append `columns` spaces.
@@ -110,8 +115,8 @@ pub fn print_c(tree: &ExportTree) -> String {
 }
 
 /// Is `node` the constant `true` of a loop that never tests (`while( true )`)?
-fn is_true(node: &Node) -> bool {
-    node.kind == Kind::Const && node.text == "true"
+fn is_true(style: &Style, node: &Node) -> bool {
+    node.kind == Kind::Const && node.text == style.keyword(Keyword::True)
 }
 
 /// The column an item of a block starts at.
@@ -205,13 +210,17 @@ pub(super) fn print_item_text<P: Printer + ?Sized>(
             w.push(":");
         }
         Kind::Case => {
-            w.push("case ");
+            w.keyword(Keyword::Case);
+            w.push(" ");
             for value in &item.children {
                 p.expr(w, value);
             }
             w.push(":");
         }
-        Kind::Default => w.push("default:"),
+        Kind::Default => {
+            w.keyword(Keyword::Default);
+            w.push(":");
+        }
         _ => p.statement(w, item, indent),
     }
 }
@@ -236,8 +245,10 @@ pub fn print_braced<P: Printer + ?Sized>(
 /// The parenthesized test of a loop: `( true )` glued to the keyword for a loop that never
 /// tests, else a space and the condition in parentheses.
 fn loop_test<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, cond: &Node) {
-    if is_true(cond) {
-        w.push("( true )");
+    if is_true(w.style, cond) {
+        w.push("( ");
+        w.keyword(Keyword::True);
+        w.push(" )");
     } else {
         w.push(" (");
         p.expr(w, cond);
@@ -257,7 +268,7 @@ pub fn print_statement<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &No
             w.push(";");
         }
         Kind::Return => {
-            w.push("return");
+            w.keyword(Keyword::Return);
             for child in &node.children {
                 w.push(" ");
                 p.expr(w, child);
@@ -265,15 +276,23 @@ pub fn print_statement<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &No
             w.push(";");
         }
         Kind::Goto => {
-            w.push("goto ");
+            w.keyword(Keyword::Goto);
+            w.push(" ");
             w.push(&node.text);
             w.push(";");
         }
-        Kind::Break => w.push("break;"),
-        Kind::Continue => w.push("continue;"),
+        Kind::Break => {
+            w.keyword(Keyword::Break);
+            w.push(";");
+        }
+        Kind::Continue => {
+            w.keyword(Keyword::Continue);
+            w.push(";");
+        }
         Kind::If => {
             let mut parts = node.children.iter().peekable();
-            w.push("if (");
+            w.keyword(Keyword::If);
+            w.push(" (");
             if let Some(cond) = parts.next() {
                 p.expr(w, cond);
             }
@@ -301,7 +320,7 @@ pub fn print_statement<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &No
             }
             if let Some(els) = parts.next() {
                 w.line(indent);
-                w.push("else");
+                w.keyword(Keyword::Else);
                 match els.kind {
                     Kind::Block => print_braced(p, w, els, w.style.brace_ifelse, indent),
                     Kind::If => {
@@ -316,23 +335,25 @@ pub fn print_statement<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &No
             }
         }
         Kind::While => {
-            w.push("while");
+            w.keyword(Keyword::While);
             if let [cond, body] = node.children.as_slice() {
                 loop_test(p, w, cond);
                 print_braced(p, w, body, w.style.brace_loop, indent);
             }
         }
         Kind::DoWhile => {
-            w.push("do");
+            w.keyword(Keyword::Do);
             if let [body, cond] = node.children.as_slice() {
                 print_braced(p, w, body, w.style.brace_loop, indent);
-                w.push(" while");
+                w.push(" ");
+                w.keyword(Keyword::While);
                 loop_test(p, w, cond);
                 w.push(";");
             }
         }
         Kind::For => {
-            w.push("for (");
+            w.keyword(Keyword::For);
+            w.push(" (");
             if let [init, cond, next, body] = node.children.as_slice() {
                 p.expr(w, init);
                 w.push("; ");
@@ -344,7 +365,8 @@ pub fn print_statement<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &No
             }
         }
         Kind::Switch => {
-            w.push("switch(");
+            w.keyword(Keyword::Switch);
+            w.push("(");
             match node.children.as_slice() {
                 [value, body] => {
                     p.expr(w, value);

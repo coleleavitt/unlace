@@ -416,8 +416,15 @@ and `tree_from_json` (`docs/api.md`). `crates/unlace/examples/let_flavour.rs` pr
 flavour; `crates/unlace/examples/ctree_roundtrip.rs` prints a document's trees back and compares
 them with its code.
 
+**Language files.** A language file over C (`--language-file`, `docs/spec/09-emission.md` §9.6)
+respells keywords and operators and leaves C's statement forms alone, so its output exports the
+same nodes. The capture carries the spellings: an operator node's token is `PrintC::op_spelling`,
+the builder reads the statement keywords from the profile (`PrintC::lang`), and `style.keywords`
+holds the respelled ones so that a printer can write them back. An `if` stays an `if`.
+
 **Limits.** C output only: the statement reader knows C's statement forms, so a function printed
-as Rust, Go or Java reports `ctree_error` (pass `--language c`). One process only (`--jobs 1`). The
+as Rust, Go or Java (or through a language file over one of them) reports `ctree_error` (pass
+`--language c`). One process only (`--jobs 1`). The
 capture render takes the place of the markup render `--json` already runs, so the flag adds the
 token capture, the record and the build: 3% of the run time on a 185-function binary. Types are the printer's: a variable's, an operation's
 result, a declaration's; a constant has none, and an operator written outside the RPN driver has

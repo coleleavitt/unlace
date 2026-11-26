@@ -24,6 +24,8 @@ pub use printer::{
     print_function, print_item, print_statement,
 };
 
+use std::collections::BTreeMap;
+
 use crate::prettyprint::CaptureMark;
 
 /// What a node of the exported tree is. [`Kind::name`] is its JSON spelling.
@@ -38,7 +40,8 @@ pub enum Kind {
     Decl,
     /// Statements between braces.
     Block,
-    /// `if`: the condition, then the body, then the `else` part when there is one.
+    /// `if`: the condition, the then part, the `else` part when there is one; an
+    /// `eol_comment` behind the condition or the then part follows it.
     If,
     /// `while`: the condition, then the body `block`.
     While,
@@ -259,9 +262,70 @@ impl Brace {
     }
 }
 
-/// The layout the text was printed in: what the printer's options decided, which no node
-/// carries.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// A keyword the statement forms print.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Keyword {
+    Break,
+    Case,
+    Continue,
+    Default,
+    Do,
+    Else,
+    For,
+    Goto,
+    If,
+    Return,
+    Switch,
+    /// The condition of a loop that never tests.
+    True,
+    While,
+}
+
+impl Keyword {
+    pub const ALL: [Keyword; 13] = [
+        Keyword::Break,
+        Keyword::Case,
+        Keyword::Continue,
+        Keyword::Default,
+        Keyword::Do,
+        Keyword::Else,
+        Keyword::For,
+        Keyword::Goto,
+        Keyword::If,
+        Keyword::Return,
+        Keyword::Switch,
+        Keyword::True,
+        Keyword::While,
+    ];
+
+    /// The keyword's C spelling, which is also its name in the JSON document.
+    pub fn c(self) -> &'static str {
+        match self {
+            Keyword::Break => "break",
+            Keyword::Case => "case",
+            Keyword::Continue => "continue",
+            Keyword::Default => "default",
+            Keyword::Do => "do",
+            Keyword::Else => "else",
+            Keyword::For => "for",
+            Keyword::Goto => "goto",
+            Keyword::If => "if",
+            Keyword::Return => "return",
+            Keyword::Switch => "switch",
+            Keyword::True => "true",
+            Keyword::While => "while",
+        }
+    }
+
+    /// The keyword a C spelling names.
+    pub fn from_c(name: &str) -> Option<Keyword> {
+        Keyword::ALL.into_iter().find(|keyword| keyword.c() == name)
+    }
+}
+
+/// The layout the text was printed in: what the printer's options and a language file
+/// decided, which no node carries.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Style {
     /// Spaces per nesting level.
     pub indent: u32,
@@ -271,6 +335,17 @@ pub struct Style {
     pub brace_ifelse: Brace,
     pub brace_loop: Brace,
     pub brace_switch: Brace,
+    /// The keywords a language file respelled; any other keyword has its C spelling.
+    pub keywords: BTreeMap<Keyword, String>,
+}
+
+impl Style {
+    /// How `keyword` is spelled in the text.
+    pub fn keyword(&self, keyword: Keyword) -> &str {
+        self.keywords
+            .get(&keyword)
+            .map_or(keyword.c(), String::as_str)
+    }
 }
 
 /// One node of the exported tree.
@@ -468,6 +543,27 @@ pub struct CapturedExpr {
     pub ty: Option<String>,
 }
 
+/// How the render spells the operators `PrintC` writes outside the RPN driver (the forms of
+/// the tree rewrites), as the emitter got them: C's, unless a language file respelled them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LooseOps {
+    pub assign: &'static str,
+    pub or: &'static str,
+    pub and: &'static str,
+    pub not: &'static str,
+}
+
+impl Default for LooseOps {
+    fn default() -> LooseOps {
+        LooseOps {
+            assign: "=",
+            or: "||",
+            and: "&&",
+            not: "!",
+        }
+    }
+}
+
 /// What a tree-capture render records beside its tokens.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Capture {
@@ -476,7 +572,9 @@ pub struct Capture {
     pub engine_tokens: Vec<(u32, u32)>,
     pub marks: Vec<CaptureMark>,
     pub style: Style,
-    /// The render was C output; other output languages are not exported.
+    pub loose: LooseOps,
+    /// The render was C output (C itself or a language file over it); other output languages
+    /// are not exported.
     pub c_output: bool,
 }
 

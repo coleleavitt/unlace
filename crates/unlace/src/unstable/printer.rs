@@ -16,8 +16,8 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use unlace_cli::embed;
 
 pub use unlace_decomp::ctreeexport::{
-    Brace, CPrinter, ExportTree as Tree, Form, Kind, Node, Place, Printer, Span, Style, Writer,
-    item_column, print, print_braced, print_c, print_expr, print_function, print_item,
+    Brace, CPrinter, ExportTree as Tree, Form, Keyword, Kind, Node, Place, Printer, Span, Style,
+    Writer, item_column, print, print_braced, print_c, print_expr, print_function, print_item,
     print_statement,
 };
 
@@ -45,7 +45,8 @@ pub enum TreeError {
 ///
 /// let tree = tree_from_json(
 ///     r#"{"style": {"indent": 2, "comment_indent": 20, "brace_function": "next_line",
-///         "brace_ifelse": "same_line", "brace_loop": "same_line", "brace_switch": "same_line"},
+///         "brace_ifelse": "same_line", "brace_loop": "same_line", "brace_switch": "same_line",
+///         "keywords": {}},
 ///        "root": {"kind": "function", "children": [
 ///          {"kind": "prototype", "text": "void f(void)"},
 ///          {"kind": "block", "children": [{"kind": "return"}]}]}}"#,

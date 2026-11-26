@@ -10,6 +10,7 @@ const STYLE: Style = Style {
     brace_ifelse: Brace::SameLine,
     brace_loop: Brace::SameLine,
     brace_switch: Brace::SameLine,
+    keywords: BTreeMap::new(),
 };
 
 fn leaf(kind: Kind, text: &str) -> Node {
@@ -258,6 +259,65 @@ void f(int a) {
     {
         break;
     }
+}";
+    assert_eq!(printed, expected);
+}
+
+#[test]
+fn keywords_are_spelled_as_the_style_spells_them() {
+    let respelled = [
+        (Keyword::If, "when"),
+        (Keyword::Else, "otherwise"),
+        (Keyword::While, "aslongas"),
+        (Keyword::True, "ever"),
+        (Keyword::Do, "repeat"),
+        (Keyword::Goto, "jump"),
+        (Keyword::Break, "leave"),
+        (Keyword::Return, "give"),
+    ];
+    let style = Style {
+        keywords: respelled
+            .into_iter()
+            .map(|(keyword, spelled)| (keyword, spelled.to_string()))
+            .collect(),
+        ..STYLE
+    };
+    let body = vec![
+        with(
+            Kind::If,
+            vec![
+                var("a"),
+                leaf(Kind::Goto, "out"),
+                with(Kind::Block, vec![Node::new(Kind::Break)]),
+            ],
+        ),
+        with(
+            Kind::While,
+            vec![
+                leaf(Kind::Const, "ever"),
+                with(Kind::Block, vec![Node::new(Kind::Continue)]),
+            ],
+        ),
+        with(
+            Kind::DoWhile,
+            vec![with(Kind::Block, vec![]), leaf(Kind::Const, "true")],
+        ),
+        with(Kind::Return, vec![var("a")]),
+    ];
+    let printed = print_c(&tree(style, function("int f(int a)", body)));
+    let expected = "\
+int f(int a)
+{
+  when (a) jump out;
+  otherwise {
+    leave;
+  }
+  aslongas( ever ) {
+    continue;
+  }
+  repeat {
+  } aslongas (true);
+  give a;
 }";
     assert_eq!(printed, expected);
 }
@@ -548,6 +608,63 @@ fn an_operator_with_text_of_its_own_is_kept_as_its_text() {
     let assignment = &tree.root.children[1].children[0].children[0];
     assert_eq!(kinds(assignment), [Kind::Var, Kind::Raw]);
     assert_eq!(assignment.children[1].text, "WRAP<b>");
+}
+
+#[test]
+fn respelled_keywords_and_operators_are_read_as_what_they_stand_for() {
+    let code = "void f(void)\n{\n  when (not a and b) leave;\n}";
+    let mut lex = Lexed::new(code);
+    lex.prototype();
+    let when = lex.keyword("when");
+    lex.syntax("(");
+    lex.push("not", TokenKind::Op, SyntaxHighlight::NoColor);
+    let a = lex.var("a");
+    lex.push("and", TokenKind::Op, SyntaxHighlight::NoColor);
+    let b = lex.var("b");
+    lex.syntax(")");
+    let leave = lex.keyword("leave");
+    let semi = lex.syntax(";");
+    lex.syntax("}");
+    let mut capture = capture(
+        vec![atom(a, "a", None), atom(b, "b", None)],
+        vec![
+            CaptureMark::StatementBegin(leave as usize, None),
+            CaptureMark::StatementEnd(semi as usize + 1),
+        ],
+    );
+    capture.loose = LooseOps {
+        and: "and",
+        not: "not ",
+        ..LooseOps::default()
+    };
+    assert!(
+        lex.build(&capture)
+            .is_ok_and(|tree| { tree.root.children[1].children[0].kind == Kind::Raw })
+    );
+
+    capture.style.keywords = [(Keyword::If, "when"), (Keyword::Break, "leave")]
+        .into_iter()
+        .map(|(keyword, spelled)| (keyword, spelled.to_string()))
+        .collect();
+    let tree = lex.build(&capture).expect("a tree");
+    assert_eq!(print_c(&tree), code);
+    let statement = &tree.root.children[1].children[0];
+    assert_eq!(kinds(statement), [Kind::Op, Kind::Break]);
+    let condition = &statement.children[0];
+    assert_eq!(
+        (condition.name.as_str(), condition.text.as_str()),
+        ("and", "and")
+    );
+    let negation = &condition.children[0];
+    assert_eq!(
+        (
+            negation.name.as_str(),
+            negation.text.as_str(),
+            negation.form
+        ),
+        ("not", "not ", Form::Prefix)
+    );
+    assert_eq!(when, 6);
 }
 
 #[test]

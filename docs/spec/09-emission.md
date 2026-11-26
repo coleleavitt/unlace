@@ -6347,12 +6347,16 @@ typed nodes; the kinds and members are listed in `docs/cli.md`, "The JSON docume
   nor the driver printed (the routine wrote it straight to the emitter).
 - Between recorded expressions the builder reads what `PrintC` writes outside the driver:
   `=`, `?:`, `||`, `&&` and `!` (the `Assign`, `Ternary`, `Or`, `And` and `Not` forms of
-  the tree rewrites), parentheses, a function name followed by a parenthesized argument
+  the tree rewrites, each as `PrintC::op_spelling` spells it; a recorded operator's token
+  is its `op_spelling` too), parentheses, a function name followed by a parenthesized argument
   list, and commas, which make a `list` (the statements a condition runs before its
   test).
 - Statements are read from the tokens. A token outside every recorded expression that is
   keyword-coloured and spells `if`, `else`, `while`, `do`, `for`, `switch`, `case`,
-  `default`, `try`, `return`, `goto`, `break` or `continue` opens that form (a `switch`
+  `default`, `try`, `return`, `goto`, `break` or `continue` opens that form; the
+  spellings are the profile's (`PrintC::lang`), so a language file over C that respells a
+  keyword changes the spelling and not the node, and the tree's `style.keywords` records
+  each respelled keyword by its C spelling (a `switch`
   followed by `;` instead of a block is a jump through a table with no recovered target:
   `switch(value);`); braces and
   parentheses are matched over the tokens outside recorded expressions; a statement mark
@@ -6365,8 +6369,11 @@ typed nodes; the kinds and members are listed in `docs/cli.md`, "The JSON docume
 - A node's span is the position of its first and last token. A statement's `addresses`
   are the instruction addresses of the ops its tokens name (`opref`), an expression
   node's the address of its own op, both in output units (`output_code_offset`). A leaf's
-  `type` is its Varnode's type, an operator's the type of its op's output when it is the
-  outermost node of that op, a declaration's its declared type.
+  `type` is its Varnode's type and a declaration's its declared type. An operator's is
+  the type of its op's output when it is the outermost node printed for that op, or the
+  right side of the assignment that op prints to its own output (`i = i + 1`: the sum has
+  `i`'s type); any other node printed for its parent's op is a part of the parent and has
+  no type of its own.
 
 Every item of a block is accepted only if it starts at the column its kind prints at and
 the reference printer reproduces its text; otherwise the whole lines it covers are one
@@ -6374,7 +6381,8 @@ the reference printer reproduces its text; otherwise the whole lines it covers a
 text; otherwise its operands are checked one by one and it is `raw` if that does not
 help. The finished tree is printed once more and compared with `code`; a difference is
 reported as the function's `ctree_error` and no tree is exported. The reasons a function
-has no tree are: an output language other than C (the statement reader knows C's forms);
+has no tree are: an output language other than C, a language file over one included (the
+statement reader knows C's forms);
 the cookie-literal return rewrite edited the text after it was printed; a token that is
 not at its recorded position in the text; a prototype that is not one line at column 0;
 a body that is not one brace pair; the final comparison. A batch that inserts

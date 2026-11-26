@@ -2612,7 +2612,7 @@ because a worker's record does not carry the tree.
 | `text` | A leaf's spelling; a comment's, label's or prototype's text; a declaration's declarator; an operator's token; a call's opening token; the text of a `raw` node. |
 | `op`, `form`, `close`, `spacing` | On an `op` node: the operator's name (`assign`, `add`, `lt`, `cast`, `deref`, `addr_of`, `subscript`, `member`, `ptr_member`, `cond`, `add_assign`, ...; absent for a token that has no name), how its token sits around its children (`binary`: between them; `prefix`: before the one child; `postsurround`: `a[b]`; `presurround`: `(type)a`; `space`: only its spacing between two children), its closing token (`]`, `)`, the `:` of `?:`) and the number of spaces on each side of the token. |
 | `sep` | What separates the children of a `list` and the arguments of a `call`. |
-| `type` | The C type of the node's value, where the printer knows it: a variable's, the result of an operation, a declaration's. |
+| `type` | The C type of the node's value, where the printer knows it: a variable's, a declaration's, and the result of an operation (the type of the value the p-code op behind the node writes; a node that is only a part of what its op prints, and an operator `PrintC` writes outside its expression driver, has none). |
 | `line`, `col`, `end_line`, `end_col` | Where the node's text is in `code`: 1-based lines, UTF-16 columns, end exclusive. |
 | `addresses` | Instruction addresses in the target's address units, as in `line_mappings`. On an expression node: the instruction of the p-code op the node prints. On a statement: every instruction under it. |
 
@@ -2644,9 +2644,15 @@ because a worker's record does not carry the tree.
 | `call` | the callee, then the arguments | `text`, `sep` and `close` are `(`, `,` and `)` |
 | `op` | its operands | see `op`, `form`, `close`, `spacing` above |
 
-`style` holds what the print options decided and no node carries: `indent` (spaces per
-level), `comment_indent` (the column of a comment line) and `brace_function`,
-`brace_ifelse`, `brace_loop`, `brace_switch` (`same_line`, `next_line` or `skip_line`).
+`style` holds what the print options and a language file decided and no node carries:
+`indent` (spaces per level), `comment_indent` (the column of a comment line),
+`brace_function`, `brace_ifelse`, `brace_loop`, `brace_switch` (`same_line`, `next_line` or
+`skip_line`) and `keywords`, the statement keywords a language file respelled, by their C
+spelling (`{}` without one; any of `break`, `case`, `continue`, `default`, `do`, `else`,
+`for`, `goto`, `if`, `return`, `switch`, `true`, `while`). With a language file over C
+(`--language-file`, "Language files") the nodes are the same and only spellings change: an
+`if` node is still `"kind": "if"` and `style.keywords.if` holds its spelling, and an `op`
+node keeps its `op` name with the respelled token in `text`.
 
 The tree is the printed text as data: it has the operators, the folding, the parentheses
 and the names the printer chose, and it prints back to `code` byte for byte. The exporter
@@ -2663,8 +2669,8 @@ lines `structdefs` and `bytearrayc` print above a function (type definitions, a 
 preamble). `ctree_error` is one of:
 
 - `the tree is exported for C output only`: the function printed in another output
-  language (a Rust, Go or DEX binary under the default `--language auto`). Pass
-  `--language c`.
+  language (a Rust, Go or DEX binary under the default `--language auto`, or a language
+  file whose base is not C). Pass `--language c`.
 - `the text was rewritten after it was printed (a cookie-literal return)`: the
   stack-cookie presentation pass edited the text.
 - `pointer-argument casts were written into the text after the tree was built`: a
@@ -2677,7 +2683,7 @@ preamble). `ctree_error` is one of:
 ```bash
 unlace decompile ./sample sum_to --json --ctree
 #   "code": "long sum_to(int n)\n{\n  long acc; ...\n  for (i = 1; i <= n; i = i + 1) {\n    acc += i;\n  }\n  return acc;\n}",
-#   "ctree": {"style": {"indent": 2, "comment_indent": 20, "brace_function": "next_line", ...},
+#   "ctree": {"style": {"indent": 2, "comment_indent": 20, "brace_function": "next_line", ..., "keywords": {}},
 #     "root": {"kind": "function", "line": 1, "col": 0, "end_line": 11, "end_col": 1, "addresses": [4460, ...],
 #       "children": [
 #         {"kind": "prototype", "text": "long sum_to(int n)", ...},

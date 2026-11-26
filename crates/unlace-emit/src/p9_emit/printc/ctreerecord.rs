@@ -12,7 +12,9 @@ use std::collections::BTreeMap;
 use super::{PrintC, tokens};
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
-use crate::ctreeexport::{Brace, Capture, CapturedExpr, ExprShape, Form, LeafKind, Style};
+use crate::ctreeexport::{
+    Brace, Capture, CapturedExpr, ExprShape, Form, Keyword, LeafKind, LooseOps, Style,
+};
 use crate::funcdata::Funcdata;
 use crate::prettyprint::{BraceStyle, CaptureMark, Emit, EmitToken, MarkupProvenance};
 use crate::printlanguage::{Atom, AtomData, IrKey, OpToken, SyntaxHighlight, TagType, TokenType};
@@ -162,22 +164,46 @@ impl PrintC {
             )
         };
         let op_of = |key: IrKey| OpId::from(slotmap::KeyData::from_ffi(key));
+        let vn_of = |key: IrKey| VarnodeId::from(slotmap::KeyData::from_ffi(key));
+        let output = |op: IrKey| fd.obank().get(op_of(op))?.get_out();
+        let mut kids: Vec<Vec<usize>> = vec![Vec::new(); record.nodes.len()];
+        for (id, node) in record.nodes.iter().enumerate() {
+            if let Some(parent) = node.parent {
+                kids[parent as usize].push(id);
+            }
+        }
+        // The right side of `out = ...`, printed for the op that writes `out`, is that op's
+        // value; any other node printed for its parent's op is a part of the parent.
+        let assigned = |id: usize, node: &RpnNode| {
+            let Some(parent) = node.parent else {
+                return false;
+            };
+            let [target, .., value] = kids[parent as usize].as_slice() else {
+                return false;
+            };
+            let (above, target) = (&record.nodes[parent as usize], &record.nodes[*target]);
+            above
+                .tok
+                .is_some_and(|tok| std::ptr::eq(tok, &tokens::ASSIGNMENT))
+                && *value == id
+                && target.tok.is_none()
+                && target.vn.is_some()
+                && target.vn.map(vn_of) == node.op.and_then(output)
+        };
         let exprs = record
             .nodes
             .iter()
-            .map(|node| {
+            .enumerate()
+            .map(|(id, node)| {
                 let parent_op = node
                     .parent
                     .and_then(|parent| record.nodes[parent as usize].op);
                 let ty = match node.tok {
-                    None => node
-                        .vn
-                        .map(|key| VarnodeId::from(slotmap::KeyData::from_ffi(key)))
-                        .and_then(&mut type_of),
+                    None => node.vn.map(vn_of).and_then(&mut type_of),
                     Some(tok) if tok.token_type != TokenType::HiddenFunction => node
                         .op
-                        .filter(|op| Some(*op) != parent_op)
-                        .and_then(|op| fd.obank().get(op_of(op))?.get_out())
+                        .filter(|op| Some(*op) != parent_op || assigned(id, node))
+                        .and_then(output)
                         .and_then(&mut type_of),
                     Some(_) => None,
                 };
@@ -196,7 +222,7 @@ impl PrintC {
                                 TokenType::Space => Form::Space,
                                 TokenType::HiddenFunction => Form::Hidden,
                             },
-                            open: tok.print1,
+                            open: self.op_spelling(tok),
                             close: tok.print2,
                             spacing: u32::try_from(tok.spacing).unwrap_or(0),
                             operands: u32::try_from(tok.stage).unwrap_or(0),
@@ -228,6 +254,26 @@ impl PrintC {
             BraceStyle::NextLine => Brace::NextLine,
             BraceStyle::SkipLine => Brace::SkipLine,
         };
+        let lang = self.lang();
+        let keywords = [
+            (Keyword::Break, lang.kw_break),
+            (Keyword::Case, lang.kw_case),
+            (Keyword::Continue, lang.kw_continue),
+            (Keyword::Default, lang.kw_default),
+            (Keyword::Do, lang.kw_do),
+            (Keyword::Else, lang.kw_else),
+            (Keyword::For, lang.kw_for),
+            (Keyword::Goto, lang.kw_goto),
+            (Keyword::If, lang.kw_if),
+            (Keyword::Return, lang.kw_return),
+            (Keyword::Switch, lang.kw_switch),
+            (Keyword::True, lang.kw_true),
+            (Keyword::While, lang.kw_while),
+        ]
+        .into_iter()
+        .filter(|(keyword, spelled)| *spelled != keyword.c())
+        .map(|(keyword, spelled)| (keyword, spelled.to_string()))
+        .collect();
         Capture {
             exprs,
             engine_tokens: record.engine,
@@ -239,6 +285,13 @@ impl PrintC {
                 brace_ifelse: brace(self.options.brace_ifelse),
                 brace_loop: brace(self.options.brace_loop),
                 brace_switch: brace(self.options.brace_switch),
+                keywords,
+            },
+            loose: LooseOps {
+                assign: self.op_spelling(&tokens::ASSIGNMENT),
+                or: self.op_spelling(&tokens::BOOLEAN_OR),
+                and: self.op_spelling(&tokens::BOOLEAN_AND),
+                not: self.op_spelling(&tokens::BOOLEAN_NOT),
             },
             c_output: self.out_lang == crate::lang::OutLang::C,
         }

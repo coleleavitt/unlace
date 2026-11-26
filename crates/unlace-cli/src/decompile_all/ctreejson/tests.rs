@@ -45,6 +45,7 @@ fn tree() -> ExportTree {
             brace_ifelse: Brace::SameLine,
             brace_loop: Brace::SkipLine,
             brace_switch: Brace::SameLine,
+            keywords: [(Keyword::While, "aslongas".to_string())].into(),
         },
         root,
     }
@@ -54,6 +55,7 @@ fn tree() -> ExportTree {
 fn the_document_reads_back_as_the_tree_it_was_written_from() {
     let tree = tree();
     let text = jsonfmt::dumps_indent2(&to_json(&tree));
+    assert!(text.contains("\"keywords\": {\n      \"while\": \"aslongas\"\n    }"));
     let read = from_json(&jsonfmt::parse(&text).expect("JSON")).expect("a tree");
     assert_eq!(read, tree);
     assert_eq!(print_c(&read), "void f(int a)\n{\n  v = g(a);\n  \n}");
@@ -138,6 +140,11 @@ fn a_document_that_is_not_a_tree_is_refused_with_the_member_at_fault() {
         ),
         ("\"next_line\"", "\"below\"", "style.brace_function"),
         ("\"indent\": 2", "\"indent\": \"two\"", "style.indent"),
+        (
+            "\"while\": \"aslongas\"",
+            "\"until\": \"aslongas\"",
+            "style.keywords.until",
+        ),
     ] {
         assert!(text.contains(from), "{from}");
         let error = parse(&text.replace(from, to)).unwrap_err();

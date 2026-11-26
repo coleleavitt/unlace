@@ -9,7 +9,7 @@
 //! `code`.
 
 use unlace_console::project::FuncResult;
-use unlace_decomp::ctreeexport::{Brace, ExportTree, Form, Kind, Node, Span, Style};
+use unlace_decomp::ctreeexport::{Brace, ExportTree, Form, Keyword, Kind, Node, Span, Style};
 
 use crate::jsonfmt::Json;
 
@@ -52,6 +52,18 @@ pub(crate) fn to_json(tree: &ExportTree) -> Json {
                 (
                     "brace_switch".into(),
                     Json::Str(style.brace_switch.name().into()),
+                ),
+                (
+                    "keywords".into(),
+                    Json::Object(
+                        style
+                            .keywords
+                            .iter()
+                            .map(|(keyword, spelled)| {
+                                (keyword.c().to_string(), Json::Str(spelled.clone()))
+                            })
+                            .collect(),
+                    ),
                 ),
             ]),
         ),
@@ -110,6 +122,16 @@ pub(crate) fn from_json(json: &Json) -> Result<ExportTree, String> {
     };
     let count =
         |key: &str| number_of(style, key).ok_or_else(|| format!("ctree: bad `style.{key}`"));
+    let keywords = match member(style, "keywords") {
+        Some(Json::Object(members)) => members
+            .iter()
+            .map(|(name, spelled)| match (Keyword::from_c(name), spelled) {
+                (Some(keyword), Json::Str(spelled)) => Ok((keyword, spelled.clone())),
+                _ => Err(format!("ctree: bad `style.keywords.{name}`")),
+            })
+            .collect::<Result<_, _>>()?,
+        _ => return Err("ctree: bad `style.keywords`".to_string()),
+    };
     Ok(ExportTree {
         style: Style {
             indent: count("indent")?,
@@ -118,6 +140,7 @@ pub(crate) fn from_json(json: &Json) -> Result<ExportTree, String> {
             brace_ifelse: brace("brace_ifelse")?,
             brace_loop: brace("brace_loop")?,
             brace_switch: brace("brace_switch")?,
+            keywords,
         },
         root: node_from(member(json, "root").ok_or("ctree: no `root`")?)?,
     })

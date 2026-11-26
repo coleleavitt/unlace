@@ -69,6 +69,9 @@ fn a_statement_names_its_operands_types_lines_and_addresses() {
     );
     assert_eq!(test["type"], "bool");
     assert_eq!(block["kind"], "block");
+    // `i = i + 1`: the sum is printed for the op that writes `i`, so it has `i`'s type.
+    let sum = &step["children"][1];
+    assert_eq!((&sum["op"], &sum["type"]), (&"add".into(), &"int".into()));
 
     let lines: Vec<&str> = code.lines().collect();
     let text = |node: &serde_json::Value| {
@@ -153,4 +156,103 @@ fn the_flag_needs_json_one_process_and_c_output() {
             .unwrap()
             .contains("C output only")
     );
+}
+
+/// A language file over C: keywords, operators and the member form respelled.
+const PSEUDO: &str = r#"
+base = "c"
+
+[keywords]
+if = "when"
+else = "otherwise"
+goto = "jump"
+while = "aslongas"
+return = "give"
+
+[operators]
+assign = ":="
+boolean_and = "and"
+boolean_or = "or"
+boolean_not = "not "
+plus = "plus"
+
+[forms]
+member = "rust-deref-paren"
+"#;
+
+#[test]
+fn a_language_file_over_c_changes_spellings_and_not_what_the_nodes_are() {
+    let ptx = repo_root()
+        .join("crates/unlace-analysis/tests/fixtures/ptx.o")
+        .to_str()
+        .expect("UTF-8 fixture path")
+        .to_owned();
+    let file = tempfile::Builder::new()
+        .suffix(".toml")
+        .tempfile()
+        .expect("a temporary file");
+    std::fs::write(file.path(), PSEUDO).expect("the language file is written");
+    let language = file.path().to_str().expect("a UTF-8 temporary path");
+
+    let kinds = |document: &serde_json::Value| {
+        let mut kinds: Vec<Vec<String>> = Vec::new();
+        for record in document["functions"].as_array().unwrap() {
+            let code = record["code"].as_str().expect("ptx decompiles");
+            let name = record["name"].as_str().unwrap();
+            assert!(record["ctree_error"].is_null(), "{name}: {record}");
+            let tree = ctree_from_json(&record["ctree"].to_string()).expect("a tree");
+            assert_eq!(print_c(&tree), code, "{name}");
+            let mut of_function = Vec::new();
+            tree.root.walk(&mut |node| {
+                assert_ne!(node.kind, Kind::Raw, "{name}: {:?}", node.text);
+                of_function.push(if node.name.is_empty() {
+                    node.kind.name().to_string()
+                } else {
+                    node.name.clone()
+                });
+            });
+            kinds.push(of_function);
+        }
+        kinds
+    };
+    let functions = "swallow_file_in_memory,fix_output_parameters,digest_word_file,print_spaces";
+    let select = [
+        "decompile-all",
+        &ptx,
+        "--json",
+        "--ctree",
+        "--functions",
+        functions,
+    ];
+    let plain = document(&select);
+    let flavoured = document(&[&select[..], &["--language-file", language]].concat());
+
+    let record = &flavoured["functions"][0];
+    let code = record["code"].as_str().unwrap();
+    assert!(code.contains("when (") && code.contains(" := "), "{code}");
+    assert!(!code.contains("if (") && !code.contains(" = "), "{code}");
+    let keywords = &record["ctree"]["style"]["keywords"];
+    assert_eq!(keywords["if"], "when");
+    assert_eq!(keywords["return"], "give");
+    assert!(keywords.get("switch").is_none(), "{keywords}");
+    assert_eq!(
+        plain["functions"][0]["ctree"]["style"]["keywords"],
+        serde_json::json!({})
+    );
+
+    // The member form adds a dereference where C prints `->`; nothing else differs.
+    let member = |kinds: Vec<Vec<String>>| -> Vec<Vec<String>> {
+        kinds
+            .into_iter()
+            .map(|of_function| {
+                of_function
+                    .into_iter()
+                    .filter(|kind| {
+                        !["ptr_member", "member", "deref", "paren"].contains(&kind.as_str())
+                    })
+                    .collect()
+            })
+            .collect()
+    };
+    assert_eq!(member(kinds(&flavoured)), member(kinds(&plain)));
 }

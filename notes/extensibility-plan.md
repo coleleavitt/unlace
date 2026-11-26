@@ -176,3 +176,42 @@ in `docs/cli.md`. Gates: `docs/dev-setup.md` § Gates.
 - **API stability.** Exposing the tree and the hooks on the facade makes their shapes a
   promise. Mark them unstable (a feature flag or a `unstable` module) until 1.3 has users?
 - **Whether `unlace map` is a new subcommand** or flags on `decompile`.
+
+## Status (2026-11-26): implemented
+
+Every step above is on `main`. The decisions were made as follows:
+- **How outside code gets in:** data (JSON out, TOML files in) and a Rust API on the `unlace`
+  facade. There is no run-time loading of native libraries or WASM.
+- **API stability:** the new facade APIs are in `unlace::unstable`, which has no stability
+  promise.
+- **`unlace map`:** a new subcommand.
+
+| Steps | PR | What landed |
+|---|---|---|
+| 1.4 | #1540 | `--language-file FILE` (TOML flavour over a base language: keywords, operators, a few forms, one capability), console `language file`, `Decompiler::with_language_file` |
+| 2.1, 2.3 | #1541 | `Decompiler::with_rule` / `with_phase_hook` (`unlace::unstable::hooks`), example `custom_pass.rs`; `--rules FILE` p-code rewrite rules as TOML, checked at load; the pool's deadline is now polled on every rewind |
+| 2.2, 1.2 + 3.4, 1.3 | #1542 | tree callbacks per `CMaturity` (`Decompiler::with_tree_hook`), the 15 built-in tree rewrites on the same schedule; `--ctree` JSON (statements, expressions, types, line spans, op addresses); `Printer` trait (`unlace::unstable::printer`), examples `let_flavour.rs`, `ctree_roundtrip.rs` |
+| 3.1, 3.2, 3.3 | #1543 | `--tokens`, `--storage` (per-variable storage pieces with address ranges), `unlace map BIN FUNC --line/--span/--addr`, `unlace::unstable::mapping` |
+
+What came out differently from the plan:
+- **Tree as data (1.2):** the expression tree is recorded from the printer's RPN driver
+  during one extra render, not rebuilt from the leaf ops.
+  - Every exported tree prints back byte for byte: 38,332 C functions in 1,482 fixture
+    binaries, plus 4,871 corpus functions.
+  - A node that does not print back stays `raw`. That covers nesting past 61 levels and
+    the `structdefs` / `bytearrayc` preambles.
+  - Only C output has a tree.
+- **Built-in tree rewrites (2.2):** they stay printer functions, run from the same schedule
+  as callbacks, because they read printer state a callback cannot see. A callback can make
+  the edits the built-ins make, nothing more.
+- **Storage (3.2):** opt-in (`--storage`). Always on, it grows the document by 46–103%.
+  - Agreement with the DWARF location information is 94–97% of bytes for C/C++/Rust and
+    93–99% for Go.
+  - Go names a location for only 15% of the bytes DWARF does. This is a naming gap in the
+    Go output (spec 06).
+- **Language flavours (1.4):** a key is accepted only where the printer honours it
+  everywhere.
+  - Type spellings, most statement forms, and a set of keywords and operators per
+    language are refused; `docs/spec/09-emission.md` §9.6 lists them.
+  - The JSON `language` key still names the base language.
+- **`--jobs`:** `--tokens` and `--ctree` with `--jobs` above 1 are argument errors.

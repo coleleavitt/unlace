@@ -3317,6 +3317,7 @@ separators, bidi markers, surrogates and private-use ranges as escape-worthy,
 and `printc.rs (print_unicode)` emits the named C escapes then falls to `print_char_hex_escape`, which emits only `\x` (zero-padded to 2/4/8 hex digits by codepoint magnitude). Internal strings
 (not in the loadimage) can be registered under a constant-space hash address
 and resolve through the same cache.
+Inside a double-quoted string literal, `printc.rs (print_unicode_in_string)` writes a single quote unescaped; char literals still escape it as `\'` (`print_unicode`).
 
 **Bounded literals** (unlace, `printc.rs (bounded_char_array)`). A Rust or Go
 literal committed as a length-bounded `char[N]` (chapter 01's `fatstrrecords`

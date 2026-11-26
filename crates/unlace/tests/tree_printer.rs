@@ -116,12 +116,15 @@ fn a_printer_of_another_flavour_changes_only_what_it_overrides() {
 }
 
 #[test]
-fn a_function_without_a_tree_says_why() {
+fn a_rust_tree_prints_back_to_the_rust_code() {
     let mut rust = declared().with_language(Language::Rust);
-    match rust.tree(0x1000) {
-        Err(TreeError::Unavailable(reason)) => assert!(reason.contains("C output"), "{reason}"),
-        other => panic!("{other:?}"),
-    }
+    let code = rust.decompile(0x1000).unwrap().c;
+    let tree = rust.tree(0x1000).unwrap();
+    assert_eq!(print_c(&tree), code);
+}
+
+#[test]
+fn a_function_without_a_tree_says_why() {
     assert!(matches!(
         declared().tree_named("nowhere"),
         Err(TreeError::Decompile(unlace::Error::NotFound { .. }))

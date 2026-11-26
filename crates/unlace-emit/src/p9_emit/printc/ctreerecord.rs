@@ -16,6 +16,7 @@ use crate::ctreeexport::{
     Brace, Capture, CapturedExpr, ExprShape, Form, Keyword, LeafKind, LooseOps, Style,
 };
 use crate::funcdata::Funcdata;
+use crate::funcdata_facing::FuncdataFacingExt;
 use crate::prettyprint::{BraceStyle, CaptureMark, Emit, EmitToken, MarkupProvenance};
 use crate::printlanguage::{Atom, AtomData, IrKey, OpToken, SyntaxHighlight, TagType, TokenType};
 
@@ -87,6 +88,7 @@ impl PrintC {
     /// Record the atom about to print.
     pub(super) fn rpn_leaf_open(&mut self, atom: &Atom) {
         let first = index(self.emit.token_count());
+        let constant_vn = self.rpn_constant;
         if let Some(record) = self.rpn_record.as_mut() {
             record.open_node(RpnNode {
                 parent: None,
@@ -100,6 +102,7 @@ impl PrintC {
                 op: atom.op,
                 vn: match atom.data {
                     AtomData::Vn(vn) => Some(vn),
+                    _ if atom.highlight == SyntaxHighlight::const_color => constant_vn,
                     _ => None,
                 },
             });
@@ -153,19 +156,24 @@ impl PrintC {
     /// right side of the assignment that op prints to its own output (`i = i + 1`); any other
     /// node printed for its parent's op is a part of the parent and has no type of its own.
     fn finish_capture(&self, fd: &Funcdata, record: RpnRecord, marks: Vec<CaptureMark>) -> Capture {
-        let mut names: BTreeMap<usize, String> = BTreeMap::new();
-        let mut type_of = |vn: VarnodeId| -> Option<String> {
+        // The cache keeps each type alive, so a pointer key is never reused by another type.
+        let names: std::cell::RefCell<
+            BTreeMap<usize, (std::rc::Rc<crate::dtype::Datatype>, String)>,
+        > = std::cell::RefCell::new(BTreeMap::new());
+        let spell = |ty: &std::rc::Rc<crate::dtype::Datatype>| -> String {
+            names
+                .borrow_mut()
+                .entry(std::rc::Rc::as_ptr(ty) as usize)
+                .or_insert_with(|| {
+                    let (front, back) = super::declarator_parts(ty, self.rt_ctx.clone());
+                    (std::rc::Rc::clone(ty), format!("{front}{back}"))
+                })
+                .1
+                .clone()
+        };
+        let type_of = |vn: VarnodeId| -> Option<String> {
             let ty = fd.vbank().get(vn)?.get_type();
-            let key = std::rc::Rc::as_ptr(ty) as usize;
-            Some(
-                names
-                    .entry(key)
-                    .or_insert_with(|| {
-                        let (front, back) = super::declarator_parts(ty, self.rt_ctx.clone());
-                        format!("{front}{back}")
-                    })
-                    .clone(),
-            )
+            Some(spell(ty))
         };
         let op_of = |key: IrKey| OpId::from(slotmap::KeyData::from_ffi(key));
         let vn_of = |key: IrKey| VarnodeId::from(slotmap::KeyData::from_ffi(key));
@@ -201,12 +209,17 @@ impl PrintC {
                     .parent
                     .and_then(|parent| record.nodes[parent as usize].op);
                 let ty = match node.tok {
-                    None => node.vn.map(vn_of).and_then(&mut type_of),
+                    None if node.constant => node
+                        .vn
+                        .zip(node.op)
+                        .map(|(vn, op)| fd.vn_type_read_facing(vn_of(vn), op_of(op)))
+                        .map(|ty| spell(&ty)),
+                    None => node.vn.map(vn_of).and_then(type_of),
                     Some(tok) if tok.token_type != TokenType::HiddenFunction => node
                         .op
                         .filter(|op| Some(*op) != parent_op || assigned(id, node))
                         .and_then(output)
-                        .and_then(&mut type_of),
+                        .and_then(type_of),
                     Some(_) => None,
                 };
                 CapturedExpr {
@@ -295,7 +308,7 @@ impl PrintC {
                 and: self.op_spelling(&tokens::BOOLEAN_AND),
                 not: self.op_spelling(&tokens::BOOLEAN_NOT),
             },
-            c_output: self.out_lang == crate::lang::OutLang::C,
+            lang: self.out_lang,
         }
     }
 }

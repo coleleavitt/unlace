@@ -3,6 +3,7 @@
 use crate::common::{repo_root, run_unlace};
 use unlace_cli::embed::ctree_from_json;
 use unlace_decomp::ctreeexport::{Kind, print_c};
+use unlace_decomp::lang::OutLang;
 
 fn sample() -> String {
     repo_root()
@@ -116,7 +117,7 @@ fn a_statement_names_its_operands_types_lines_and_addresses() {
 }
 
 #[test]
-fn the_flag_needs_json_and_c_output() {
+fn the_flag_needs_json() {
     let sample = sample();
     for (args, message) in [
         (
@@ -133,26 +134,37 @@ fn the_flag_needs_json_and_c_output() {
         assert!(stdout.is_empty(), "{args:?}: {stdout}");
         assert!(stderr.contains(message), "{args:?}: {stderr}");
     }
+}
 
-    let rust = document(&[
-        "decompile",
-        &sample,
-        "main",
-        "--json",
-        "--ctree",
-        "--language",
-        "rust",
-    ]);
-    let record = &rust["functions"][0];
-    assert!(record["code"].is_string());
-    assert!(record["ctree"].is_null());
-    assert!(
-        record["ctree_error"]
-            .as_str()
-            .unwrap()
-            .contains("C output only")
-    );
+#[test]
+fn a_loop_and_a_test_are_typed_in_rust_and_go() {
+    for (language, lang, kind) in [("rust", OutLang::Rust, "while"), ("go", OutLang::Go, "for")] {
+        let document = document(&[
+            "decompile",
+            &sample(),
+            "sum_to",
+            "--json",
+            "--ctree",
+            "--language",
+            language,
+        ]);
+        let record = &document["functions"][0];
+        let code = record["code"].as_str().unwrap();
+        let tree = ctree_from_json(&record["ctree"].to_string()).expect("a tree");
+        assert_eq!(tree.lang, lang);
+        assert_eq!(print_c(&tree), code, "{language}");
+        let mut kinds = Vec::new();
+        tree.root.walk(&mut |node| kinds.push(node.kind));
+        assert!(
+            kinds.contains(&Kind::from_name(kind).unwrap()),
+            "{language}: {kinds:?}"
+        );
+    }
+}
 
+#[test]
+fn jobs_2_gives_the_trees_jobs_1_does() {
+    let sample = sample();
     let serial = document(&["decompile-all", &sample, "--json", "--ctree", "--jobs", "1"]);
     let pooled = document(&["decompile-all", &sample, "--json", "--ctree", "--jobs", "2"]);
     assert_eq!(serial, pooled, "--jobs 2 differs from --jobs 1");
@@ -255,4 +267,57 @@ fn a_language_file_over_c_changes_spellings_and_not_what_the_nodes_are() {
             .collect()
     };
     assert_eq!(member(kinds(&flavoured)), member(kinds(&plain)));
+}
+
+#[test]
+fn a_constant_carries_the_type_it_is_printed_with() {
+    let document = document(&["decompile", &sample(), "sum_to", "--json", "--ctree"]);
+    let root = &document["functions"][0]["ctree"]["root"];
+    let body = &root["children"][1];
+    let loop_ = body["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|statement| statement["kind"] == "for")
+        .expect("a for loop");
+    let [init, _, step, _] = loop_["children"].as_array().unwrap().as_slice() else {
+        panic!("{loop_}");
+    };
+    let start = &init["children"][1];
+    let one = &step["children"][1]["children"][1];
+    assert_eq!(
+        (&start["kind"], &start["text"], &start["type"]),
+        (&"const".into(), &"1".into(), &"int".into())
+    );
+    assert_eq!(
+        (&one["kind"], &one["text"], &one["type"]),
+        (&"const".into(), &"1".into(), &"int".into())
+    );
+    let tree = ctree_from_json(&document["functions"][0]["ctree"].to_string()).expect("a tree");
+    let mut zeros = Vec::new();
+    tree.root.walk(&mut |node| {
+        if node.kind == Kind::Const && node.text == "0" {
+            zeros.push(node.ty.clone());
+        }
+    });
+    assert_eq!(zeros, vec![Some("long".to_string())]);
+}
+
+#[test]
+fn a_string_literal_carries_its_pointer_type() {
+    let document = document(&["decompile", &sample(), "main", "--json", "--ctree"]);
+    let tree = ctree_from_json(&document["functions"][0]["ctree"].to_string()).expect("a tree");
+    let mut constants = Vec::new();
+    tree.root.walk(&mut |node| {
+        if node.kind == Kind::Const {
+            constants.push((node.text.clone(), node.ty.clone()));
+        }
+    });
+    assert_eq!(
+        constants,
+        vec![
+            ("3".to_string(), Some("int".to_string())),
+            ("\"%ld\\n\"".to_string(), Some("char *".to_string())),
+        ]
+    );
 }

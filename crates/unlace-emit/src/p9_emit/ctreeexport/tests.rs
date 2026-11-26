@@ -56,7 +56,11 @@ fn function(prototype: &str, body: Vec<Node>) -> Node {
 }
 
 fn tree(style: Style, root: Node) -> ExportTree {
-    ExportTree { style, root }
+    ExportTree {
+        style,
+        root,
+        lang: OutLang::C,
+    }
 }
 
 #[test]
@@ -493,7 +497,7 @@ fn capture(exprs: Vec<CapturedExpr>, marks: Vec<CaptureMark>) -> Capture {
         exprs,
         marks,
         style: STYLE,
-        c_output: true,
+        lang: OutLang::C,
         ..Capture::default()
     }
 }
@@ -1141,11 +1145,6 @@ fn a_render_that_is_not_the_reported_text_has_no_tree() {
         .build(&capture(Vec::new(), marks.clone()))
         .unwrap_err();
     assert!(error.contains("is not in the text"), "{error}");
-
-    let mut other_language = capture(Vec::new(), marks);
-    other_language.c_output = false;
-    let error = lex.build(&other_language).unwrap_err();
-    assert!(error.contains("C output only"), "{error}");
 }
 
 fn spanned(mut node: Node, line: u32, col: u32, end_col: u32) -> Node {

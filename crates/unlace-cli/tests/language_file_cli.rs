@@ -411,7 +411,11 @@ fn output_is_unchanged_with_a_file_that_overrides_nothing() {
                 .concat(),
             );
             assert_eq!(code, Some(0), "{stderr}");
-            assert_eq!(flavoured, plain, "{language} {surface:?}");
+            assert_eq!(
+                without_flavour_member(&flavoured),
+                plain,
+                "{language} {surface:?}"
+            );
         }
     }
     let file = flavour("base = \"c\"\n");
@@ -423,7 +427,14 @@ fn output_is_unchanged_with_a_file_that_overrides_nothing() {
         "--language-file",
         path(&file),
     ]);
-    assert_eq!(flavoured, plain);
+    assert_eq!(without_flavour_member(&flavoured), plain);
+}
+
+/// `text` without the `language_flavour` line of a `--json` document.
+fn without_flavour_member(text: &str) -> String {
+    text.split_inclusive('\n')
+        .filter(|line| !line.contains("\"language_flavour\""))
+        .collect()
 }
 
 /// Rust has no `goto`: its printer writes a diverging marker and reports it. A flavour that
@@ -585,4 +596,78 @@ fn the_file_names_the_language() {
         .concat(),
     );
     assert_eq!(code, Some(0), "{stderr}");
+}
+
+/// A flavour file named `stem.toml` in `dir`, as its path.
+fn named_flavour(dir: &tempfile::TempDir, stem: &str, text: &str) -> String {
+    let file = dir.path().join(format!("{stem}.toml"));
+    std::fs::write(&file, text).expect("the flavour is written");
+    file.to_str().expect("a UTF-8 temporary path").to_string()
+}
+
+/// The JSON document names the flavour applied: the file's `name`, else its stem, on
+/// `decompile` and on `decompile-all` at any job count.
+#[test]
+fn the_json_names_the_flavour_applied() {
+    let dir = tempfile::tempdir().expect("a temporary directory");
+    let by_stem = named_flavour(&dir, "house", "base = \"c\"\n");
+    let by_name = named_flavour(&dir, "ignored", "name = \"office\"\nbase = \"c\"\n");
+    for (file, name) in [(&by_stem, "house"), (&by_name, "office")] {
+        let (stdout, stderr, code) = run_unlace(&[
+            "decompile",
+            &ptx(),
+            "swallow_file_in_memory",
+            "--json",
+            "--language-file",
+            file,
+        ]);
+        assert_eq!(code, Some(0), "{stderr}");
+        let document: serde_json::Value = serde_json::from_str(&stdout).expect("a JSON document");
+        assert_eq!(document["language"], "c-language");
+        assert_eq!(document["language_flavour"], name);
+        for jobs in ["1", "2"] {
+            let (stdout, stderr, code) = run_unlace(&[
+                "decompile-all",
+                &ptx(),
+                "--json",
+                "--functions",
+                "swallow_file_in_memory,print_spaces",
+                "--jobs",
+                jobs,
+                "--language-file",
+                file,
+            ]);
+            assert_eq!(code, Some(0), "--jobs {jobs}: {stderr}");
+            let document: serde_json::Value =
+                serde_json::from_str(&stdout).expect("a JSON document");
+            assert_eq!(document["language_flavour"], name, "--jobs {jobs}");
+        }
+    }
+}
+
+/// Without `--language-file` the document has no `language_flavour` member.
+#[test]
+fn a_document_without_a_flavour_has_no_flavour_member() {
+    let (stdout, stderr, code) =
+        run_unlace(&["decompile", &ptx(), "swallow_file_in_memory", "--json"]);
+    assert_eq!(code, Some(0), "{stderr}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).expect("a JSON document");
+    assert!(document.get("language_flavour").is_none(), "{stdout}");
+}
+
+/// A `name` with no text in it is refused with the field named.
+#[test]
+fn a_blank_flavour_name_is_refused() {
+    let file = flavour("name = \"  \"\nbase = \"c\"\n");
+    let (stdout, stderr, code) = run_unlace(&[
+        "decompile",
+        &ptx(),
+        "swallow_file_in_memory",
+        "--json",
+        "--language-file",
+        path(&file),
+    ]);
+    assert_eq!(code, Some(2), "{stdout}");
+    assert!(stderr.contains("name"), "{stderr}");
+    assert!(stderr.contains("expected a name"), "{stderr}");
 }

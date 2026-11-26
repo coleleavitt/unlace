@@ -117,6 +117,15 @@ impl FileManage {
         }
     }
 
+    /// Is the path an existing regular file?  (C++ `isFile`: `stat(2)`, so
+    /// symlinks are followed.)
+    pub fn is_file(path: &str) -> bool {
+        match fs::metadata(path) {
+            Ok(meta) => meta.is_file(),
+            Err(_) => false,
+        }
+    }
+
     /// Look through files in a directory for those matching `match_`,
     /// appending `dirfinal + name` for each hit.  (POSIX branch of C++
     /// `matchListDir`.)
@@ -346,13 +355,13 @@ impl FileManage {
         }
         *root = Self::build_path(pathels, level + 1);
         let mut testpaths1: Vec<String> = Vec::new();
-        let mut testpaths2: Vec<String> = Vec::new();
         Self::scan_directory_recursive(&mut testpaths1, "server", root, 1);
         if testpaths1.len() != 1 {
             return false;
         }
-        Self::scan_directory_recursive(&mut testpaths2, "server.conf", &testpaths1[0], 1);
-        testpaths2.len() == 1
+        // scan_directory_recursive only returns directories, so the
+        // regular file server.conf is tested for directly.
+        Self::is_file(&format!("{}{}server.conf", testpaths1[0], SEPARATOR))
     }
 
     /// Find the root of the Ghidra distribution based on the current working

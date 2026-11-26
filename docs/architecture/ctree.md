@@ -458,7 +458,7 @@ level 61 is text. The deepest tree of coreutils `tr` has 36 levels, from twelve 
 
 **Limits.** C output only: the statement reader knows C's statement forms, so a function printed
 as Rust, Go or Java (or through a language file over one of them) reports `ctree_error` (pass
-`--language c`). One process only (`--jobs 1`). The capture render takes the place of the markup
+`--language c`). A `--jobs N` worker carries the tree in its result frame, so the document is the same at every job count. The capture render takes the place of the markup
 render `--json` already runs, so the flag adds the token capture, the record and the build: no
 difference in run time outside the noise on a 185-function binary (3.5 s with and without). Types
 are the printer's: a variable's, an operation's

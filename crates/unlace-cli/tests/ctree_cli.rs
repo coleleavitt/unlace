@@ -117,7 +117,7 @@ fn a_statement_names_its_operands_types_lines_and_addresses() {
 }
 
 #[test]
-fn the_flag_needs_json_and_one_process() {
+fn the_flag_needs_json() {
     let sample = sample();
     for (args, message) in [
         (
@@ -127,10 +127,6 @@ fn the_flag_needs_json_and_one_process() {
         (
             vec!["decompile", &sample, "main", "--ctree"],
             "--ctree selects --json record keys; add --json",
-        ),
-        (
-            vec!["decompile-all", &sample, "--json", "--ctree", "--jobs", "2"],
-            "--ctree and --jobs are exclusive",
         ),
     ] {
         let (stdout, stderr, code) = run_unlace(&args);
@@ -164,6 +160,14 @@ fn a_loop_and_a_test_are_typed_in_rust_and_go() {
             "{language}: {kinds:?}"
         );
     }
+}
+
+#[test]
+fn jobs_2_gives_the_trees_jobs_1_does() {
+    let sample = sample();
+    let serial = document(&["decompile-all", &sample, "--json", "--ctree", "--jobs", "1"]);
+    let pooled = document(&["decompile-all", &sample, "--json", "--ctree", "--jobs", "2"]);
+    assert_eq!(serial, pooled, "--jobs 2 differs from --jobs 1");
 }
 
 /// A language file over C: keywords, operators and the member form respelled.

@@ -120,6 +120,9 @@ mod array_record;
 #[path = "ctree_cli.rs"]
 mod ctree_cli;
 
+#[path = "jobs_document.rs"]
+mod jobs_document;
+
 #[path = "aif_lea_padding.rs"]
 mod aif_lea_padding;
 
@@ -753,6 +756,8 @@ mod globalwidth;
 #[path = "xrefs_unflagged_cli.rs"]
 mod xrefs_unflagged_cli;
 
+#[path = "go_dwarf_storage_names.rs"]
+mod go_dwarf_storage_names;
 #[path = "zero_extended_returns.rs"]
 mod zero_extended_returns;
 

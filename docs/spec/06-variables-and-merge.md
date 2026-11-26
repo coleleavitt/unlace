@@ -2032,22 +2032,25 @@ variable in the C: 72 of the 1,689 rows have no range at all and are 49% of
 those bytes. 1,911 of the 2,078 distinct locations DWARF gives these variables
 are pieces of their rows.
 
-In the Go fixtures the two agree as often where both name a location, but
-`storage` names one for only 15% of the bytes DWARF does (57% in the C, C++
-and Rust fixtures). 4,465 of the 8,039 rows have no range at all, and they
-hold 87% of the bytes only DWARF covers; 8,945 of DWARF's 12,922 locations are
-pieces of their rows, half of them as the declared home of a row without a
-range. Go passes arguments in registers and reserves a frame slot for each,
-and DWARF's location list for a parameter names the register and then the
-slot. The decompiler gives the DWARF name to the frame row, which no printed
-code references, and tracks the value in another row. In
-`internal/runtime/maps.NewMap` of `go-arm64-dwarf-result/arm64-plain.elf`,
-DWARF places `mt` in `x0` up to `0x12040` and in the slot `stack + 0x8` after
-it; the row `mt` is that slot with no range, and the row `param_1` has `x0`,
-`x5` and the same slot with their ranges. A row gets its ranges from the
-Varnodes its printed references bind, so a row nothing references has none.
-That is the second limit above. It is a gap in how the Go output names its
-parameters, not in the ranges.
+In the Go fixtures the two agree as often where both name a location. A DWARF
+location list says where a variable can be (availability); a storage range says
+where it holds the value on the way to a read (liveness). A register that still
+holds a dead value is DWARF's and not `storage`'s, so the share of DWARF's bytes
+that `storage` covers is not a defect measure. Over the eight Go fixtures with
+DWARF, 1,856,633 bytes are named only by DWARF; 1,548,982 of them are DWARF
+places that are not a piece of their row. A Go local that DWARF gives a register
+range and a frame slot now takes its name at the register range
+(`collect_fbreg_locals`: the frame row is emitted only when there is no register
+place), so the name sits on the variable that holds the value. That brings the
+DWARF-only bytes to 1,321,625 and the bytes both name to 461,770, from 290,326
+(in `arm64.elf`, the naming bytes fall from 766,484 to 444,412).
+
+Go formal parameters keep the frame row. DWARF names the parameter's frame slot
+and the value is the prototype row. In `internal/runtime/maps.NewMap` of
+`go-arm64-dwarf-result/arm64-plain.elf`, `mt` is that frame row with no range,
+and `param_1` holds `x0`, `x5` and the slot. Naming a parameter from its register
+range was tried and it adds a copy of each parameter to the printed code
+(`v16 = a0`), so it is not done. That is the remaining limit.
 
 **Which offsets are frame.** The local
 scope's window is the prototype's local range plus its parameter range, and
@@ -2433,6 +2436,14 @@ no array covers it) prints as `char buf[8200]`, `char buf[1001]` as
 `char buf[1016]`, and `char buf[21]` between two other buffers as `char
 buf[32]`. The source size is anywhere in the last 16 bytes of the gap, and the
 frame alone cannot say where. The call that receives the buffer often can.
+
+**An open range on an upward stack (`varmap.rs (ScopeLocal::restructure)`).** On a stack
+that grows toward larger addresses the endpoint hint is only the top of the local range,
+not the end of the frame. An open range that is followed by the endpoint therefore keeps
+its element size, or grows to `(highind + 1)` elements when that is larger. It does not
+reach the endpoint. Without this, a local whose address is passed to a call (for example
+`copyin(uaddr, &flag, 4)`) prints as an array of hundreds of millions of elements. A
+downward stack keeps the gap to the next hint.
 
 `crates/unlace-bandb-base/src/p6_variables/arraysize.rs (gather)`
 runs in `restructure_varnode` after the open hints are gathered. For every call

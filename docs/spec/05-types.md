@@ -4271,6 +4271,10 @@ The live rule uses `StringSequence` for collection and replacement. The legacy
 constructor; fixture-only construction and inspection helpers live with its
 unit tests. Both paths use the same fill predicate.
 
+Collection scans from the sequence's start address (not one character before the root). A COPY that
+reaches the root from an earlier element is rejected. A wide COPY confined to an earlier element is
+skipped, not rejected (`constseq.rs (StringSequence::collect_copy_ops)`).
+
 **(unlace) Read-only string block copy —**
 [`rodatastring`](../options.md)**, default on** (DIV-113).
 `crates/unlace-bandb-base/src/p5_types/rodatastring.rs

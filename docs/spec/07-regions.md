@@ -295,7 +295,7 @@ where **both** operands derive from a LOAD of `<base> + 0x28` — the glibc
 x86-64 TLS canary slot (`fs:0x28`): the saved canary versus a fresh reload.
 The derivation walk (`stackguard.rs (derives_from_canary_load)`) peels
 value-preserving ops (COPY/CAST/zext/sext/INDIRECT/zero-offset SUBPIECE) and
-follows every MULTIEQUAL input, bounded by depth 32 and a visited set; the
+follows every MULTIEQUAL input, bounded by depth 256 (`CANARY_WALK_DEPTH`) and a visited set (depth 32 cut off the real check of coreutils `ls` `main`, whose slot chain runs through about 38 merges); the
 pointer probe (`stackguard.rs (ptr_is_canary_slot)`) runs an 8-step walk
 in which peels and the `INT_ADD`-of-`0x28` test share the budget, so at most 7
 peeled COPY/CAST layers can precede a match. The

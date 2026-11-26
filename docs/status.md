@@ -103,6 +103,11 @@ Opt-in or unfinished. Each is off by default or marked above:
 - **Java output language** in the printer: not reachable through `outlang`.
 - **Language files** (`--language-file`, `unlace::unstable::flavour`): the format and the set of
   overridable fields can change.
+- **The C syntax tree as data** (`--ctree`, `unlace::unstable::printer`): C output only (a language
+  file over C included); the node kinds and members can change. [`docs/cli.md`, "The JSON
+  documents"; `docs/architecture/ctree.md` section 11]
+- **Callbacks on the C syntax tree** (`unlace::unstable::ctree`): they work on the engine's own
+  types, which change with it. [`docs/architecture/ctree.md` section 10]
 - **Tier 3 architectures**: decompile without an output check.
 
 Option-level status (tier, default, what each flip does) is in [docs/options.md](options.md), which is

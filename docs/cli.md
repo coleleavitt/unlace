@@ -2597,6 +2597,129 @@ default size, and a whole-binary run of `cmp` or `ln` takes 3-6% less time. For 
 two-instruction function exported under 600 names of 177 bytes each, those three
 leave 114,080 bytes, and adding `aliases` takes it to 836 (its C is 217).
 
+**`--ctree`** (`decompile-all --json` and `decompile --json`) adds the **C syntax tree** of
+each function's `code` to its record: statements and expressions as nested nodes, each with
+its kind, its operands, its C type where the printer knows it, where its text is in `code`
+and the instruction addresses it came from. It is opt-in because the tree is many times the
+size of the code (coreutils `tr`, 185 functions, 135 KB of C: a 1.0 MB document without
+it, 16.6 MB with it; the run time is the same within noise, 3.5 s).
+The record gains two members after its last default one, `ctree` and `ctree_error`; every
+other member, `code` included, and the exit status are what they are without the flag.
+`--ctree` needs `--json`, and one process: with `--jobs N` above 1 it is an argument error,
+because a worker's record does not carry the tree.
+
+`ctree` is `{"style": {...}, "root": {...}}`, or `null` when the function has no tree;
+`ctree_error` then says why (both are `null` on a record with no `code`). `root` is a
+`function` node. Every node is an object, and a member a node has no value for is absent:
+
+| Member | Meaning |
+|---|---|
+| `kind` | What the node is (the next table). |
+| `children` | The nodes under it, in the order they print. |
+| `text` | A leaf's spelling; a comment's, label's or prototype's text; a declaration's declarator; an operator's token; a call's opening token; the text of a `raw` node. |
+| `op`, `form`, `close`, `spacing` | On an `op` node: the operator's name (`assign`, `add`, `lt`, `cast`, `deref`, `addr_of`, `subscript`, `member`, `ptr_member`, `cond`, `add_assign`, ...; absent for a token that has no name), how its token sits around its children (`binary`: between them, and with more than two children the node is a chain, `a + b + c`, which reads as C reads it, `(a + b) + c`; `prefix`: before the one child; `postsurround`: `a[b]`; `presurround`: `(type)a`; `space`: only its spacing between two children), its closing token (`]`, `)`, the `:` of `?:`) and the number of spaces on each side of the token. |
+| `sep` | What separates the children of a `list` and the arguments of a `call`. |
+| `grouped` | `true` on a chain whose text groups it from the left in parentheses, as the printer writes `&&` and `\|\|`: `((a && b) && c) && d` is one `and` node with four children. |
+| `type` | The C type of the node's value, where the printer knows it: a variable's, a declaration's, and the result of an operation (the type of the value the p-code op behind the node writes; a node that is only a part of what its op prints, and an operator `PrintC` writes outside its expression driver, has none). |
+| `line`, `col`, `end_line`, `end_col` | Where the node's text is in `code`: 1-based lines, UTF-16 columns, end exclusive. |
+| `addresses` | Instruction addresses in the target's address units, as in `line_mappings`. On an expression node: the instruction of the p-code op the node prints, and on a chain the instruction of each of its operators. On a statement: every instruction under it. |
+
+| `kind` | Children | Notes |
+|---|---|---|
+| `function` | comments and blank lines above the prototype, the `prototype`, its `eol_comment`s, the body `block` | |
+| `prototype` | the return `type`, the `func` name, one `decl` per parameter | `text` is the whole line |
+| `decl` | its `type` tokens and its `var` | `text` is the declarator (`char *p`), `type` the declared type (`char *`) |
+| `block` | the items between two braces | |
+| `if` | the condition and the part it guards, the same two for each `else if`, then the else part if any; an `eol_comment` follows the condition or part it is behind | a part is a `block` or one statement without braces, a condition is an expression: that tells an `else if` from the else part. An `else if` chain is one node whatever its length |
+| `while` | the condition, the body `block` | the condition `const` `true` prints `while( true )` |
+| `do_while` | the body `block`, the condition | |
+| `for` | the initializer, the condition, the step, the body `block` | an absent part is `empty` |
+| `switch` | the value, a `block` of `case`, `default` and statements | with no block: `switch(value);`, a jump through a table with no recovered target |
+| `case`, `default` | a `case`'s value | |
+| `try` | the guarded `block`, the handler `block` | `text` is the handler's header (`catch (int)`) |
+| `goto`, `label` | | `text` is the label |
+| `break`, `continue` | | |
+| `return` | the value, when it returns one | |
+| `expr` | the expression | an expression statement; with no child, an empty statement `;` |
+| `comment`, `eol_comment` | | a comment on a line of its own (at `style.comment_indent`), or behind the item before it |
+| `blank_line` | | an empty line |
+| `raw` | | text the kinds above do not cover, kept exactly as printed: as an item of a block its whole lines with their indentation, inside an expression that expression's text. Also what the text nests past the tree's last level (next paragraph) |
+| `var`, `const`, `func`, `type`, `field` | | a variable, a constant as spelled, a function name, a type name, a field name |
+| `text` | | any other atom, such as the name of a pseudo-operation (`ZEXT48`, `CONCAT44`) |
+| `empty` | | nothing: an absent part |
+| `paren` | one expression | its child in parentheses |
+| `list` | expressions | separated by `sep`: the statements a condition runs before its test (`(a = f(), a != 0)`) |
+| `call` | the callee, then the arguments | `text`, `sep` and `close` are `(`, `,` and `)` |
+| `op` | its operands | see `op`, `form`, `close`, `spacing` above. An operator applied again to one of its own operands with no parentheses between is one node over all the operands, so `a + b + c + d` is one `add` with four children; so is one applied again to its first operand in parentheses (`grouped`). An assignment is never chained (`a = b = c` nests to the right), and `?:` has exactly three children |
+
+A tree has at most **61 levels** (the `function` node is level 1, its body `block` 2, the
+body's statements 3). What the text nests deeper stays text: an operand that would have
+operands of its own on level 61 is a `raw` node, and a statement that has no room for its
+block and operands is `raw` lines. Chains of one operator and `else if` chains are wide,
+not deep, so only real nesting counts: 28 nested `if`s fit. A node of
+level `d` is nested `3 + 2d` arrays and objects deep in the document and its `children`
+and `addresses` one more, so the document nests at most 126, inside the default nesting
+limit of the common JSON readers (`serde_json`: 128).
+
+`style` holds what the print options and a language file decided and no node carries:
+`indent` (spaces per level), `comment_indent` (the column of a comment line),
+`brace_function`, `brace_ifelse`, `brace_loop`, `brace_switch` (`same_line`, `next_line` or
+`skip_line`) and `keywords`, the statement keywords a language file respelled, by their C
+spelling (`{}` without one; any of `break`, `case`, `continue`, `default`, `do`, `else`,
+`for`, `goto`, `if`, `return`, `switch`, `true`, `while`). With a language file over C
+(`--language-file`, "Language files") the nodes are the same and only spellings change: an
+`if` node is still `"kind": "if"` and `style.keywords.if` holds its spelling, and an `op`
+node keeps its `op` name with the respelled token in `text`.
+
+The tree is the printed text as data: it has the operators, the folding, the parentheses
+and the names the printer chose, and it prints back to `code` byte for byte. The exporter
+checks that itself with the reference printer: every statement and every expression is
+printed from its node and compared with the text it stands for, and a part that does not
+print back exactly is kept as a `raw` node holding its text, so the document never states
+a structure the text does not have. `cargo run -p unlace --example ctree_roundtrip` (the
+reference printer, `unlace::unstable::printer::CPrinter`, over a `--json --ctree`
+document) repeats the check from outside. Measured on 2026-11-26 over the fixture binaries
+of this repository (1,482 binaries; 38,332 functions printed in C), every tree prints back
+to its `code` byte for byte; 38,327 hold no `raw` node and the other five hold nine
+between them, all of it text nested past level 61. Over the two parity corpora (4,871
+functions printed in C) every tree prints back, and the only `raw` nodes are the lines
+`structdefs` and `bytearrayc` print above a function (type definitions, a helper
+preamble). `ctree_error` is one of:
+
+- `the tree is exported for C output only`: the function printed in another output
+  language (a Rust, Go or DEX binary under the default `--language auto`, or a language
+  file whose base is not C). Pass `--language c`.
+- `the text was rewritten after it was printed (a cookie-literal return)`: the
+  stack-cookie presentation pass edited the text.
+- `pointer-argument casts were written into the text after the tree was built`: a
+  whole-program run inserted a cast the tree could not follow (normally it does: the
+  argument's node is wrapped in a `cast` node).
+- `the tree does not print back to the text (first difference on line N)` or a token
+  position error: the exporter's own check failed; the document reports that instead of
+  a wrong tree.
+
+```bash
+unlace decompile ./sample sum_to --json --ctree
+#   "code": "long sum_to(int n)\n{\n  long acc; ...\n  for (i = 1; i <= n; i = i + 1) {\n    acc += i;\n  }\n  return acc;\n}",
+#   "ctree": {"style": {"indent": 2, "comment_indent": 20, "brace_function": "next_line", ..., "keywords": {}},
+#     "root": {"kind": "function", "line": 1, "col": 0, "end_line": 11, "end_col": 1, "addresses": [4460, ...],
+#       "children": [
+#         {"kind": "prototype", "text": "long sum_to(int n)", ...},
+#         {"kind": "block", "children": [
+#           {"kind": "decl", "text": "long acc", "type": "long", ...},
+#           {"kind": "eol_comment", "text": "// stack - 0x10", ...}, ...,
+#           {"kind": "for", "line": 7, "col": 2, "end_line": 9, "end_col": 3, "addresses": [4468, 4480, 4482, 4486, 4496],
+#             "children": [
+#               {"kind": "op", "op": "assign", "form": "binary", "text": "=", "spacing": 1, "type": "int", ...},
+#               {"kind": "op", "op": "le", "form": "binary", "text": "<=", "spacing": 1, "type": "bool",
+#                "line": 7, "col": 14, "end_line": 7, "end_col": 20, "addresses": [4496],
+#                "children": [{"kind": "var", "text": "i", "type": "int", ...}, {"kind": "var", "text": "n", "type": "int", ...}]},
+#               {"kind": "op", "op": "assign", ...},
+#               {"kind": "block", "children": [{"kind": "expr", "children": [{"kind": "op", "op": "add_assign", ...}]}]}]},
+#           {"kind": "return", "children": [{"kind": "var", "text": "acc", "type": "long", ...}]}]}]}},
+#   "ctree_error": null
+```
+
 `types` is the layout side of the same record: one object per composite, enum or
 typedef the function's C names, carrying its name, its definition text (the same
 line(s) the `decompile-project` header gives it) and its size. It is present

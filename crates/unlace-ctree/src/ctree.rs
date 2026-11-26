@@ -96,6 +96,14 @@ pub enum CMaturity {
 }
 
 impl CMaturity {
+    /// Every level, lowest first.
+    pub const LEVELS: [CMaturity; 4] = [
+        CMaturity::Built,
+        CMaturity::Statements,
+        CMaturity::Rewritten,
+        CMaturity::Final,
+    ];
+
     /// The level's name, as `phase status` prints it.
     pub fn name(self) -> &'static str {
         match self {

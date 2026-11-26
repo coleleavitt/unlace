@@ -479,6 +479,9 @@ mod verify_sectionlessextent;
 #[path = "verify_short_utf16_window.rs"]
 mod verify_short_utf16_window;
 
+#[path = "verify_ctree.rs"]
+mod verify_ctree;
+
 #[path = "verify_sparc_plt.rs"]
 mod verify_sparc_plt;
 

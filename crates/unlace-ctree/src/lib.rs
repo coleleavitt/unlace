@@ -9,6 +9,7 @@
 
 pub mod ctree;
 pub mod ctreebuild;
+pub mod ctreehooks;
 
 #[doc(hidden)]
 pub use unlace_middle::*;

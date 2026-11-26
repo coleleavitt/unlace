@@ -30,8 +30,10 @@
 use std::path::Path;
 use std::process::ExitCode;
 
-use unlace_harness::parallel::{WORKER_FLAG, run_test_files_parallel, worker_main};
-use unlace_harness::testfunction::write_file_runs;
+use unlace_harness::parallel::{
+    TREE_WORKER_FLAG, WORKER_FLAG, run_test_files_parallel, worker_main,
+};
+use unlace_harness::testfunction::{Pass, write_file_runs};
 use unlace_harness::unittest::{UnitTestSuite, add_exit_code};
 
 fn main() -> ExitCode {
@@ -45,9 +47,10 @@ fn main() -> ExitCode {
     // C++ defaults; the Python harness always passes -path and -sleighpath.
     let mut dirname = String::from("../datatests");
     let mut spec_roots: Vec<String> = Vec::new();
-    // unlace: `-j N` runs the datatests across N worker processes; `-worker` is one of them.
+    // unlace: `-j N` runs the datatests across N worker processes; `-worker` is one of them,
+    // and `-treeworker` one of the tree pass (`Pass::Trees`).
     let mut jobs = 1usize;
-    let mut worker = false;
+    let mut worker = None;
 
     // C++ `argc -= 1; argv += 1;` — skip the program name.
     let mut i = 1usize;
@@ -77,7 +80,11 @@ fn main() -> ExitCode {
                 i += 2;
             }
             flag if flag == WORKER_FLAG => {
-                worker = true;
+                worker = Some(Pass::Assertions);
+                i += 1;
+            }
+            flag if flag == TREE_WORKER_FLAG => {
+                worker = Some(Pass::Trees);
                 i += 1;
             }
             "-usesleighenv" => {
@@ -114,8 +121,8 @@ fn main() -> ExitCode {
         }
     }
 
-    if worker {
-        worker_main(&spec_roots);
+    if let Some(pass) = worker {
+        worker_main(&spec_roots, pass);
         return ExitCode::SUCCESS;
     }
 

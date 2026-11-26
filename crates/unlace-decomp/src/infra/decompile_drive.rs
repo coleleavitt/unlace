@@ -3410,6 +3410,67 @@ pub fn print_c_with_srcmap(
     (out, resolve_markup_provenance(fd, &markup), tokens)
 }
 
+/// What [`print_c_with_ctree`] recorded for the exported C syntax tree
+/// ([`crate::ctreeexport`]).
+pub struct TreeRender {
+    capture: crate::ctreeexport::Capture,
+    op_addresses: BTreeMap<u64, u64>,
+    /// The cookie-literal rewrite changed the text after it was printed.
+    rewritten: bool,
+}
+
+impl TreeRender {
+    /// The exported tree of the render: `tokens` and `untrimmed` as
+    /// [`print_c_with_ctree`] returned them, `code` the text reported for the
+    /// function. `Err` says why the function has no tree.
+    pub fn tree(
+        &self,
+        tokens: &[crate::prettyprint::EmitToken],
+        untrimmed: &str,
+        code: &str,
+    ) -> Result<crate::ctreeexport::ExportTree, String> {
+        if self.rewritten {
+            return Err(
+                "the text was rewritten after it was printed (a cookie-literal return)".to_string(),
+            );
+        }
+        crate::ctreeexport::build(tokens, &self.capture, &self.op_addresses, untrimmed, code)
+    }
+}
+
+/// [`print_c_with_srcmap`] whose markup pass also records the expression nodes
+/// and statement marks the exported C syntax tree is built from
+/// ([`TreeRender::tree`]). The text is the plain render, byte for byte.
+pub fn print_c_with_ctree(
+    arch: &mut Architecture,
+    fd: &Funcdata,
+) -> (
+    String,
+    CodeProvenance,
+    Vec<crate::prettyprint::EmitToken>,
+    TreeRender,
+) {
+    let cookie_calls = exact_cookie_call_evidence(fd, arch);
+    let (out, (mut markup, mut tokens, capture)) = arch.with_print(|printer, arch| {
+        (
+            printer.doc_function_full(fd, arch),
+            printer.doc_function_capture(fd, arch),
+        )
+    });
+    let spelling = CookieSpelling::of(arch.print());
+    let (out, edits) = traced_cookie_rewrite(fd, out, &cookie_calls, &mut markup, spelling);
+    crate::srcmap::apply_cookie_rewrites(&mut tokens, &edits, spelling.kw_return);
+    align_markup_to_trimmed(&mut markup, &out);
+    let op_addresses = op_addresses(fd);
+    let provenance = resolve_markup_provenance_with_addresses(&markup, &op_addresses);
+    let render = TreeRender {
+        capture,
+        op_addresses,
+        rewritten: !edits.is_empty(),
+    };
+    (out, provenance, tokens, render)
+}
+
 /// (unlace) Render every user-defined data-type in the architecture's type
 /// factory as C definitions (the `PrintC::docTypeDefinitions` port,
 /// [`crate::printc::PrintC::doc_type_definitions`]) — the type-definition
@@ -4022,20 +4083,23 @@ fn named_high_varrefs(fd: &Funcdata, variable: &VarInfo) -> BTreeSet<u64> {
     varrefs
 }
 
-fn resolve_markup_provenance(
-    fd: &Funcdata,
-    markup: &crate::prettyprint::MarkupProvenance,
-) -> CodeProvenance {
-    let op_addresses: BTreeMap<u64, u64> = fd
-        .obank()
+/// The instruction address of every op of `fd`, by the `opref` markup names it with.
+fn op_addresses(fd: &Funcdata) -> BTreeMap<u64, u64> {
+    fd.obank()
         .iter_all()
         .filter_map(|(_, op_id)| {
             let op = fd.obank().get(op_id)?;
             op.get_addr().get_space()?;
             Some((op.get_time() as u64, op.get_addr().get_offset()))
         })
-        .collect();
-    resolve_markup_provenance_with_addresses(markup, &op_addresses)
+        .collect()
+}
+
+fn resolve_markup_provenance(
+    fd: &Funcdata,
+    markup: &crate::prettyprint::MarkupProvenance,
+) -> CodeProvenance {
+    resolve_markup_provenance_with_addresses(markup, &op_addresses(fd))
 }
 
 fn resolve_markup_provenance_with_addresses(

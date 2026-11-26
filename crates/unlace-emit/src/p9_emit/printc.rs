@@ -1407,6 +1407,20 @@ impl PrintEmit {
             _ => Vec::new(),
         }
     }
+    /// How many tokens the markup leaf has captured; `0` on any other leaf.
+    pub fn token_count(&self) -> usize {
+        match self {
+            PrintEmit::Markup(e) => e.token_count(),
+            _ => 0,
+        }
+    }
+    /// Take the structural marks captured by the markup leaf.
+    pub fn take_markup_marks(&mut self) -> Vec<crate::prettyprint::CaptureMark> {
+        match self {
+            PrintEmit::Markup(e) => e.take_marks(),
+            _ => Vec::new(),
+        }
+    }
     /// Whether the plain-text statement-root sidecar is active.
     pub fn captures_plain_statement_provenance(&self) -> bool {
         match self {
@@ -1840,6 +1854,9 @@ pub struct PrintC {
     label_names: std::collections::BTreeMap<BlockId, String>,
     /// (unlace `ctree`) The C syntax tree of the function being printed (none in flat printing).
     ctree: Option<crate::ctree::CTree>,
+    /// (unlace `ctreeexport`) The expression nodes the RPN driver prints, recorded during a
+    /// tree-capture render (`doc_function_capture`); `None` on every other render.
+    rpn_record: Option<ctreerecord::RpnRecord>,
     /// (unlace `noretfirst`) `CBRANCH` ops whose condition prints negated, for an `if` whose
     /// arms the tree swapped.
     flipped_branches: std::collections::BTreeSet<OpId>,
@@ -1908,6 +1925,7 @@ impl PrintC {
             named_globals: crate::namedglobals::References::default(),
             label_names: std::collections::BTreeMap::new(),
             ctree: None,
+            rpn_record: None,
             flipped_branches: std::collections::BTreeSet::new(),
         }
     }
@@ -2286,6 +2304,9 @@ impl PrintC {
         self.revpol.clear();
         self.nodepend.clear();
         self.pending = 0;
+        if let Some(record) = self.rpn_record.as_mut() {
+            record.reset_open();
+        }
     }
 
     /// C++ `PrintLanguage::clear` (printlanguage.cc:682), which `docFunction`
@@ -2293,9 +2314,9 @@ impl PrintC {
     /// drop what an interrupted document left behind, keeping every option.
     /// Beyond the upstream emitter/RPN/mod/scope reset this drops the unlace
     /// per-document state (the scoped `fd` pointer, unflushed end-of-line
-    /// warnings, the declared locals, the pointer-argument record) and returns a
-    /// markup render's back-end to plain text, the state every document starts
-    /// from.
+    /// warnings, the declared locals, the pointer-argument record, the
+    /// tree-capture record) and returns a markup render's back-end to plain text,
+    /// the state every document starts from.
     pub fn clear(&mut self) {
         if self.emit.emits_markup() {
             self.set_markup(false);
@@ -2305,6 +2326,7 @@ impl PrintC {
         self.emit.clear();
         self.context.clear();
         self.clear_rpn();
+        self.rpn_record = None;
         self.emit_fd = None;
         self.eol_warns.clear();
         self.warnings.clear();
@@ -2338,6 +2360,7 @@ impl PrintC {
         let id;
         if self.revpol.is_empty() {
             paren = false;
+            self.rpn_open(tok, op, paren);
             id = self.emit.open_group();
         } else {
             let back = self.revpol.last().unwrap().clone();
@@ -2345,8 +2368,11 @@ impl PrintC {
             // Reflect any id2 mutation emit_op performed back onto the stack.
             *self.revpol.last_mut().unwrap() = back;
             paren = self.parentheses_top(tok);
+            self.rpn_open(tok, op, paren);
             if paren {
+                let first = self.emit.token_count();
                 id = self.emit.open_paren(crate::printlanguage::OPEN_PAREN, 0);
+                self.rpn_engine_tokens(first);
             } else {
                 id = self.emit.open_group();
             }
@@ -2368,12 +2394,16 @@ impl PrintC {
             self.recurse();
         }
         if self.revpol.is_empty() {
+            self.rpn_leaf_open(atom);
             self.emit_atom(atom);
+            self.rpn_close();
         } else {
             let back = self.revpol.last().unwrap().clone();
             self.emit_op(&back);
             *self.revpol.last_mut().unwrap() = back;
+            self.rpn_leaf_open(atom);
             self.emit_atom(atom);
+            self.rpn_close();
             loop {
                 {
                     let top = self.revpol.last_mut().unwrap();
@@ -2385,12 +2415,15 @@ impl PrintC {
                 let entry = self.revpol.last().unwrap().clone();
                 self.emit_op(&entry);
                 if entry.paren {
+                    let first = self.emit.token_count();
                     self.emit
                         .close_paren(crate::printlanguage::CLOSE_PAREN, entry.id);
+                    self.rpn_engine_tokens(first);
                 } else {
                     self.emit.close_group(entry.id);
                 }
                 self.revpol.pop();
+                self.rpn_close();
                 if self.revpol.is_empty() {
                     break;
                 }
@@ -2538,6 +2571,13 @@ impl PrintC {
     /// spacing / parens for one RPN entry at its current stage.  Mutates the
     /// entry's `id2` for surround tokens (mirrored back by the callers).
     fn emit_op(&mut self, entry_in: &ReversePolish) {
+        let first = self.emit.token_count();
+        self.emit_op_tokens(entry_in);
+        self.rpn_engine_tokens(first);
+    }
+
+    /// The body of [`emit_op`](Self::emit_op).
+    fn emit_op_tokens(&mut self, entry_in: &ReversePolish) {
         let mut entry = entry_in.clone();
         // (unlace) The operator's markup (C++ `EmitMarkup::tagOp` derefs the entry's
         // `PcodeOp *` for `opref = getTime()`).  Resolved from the entry's arena
@@ -5019,9 +5059,6 @@ impl PrintC {
         } else {
             None
         };
-        if let Some(tree) = self.ctree.as_mut() {
-            crate::ctreebuild::split_statements(fd, tree);
-        }
         self.ctree_rewrite(fd, arch);
         if !self.emit_ctree_body(fd, arch, sroot) {
             self.emit_block_graph(fd, arch, sroot);
@@ -18293,6 +18330,7 @@ fn to_emit_hl(hl: crate::printlanguage::SyntaxHighlight) -> SyntaxHighlight {
 
 mod cpoolprint;
 mod ctreeprint;
+mod ctreerecord;
 mod javasyncprint;
 mod javatryprint;
 

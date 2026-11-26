@@ -13,6 +13,7 @@ use std::collections::BTreeSet;
 
 use unlace_console::engine::{ConsoleProgram, EntrySelector, FunctionEntry};
 use unlace_decomp::architecture::Architecture;
+use unlace_decomp::ctreeexport::ExportTree;
 
 use crate::decompile_all::{self, Args, DriverDefaults};
 use crate::funcdecl::Declared;
@@ -237,6 +238,15 @@ pub struct Output {
     pub prototype: Option<String>,
     /// The analysis warnings the body carries as comments.
     pub warnings: Vec<String>,
+    /// The exported C syntax tree, or why the function has none; `None` unless
+    /// the session exports it ([`Session::set_ctree`]).
+    pub ctree: Option<Result<ExportTree, String>>,
+}
+
+/// The tree the `ctree` member of a `--json --ctree` record holds, from its JSON text.
+pub fn ctree_from_json(text: &str) -> Result<ExportTree, String> {
+    let json = crate::jsonfmt::parse(text).ok_or("ctree: not JSON, or nested too deep")?;
+    decompile_all::ctreejson::from_json(&json)
 }
 
 /// Which function to decompile.
@@ -261,8 +271,9 @@ pub fn load(request: &Request) -> Result<Session, LoadError> {
 }
 
 /// [`load`], with `install` run on the architecture as soon as it is built,
-/// before any option is applied: where the `unlace` crate registers the rules
-/// and phase callbacks of `unlace::unstable`. An `Err` from it fails the load.
+/// before any option is applied: where the `unlace` crate registers the rules,
+/// phase callbacks and tree callbacks of `unlace::unstable`. An `Err` from it
+/// fails the load.
 pub fn load_with(
     request: &Request,
     install: &mut dyn FnMut(&mut Architecture) -> Result<(), String>,
@@ -313,6 +324,12 @@ impl Session {
     /// The SLEIGH language id the program was loaded with.
     pub fn architecture(&self) -> &str {
         &self.prog.arch().archid
+    }
+
+    /// Export the C syntax tree with each later decompile (`--ctree`): the
+    /// document's `ctree` member and [`Output::ctree`].
+    pub fn set_ctree(&mut self, on: bool) {
+        self.args.extra.ctree = on;
     }
 
     /// The function inventory, one record per entry address, address-ordered
@@ -388,6 +405,7 @@ impl Session {
             &interior,
             &self.declared,
             self.args.omit,
+            self.args.extra,
         );
         let warnings = function.warnings.iter().map(|w| w.message()).collect();
         Ok(Output {
@@ -398,6 +416,7 @@ impl Session {
             error: failure,
             prototype: function.proto,
             warnings,
+            ctree: function.detail.and_then(|detail| detail.ctree),
         })
     }
 

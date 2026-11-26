@@ -19,6 +19,10 @@
 //! the baseline holds the key. It is written before the gate's assert, so a failing run leaves it
 //! too; a selected run does not write it.
 //!
+//! A third test, `exported_trees_print_back_over_the_corpora`, runs on request (`-- --ignored
+//! trees`): a second pass over both corpora ([`Pass::Trees`]) that exports the C syntax tree of
+//! every function a script prints and prints it back with the reference printer.
+//!
 //! `cargo test -p unlace-harness --test parity` runs both, each corpus across up to eight
 //! `decomp_test_dbg -worker` processes (`UNLACE_PARITY_JOBS=N`; `1` runs it in this process). `UNLACE_BLESS=1` re-records the
 //! baselines from the run (a deliberate default change, a new stage test) instead of comparing;
@@ -30,8 +34,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use unlace_harness::parallel::run_test_files_parallel;
-use unlace_harness::testfunction::{describe_test_file, run_test_files_each};
+use unlace_harness::parallel::run_files_parallel;
+use unlace_harness::testfunction::{FileRun, Pass, describe_test_file, run_files_each};
 
 /// The engine keeps a few process-wide settings; the two corpora run one after the other.
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -383,8 +387,13 @@ fn selected(root: &Path, file: &str, patterns: &[String]) -> bool {
     })
 }
 
-/// The corpus run, or `None` when a selection matches none of its files.
-fn run_corpus(root: &Path, corpus: &Path, select: Option<&[String]>) -> Option<DataResult> {
+/// One pass over the corpus files, or `None` when a selection matches none of them.
+fn corpus_runs(
+    root: &Path,
+    corpus: &Path,
+    select: Option<&[String]>,
+    pass: Pass,
+) -> Option<Vec<FileRun>> {
     assert!(
         has_slaspec(&root.join("specs")),
         "specs/ holds no SLEIGH sources (.slaspec)"
@@ -404,18 +413,23 @@ fn run_corpus(root: &Path, corpus: &Path, select: Option<&[String]>) -> Option<D
         specs.push(home);
     }
     let jobs = parity_jobs();
-    let runs = if jobs > 1 {
+    Some(if jobs > 1 {
         let exe = Path::new(env!("CARGO_BIN_EXE_decomp_test_dbg"));
-        run_test_files_parallel(&files, &specs, jobs, exe)
+        run_files_parallel(&files, &specs, jobs, exe, pass)
     } else {
         std::thread::Builder::new()
             .name("parity".into())
             .stack_size(256 << 20)
-            .spawn(move || run_test_files_each(&files, &specs))
+            .spawn(move || run_files_each(&files, &specs, pass))
             .expect("spawn the corpus thread")
             .join()
             .unwrap_or_else(|_| panic!("the engine panicked on {}", corpus.display()))
-    };
+    })
+}
+
+/// The corpus run, or `None` when a selection matches none of its files.
+fn run_corpus(root: &Path, corpus: &Path, select: Option<&[String]>) -> Option<DataResult> {
+    let runs = corpus_runs(root, corpus, select, Pass::Assertions)?;
     let mut r = DataResult::default();
     for run in runs {
         let mut text = run.output;
@@ -796,6 +810,77 @@ fn stage_tests_pass() {
         "PARITY FAIL"
     };
     assert!(broken == 0, "{report}");
+    println!("{report}");
+}
+
+/// Every function the two corpora print in C exports a C syntax tree that the reference
+/// printer prints back to the printed text, byte for byte ([`Pass::Trees`]), and every
+/// statement and expression of it is typed: the only `raw` nodes are lines above a prototype
+/// (the type definitions and helper preambles an option prints there), and the only functions
+/// without a tree are the ones printed in another output language. The report counts, per
+/// corpus, the functions printed, the trees, the trees with no `raw` node, the `raw` nodes by
+/// the kind of node they are in, and the functions without a tree by reason. The pass
+/// decompiles both corpora a second time, so it runs on request:
+/// `cargo test -p unlace-harness --test parity -- --ignored trees --nocapture`.
+#[test]
+#[ignore = "a second pass over both corpora; run when the printer or the tree export changes"]
+fn exported_trees_print_back_over_the_corpora() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let root = repo_root();
+    std::env::set_current_dir(&root).expect("enter the repository root");
+    let select = parity_selection();
+    let mut report = String::new();
+    let mut mismatches = Vec::new();
+    let mut untyped: Vec<String> = Vec::new();
+    for corpus in ["tests/datatests", "tests/stages"] {
+        let Some(runs) = corpus_runs(&root, &root.join(corpus), select.as_deref(), Pass::Trees)
+        else {
+            continue;
+        };
+        let (mut printed, mut trees, mut typed) = (0i64, 0usize, 0usize);
+        let mut raw: BTreeMap<&str, usize> = BTreeMap::new();
+        let mut none: BTreeMap<&str, usize> = BTreeMap::new();
+        for run in &runs {
+            printed += i64::from(run.applied);
+            for line in run.output.lines() {
+                let detail = |prefix| {
+                    let (_function, rest) = line.strip_prefix(prefix)?.split_once(": ")?;
+                    Some(rest)
+                };
+                if let Some(counts) = detail("Tree -- ") {
+                    trees += 1;
+                    typed += usize::from(counts.ends_with(", 0 raw"));
+                } else if let Some(reason) = detail("NoTree -- ") {
+                    *none.entry(reason).or_default() += 1;
+                } else if let Some(place) = detail("Raw -- ") {
+                    let parent = place.split_once(": ").map_or(place, |(parent, _)| parent);
+                    *raw.entry(parent).or_default() += 1;
+                } else if line.starts_with("Mismatch -- ") {
+                    mismatches.push(format!("{}: {line}", run.file));
+                }
+            }
+        }
+        report += &format!(
+            "{corpus}: {printed} functions printed, {trees} trees print back, {typed} without raw nodes\n"
+        );
+        for (parent, count) in &raw {
+            report += &format!("  raw nodes {parent}: {count}\n");
+        }
+        for (reason, count) in &none {
+            report += &format!("  no tree ({reason}): {count}\n");
+        }
+        let body_raw = raw.keys().filter(|parent| **parent != "in function");
+        let other_reason = none
+            .keys()
+            .filter(|reason| !reason.contains("C output only"));
+        untyped.extend(
+            body_raw
+                .chain(other_reason)
+                .map(|what| format!("{corpus}: {what}")),
+        );
+    }
+    assert!(mismatches.is_empty(), "{report}{}", mismatches.join("\n"));
+    assert!(untyped.is_empty(), "{report}not typed: {untyped:?}");
     println!("{report}");
 }
 

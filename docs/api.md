@@ -89,6 +89,40 @@ document only gains keys. Option names and their values follow the catalog and c
 releases; `unlace catalog --check` reports drift. `unlace_cli::embed` is not stable.
 `unlace::unstable` is outside this promise: each part below can change or go away in any release.
 
+### unlace::unstable::ctree — callbacks on the C syntax tree
+
+The engine prints every function from a C syntax tree (`docs/architecture/ctree.md`) that it takes
+through four levels: `Built`, `Statements`, `Rewritten`, `Final`. `Decompiler::with_tree_hook(level,
+callback)` runs `callback(&mut CTree, &Funcdata)` on every printed function when its tree reaches
+`level`, before the built-in rewrites of that level; the module re-exports the tree types (`CTree`,
+`CMaturity`, `Stmt`, `StmtKind`, `Expr`, `ExprKind`, the ids) and `Funcdata`.
+
+```rust
+use unlace::unstable::ctree::{CMaturity, StmtKind};
+
+// Print each function without its calls to `log_debug`.
+let mut decompiler = unlace::Decompiler::open("a.out")?.with_tree_hook(
+    CMaturity::Statements,
+    |tree, fd| {
+        let hidden: Vec<_> = (0..fd.num_calls())
+            .map(|i| fd.get_call_specs(i))
+            .filter(|call| call.get_name() == "log_debug")
+            .map(|call| call.get_op())
+            .collect();
+        for id in tree.stmt_ids() {
+            if let StmtKind::Stmts { ops, .. } = &mut tree.stmt_mut(id).kind {
+                ops.retain(|op| !hidden.contains(op));
+            }
+        }
+    },
+);
+```
+
+Runnable: `cargo run -p unlace --example tree_hook -- /usr/bin/true main __stack_chk_fail`. Which
+edits the printer honours, and that a callback runs once per print (twice per `decompile`, which
+prints the text and then the line map), is in `docs/architecture/ctree.md` section 10. A hook
+survives the reload a later builder method causes.
+
 ### unlace::unstable::flavour — language files
 
 `Decompiler::with_language_file(path)?` prints through a language flavour, the TOML file
@@ -133,6 +167,48 @@ runs every callback again on the rebuilt function, that no callback runs during 
 recovery, and that rules and callbacks must be deterministic. Rules and callbacks are registered
 again on every load, before any option is applied; with none registered the pipeline and its
 output are the default ones. `docs/spec/00-overview.md` §0.6 describes the mechanism.
+
+### unlace::unstable::printer — the printed function as a tree, and printers over it
+
+`Decompiler::tree(address)` and `tree_named(name)` decompile one function and return its text as a
+`Tree`: nested `Node`s for the prototype, the declarations, the statements and the expressions,
+each with its `kind`, its children, its C type where the printer knows it (`ty`), where its text is
+in the code (`span`) and the instruction addresses it came from. It is the tree
+`unlace decompile --json --ctree` writes as the record's `ctree` member (`docs/cli.md`, "The JSON
+documents", `--ctree`); `tree_from_json` reads that member back. A function has a tree when its output
+language is C; otherwise the call returns `TreeError::Unavailable` with the reason.
+
+`Printer` prints a tree. Its methods (`function`, `prototype`, `declaration`, `item`, `statement`,
+`expr`) each have a default that prints C in the decompiler's own layout and calls back into the
+printer for the nodes underneath. `CPrinter` is the defaults and nothing else: `print_c(&tree)`
+is the function's code, byte for byte. A printer for another flavour overrides what it prints
+differently:
+
+```rust
+use unlace::unstable::printer::{Kind, Node, Printer, Writer, print};
+
+struct LetBindings;
+
+impl Printer for LetBindings {
+    // `long acc;` becomes `let mut acc: long;`.
+    fn declaration(&mut self, w: &mut Writer, node: &Node) {
+        let name = node.children.iter().find(|child| child.kind == Kind::Var);
+        w.push(&format!(
+            "let mut {}: {};",
+            name.map_or("_", |name| name.text.as_str()),
+            node.ty.as_deref().unwrap_or("_"),
+        ));
+    }
+}
+
+let tree = unlace::Decompiler::open("a.out")?.tree_named("main")?;
+println!("{}", print(&mut LetBindings, &tree));
+```
+
+Runnable: `cargo run -p unlace --example let_flavour -- /usr/bin/true main` (prototype, `let`
+bindings and casts in another flavour) and `unlace decompile-all a.out --json --ctree | cargo run
+-p unlace --example ctree_roundtrip` (prints every exported tree back and compares it with the
+code). The node kinds and the layout rules are in `docs/architecture/ctree.md` section 11.
 
 ## For a framework with its own loader (fugue-style integration)
 

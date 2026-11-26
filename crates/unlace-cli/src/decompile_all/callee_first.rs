@@ -30,6 +30,7 @@ pub(super) fn decompile_entries_callee_first(
         single_target: targets.len() == 1,
         want_tokens: false,
         want_pointer_arguments: true,
+        want_ctree: args.extra.ctree,
     };
     decompile_callee_first(prog, args, targets, explicit, base, &mut |_| {})
 }

@@ -55,9 +55,13 @@ pub struct SlaStream {
 }
 
 impl SlaStream {
-    /// Inflate a compressed `.sla` image.
+    /// The stream of a `.sla` image: a compressed one inflated, or the `.sla` cache's
+    /// uncompressed copy ([`sla::RAW_SLA_HEADER`]) as it is.
     pub fn inflate(sla_bytes: &[u8]) -> UnlaceResult<SlaStream> {
-        SlaStream::new(sla::inflate_sla(sla_bytes)?)
+        match sla_bytes.strip_prefix(&sla::RAW_SLA_HEADER) {
+            Some(stream) => SlaStream::new(stream.to_vec()),
+            None => SlaStream::new(sla::inflate_sla(sla_bytes)?),
+        }
     }
 
     /// Split an inflated `<sleigh>` stream at its symbol contents.

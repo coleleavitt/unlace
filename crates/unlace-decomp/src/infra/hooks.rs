@@ -4,8 +4,8 @@
 //! [`HookRegistry`] lives on the [`Architecture`](crate::architecture::Architecture)
 //! and is read by [`universal_sched_hooked`](crate::universalaction::universal_sched_hooked)
 //! each time the universal tree is built.  An empty registry changes nothing:
-//! no rule row and no leaf action is added.  There is no option and no CLI
-//! surface; the registry is reachable only from code that links `unlace-decomp`.
+//! no rule row and no leaf action is added.  There is no option; the `unlace`
+//! crate exposes the registry to a library user as `unlace::unstable::hooks`.
 //!
 //! A phase boundary is one fixed schedule point per phase:
 //!
@@ -73,7 +73,7 @@ impl HookRegistry {
         state: RuleState,
         rule: Box<dyn Rule>,
     ) -> UnlaceResult<()> {
-        if !pool_owns_group(&universal_sched(None, None, Vec::new(), false), after_group) {
+        if !rule_groups().iter().any(|(_, group)| group == after_group) {
             return Err(UnlaceError::lowlevel(format!(
                 "No rule pool holds the group: {after_group}"
             )));
@@ -182,14 +182,31 @@ fn boundary_group(phase: UnlacePhase) -> Option<&'static str> {
     }
 }
 
-fn pool_owns_group(node: &SchedNode, group: &str) -> bool {
+/// The groups a rule can be added behind, as `(pool, group)` in schedule
+/// order: every group of the default tree's rule rows, with the first pool
+/// that holds a rule of it, which is the pool [`HookRegistry::add_rule`] picks.
+pub fn rule_groups() -> Vec<(&'static str, String)> {
+    let mut groups = Vec::new();
+    collect_rule_groups(&universal_sched(None, None, Vec::new(), false), &mut groups);
+    groups
+}
+
+fn collect_rule_groups(node: &SchedNode, groups: &mut Vec<(&'static str, String)>) {
     match node {
-        SchedNode::Pool { rules, .. } => rules.iter().any(|row| row.group == group),
-        SchedNode::Group { children, .. } | SchedNode::RestartGroup { children, .. } => {
-            children.iter().any(|child| pool_owns_group(child, group))
+        SchedNode::Pool { name, rules, .. } => {
+            for row in rules {
+                if !groups.iter().any(|(_, group)| *group == row.group) {
+                    groups.push((name, row.group.to_string()));
+                }
+            }
         }
-        SchedNode::Settles(_, node) => pool_owns_group(node, group),
-        SchedNode::Action(_) | SchedNode::Empty => false,
+        SchedNode::Group { children, .. } | SchedNode::RestartGroup { children, .. } => {
+            for child in children {
+                collect_rule_groups(child, groups);
+            }
+        }
+        SchedNode::Settles(_, node) => collect_rule_groups(node, groups),
+        SchedNode::Action(_) | SchedNode::Empty => {}
     }
 }
 

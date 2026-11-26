@@ -36,6 +36,7 @@ use unlace_console::project::{
 // `File::architecture()` (the ARM-discovery default, decbench) plus the
 // section/segment walks the zero-discovery diagnosis reads.
 use object::{Object, ObjectSection, ObjectSegment};
+use unlace_decomp::architecture::Architecture;
 use unlace_decomp::decompile_drive::{LineMapping, TypeInfo, VarInfo, print_c_types};
 use unlace_decomp::option_dispatch::UNLACE_OPTION_NAMES;
 use unlace_decomp::options::OptionDatabase;
@@ -1370,13 +1371,17 @@ fn run_summary(args: &Args, filters: &Filters) -> i32 {
         None => (None, None),
     };
     let loaded = match request {
-        Some(request) => {
-            load_program_with_rust_profiles(args, DriverDefaults::Functions, Some(request), None)
-                .map(|prog| {
-                    let all = prog.function_entries_canonical();
-                    (prog, all)
-                })
-        }
+        Some(request) => load_program_with_rust_profiles(
+            args,
+            DriverDefaults::Functions,
+            Some(request),
+            None,
+            &mut |_| Ok(()),
+        )
+        .map(|prog| {
+            let all = prog.function_entries_canonical();
+            (prog, all)
+        }),
         None => list_functions(args),
     };
     let (prog, all) = match loaded {
@@ -1927,21 +1932,28 @@ pub(crate) fn load_program(
             crate::rust_signatures::load(std::path::Path::new(path)).map(|(request, _)| request)
         })
         .transpose()?;
-    load_program_with_rust_profiles(args, defaults, request, None)
+    load_program_with_rust_profiles(args, defaults, request, None, &mut |_| Ok(()))
 }
 
-/// [`load_program`] over disjoint runs of bytes an embedding caller already
-/// holds, each `(address, bytes, flags)`, in place of `args.binary`'s bytes.
-/// `args` must be a raw-image parse; its file still sizes the `auto` mode.
-pub(crate) fn load_program_segments(
+/// What an embedding caller does to the architecture of a load, before any
+/// option is applied to it: where its rules and phase callbacks are registered
+/// (`docs/spec/00-overview.md` §0.6, "Embedder hooks").
+pub(crate) type Install<'a> = &'a mut dyn FnMut(&mut Architecture) -> Result<(), String>;
+
+/// [`load_program`] for an embedding caller. `segments` are disjoint runs of
+/// bytes it already holds, each `(address, bytes, flags)`, in place of
+/// `args.binary`'s bytes; `args` must then be a raw-image parse, and its file
+/// still sizes the `auto` mode. `install` is run once on the architecture.
+pub(crate) fn load_program_embedded(
     args: &Args,
     defaults: DriverDefaults,
-    runs: Vec<(u64, Vec<u8>, u32)>,
+    segments: Option<Vec<(u64, Vec<u8>, u32)>>,
+    install: Install<'_>,
 ) -> Result<ConsoleProgram, String> {
-    if !args.raw_image {
+    if segments.is_some() && !args.raw_image {
         return Err("segments load only as a raw image".to_string());
     }
-    load_program_with_rust_profiles(args, defaults, None, Some(runs))
+    load_program_with_rust_profiles(args, defaults, None, segments, install)
 }
 
 fn load_program_with_rust_profiles(
@@ -1949,6 +1961,7 @@ fn load_program_with_rust_profiles(
     defaults: DriverDefaults,
     request: Option<unlace_analysis::flirt::rustprofiles::Request>,
     segments: Option<Vec<(u64, Vec<u8>, u32)>>,
+    install: Install<'_>,
 ) -> Result<ConsoleProgram, String> {
     let binary = std::fs::canonicalize(&args.binary)
         .map_err(|_| format!("binary not found: {}", args.binary))?
@@ -2036,6 +2049,10 @@ fn load_program_with_rust_profiles(
         };
         format!("{msg}{raw_hint}")
     })?;
+
+    // Before any option: a registration rebuilds the action tree, which drops
+    // the breakpoints and disabled rules an option may set on it.
+    install(prog.arch_mut())?;
 
     let non_x86_64 = !prog.arch().archid.starts_with("x86:LE:64:");
     for (name, value) in driver_default_options_for_arch(

@@ -4,9 +4,9 @@
 - A decompiler load used to cost about 110 ms of CPU whatever the input, against about 8 ms for
   the decompile itself. Almost all of it was decoding the compiled SLEIGH spec (`.sla`) into
   memory. Every test process and every `unlace` run paid it.
-- Three changes (#1530, #1531, #1532) brought one
-  `unlace decompile` call from 128 ms to 71 ms and a fresh load from 101 ms to 41 ms
-  (1,505 M -> 530 M instructions). Output is unchanged.
+- Four changes (#1530, #1531, #1532, #1535) brought one `unlace decompile` call from 128 ms
+  to 57 ms and a fresh load from 101 ms to 28 ms (1,505 M -> 255 M instructions). Output is
+  unchanged.
 - What is left of a load, and what each remaining fix would cost, is in
   [What is left](#what-is-left).
 
@@ -189,7 +189,8 @@ Same benchmark and host (load average about 8), median of 3; "before" is the eng
 
 After `perf/sleigh-lazyindex` (load average 2-9, median of 3): `raw-fresh` 44.0 ms -> 36.6 ms
 (layout in the copy) -> 30.0 ms (lazy operands and flat headers); callgrind 530,128,739 ->
-416,846,879 -> 254,623,161 instructions.
+416,846,879 -> 254,623,161 instructions. Rerun after #1535 merged (load average about 4,
+median of 3): `spawn` 57.5 ms, `inproc-fresh` 37.3 ms, `raw-fresh` 28.2 ms.
 
 Costs of the changes:
 - Memory: an engine keeps the inflated x86-64 stream, 8.5 MB, where it kept 3.6 MB of template
@@ -215,7 +216,7 @@ functions counted once):
 | 3% | reading the layout back (`Layout::read`) |
 | 2% | reading the uncompressed `.sla` copy |
 
-A process start is about 20 ms of the 71 ms per `unlace` spawn. The remaining fixes, none built:
+A process start is about 20 ms of the 57 ms per `unlace` spawn. The remaining fixes, none built:
 - **Symbol shells (12%) and scopes (3.5%)** are what name lookups use. The 9,000 constructor
   scopes and the operand names in them serve only snippet compilation and printing; a lazy
   per-scope name map would need the scope's symbol ids in the layout.

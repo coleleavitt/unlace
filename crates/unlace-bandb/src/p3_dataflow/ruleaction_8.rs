@@ -2285,6 +2285,38 @@ impl RuleExpandLoad {
     }
 }
 
+/// A PTRSUB, possibly indexed through PTRADDs, names an object of the pointed-to size
+/// (C++ `RuleExpandLoad::isFieldReference`).
+fn is_field_reference(data: &Funcdata, mut ptr: VarnodeId) -> bool {
+    loop {
+        if !data
+            .vbank()
+            .get(ptr)
+            .expect("is_field_reference: stale ptr")
+            .is_written()
+        {
+            return false;
+        }
+        let def = data
+            .vbank()
+            .get(ptr)
+            .expect("is_field_reference: stale ptr")
+            .get_def()
+            .expect("is_field_reference: written ptr has no def");
+        let op = data
+            .obank()
+            .get(def)
+            .expect("is_field_reference: stale def");
+        match op.code() {
+            OpCode::CPUI_PTRADD => {
+                ptr = op.get_in(0).expect("is_field_reference: PTRADD input");
+            }
+            OpCode::CPUI_PTRSUB => return true,
+            _ => return false,
+        }
+    }
+}
+
 impl Rule for RuleExpandLoad {
     fn get_op_list(&self) -> Vec<OpCode> {
         vec![OpCode::CPUI_LOAD]
@@ -2391,6 +2423,9 @@ impl Rule for RuleExpandLoad {
             Some(p) => p,
             None => return 0,
         };
+        if !el_type.is_enum_type() && !is_field_reference(data, root_ptr) {
+            return 0;
+        }
         // pointer data-type must be bigger
         if el_type.get_size() <= out_size {
             return 0;

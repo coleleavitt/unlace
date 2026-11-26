@@ -429,7 +429,12 @@ impl Rule for RuleAndCommute {
                 i += 1;
                 continue;
             }
-            sa = vn_offset(data, savn_l) as int4;
+            let raw_sa = vn_offset(data, savn_l);
+            if raw_sa == 0 || raw_sa >= (8 * size) as uintb {
+                i += 1;
+                continue;
+            }
+            sa = raw_sa as int4;
 
             let othervn_l = op_in(data, op, 1 - i);
             othervn = Some(othervn_l);
@@ -1249,6 +1254,9 @@ impl Rule for RuleShiftCompare {
         }
         let shiftop = vn_def(data, shiftvn).expect("shiftop def");
         let opc = op_code(data, shiftop);
+        if vn_size(data, shiftvn) as usize > std::mem::size_of::<uintb>() {
+            return 0;
+        }
         let savn;
         if opc == OpCode::CPUI_INT_LEFT {
             isleft = true;
@@ -1256,14 +1264,22 @@ impl Rule for RuleShiftCompare {
             if !vn_constant(data, savn) {
                 return 0;
             }
-            sa = vn_offset(data, savn) as int4;
+            let raw_sa = vn_offset(data, savn);
+            if raw_sa == 0 || raw_sa >= (8 * vn_size(data, shiftvn)) as uintb {
+                return 0;
+            }
+            sa = raw_sa as int4;
         } else if opc == OpCode::CPUI_INT_RIGHT {
             isleft = false;
             savn = op_in(data, shiftop, 1);
             if !vn_constant(data, savn) {
                 return 0;
             }
-            sa = vn_offset(data, savn) as int4;
+            let raw_sa = vn_offset(data, savn);
+            if raw_sa == 0 || raw_sa >= (8 * vn_size(data, shiftvn)) as uintb {
+                return 0;
+            }
+            sa = raw_sa as int4;
             // We only apply when we know we will eliminate a variable
             if data.lone_descend(shiftvn) != Some(op) {
                 return 0;
@@ -1299,7 +1315,7 @@ impl Rule for RuleShiftCompare {
             return 0;
         }
 
-        if sa == 0 {
+        if sa <= 0 || sa >= 8 * vn_size(data, shiftvn) {
             return 0;
         }
         let mainvn = op_in(data, shiftop, 0);

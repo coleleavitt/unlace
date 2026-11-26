@@ -1164,17 +1164,12 @@ impl StringSequence {
     /// root (root is not first), or fewer than the minimum number of COPYs.
     fn collect_copy_ops(&mut self, data: &Funcdata, size: int4) -> bool {
         let end_addr = &self.start_addr + i64::from(size - 1);
-        let begin_addr = if self.start_addr != self.root_addr {
-            &self.root_addr + (-(self.base.char_type.get_align_size() as i64))
-        } else {
-            self.start_addr.clone()
-        };
         // endLoc(endAddr) == lower_bound(endAddr + 1); the half-open window is
-        // [beginAddr, endAddr + 1).
+        // [startAddr, endAddr + 1).
         let scan_end = &end_addr + 1;
         let ids: Vec<VarnodeId> = data
             .vbank()
-            .iter_loc_addr_range(&begin_addr, &scan_end)
+            .iter_loc_addr_range(&self.start_addr, &scan_end)
             .collect();
         let mut diff: int4 = self
             .root_addr
@@ -1209,16 +1204,17 @@ impl StringSequence {
             {
                 continue;
             }
+            let tmp_diff: int4 = v.get_offset().wrapping_sub(self.start_addr.get_offset()) as int4;
+            if tmp_diff < diff {
+                if tmp_diff + align + v.get_size() > diff {
+                    return false; // COPY reaches the root, which is not first
+                }
+                continue;
+            }
             if v.get_size() != char_size {
                 return false;
             }
-            let tmp_diff: int4 = v.get_offset().wrapping_sub(self.start_addr.get_offset()) as int4;
-            if tmp_diff < diff {
-                if tmp_diff + align == diff {
-                    return false; // COPY to previous element, root is not first
-                }
-                continue;
-            } else if tmp_diff > diff {
+            if tmp_diff > diff {
                 if tmp_diff - diff < align {
                     continue;
                 }

@@ -2041,7 +2041,7 @@ multiply between the quotient and remainder. After `RuleDivOpt` recovers
 `x / 3`, the sibling `(high64(x * 0xaaaaaaaaaaaaaaab) & ~1)` is exactly twice
 that quotient. `RuleDivOpt` substitutes `(x / 3) * 2` only when the same
 `x / 3` node precedes it in the same basic block; the ordinary term collection
-and `RuleModOpt` rules can then recover `x % 3`. Other masks, reciprocals, widths, wide divisions, and
+and `RuleModOpt` rules can then recover `x % 3`. The quotient may also be truncated before its multiply: `SUBPIECE(x/c, 0) * -c` is matched when the addend is `SUBPIECE(x, 0)`, and it becomes `SUBPIECE(x % c, 0)` (`ruleaction_7.rs (RuleModOpt::apply_op)`). Other masks, reciprocals, widths, wide divisions, and
 multiply-without-a-matching-quotient forms are declined.
 
 The cleanup pool's `RuleExpandLoad` is upstream's rewrite of a LOAD narrower
@@ -2058,6 +2058,9 @@ when the caller's object ends at `+10` at the end of a page. The same held for a
 (`(unsigned short)a0[1]`), for the low half of the `long` one past a walk
 (`(int)a0[a1]`), and for a masked byte of an 8-byte element (`(q[1] & 0x30) !=
 0x10`).
+
+The guard that keeps a bare pointer's element type from widening a read is `is_field_reference`
+(`ruleaction_8.rs`): the pointer must be a PTRSUB, possibly indexed through PTRADDs, or point to an enum.
 
 unlace never takes the truncation form: the read prints at its own width and
 offset, `*(unsigned short *)&a0->field_0x8`, with the one cast the truncation
@@ -2185,6 +2188,13 @@ constant, out of a same-location copy, and into any marker over a `persist`
 global — a global already has heritage's persist `RETURN-COPY` (§3.1) keeping
 its last store printed, so the brake has nothing to add there.
 
+**Shared sums in `RulePtrsubUndo`** (a strict fix, no option). `getConstOffsetBack`
+(`ruleaction_6.rs (RulePtrsubUndo::get_const_offset_back)`) sums the constants behind a value only
+when that value has exactly one reader. A sum read by several ops keeps its constants in the shared
+expression, which `removeLocalAddRecurse` cannot fold. Counting them let `RulePtrsubUndo` undo a
+PTRSUB without changing its offset, and `RulePtrArith` then recreated it indefinitely. The multiplier
+is still collected from such a sum, so stride validation is unchanged.
+
 **Keeping a retyped local out of its readers** (a strict fix, no option). A
 `type` directive that retypes a printed pointer local to a pointer to a record
 is replayed by locking the new type on the local's own definitions before type
@@ -2264,6 +2274,10 @@ into a reader of the copy when a write lies between the copy and the reader, and
 chapter 06 keeps the copy as its own variable, so
 `r = gi; *pp2 = p + 1; return r[1];` keeps `r` where the binary loads it rather
 than reading `gi` after the second store.
+When `RulePushMulti` reuses an existing `MULTIEQUAL`, that value gains the new readers,
+so its consumed-bits mask is set to all bits (`ruleaction_1.rs (RulePushMulti::apply_op)`) until
+`ActionDeadCode` narrows it again. In the COPY case the reused value's mask is ORed with the merge's
+mask. Otherwise `RuleOrConsume` could drop an OR whose bits only the new readers use.
 
 These questions are asked again every time the rule pool visits a reader
 (issue #818). One search for an earlier value read after the store first sets
@@ -2380,6 +2394,12 @@ signedness, but `sink + 1 >> 4` shifts the way `sink` is declared, so a
 sign-sensitive reader of `u + 1` counts as a reader of `u`. Globals and
 constants end the walk, and a walk that visits more than 256 varnodes answers
 yes, which keeps the store and every load where the binary makes them.
+
+**Common terms in `RuleEqual2Zero`** (default on, no option). `0 == (U + W) + W * -1` cancels the
+shared term and becomes `0 == U` (`ruleaction_5.rs (RuleEqual2Zero::apply_op)`), unless a less-than
+comparison of the same two values pairs with the result (`is_paired_with_less`), since `RuleLessEqual`
+and `RuleLessNotEqual` merge such pairs. Before this, the two sign terms of a signed division's sign
+correction stayed on opposite sides of the comparison and never cancelled.
 
 The decision cannot wait for the other rules: once the `COPY` is gone, chapter
 06's join of the value into the global's marker is forced. So the walk also

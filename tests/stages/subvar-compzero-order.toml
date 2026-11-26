@@ -1,0 +1,57 @@
+# unlace issue testcase: a bit test that SubvariableFlow negates keeps its
+# definition ahead of the COPY that reads it (default correctness fix, no
+# option).
+#
+# Issue:      unlace GH-1561 - the irverify probe found 32 same-block
+#             definedness breaks in the stage corpus, each introduced by rule
+#             subvar_compzero.
+# Stage:      P3 dataflow - SubvariableFlow::do_replacement
+#             (`p3_dataflow/subflow.rs`).
+#
+# FreeRTOS's MPU port, xPortRaisePrivilege (the bytes of
+# syscallregs-cortexm.toml):
+#
+#     8564: f3ef 8014   mrs   r0, control
+#           f010 0f01   tst.w r0, #1
+#           bf1a        itte  ne
+#           2000        movne r0, #0
+#           df02        svcne 2
+#           2001        moveq r0, #1
+#           4770        bx    lr
+#
+# The `tst` is a one-bit test, so subvar_compzero narrows it: the compare
+# becomes a COPY of a new BOOL_NEGATE of the bit.  The BOOL_NEGATE was
+# inserted after the compare, so the COPY read a value defined later in its
+# own block, and option irverify reported "pass oppool1 left the IR broken
+# ... does not reach it".  It is now inserted before the compare.
+
+[image]
+arch = 'ARM:LE:32:Cortex'
+symbols = [
+    { space = 'ram', offset = '0x8564', name = 'xPortRaisePrivilege' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x8564'
+readonly = true
+hex = 'eff3148010f0010f1abf002002df012070470020'
+
+[script]
+commands = [
+    'option irverify on',
+    'lo fu xPortRaisePrivilege',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'SUBVAR-COMPZERO-ORDER #1: no pass leaves a read ahead of its definition'
+count = 0
+literal = 'irverify:'
+
+[[match]]
+name = 'SUBVAR-COMPZERO-ORDER #2: the narrowed bit test still returns the negated bit'
+count = 1
+literal = 'return !v1;'

@@ -366,3 +366,9 @@ fn sweep_an_indexed_hint_inside_the_array_is_element_arithmetic() {
         vec![(0x10, 7), (0x17, 1), (0x18, 4)]
     );
 }
+
+#[test]
+fn open_array_on_an_upward_stack_stops_at_its_highest_known_index() {
+    let arr = open_array(0x10, base(4, type_metatype::TYPE_INT));
+    assert_eq!(layout(&[arr], &[]), vec![(0x10, 16)]);
+}

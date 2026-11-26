@@ -5350,8 +5350,10 @@ fn a_return_merged_in_pieces_stays_void() {
 /// `floatret_parse_gcc_O1.o` and `floatret_parse_armel.o` (soft-float ARM):
 /// `parse`, `parse2` and `parsef` return what `strtod` and `strtof` return, and
 /// `rp` keeps `parse`'s bits as an integer, `rp2` stores `parse2`'s `double`, and
-/// Code-proven imports receive their known floating-point contracts on x86-64;
-/// ARM retains its exclusion for incompatible floating-point ABI rows.
+/// Code-proven imports receive their known floating-point contracts on x86-64.
+/// The soft-float ARM object states the base standard, which binds `strtod` and
+/// returns its `double` whole in `r0:r1`, so `parse` and `parse2` return it too;
+/// `parsef` keeps no return.
 #[test]
 fn a_known_float_import_preserves_its_floating_return() {
     let sp = specs();
@@ -5374,7 +5376,12 @@ fn a_known_float_import_preserves_its_floating_return() {
                 "return strtof(",
             ]
         } else {
-            &["void parse(", "void parse2(", "void parsef("]
+            &[
+                "double parse(char *",
+                "double parse2(char *",
+                "return strtod(",
+                "void parsef(",
+            ]
         };
         for want in wants {
             assert!(

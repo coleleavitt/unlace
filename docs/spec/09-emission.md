@@ -6488,6 +6488,14 @@ each cast argument in a `cast` node and moves the spans behind it
 (`ExportTree::insert_cast`, `FuncDetail::cast_tree_arguments`); if the tree then does
 not print back to the edited text it is dropped with that reason.
 
+**Languages.** The tree records its output language (`ExportTree::lang`; the JSON member
+`language`). The builder reads each language's statement forms from its profile: the test of
+`if`, `while` and `for` is parenthesised when `caps.paren_conditions` says so, a statement ends
+with the profile's `kw_semicolon` (Go has none, so a statement ends at its line), Go's `while`
+spelling is also its `for` (a header with a `;` is a three-part `for`), and Rust's `loop {` is a
+`while` with an empty test. The printer writes the same forms back, and a form the reader does
+not cover is kept as a `raw` node.
+
 The reference printer (`ctreeexport::CPrinter`, the defaults of the `Printer` trait)
 prints a tree as follows; it is the builder's check and what `print_c` and
 `unlace::unstable::printer` run. Header children print one per line; the prototype is
@@ -6531,14 +6539,16 @@ Corpus checks (2026-11-26). The harness's tree pass
 render with unbroken lines and prints it back: 5,344 functions are printed, 4,871 of them
 in C; all 4,871 export a tree that prints back byte for byte; 4,858 trees hold no `raw`
 node and 13 hold `raw` lines only above the prototype (132 lines of `structdefs` type
-definitions and the `bytearrayc` helper preamble); the 473 functions printed in Go, Rust
-or Java export no tree. The test fails on a tree that prints back differently, on a C
-function without a tree and on a `raw` node inside a function body.
+definitions and the `bytearrayc` helper preamble). The
+test fails on a tree that prints back differently, on a function without a tree and on a
+C `raw` node inside a function body; the other languages' `raw` nodes are counted per
+language (`docs/architecture/ctree.md`, section 11).
 `crates/unlace/examples/ctree_roundtrip.rs` over `decompile-all --json --ctree` of every
 fixture binary in the repository (1,482 binaries, 47,525 functions with code): the
 38,332 functions printed in C all have a tree that prints back byte for byte; 38,327 of
 those trees hold no `raw` node and five hold nine between them, all of it text nested
-past level 61; 9,193 functions are printed in another output language. The example
+past level 61; The 9,193 functions printed in another output language are measured in
+section 11 of `docs/architecture/ctree.md`. The example
 exits 2 on a document or tree it cannot read, so a run that reads nothing is not a clean
 run.
 

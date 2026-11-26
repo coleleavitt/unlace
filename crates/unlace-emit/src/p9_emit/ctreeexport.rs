@@ -26,6 +26,7 @@ pub use printer::{
 
 use std::collections::BTreeMap;
 
+use crate::lang::OutLang;
 use crate::prettyprint::CaptureMark;
 
 /// What a node of the exported tree is. [`Kind::name`] is its JSON spelling.
@@ -428,11 +429,12 @@ impl Node {
     }
 }
 
-/// The exported tree of one function.
+/// The exported tree of one function, in the output language it was printed in.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExportTree {
     pub style: Style,
     pub root: Node,
+    pub lang: OutLang,
 }
 
 impl ExportTree {
@@ -457,24 +459,31 @@ impl ExportTree {
         };
         let width = u32::try_from(ty.encode_utf16().count()).unwrap_or(u32::MAX);
         let delta = width.saturating_add(2).max(2);
-        cast_at(&mut self.root, 1, &site, ty, delta, &self.style)
+        cast_at(
+            &mut self.root,
+            1,
+            &site,
+            ty,
+            delta,
+            (&self.style, self.lang),
+        )
     }
 }
 
 /// Keep the expression `node`, at tree level `level`, inside [`ExportTree::MAX_LEVELS`]: a
 /// node at the last level that has operands of its own becomes a `raw` node holding the text
 /// the reference printer prints for it, so the tree prints as before.
-fn clip(node: &mut Node, level: u32, style: &Style) {
+fn clip(node: &mut Node, level: u32, layout: (&Style, OutLang)) {
     if node.children.is_empty() {
         return;
     }
     if level < ExportTree::MAX_LEVELS {
         for child in &mut node.children {
-            clip(child, level + 1, style);
+            clip(child, level + 1, layout);
         }
         return;
     }
-    let mut w = Writer::new(style);
+    let mut w = Writer::new(layout.0, layout.1);
     CPrinter.expr(&mut w, node);
     *node = Node {
         text: w.out,
@@ -500,7 +509,14 @@ fn shift_behind(node: &mut Node, site: &Span, delta: u32) {
 
 /// [`ExportTree::insert_cast`] under `node`, which is at tree level `level`: the outermost
 /// node whose span is `site`.
-fn cast_at(node: &mut Node, level: u32, site: &Span, ty: &str, delta: u32, style: &Style) -> bool {
+fn cast_at(
+    node: &mut Node,
+    level: u32,
+    site: &Span,
+    ty: &str,
+    delta: u32,
+    layout: (&Style, OutLang),
+) -> bool {
     let start = |span: &Span| (span.line, span.col);
     let end = |span: &Span| (span.end_line, span.end_col);
     if node.span == *site && !node.kind.is_statement() {
@@ -522,7 +538,7 @@ fn cast_at(node: &mut Node, level: u32, site: &Span, ty: &str, delta: u32, style
             },
             ..Node::op("cast", Form::Presurround, "(", 0, vec![ty_node, operand])
         };
-        clip(node, level, style);
+        clip(node, level, layout);
         return true;
     }
     let Some(at) = node.children.iter().position(|child| {
@@ -530,7 +546,7 @@ fn cast_at(node: &mut Node, level: u32, site: &Span, ty: &str, delta: u32, style
     }) else {
         return false;
     };
-    if !cast_at(&mut node.children[at], level + 1, site, ty, delta, style) {
+    if !cast_at(&mut node.children[at], level + 1, site, ty, delta, layout) {
         return false;
     }
     for later in &mut node.children[at + 1..] {
@@ -613,9 +629,8 @@ pub struct Capture {
     pub marks: Vec<CaptureMark>,
     pub style: Style,
     pub loose: LooseOps,
-    /// The render was C output (C itself or a language file over it); other output languages
-    /// are not exported.
-    pub c_output: bool,
+    /// The output language the render printed.
+    pub lang: OutLang,
 }
 
 #[cfg(test)]

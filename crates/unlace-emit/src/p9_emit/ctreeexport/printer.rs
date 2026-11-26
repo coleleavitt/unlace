@@ -2,20 +2,34 @@
 //! decompiler's layout, and [`CPrinter`], the reference printer that is those defaults.
 
 use super::{Brace, ExportTree, Form, Keyword, Kind, Node, Style};
+use crate::lang::{OutLang, OutLangExt};
 
-/// The text a [`Printer`] writes and the layout it writes it in.
+/// The text a [`Printer`] writes, the layout it writes it in and the language it is written in.
 pub struct Writer<'a> {
     pub style: &'a Style,
+    pub lang: OutLang,
     pub out: String,
 }
 
 impl<'a> Writer<'a> {
-    /// An empty text in `style`.
-    pub fn new(style: &'a Style) -> Writer<'a> {
+    /// An empty text in `style`, in `lang`.
+    pub fn new(style: &'a Style, lang: OutLang) -> Writer<'a> {
         Writer {
             style,
+            lang,
             out: String::new(),
         }
+    }
+
+    /// Does the language parenthesise the test of `if`, `while` and `for`?
+    fn parenthesised_tests(&self) -> bool {
+        self.lang.profile().caps.paren_conditions
+    }
+
+    /// End a statement: the language's terminator (`;`, or nothing in Go).
+    pub fn terminator(&mut self) {
+        let end = self.lang.profile().kw_semicolon;
+        self.out.push_str(end);
     }
 
     /// Append `text`.
@@ -78,7 +92,7 @@ pub trait Printer {
     /// A local declaration, with its terminator.
     fn declaration(&mut self, w: &mut Writer, node: &Node) {
         w.push(&node.text);
-        w.push(";");
+        w.terminator();
     }
 
     /// One item of a block, from the end of the line before it.
@@ -97,19 +111,20 @@ pub trait Printer {
     }
 }
 
-/// The reference printer: C in the decompiler's layout.
+/// The reference printer: the defaults of [`Printer`], which print each language in its own
+/// layout (the tree's [`ExportTree::lang`]); C in the decompiler's layout is the first of them.
 pub struct CPrinter;
 
 impl Printer for CPrinter {}
 
 /// Print `tree` with `printer`.
 pub fn print<P: Printer + ?Sized>(printer: &mut P, tree: &ExportTree) -> String {
-    let mut w = Writer::new(&tree.style);
+    let mut w = Writer::new(&tree.style, tree.lang);
     printer.function(&mut w, &tree.root);
     w.out
 }
 
-/// Print `tree` as C in the decompiler's layout: the function's `code`.
+/// Print `tree` in its output language: the function's `code`.
 pub fn print_c(tree: &ExportTree) -> String {
     print(&mut CPrinter, tree)
 }
@@ -256,7 +271,12 @@ fn eol_comments<'a>(
 /// The parenthesized test of a loop: `( true )` glued to the keyword for a loop that never
 /// tests, else a space and the condition in parentheses.
 fn loop_test<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, cond: &Node) {
-    if is_true(w.style, cond) {
+    if !w.parenthesised_tests() {
+        if cond.kind != Kind::Empty {
+            w.push(" ");
+            p.expr(w, cond);
+        }
+    } else if is_true(w.style, cond) {
         w.push("( ");
         w.keyword(Keyword::True);
         w.push(" )");
@@ -276,7 +296,7 @@ pub fn print_statement<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &No
             for child in &node.children {
                 p.expr(w, child);
             }
-            w.push(";");
+            w.terminator();
         }
         Kind::Return => {
             w.keyword(Keyword::Return);
@@ -284,31 +304,37 @@ pub fn print_statement<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &No
                 w.push(" ");
                 p.expr(w, child);
             }
-            w.push(";");
+            w.terminator();
         }
         Kind::Goto => {
             w.keyword(Keyword::Goto);
             w.push(" ");
             w.push(&node.text);
-            w.push(";");
+            w.terminator();
         }
         Kind::Break => {
             w.keyword(Keyword::Break);
-            w.push(";");
+            w.terminator();
         }
         Kind::Continue => {
             w.keyword(Keyword::Continue);
-            w.push(";");
+            w.terminator();
         }
         Kind::If => {
             let mut parts = node.children.iter().peekable();
             loop {
                 w.keyword(Keyword::If);
-                w.push(" (");
+                if w.parenthesised_tests() {
+                    w.push(" (");
+                } else {
+                    w.push(" ");
+                }
                 if let Some(cond) = parts.next() {
                     p.expr(w, cond);
                 }
-                w.push(")");
+                if w.parenthesised_tests() {
+                    w.push(")");
+                }
                 eol_comments(w, &mut parts);
                 if let Some(then) = parts.next() {
                     match then.kind {
@@ -344,9 +370,15 @@ pub fn print_statement<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &No
             }
         }
         Kind::While => {
-            w.keyword(Keyword::While);
             if let [cond, body] = node.children.as_slice() {
-                loop_test(p, w, cond);
+                if cond.kind == Kind::Empty
+                    && w.lang.profile().forms.inf_loop == crate::lang::InfLoopForm::RustLoop
+                {
+                    w.push("loop");
+                } else {
+                    w.keyword(Keyword::While);
+                    loop_test(p, w, cond);
+                }
                 print_braced(p, w, body, w.style.brace_loop, indent);
             }
         }
@@ -357,19 +389,22 @@ pub fn print_statement<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, node: &No
                 w.push(" ");
                 w.keyword(Keyword::While);
                 loop_test(p, w, cond);
-                w.push(";");
+                w.terminator();
             }
         }
         Kind::For => {
             w.keyword(Keyword::For);
-            w.push(" (");
+            let parenthesised = w.parenthesised_tests();
+            w.push(if parenthesised { " (" } else { " " });
             if let [init, cond, next, body] = node.children.as_slice() {
                 p.expr(w, init);
                 w.push("; ");
                 p.expr(w, cond);
                 w.push("; ");
                 p.expr(w, next);
-                w.push(")");
+                if parenthesised {
+                    w.push(")");
+                }
                 print_braced(p, w, body, w.style.brace_loop, indent);
             }
         }

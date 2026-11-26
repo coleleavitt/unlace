@@ -813,13 +813,14 @@ fn stage_tests_pass() {
     println!("{report}");
 }
 
-/// Every function the two corpora print in C exports a C syntax tree that the reference
-/// printer prints back to the printed text, byte for byte ([`Pass::Trees`]), and every
-/// statement and expression of it is typed: the only `raw` nodes are lines above a prototype
-/// (the type definitions and helper preambles an option prints there), and the only functions
-/// without a tree are the ones printed in another output language. The report counts, per
-/// corpus, the functions printed, the trees, the trees with no `raw` node, the `raw` nodes by
-/// the kind of node they are in, and the functions without a tree by reason. The pass
+/// Every function the two corpora print exports a syntax tree that the reference printer prints
+/// back to the printed text, byte for byte ([`Pass::Trees`]). In C every statement and
+/// expression of it is typed: the only `raw` nodes are lines above a prototype (the type
+/// definitions and helper preambles an option prints there). Other output languages keep the
+/// text their forms do not cover as `raw` nodes, and the report counts them per language. The
+/// report counts, per corpus, the functions printed, the trees, the trees with no `raw` node,
+/// the trees and those with no `raw` node per language, the `raw` nodes by language and the
+/// kind of node they are in, and the functions without a tree by reason. The pass
 /// decompiles both corpora a second time, so it runs on request:
 /// `cargo test -p unlace-harness --test parity -- --ignored trees --nocapture`.
 #[test]
@@ -838,10 +839,12 @@ fn exported_trees_print_back_over_the_corpora() {
             continue;
         };
         let (mut printed, mut trees, mut typed) = (0i64, 0usize, 0usize);
-        let mut raw: BTreeMap<&str, usize> = BTreeMap::new();
+        let mut by_lang: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+        let mut raw: BTreeMap<(&str, &str), usize> = BTreeMap::new();
         let mut none: BTreeMap<&str, usize> = BTreeMap::new();
         for run in &runs {
             printed += i64::from(run.applied);
+            let mut language = "";
             for line in run.output.lines() {
                 let detail = |prefix| {
                     let (_function, rest) = line.strip_prefix(prefix)?.split_once(": ")?;
@@ -849,12 +852,19 @@ fn exported_trees_print_back_over_the_corpora() {
                 };
                 if let Some(counts) = detail("Tree -- ") {
                     trees += 1;
-                    typed += usize::from(counts.ends_with(", 0 raw"));
+                    let (lang, rest) = counts.split_once(", ").unwrap_or(("", counts));
+                    language = lang;
+                    let (lang_trees, lang_typed) = by_lang.entry(lang).or_default();
+                    *lang_trees += 1;
+                    if rest.ends_with(", 0 raw") {
+                        typed += 1;
+                        *lang_typed += 1;
+                    }
                 } else if let Some(reason) = detail("NoTree -- ") {
                     *none.entry(reason).or_default() += 1;
                 } else if let Some(place) = detail("Raw -- ") {
                     let parent = place.split_once(": ").map_or(place, |(parent, _)| parent);
-                    *raw.entry(parent).or_default() += 1;
+                    *raw.entry((language, parent)).or_default() += 1;
                 } else if line.starts_with("Mismatch -- ") {
                     mismatches.push(format!("{}: {line}", run.file));
                 }
@@ -863,20 +873,23 @@ fn exported_trees_print_back_over_the_corpora() {
         report += &format!(
             "{corpus}: {printed} functions printed, {trees} trees print back, {typed} without raw nodes\n"
         );
-        for (parent, count) in &raw {
-            report += &format!("  raw nodes {parent}: {count}\n");
+        for (lang, (lang_trees, lang_typed)) in &by_lang {
+            report += &format!("  {lang}: {lang_trees} trees, {lang_typed} without raw nodes\n");
+        }
+        for ((lang, parent), count) in &raw {
+            report += &format!("  raw nodes {lang} {parent}: {count}\n");
         }
         for (reason, count) in &none {
             report += &format!("  no tree ({reason}): {count}\n");
         }
-        let body_raw = raw.keys().filter(|parent| **parent != "in function");
-        let other_reason = none
-            .keys()
-            .filter(|reason| !reason.contains("C output only"));
         untyped.extend(
-            body_raw
-                .chain(other_reason)
-                .map(|what| format!("{corpus}: {what}")),
+            raw.keys()
+                .filter(|(lang, parent)| *lang == "c-language" && *parent != "in function")
+                .map(|(lang, parent)| format!("{corpus}: {lang} {parent}"))
+                .chain(
+                    none.keys()
+                        .map(|reason| format!("{corpus}: no tree ({reason})")),
+                ),
         );
     }
     assert!(mismatches.is_empty(), "{report}{}", mismatches.join("\n"));

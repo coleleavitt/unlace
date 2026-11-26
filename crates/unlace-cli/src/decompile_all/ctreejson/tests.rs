@@ -1,4 +1,5 @@
 use unlace_decomp::ctreeexport::print_c;
+use unlace_decomp::lang::OutLang;
 
 use super::*;
 use crate::jsonfmt;
@@ -60,6 +61,7 @@ fn tree() -> ExportTree {
             keywords: [(Keyword::While, "aslongas".to_string())].into(),
         },
         root,
+        lang: OutLang::C,
     }
 }
 
@@ -183,7 +185,12 @@ fn a_document_that_is_not_a_tree_is_refused_with_the_member_at_fault() {
         let error = parse(&text.replace(from, to)).unwrap_err();
         assert!(error.contains(fault), "{error}");
     }
-    assert!(parse("{}").unwrap_err().contains("style"));
+    assert!(parse("{}").unwrap_err().contains("language"));
+    assert!(
+        parse("{\"language\": \"c-language\"}")
+            .unwrap_err()
+            .contains("style")
+    );
 }
 
 #[test]

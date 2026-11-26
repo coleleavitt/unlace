@@ -308,7 +308,7 @@ impl PrintC {
                 and: self.op_spelling(&tokens::BOOLEAN_AND),
                 not: self.op_spelling(&tokens::BOOLEAN_NOT),
             },
-            c_output: self.out_lang == crate::lang::OutLang::C,
+            lang: self.out_lang,
         }
     }
 }

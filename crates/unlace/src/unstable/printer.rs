@@ -6,10 +6,11 @@
 //! [`Decompiler::tree`] returns it; `unlace decompile --json --ctree` writes the same tree as
 //! the record's `ctree` member, which [`tree_from_json`] reads back.
 //!
-//! [`Printer`] prints a tree. Each of its methods has a default that prints C in the
-//! decompiler's own layout, so [`CPrinter`] (the defaults and nothing else) reproduces the
-//! function's code byte for byte, and a printer for another flavour overrides only what it
-//! prints differently. `examples/let_flavour.rs` prints declarations as `let` bindings.
+//! [`Printer`] prints a tree. Each of its methods has a default that prints the tree in its
+//! output language (`tree.lang`, the layout and the forms of that language), so [`CPrinter`]
+//! (the defaults and nothing else) reproduces the function's code byte for byte in C, Rust, Go
+//! and Java alike, and a printer for another flavour overrides only what it prints differently.
+//! `examples/let_flavour.rs` prints declarations as `let` bindings.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 

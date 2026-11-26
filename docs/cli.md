@@ -2703,7 +2703,10 @@ other member, `code` included, and the exit status are what they are without the
 `--ctree` needs `--json`, and one process: with `--jobs N` above 1 it is an argument error,
 because a worker's record does not carry the tree.
 
-`ctree` is `{"style": {...}, "root": {...}}`, or `null` when the function has no tree;
+`ctree` is `{"language": "...", "style": {...}, "root": {...}}`, or `null` when the function has no tree;
+`language` is the output language the tree was printed in (`c-language`, `rust-language`,
+`go-language` or `java-language`, the `option setlanguage` names), and the tree prints in that
+language's layout and forms;
 `ctree_error` then says why (both are `null` on a record with no `code`). `root` is a
 `function` node. Every node is an object, and a member a node has no value for is absent:
 
@@ -2773,17 +2776,19 @@ printed from its node and compared with the text it stands for, and a part that 
 print back exactly is kept as a `raw` node holding its text, so the document never states
 a structure the text does not have. `cargo run -p unlace --example ctree_roundtrip` (the
 reference printer, `unlace::unstable::printer::CPrinter`, over a `--json --ctree`
-document) repeats the check from outside. Measured on 2026-11-26 over the fixture binaries
-of this repository (1,482 binaries; 38,332 functions printed in C), every tree prints back
-to its `code` byte for byte; 38,327 hold no `raw` node and the other five hold nine
-between them, all of it text nested past level 61. Over the two parity corpora (4,871
-functions printed in C) every tree prints back, and the only `raw` nodes are the lines
-`structdefs` and `bytearrayc` print above a function (type definitions, a helper
-preamble). `ctree_error` is one of:
+document) repeats the check from outside. Measured on 2026-11-26. For C, over the fixture binaries of this repository (1,482
+binaries; 38,332 functions printed in C), every tree prints back to its `code` byte for byte;
+38,327 hold no `raw` node and the other five hold nine between them, all of it text nested past
+level 61. Over the two parity corpora every printed function exports a tree that prints back
+byte for byte, in each language: C 4,694 trees of which 4,681 hold no `raw` node (the other 13
+hold `raw` lines only above the prototype: the type definitions and helper preamble an option
+prints there); Go 201 trees, 89 without `raw`; Java 37 trees, 28 without; Rust 235 trees, none
+without a `raw` node, because every Rust function has a `#[allow(...)]` line above its
+prototype, and the loops, tests and declarations are typed. A `raw` node holds the text of a
+statement or expression the typed vocabulary does not cover: a `break` the emitter does not
+mark as a statement, a `match` (Rust) or `switch` (Go), a standalone comment, an unsafe pointer
+access, and the statements the parity corpora print in those forms. `ctree_error` is one of:
 
-- `the tree is exported for C output only`: the function printed in another output
-  language (a Rust, Go or DEX binary under the default `--language auto`, or a language
-  file whose base is not C). Pass `--language c`.
 - `the text was rewritten after it was printed (a cookie-literal return)`: the
   stack-cookie presentation pass edited the text.
 - `pointer-argument casts were written into the text after the tree was built`: a

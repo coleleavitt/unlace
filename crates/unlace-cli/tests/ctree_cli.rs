@@ -3,6 +3,7 @@
 use crate::common::{repo_root, run_unlace};
 use unlace_cli::embed::ctree_from_json;
 use unlace_decomp::ctreeexport::{Kind, print_c};
+use unlace_decomp::lang::OutLang;
 
 fn sample() -> String {
     repo_root()
@@ -116,7 +117,7 @@ fn a_statement_names_its_operands_types_lines_and_addresses() {
 }
 
 #[test]
-fn the_flag_needs_json_one_process_and_c_output() {
+fn the_flag_needs_json_and_one_process() {
     let sample = sample();
     for (args, message) in [
         (
@@ -137,25 +138,32 @@ fn the_flag_needs_json_one_process_and_c_output() {
         assert!(stdout.is_empty(), "{args:?}: {stdout}");
         assert!(stderr.contains(message), "{args:?}: {stderr}");
     }
+}
 
-    let rust = document(&[
-        "decompile",
-        &sample,
-        "main",
-        "--json",
-        "--ctree",
-        "--language",
-        "rust",
-    ]);
-    let record = &rust["functions"][0];
-    assert!(record["code"].is_string());
-    assert!(record["ctree"].is_null());
-    assert!(
-        record["ctree_error"]
-            .as_str()
-            .unwrap()
-            .contains("C output only")
-    );
+#[test]
+fn a_loop_and_a_test_are_typed_in_rust_and_go() {
+    for (language, lang, kind) in [("rust", OutLang::Rust, "while"), ("go", OutLang::Go, "for")] {
+        let document = document(&[
+            "decompile",
+            &sample(),
+            "sum_to",
+            "--json",
+            "--ctree",
+            "--language",
+            language,
+        ]);
+        let record = &document["functions"][0];
+        let code = record["code"].as_str().unwrap();
+        let tree = ctree_from_json(&record["ctree"].to_string()).expect("a tree");
+        assert_eq!(tree.lang, lang);
+        assert_eq!(print_c(&tree), code, "{language}");
+        let mut kinds = Vec::new();
+        tree.root.walk(&mut |node| kinds.push(node.kind));
+        assert!(
+            kinds.contains(&Kind::from_name(kind).unwrap()),
+            "{language}: {kinds:?}"
+        );
+    }
 }
 
 /// A language file over C: keywords, operators and the member form respelled.

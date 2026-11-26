@@ -1,4 +1,5 @@
 use unlace_decomp::ctreeexport::{Brace, ExportTree, Form, Kind, Node, Span, Style, print_c};
+use unlace_decomp::lang::OutLang;
 use unlace_decomp::pointerargs::{Insertion, Position};
 
 use super::FuncDetail;
@@ -54,6 +55,7 @@ fn detail() -> FuncDetail {
             ..Style::default()
         },
         root,
+        lang: OutLang::C,
     };
     assert_eq!(print_c(&tree), ORIGINAL);
     FuncDetail {

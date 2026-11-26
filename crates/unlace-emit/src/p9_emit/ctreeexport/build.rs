@@ -1,6 +1,7 @@
 //! Builds the exported tree of one function from its tree-capture render, checking every part
 //! against the text with the reference printer ([`super::print_c`]).
 
+use crate::lang::OutLangExt;
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -42,15 +43,13 @@ pub fn build(
     untrimmed: &str,
     code: &str,
 ) -> Result<ExportTree, String> {
-    if !capture.c_output {
-        return Err("the tree is exported for C output only".to_string());
-    }
     let builder = Builder::new(tokens, capture, op_addresses, untrimmed, code)?;
     let mut root = builder.function()?;
     builder.statement_addresses(&mut root);
     let tree = ExportTree {
         style: capture.style.clone(),
         root,
+        lang: capture.lang,
     };
     let printed = print_c(&tree);
     if printed != code {
@@ -275,7 +274,7 @@ impl<'a> Builder<'a> {
     }
 
     fn printed(&self, print: impl FnOnce(&mut CPrinter, &mut Writer)) -> String {
-        let mut w = Writer::new(self.style);
+        let mut w = Writer::new(self.style, self.capture.lang);
         print(&mut CPrinter, &mut w);
         w.out
     }
@@ -373,7 +372,11 @@ impl<'a> Builder<'a> {
         let parsed = self.sequence(&mut at, b).filter(|_| at == b);
         match parsed {
             Some(mut node) => {
-                clip(&mut node, self.level.get() + 1, self.style);
+                clip(
+                    &mut node,
+                    self.level.get() + 1,
+                    (self.style, self.capture.lang),
+                );
                 self.checked(node)
             }
             None => self.leaf(Kind::Raw, a, b),
@@ -958,24 +961,35 @@ impl<'a> Builder<'a> {
             while j < end && self.toks[j].in_var_decl {
                 j += 1;
             }
-            let decl = self.declaration(i, j).filter(|_| self.sym(j, ";"))?;
+            let term = self.terminator();
+            let decl = self.declaration(i, j).filter(|_| self.ends(j))?;
             return Some((
                 Node {
-                    span: self.span(i, j + 1),
+                    span: self.span(i, j + term),
                     ..decl
                 },
-                j + 1,
+                j + term,
             ));
         }
         if self.kw(i, Keyword::If) {
             return self.if_statement(i, end, indent);
         }
-        if self.kw(i, Keyword::While) {
-            let close = self
-                .close_of(i + 1, end, "(", ")")
-                .filter(|_| self.sym(i + 1, "("))?;
-            let cond = self.expr(i + 2, close);
-            let (body, next) = self.block(close + 1, end, indent)?;
+        if self.word(i, "loop")
+            && self.capture.lang.profile().forms.inf_loop == crate::lang::InfLoopForm::RustLoop
+            && self.sym(i + 1, "{")
+        {
+            let (body, next) = self.block(i + 1, end, indent)?;
+            return Some((
+                Node {
+                    children: vec![self.node(Kind::Empty, i + 1, i + 1), body],
+                    ..self.node(Kind::While, i, next)
+                },
+                next,
+            ));
+        }
+        if self.kw(i, Keyword::While) && !self.semicolon_before_body(i, end) {
+            let (cond, open) = self.test(i, end)?;
+            let (body, next) = self.block(open, end, indent)?;
             return Some((
                 Node {
                     children: vec![cond, body],
@@ -1002,17 +1016,24 @@ impl<'a> Builder<'a> {
             ));
         }
         if self.kw(i, Keyword::For) {
-            let close = self
-                .close_of(i + 1, end, "(", ")")
-                .filter(|_| self.sym(i + 1, "("))?;
-            let semis: Vec<usize> = (i + 2..close).filter(|&k| self.sym(k, ";")).collect();
+            let parenthesised = self.capture.lang.profile().caps.paren_conditions;
+            let (start, close, open) = if parenthesised {
+                let close = self
+                    .close_of(i + 1, end, "(", ")")
+                    .filter(|_| self.sym(i + 1, "("))?;
+                (i + 2, close, close + 1)
+            } else {
+                let open = (i + 1..end).find(|&k| self.sym(k, "{"))?;
+                (i + 1, open, open)
+            };
+            let semis: Vec<usize> = (start..close).filter(|&k| self.sym(k, ";")).collect();
             let [first, second] = semis.as_slice() else {
                 return None;
             };
-            let init = self.expr(i + 2, *first);
+            let init = self.expr(start, *first);
             let cond = self.expr(first + 1, *second);
             let step = self.expr(second + 1, close);
-            let (body, next) = self.block(close + 1, end, indent)?;
+            let (body, next) = self.block(open, end, indent)?;
             return Some((
                 Node {
                     children: vec![init, cond, step, body],
@@ -1142,7 +1163,8 @@ impl<'a> Builder<'a> {
                 mark,
             ));
         }
-        if mark >= end || !self.sym(mark, ";") {
+        let term = self.terminator();
+        if mark > end || (term == 1 && (mark >= end || !self.sym(mark, ";"))) {
             return None;
         }
         let (kind, from) = if self.kw(i, Keyword::Return) {
@@ -1158,14 +1180,51 @@ impl<'a> Builder<'a> {
         Some((
             Node {
                 children,
-                ..self.node(kind, i, mark + 1)
+                ..self.node(kind, i, mark + term)
             },
-            mark + 1,
+            mark + term,
         ))
     }
 
     /// The braces opened at token `open` and the items between them, a level deeper than
     /// `indent`.
+    /// The width of a statement's terminator in tokens: 1 for the language's `;`, 0 in a
+    /// language with none (Go ends a statement at its line).
+    fn terminator(&self) -> usize {
+        usize::from(!self.capture.lang.profile().kw_semicolon.is_empty())
+    }
+
+    /// Does the statement end at token `i`: the language's terminator is there, or it has none.
+    fn ends(&self, i: usize) -> bool {
+        match self.capture.lang.profile().kw_semicolon {
+            "" => true,
+            semi => self.sym(i, semi),
+        }
+    }
+
+    /// Is the header of the bare-test statement at `at` a three-part `for` header (a `;` before
+    /// the `{` that opens the body)? Go spells its `while` and its `for` alike.
+    fn semicolon_before_body(&self, at: usize, end: usize) -> bool {
+        !self.capture.lang.profile().caps.paren_conditions
+            && (at + 1..end)
+                .take_while(|&k| !self.sym(k, "{"))
+                .any(|k| self.sym(k, ";"))
+    }
+
+    /// The test of the statement keyword at `at`, and the token after it: `(test)` in a language
+    /// that parenthesises its tests, else the tokens up to the `{` that opens the body.
+    fn test(&self, at: usize, end: usize) -> Option<(Node, usize)> {
+        if self.capture.lang.profile().caps.paren_conditions {
+            let close = self
+                .close_of(at + 1, end, "(", ")")
+                .filter(|_| self.sym(at + 1, "("))?;
+            Some((self.expr(at + 2, close), close + 1))
+        } else {
+            let open = (at + 1..end).find(|&k| self.sym(k, "{"))?;
+            Some((self.expr(at + 1, open), open))
+        }
+    }
+
     fn block(&self, open: usize, end: usize, indent: u32) -> Parsed {
         self.braces(open, end, Place::block(indent + self.style.indent))
     }
@@ -1197,11 +1256,9 @@ impl<'a> Builder<'a> {
         let mut children = Vec::new();
         let mut at = i;
         loop {
-            let close = self
-                .close_of(at + 1, end, "(", ")")
-                .filter(|_| self.sym(at + 1, "("))?;
-            children.push(self.expr(at + 2, close));
-            at = close + 1;
+            let (cond, after_test) = self.test(at, end)?;
+            children.push(cond);
+            at = after_test;
             while at < end && self.eol_comment(at) {
                 children.push(self.leaf(Kind::EolComment, at, at + 1));
                 at += 1;

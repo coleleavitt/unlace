@@ -10,6 +10,7 @@
 
 use unlace_console::project::FuncResult;
 use unlace_decomp::ctreeexport::{Brace, ExportTree, Form, Keyword, Kind, Node, Span, Style};
+use unlace_decomp::lang::OutLang;
 
 use crate::jsonfmt::Json;
 
@@ -32,6 +33,7 @@ fn number(value: impl ToString) -> Json {
 pub(crate) fn to_json(tree: &ExportTree) -> Json {
     let style = &tree.style;
     Json::Object(vec![
+        ("language".into(), Json::Str(tree.lang.print_name().into())),
         (
             "style".into(),
             Json::Object(vec![
@@ -117,6 +119,9 @@ fn node_json(node: &Node) -> Json {
 
 /// The tree a `ctree` member holds.
 pub(crate) fn from_json(json: &Json) -> Result<ExportTree, String> {
+    let lang = text_of(json, "language")
+        .and_then(OutLang::from_print_name)
+        .ok_or("ctree: bad `language`")?;
     let style = member(json, "style").ok_or("ctree: no `style`")?;
     let brace = |key: &str| {
         text_of(style, key)
@@ -146,6 +151,7 @@ pub(crate) fn from_json(json: &Json) -> Result<ExportTree, String> {
             keywords,
         },
         root: node_from(member(json, "root").ok_or("ctree: no `root`")?, 1)?,
+        lang,
     })
 }
 

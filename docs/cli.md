@@ -2641,7 +2641,7 @@ because a worker's record does not carry the tree.
 | `expr` | the expression | an expression statement; with no child, an empty statement `;` |
 | `comment`, `eol_comment` | | a comment on a line of its own (at `style.comment_indent`), or behind the item before it |
 | `blank_line` | | an empty line |
-| `raw` | | text the kinds above do not cover, kept exactly as printed: as an item of a block its whole lines with their indentation, inside an expression that expression's text. Also what nests more than 128 statements and expressions deep, so that a walk of the tree has a bounded depth (chains are wide, not deep, so only genuine nesting counts) |
+| `raw` | | text the kinds above do not cover, kept exactly as printed: as an item of a block its whole lines with their indentation, inside an expression that expression's text. Also what the text nests past the tree's last level (next paragraph) |
 | `var`, `const`, `func`, `type`, `field` | | a variable, a constant as spelled, a function name, a type name, a field name |
 | `text` | | any other atom, such as the name of a pseudo-operation (`ZEXT48`, `CONCAT44`) |
 | `empty` | | nothing: an absent part |
@@ -2649,6 +2649,15 @@ because a worker's record does not carry the tree.
 | `list` | expressions | separated by `sep`: the statements a condition runs before its test (`(a = f(), a != 0)`) |
 | `call` | the callee, then the arguments | `text`, `sep` and `close` are `(`, `,` and `)` |
 | `op` | its operands | see `op`, `form`, `close`, `spacing` above. An operator applied again to one of its own operands with no parentheses between is one node over all the operands, so `a + b + c + d` is one `add` with four children; an assignment is never chained (`a = b = c` nests to the right), and `?:` has exactly three children |
+
+A tree has at most **61 levels** (the `function` node is level 1, its body `block` 2, the
+body's statements 3). What the text nests deeper stays text: an operand that would have
+operands of its own on level 61 is a `raw` node, and a statement that has no room for its
+block and operands is `raw` lines. Chains are wide, not deep, so only real nesting counts:
+the deepest tree of the corpus below has 41 levels, and 28 nested `if`s fit. A node of
+level `d` is nested `3 + 2d` arrays and objects deep in the document and its `children`
+and `addresses` one more, so the document nests at most 126, inside the default nesting
+limit of the common JSON readers (`serde_json`: 128).
 
 `style` holds what the print options and a language file decided and no node carries:
 `indent` (spaces per level), `comment_indent` (the column of a comment line),

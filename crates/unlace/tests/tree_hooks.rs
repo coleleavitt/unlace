@@ -5,7 +5,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use unlace::unstable::ctree::{CMaturity, CTree, Funcdata, OpId, StmtKind};
-use unlace::{Decompiler, Target};
+use unlace::unstable::printer::{Kind, print_c};
+use unlace::{Decompiler, Error, Target};
 
 const G: u64 = 0x1020;
 
@@ -126,4 +127,37 @@ fn hooks_survive_a_reload() {
     assert!(!first.contains("g();") && first.contains("h();"), "{first}");
     let mut decompiler = decompiler.with_max_fn_seconds(60);
     assert_eq!(decompiler.decompile(0x1000).unwrap().c, first);
+}
+
+#[test]
+fn a_panic_in_a_hook_fails_the_function_it_was_printing_and_no_other() {
+    let mut decompiler = declared().with_tree_hook(CMaturity::Statements, |_, fd| {
+        assert!(fd.get_name() != "f", "the hook refuses f");
+    });
+    for _ in 0..2 {
+        match decompiler.decompile(0x1000) {
+            Err(Error::Decompile { name, reason, .. }) => {
+                assert_eq!(name, "f");
+                assert!(reason.contains("panic while rendering C"), "{reason}");
+            }
+            other => panic!("{:?}", other.map(|function| function.c)),
+        }
+        let untouched = decompiler.decompile(0x1020).unwrap().c;
+        assert_eq!(untouched, declared().decompile(0x1020).unwrap().c);
+    }
+}
+
+#[test]
+fn the_exported_tree_is_the_tree_of_the_hooked_text() {
+    let mut hooked = declared().with_tree_hook(CMaturity::Statements, drop_calls_to_g);
+    let code = hooked.decompile(0x1000).unwrap().c;
+    let tree = hooked.tree(0x1000).unwrap();
+    assert_eq!(print_c(&tree), code);
+    let mut callees = Vec::new();
+    tree.root.walk(&mut |node| {
+        if node.kind == Kind::Call {
+            callees.push(node.children[0].text.clone());
+        }
+    });
+    assert_eq!(callees, ["h"]);
 }

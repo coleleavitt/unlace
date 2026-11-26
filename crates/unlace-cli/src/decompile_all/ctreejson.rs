@@ -142,7 +142,7 @@ pub(crate) fn from_json(json: &Json) -> Result<ExportTree, String> {
             brace_switch: brace("brace_switch")?,
             keywords,
         },
-        root: node_from(member(json, "root").ok_or("ctree: no `root`")?)?,
+        root: node_from(member(json, "root").ok_or("ctree: no `root`")?, 1)?,
     })
 }
 
@@ -170,7 +170,14 @@ fn number_of<T: std::str::FromStr>(json: &Json, key: &str) -> Option<T> {
     }
 }
 
-fn node_from(json: &Json) -> Result<Node, String> {
+/// The node `json` holds, at tree level `level`.
+fn node_from(json: &Json, level: u32) -> Result<Node, String> {
+    if level > ExportTree::MAX_LEVELS {
+        return Err(format!(
+            "ctree: nested deeper than {} levels",
+            ExportTree::MAX_LEVELS
+        ));
+    }
     let kind = text_of(json, "kind").ok_or("ctree: a node has no `kind`")?;
     let kind = Kind::from_name(kind).ok_or_else(|| format!("ctree: unknown kind `{kind}`"))?;
     let owned = |key: &str| text_of(json, key).unwrap_or_default().to_string();
@@ -206,7 +213,7 @@ fn node_from(json: &Json) -> Result<Node, String> {
         .collect::<Result<_, _>>()?;
     node.children = list("children")
         .iter()
-        .map(node_from)
+        .map(|child| node_from(child, level + 1))
         .collect::<Result<_, _>>()?;
     Ok(node)
 }

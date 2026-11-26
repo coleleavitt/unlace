@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::printer::print_item_text;
 use super::{
     CPrinter, Capture, ExportTree, ExprShape, Form, Keyword, Kind, LeafKind, Node, Place, Printer,
-    Span, Style, Writer, item_column, print_c,
+    Span, Style, Writer, clip, item_column, print_c,
 };
 use crate::prettyprint::{CaptureMark, EmitToken, SyntaxHighlight, TokenKind};
 
@@ -67,10 +67,6 @@ pub fn build(
     Ok(tree)
 }
 
-/// How deep statements and expressions nest in a tree. What the text nests deeper stays text
-/// (a `raw` node), so a walk of the tree, or of its JSON, has a bounded depth.
-const MAX_DEPTH: u32 = 128;
-
 struct Builder<'a> {
     toks: &'a [EmitToken],
     capture: &'a Capture,
@@ -90,7 +86,9 @@ struct Builder<'a> {
     stmt_end: BTreeMap<u32, u32>,
     function_begin: usize,
     style: &'a Style,
-    /// How many statements and expressions enclose the one being built.
+    /// The tree level of the statements being built: the function is level 1, its body 2.
+    level: Cell<u32>,
+    /// How many calls deep the expression parser is.
     depth: Cell<u32>,
 }
 
@@ -195,6 +193,7 @@ impl<'a> Builder<'a> {
             stmt_end,
             function_begin,
             style: &capture.style,
+            level: Cell::new(3),
             depth: Cell::new(0),
         })
     }
@@ -281,15 +280,29 @@ impl<'a> Builder<'a> {
         w.out
     }
 
-    /// `build` one level deeper, or nothing at [`MAX_DEPTH`].
+    /// `build` one call deeper in the expression parser, or nothing once it is as deep as a
+    /// tree has levels: what would be built there is past [`ExportTree::MAX_LEVELS`].
     fn nested<T>(&self, build: impl FnOnce() -> Option<T>) -> Option<T> {
         let depth = self.depth.get();
-        if depth >= MAX_DEPTH {
+        if depth >= ExportTree::MAX_LEVELS {
             return None;
         }
         self.depth.set(depth + 1);
         let built = build();
         self.depth.set(depth);
+        built
+    }
+
+    /// `build` with the statements it builds `by` levels deeper, or nothing when they would be
+    /// on the last level: a statement needs a level under it for its operands.
+    fn deeper<T>(&self, by: u32, build: impl FnOnce() -> Option<T>) -> Option<T> {
+        let level = self.level.get();
+        if level + by >= ExportTree::MAX_LEVELS {
+            return None;
+        }
+        self.level.set(level + by);
+        let built = build();
+        self.level.set(level);
         built
     }
 
@@ -350,8 +363,8 @@ impl<'a> Builder<'a> {
 
     // --- expressions --------------------------------------------------------------------------
 
-    /// The expression printed by the tokens `a..b`: typed when it parses and prints back to
-    /// those tokens' text, else that text.
+    /// The expression printed by the tokens `a..b`, an operand of the statement being built:
+    /// typed when it parses and prints back to those tokens' text, else that text.
     fn expr(&self, a: usize, b: usize) -> Node {
         if a >= b {
             return self.node(Kind::Empty, a, a);
@@ -359,7 +372,10 @@ impl<'a> Builder<'a> {
         let mut at = a;
         let parsed = self.sequence(&mut at, b).filter(|_| at == b);
         match parsed {
-            Some(node) => self.checked(node),
+            Some(mut node) => {
+                clip(&mut node, self.level.get() + 1, self.style);
+                self.checked(node)
+            }
             None => self.leaf(Kind::Raw, a, b),
         }
     }
@@ -916,10 +932,6 @@ impl<'a> Builder<'a> {
     /// statement opened by its keyword, a `case` or `default` label, an empty statement, a
     /// statement the emitter bracketed, or a label line.
     fn item(&self, i: usize, end: usize, place: Place) -> Parsed {
-        self.nested(|| self.item_at(i, end, place))
-    }
-
-    fn item_at(&self, i: usize, end: usize, place: Place) -> Parsed {
         let tok = &self.toks[i];
         let indent = place.indent;
         if tok.kind == TokenKind::Comment {
@@ -1007,25 +1019,18 @@ impl<'a> Builder<'a> {
                     close + 2,
                 ));
             }
-            let open = close + 1;
-            let last = self
-                .close_of(open, end, "{", "}")
-                .filter(|_| self.sym(open, "{"))?;
             let step = self.style.indent;
             let inside = Place {
                 indent: indent + 2 * step,
                 blank: indent + step,
             };
-            let body = Node {
-                children: self.items(open + 1, last, inside, self.line_of[open]),
-                ..self.node(Kind::Block, open, last + 1)
-            };
+            let (body, next) = self.braces(close + 1, end, inside)?;
             return Some((
                 Node {
                     children: vec![value, body],
-                    ..self.node(Kind::Switch, i, last + 1)
+                    ..self.node(Kind::Switch, i, next)
                 },
-                last + 1,
+                next,
             ));
         }
         if self.word(i, "try") {
@@ -1146,13 +1151,21 @@ impl<'a> Builder<'a> {
     /// The braces opened at token `open` and the items between them, a level deeper than
     /// `indent`.
     fn block(&self, open: usize, end: usize, indent: u32) -> Parsed {
+        self.braces(open, end, Place::block(indent + self.style.indent))
+    }
+
+    /// The braces opened at token `open` and the items between them, which print at `inside`:
+    /// a block under the statement being built, its items two levels below that statement.
+    fn braces(&self, open: usize, end: usize, inside: Place) -> Parsed {
         let close = self
             .close_of(open, end, "{", "}")
             .filter(|_| self.sym(open, "{"))?;
-        let inside = Place::block(indent + self.style.indent);
+        let children = self.deeper(2, || {
+            Some(self.items(open + 1, close, inside, self.line_of[open]))
+        })?;
         Some((
             Node {
-                children: self.items(open + 1, close, inside, self.line_of[open]),
+                children,
                 ..self.node(Kind::Block, open, close + 1)
             },
             close + 1,
@@ -1186,7 +1199,7 @@ impl<'a> Builder<'a> {
         if at < end && self.kw(at, Keyword::Else) && self.first_on_line(at) {
             let chained = self.kw(at + 1, Keyword::If) && self.line_of[at + 1] == self.line_of[at];
             let (els, next) = if chained {
-                self.nested(|| self.if_statement(at + 1, end, indent))?
+                self.deeper(1, || self.if_statement(at + 1, end, indent))?
             } else {
                 self.arm(at + 1, end, indent)?
             };
@@ -1211,7 +1224,7 @@ impl<'a> Builder<'a> {
             return self.block(at, end, indent);
         }
         let place = Place::block(indent + self.style.indent);
-        self.item(at, end, place)
+        self.deeper(1, || self.item(at, end, place))
             .filter(|(node, _)| node.kind.is_statement())
     }
 

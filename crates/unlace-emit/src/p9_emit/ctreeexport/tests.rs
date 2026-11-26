@@ -832,6 +832,169 @@ fn what_nests_too_deep_stays_text() {
 }
 
 #[test]
+fn operands_nested_past_the_last_level_stay_text() {
+    // `return !!...!a;`: the return is level 3, the i-th `!` level 3 + i.
+    let bangs = 80;
+    let code: &'static str =
+        Box::leak(format!("void f(void)\n{{\n  return {}a;\n}}", "!".repeat(bangs)).into());
+    let mut lex = Lexed::new(code);
+    lex.prototype();
+    let keyword = lex.keyword("return");
+    let first: Vec<u32> = (0..bangs)
+        .map(|_| lex.push("!", TokenKind::Op, SyntaxHighlight::NoColor))
+        .collect();
+    let a = lex.var("a");
+    let semi = lex.syntax(";");
+    lex.syntax("}");
+    let mut exprs: Vec<CapturedExpr> = first
+        .iter()
+        .enumerate()
+        .map(|(i, &at)| CapturedExpr {
+            parent: i.checked_sub(1).map(|parent| parent as u32),
+            first: at,
+            end: a + 1,
+            shape: ExprShape::Op {
+                name: "not",
+                form: Form::Prefix,
+                open: "!",
+                close: "",
+                spacing: 0,
+                operands: 1,
+            },
+            paren: false,
+            op: None,
+            ty: None,
+        })
+        .collect();
+    exprs.push(atom(a, "a", Some(bangs as u32 - 1)));
+    let mut capture = capture(
+        exprs,
+        vec![
+            CaptureMark::StatementBegin(keyword as usize, None),
+            CaptureMark::StatementEnd(semi as usize),
+        ],
+    );
+    capture.engine_tokens = first.iter().map(|&at| (at, at + 1)).collect();
+    let tree = lex.build(&capture).expect("a tree");
+    assert_eq!(print_c(&tree), code);
+    assert_eq!(depth(&tree.root), ExportTree::MAX_LEVELS as usize);
+    let mut node = &tree.root.children[1].children[0].children[0];
+    let mut typed = 0;
+    while node.kind == Kind::Op {
+        typed += 1;
+        node = &node.children[0];
+    }
+    let kept = ExportTree::MAX_LEVELS as usize - 4;
+    assert_eq!(typed, kept);
+    assert_eq!(
+        (node.kind, node.text.as_str()),
+        (Kind::Raw, format!("{}a", "!".repeat(bangs - kept)).as_str())
+    );
+}
+
+#[test]
+fn statements_nested_past_the_last_levels_stay_lines() {
+    // The k-th nested `if` is level 1 + 2k and its body's statements two levels below it.
+    let nested = 40;
+    let mut text = String::from("void f(void)\n{\n");
+    for k in 1..=nested {
+        text += &format!("{}if (a) {{\n", "  ".repeat(k));
+    }
+    text += &format!("{}return;\n", "  ".repeat(nested + 1));
+    for k in (1..=nested).rev() {
+        text += &format!("{}}}\n", "  ".repeat(k));
+    }
+    text += "}";
+    let code: &'static str = Box::leak(text.into());
+    let mut lex = Lexed::new(code);
+    lex.prototype();
+    for _ in 0..nested {
+        lex.keyword("if");
+        lex.syntax("(");
+        lex.var("a");
+        lex.syntax(")");
+        lex.syntax("{");
+    }
+    let keyword = lex.keyword("return");
+    let semi = lex.syntax(";");
+    for _ in 0..=nested {
+        lex.syntax("}");
+    }
+    let marks = vec![
+        CaptureMark::StatementBegin(keyword as usize, None),
+        CaptureMark::StatementEnd(semi as usize),
+    ];
+    let tree = lex.build(&capture(Vec::new(), marks)).expect("a tree");
+    assert_eq!(print_c(&tree), code);
+    assert!(depth(&tree.root) <= ExportTree::MAX_LEVELS as usize);
+    let (mut typed, mut raw) = (0, Vec::new());
+    tree.root.walk(&mut |node| match node.kind {
+        Kind::If => typed += 1,
+        Kind::Raw => raw.push(node.text.clone()),
+        _ => {}
+    });
+    // An `if` needs its block and the block's statements under it, and those statements a
+    // level for their operands: the last typed `if` is on level MAX_LEVELS - 4.
+    let kept = (ExportTree::MAX_LEVELS as usize - 4 - 1) / 2;
+    assert_eq!(typed, kept);
+    let [lines] = raw.as_slice() else {
+        panic!("{} raw nodes", raw.len());
+    };
+    assert!(lines.starts_with(&format!("{}if (a) {{\n", "  ".repeat(kept + 1))));
+    assert_eq!(lines.matches("if (a)").count(), nested - kept);
+    assert!(lines.contains("return;"));
+}
+
+#[test]
+fn a_cast_written_at_the_last_level_is_kept_as_text() {
+    // `  (((...v...)));` on line 3: the statement is level 3, the leaf on the last level.
+    let parens = ExportTree::MAX_LEVELS - 4;
+    let leaf_col = 2 + parens;
+    let mut node = spanned(var("v"), 3, leaf_col, leaf_col + 1);
+    for i in (0..parens).rev() {
+        let width = 2 * (parens - i) + 1;
+        node = spanned(with(Kind::Paren, vec![node]), 3, 2 + i, 2 + i + width);
+    }
+    let width = 2 * parens + 1;
+    let statement = spanned(stmt(node), 3, 2, 2 + width + 1);
+    let mut tree = tree(STYLE, function("void f(void)", vec![statement]));
+    let lines = |line, end_line| Span {
+        line,
+        col: 0,
+        end_line,
+        end_col: 1,
+    };
+    tree.root.span = lines(1, 4);
+    tree.root.children[1].span = lines(2, 4);
+    let open = "(".repeat(parens as usize);
+    let close = ")".repeat(parens as usize);
+    assert_eq!(depth(&tree.root), ExportTree::MAX_LEVELS as usize);
+    assert_eq!(
+        print_c(&tree),
+        format!("void f(void)\n{{\n  {open}v{close};\n}}")
+    );
+
+    assert!(tree.insert_cast(3, leaf_col, 1, "char"));
+    assert_eq!(
+        print_c(&tree),
+        format!("void f(void)\n{{\n  {open}(char)v{close};\n}}")
+    );
+    assert_eq!(depth(&tree.root), ExportTree::MAX_LEVELS as usize);
+    let mut innermost = &tree.root;
+    while let Some(child) = innermost.children.last() {
+        innermost = child;
+    }
+    assert_eq!(
+        (
+            innermost.kind,
+            innermost.text.as_str(),
+            innermost.ty.as_deref()
+        ),
+        (Kind::Raw, "(char)v", Some("char"))
+    );
+}
+
+#[test]
 fn a_render_that_is_not_the_reported_text_has_no_tree() {
     let code = "void f(void)\n{\n  return;\n}";
     let mut lex = Lexed::new(code);

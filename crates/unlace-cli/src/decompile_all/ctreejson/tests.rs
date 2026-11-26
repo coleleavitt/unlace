@@ -152,3 +152,22 @@ fn a_document_that_is_not_a_tree_is_refused_with_the_member_at_fault() {
     }
     assert!(parse("{}").unwrap_err().contains("style"));
 }
+
+#[test]
+fn a_document_nested_deeper_than_a_tree_can_be_is_refused() {
+    let nested = |levels: u32| {
+        let mut tree = tree();
+        let mut node = Node::with_text(Kind::Var, "v");
+        for _ in 3..levels {
+            let mut paren = Node::new(Kind::Paren);
+            paren.children = vec![node];
+            node = paren;
+        }
+        tree.root.children[1].children = vec![node];
+        jsonfmt::dumps_indent2(&to_json(&tree))
+    };
+    let parse = |text: &str| from_json(&jsonfmt::parse(text).expect("JSON"));
+    assert!(parse(&nested(ExportTree::MAX_LEVELS)).is_ok());
+    let error = parse(&nested(ExportTree::MAX_LEVELS + 1)).unwrap_err();
+    assert!(error.contains("deeper than 61 levels"), "{error}");
+}

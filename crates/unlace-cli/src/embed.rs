@@ -245,7 +245,7 @@ pub struct Output {
 
 /// The tree the `ctree` member of a `--json --ctree` record holds, from its JSON text.
 pub fn ctree_from_json(text: &str) -> Result<ExportTree, String> {
-    let json = crate::jsonfmt::parse(text).ok_or("ctree: not JSON")?;
+    let json = crate::jsonfmt::parse(text).ok_or("ctree: not JSON, or nested too deep")?;
     decompile_all::ctreejson::from_json(&json)
 }
 

@@ -11,8 +11,11 @@
 //! (`unlace::unstable::printer::CPrinter`); the result must be `code`, byte for byte. The
 //! report counts the functions, the trees, the exact round trips, the trees with no `raw` node
 //! (text the typed vocabulary does not cover), the nodes, the levels of the deepest tree, the
-//! `raw` nodes by the kind of node they are in, and each reason a function has no tree. The exit status is 1 when a tree does not print
-//! back. `unlace::unstable` is not covered by a stability promise.
+//! `raw` nodes by the kind of node they are in, and each reason a function has no tree.
+//!
+//! The exit status is 0 when every tree prints back, 1 when one does not (a `MISMATCH` line
+//! names it), and 2 when a document or a tree in it could not be read (an `UNREADABLE` line
+//! says why). `unlace::unstable` is not covered by a stability promise.
 
 use std::collections::BTreeMap;
 use std::io::Read;
@@ -30,6 +33,7 @@ struct Report {
     raw_in: BTreeMap<&'static str, usize>,
     no_tree: BTreeMap<String, usize>,
     mismatches: Vec<String>,
+    unreadable: Vec<String>,
 }
 
 fn count_raw(node: &Node, parent: &'static str, depth: usize, report: &mut Report) -> usize {
@@ -62,8 +66,14 @@ fn check(source: &str, text: &str, report: &mut Report) -> Result<(), Box<dyn st
             *report.no_tree.entry(reason.to_string()).or_default() += 1;
             continue;
         }
+        let tree = match tree_from_json(&function["ctree"].to_string()) {
+            Ok(tree) => tree,
+            Err(error) => {
+                report.unreadable.push(format!("{source}: {name}: {error}"));
+                continue;
+            }
+        };
         report.trees += 1;
-        let tree = tree_from_json(&function["ctree"].to_string())?;
         if count_raw(&tree.root, "tree", 1, report) == 0 {
             report.fully_typed += 1;
         }
@@ -84,16 +94,26 @@ fn check(source: &str, text: &str, report: &mut Report) -> Result<(), Box<dyn st
     Ok(())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let mut report = Report::default();
     let paths: Vec<String> = std::env::args().skip(1).collect();
+    let mut documents = Vec::new();
     if paths.is_empty() {
         let mut text = String::new();
-        std::io::stdin().read_to_string(&mut text)?;
-        check("<stdin>", &text, &mut report)?;
+        let read = std::io::stdin().read_to_string(&mut text).map(|_| text);
+        documents.push(("<stdin>".to_string(), read));
     }
-    for path in &paths {
-        check(path, &std::fs::read_to_string(path)?, &mut report)?;
+    for path in paths {
+        let read = std::fs::read_to_string(&path);
+        documents.push((path, read));
+    }
+    for (source, text) in documents {
+        let checked = text
+            .map_err(Into::into)
+            .and_then(|text| check(&source, &text, &mut report));
+        if let Err(error) = checked {
+            report.unreadable.push(format!("{source}: {error}"));
+        }
     }
 
     println!("functions with code: {}", report.with_code);
@@ -111,8 +131,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for mismatch in &report.mismatches {
         println!("MISMATCH {mismatch}");
     }
+    for unreadable in &report.unreadable {
+        println!("UNREADABLE {unreadable}");
+    }
+    if !report.unreadable.is_empty() {
+        std::process::exit(2);
+    }
     if !report.mismatches.is_empty() {
         std::process::exit(1);
     }
-    Ok(())
 }

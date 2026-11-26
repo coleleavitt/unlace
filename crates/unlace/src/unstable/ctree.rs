@@ -50,6 +50,12 @@ impl Decompiler {
     /// not printed, a sequence prints its statements in the tree's order, and a statement
     /// replaced by an empty [`StmtKind::Seq`] prints nothing.
     ///
+    /// A hook runs once per print of a function, and one decompile prints a function more
+    /// than once (the text, then the line map), so it makes the same edit each time it is
+    /// called for a function. A panic in a hook fails the function being printed: the call
+    /// returns [`Error::Decompile`](crate::Error::Decompile) (`panic while rendering C`),
+    /// and the load stays usable for every other function.
+    ///
     /// ```no_run
     /// use unlace::unstable::ctree::{CMaturity, OpCode, StmtKind};
     ///

@@ -433,6 +433,14 @@ pub struct ExportTree {
 }
 
 impl ExportTree {
+    /// The deepest level a node of an exported tree has; the function node is level 1. What
+    /// the text nests deeper stays text: an expression as a `raw` node, a statement as `raw`
+    /// lines. So every walk of a tree has a bounded depth, and so has its JSON: a node of
+    /// level `d` is nested `3 + 2d` arrays and objects deep in a `--json` document and its own
+    /// arrays one more, 126 at most, which is inside the nesting limit of this project's
+    /// reader and of `serde_json` (both 128).
+    pub const MAX_LEVELS: u32 = 61;
+
     /// Follow a cast written into the text after the tree was built: `(ty)` in front of the
     /// expression that is the `len` columns at `line`:`col`. The expression becomes the operand
     /// of a `cast` node and every span behind it on the line moves right. `false`, and no
@@ -445,8 +453,33 @@ impl ExportTree {
             end_col: col.saturating_add(len),
         };
         let width = u32::try_from(ty.encode_utf16().count()).unwrap_or(u32::MAX);
-        cast_at(&mut self.root, &site, ty, width.saturating_add(2).max(2))
+        let delta = width.saturating_add(2).max(2);
+        cast_at(&mut self.root, 1, &site, ty, delta, &self.style)
     }
+}
+
+/// Keep the expression `node`, at tree level `level`, inside [`ExportTree::MAX_LEVELS`]: a
+/// node at the last level that has operands of its own becomes a `raw` node holding the text
+/// the reference printer prints for it, so the tree prints as before.
+fn clip(node: &mut Node, level: u32, style: &Style) {
+    if node.children.is_empty() {
+        return;
+    }
+    if level < ExportTree::MAX_LEVELS {
+        for child in &mut node.children {
+            clip(child, level + 1, style);
+        }
+        return;
+    }
+    let mut w = Writer::new(style);
+    CPrinter.expr(&mut w, node);
+    *node = Node {
+        text: w.out,
+        ty: node.ty.take(),
+        span: node.span,
+        addresses: std::mem::take(&mut node.addresses),
+        ..Node::new(Kind::Raw)
+    };
 }
 
 /// Move the spans of `node` and the nodes under it that lie behind `site`'s start on its line.
@@ -462,8 +495,9 @@ fn shift_behind(node: &mut Node, site: &Span, delta: u32) {
     }
 }
 
-/// [`ExportTree::insert_cast`] under `node`: the outermost node whose span is `site`.
-fn cast_at(node: &mut Node, site: &Span, ty: &str, delta: u32) -> bool {
+/// [`ExportTree::insert_cast`] under `node`, which is at tree level `level`: the outermost
+/// node whose span is `site`.
+fn cast_at(node: &mut Node, level: u32, site: &Span, ty: &str, delta: u32, style: &Style) -> bool {
     let start = |span: &Span| (span.line, span.col);
     let end = |span: &Span| (span.end_line, span.end_col);
     if node.span == *site && !node.kind.is_statement() {
@@ -485,6 +519,7 @@ fn cast_at(node: &mut Node, site: &Span, ty: &str, delta: u32) -> bool {
             },
             ..Node::op("cast", Form::Presurround, "(", 0, vec![ty_node, operand])
         };
+        clip(node, level, style);
         return true;
     }
     let Some(at) = node.children.iter().position(|child| {
@@ -492,7 +527,7 @@ fn cast_at(node: &mut Node, site: &Span, ty: &str, delta: u32) -> bool {
     }) else {
         return false;
     };
-    if !cast_at(&mut node.children[at], site, ty, delta) {
+    if !cast_at(&mut node.children[at], level + 1, site, ty, delta, style) {
         return false;
     }
     for later in &mut node.children[at + 1..] {

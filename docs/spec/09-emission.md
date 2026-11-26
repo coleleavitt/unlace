@@ -6319,7 +6319,9 @@ statements in the tree's order, a statement turned into an empty sequence prints
 and the `return`, `&&`/`||` and moved-arm forms print as described above. A callback runs
 once per print of a function, and one decompile prints a function more than once when line
 mappings or tokens are asked for (the text, then the markup pass), so it must make the
-same edit each time. With no callback registered the schedule is the built-in rows alone
+same edit each time. A panic in a callback is a panic while printing: the function fails
+with `panic while rendering C / extracting variables`, the printer is returned cleared
+(`ArchPrintExt::with_print`), and the callbacks stay registered for the next function. With no callback registered the schedule is the built-in rows alone
 and the output is unchanged. With `UNLACE_STAGE_DIFF` set, each row reports the lines of
 the tree's dump (`CTree::dump`) it changed, as stage `ctree:<row name>`.
 
@@ -6382,11 +6384,22 @@ typed nodes; the kinds and members are listed in `docs/cli.md`, "The JSON docume
   `i`'s type); any other node printed for its parent's op is a part of the parent and has
   no type of its own.
 
-The builder nests at most 128 levels of statements and expressions (`MAX_DEPTH`): an
-item, an operand or an `else if` link that would nest deeper is not parsed and stays
-text under the rules below (an `else if` chain longer than that is `raw` as a whole), so
-every walk of a tree and of its JSON has a bounded depth. A chain costs one level
-whatever its length, so the bound is met only by genuine nesting.
+A tree has at most `ExportTree::MAX_LEVELS` = 61 levels (the function node is level 1,
+its body block 2, the body's statements 3), so every walk of a tree has a bounded depth
+and the `--json` document, in which a node of level `d` is nested `3 + 2d` arrays and
+objects deep and its own arrays one more, nests at most 126: inside the limit of the
+project's JSON reader (`jsonfmt`, 128) and of `serde_json`'s default (128). The builder
+keeps the bound exactly. On the statement side it tracks the level of the statements it
+is building: a block's statements are two levels below the statement that owns the block,
+an unbraced arm and an `else if` one level, and a statement is built only on a level
+below the last (it needs one for its operands); a statement with no room for that fails
+to parse and is kept as `raw` lines under the rules below, so the 29th of 29 nested `if`s
+is text. On the expression side `clip` cuts each parsed expression: a node on level 61
+that has operands of its own becomes a `raw` node holding the text the reference printer
+prints for it. The expression parser itself recurses at most 61 calls deep; what needs
+more is past the last level and stays text. A chain costs one level whatever its length,
+so the bound is met only by real nesting. `insert_cast` clips the cast it writes in the
+same way, and the JSON reader refuses a node deeper than 61 levels.
 
 Every item of a block is accepted only if it starts at the column its kind prints at and
 the reference printer reproduces its text; otherwise the whole lines it covers are one

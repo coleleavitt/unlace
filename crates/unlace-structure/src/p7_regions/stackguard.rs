@@ -218,6 +218,15 @@ fn ptr_is_guard_slot(ptr: VarnodeId, data: &Funcdata) -> bool {
     false
 }
 
+/// Walk budget for [`derives_from_canary_load`] and [`collect_canary_slots`].
+///
+/// The walk follows every INDIRECT and MULTIEQUAL back through the function,
+/// so its length is the number of merges and calls between the compare and the
+/// entry-side canary store. The visited set already stops cycles; this bound
+/// only limits recursion. At 32 it cut off the real canary check of coreutils
+/// `ls` `main` (a chain of about 38 merges), leaving the check in place.
+const CANARY_WALK_DEPTH: int4 = 256;
+
 /// Does `vn` ultimately derive from a LOAD of the canary slot?
 /// (C++ `derivesFromCanaryLoad`, `unlace_stackguard.cc:60`).
 ///
@@ -534,10 +543,10 @@ fn is_canary_compare(cbranch: OpId, data: &Funcdata) -> Option<bool> {
     let in1 = cmpop.get_in(1).expect("isCanaryCompare: cmp in1");
     let mut s0: BTreeSet<VarnodeId> = BTreeSet::new();
     let mut s1: BTreeSet<VarnodeId> = BTreeSet::new();
-    if !derives_from_canary_load(in0, 32, &mut s0, data) {
+    if !derives_from_canary_load(in0, CANARY_WALK_DEPTH, &mut s0, data) {
         return None;
     }
-    if !derives_from_canary_load(in1, 32, &mut s1, data) {
+    if !derives_from_canary_load(in1, CANARY_WALK_DEPTH, &mut s1, data) {
         return None;
     }
     Some(oc == OpCode::CPUI_INT_NOTEQUAL)
@@ -712,9 +721,23 @@ impl Action for ActionStripStackGuard {
             let mut slots: Vec<(Address, int4)> = Vec::new();
             let mut loads: Vec<OpId> = Vec::new();
             let mut seen: BTreeSet<VarnodeId> = BTreeSet::new();
-            collect_canary_slots(cmp_in0, 32, &mut seen, data, &mut slots, &mut loads);
+            collect_canary_slots(
+                cmp_in0,
+                CANARY_WALK_DEPTH,
+                &mut seen,
+                data,
+                &mut slots,
+                &mut loads,
+            );
             let mut seen: BTreeSet<VarnodeId> = BTreeSet::new();
-            collect_canary_slots(cmp_in1, 32, &mut seen, data, &mut slots, &mut loads);
+            collect_canary_slots(
+                cmp_in1,
+                CANARY_WALK_DEPTH,
+                &mut seen,
+                data,
+                &mut slots,
+                &mut loads,
+            );
             collect_value_slots(&loads, data, &mut slots);
             data.remove_branch(h, idx)
                 .expect("ActionStripStackGuard: removeBranch");

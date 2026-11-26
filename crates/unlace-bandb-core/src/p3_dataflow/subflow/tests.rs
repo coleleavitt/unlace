@@ -1367,3 +1367,33 @@ fn try_return_pull_terminal_trim_emits_one_patch_and_sets_traversed() {
         "second call must not re-traverse RETURNs, only add its terminal"
     );
 }
+
+#[test]
+fn free_pointer_chain_marks_shared_remainder_freed_for_the_other_chain() {
+    let mut fd = build_fd();
+    let root = mk_input(&mut fd, 0x10, 8);
+    let ptr = mk_reg(&mut fd, 0x20, 8);
+    let add = mk_op(&mut fd, 0x1000, 2, OpCode::CPUI_INT_ADD);
+    let c = mk_const(&mut fd, 8, 4);
+    wire_in(&mut fd, add, root, 0);
+    wire_in(&mut fd, add, c, 1);
+    let ptr = wire_out(&mut fd, add, ptr);
+    let load = mk_op(&mut fd, 0x1004, 2, OpCode::CPUI_LOAD);
+    wire_in(&mut fd, load, ptr, 1);
+    let mut load_root = RootPointer {
+        load_store: Some(load),
+        first_pointer: Some(ptr),
+        pointer: root,
+        ..Default::default()
+    };
+    let mut store_root = RootPointer {
+        load_store: None,
+        first_pointer: Some(ptr),
+        pointer: root,
+        ..Default::default()
+    };
+    fd.op_destroy(load);
+    load_root.free_pointer_chain(&mut fd, Some(&mut store_root));
+    store_root.free_pointer_chain(&mut fd, None);
+    assert_eq!(store_root.first_pointer, Some(root));
+}

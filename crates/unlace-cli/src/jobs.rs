@@ -184,6 +184,10 @@ pub(crate) struct PoolConfig<'a> {
     pub(crate) want_provenance: bool,
     /// Ask each worker for every variable's storage (`--storage`).
     pub(crate) want_storage: bool,
+    /// Ask each worker for every record's token map (`--tokens`).
+    pub(crate) want_tokens: bool,
+    /// Ask each worker for every function's C syntax tree (`--ctree`).
+    pub(crate) want_ctree: bool,
     /// Ask each worker for its rendered user-defined type definitions — the
     /// `decompile-project` `.h` block, which is a whole-program artifact built
     /// after the loop from types the loop itself interns.
@@ -1208,6 +1212,12 @@ impl Worker {
         }
         if cfg.want_storage {
             cmd.arg("--jobs-storage");
+        }
+        if cfg.want_tokens {
+            cmd.arg("--jobs-tokens");
+        }
+        if cfg.want_ctree {
+            cmd.arg("--jobs-ctree");
         }
         if cfg.want_types {
             cmd.arg("--jobs-types");

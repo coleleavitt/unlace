@@ -541,10 +541,12 @@ impl PrintC {
             to_emit_brace(self.options.brace_loop),
         );
         self.emit.tag_line();
+        let sid = self.emit.begin_statement(&MarkupRef::none());
         self.emit
             .print(self.lang().kw_break, SyntaxHighlight::KeywordColor);
         self.emit
             .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
+        self.emit.end_statement(sid);
         self.emit
             .close_brace_indent(self.lang().kw_close_curly, idb);
 
@@ -716,10 +718,12 @@ impl PrintC {
                 to_emit_brace(self.options.brace_ifelse),
             );
             self.emit.tag_line();
+            let sid = self.emit.begin_statement(&MarkupRef::none());
             self.emit
                 .print(self.lang().kw_break, SyntaxHighlight::KeywordColor);
             self.emit
                 .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
+            self.emit.end_statement(sid);
             self.emit
                 .close_brace_indent(self.lang().kw_close_curly, idb);
         } else {

@@ -1387,6 +1387,7 @@ types and the structure are the base language's; the file changes spellings and 
 
 ```toml
 base = "c"                      # required: c, rust, go or java
+name = "pseudo"                 # optional: the JSON document's language_flavour (default: the file stem)
 
 [keywords]                      # how a keyword is spelled
 if = "when"
@@ -1420,7 +1421,9 @@ unlace decompile ./ptx.o swallow_file_in_memory --language-file pseudo.toml
 
 The file names its base language, so `--language` does not apply with it, and an
 `--option setlanguage` or `outlang` for another language is an error. A `--json` document
-reports the base language in `"language"`. A `--jobs` worker and the console child of
+reports the base language in `"language"`. A run with a flavour adds `"language_flavour"`
+after it: the file's `name`, or the file stem when the file has no `name`. The name must have
+some text in it. Without `--language-file` the document has no `language_flavour` key. A `--jobs` worker and the console child of
 `decompile` read the file again from the same path. In a console script the command is
 `language file <path>`, after the `option` lines; a later `option setlanguage` renders the
 built-in language again.
@@ -2583,8 +2586,8 @@ does not rebuild `code` exactly, `tokens` is `[]` and `tokens_error` says why, s
 a drifted map is never shipped. A record without `code` has `[]` and `null`.
 The casts a whole-binary C run adds after the render, to a scalar address passed
 where the callee declares a character pointer, are in the map as a `(`, a `type`
-token and a `)`. A `--jobs N` worker's record does not carry the map, so
-`--tokens` with `--jobs` above 1 exits 2 and names `--jobs 1`. Over the 1,399
+token and a `)`. The map crosses `--jobs N` unchanged: a worker ships it in its
+result frame, so `--tokens` with `--jobs` is the same document as with `--jobs 1`. Over the 1,399
 ELF, PE and Mach-O fixtures of the repository that load without `--target`
 (47,205 function bodies), every map rebuilds its code and `code` is identical
 with and without the flag; a run executes 1.1-2.4% more instructions with it.
@@ -2700,10 +2703,13 @@ size of the code (coreutils `tr`, 185 functions, 135 KB of C: a 1.0 MB document 
 it, 16.6 MB with it; the run time is the same within noise, 3.5 s).
 The record gains two members after its last default one, `ctree` and `ctree_error`; every
 other member, `code` included, and the exit status are what they are without the flag.
-`--ctree` needs `--json`, and one process: with `--jobs N` above 1 it is an argument error,
-because a worker's record does not carry the tree.
+`--ctree` needs `--json`. With `--jobs N` each worker ships the tree in its result frame, so the
+document is the same as with `--jobs 1`.
 
-`ctree` is `{"style": {...}, "root": {...}}`, or `null` when the function has no tree;
+`ctree` is `{"language": "...", "style": {...}, "root": {...}}`, or `null` when the function has no tree;
+`language` is the output language the tree was printed in (`c-language`, `rust-language`,
+`go-language` or `java-language`, the `option setlanguage` names), and the tree prints in that
+language's layout and forms;
 `ctree_error` then says why (both are `null` on a record with no `code`). `root` is a
 `function` node. Every node is an object, and a member a node has no value for is absent:
 
@@ -2715,7 +2721,7 @@ because a worker's record does not carry the tree.
 | `op`, `form`, `close`, `spacing` | On an `op` node: the operator's name (`assign`, `add`, `lt`, `cast`, `deref`, `addr_of`, `subscript`, `member`, `ptr_member`, `cond`, `add_assign`, ...; absent for a token that has no name), how its token sits around its children (`binary`: between them, and with more than two children the node is a chain, `a + b + c`, which reads as C reads it, `(a + b) + c`; `prefix`: before the one child; `postsurround`: `a[b]`; `presurround`: `(type)a`; `space`: only its spacing between two children), its closing token (`]`, `)`, the `:` of `?:`) and the number of spaces on each side of the token. |
 | `sep` | What separates the children of a `list` and the arguments of a `call`. |
 | `grouped` | `true` on a chain whose text groups it from the left in parentheses, as the printer writes `&&` and `\|\|`: `((a && b) && c) && d` is one `and` node with four children. |
-| `type` | The C type of the node's value, where the printer knows it: a variable's, a declaration's, and the result of an operation (the type of the value the p-code op behind the node writes; a node that is only a part of what its op prints, and an operator `PrintC` writes outside its expression driver, has none). |
+| `type` | The C type of the node's value, where the printer knows it: a variable's, a declaration's, a constant's (the type it was read with, when the printer printed it for a Varnode; a constant spelled from a value alone, such as a subscript index, has none), and the result of an operation (the type of the value the p-code op behind the node writes; a node that is only a part of what its op prints, and an operator `PrintC` writes outside its expression driver, has none). |
 | `line`, `col`, `end_line`, `end_col` | Where the node's text is in `code`: 1-based lines, UTF-16 columns, end exclusive. |
 | `addresses` | Instruction addresses in the target's address units, as in `line_mappings`. On an expression node: the instruction of the p-code op the node prints, and on a chain the instruction of each of its operators. On a statement: every instruction under it. |
 
@@ -2729,7 +2735,9 @@ because a worker's record does not carry the tree.
 | `while` | the condition, the body `block` | the condition `const` `true` prints `while( true )` |
 | `do_while` | the body `block`, the condition | |
 | `for` | the initializer, the condition, the step, the body `block` | an absent part is `empty` |
-| `switch` | the value, a `block` of `case`, `default` and statements | with no block: `switch(value);`, a jump through a table with no recovered target |
+| `switch` | the value, a `block` of `case`, `default` and statements (Rust: of `arm`s) | with no block: `switch(value);`, a jump through a table with no recovered target |
+| `arm` | the pattern (a `list` of its alternatives, `|` between them), the arm's `block` | a Rust `match` arm, `pattern => { ... }`; the wildcard `_` is `text` |
+| `attribute` | | an attribute line above the prototype (Rust `#[...]`); `text` is the line |
 | `case`, `default` | a `case`'s value | |
 | `try` | the guarded `block`, the handler `block` | `text` is the handler's header (`catch (int)`) |
 | `goto`, `label` | | `text` is the label |
@@ -2773,17 +2781,19 @@ printed from its node and compared with the text it stands for, and a part that 
 print back exactly is kept as a `raw` node holding its text, so the document never states
 a structure the text does not have. `cargo run -p unlace --example ctree_roundtrip` (the
 reference printer, `unlace::unstable::printer::CPrinter`, over a `--json --ctree`
-document) repeats the check from outside. Measured on 2026-11-26 over the fixture binaries
-of this repository (1,482 binaries; 38,332 functions printed in C), every tree prints back
-to its `code` byte for byte; 38,327 hold no `raw` node and the other five hold nine
-between them, all of it text nested past level 61. Over the two parity corpora (4,871
-functions printed in C) every tree prints back, and the only `raw` nodes are the lines
-`structdefs` and `bytearrayc` print above a function (type definitions, a helper
-preamble). `ctree_error` is one of:
+document) repeats the check from outside. Measured on 2026-11-26. For C, over the fixture binaries of this repository (1,482
+binaries; 38,332 functions printed in C), every tree prints back to its `code` byte for byte;
+38,327 hold no `raw` node and the other five hold nine between them, all of it text nested past
+level 61. The C figure predates the other languages. Over the two parity corpora every printed
+function exports a tree that prints back byte for byte, in each language. Without a `raw` node:
+C 4,681 of 4,694 trees (the other 13 hold `raw` lines above the prototype: the type definitions
+and helper preamble an option prints there); Go 196 of 201; Java 28 of 37; Rust 216 of 235. On
+seven fixture binaries (46 functions each): Java 46 of 46, Rust 41 of 46, Go 43 of 46. The
+`raw` nodes that remain are the text the typed vocabulary does not cover: Java's `try`,
+`catch`, `finally` and `synchronized` statements; Rust's `if !(...)` conditions, raw-pointer
+expressions and unstructured-goto `panic!` lines; Go's `for` loop temporaries and `fallthrough`.
+`ctree_error` is one of:
 
-- `the tree is exported for C output only`: the function printed in another output
-  language (a Rust, Go or DEX binary under the default `--language auto`, or a language
-  file whose base is not C). Pass `--language c`.
 - `the text was rewritten after it was printed (a cookie-literal return)`: the
   stack-cookie presentation pass edited the text.
 - `pointer-argument casts were written into the text after the tree was built`: a

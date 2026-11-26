@@ -5326,7 +5326,7 @@ impl JumpBasicModel {
         &mut self,
         fd: &mut Funcdata,
         maxaddsub: uint4,
-        _maxleftright: uint4,
+        maxleftright: uint4,
         maxext: uint4,
     ) {
         let mut i = self.varnode_index;
@@ -5336,6 +5336,7 @@ impl JumpBasicModel {
         self.mark_model(fd, true);
 
         let mut countaddsub = 0;
+        let mut countleftright = 0;
         let mut countext = 0;
         let mut normop: Option<OpId> = None;
         while i < self.path_meld.num_common_varnode() {
@@ -5368,6 +5369,22 @@ impl JumpBasicModel {
                     }
                     let otherin = fd.obank().get(nop).unwrap().get_in(1 - j).unwrap();
                     if !fd.vbank().get(otherin).unwrap().is_constant() {
+                        break;
+                    }
+                    self.switchvn = Some(testvn);
+                }
+                OpCode::CPUI_INT_LEFT => {
+                    countleftright += 1;
+                    if countleftright > maxleftright {
+                        break;
+                    }
+                    let shift = fd.obank().get(nop).unwrap();
+                    let amount = fd.vbank().get(shift.get_in(1).unwrap()).unwrap();
+                    let out_size = fd.vbank().get(shift.get_out().unwrap()).unwrap().get_size();
+                    if j != 0
+                        || !amount.is_constant()
+                        || amount.get_offset() >= 8 * out_size as uintb
+                    {
                         break;
                     }
                     self.switchvn = Some(testvn);

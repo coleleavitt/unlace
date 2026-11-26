@@ -1644,6 +1644,7 @@ fn run_in_process(req: &SingleRequest) -> i32 {
                     &declared,
                     args.omit,
                     args.extra,
+                    args.language_file.as_ref().map(|file| file.name.as_str()),
                 )
             } else {
                 String::new()
@@ -1770,6 +1771,7 @@ fn decompile_one(
             &declared,
             args.omit,
             args.extra,
+            args.language_file.as_ref().map(|file| file.name.as_str()),
         )
     } else {
         funcs

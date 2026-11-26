@@ -2832,6 +2832,13 @@ the case targets.
    switch). One special case: if the meld is a single read-only Varnode, the
    "switch" is a jump through a read-only pointer; its value is read from the
    load image and the table has one entry.
+Walking back from the normalized variable to the unnormalized switch variable
+(`jumptable.rs (JumpBasicModel::find_unnormalized_basic)`) passes through at most
+`maxaddsub` constant `INT_ADD`/`INT_SUB`, `maxext` `INT_ZEXT`/`INT_SEXT` and
+`maxleftright` (default 1) `INT_LEFT` steps. An `INT_LEFT` counts only when its
+input is in slot 0 and its shift is a constant below the output width in bits.
+So a table indexed by a scaled byte (`ASL A; TAY; LDA table,Y`) labels its cases
+with the index 0, 1, 2, not with the byte offsets 0, 2, 4.
    If that normalized variable is itself the output of a byte-sized LOAD, a
    bounded common input farther down the meld may prove a smaller, exact output
    domain. Unlace emulates every input value through the path, with one total

@@ -7,15 +7,20 @@
 use std::io::{BufWriter, Write};
 
 use unlace_console::engine::{EntryProvenance, ObjectLocation};
+use unlace_console::inspect::{FuncDetail, GlobalRef};
 use unlace_console::project::FuncResult;
 use unlace_decomp::decompile_drive::{GlobalInfo, LineMapping, TypeInfo, VarInfo};
 use unlace_decomp::funcreport::StoragePiece;
+use unlace_decomp::prettyprint::{SyntaxHighlight, TokenKind};
+use unlace_decomp::srcmap::CodeToken;
 use unlace_decomp::structsynth::shard::FunctionRecord;
 
 use super::TargetSpec;
+use crate::decompile_all::ctreejson;
+use crate::jsonfmt::{dumps_compact, parse};
 
 const SPEC_MAGIC: &[u8; 12] = b"UNLACEJOBSP3";
-pub(super) const RESULT_MAGIC: &[u8; 12] = b"UNLACEJOBR13";
+pub(super) const RESULT_MAGIC: &[u8; 12] = b"UNLACEJOBR14";
 
 /// Result-stream frame kinds.  The envelope is what lets a truncated tail be
 /// dropped rather than guessed.
@@ -132,6 +137,14 @@ impl<'a> Reader<'a> {
         match self.u8()? {
             0 => Some(None),
             1 => Some(Some(self.string()?)),
+            _ => None,
+        }
+    }
+
+    fn opt_u64(&mut self) -> Option<Option<u64>> {
+        match self.u8()? {
+            0 => Some(None),
+            1 => Some(Some(self.u64()?)),
             _ => None,
         }
     }
@@ -423,6 +436,7 @@ pub(crate) fn encode_result(r: &FuncResult) -> Vec<u8> {
         }
         body.push(u8::from(contract.definition));
     }
+    put_detail(&mut body, r.detail.as_deref());
     body
 }
 
@@ -683,6 +697,7 @@ pub(crate) fn decode_result(body: &[u8]) -> Option<FuncResult> {
             definition,
         });
     }
+    let detail = read_detail(&mut r)?;
     if r.pos != body.len() {
         return None;
     }
@@ -709,8 +724,165 @@ pub(crate) fn decode_result(body: &[u8]) -> Option<FuncResult> {
         synth,
         pointerargs,
         warnings,
-        detail: None,
+        detail,
     })
+}
+
+/// Every kind a [`CodeToken`] can carry, in wire order.
+const TOKEN_KINDS: [TokenKind; 9] = [
+    TokenKind::Syntax,
+    TokenKind::Variable,
+    TokenKind::Op,
+    TokenKind::FuncName,
+    TokenKind::Type,
+    TokenKind::Field,
+    TokenKind::Comment,
+    TokenKind::Label,
+    TokenKind::Value,
+];
+
+/// Every colour a [`CodeToken`] can carry, in wire order.
+const HIGHLIGHTS: [SyntaxHighlight; 11] = [
+    SyntaxHighlight::KeywordColor,
+    SyntaxHighlight::CommentColor,
+    SyntaxHighlight::TypeColor,
+    SyntaxHighlight::FuncnameColor,
+    SyntaxHighlight::VarColor,
+    SyntaxHighlight::ConstColor,
+    SyntaxHighlight::ParamColor,
+    SyntaxHighlight::GlobalColor,
+    SyntaxHighlight::NoColor,
+    SyntaxHighlight::ErrorColor,
+    SyntaxHighlight::SpecialColor,
+];
+
+/// The declaration words a token's `decl` can name.
+const DECLS: [&str; 4] = ["local", "param", "return", "function"];
+
+fn code_of<T: PartialEq>(table: &[T], value: &T) -> u8 {
+    table
+        .iter()
+        .position(|t| t == value)
+        .expect("every token value is listed in its wire table") as u8
+}
+
+fn put_opt_u64(out: &mut Vec<u8>, value: Option<u64>) {
+    match value {
+        Some(v) => {
+            out.push(1);
+            put_u64(out, v);
+        }
+        None => out.push(0),
+    }
+}
+
+/// A record's token map and C syntax tree (`--tokens`, `--ctree`): `0` when the
+/// record has neither. The tree travels as the JSON `--ctree` writes, which
+/// [`ctreejson::from_json`] reads back exactly.
+fn put_detail(out: &mut Vec<u8>, detail: Option<&FuncDetail>) {
+    let Some(detail) = detail else {
+        out.push(0);
+        return;
+    };
+    out.push(1);
+    put_opt_str(out, detail.tokens_error.as_deref());
+    put_u32(out, detail.tokens.len() as u32);
+    for t in &detail.tokens {
+        put_u64(out, t.line as u64);
+        put_u64(out, t.col as u64);
+        put_u64(out, t.len as u64);
+        out.push(code_of(&TOKEN_KINDS, &t.kind));
+        out.push(code_of(&HIGHLIGHTS, &t.color));
+        put_str(out, &t.text);
+        put_opt_u64(out, t.address);
+        put_opt_u64(out, t.callee);
+        put_opt_u64(out, t.var.map(|v| v as u64));
+        put_opt_str(out, t.decl);
+        put_opt_str(out, t.type_text.as_deref());
+    }
+    put_u32(out, detail.globals.len() as u32);
+    for g in &detail.globals {
+        put_str(out, &g.name);
+        put_u64(out, g.address);
+        put_u64(out, g.size);
+        put_str(out, &g.type_name);
+    }
+    put_u32(out, detail.token_globals.len() as u32);
+    for g in &detail.token_globals {
+        put_opt_u64(out, g.map(|index| index as u64));
+    }
+    match &detail.ctree {
+        None => out.push(0),
+        Some(Ok(tree)) => {
+            out.push(1);
+            put_str(out, &dumps_compact(&ctreejson::to_json(tree)));
+        }
+        Some(Err(reason)) => {
+            out.push(2);
+            put_str(out, reason);
+        }
+    }
+}
+
+/// Read back [`put_detail`]; `None` when the frame is not a complete one.
+fn read_detail(r: &mut Reader<'_>) -> Option<Option<Box<FuncDetail>>> {
+    match r.u8()? {
+        0 => return Some(None),
+        1 => {}
+        _ => return None,
+    }
+    let tokens_error = r.opt_string()?;
+    let nt = r.u32()? as usize;
+    let mut tokens = r.sized(nt);
+    for _ in 0..nt {
+        tokens.push(CodeToken {
+            line: r.u64()? as usize,
+            col: r.u64()? as usize,
+            len: r.u64()? as usize,
+            kind: *TOKEN_KINDS.get(r.u8()? as usize)?,
+            color: *HIGHLIGHTS.get(r.u8()? as usize)?,
+            text: r.string()?,
+            address: r.opt_u64()?,
+            callee: r.opt_u64()?,
+            var: r.opt_u64()?.map(|v| v as usize),
+            decl: match r.opt_string()? {
+                Some(word) => Some(*DECLS.iter().find(|d| **d == word)?),
+                None => None,
+            },
+            type_text: r.opt_string()?,
+        });
+    }
+    let ng = r.u32()? as usize;
+    let mut globals = r.sized(ng);
+    for _ in 0..ng {
+        globals.push(GlobalRef {
+            name: r.string()?,
+            address: r.u64()?,
+            size: r.u64()?,
+            type_name: r.string()?,
+        });
+    }
+    let nw = r.u32()? as usize;
+    let mut token_globals = r.sized(nw);
+    for _ in 0..nw {
+        token_globals.push(r.opt_u64()?.map(|index| index as usize));
+    }
+    let ctree = match r.u8()? {
+        0 => None,
+        1 => {
+            let json = parse(&r.string()?)?;
+            Some(Ok(ctreejson::from_json(&json).ok()?))
+        }
+        2 => Some(Err(r.string()?)),
+        _ => return None,
+    };
+    Some(Some(Box::new(FuncDetail {
+        tokens,
+        tokens_error,
+        globals,
+        token_globals,
+        ctree,
+    })))
 }
 
 fn put_entry(out: &mut Vec<u8>, entry: &unlace_decomp::pointerargs::Entry) {

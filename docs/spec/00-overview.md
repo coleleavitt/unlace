@@ -1988,9 +1988,11 @@ mode. `--jobs 1` is the default and is the in-process loop above, unchanged; the
 console and parity paths never see a pool.
 
 The record codec is isolated in `crates/unlace-cli/src/jobs/wire.rs`;
-it does not own worker processes or scheduling. Chunk specifications and result
-frames retain their existing version markers, little-endian fields and field
-order. A worker flushes each completed function's result, and the parent keeps
+it does not own worker processes or scheduling. Chunk specifications keep their
+version marker. A result frame is version 14: it carries the token map (`--tokens`)
+and the C syntax tree (`--ctree`) of each record when the parent asked for them, so
+those flags give the same document at every job count. Fields are little-endian and
+in a fixed order. A worker flushes each completed function's result, and the parent keeps
 every complete frame before a truncated tail. Wire counts reserve no more
 storage than the remaining bytes can justify. Literal-byte tests pin both
 formats independently of their decoders.

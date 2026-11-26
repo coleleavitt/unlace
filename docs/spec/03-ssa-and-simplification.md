@@ -2185,6 +2185,13 @@ constant, out of a same-location copy, and into any marker over a `persist`
 global — a global already has heritage's persist `RETURN-COPY` (§3.1) keeping
 its last store printed, so the brake has nothing to add there.
 
+**Shared sums in `RulePtrsubUndo`** (a strict fix, no option). `getConstOffsetBack`
+(`ruleaction_6.rs (RulePtrsubUndo::get_const_offset_back)`) sums the constants behind a value only
+when that value has exactly one reader. A sum read by several ops keeps its constants in the shared
+expression, which `removeLocalAddRecurse` cannot fold. Counting them let `RulePtrsubUndo` undo a
+PTRSUB without changing its offset, and `RulePtrArith` then recreated it indefinitely. The multiplier
+is still collected from such a sum, so stride validation is unchanged.
+
 **Keeping a retyped local out of its readers** (a strict fix, no option). A
 `type` directive that retypes a printed pointer local to a pointer to a record
 is replayed by locking the new type on the local's own definitions before type

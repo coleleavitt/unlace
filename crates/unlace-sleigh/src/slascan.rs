@@ -26,15 +26,24 @@ pub(crate) enum Record {
 /// One attribute's value, for the types a lazy load reads; the rest are only
 /// ever skipped.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Value {
+pub(crate) enum Value<'a> {
     Bool(bool),
     Signed(i64),
     Unsigned(u64),
-    /// An address-space or string attribute (skipped, not decoded).
+    Str(&'a [u8]),
+    /// An address-space attribute (skipped, not decoded).
     Other,
 }
 
-impl Value {
+impl<'a> Value<'a> {
+    /// C++ `readString` on this attribute.
+    pub(crate) fn string(self) -> UnlaceResult<&'a [u8]> {
+        match self {
+            Value::Str(v) => Ok(v),
+            _ => Err(UnlaceError::decoder("Expecting string attribute")),
+        }
+    }
+
     /// C++ `readSignedInteger` on this attribute (a positive or negative
     /// integer record; anything else is a type error).
     pub(crate) fn signed(self) -> UnlaceResult<i64> {
@@ -143,7 +152,7 @@ impl<'a> Scan<'a> {
 
     /// Consume the next attribute of the open element: its id and value, or
     /// `None` once the element's attributes are exhausted.
-    pub(crate) fn attribute(&mut self) -> UnlaceResult<Option<(u32, Value)>> {
+    pub(crate) fn attribute(&mut self) -> UnlaceResult<Option<(u32, Value<'a>)>> {
         let (kind, id, pos) = self.header()?;
         if kind != pf::ATTRIBUTE {
             return Ok(None);
@@ -155,7 +164,7 @@ impl<'a> Scan<'a> {
 
     /// The value of the attribute whose type byte is at `pos`, and the offset
     /// past its data.
-    fn attribute_value(&self, mut pos: usize) -> UnlaceResult<(Value, usize)> {
+    fn attribute_value(&self, mut pos: usize) -> UnlaceResult<(Value<'a>, usize)> {
         let type_byte = self.byte(pos)?;
         pos += 1;
         // The length code: the data's byte count, or for a boolean its value
@@ -178,7 +187,12 @@ impl<'a> Scan<'a> {
                 // The length code sizes the integer holding the string's byte
                 // count, which the string itself follows.
                 let strlen = self.integer(pos, code)? as usize; // u64 -> usize: byte count
-                (Value::Other, code + strlen)
+                let start = pos + code;
+                let string = self
+                    .bytes
+                    .get(start..start.checked_add(strlen).ok_or_else(corrupt)?)
+                    .ok_or_else(corrupt)?;
+                (Value::Str(string), code + strlen)
             }
             _ => return Err(corrupt()),
         };

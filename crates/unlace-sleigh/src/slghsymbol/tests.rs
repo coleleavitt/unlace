@@ -1,7 +1,7 @@
 use unlace_base::marshal::{PackedDecode, PackedEncode};
 use unlace_base::space::{AddrSpaceManager, ConstantSpace, addrspace_flags};
 
-use crate::lazysla::{SlaSource, SlaStream};
+use crate::lazysla::{SlaSource, SlaStream, index_raw_image, split_raw_image};
 use crate::semantics::ConstructTpl;
 use crate::slghpatexpress::TokenField;
 use crate::slghpattern::{InstructionPattern, PatternBlock};
@@ -758,13 +758,29 @@ fn full_table_decode_and_reencode_roundtrip() {
     assert_eq!(reenc, buf);
 }
 
-/// The hand-built table inside a `<sleigh>` element, as a lazy load sees it.
-fn decode_full_table_lazily(manager: &AddrSpaceManager) -> (SymbolTable, Rc<SlaSource>) {
+/// The hand-built table inside a `<sleigh>` element, as a lazy load sees it:
+/// walked, or read with the layout the `.sla` cache's copy carries.
+fn decode_full_table_lazily(
+    manager: &AddrSpaceManager,
+    indexed: bool,
+) -> (SymbolTable, Rc<SlaSource>) {
     let mut buf = Vec::new();
     PackedEncode::new(&mut buf).open_element(&sla::ELEM_SLEIGH);
     buf.extend_from_slice(&encode_full_table(manager));
     PackedEncode::new(&mut buf).close_element(&sla::ELEM_SLEIGH);
-    let stream = SlaStream::new(buf).unwrap();
+    let stream = if indexed {
+        let mut image = crate::slaformat::RAW_SLA_HEADER.to_vec();
+        image.extend_from_slice(&buf);
+        index_raw_image(&mut image).unwrap();
+        let (stream, layout) = split_raw_image(&image).unwrap();
+        assert_eq!(stream, buf);
+        assert!(layout.is_some());
+        let indexed = SlaStream::inflate(&image).unwrap();
+        assert_eq!(indexed.layout(), SlaStream::new(buf).unwrap().layout());
+        indexed
+    } else {
+        SlaStream::new(buf).unwrap()
+    };
     let mut dec = PackedDecode::new(manager);
     stream.ingest_prefix(&mut dec).unwrap();
     dec.open_element_id(&sla::ELEM_SLEIGH).unwrap();
@@ -777,15 +793,43 @@ fn decode_full_table_lazily(manager: &AddrSpaceManager) -> (SymbolTable, Rc<SlaS
 
 #[test]
 fn lazy_decode_reads_the_same_table_as_the_eager_one() {
+    for indexed in [false, true] {
+        lazy_decode_reads_the_same_table(indexed);
+    }
+}
+
+fn lazy_decode_reads_the_same_table(indexed: bool) {
     let manager = test_manager();
     let (eager, buf) = decode_full_table(&manager);
-    let (lazy, source) = decode_full_table_lazily(&manager);
+    let (lazy, source) = decode_full_table_lazily(&manager, indexed);
     assert_eq!(source.num_templates(), 0);
     assert_eq!(lazy.num_scopes(), eager.num_scopes());
     assert_eq!(lazy.num_symbols(), eager.num_symbols());
+    let operands = eager
+        .symbollist
+        .iter()
+        .flatten()
+        .filter(|s| s.get_type() == SymbolType::Operand)
+        .count();
+    let pending = || {
+        lazy.symbollist
+            .iter()
+            .flatten()
+            .filter(|s| s.kind.get().is_none())
+            .count()
+    };
+    assert!(operands > 0);
+    assert_eq!(
+        pending(),
+        operands,
+        "operand symbols wait for their first use"
+    );
     for id in 0..eager.num_symbols() as u32 {
+        // An operand symbol decodes on this first access.
         let (e, l) = (eager.symbol(id).unwrap(), lazy.symbol(id).unwrap());
         assert_eq!(l.get_name(), e.get_name());
+        assert_eq!(l.get_scope_id(), e.get_scope_id());
+        assert_eq!(l.get_type(), e.get_type());
         match (e.kind(), l.kind()) {
             (SymbolKind::Subtable(e), SymbolKind::Subtable(l)) => {
                 assert_eq!(l.get_num_constructors(), e.get_num_constructors());
@@ -798,9 +842,10 @@ fn lazy_decode_reads_the_same_table_as_the_eager_one() {
                 }
                 assert!(l.get_constructor(2).is_err());
             }
-            _ => assert_eq!(format!("{l:?}"), format!("{e:?}")),
+            (e, l) => assert_eq!(format!("{l:?}"), format!("{e:?}")),
         }
     }
+    assert_eq!(pending(), 0);
     let inst = lazy.find_global_symbol(b"instruction").unwrap();
     for (byte, expect) in [(0x00, Some(0)), (0x80, Some(1))] {
         let mut walker = TestWalker::from_bytes(&[byte, 0, 0, 0]);

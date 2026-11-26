@@ -94,7 +94,8 @@ fn inflate_into(compressed: &[u8], out: &mut Vec<u8>) -> UnlaceResult<()> {
 }
 
 /// (unlace) The header of an uncompressed `.sla` image: `slr` and the format version, followed
-/// by the packed element stream itself. The `.sla` cache (`unlace_slacomp::slacache`) keeps one
+/// by the packed element stream itself, optionally followed by the stream's layout
+/// (`crate::lazysla::index_raw_image`). The `.sla` cache (`unlace_slacomp::slacache`) keeps one
 /// beside each compressed image it has loaded, so later loads skip the inflate;
 /// [`FormatDecode::ingest_stream`] takes either form.
 pub const RAW_SLA_HEADER: [u8; 4] = [b's', b'l', b'r', FORMAT_VERSION as u8];
@@ -196,10 +197,11 @@ impl<'a> FormatDecode<'a> {
     /// and transfers it with `ingest_owned`, which copies only the trailing
     /// partial chunk so `endIngest` has one to pad — every packed byte has its
     /// high bit set, so the NUL-terminator scan never trips.  (unlace) An
-    /// uncompressed image ([`RAW_SLA_HEADER`]) is taken as it is.
+    /// uncompressed image ([`RAW_SLA_HEADER`]) is taken as it is, without the
+    /// layout it may carry (`crate::lazysla::split_raw_image`).
     pub fn ingest_stream(&mut self, s: &[u8]) -> UnlaceResult<()> {
-        let out = match s.strip_prefix(&RAW_SLA_HEADER) {
-            Some(packed) => packed.to_vec(),
+        let out = match crate::lazysla::split_raw_image(s) {
+            Some((packed, _)) => packed.to_vec(),
             None => inflate_sla(s)?,
         };
         self.inner.ingest_owned(out)

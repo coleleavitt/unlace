@@ -422,9 +422,17 @@ same nodes. The capture carries the spellings: an operator node's token is `Prin
 the builder reads the statement keywords from the profile (`PrintC::lang`), and `style.keywords`
 holds the respelled ones so that a printer can write them back. An `if` stays an `if`.
 
-**Depth.** The builder nests at most 128 levels of statements and expressions; what the text nests
-deeper stays `raw` text. The tree, its JSON and every recursive walk of either then have a bounded
-depth, whatever the function (the deepest tree of `/usr/bin/tr` has 36 levels).
+**Chains and depth.** The p-code behind `a | b | c | ...` is a chain of binary ops, as deep as it is
+long: 31 nested `|` in one Go runtime function, 140 nested `+` in a stage test. An operator applied
+again to one of its own operands with no parentheses between them is therefore exported as one node
+over all the operands (the comma operators of a call are its arguments in the same way), with the
+addresses of every operator of the chain; an assignment is never chained. Depth then comes from
+genuine nesting only, and the builder bounds it: at most 128 levels of statements and expressions,
+beyond which the text stays `raw`. The tree, its JSON and every recursive walk of either so have a
+bounded depth, whatever the function. A node at tree level `d` sits `3 + 2d` JSON values deep in a
+`--json --ctree` document, so a parser with a recursion limit (serde_json: 128 by default) reads
+trees of up to 62 levels without a setting; `/usr/bin/tr`'s deepest tree has 36, from twelve nested
+statements.
 
 **Limits.** C output only: the statement reader knows C's statement forms, so a function printed
 as Rust, Go or Java (or through a language file over one of them) reports `ctree_error` (pass
@@ -438,7 +446,7 @@ Measured (2026-11-26):
 
 - The parity corpora, through the harness's tree pass (`cargo test -p unlace-harness --test parity --
   --ignored trees --nocapture`, `docs/dev-setup.md`): `tests/datatests` prints 177 functions and
-  `tests/stages` 5,165. All 4,869 printed in C export a tree that prints back byte for byte. 4,856
+  `tests/stages` 5,167. All 4,871 printed in C export a tree that prints back byte for byte. 4,858
   of those trees hold no `raw` node; the other 13 hold `raw` lines only above the prototype (132
   lines: the type definitions `structdefs` prints there and the helper preamble of `bytearrayc`).
   The 473 functions printed in Go, Rust or Java have no tree.

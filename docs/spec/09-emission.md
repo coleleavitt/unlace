@@ -6340,7 +6340,14 @@ typed nodes; the kinds and members are listed in `docs/cli.md`, "The JSON docume
 `--ctree`):
 
 - An expression is the recorded node and the recorded nodes under it. A `HiddenFunction`
-  token is its one operand. A `FUNCTION_CALL` node becomes a `call` whose arguments are
+  token is its one operand. A binary operator applied again to one of its own operands
+  with no parentheses between them (the operand is a recorded node with the same token
+  that the driver did not parenthesize) is one node: its children are the operands of the
+  whole chain in print order, and its `addresses` are those of every operator of the
+  chain. `a + b + c` is so one `add` node over three operands, whichever way the ops
+  nest; it reads as C reads the text, `(a + b) + c`. An assignment token never chains
+  (`a = b = c` groups to the right and stays nested). The operators the builder reads
+  outside the driver chain the same way (`a || b || c`). A `FUNCTION_CALL` node becomes a `call` whose arguments are
   the operands of its comma operators, in order. A node the driver parenthesized is a
   `paren` over it. A recorded node is kept as `raw` text when the number of nodes under
   it is not its token's operand count, or when it covers a token that neither an operand
@@ -6378,7 +6385,8 @@ typed nodes; the kinds and members are listed in `docs/cli.md`, "The JSON docume
 The builder nests at most 128 levels of statements and expressions (`MAX_DEPTH`): an
 item, an operand or an `else if` link that would nest deeper is not parsed and stays
 text under the rules below (an `else if` chain longer than that is `raw` as a whole), so
-every walk of a tree and of its JSON has a bounded depth.
+every walk of a tree and of its JSON has a bounded depth. A chain costs one level
+whatever its length, so the bound is met only by genuine nesting.
 
 Every item of a block is accepted only if it starts at the column its kind prints at and
 the reference printer reproduces its text; otherwise the whole lines it covers are one
@@ -6414,7 +6422,8 @@ print ` (cond)`, or `( true )` when the condition is the constant `true`; `for` 
 block, a space, its header text and the handler block; `return` prints its value after a
 space; every simple statement ends in `;`. An operator prints its token around its
 children by `form` as `emit_op` does: `binary` pads the token with `spacing` spaces on
-each side (and its closing token likewise, for `?:`), `prefix` prints the token then
+each side, before each operand after the first (and its closing token likewise before
+the third, for `?:`), `prefix` prints the token then
 `spacing` spaces, `postsurround` prints the opening token after the first child and the
 closing token after the last, `presurround` prints the opening token, the first child,
 the closing token, then the second child, and `space` prints only its spacing. A `call`
@@ -6432,8 +6441,8 @@ Corpus checks (2026-11-26). The harness's tree pass
 (`FunctionTestCollection::check_trees`, `Pass::Trees`; the on-request parity test
 `exported_trees_print_back_over_the_corpora`) runs every script of `tests/datatests` and
 `tests/stages` and, after each `print C`, exports the printed function's tree from a
-render with unbroken lines and prints it back: 5,342 functions are printed, 4,869 of them
-in C; all 4,869 export a tree that prints back byte for byte; 4,856 trees hold no `raw`
+render with unbroken lines and prints it back: 5,344 functions are printed, 4,871 of them
+in C; all 4,871 export a tree that prints back byte for byte; 4,858 trees hold no `raw`
 node and 13 hold `raw` lines only above the prototype (132 lines of `structdefs` type
 definitions and the `bytearrayc` helper preamble); the 473 functions printed in Go, Rust
 or Java export no tree. The test fails on a tree that prints back differently, on a C

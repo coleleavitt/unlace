@@ -2616,11 +2616,11 @@ because a worker's record does not carry the tree.
 | `kind` | What the node is (the next table). |
 | `children` | The nodes under it, in the order they print. |
 | `text` | A leaf's spelling; a comment's, label's or prototype's text; a declaration's declarator; an operator's token; a call's opening token; the text of a `raw` node. |
-| `op`, `form`, `close`, `spacing` | On an `op` node: the operator's name (`assign`, `add`, `lt`, `cast`, `deref`, `addr_of`, `subscript`, `member`, `ptr_member`, `cond`, `add_assign`, ...; absent for a token that has no name), how its token sits around its children (`binary`: between them; `prefix`: before the one child; `postsurround`: `a[b]`; `presurround`: `(type)a`; `space`: only its spacing between two children), its closing token (`]`, `)`, the `:` of `?:`) and the number of spaces on each side of the token. |
+| `op`, `form`, `close`, `spacing` | On an `op` node: the operator's name (`assign`, `add`, `lt`, `cast`, `deref`, `addr_of`, `subscript`, `member`, `ptr_member`, `cond`, `add_assign`, ...; absent for a token that has no name), how its token sits around its children (`binary`: between them, and with more than two children the node is a chain, `a + b + c`, which reads as C reads it, `(a + b) + c`; `prefix`: before the one child; `postsurround`: `a[b]`; `presurround`: `(type)a`; `space`: only its spacing between two children), its closing token (`]`, `)`, the `:` of `?:`) and the number of spaces on each side of the token. |
 | `sep` | What separates the children of a `list` and the arguments of a `call`. |
 | `type` | The C type of the node's value, where the printer knows it: a variable's, a declaration's, and the result of an operation (the type of the value the p-code op behind the node writes; a node that is only a part of what its op prints, and an operator `PrintC` writes outside its expression driver, has none). |
 | `line`, `col`, `end_line`, `end_col` | Where the node's text is in `code`: 1-based lines, UTF-16 columns, end exclusive. |
-| `addresses` | Instruction addresses in the target's address units, as in `line_mappings`. On an expression node: the instruction of the p-code op the node prints. On a statement: every instruction under it. |
+| `addresses` | Instruction addresses in the target's address units, as in `line_mappings`. On an expression node: the instruction of the p-code op the node prints, and on a chain the instruction of each of its operators. On a statement: every instruction under it. |
 
 | `kind` | Children | Notes |
 |---|---|---|
@@ -2641,14 +2641,14 @@ because a worker's record does not carry the tree.
 | `expr` | the expression | an expression statement; with no child, an empty statement `;` |
 | `comment`, `eol_comment` | | a comment on a line of its own (at `style.comment_indent`), or behind the item before it |
 | `blank_line` | | an empty line |
-| `raw` | | text the kinds above do not cover, kept exactly as printed: as an item of a block its whole lines with their indentation, inside an expression that expression's text. Also what nests more than 128 statements and expressions deep, so that a walk of the tree has a bounded depth |
+| `raw` | | text the kinds above do not cover, kept exactly as printed: as an item of a block its whole lines with their indentation, inside an expression that expression's text. Also what nests more than 128 statements and expressions deep, so that a walk of the tree has a bounded depth (chains are wide, not deep, so only genuine nesting counts) |
 | `var`, `const`, `func`, `type`, `field` | | a variable, a constant as spelled, a function name, a type name, a field name |
 | `text` | | any other atom, such as the name of a pseudo-operation (`ZEXT48`, `CONCAT44`) |
 | `empty` | | nothing: an absent part |
 | `paren` | one expression | its child in parentheses |
 | `list` | expressions | separated by `sep`: the statements a condition runs before its test (`(a = f(), a != 0)`) |
 | `call` | the callee, then the arguments | `text`, `sep` and `close` are `(`, `,` and `)` |
-| `op` | its operands | see `op`, `form`, `close`, `spacing` above |
+| `op` | its operands | see `op`, `form`, `close`, `spacing` above. An operator applied again to one of its own operands with no parentheses between is one node over all the operands, so `a + b + c + d` is one `add` with four children; an assignment is never chained (`a = b = c` nests to the right), and `?:` has exactly three children |
 
 `style` holds what the print options and a language file decided and no node carries:
 `indent` (spaces per level), `comment_indent` (the column of a comment line),
@@ -2670,7 +2670,7 @@ reference printer, `unlace::unstable::printer::CPrinter`, over a `--json --ctree
 document) repeats the check from outside. Measured on 2026-11-26 over the fixture binaries
 of this repository (1,482 binaries; 36,055 functions printed in C), every tree prints back
 to its `code` byte for byte and none holds a `raw` node; over the two parity corpora
-(4,869 functions printed in C) every tree prints back, and the only `raw` nodes are the
+(4,871 functions printed in C) every tree prints back, and the only `raw` nodes are the
 lines `structdefs` and `bytearrayc` print above a function (type definitions, a helper
 preamble). `ctree_error` is one of:
 

@@ -148,6 +148,10 @@ impl PrintC {
         (provenance, tokens, capture)
     }
 
+    /// The capture of a finished render. A leaf's type is its Varnode's. An operator's is the
+    /// type of its op's output when the node is the outermost one printed for that op, or the
+    /// right side of the assignment that op prints to its own output (`i = i + 1`); any other
+    /// node printed for its parent's op is a part of the parent and has no type of its own.
     fn finish_capture(&self, fd: &Funcdata, record: RpnRecord, marks: Vec<CaptureMark>) -> Capture {
         let mut names: BTreeMap<usize, String> = BTreeMap::new();
         let mut type_of = |vn: VarnodeId| -> Option<String> {
@@ -172,8 +176,6 @@ impl PrintC {
                 kids[parent as usize].push(id);
             }
         }
-        // The right side of `out = ...`, printed for the op that writes `out`, is that op's
-        // value; any other node printed for its parent's op is a part of the parent.
         let assigned = |id: usize, node: &RpnNode| {
             let Some(parent) = node.parent else {
                 return false;

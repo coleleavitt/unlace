@@ -384,6 +384,8 @@ struct Lexed {
     tokens: Vec<EmitToken>,
     cursor: usize,
     code: &'static str,
+    /// The instruction address of each `opref`.
+    addresses: BTreeMap<u64, u64>,
 }
 
 impl Lexed {
@@ -392,6 +394,7 @@ impl Lexed {
             tokens: Vec::new(),
             cursor: 0,
             code,
+            addresses: BTreeMap::new(),
         }
     }
 
@@ -452,7 +455,7 @@ impl Lexed {
         build(
             &self.tokens,
             capture,
-            &BTreeMap::new(),
+            &self.addresses,
             &untrimmed,
             self.code,
         )
@@ -612,7 +615,7 @@ fn an_operator_with_text_of_its_own_is_kept_as_its_text() {
 
 #[test]
 fn respelled_keywords_and_operators_are_read_as_what_they_stand_for() {
-    let code = "void f(void)\n{\n  when (not a and b) leave;\n}";
+    let code = "void f(void)\n{\n  when (not a and b and c) leave;\n}";
     let mut lex = Lexed::new(code);
     lex.prototype();
     let when = lex.keyword("when");
@@ -621,12 +624,14 @@ fn respelled_keywords_and_operators_are_read_as_what_they_stand_for() {
     let a = lex.var("a");
     lex.push("and", TokenKind::Op, SyntaxHighlight::NoColor);
     let b = lex.var("b");
+    lex.push("and", TokenKind::Op, SyntaxHighlight::NoColor);
+    let c = lex.var("c");
     lex.syntax(")");
     let leave = lex.keyword("leave");
     let semi = lex.syntax(";");
     lex.syntax("}");
     let mut capture = capture(
-        vec![atom(a, "a", None), atom(b, "b", None)],
+        vec![atom(a, "a", None), atom(b, "b", None), atom(c, "c", None)],
         vec![
             CaptureMark::StatementBegin(leave as usize, None),
             CaptureMark::StatementEnd(semi as usize + 1),
@@ -655,6 +660,7 @@ fn respelled_keywords_and_operators_are_read_as_what_they_stand_for() {
         (condition.name.as_str(), condition.text.as_str()),
         ("and", "and")
     );
+    assert_eq!(kinds(condition), [Kind::Op, Kind::Var, Kind::Var]);
     let negation = &condition.children[0];
     assert_eq!(
         (
@@ -665,6 +671,124 @@ fn respelled_keywords_and_operators_are_read_as_what_they_stand_for() {
         ("not", "not ", Form::Prefix)
     );
     assert_eq!(when, 6);
+}
+
+#[test]
+fn an_operator_applied_again_to_its_own_operand_is_one_wide_node() {
+    // Line 3: `+` nested on both sides, no parentheses. Line 4: the same sum with its left
+    // part in parentheses. Line 5: `=` groups to the right and stays nested.
+    let code = "void f(void)\n{\n  a + b + c + d;\n  (a + b) + c;\n  a = b = c;\n}";
+    let mut lex = Lexed::new(code);
+    lex.prototype();
+    lex.addresses = [(1, 0x10), (2, 0x20), (3, 0x30)].into();
+    let op = |name, token, first, end, parent, opref| CapturedExpr {
+        parent,
+        first,
+        end,
+        shape: ExprShape::Op {
+            name,
+            form: Form::Binary,
+            open: token,
+            close: "",
+            spacing: 1,
+            operands: 2,
+        },
+        paren: false,
+        op: opref,
+        ty: Some("int".into()),
+    };
+    let mut exprs: Vec<CapturedExpr> = Vec::new();
+    let mut marks = Vec::new();
+    let mut engine = Vec::new();
+    type Shape<'a> = &'a dyn Fn(&[u32], u32) -> Vec<CapturedExpr>;
+    let mut statement = |lex: &mut Lexed, words: &[&str], shape: Shape| {
+        let base = exprs.len() as u32;
+        let tokens: Vec<u32> = words
+            .iter()
+            .map(|word| match *word {
+                "+" | "=" => {
+                    let at = lex.push(word, TokenKind::Op, SyntaxHighlight::NoColor);
+                    engine.push((at, at + 1));
+                    at
+                }
+                "(" | ")" => {
+                    let at = lex.syntax(word);
+                    engine.push((at, at + 1));
+                    at
+                }
+                _ => lex.var(word),
+            })
+            .collect();
+        let semi = lex.syntax(";");
+        marks.push(CaptureMark::StatementBegin(tokens[0] as usize, None));
+        marks.push(CaptureMark::StatementEnd(semi as usize));
+        exprs.extend(shape(&tokens, base));
+    };
+    // `(a + b) + (c + d)` as ops: the root, its left sum at `base + 1`, its right at `base + 4`.
+    statement(
+        &mut lex,
+        &["a", "+", "b", "+", "c", "+", "d"],
+        &|t, base| {
+            vec![
+                op("add", "+", t[0], t[6] + 1, None, Some(2)),
+                op("add", "+", t[0], t[2] + 1, Some(base), Some(1)),
+                atom(t[0], "a", Some(base + 1)),
+                atom(t[2], "b", Some(base + 1)),
+                op("add", "+", t[4], t[6] + 1, Some(base), Some(3)),
+                atom(t[4], "c", Some(base + 4)),
+                atom(t[6], "d", Some(base + 4)),
+            ]
+        },
+    );
+    statement(
+        &mut lex,
+        &["(", "a", "+", "b", ")", "+", "c"],
+        &|t, base| {
+            let mut inner = op("add", "+", t[0], t[4] + 1, Some(base), Some(1));
+            inner.paren = true;
+            vec![
+                op("add", "+", t[0], t[6] + 1, None, Some(2)),
+                inner,
+                atom(t[1], "a", Some(base + 1)),
+                atom(t[3], "b", Some(base + 1)),
+                atom(t[6], "c", Some(base)),
+            ]
+        },
+    );
+    statement(&mut lex, &["a", "=", "b", "=", "c"], &|t, base| {
+        vec![
+            op("assign", "=", t[0], t[4] + 1, None, Some(2)),
+            atom(t[0], "a", Some(base)),
+            op("assign", "=", t[2], t[4] + 1, Some(base), Some(1)),
+            atom(t[2], "b", Some(base + 2)),
+            atom(t[4], "c", Some(base + 2)),
+        ]
+    });
+    lex.syntax("}");
+    let mut capture = capture(exprs, marks);
+    capture.engine_tokens = engine;
+    let tree = lex.build(&capture).expect("a tree");
+    assert_eq!(print_c(&tree), code);
+    let [wide, grouped, assigned] = tree.root.children[1].children.as_slice() else {
+        panic!("{:?}", kinds(&tree.root.children[1]));
+    };
+    let wide = &wide.children[0];
+    assert_eq!(kinds(wide), [Kind::Var; 4]);
+    assert_eq!(wide.addresses, [0x10, 0x20, 0x30]);
+    assert_eq!(
+        (wide.name.as_str(), wide.ty.as_deref()),
+        ("add", Some("int"))
+    );
+    let grouped = &grouped.children[0];
+    assert_eq!(kinds(grouped), [Kind::Paren, Kind::Var]);
+    assert_eq!(
+        kinds(&grouped.children[0].children[0]),
+        [Kind::Var, Kind::Var]
+    );
+    assert_eq!(grouped.addresses, [0x20]);
+    let assigned = &assigned.children[0];
+    assert_eq!(kinds(assigned), [Kind::Var, Kind::Op]);
+    assert_eq!(kinds(&assigned.children[1]), [Kind::Var, Kind::Var]);
 }
 
 /// The deepest node under `node`, counting `node` as 1.

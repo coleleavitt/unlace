@@ -183,7 +183,9 @@ pub enum Form {
     /// Not an operator.
     #[default]
     None,
-    /// Between its children: `a + b`; a third child follows the closing token (`a ? b : c`).
+    /// Between its children: `a + b`. More than two children are a left-associative chain,
+    /// `a + b + c` for `(a + b) + c`; with a closing token the third child follows it
+    /// (`a ? b : c`).
     Binary,
     /// Before its child: `-a`.
     Prefix,
@@ -367,8 +369,8 @@ pub struct Node {
     /// The C type of an expression's value, where the printer knows it.
     pub ty: Option<String>,
     pub span: Span,
-    /// Instruction addresses: of the op an expression node prints; of every op under a
-    /// statement.
+    /// Instruction addresses: of the op an expression node prints (of each operator of a
+    /// chain); of every op under a statement.
     pub addresses: Vec<u64>,
     pub children: Vec<Node>,
 }

@@ -452,17 +452,13 @@ fn separated<P: Printer + ?Sized>(p: &mut P, w: &mut Writer, nodes: &[Node], sep
 }
 
 /// What an operator prints when `visited` of its children are printed: the RPN driver's
-/// `emit_op`.
+/// `emit_op`, and for a chain of more than two operands its token before each further one.
 fn op_token(w: &mut Writer, node: &Node, visited: usize) {
     match (node.form, visited) {
-        (Form::Binary, 1) => {
+        (Form::Binary, 1..) if visited < node.children.len() => {
+            let closing = visited == 2 && !node.close.is_empty();
             w.pad(node.spacing);
-            w.push(&node.text);
-            w.pad(node.spacing);
-        }
-        (Form::Binary, 2) if !node.close.is_empty() => {
-            w.pad(node.spacing);
-            w.push(&node.close);
+            w.push(if closing { &node.close } else { &node.text });
             w.pad(node.spacing);
         }
         (Form::Prefix, 0) => {

@@ -426,6 +426,9 @@ impl<'a> Builder<'a> {
         let first = *at;
         let mut left = self.unary(at, limit)?;
         let loose = &self.capture.loose;
+        // The operator of the chain `left` is, when this loop built it: `a || b || c` is one
+        // node over three operands, as a recorded chain is.
+        let mut chain = None;
         while let Some(op) = self.loose_op(*at, limit) {
             let known = [
                 (1, "assign", loose.assign),
@@ -439,8 +442,18 @@ impl<'a> Builder<'a> {
             else {
                 break;
             };
-            let addresses = self.token_address(*at).into_iter().collect();
+            let address = self.token_address(*at);
             *at += 1;
+            if level > 2 && chain == Some(name) {
+                left.children.push(self.binary(at, limit, level + 1)?);
+                if let Some(address) = address
+                    && let Err(place) = left.addresses.binary_search(&address)
+                {
+                    left.addresses.insert(place, address);
+                }
+                left.span = self.span(first, *at);
+                continue;
+            }
             let mut children = vec![left];
             let mut close = String::new();
             if level == 2 {
@@ -454,10 +467,11 @@ impl<'a> Builder<'a> {
             children.push(self.binary(at, limit, if level <= 2 { level } else { level + 1 })?);
             left = Node {
                 close,
-                addresses,
+                addresses: address.into_iter().collect(),
                 span: self.span(first, *at),
                 ..Node::op(name, Form::Binary, token, 1, children)
             };
+            chain = (level > 2).then_some(name);
         }
         Some(left)
     }
@@ -544,7 +558,10 @@ impl<'a> Builder<'a> {
     /// respelled the name: then it is the spelling that was printed. An operator is kept as
     /// raw text when its operands are not the ones its token takes, or when it covers a token
     /// that neither an operand nor the RPN engine printed: the routine that pushed it wrote
-    /// that token straight to the emitter.
+    /// that token straight to the emitter. A binary operator applied again to one of its own
+    /// operands, with no parentheses between, is one node over all the operands in print order
+    /// (`a + b + c`), with the addresses of every operator of the chain; so a long chain is
+    /// wide, not deep. An assignment is never part of a chain: it groups to the right.
     fn recorded(&self, id: u32) -> Node {
         self.nested(|| Some(self.recorded_at(id)))
             .unwrap_or_else(|| {
@@ -553,11 +570,33 @@ impl<'a> Builder<'a> {
             })
     }
 
+    /// The operands of the recorded operator `id`, when the node is exactly its token around
+    /// them: as many operands as the token takes, in print order inside the node, and between
+    /// them no token that the RPN engine did not print.
+    fn operands(&self, id: u32) -> Option<&[u32]> {
+        let expr = &self.capture.exprs[id as usize];
+        let ExprShape::Op { operands, .. } = &expr.shape else {
+            return None;
+        };
+        let kids = &self.kids[id as usize];
+        let mut own = expr.first as usize;
+        for &kid in kids {
+            let kid = &self.capture.exprs[kid as usize];
+            let gap = self.engine.get(own..kid.first as usize)?;
+            if kid.end > expr.end || gap.contains(&false) {
+                return None;
+            }
+            own = kid.end as usize;
+        }
+        let gap = self.engine.get(own..expr.end as usize)?;
+        (!gap.contains(&false) && kids.len() == *operands as usize).then_some(kids.as_slice())
+    }
+
     fn recorded_at(&self, id: u32) -> Node {
         let expr = &self.capture.exprs[id as usize];
         let (first, end) = (expr.first as usize, expr.end as usize);
         let address = expr.op.and_then(|op| self.addresses.get(&op)).copied();
-        let (name, form, open, close, spacing, operands) = match &expr.shape {
+        let (name, form, open, close, spacing) = match &expr.shape {
             ExprShape::Leaf(kind, text) => {
                 let kind = match kind {
                     _ if text.is_empty() => Kind::Empty,
@@ -587,29 +626,35 @@ impl<'a> Builder<'a> {
                 open,
                 close,
                 spacing,
-                operands,
-            } => (*name, *form, *open, *close, *spacing, *operands),
+                ..
+            } => (*name, *form, *open, *close, *spacing),
         };
-        let kids = &self.kids[id as usize];
-        let mut own = vec![true; end - first];
-        let mut nested = true;
-        for &kid in kids {
-            let kid = &self.capture.exprs[kid as usize];
-            match own.get_mut(
-                (kid.first as usize).wrapping_sub(first)..(kid.end as usize).wrapping_sub(first),
-            ) {
-                Some(covered) => covered.fill(false),
-                None => nested = false,
-            }
-        }
-        let foreign = own
-            .iter()
-            .enumerate()
-            .any(|(at, own)| *own && !self.engine[first + at]);
-        if !nested || foreign || kids.len() != operands as usize {
+        if self.operands(id).is_none() {
             return self.leaf(Kind::Raw, first, end);
         }
-        let mut children: Vec<Node> = kids.iter().map(|&kid| self.recorded(kid)).collect();
+        let chains = form == Form::Binary && close.is_empty() && !name.ends_with("assign");
+        let (mut links, mut operands) = (Vec::new(), Vec::new());
+        let mut pending = vec![id];
+        while let Some(at) = pending.pop() {
+            let part = &self.capture.exprs[at as usize];
+            let link = at == id
+                || (chains
+                    && !part.paren
+                    && part.shape == expr.shape
+                    && self.operands(at).is_some());
+            if link {
+                links.push(at);
+                pending.extend(self.kids[at as usize].iter().rev());
+            } else {
+                operands.push(at);
+            }
+        }
+        let mut children: Vec<Node> = operands.iter().map(|&kid| self.recorded(kid)).collect();
+        let addresses: BTreeSet<u64> = links
+            .iter()
+            .filter_map(|&link| self.capture.exprs[link as usize].op)
+            .filter_map(|op| self.addresses.get(&op).copied())
+            .collect();
         let (inner_first, inner_end) = if expr.paren {
             (first + 1, end.saturating_sub(1))
         } else {
@@ -623,7 +668,7 @@ impl<'a> Builder<'a> {
             _ => Node {
                 close: close.to_string(),
                 ty: expr.ty.clone(),
-                addresses: address.into_iter().collect(),
+                addresses: addresses.into_iter().collect(),
                 span: self.span(inner_first, inner_end),
                 ..Node::op(name, form, open, spacing, children)
             },
@@ -1205,10 +1250,8 @@ fn call(node: Node) -> Node {
     let mut pending = Vec::new();
     pending.extend(arguments);
     while let Some(argument) = pending.pop() {
-        let comma = argument.kind == Kind::Op
-            && argument.name == "comma"
-            && argument.form == Form::Binary
-            && argument.children.len() == 2;
+        let comma =
+            argument.kind == Kind::Op && argument.name == "comma" && argument.form == Form::Binary;
         if comma {
             let pad = " ".repeat(argument.spacing as usize);
             sep = format!("{pad}{}{pad}", argument.text);

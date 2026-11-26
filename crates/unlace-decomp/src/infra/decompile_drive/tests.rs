@@ -11,8 +11,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::prettyprint::{MarkupAssociation, MarkupProvenance};
 
 use super::{
-    align_markup_to_trimmed, panic_message, resolve_markup_provenance_with_addresses,
-    rewrite_cookie_literal_returns, stack_storage_contains,
+    CookieSpelling, align_markup_to_trimmed, panic_message,
+    resolve_markup_provenance_with_addresses, rewrite_cookie_literal_returns,
+    rewrite_cookie_literal_returns_with_edits, stack_storage_contains,
 };
 
 #[test]
@@ -149,6 +150,42 @@ fn exact_cookie_literal_return_rewrite_declines_ambiguous_text() {
             text
         );
     }
+}
+
+/// A language flavour respells `=` and `return`; the rule reads and writes the printer's
+/// spellings.
+#[test]
+fn cookie_literal_return_rewrite_follows_the_printers_spellings() {
+    let markup = || MarkupProvenance {
+        associations: vec![MarkupAssociation {
+            line_number: 2,
+            opref: Some(7),
+            varref: None,
+        }],
+    };
+    let flavour = CookieSpelling {
+        assign: ":=",
+        kw_return: "ret",
+    };
+    let respelled = "  v7 := 1;\n  security_check_cookie(cookie);\n  ret v7;\n";
+    let (after, edits) = rewrite_cookie_literal_returns_with_edits(
+        respelled.into(),
+        &cookie_calls(7),
+        &mut markup(),
+        flavour,
+    );
+    assert_eq!(after, "  \n  security_check_cookie(cookie);\n  ret 1;\n");
+    assert_eq!(edits.len(), 1);
+
+    let default = "  v7 = 1;\n  security_check_cookie(cookie);\n  return v7;\n";
+    let (after, edits) = rewrite_cookie_literal_returns_with_edits(
+        default.into(),
+        &cookie_calls(7),
+        &mut markup(),
+        flavour,
+    );
+    assert_eq!(after, default);
+    assert!(edits.is_empty());
 }
 
 /// A `panic!("literal")` payload is a `&'static str`.

@@ -74,6 +74,7 @@ pub(super) fn build_script_for_input(
         base,
         raw,
         options,
+        language_file,
         kasserts,
         func_decls,
         assertions,
@@ -135,6 +136,10 @@ pub(super) fn build_script_for_input(
     }
     if defer_fast_funcdisc {
         lines.push("option fast_funcdisc off".into());
+    }
+    // After every `option setlanguage`, which would drop the flavour.
+    if let Some(file) = language_file {
+        lines.push(format!("language file {}", console_path(&file.path)));
     }
     // (unlace `--assert`) IMAGE-scoped directives -- a read-only or volatile
     // memory range -- must precede `read symbols`: mapping a symbol folds the

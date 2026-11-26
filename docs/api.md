@@ -123,6 +123,22 @@ edits the printer honours, and that a callback runs once per print (twice per `d
 prints the text and then the line map), is in `docs/architecture/ctree.md` section 10. A hook
 survives the reload a later builder method causes.
 
+### unlace::unstable::flavour — language files
+
+`Decompiler::with_language_file(path)?` prints through a language flavour, the TOML file
+`--language-file` takes (`docs/cli.md`, "Language files"): a base language (`c`, `rust`, `go`,
+`java`) with keyword and operator spellings, forms and capabilities overridden. The file is
+read and checked when the method is called. An unknown field, a value its field does not take
+or an override the base language's printer cannot honour is `Error::Request` naming the field;
+an unreadable file is `Error::Io`. The file names its base language, so `with_language` does
+not apply with it: the load refuses the pair. `Decompiled::json` reports the base language in
+`"language"`.
+
+```rust
+let mut decompiler = unlace::Decompiler::open("a.out")?.with_language_file("pseudo.toml")?;
+println!("{}", decompiler.decompile_named("main")?.c);
+```
+
 ### unlace::unstable::printer — the printed function as a tree, and printers over it
 
 `Decompiler::tree(address)` and `tree_named(name)` decompile one function and return its text as a

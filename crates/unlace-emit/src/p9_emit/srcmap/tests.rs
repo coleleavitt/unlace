@@ -112,6 +112,7 @@ fn a_cookie_rewrite_moves_the_literal_onto_the_return_line() {
             indent: 2,
             literal: '0',
         }],
+        "return",
     );
     let placed: Vec<(usize, usize, &str)> = tokens
         .iter()
@@ -131,6 +132,36 @@ fn a_cookie_rewrite_moves_the_literal_onto_the_return_line() {
     );
     let literal = &tokens[4];
     assert_eq!((literal.kind, literal.opref), (TokenKind::Value, Some(9)));
+}
+
+/// A language flavour respells `return`; the literal lands one blank past the keyword
+/// the line carries, whatever its length.
+#[test]
+fn a_cookie_rewrite_follows_a_respelled_return_keyword() {
+    let mut tokens = vec![
+        raw(4, 2, "v1", TokenKind::Variable),
+        raw(4, 5, "=", TokenKind::Op),
+        raw(4, 7, "0", TokenKind::Value),
+        raw(4, 8, ";", TokenKind::Syntax),
+        raw(6, 2, "ret", TokenKind::Syntax),
+        raw(6, 6, "v1", TokenKind::Variable),
+        raw(6, 8, ";", TokenKind::Syntax),
+    ];
+    apply_cookie_rewrites(
+        &mut tokens,
+        &[CookieRewrite {
+            assignment_line: 4,
+            return_line: 6,
+            indent: 2,
+            literal: '0',
+        }],
+        "ret",
+    );
+    let placed: Vec<(usize, usize, &str)> = tokens
+        .iter()
+        .map(|t| (t.line, t.col, t.text.as_str()))
+        .collect();
+    assert_eq!(placed, vec![(6, 2, "ret"), (6, 6, "0"), (6, 7, ";")]);
 }
 
 /// The text rule rewrites only a return line reading exactly `return <v>;`, so
@@ -157,6 +188,7 @@ fn a_cookie_rewrite_leaves_a_return_line_it_does_not_recognise() {
             indent: 2,
             literal: '0',
         }],
+        "return",
     );
     assert_eq!(tokens, before);
 }

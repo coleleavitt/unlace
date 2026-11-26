@@ -53,19 +53,24 @@ pub struct CookieRewrite {
 }
 
 /// Apply the text rewrites to the tokens of the same render. The text rule
-/// fires only on a return line that reads exactly `return <v>;` and blanks the
-/// whole assignment line, so the return line's three tokens become `return`,
-/// the literal carried from the assignment, `;`, and the assignment's tokens
-/// go. A return line whose tokens are not exactly those three is left as it is
-/// (the text rule could not have fired on it; [`verify`] then says so).
-pub fn apply_cookie_rewrites(tokens: &mut Vec<EmitToken>, rewrites: &[CookieRewrite]) {
+/// fires only on a return line that reads exactly `return <v>;` (`kw_return` is
+/// the keyword as the printer spells it) and blanks the whole assignment line,
+/// so the return line's three tokens become the keyword, the literal carried
+/// from the assignment, `;`, and the assignment's tokens go. A return line whose
+/// tokens are not exactly those three is left as it is (the text rule could not
+/// have fired on it; [`verify`] then says so).
+pub fn apply_cookie_rewrites(
+    tokens: &mut Vec<EmitToken>,
+    rewrites: &[CookieRewrite],
+    kw_return: &str,
+) {
     for rw in rewrites {
         let returned: Vec<&EmitToken> =
             tokens.iter().filter(|t| t.line == rw.return_line).collect();
         let [keyword, _, semi] = returned.as_slice() else {
             continue;
         };
-        if keyword.text != "return" || semi.text != ";" {
+        if keyword.text != kw_return || semi.text != ";" {
             continue;
         }
         let (mut keyword, mut semi) = ((*keyword).clone(), (*semi).clone());
@@ -87,8 +92,8 @@ pub fn apply_cookie_rewrites(tokens: &mut Vec<EmitToken>, rewrites: &[CookieRewr
         tokens.retain(|t| t.line != rw.assignment_line && t.line != rw.return_line);
         keyword.col = rw.indent;
         value.line = rw.return_line;
-        value.col = rw.indent + 7;
-        semi.col = rw.indent + 8;
+        value.col = rw.indent + keyword.text.encode_utf16().count() + 1;
+        semi.col = value.col + 1;
         let at = tokens
             .iter()
             .position(|t| t.line > rw.return_line)

@@ -65,6 +65,7 @@ pub mod labelstmt; // (unlace) every printed C label labels a statement
 mod lanetrace;
 pub mod lang; // (unlace) the output-language plane: profile + capabilities
 pub mod langc; // (unlace) the c-language policy objects (CSpeller)
+pub mod langflavour; // (unlace) a profile read from a TOML file over a base language
 pub mod langgo;
 pub mod langjava; // (unlace) the java-language profile and type speller
 pub mod langrust; // (unlace) the rust-language policy objects (profile + caps)

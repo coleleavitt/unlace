@@ -525,7 +525,10 @@ impl PrintC {
             &MarkupRef::none(),
         );
         self.emit.spaces(1, 0);
-        self.emit.print("!", SyntaxHighlight::NoColor);
+        self.emit.print(
+            self.op_spelling(&crate::printc::tokens::BOOLEAN_NOT),
+            SyntaxHighlight::NoColor,
+        );
         let idp = self.emit.open_paren(crate::printlanguage::OPEN_PAREN, 0);
         self.context.push_mod();
         self.context.set_mod(modifiers::ONLY_BRANCH);

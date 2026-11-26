@@ -6,4 +6,5 @@
 //! promised. The rest of the crate is the stable surface.
 
 pub mod ctree;
+pub mod flavour;
 pub mod printer;

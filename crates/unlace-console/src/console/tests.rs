@@ -60,11 +60,11 @@ fn run_one(line: &str) -> String {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn registers_all_twenty_six_unlace_commands() {
+fn registers_all_twenty_seven_unlace_commands() {
     // register_decomp_commands registers 107 (see ifacedecomp/tests.rs); the
-    // unlace capability adds 26: phase list/map/status/catalog (plus the four
+    // unlace capability adds 27: phase list/map/status/catalog (plus the four
     // deprecated `stage ...` alias registrations), kassert, restarts,
-    // pipeline, mode, quality, functions, region tree/blocks/walk,
+    // pipeline, mode, quality, functions, `language file`, region tree/blocks/walk,
     // `function bounds`/`function symbol`/`function noreturn`/`function containing`,
     // `map prototype`
     // `override bytes`, `override indirect`, `callwide prepare` and `cfg dot`.
@@ -73,8 +73,38 @@ fn registers_all_twenty_six_unlace_commands() {
         register_unlace_commands(&mut st);
         st.num_commands()
     };
-    assert_eq!(only_unlace, 26);
-    assert_eq!(console(&[]).num_commands(), 107 + 26);
+    assert_eq!(only_unlace, 27);
+    assert_eq!(console(&[]).num_commands(), 107 + 27);
+}
+
+/// `language file` must not have made `load ...` ambiguous: the datatest corpus drives
+/// `lo fu` by abbreviation.
+#[test]
+fn language_file_does_not_shadow_the_upstream_load_commands() {
+    let mut status = console(&[]);
+    assert_eq!(
+        status.resolve("language file /x/pseudo.toml").unwrap(),
+        vec!["language", "file"]
+    );
+    assert_eq!(
+        status.resolve("lo fu main").unwrap(),
+        vec!["load", "function"]
+    );
+}
+
+/// The command needs its file and a loaded image, and a refused file names its field.
+#[test]
+fn language_file_names_what_is_missing() {
+    assert!(
+        run_one("language file").contains("No filename specified"),
+        "out: {:?}",
+        run_one("language file")
+    );
+    assert!(
+        run_one("language file /x/pseudo.toml").contains("No load image present"),
+        "out: {:?}",
+        run_one("language file /x/pseudo.toml")
+    );
 }
 
 #[test]

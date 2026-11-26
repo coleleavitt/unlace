@@ -1321,7 +1321,9 @@ structuring option (`unlace catalog`) can remove it instead. `--language` also w
 `decompile-all`; `decompile-project` is C-only -- it never auto-selects, and errors on an
 explicit non-C language -- and the Ghidra front-end pins its markup document to
 C. The browser decompiler carries the same three choices in its **Language**
-control. See `docs/spec/09-emission.md` §9.6.
+control. See `docs/spec/09-emission.md` §9.6. `--language-file FILE` prints through
+a profile read from a TOML file instead
+([Language files](#language-files---language-file)).
 Omitting `--mode` selects `auto`: files below 500 KiB use `aggressive`, files
 from 500 KiB up to 2 MiB use `reliable`, and files at least 2 MiB use `fast`.
 The raw on-disk byte length is used, with exact cutovers at 512,000 and
@@ -1370,6 +1372,101 @@ With no mode evidence, decoding uses the selected language's default context; us
 `--isa` to select another mode. `--isa` is refused where it could not apply —
 `strings --no-xrefs` decodes nothing, so the pair is a usage error rather than a
 silently dropped flag.
+
+### Language files (`--language-file`)
+
+`--language-file FILE` (`decompile`, `decompile-all`) prints through a **language flavour**: a
+TOML file that names one of the output languages as its base and overrides parts of that
+language's profile. The base language's printer does the printing, so the analysis, the
+types and the structure are the base language's; the file changes spellings and a few forms.
+
+```toml
+base = "c"                      # required: c, rust, go or java
+
+[keywords]                      # how a keyword is spelled
+if = "when"
+else = "otherwise"
+goto = "jump"
+
+[operators]                     # how an operator is spelled; precedence and spacing stay
+assign = ":="
+boolean_and = "and"
+boolean_or = "or"
+boolean_not = "not "            # a prefix operator carries its own blank
+
+[forms]
+member = "rust-deref-paren"     # p->f prints as (*p).f
+```
+
+```bash
+unlace decompile ./ptx.o swallow_file_in_memory --language-file pseudo.toml
+#   when (((file_name) and (*file_name)) and ((*file_name != '-' or (file_name[1])))) {
+#     v1 := (char *)read_file(file_name,0,&used_length);
+#     (*block).start := v1;
+#     when (not v1) {
+#   label_400517:
+#       ...
+#     }
+#   }
+#   otherwise {
+#     ...
+#       jump label_400517;
+```
+
+The file names its base language, so `--language` does not apply with it, and an
+`--option setlanguage` or `outlang` for another language is an error. A `--json` document
+reports the base language in `"language"`. A `--jobs` worker and the console child of
+`decompile` read the file again from the same path. In a console script the command is
+`language file <path>`, after the `option` lines; a later `option setlanguage` renders the
+built-in language again.
+
+A field is overridable only for the base languages whose printer reads it from the profile at
+every place it prints the construct (`docs/spec/09-emission.md` §9.6 says how that was
+checked). Everything else is refused when the file is loaded, before the binary is, with the
+field's name, and the command exits `2`:
+
+```
+error: --language-file pseudo.toml: keywords.retrun: unknown keyword (the keywords are: break, case, ...)
+error: --language-file pseudo.toml: forms.member: unknown form "dot" (expected one of: c-arrow, rust-deref-paren)
+error: --language-file pseudo.toml: forms.switch: the c printer cannot honour "rust-match": the switch was structured for what `break` leaves in the base language
+error: --language-file pseudo.toml: caps.ternary: the c printer cannot honour false
+```
+
+| Table | Keys | Base languages |
+|---|---|---|
+| `[keywords]` | `continue`, `else`, `null`, `switch` | c, rust, go, java |
+| | `break`, `default`, `if`, `return`, `while` | c, rust, java |
+| | `goto` | c, go, java; rust with `forms.goto = "c-goto"` |
+| | `case`, `do`, `for`, `true` | c, java |
+| `[operators]` | `bitwise_and`, `bitwise_not`, `bitwise_or`, `bitwise_xor`, `boolean_and`, `divide`, `equal`, `greater_equal`, `greater_than`, `less_equal`, `less_than`, `modulo`, `shift_left`, `shift_right`, `shift_right_signed` | c, rust, go, java |
+| | `boolean_not`, `boolean_or`, `boolean_xor`, `not_equal` | c, rust, java |
+| | `minus`, `multiply`, `plus` | c, go, java |
+| | `assign` | c, java |
+| `[forms]` | `member`: `c-arrow`, `rust-deref-paren` | c |
+| | `goto`: `c-goto`, `unrepresentable`; `label`: `c-colon`, `comment-only` | rust |
+| `[caps]` | `implicit_bool_conditions = false` (what `--option truthycond off` does) | c |
+
+A keyword key names the construct, and the base language gives the default spelling: in a
+Rust flavour `switch` is `match`, `default` is the `_` arm and `null` is
+`core::ptr::null_mut()`. `true` is the condition of an endless loop (`while( true )`).
+`shift_right` is the logical shift and `shift_right_signed` the arithmetic one (both `>>` in
+C, `>>>` and `>>` in Java); `minus` is the binary operator. Where the base language prints
+two operators as one token (Go's `>>` for both shifts), set one of the two keys. A `[forms]`
+or `[caps]` key set to the base language's own value is accepted and changes nothing.
+
+What a flavour does not change: type names, declarations and type definitions (there is no
+`[types]` table: the type speller belongs to the base language), punctuation (braces, `;`,
+`,`, parentheses, `[]`), compound assignments and `++`, the conditional `?:`, unary minus,
+`&` and `*` as address-of and dereference, casts, calls, an or of enum constants (`A|B`),
+and anything a language's own emitters write as text (Rust's `loop`, `let` and `as`, Go's
+`func` and `:=`). Identifiers are checked against the base language's reserved words, not
+against the flavour's spellings. `decompile-project` and `decompile-graph` are C by contract
+and refuse the flag.
+
+In a Rust flavour, `forms.goto = "c-goto"` with `keywords.goto` and `forms.label = "c-colon"`
+print the jump Rust has no statement for as a `goto` and its target as a label line, where
+`--language rust` prints a `panic!` marker and a comment; such a document reports no
+`unstructured_gotos`.
 
 ### UEFI TE images
 

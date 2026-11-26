@@ -155,52 +155,58 @@ so the profile is from callgrind (instruction counts, not time).
   mnemonic against `format!("{op}{ty}")` for 44 combinations; engine setup names every AVX
   user-op of x86-64 (7,268 calls), so a load made about 173,000 allocations, 117 M of the
   616 M instructions it then cost. 616 M -> 530 M.
-- **`perf/sleigh-lazyindex`, commit 1: the layout in the cache copy.** The walk of #1530 (113 M
+- **#1535, first commit: the layout in the cache copy.** The walk of #1530 (113 M
   of the 530 M) is skipped when the uncompressed copy carries its result: `slacache::read_image`
   appends the encoded layout (constructor ranges, template counts, decision roots, operand
   ranges, header and content offsets, as LEB128 integers) and a trailer naming the stream's and
   the layout's lengths to the `.slr` it writes, in the same rename as the stream, so the two
   cannot drift apart; a copy from before gets one on its next read. 530 M -> 417 M.
-- **`perf/sleigh-lazyindex`, commit 2: operand symbols and headers.** The 26,603 `<operand_sym>`
+- **#1535, second commit: operand symbols and headers.** The 26,603 `<operand_sym>`
   contents (151 M) are decoded on first use: `SleighSymbol::kind` is a `OnceCell`, and
   `SymbolTable::symbol`/`find_symbol_by_id` (every lookup by id or name passes through them)
   decode a pending operand before handing the symbol out, so the ~40 field accessors stay
   infallible and a corrupt operand is reported by the lookup. The symbol headers (name, id,
   scope) of a lazy load are read with the flat cursor (119 M -> 45 M; the packed decoder spent
   about 500 instructions per attribute read) and checked and inserted by the shared code.
-  417 M -> 255 M.
+  417 M -> 255 M. It also fixed `OperandPlans::new`, which since #1530 sized its slots from a
+  lazy subtable's constructor list (empty until decoded), so operand plans were never cached
+  for lazy tables; with pending operands it would have panicked on the `kind()` invariant.
 
-Verification: `cargo test` of every crate each change touched; parity (`cargo test -p
-unlace-harness --test parity`) after #1530 and after #1530+#1531: datatests match
+Verification: `cargo test` of every crate each change touched (for #1535: unlace-sleigh 249
+lib + 91 integration, unlace-lift 515, slacomp `slacache` 12 and `encode_roundtrip` 10, which
+re-encodes a lazily loaded spec byte for byte for x86, mips32be, 6502 and the toy specs);
+parity (`cargo test -p unlace-harness --test parity`) after #1530, after #1530+#1531 and after
+#1535: datatests match
 `docs/baseline.json`, and `tests/stages` fails the same 5 assertions as `main` did before
 (6061/6066: globalpointee #15, INDEXEDSTOREGUARD #16, three mixed-width record assertions).
 The PRs were merged with `--admin` while the CI runners were queued, so CI did not run on them.
 
 ## Results
-Same benchmark and host (load average about 8), median of 3; "before" is the engine before #1530:
+Same benchmark and host, median of 3; "before" is the engine before #1530, the middle column
+after #1532 (load average about 8), the last after #1535 (load average about 4):
 
-| Mode | before | after |
-|---|---|---|
-| `spawn`: start `unlace decompile` per function | 127.6 ms | 71.2 ms |
-| `inproc-fresh`: `Decompiler::open` + decompile per function | 103.7 ms | 52.6 ms |
-| `raw-fresh`: load + decompile a 5-byte x86-64 blob | 101.2 ms | 41.3 ms |
-| `inproc-shared`: load once, decompile each function | 6.8 ms | 4.3 ms |
-| callgrind instructions, `raw-fresh`, one load | 1,505 M | 530 M |
+| Mode | before | after #1532 | after #1535 |
+|---|---|---|---|
+| `spawn`: start `unlace decompile` per function | 127.6 ms | 71.2 ms | 57.5 ms |
+| `inproc-fresh`: `Decompiler::open` + decompile per function | 103.7 ms | 52.6 ms | 37.3 ms |
+| `raw-fresh`: load + decompile a 5-byte x86-64 blob | 101.2 ms | 41.3 ms | 28.2 ms |
+| `inproc-shared`: load once, decompile each function | 6.8 ms | 4.3 ms | not rerun |
+| callgrind instructions, `raw-fresh`, one load | 1,505 M | 530 M | 255 M |
 
-After `perf/sleigh-lazyindex` (load average 2-9, median of 3): `raw-fresh` 44.0 ms -> 36.6 ms
-(layout in the copy) -> 30.0 ms (lazy operands and flat headers); callgrind 530,128,739 ->
-416,846,879 -> 254,623,161 instructions. Rerun after #1535 merged (load average about 4,
-median of 3): `spawn` 57.5 ms, `inproc-fresh` 37.3 ms, `raw-fresh` 28.2 ms.
+The C output of every mode is the same size before and after. #1535 step by step (its author's
+measurement, load average 2-9): `raw-fresh` 44.0 ms -> 36.6 ms (layout in the copy) -> 30.0 ms
+(lazy operands and flat headers); callgrind 530,128,739 -> 416,846,879 -> 254,623,161.
 
 Costs of the changes:
 - Memory: an engine keeps the inflated x86-64 stream, 8.5 MB, where it kept 3.6 MB of template
   bytes before. `decodekit::EngineRecipe` also holds the 8.5 MB image per engine.
 - Disk: the uncompressed copies of every image of 2 MiB or more come to about 412 MB in
   `~/.cache/unlace/sla` if all of them are loaded (556 MB for all 464 languages, which is why
-  only large images get one). Deleting the cache is always safe.
+  only large images get one). #1535 adds the layout to each copy, about 400 KB for x86-64
+  (8.5 MB -> 8.9 MB). Deleting the cache is always safe.
 
 ## What is left
-Where the 255 M instructions of one load go after `perf/sleigh-lazyindex` (inclusive, recursive
+Where the 255 M instructions of one load go after #1535 (inclusive, recursive
 functions counted once):
 
 | Share | What |

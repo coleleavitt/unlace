@@ -2,7 +2,7 @@
 //! browser and loader fixtures: each tree prints back to its code through the reference
 //! printer, asking for it changes nothing else in the record, a statement's addresses are
 //! instructions its lines map to, the tree follows the layout options, and output in another
-//! language reports why it has no tree.
+//! language prints back from its tree too.
 //!
 //! Requires built `.sla` specs for each fixture.
 
@@ -168,18 +168,20 @@ fn a_tree_follows_the_layout_options() {
 }
 
 #[test]
-fn output_in_another_language_says_why_it_has_no_tree() {
+fn output_in_another_language_prints_back_from_its_tree() {
     let binary = fixture(FIXTURES[0]);
-    let exported = batch(&binary, true, |prog| {
-        prog.arch_mut()
-            .set_print_language_checked("rust-language")
-            .expect("output language");
-    });
-    let mut refused = 0;
-    for result in exported.iter().filter(|result| result.code.is_some()) {
-        let reason = tree(result).expect_err("a Rust body has no tree");
-        assert!(reason.contains("C output only"), "{reason}");
-        refused += 1;
+    for language in ["rust-language", "go-language", "java-language"] {
+        let exported = batch(&binary, true, |prog| {
+            prog.arch_mut()
+                .set_print_language_checked(language)
+                .expect("output language");
+        });
+        let mut printed = 0;
+        for result in exported.iter().filter(|result| result.code.is_some()) {
+            let tree = tree(result).unwrap_or_else(|reason| panic!("{language}: {reason}"));
+            assert_eq!(&print_c(tree), result.code.as_ref().unwrap(), "{language}");
+            printed += 1;
+        }
+        assert!(printed > 5, "{language}: {printed} trees");
     }
-    assert!(refused > 5);
 }

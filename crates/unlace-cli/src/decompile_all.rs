@@ -164,6 +164,10 @@ pub(crate) struct Args {
     pub(crate) jobs_provenance: bool,
     /// Worker mode: fill each variable's storage (`--storage` in the parent).
     pub(crate) jobs_storage: bool,
+    /// Worker mode: fill each record's token map (`--tokens` in the parent).
+    pub(crate) jobs_tokens: bool,
+    /// Worker mode: carry each function's C syntax tree (`--ctree` in the parent).
+    pub(crate) jobs_ctree: bool,
     pub(crate) jobs_types: bool,
     /// Report each function's callee hints — the `--stream` scheduler's
     /// frontier, asked for by `--jobs-callees`.
@@ -220,6 +224,8 @@ impl Args {
             jobs_proto: false,
             jobs_provenance: false,
             jobs_storage: false,
+            jobs_tokens: false,
+            jobs_ctree: false,
             jobs_types: false,
             jobs_callees: false,
             jobs_pointerargs: false,
@@ -749,6 +755,7 @@ pub fn run(argv: &[String]) -> i32 {
                         &run.declared,
                         args.omit,
                         args.extra,
+                        args.language_file.as_ref().map(|file| file.name.as_str()),
                     )
                 }),
             };
@@ -880,10 +887,10 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
                 header_carries_types: args.jobs_types,
                 park_recovered_proto: false,
                 single_target: false,
-                want_tokens: false,
+                want_tokens: args.jobs_tokens,
                 want_storage: args.jobs_storage,
                 want_pointer_arguments: args.jobs_pointerargs,
-                want_ctree: false,
+                want_ctree: args.jobs_ctree,
             };
             let mut pending = entries.into_iter();
             let mut pulled = 0usize;
@@ -1179,6 +1186,8 @@ pub(crate) fn pool_config<'a>(
         want_proto,
         want_provenance,
         want_storage: args.extra.storage,
+        want_tokens: args.extra.tokens,
+        want_ctree: args.extra.ctree,
         want_types,
         want_callee_hints,
         want_pointer_arguments: false,
@@ -2610,9 +2619,20 @@ pub(crate) fn render_result_json(
     declared: &crate::funcdecl::Declared,
     omit: Omit,
     extra: Extra,
+    language_flavour: Option<&str>,
 ) -> String {
     render_selected_json(
-        binary, funcs, options, error, None, assertions, interior, declared, omit, extra,
+        binary,
+        funcs,
+        options,
+        error,
+        None,
+        assertions,
+        interior,
+        declared,
+        omit,
+        extra,
+        language_flavour,
     )
 }
 
@@ -2636,10 +2656,22 @@ pub(crate) fn render_selected_json(
     declared: &crate::funcdecl::Declared,
     omit: Omit,
     extra: Extra,
+    language_flavour: Option<&str>,
 ) -> String {
     let mut out = Vec::new();
     write_selected_json(
-        &mut out, binary, funcs, options, error, total, assertions, interior, declared, omit, extra,
+        &mut out,
+        binary,
+        funcs,
+        options,
+        error,
+        total,
+        assertions,
+        interior,
+        declared,
+        omit,
+        extra,
+        language_flavour,
     )
     .expect("rendering the document into memory");
     String::from_utf8(out).expect("the document is ASCII")
@@ -2660,13 +2692,22 @@ pub(crate) fn write_selected_json(
     declared: &crate::funcdecl::Declared,
     omit: Omit,
     extra: Extra,
+    language_flavour: Option<&str>,
 ) -> std::io::Result<()> {
     let language = crate::loadtime::explicit_output_language(options)
         .and_then(unlace_decomp::lang::OutLang::from_print_name)
         .map(|lang| lang.print_name())
         .unwrap_or("c-language");
     let (head, tail) = document_fields(
-        binary, funcs, language, error, total, assertions, declared, omit,
+        binary,
+        funcs,
+        language,
+        language_flavour,
+        error,
+        total,
+        assertions,
+        declared,
+        omit,
     );
     let records = funcs
         .iter()
@@ -2785,6 +2826,7 @@ fn result_json(
     binary: &str,
     funcs: &[FuncResult],
     language: &str,
+    language_flavour: Option<&str>,
     error: Option<&str>,
     total: Option<usize>,
     assertions: &[unlace_console::assertions::Outcome],
@@ -2794,7 +2836,15 @@ fn result_json(
 ) -> Json {
     let declared = crate::funcdecl::Declared::default();
     let (mut fields, tail) = document_fields(
-        binary, funcs, language, error, total, assertions, &declared, omit,
+        binary,
+        funcs,
+        language,
+        language_flavour,
+        error,
+        total,
+        assertions,
+        &declared,
+        omit,
     );
     let functions = funcs
         .iter()
@@ -2817,6 +2867,7 @@ fn document_fields(
     binary: &str,
     funcs: &[FuncResult],
     language: &str,
+    language_flavour: Option<&str>,
     error: Option<&str>,
     total: Option<usize>,
     assertions: &[unlace_console::assertions::Outcome],
@@ -2830,6 +2881,14 @@ fn document_fields(
         // consumer cannot tell a Rust body from a C one without guessing.
         ("language".to_string(), Json::Str(language.to_string())),
     ];
+    // (unlace `langflavour`) The flavour `--language-file` applied over `language`,
+    // present only when one was.
+    if let Some(flavour) = language_flavour {
+        fields.push((
+            "language_flavour".to_string(),
+            Json::Str(flavour.to_string()),
+        ));
+    }
     if let Some(omitted) = omit.json() {
         fields.push(("omitted".to_string(), omitted));
     }
@@ -3310,6 +3369,8 @@ pub(crate) fn parse_args_with_filters(
     let mut jobs_proto = false;
     let mut jobs_provenance = false;
     let mut jobs_storage = false;
+    let mut jobs_tokens = false;
+    let mut jobs_ctree = false;
     let mut jobs_types = false;
     let mut jobs_callees = false;
     let mut jobs_pointerargs = false;
@@ -3398,6 +3459,8 @@ pub(crate) fn parse_args_with_filters(
             "--jobs-proto" if cmd == "decompile-all" => jobs_proto = true,
             "--jobs-provenance" if cmd == "decompile-all" => jobs_provenance = true,
             "--jobs-storage" if cmd == "decompile-all" => jobs_storage = true,
+            "--jobs-tokens" if cmd == "decompile-all" => jobs_tokens = true,
+            "--jobs-ctree" if cmd == "decompile-all" => jobs_ctree = true,
             "--jobs-types" if cmd == "decompile-all" => jobs_types = true,
             "--jobs-callees" if cmd == "decompile-all" => jobs_callees = true,
             "--jobs-pointerargs" if cmd == "decompile-all" => jobs_pointerargs = true,
@@ -3686,13 +3749,6 @@ pub(crate) fn parse_args_with_filters(
                 "--jobs does not apply to --raw-image input (the entry seeds are the load)".into(),
             );
         }
-        if extra.ctree {
-            return Err(
-                "--ctree and --jobs are exclusive: a worker's record does not carry the tree. \
-                 Re-run with --jobs 1."
-                    .into(),
-            );
-        }
         if !assertions.is_empty() {
             return Err(
                 "--assert and --jobs are exclusive: assertion outcomes are per-load state the \
@@ -3739,13 +3795,6 @@ pub(crate) fn parse_args_with_filters(
                     .into(),
             );
         }
-        if extra.tokens {
-            return Err(
-                "--tokens and --jobs are exclusive: a worker's record does not carry the token \
-                 map. Re-run with --jobs 1."
-                    .into(),
-            );
-        }
     }
 
     if let (Some(min), Some(max)) = (filters.min_size, filters.max_size)
@@ -3787,6 +3836,8 @@ pub(crate) fn parse_args_with_filters(
         jobs_proto,
         jobs_provenance,
         jobs_storage,
+        jobs_tokens,
+        jobs_ctree,
         jobs_types,
         jobs_callees,
         jobs_pointerargs,
@@ -3864,7 +3915,7 @@ fn usage_decompile_all() {
          {{kind,message,line,address}}, each at the address it was recorded\n\
          at (a header warning at the entry); `error` is set only for a failed\n\
          function.\n\
-         --ctree (with --json, not with --jobs above 1) adds the C syntax tree of\n\
+         --ctree (with --json) adds the C syntax tree of\n\
          each function's code to its record: `ctree`, its statements and expressions\n\
          as nested nodes with kind, operands, type, line span and addresses, and\n\
          `ctree_error`, set when the function has no tree.\n\
@@ -3873,7 +3924,7 @@ fn usage_decompile_all() {
          types -- and lists them in a top-level `omitted` array, so an omitted\n\
          collection is never mistaken for an empty one.\n\
          --no-vars skips the variable extraction and leaves `variables` empty.\n\
-         --tokens (with --json, not with --jobs above 1) adds the token source map\n\
+         --tokens (with --json) adds the token source map\n\
          to every record: `tokens`, each token of `code` with its line, column,\n\
          kind and the instruction, callee or variable it stands for, and\n\
          `tokens_error`, set when the map could not be shipped.\n\

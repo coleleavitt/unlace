@@ -3792,7 +3792,7 @@ funcsym stream:
   calls `os_unfair_lock_lock_with_options` through an island on iOS 16 and
   through `HomeKit`'s rewritten stub on iOS 14, and both render the name.
 
-- **Empty functions** (unlace `nullsubs`, default off,
+- **Empty functions** (unlace `nullsubs`, default on,
   `crates/unlace-console/src/engine/thunknames.rs (name_nullsubs)`): after
   the thunks are named, a discovered function still named by a placeholder whose
   first instruction, after at most one that emits no p-code (`endbr64`, `bti`), is

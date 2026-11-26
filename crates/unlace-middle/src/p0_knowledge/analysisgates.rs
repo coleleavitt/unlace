@@ -798,12 +798,12 @@ crate::unlace_flag!(
 
 crate::unlace_flag!(
     /// (unlace) Name a placeholder function whose body is a bare return
-    /// `nullsub_<addr>` (`nullsubs`). Default off.
+    /// `nullsub_<addr>` (`nullsubs`). Default on.
     Nullsubs,
     "nullsubs",
     "Placeholder empty functions named nullsub_<addr>",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 crate::unlace_flag!(

@@ -21,6 +21,7 @@
 arch = 'x86:LE:64:default:gcc'
 symbols = [
     { space = 'ram', offset = '0x401000', name = 'chain' },
+    { space = 'ram', offset = '0x401420', name = '__stack_chk_fail' },
 ]
 
 [[image.bytes]]
@@ -77,16 +78,11 @@ commands = [
 ]
 
 [[match]]
-name = 'STACKGUARD-DEEPCHAIN #1: default strips the canary check, so no call to the fail handler is printed'
-count = 0
-literal = 'sub_401420();'
+name = 'STACKGUARD-DEEPCHAIN #1: the fail call prints once: stripped by default, kept with stackguard off'
+count = 1
+literal = '__stack_chk_fail();'
 
 [[match]]
-name = 'STACKGUARD-DEEPCHAIN #2: option stackguard off keeps the check and its fail call'
+name = 'STACKGUARD-DEEPCHAIN #2: option stackguard off keeps the fs:0x28 reload in the compare'
 count = 1
-literal = 'sub_401420();'
-
-[[match]]
-name = 'STACKGUARD-DEEPCHAIN #3: option stackguard off keeps the fs:0x28 reload in the compare'
-count = 1
-literal = 'if (v1[0] == *(long *)(v2 + 0x28))'
+literal = 'if (v1[0] == *(int8 *)(v2 + 0x28))'

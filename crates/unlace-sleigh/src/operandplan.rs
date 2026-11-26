@@ -5,7 +5,7 @@ use std::cell::OnceCell;
 
 use unlace_base::error::UnlaceResult;
 
-use super::{ConstructorRef, OperandSymbol, SymbolKind, SymbolTable};
+use super::{ConstructorRef, OperandSymbol, SleighSymbol, SymbolKind, SymbolTable, SymbolType};
 use crate::slghpatexpress::{
     PatternExpression, PatternExpressionContext, PatternValue, TokenField,
 };
@@ -77,13 +77,15 @@ impl OperandPlans {
             .symbollist
             .iter()
             .map(|symbol| {
-                let Some(symbol) = symbol else {
+                // A pending operand symbol of a lazy load has no kind yet.
+                let Some(subtable) = symbol
+                    .as_ref()
+                    .filter(|symbol| symbol.get_type() == SymbolType::Subtable)
+                    .and_then(SleighSymbol::as_subtable)
+                else {
                     return Vec::new();
                 };
-                let SymbolKind::Subtable(subtable) = symbol.kind() else {
-                    return Vec::new();
-                };
-                (0..subtable.construct.len())
+                (0..subtable.get_num_constructors())
                     .map(|_| OnceCell::new())
                     .collect()
             })

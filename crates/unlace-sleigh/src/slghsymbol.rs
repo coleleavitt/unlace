@@ -18,6 +18,7 @@
 //! lossily to UTF-8 (`.sla` identifiers are ASCII).
 
 use std::borrow::Cow;
+use std::cell::OnceCell;
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::rc::Rc;
@@ -31,8 +32,9 @@ use unlace_num::opcodes::{OpcodeDecoder, OpcodeEncoder};
 use unlace_num::pcoderaw::VarnodeData;
 
 use crate::context::{FixedHandle, Token};
-use crate::lazysla::{LazySubtable, SlaSource, SlaStream};
+use crate::lazysla::{LazySubtable, SlaSource, SlaStream, Span};
 use crate::semantics::{ConstTpl, ConstType, ConstructTpl, VarnodeTpl};
+use crate::slascan::Scan;
 use crate::slghpatexpress::{
     ConstantValue, ContextField, EndInstructionValue, EqId, EquationArena, Next2InstructionValue,
     OperandResolve, OperandResolveSink, OperandValue, OperandValueResolver, PatternExpression,
@@ -666,6 +668,69 @@ impl OperandSymbol {
         }
         self.triple = Some(tri);
         Ok(())
+    }
+
+    /// C++ `OperandSymbol::decode`: the content of an open `<operand_sym>`
+    /// whose `id` attribute the caller has read (or not: the loop skips the
+    /// first attribute either way), closing the element.
+    pub fn decode(
+        decoder: &mut dyn Decoder,
+        resolver: &dyn OperandValueResolver,
+    ) -> UnlaceResult<OperandSymbol> {
+        let mut reloffset: u32 = 0;
+        let mut offsetbase: i32 = 0;
+        let mut minimumlength: i32 = 0;
+        let mut hand: i32 = 0;
+        let mut triple: Option<u32> = None;
+        let mut flags: u32 = 0;
+        // C++ reads getNextAttributeId at the TOP of the loop body,
+        // so the first peeked attribute (ATTRIB_ID, already consumed
+        // by SymbolTable::decode) only feeds the loop condition.
+        let mut attrib = decoder.get_next_attribute_id()?;
+        while attrib != 0 {
+            attrib = decoder.get_next_attribute_id()?;
+            if attrib == sla::ATTRIB_INDEX {
+                hand = decoder.read_signed_integer()? as i32; // C++ implicit intb -> int4
+            } else if attrib == sla::ATTRIB_OFF {
+                reloffset = decoder.read_signed_integer()? as u32; // C++ implicit intb -> uint4
+            } else if attrib == sla::ATTRIB_BASE {
+                offsetbase = decoder.read_signed_integer()? as i32; // C++ implicit intb -> int4
+            } else if attrib == sla::ATTRIB_MINLEN {
+                minimumlength = decoder.read_signed_integer()? as i32; // C++ implicit intb -> int4
+            } else if attrib == sla::ATTRIB_SUBSYM {
+                // C++ (TripleSymbol*)trans->findSymbol(id): stored
+                // as the id (uintb -> uintm)
+                triple = Some(decoder.read_unsigned_integer()? as u32);
+            } else if attrib == sla::ATTRIB_CODE && decoder.read_bool()? {
+                flags |= OperandSymbol::CODE_ADDRESS;
+            }
+        }
+        // C++ (OperandValue*)decodeExpression(...): unchecked
+        // cast (UB on a non-operand expression); an error here
+        let localexp = match PatternExpression::decode_expression(decoder, resolver)? {
+            PatternExpression::Value(PatternValue::OperandValue(ov)) => ov,
+            _ => {
+                return Err(UnlaceError::decoder(
+                    "Expecting operand expression (C++ casts unchecked)",
+                ));
+            }
+        };
+        let defexp = if decoder.peek_element()? != 0 {
+            Some(PatternExpression::decode_expression(decoder, resolver)?)
+        } else {
+            None
+        };
+        decoder.close_element(sla::ELEM_OPERAND_SYM.get_id())?;
+        Ok(OperandSymbol {
+            reloffset,
+            offsetbase,
+            minimumlength,
+            hand,
+            localexp: Some(localexp),
+            triple,
+            defexp,
+            flags,
+        })
     }
 
     // ---- build side (ws4a) ----
@@ -2405,7 +2470,12 @@ pub struct SleighSymbol {
     id: u32,
     /// Unique id of scope this symbol is in (C++ `uintm`).
     scopeid: u32,
-    kind: SymbolKind,
+    /// The payload. Empty only for an operand symbol of a lazy load
+    /// (`crate::lazysla`) that nothing has read yet: the table's accessors
+    /// decode it from `lazy` before handing the symbol out.
+    kind: OnceCell<SymbolKind>,
+    /// Where a lazily loaded operand symbol's content lies in the stream.
+    lazy: Option<Span>,
 }
 
 impl SleighSymbol {
@@ -2416,7 +2486,8 @@ impl SleighSymbol {
             name: nm.to_vec(),
             id: 0,
             scopeid: 0,
-            kind,
+            kind: OnceCell::from(kind),
+            lazy: None,
         }
     }
 
@@ -2622,13 +2693,15 @@ impl SleighSymbol {
 
     /// The subclass payload.
     pub fn kind(&self) -> &SymbolKind {
-        &self.kind
+        self.kind
+            .get()
+            .expect("a symbol reached through SymbolTable's accessors is decoded")
     }
 
     /// `&SubtableSymbol` when this symbol is a subtable (C++
     /// `dynamic_cast<SubtableSymbol*>`), else `None`.
     pub fn as_subtable(&self) -> Option<&SubtableSymbol> {
-        match &self.kind {
+        match self.kind() {
             SymbolKind::Subtable(v) => Some(v),
             _ => None,
         }
@@ -2636,7 +2709,7 @@ impl SleighSymbol {
 
     /// Mutable access to the subtable payload, if this is a subtable symbol.
     pub fn as_subtable_mut(&mut self) -> Option<&mut SubtableSymbol> {
-        match &mut self.kind {
+        match self.kind_mut() {
             SymbolKind::Subtable(v) => Some(v),
             _ => None,
         }
@@ -2645,14 +2718,16 @@ impl SleighSymbol {
     /// Mutable access to the subclass payload (compiler-style setup such as
     /// `UserOpSymbol::setIndex` / `VarnodeSymbol::markAsContext`).
     pub fn kind_mut(&mut self) -> &mut SymbolKind {
-        &mut self.kind
+        self.kind
+            .get_mut()
+            .expect("a symbol reached through SymbolTable's accessors is decoded")
     }
 
     /// Remap symbol references after compaction. Ids without a replacement in
     /// `remap` retain their original value.
     fn remap_symbol_refs(&mut self, remap: &[Option<u32>]) {
         let map = |id: u32| remap.get(id as usize).copied().flatten().unwrap_or(id);
-        match &mut self.kind {
+        match self.kind_mut() {
             SymbolKind::Context(c) => {
                 if let Some(vn) = c.vn {
                     c.vn = Some(map(vn));
@@ -2717,7 +2792,10 @@ impl SleighSymbol {
 
     /// C++ virtual `getType`.
     pub fn get_type(&self) -> SymbolType {
-        match &self.kind {
+        let Some(kind) = self.kind.get() else {
+            return SymbolType::Operand; // only operand symbols are lazy
+        };
+        match kind {
             SymbolKind::Space(_) => SymbolType::Space,
             SymbolKind::Token(_) => SymbolType::Token,
             SymbolKind::UserOp(_) => SymbolType::UserOp,
@@ -2744,49 +2822,49 @@ impl SleighSymbol {
 
     /// `&MacroSymbol` when this symbol is a macro, else `None`.
     pub fn as_macro(&self) -> Option<&MacroSymbol> {
-        match &self.kind {
+        match self.kind() {
             SymbolKind::Macro(m) => Some(m),
             _ => None,
         }
     }
     /// Mutable access to the macro payload, if this is a macro symbol.
     pub fn as_macro_mut(&mut self) -> Option<&mut MacroSymbol> {
-        match &mut self.kind {
+        match self.kind_mut() {
             SymbolKind::Macro(m) => Some(m),
             _ => None,
         }
     }
     /// `&SectionSymbol` when this symbol is a section, else `None`.
     pub fn as_section(&self) -> Option<&SectionSymbol> {
-        match &self.kind {
+        match self.kind() {
             SymbolKind::Section(s) => Some(s),
             _ => None,
         }
     }
     /// Mutable section access (`incrementDefineCount`/`incrementRefCount`).
     pub fn as_section_mut(&mut self) -> Option<&mut SectionSymbol> {
-        match &mut self.kind {
+        match self.kind_mut() {
             SymbolKind::Section(s) => Some(s),
             _ => None,
         }
     }
     /// `&BitrangeSymbol` when this symbol is a bitrange, else `None`.
     pub fn as_bitrange(&self) -> Option<&BitrangeSymbol> {
-        match &self.kind {
+        match self.kind() {
             SymbolKind::Bitrange(b) => Some(b),
             _ => None,
         }
     }
     /// `&LabelTableSymbol` when this symbol is a label, else `None`.
     pub fn as_label(&self) -> Option<&LabelTableSymbol> {
-        match &self.kind {
+        match self.kind() {
             SymbolKind::Label(l) => Some(l),
             _ => None,
         }
     }
     /// Mutable label access (`incrementRefCount`/`setPlaced`).
     pub fn as_label_mut(&mut self) -> Option<&mut LabelTableSymbol> {
-        match &mut self.kind {
+        match self.kind_mut() {
             SymbolKind::Label(l) => Some(l),
             _ => None,
         }
@@ -2796,7 +2874,7 @@ impl SleighSymbol {
     /// `None` for everything else (no such virtual in C++) and for an
     /// undecoded shell (C++ null).
     pub fn get_pattern_value(&self) -> Option<&PatternValue> {
-        match &self.kind {
+        match self.kind() {
             SymbolKind::Value(v) => v.get_pattern_value(),
             SymbolKind::ValueMap(v) => v.value.get_pattern_value(),
             SymbolKind::Name(v) => v.value.get_pattern_value(),
@@ -2812,7 +2890,7 @@ impl SleighSymbol {
     /// FlowRef/Subtable throw exactly the C++ `SleighError`s.  Returns an
     /// owned expression (C++ shares an interior pointer).
     pub fn get_pattern_expression(&self) -> UnlaceResult<Option<PatternExpression>> {
-        match &self.kind {
+        match self.kind() {
             // PatternlessSymbol: the constant-0 expression
             SymbolKind::Epsilon(_) | SymbolKind::Varnode(_) => Ok(Some(PatternExpression::Value(
                 PatternValue::ConstantValue(ConstantValue::new(0)),
@@ -2859,7 +2937,7 @@ impl SleighSymbol {
     /// index and return `None` (C++ null), everything else is the base
     /// no-op.
     pub fn resolve(&self, walker: &(impl SymbolWalker + ?Sized)) -> UnlaceResult<Option<u32>> {
-        match &self.kind {
+        match self.kind() {
             SymbolKind::ValueMap(v) => {
                 v.resolve(walker)?;
                 Ok(None)
@@ -2884,7 +2962,7 @@ impl SleighSymbol {
         &self,
         walker: &(impl SymbolWalker + ?Sized),
     ) -> UnlaceResult<(Option<u32>, Option<DisjointPattern>)> {
-        match &self.kind {
+        match self.kind() {
             SymbolKind::Subtable(v) => {
                 let (pat, ct) = v.resolve_matched(walker)?;
                 Ok((Some(*ct), Some(pat.clone())))
@@ -2895,7 +2973,7 @@ impl SleighSymbol {
 
     /// C++ virtual `TripleSymbol::getSize` (size out of context).
     pub fn get_size(&self, table: &SymbolTable) -> UnlaceResult<i32> {
-        match &self.kind {
+        match self.kind() {
             SymbolKind::Varnode(v) => Ok(v.get_size()),
             SymbolKind::VarnodeList(v) => v.get_size(&self.name, table),
             SymbolKind::Operand(op) => match op.triple {
@@ -2916,7 +2994,7 @@ impl SleighSymbol {
         walker: &(impl SymbolWalker + ?Sized),
         table: &SymbolTable,
     ) -> UnlaceResult<()> {
-        match &self.kind {
+        match self.kind() {
             SymbolKind::Epsilon(e) => {
                 // C++ reads the (decode-initialized) const_space field
                 hand.space = Some(e.const_space.clone().ok_or_else(|| {
@@ -2928,7 +3006,7 @@ impl SleighSymbol {
             }
             // NameSymbol/ContextSymbol inherit ValueSymbol::getFixedHandle
             SymbolKind::Value(_) | SymbolKind::Name(_) | SymbolKind::Context(_) => {
-                let v = match &self.kind {
+                let v = match self.kind() {
                     SymbolKind::Value(v) => v,
                     SymbolKind::Name(n) => &n.value,
                     SymbolKind::Context(c) => &c.value,
@@ -3055,7 +3133,7 @@ impl SleighSymbol {
         table: &SymbolTable,
         code_address: bool,
     ) -> UnlaceResult<()> {
-        match &self.kind {
+        match self.kind() {
             SymbolKind::Epsilon(_) => {
                 s.push('0');
                 Ok(())
@@ -3150,7 +3228,7 @@ impl SleighSymbol {
     /// class behavior (bare attributes, no element — C++ only ever reaches
     /// it through a subclass wrapper).
     pub fn encode_header(&self, encoder: &mut dyn Encoder) {
-        let head = match &self.kind {
+        let head = match self.kind() {
             SymbolKind::UserOp(_) => Some(&sla::ELEM_USEROP_HEAD),
             SymbolKind::Epsilon(_) => Some(&sla::ELEM_EPSILON_SYM_HEAD),
             SymbolKind::Value(_) => Some(&sla::ELEM_VALUE_SYM_HEAD),
@@ -3196,7 +3274,7 @@ impl SleighSymbol {
         encoder: &mut dyn OpcodeEncoder,
         templates: &[ConstructTpl],
     ) -> UnlaceResult<()> {
-        match &self.kind {
+        match self.kind() {
             SymbolKind::UserOp(v) => {
                 encoder.open_element(&sla::ELEM_USEROP);
                 encoder.write_unsigned_integer(&sla::ATTRIB_ID, u64::from(self.id));
@@ -3442,6 +3520,9 @@ pub struct SymbolTable {
     table: Vec<Option<SymbolScope>>,
     /// Current scope id (C++ `SymbolScope *curscope`, null = `None`).
     curscope: Option<u32>,
+    /// The stream of a lazy load (`crate::lazysla`), which the operand
+    /// symbols still to be decoded are read from.
+    lazy: Option<Rc<SlaSource>>,
 }
 
 /// C++ `SymbolTable::MAX_TABLES`.
@@ -3576,7 +3657,7 @@ impl SymbolTable {
         while let Some(sid) = scope {
             let sc = self.get_scope(sid)?;
             if let Some(symid) = sc.find_symbol(nm) {
-                return self.symbollist.get(symid as usize).and_then(|s| s.as_ref());
+                return self.find_symbol_by_id(symid);
             }
             scope = sc.get_parent(); // Try higher scope
         }
@@ -3599,34 +3680,63 @@ impl SymbolTable {
     }
 
     /// C++ `SymbolTable::findSymbol(uintm id)` — `symbollist[id]`, indexed
-    /// unchecked in C++ (UB out of range); `None` here for both an
-    /// out-of-range id and an undecoded slot.
+    /// unchecked in C++ (UB out of range); `None` here for an out-of-range
+    /// id, an undecoded slot, and a lazily loaded operand symbol whose
+    /// content does not decode ([`Self::symbol`] reports why).
     pub fn find_symbol_by_id(&self, id: u32) -> Option<&SleighSymbol> {
-        self.symbollist.get(id as usize).and_then(|s| s.as_ref())
+        self.symbol(id).ok()
     }
 
     /// Look up a symbol id for mutation. Returns `None` for an out-of-range id
     /// or an empty slot.
     pub fn find_symbol_by_id_mut(&mut self, id: u32) -> Option<&mut SleighSymbol> {
+        self.find_symbol_by_id(id)?;
         self.symbollist
             .get_mut(id as usize)
             .and_then(|s| s.as_mut())
     }
 
     /// `findSymbol(id)` at sites where C++ dereferences the result
-    /// immediately (an error instead of UB).
+    /// immediately (an error instead of UB). A lazily loaded operand symbol
+    /// is decoded here, on its first use.
     #[inline]
     fn symbol(&self, id: u32) -> UnlaceResult<&SleighSymbol> {
-        self.find_symbol_by_id(id).ok_or_else(|| {
-            UnlaceError::sleigh(format!(
-                "symbol id {id} is undefined (C++ dereferences unchecked)"
-            ))
-        })
+        let sym = self
+            .symbollist
+            .get(id as usize)
+            .and_then(|s| s.as_ref())
+            .ok_or_else(|| {
+                UnlaceError::sleigh(format!(
+                    "symbol id {id} is undefined (C++ dereferences unchecked)"
+                ))
+            })?;
+        if sym.kind.get().is_none() {
+            self.decode_lazy_operand(sym)?;
+        }
+        Ok(sym)
+    }
+
+    /// Decode the content of a lazily loaded operand symbol from the stream
+    /// (the operand arm of [`Self::decode_symbol_content`], over the same
+    /// bytes).
+    fn decode_lazy_operand(&self, sym: &SleighSymbol) -> UnlaceResult<()> {
+        let (Some(source), Some(span)) = (&self.lazy, sym.lazy) else {
+            return Err(UnlaceError::sleigh("symbol has no content to decode"));
+        };
+        let mut decoder = source.decoder(span)?;
+        decoder.open_element_id(&sla::ELEM_OPERAND_SYM)?;
+        let resolver = TableResolver {
+            table: self,
+            current: None,
+        };
+        let operand = OperandSymbol::decode(&mut decoder, &resolver)?;
+        let _ = sym.kind.set(SymbolKind::Operand(operand));
+        Ok(())
     }
 
     /// Resolve a symbol id that C++ blind-casts to `VarnodeSymbol*`.
     fn varnode_symbol(&self, id: u32) -> UnlaceResult<&VarnodeSymbol> {
-        match &self.symbol(id)?.kind {
+        match self.symbol(id)?.kind() {
             SymbolKind::Varnode(v) => Ok(v),
             _ => Err(UnlaceError::sleigh(format!(
                 "symbol id {id} is not a varnode symbol (C++ casts unchecked)"
@@ -3636,7 +3746,7 @@ impl SymbolTable {
 
     /// Resolve a symbol id that C++ blind-casts to `OperandSymbol*`.
     fn operand_symbol(&self, id: u32) -> UnlaceResult<&OperandSymbol> {
-        match &self.symbol(id)?.kind {
+        match self.symbol(id)?.kind() {
             SymbolKind::Operand(v) => Ok(v),
             _ => Err(UnlaceError::sleigh(format!(
                 "symbol id {id} is not an operand symbol (C++ casts unchecked)"
@@ -3647,7 +3757,7 @@ impl SymbolTable {
     /// Resolve a symbol id that C++ blind-casts to `SubtableSymbol*`.
     #[inline]
     fn subtable_symbol(&self, id: u32) -> UnlaceResult<&SubtableSymbol> {
-        match &self.symbol(id)?.kind {
+        match self.symbol(id)?.kind() {
             SymbolKind::Subtable(v) => Ok(v),
             _ => Err(UnlaceError::sleigh(format!(
                 "symbol id {id} is not a subtable symbol (C++ casts unchecked)"
@@ -3692,7 +3802,7 @@ impl SymbolTable {
     /// into its defining triple symbol.
     pub fn get_varnode(&self, id: u32) -> UnlaceResult<VarnodeTpl> {
         let sym = self.symbol(id)?;
-        match &sym.kind {
+        match sym.kind() {
             SymbolKind::Epsilon(e) => {
                 let cs = e
                     .const_space
@@ -3733,7 +3843,7 @@ impl SymbolTable {
                 match op.triple {
                     Some(tid) => {
                         let tsym = self.symbol(tid)?;
-                        if is_specific_symbol(&tsym.kind) {
+                        if is_specific_symbol(tsym.kind()) {
                             self.get_varnode(tid)
                         } else if matches!(tsym.get_type(), SymbolType::ValueMap | SymbolType::Name)
                         {
@@ -3809,7 +3919,7 @@ impl SymbolTable {
         for (i, &opid) in operand_ids.iter().enumerate() {
             let is_subtable = self
                 .find_symbol_by_id(opid)
-                .and_then(|s| match &s.kind {
+                .and_then(|s| match s.kind() {
                     SymbolKind::Operand(op) => op.get_defining_symbol(),
                     _ => None,
                 })
@@ -3828,11 +3938,9 @@ impl SymbolTable {
     /// Mutable `SubtableSymbol` by id (build side; C++ casts unchecked).
     fn subtable_symbol_mut(&mut self, id: u32) -> UnlaceResult<&mut SubtableSymbol> {
         let sym = self
-            .symbollist
-            .get_mut(id as usize)
-            .and_then(|s| s.as_mut())
+            .find_symbol_by_id_mut(id)
             .ok_or_else(|| UnlaceError::sleigh(format!("symbol id {id} is undefined")))?;
-        match &mut sym.kind {
+        match sym.kind_mut() {
             SymbolKind::Subtable(v) => Ok(v),
             _ => Err(UnlaceError::sleigh(format!(
                 "symbol id {id} is not a subtable symbol (C++ casts unchecked)"
@@ -3843,11 +3951,9 @@ impl SymbolTable {
     /// Mutable `OperandSymbol` by id (build side; C++ casts unchecked).
     fn operand_symbol_mut(&mut self, id: u32) -> UnlaceResult<&mut OperandSymbol> {
         let sym = self
-            .symbollist
-            .get_mut(id as usize)
-            .and_then(|s| s.as_mut())
+            .find_symbol_by_id_mut(id)
             .ok_or_else(|| UnlaceError::sleigh(format!("symbol id {id} is undefined")))?;
-        match &mut sym.kind {
+        match sym.kind_mut() {
             SymbolKind::Operand(v) => Ok(v),
             _ => Err(UnlaceError::sleigh(format!(
                 "symbol id {id} is not an operand symbol (C++ casts unchecked)"
@@ -4306,7 +4412,7 @@ impl SymbolTable {
             let remove = if symbol.scopeid != 0 {
                 symbol.get_type() != SymbolType::Operand
             } else {
-                match &symbol.kind {
+                match symbol.kind() {
                     SymbolKind::Space(_)
                     | SymbolKind::Token(_)
                     | SymbolKind::Epsilon(_)
@@ -4322,7 +4428,7 @@ impl SymbolTable {
             }
             let symbol = self.remove_symbol(i as u32).expect("symbol exists");
             if symbol.scopeid == 0 {
-                match &symbol.kind {
+                match symbol.kind() {
                     SymbolKind::Macro(macro_symbol) => {
                         for &id in macro_symbol.operand_ids() {
                             let _ = self.remove_symbol(id);
@@ -4437,12 +4543,14 @@ impl SymbolTable {
             .map(|s| s.get_id());
     }
 
-    /// C++ `SymbolTable::encode`.
+    /// C++ `SymbolTable::encode`. A lazily loaded table is decoded whole
+    /// first.
     pub fn encode(
         &self,
         encoder: &mut dyn OpcodeEncoder,
         templates: &[ConstructTpl],
     ) -> UnlaceResult<()> {
+        self.decode_all_lazy()?;
         encoder.open_element(&sla::ELEM_SYMBOL_TABLE);
         // size_t -> intb counts as in C++ writeSignedInteger(..., size())
         encoder.write_signed_integer(&sla::ATTRIB_SCOPESIZE, self.table.len() as i64);
@@ -4502,20 +4610,11 @@ impl SymbolTable {
         stream: SlaStream,
         trans: &mut dyn SleighBaseTrans,
     ) -> UnlaceResult<Rc<SlaSource>> {
-        self.decode_scopes_and_headers(decoder)?;
-        let (source, subtables, rest) = stream.scan_contents(trans.get_constant_space())?;
+        self.decode_scopes_and_scan_headers(decoder, stream.headers())?;
+        let (source, subtables, operands, rest) =
+            stream.scan_contents(trans.get_constant_space())?;
         for (id, lazy) in subtables {
-            match &mut self
-                .symbollist
-                .get_mut(id as usize)
-                .and_then(|slot| slot.as_mut())
-                .ok_or_else(|| {
-                    UnlaceError::decoder(format!(
-                        "symbol content references undefined id {id} (C++ dereferences unchecked)"
-                    ))
-                })?
-                .kind
-            {
+            match self.lazy_slot(id)?.kind_mut() {
                 SymbolKind::Subtable(v) => v.lazy = Some(lazy),
                 _ => {
                     return Err(UnlaceError::decoder(format!(
@@ -4524,12 +4623,54 @@ impl SymbolTable {
                 }
             }
         }
+        for (id, span) in operands {
+            let sym = self.lazy_slot(id)?;
+            if sym.get_type() != SymbolType::Operand {
+                return Err(UnlaceError::decoder(format!(
+                    "operand content for symbol {id}, which is not an operand"
+                )));
+            }
+            sym.kind = OnceCell::new();
+            sym.lazy = Some(span);
+        }
+        self.lazy = Some(Rc::clone(&source));
         if !rest.is_empty() {
             let mut contents = PackedDecode::new(decoder.get_addr_space_manager());
             contents.ingest_owned(rest)?;
             self.decode_contents(&mut contents, trans)?;
         }
         Ok(source)
+    }
+
+    /// Decode every operand symbol and every constructor a lazy load has
+    /// left undecoded (for whatever needs the whole table: encoding it).
+    pub fn decode_all_lazy(&self) -> UnlaceResult<()> {
+        for id in 0..self.symbollist.len() {
+            let Some(sym) = self.find_symbol_by_id(id as u32) else {
+                continue; // cast: symbol id, `symbollist` is indexed by uintm
+            };
+            if sym.kind.get().is_none() {
+                self.decode_lazy_operand(sym)?;
+            }
+            if let Some(sub) = sym.as_subtable() {
+                for ct in 0..sub.get_num_constructors() {
+                    sub.get_constructor(ct as u32)?; // cast: constructor id, C++ `uintm`
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The shell a lazy load is about to attach content to.
+    fn lazy_slot(&mut self, id: u32) -> UnlaceResult<&mut SleighSymbol> {
+        self.symbollist
+            .get_mut(id as usize)
+            .and_then(|slot| slot.as_mut())
+            .ok_or_else(|| {
+                UnlaceError::decoder(format!(
+                    "symbol content references undefined id {id} (C++ dereferences unchecked)"
+                ))
+            })
     }
 
     /// The symbol-content loop of C++ `SymbolTable::decode`: every element up
@@ -4552,6 +4693,16 @@ impl SymbolTable {
     /// The first half of C++ `SymbolTable::decode`: the `<symbol_table>`
     /// element (returned open), its scopes and the symbol headers.
     fn decode_scopes_and_headers(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<u32> {
+        let el = self.decode_scopes(decoder)?;
+        // Now decode the symbol shells
+        for _ in 0..self.symbollist.len() {
+            self.decode_symbol_header(decoder)?;
+        }
+        Ok(el)
+    }
+
+    /// The `<symbol_table>` element (returned open), its sizes and its scopes.
+    fn decode_scopes(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<u32> {
         let el = decoder.open_element_id(&sla::ELEM_SYMBOL_TABLE)?;
         let table_size = decoder.read_signed_integer_id(&sla::ATTRIB_SCOPESIZE)?;
         let symbol_size = decoder.read_signed_integer_id(&sla::ATTRIB_SYMBOLSIZE)?;
@@ -4607,48 +4758,58 @@ impl SymbolTable {
             Some(Some(scope)) => Some(scope.get_id()),
             _ => None,
         };
-        // Now decode the symbol shells
-        for _ in 0..self.symbollist.len() {
-            self.decode_symbol_header(decoder)?;
-        }
         Ok(el)
+    }
+
+    /// (unlace) [`Self::decode_scopes_and_headers`] for a lazy load: the
+    /// scopes through `decoder`, the symbol headers through the stream's flat
+    /// cursor (`decoder` holds the stream only up to them).
+    fn decode_scopes_and_scan_headers(
+        &mut self,
+        decoder: &mut dyn Decoder,
+        headers: &[u8],
+    ) -> UnlaceResult<()> {
+        self.decode_scopes(decoder)?;
+        let mut scan = Scan::new(headers, 0);
+        for _ in 0..self.symbollist.len() {
+            self.scan_symbol_header(&mut scan)?;
+        }
+        if scan.pos() != headers.len() {
+            return Err(UnlaceError::decoder("Corrupt .sla layout"));
+        }
+        Ok(())
     }
 
     /// C++ `SymbolTable::decodeSymbolHeader`: put the shell of a symbol in
     /// the symbol table in order to allow recursion.
     pub fn decode_symbol_header(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
-        let el = decoder.peek_element()?;
-        let kind = if el == sla::ELEM_USEROP_HEAD {
-            SymbolKind::UserOp(UserOpSymbol::default())
-        } else if el == sla::ELEM_EPSILON_SYM_HEAD {
-            SymbolKind::Epsilon(EpsilonSymbol::default())
-        } else if el == sla::ELEM_VALUE_SYM_HEAD {
-            SymbolKind::Value(ValueSymbol::default())
-        } else if el == sla::ELEM_VALUEMAP_SYM_HEAD {
-            SymbolKind::ValueMap(ValueMapSymbol::default())
-        } else if el == sla::ELEM_NAME_SYM_HEAD {
-            SymbolKind::Name(NameSymbol::default())
-        } else if el == sla::ELEM_VARNODE_SYM_HEAD {
-            SymbolKind::Varnode(VarnodeSymbol::default())
-        } else if el == sla::ELEM_CONTEXT_SYM_HEAD {
-            SymbolKind::Context(ContextSymbol::default())
-        } else if el == sla::ELEM_VARLIST_SYM_HEAD {
-            SymbolKind::VarnodeList(VarnodeListSymbol::default())
-        } else if el == sla::ELEM_OPERAND_SYM_HEAD {
-            SymbolKind::Operand(OperandSymbol::default())
-        } else if el == sla::ELEM_START_SYM_HEAD {
-            SymbolKind::Start(StartSymbol::default())
-        } else if el == sla::ELEM_END_SYM_HEAD {
-            SymbolKind::End(EndSymbol::default())
-        } else if el == sla::ELEM_NEXT2_SYM_HEAD {
-            SymbolKind::Next2(Next2Symbol::default())
-        } else if el == sla::ELEM_SUBTABLE_SYM_HEAD {
-            SymbolKind::Subtable(SubtableSymbol::default())
-        } else {
-            return Err(UnlaceError::sleigh("Bad symbol xml"));
-        };
+        let kind = symbol_shell(decoder.peek_element()?)?;
         let mut sym = SleighSymbol::new(b"", kind);
         sym.decode_header(decoder)?; // Restore basic elements of symbol
+        self.add_symbol_header(sym)
+    }
+
+    /// (unlace) [`Self::decode_symbol_header`] over the flat cursor of a lazy
+    /// load (`crate::lazysla`): the same three attributes, the same checks.
+    fn scan_symbol_header(&mut self, scan: &mut Scan<'_>) -> UnlaceResult<()> {
+        let kind = symbol_shell(scan.open()?)?;
+        let mut sym = SleighSymbol::new(b"", kind);
+        while let Some((attrib, value)) = scan.attribute()? {
+            if attrib == sla::ATTRIB_NAME {
+                sym.name = value.string()?.to_vec();
+            } else if attrib == sla::ATTRIB_ID {
+                sym.id = value.unsigned()? as u32; // C++ implicit uintb -> uintm
+            } else if attrib == sla::ATTRIB_SCOPE {
+                sym.scopeid = value.unsigned()? as u32; // C++ implicit uintb -> uintm
+            }
+        }
+        scan.close()?;
+        self.add_symbol_header(sym)
+    }
+
+    /// The checks and the insertion of C++ `SymbolTable::decodeSymbolHeader`
+    /// after the header itself is read.
+    fn add_symbol_header(&mut self, sym: SleighSymbol) -> UnlaceResult<()> {
         // C++ `sym->id >= symbollist.size()`: uintm vs size_t (zero-extends)
         if u64::from(sym.id) >= self.symbollist.len() as u64 {
             return Err(UnlaceError::sleigh(
@@ -4675,7 +4836,6 @@ impl SymbolTable {
             .add_symbol(name, id); // to allow recursion
         Ok(())
     }
-
     /// The per-kind content decode dispatch (the C++ virtual
     /// `sym->decode(decoder,trans)` call in `SymbolTable::decode`).  The
     /// caller has already opened the content element and read `ATTRIB_ID`.
@@ -4890,72 +5050,20 @@ impl SymbolTable {
                 }
             }
             SymbolType::Operand => {
-                // C++ OperandSymbol::decode
-                if let SymbolKind::Operand(v) = self.kind_of(id) {
+                if let SymbolKind::Operand(v) = self.symbol(id)?.kind() {
                     if v.defexp.is_some() || v.localexp.is_some() {
                         return Err(UnlaceError::decoder("Already decoded symbol"));
                     }
                 }
-                let mut reloffset: u32 = 0;
-                let mut offsetbase: i32 = 0;
-                let mut minimumlength: i32 = 0;
-                let mut hand: i32 = 0;
-                let mut triple: Option<u32> = None;
-                let mut flags: u32 = 0;
-                // C++ reads getNextAttributeId at the TOP of the loop body,
-                // so the first peeked attribute (ATTRIB_ID, already consumed
-                // by SymbolTable::decode) only feeds the loop condition.
-                let mut attrib = decoder.get_next_attribute_id()?;
-                while attrib != 0 {
-                    attrib = decoder.get_next_attribute_id()?;
-                    if attrib == sla::ATTRIB_INDEX {
-                        hand = decoder.read_signed_integer()? as i32; // C++ implicit intb -> int4
-                    } else if attrib == sla::ATTRIB_OFF {
-                        reloffset = decoder.read_signed_integer()? as u32; // C++ implicit intb -> uint4
-                    } else if attrib == sla::ATTRIB_BASE {
-                        offsetbase = decoder.read_signed_integer()? as i32; // C++ implicit intb -> int4
-                    } else if attrib == sla::ATTRIB_MINLEN {
-                        minimumlength = decoder.read_signed_integer()? as i32; // C++ implicit intb -> int4
-                    } else if attrib == sla::ATTRIB_SUBSYM {
-                        // C++ (TripleSymbol*)trans->findSymbol(id): stored
-                        // as the id (uintb -> uintm)
-                        triple = Some(decoder.read_unsigned_integer()? as u32);
-                    } else if attrib == sla::ATTRIB_CODE && decoder.read_bool()? {
-                        flags |= OperandSymbol::CODE_ADDRESS;
-                    }
-                }
-                let (localexp, defexp) = {
+                let operand = {
                     let resolver = TableResolver {
                         table: self,
                         current: None,
                     };
-                    // C++ (OperandValue*)decodeExpression(...): unchecked
-                    // cast (UB on a non-operand expression); an error here
-                    let localexp = match PatternExpression::decode_expression(decoder, &resolver)? {
-                        PatternExpression::Value(PatternValue::OperandValue(ov)) => ov,
-                        _ => {
-                            return Err(UnlaceError::decoder(
-                                "Expecting operand expression (C++ casts unchecked)",
-                            ));
-                        }
-                    };
-                    let defexp = if decoder.peek_element()? != 0 {
-                        Some(PatternExpression::decode_expression(decoder, &resolver)?)
-                    } else {
-                        None
-                    };
-                    (localexp, defexp)
+                    OperandSymbol::decode(decoder, &resolver)?
                 };
-                decoder.close_element(sla::ELEM_OPERAND_SYM.get_id())?;
                 if let SymbolKind::Operand(v) = &mut self.kind_of_mut(id) {
-                    v.reloffset = reloffset;
-                    v.offsetbase = offsetbase;
-                    v.minimumlength = minimumlength;
-                    v.hand = hand;
-                    v.localexp = Some(localexp);
-                    v.triple = triple;
-                    v.defexp = defexp;
-                    v.flags = flags;
+                    *v = operand;
                 }
             }
             SymbolType::Start => {
@@ -5004,19 +5112,53 @@ impl SymbolTable {
     /// Immutable kind access during content decode (slot existence was
     /// checked by the dispatch).
     fn kind_of(&self, id: u32) -> &SymbolKind {
-        &self.symbollist[id as usize]
+        self.symbollist[id as usize]
             .as_ref()
             .expect("checked by decode_symbol_content")
-            .kind
+            .kind()
     }
 
     /// Mutable kind access during content decode.
     fn kind_of_mut(&mut self, id: u32) -> &mut SymbolKind {
-        &mut self.symbollist[id as usize]
+        self.symbollist[id as usize]
             .as_mut()
             .expect("checked by decode_symbol_content")
-            .kind
+            .kind_mut()
     }
+}
+
+/// The empty symbol of the header element `el` (the kind dispatch of C++
+/// `SymbolTable::decodeSymbolHeader`).
+fn symbol_shell(el: u32) -> UnlaceResult<SymbolKind> {
+    Ok(if el == sla::ELEM_USEROP_HEAD {
+        SymbolKind::UserOp(UserOpSymbol::default())
+    } else if el == sla::ELEM_EPSILON_SYM_HEAD {
+        SymbolKind::Epsilon(EpsilonSymbol::default())
+    } else if el == sla::ELEM_VALUE_SYM_HEAD {
+        SymbolKind::Value(ValueSymbol::default())
+    } else if el == sla::ELEM_VALUEMAP_SYM_HEAD {
+        SymbolKind::ValueMap(ValueMapSymbol::default())
+    } else if el == sla::ELEM_NAME_SYM_HEAD {
+        SymbolKind::Name(NameSymbol::default())
+    } else if el == sla::ELEM_VARNODE_SYM_HEAD {
+        SymbolKind::Varnode(VarnodeSymbol::default())
+    } else if el == sla::ELEM_CONTEXT_SYM_HEAD {
+        SymbolKind::Context(ContextSymbol::default())
+    } else if el == sla::ELEM_VARLIST_SYM_HEAD {
+        SymbolKind::VarnodeList(VarnodeListSymbol::default())
+    } else if el == sla::ELEM_OPERAND_SYM_HEAD {
+        SymbolKind::Operand(OperandSymbol::default())
+    } else if el == sla::ELEM_START_SYM_HEAD {
+        SymbolKind::Start(StartSymbol::default())
+    } else if el == sla::ELEM_END_SYM_HEAD {
+        SymbolKind::End(EndSymbol::default())
+    } else if el == sla::ELEM_NEXT2_SYM_HEAD {
+        SymbolKind::Next2(Next2Symbol::default())
+    } else if el == sla::ELEM_SUBTABLE_SYM_HEAD {
+        SymbolKind::Subtable(SubtableSymbol::default())
+    } else {
+        return Err(UnlaceError::sleigh("Bad symbol xml"));
+    })
 }
 
 impl OperandValueResolver for SymbolTable {

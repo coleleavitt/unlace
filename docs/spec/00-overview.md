@@ -1400,27 +1400,36 @@ they are not part of either child.
 inflated and checksum-verified in full before a single element is decoded
 (`crates/unlace-sleigh/src/slaformat.rs (FormatDecode::ingest_stream)`).
 
-(unlace) **Subtables on first use.** Most of a `.sla` is its subtables: the
-constructors, their `<construct_tpl>` p-code templates and the `<decision>`
-trees that pick among them (x86-64: 9,121 constructors, 80% of the inflated
-stream, nearly all of them in the one `instruction` table), and a run resolves
-a few dozen constructors. The load therefore keeps the inflated stream
+(unlace) **Subtables and operands on first use.** Most of a `.sla` is its
+subtables: the constructors, their `<construct_tpl>` p-code templates and the
+`<decision>` trees that pick among them (x86-64: 9,121 constructors, 80% of the
+inflated stream, nearly all of them in the one `instruction` table), then the
+`<operand_sym>` contents of those constructors' operands (26,603 of x86-64's
+30,579 symbols), and a run resolves a few dozen constructors. The load
+therefore keeps the inflated stream
 (`crates/unlace-sleigh/src/lazysla.rs (SlaSource)`) and walks the symbol
 contents once with a flat cursor that reads nothing but record boundaries
 (`crates/unlace-sleigh/src/slascan.rs (Scan::skip_element_with)`): every other
-symbol is copied out and decoded at load as before, while each `<subtable_sym>`
-is reduced to its `numct`, the byte range and template count of each
-constructor, and the root decision node's field and children ranges
-(`crates/unlace-sleigh/src/lazysla.rs (SlaStream::scan_contents)`). The regular
-decoders then run over those byte ranges the first time something is read: a
-constructor when it is resolved, printed or built
+symbol is copied out and decoded at load as before, each `<operand_sym>` is
+reduced to its id and byte range, and each `<subtable_sym>` to the byte range
+and template count of each constructor and the root decision node's field and
+children ranges (`crates/unlace-sleigh/src/lazysla.rs (Layout::walk)`). The
+symbol headers (name, id, scope) are read with the same cursor
+(`crates/unlace-sleigh/src/slghsymbol.rs (SymbolTable::scan_symbol_header)`)
+and checked and inserted as the packed decoder's path checks and inserts them.
+The regular decoders then run over the recorded byte ranges the first time
+something is read: a constructor when it is resolved, printed or built
 (`crates/unlace-sleigh/src/lazysla.rs (LazySubtable::constructor)`), which also
 keeps its templates' bytes in their handle slots; a template when the p-code
 builder or an exported operand needs it
 (`crates/unlace-sleigh/src/lazysla.rs (SlaSource::template)`); a decision node
 when a resolution walks through it (`crates/unlace-sleigh/src/lazysla.rs
 (LazyDecision::node)`), a terminal node whole and an inner node as its field
-plus pending children. Template handles are allotted in stream order by the load
+plus pending children; an operand symbol when the table hands it out
+(`crates/unlace-sleigh/src/slghsymbol.rs (SymbolTable::symbol)`: every lookup
+by id or by name passes through it, so the symbol's payload accessors stay
+infallible and a corrupt operand is reported by the lookup). Template handles
+are allotted in stream order by the load
 walk, so they are the ones an eager decode allots; an `OperandValue` inside a
 constructor is validated against the live count of its own table and the
 `numct` of every other, as the eager decode validates it against the tables
@@ -1437,8 +1446,8 @@ the whole `.sla` at load, as an XML decoder always does.
 The walk is skipped when the `.sla` cache's uncompressed copy carries its
 result: `crates/unlace-slacomp/src/slacache.rs (read_image)` appends the
 encoded layout (`crates/unlace-sleigh/src/lazysla.rs (index_raw_image)`:
-every range above, the template count and the commit flag, as LEB128
-integers) and a trailer naming the stream's and the layout's lengths to the
+every range above, the header and content offsets, the template count and the
+commit flag, as LEB128 integers) and a trailer naming the stream's and the layout's lengths to the
 `.slr` it writes, in the same rename as the stream, so the two cannot drift
 apart; a copy from before layouts were kept gets one on its next read.
 `SlaStream::inflate` reads the layout back when the trailer is present and its

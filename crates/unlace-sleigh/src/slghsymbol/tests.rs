@@ -805,9 +805,31 @@ fn lazy_decode_reads_the_same_table(indexed: bool) {
     assert_eq!(source.num_templates(), 0);
     assert_eq!(lazy.num_scopes(), eager.num_scopes());
     assert_eq!(lazy.num_symbols(), eager.num_symbols());
+    let operands = eager
+        .symbollist
+        .iter()
+        .flatten()
+        .filter(|s| s.get_type() == SymbolType::Operand)
+        .count();
+    let pending = || {
+        lazy.symbollist
+            .iter()
+            .flatten()
+            .filter(|s| s.kind.get().is_none())
+            .count()
+    };
+    assert!(operands > 0);
+    assert_eq!(
+        pending(),
+        operands,
+        "operand symbols wait for their first use"
+    );
     for id in 0..eager.num_symbols() as u32 {
+        // An operand symbol decodes on this first access.
         let (e, l) = (eager.symbol(id).unwrap(), lazy.symbol(id).unwrap());
         assert_eq!(l.get_name(), e.get_name());
+        assert_eq!(l.get_scope_id(), e.get_scope_id());
+        assert_eq!(l.get_type(), e.get_type());
         match (e.kind(), l.kind()) {
             (SymbolKind::Subtable(e), SymbolKind::Subtable(l)) => {
                 assert_eq!(l.get_num_constructors(), e.get_num_constructors());
@@ -820,9 +842,10 @@ fn lazy_decode_reads_the_same_table(indexed: bool) {
                 }
                 assert!(l.get_constructor(2).is_err());
             }
-            _ => assert_eq!(format!("{l:?}"), format!("{e:?}")),
+            (e, l) => assert_eq!(format!("{l:?}"), format!("{e:?}")),
         }
     }
+    assert_eq!(pending(), 0);
     let inst = lazy.find_global_symbol(b"instruction").unwrap();
     for (byte, expect) in [(0x00, Some(0)), (0x80, Some(1))] {
         let mut walker = TestWalker::from_bytes(&[byte, 0, 0, 0]);

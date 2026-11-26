@@ -48,7 +48,7 @@ fn attributes_read_as_the_packed_decoder_does() {
     );
     assert_eq!(
         scan.attribute().unwrap(),
-        Some((A_NAME.get_id(), Value::Other))
+        Some((A_NAME.get_id(), Value::Str(b"hello there")))
     );
     assert_eq!(scan.attribute().unwrap(), None);
     assert_eq!(scan.peek().unwrap(), Record::Start(ELEM_VALUE.get_id()));

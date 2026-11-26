@@ -155,6 +155,20 @@ so the profile is from callgrind (instruction counts, not time).
   mnemonic against `format!("{op}{ty}")` for 44 combinations; engine setup names every AVX
   user-op of x86-64 (7,268 calls), so a load made about 173,000 allocations, 117 M of the
   616 M instructions it then cost. 616 M -> 530 M.
+- **`perf/sleigh-lazyindex`, commit 1: the layout in the cache copy.** The walk of #1530 (113 M
+  of the 530 M) is skipped when the uncompressed copy carries its result: `slacache::read_image`
+  appends the encoded layout (constructor ranges, template counts, decision roots, operand
+  ranges, header and content offsets, as LEB128 integers) and a trailer naming the stream's and
+  the layout's lengths to the `.slr` it writes, in the same rename as the stream, so the two
+  cannot drift apart; a copy from before gets one on its next read. 530 M -> 417 M.
+- **`perf/sleigh-lazyindex`, commit 2: operand symbols and headers.** The 26,603 `<operand_sym>`
+  contents (151 M) are decoded on first use: `SleighSymbol::kind` is a `OnceCell`, and
+  `SymbolTable::symbol`/`find_symbol_by_id` (every lookup by id or name passes through them)
+  decode a pending operand before handing the symbol out, so the ~40 field accessors stay
+  infallible and a corrupt operand is reported by the lookup. The symbol headers (name, id,
+  scope) of a lazy load are read with the flat cursor (119 M -> 45 M; the packed decoder spent
+  about 500 instructions per attribute read) and checked and inserted by the shared code.
+  417 M -> 255 M.
 
 Verification: `cargo test` of every crate each change touched; parity (`cargo test -p
 unlace-harness --test parity`) after #1530 and after #1530+#1531: datatests match
@@ -173,6 +187,10 @@ Same benchmark and host (load average about 8), median of 3; "before" is the eng
 | `inproc-shared`: load once, decompile each function | 6.8 ms | 4.3 ms |
 | callgrind instructions, `raw-fresh`, one load | 1,505 M | 530 M |
 
+After `perf/sleigh-lazyindex` (load average 2-9, median of 3): `raw-fresh` 44.0 ms -> 36.6 ms
+(layout in the copy) -> 30.0 ms (lazy operands and flat headers); callgrind 530,128,739 ->
+416,846,879 -> 254,623,161 instructions.
+
 Costs of the changes:
 - Memory: an engine keeps the inflated x86-64 stream, 8.5 MB, where it kept 3.6 MB of template
   bytes before. `decodekit::EngineRecipe` also holds the 8.5 MB image per engine.
@@ -181,30 +199,31 @@ Costs of the changes:
   only large images get one). Deleting the cache is always safe.
 
 ## What is left
-Where the 530 M instructions of one load go now (inclusive, recursive functions counted once):
+Where the 255 M instructions of one load go after `perf/sleigh-lazyindex` (inclusive, recursive
+functions counted once):
 
 | Share | What |
 |---|---|
-| 28% | contents of the non-subtable symbols (operand, value, varnode symbols; `decode_expression` alone 13%) |
-| 22% | symbol headers and scopes (`decode_symbol_header`, name-map inserts) |
-| 21% | the flat walk over the subtable bytes (`SlaStream::scan_contents`, `Scan::skip_element_with`) |
-| 9% | `Architecture::init_post_engine`, of which AVX intrinsic naming is 6% |
-| 6% | the decompile itself |
-| 4% | parsing the `.pspec`/`.cspec` XML (`xml_tree`) |
+| 20% | `Architecture::init_post_engine` (user-ops and fixups 6%, string builtins 5%) |
+| 12% | inserting the 30,579 symbol shells (`add_symbol_header`: the name-map `BTreeMap` entry, the name copy, the `SleighSymbol` move) |
+| 9% | the decompile itself |
+| 9% | parsing the `.pspec`/`.cspec` XML (`xml_tree`) |
+| 7% | dropping the engine at the end (`drop_glue::<Sleigh>`: 30k symbols, 9k scopes, the layout) |
+| 3.5% | contents of the value, varnode and context symbols (`decode_contents`) |
+| 3.5% | the 9,000 scopes (`decode_scopes`, still through the packed decoder) |
+| 3% | copying the 8.5 MB stream out of the image (`to_vec`; the image is also kept by `EngineRecipe`) |
+| 3% | reading the layout back (`Layout::read`) |
 | 2% | reading the uncompressed `.sla` copy |
 
 A process start is about 20 ms of the 71 ms per `unlace` spawn. The remaining fixes, none built:
-- **Skip the walk (21%).** It has to look at every byte because the packed format stores no
-  lengths. The uncompressed copy is unlace's own file, so it could also store the byte ranges
-  the walk records. Medium change; the copy gets a second part that must stay in step with the
-  stream.
-- **Operand symbols on first use (28%).** About 40 call sites read `OperandSymbol` fields
-  directly and would have to go through a decode-on-first-read accessor. Large change.
-- **Symbol headers (22%)** are what name lookups use, so they cannot simply be skipped.
+- **Symbol shells (12%) and scopes (3.5%)** are what name lookups use. The 9,000 constructor
+  scopes and the operand names in them serve only snippet compilation and printing; a lazy
+  per-scope name map would need the scope's symbol ids in the layout.
+- **Dropping the engine (7%)** could be skipped by a process that exits right after.
 - **AVX naming at setup (6%)** is front-loaded on purpose: the masked user-op names must be
   registered before printing. Making it lazy changes the user-op registry.
 - **A flat cache (rkyv) or tables compiled into the binary** would replace all of the decode
-  (73% of what is left) and is the only way to a load near 1 ms. It changes the types the SLEIGH
+  (about 40% of what is left) and is the only way to a load near 1 ms. It changes the types the SLEIGH
   runtime reads, in every user of `SymbolTable`, `Constructor` and `DecisionNode`.
 - **A process-wide cache of the decoded spec** (per thread, because of `Rc`) would make the 2nd
   and later loads in one process about 8 ms. It does not help a spawned `unlace`.

@@ -214,4 +214,4 @@ What came out differently from the plan:
   - Type spellings, most statement forms, and a set of keywords and operators per
     language are refused; `docs/spec/09-emission.md` §9.6 lists them.
   - The JSON `language` key still names the base language.
-- **`--jobs`:** `--tokens` and `--ctree` with `--jobs` above 1 are argument errors.
+- **`--jobs`:** `--tokens` and `--ctree` cross `--jobs` workers in the result frame (version 14), so the document is the same at every job count.

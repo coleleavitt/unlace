@@ -1976,7 +1976,17 @@ impl ScopeLocal {
                     }
                 }
                 let open = cur.range_type == RangeType::Open;
-                if open {
+                if open && next.range_type == RangeType::Endpoint && !self.stack_grows_negative {
+                    // On a stack that grows toward larger addresses the endpoint only
+                    // bounds the local range, so an open range extends as far as its
+                    // highest known index.
+                    if cur.highind > 0 {
+                        let extent = (cur.highind + 1) * cur.type_.get_align_size() as int4;
+                        if cur.size < extent {
+                            cur.size = extent;
+                        }
+                    }
+                } else if open {
                     // C++ `cur.size = next->sstart - cur.sstart;` (intb diff
                     // truncated to int4); the gap is small and positive here.
                     cur.size = next.sstart.wrapping_sub(cur.sstart) as int4;

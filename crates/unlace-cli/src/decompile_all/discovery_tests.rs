@@ -217,6 +217,7 @@ fn the_run_level_error_field_is_always_present() {
         &Default::default(),
         Default::default(),
         Default::default(),
+        None,
     );
     assert!(decompiled.contains("\"error\": \"boom\""), "{decompiled}");
     assert!(
@@ -229,7 +230,8 @@ fn the_run_level_error_field_is_always_present() {
             &Default::default(),
             &Default::default(),
             Default::default(),
-            Default::default()
+            Default::default(),
+            None,
         )
         .contains("\"error\": null")
     );
@@ -253,7 +255,8 @@ fn the_document_reports_the_selected_language() {
             &Default::default(),
             &Default::default(),
             Default::default(),
-            Default::default()
+            Default::default(),
+            None,
         )
         .contains("\"c-language\"")
     );
@@ -267,7 +270,8 @@ fn the_document_reports_the_selected_language() {
             &Default::default(),
             &Default::default(),
             Default::default(),
-            Default::default()
+            Default::default(),
+            None,
         )
         .contains("\"c-language\"")
     );
@@ -283,7 +287,8 @@ fn the_document_reports_the_selected_language() {
             &Default::default(),
             &Default::default(),
             Default::default(),
-            Default::default()
+            Default::default(),
+            None,
         )
         .contains("\"go-language\"")
     );
@@ -298,7 +303,8 @@ fn the_document_reports_the_selected_language() {
             &Default::default(),
             &Default::default(),
             Default::default(),
-            Default::default()
+            Default::default(),
+            None,
         )
         .contains("\"rust-language\"")
     );

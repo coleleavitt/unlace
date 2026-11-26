@@ -7093,6 +7093,10 @@ pub struct LaneDivide {
     /// `true` if we allow lanes to be cast (via SUBPIECE) to a smaller integer
     /// size (C++ `allowSubpieceTerminator`).
     allow_subpiece_terminator: bool,
+    /// Ops that consume a traced value whole and already read its reassembled lanes.
+    whole_input_ops: Vec<OpId>,
+    /// Set when the trace met an op that changes the lanes.
+    lane_progress: bool,
 }
 
 impl LaneDivide {
@@ -7113,6 +7117,8 @@ impl LaneDivide {
             description: desc,
             work_list: Vec::new(),
             allow_subpiece_terminator: allow_downcast,
+            whole_input_ops: Vec::new(),
+            lane_progress: false,
         };
         ld.set_replacement(data, root, num, 0);
         ld
@@ -7806,6 +7812,7 @@ impl LaneDivide {
                     {
                         Some((out_lanes, out_skip)) => {
                             if out_lanes == 1 {
+                                self.lane_progress = true;
                                 let rop = self.tm.new_preexisting_op(1, OpCode::CPUI_COPY, op);
                                 self.tm
                                     .op_set_input(rop, lane_at(rvn, out_skip - skip_lanes), 0);
@@ -7830,6 +7837,7 @@ impl LaneDivide {
                                     return false; // Is the piece smaller than a lane?
                                 }
                                 // Treat SUBPIECE as terminating
+                                self.lane_progress = true;
                                 let rop = self.tm.new_preexisting_op(2, OpCode::CPUI_SUBPIECE, op);
                                 self.tm
                                     .op_set_input(rop, lane_at(rvn, lane_index - skip_lanes), 0);
@@ -7931,11 +7939,93 @@ impl LaneDivide {
                     if !self.build_store(data, op, num_lanes, skip_lanes) {
                         return false;
                     }
+                    self.lane_progress = true;
+                }
+                OpCode::CPUI_CALL
+                | OpCode::CPUI_CALLIND
+                | OpCode::CPUI_CALLOTHER
+                | OpCode::CPUI_RETURN => {
+                    if Self::is_whole_reassembly(data, origvn, op) {
+                        return false;
+                    }
+                    if !self.whole_input_ops.contains(&op) {
+                        self.build_whole_input(data, op, rvn, num_lanes, skip_lanes);
+                        self.whole_input_ops.push(op);
+                    }
                 }
                 _ => return false,
             }
         }
         true
+    }
+
+    /// Is the Varnode a PIECE result that only the given op reads (C++
+    /// `LaneDivide::isWholeReassembly`)?
+    fn is_whole_reassembly(data: &Funcdata, vn: VarnodeId, op: OpId) -> bool {
+        let v = data.vbank().get(vn).expect("is_whole_reassembly: stale vn");
+        if !v.is_written() {
+            return false;
+        }
+        let Some(def) = v.get_def() else {
+            return false;
+        };
+        if data
+            .obank()
+            .get(def)
+            .expect("is_whole_reassembly: stale def")
+            .code()
+            != OpCode::CPUI_PIECE
+        {
+            return false;
+        }
+        data.descend_snapshot(vn).iter().all(|&o| o == op)
+    }
+
+    /// Reattach the lanes to an op that consumes the traced value whole (C++
+    /// `LaneDivide::buildWholeInput`): PIECE ops rebuild the value before the op, and
+    /// every input slot that held the original reads the rebuilt value.
+    fn build_whole_input(
+        &mut self,
+        data: &Funcdata,
+        op: OpId,
+        rvn: TVarRef,
+        num_lanes: int4,
+        skip_lanes: int4,
+    ) {
+        let origvn = self
+            .tm
+            .var(rvn)
+            .get_original()
+            .expect("build_whole_input: rvn original");
+        let pcop = data.obank().get(op).expect("build_whole_input: stale op");
+        let num_in = pcop.num_input();
+        let rop = self.tm.new_preexisting_op(num_in, pcop.code(), op);
+        let mut whole = rvn;
+        let mut size = self.description.get_size(skip_lanes);
+        for i in 1..num_lanes {
+            let lane_size = self.description.get_size(skip_lanes + i);
+            let next = self.tm.new_unique(size + lane_size);
+            let piece = self.tm.new_op(2, OpCode::CPUI_PIECE, rop);
+            self.tm.op_set_output(piece, next);
+            self.tm.op_set_input(piece, lane_at(rvn, i), 0);
+            self.tm.op_set_input(piece, whole, 1);
+            whole = next;
+            size += lane_size;
+        }
+        for i in 0..num_in {
+            let vn = data
+                .obank()
+                .get(op)
+                .expect("build_whole_input: stale op")
+                .get_in(i)
+                .expect("build_whole_input: input");
+            if vn == origvn {
+                self.tm.op_set_input(rop, whole, i);
+            } else {
+                let tvn = self.tm.get_preexisting_varnode(data, vn);
+                self.tm.op_set_input(rop, tvn, i);
+            }
+        }
     }
 
     /// Pull the logical lanes back through the defining op (C++
@@ -7979,6 +8069,9 @@ impl LaneDivide {
                     None => return false,
                 };
                 self.build_unary_op(code, op, in_vars, rvn, num_lanes);
+                if code != OpCode::CPUI_COPY {
+                    self.lane_progress = true;
+                }
             }
             OpCode::CPUI_INT_AND | OpCode::CPUI_INT_OR | OpCode::CPUI_INT_XOR => {
                 let in0 = data
@@ -8002,6 +8095,7 @@ impl LaneDivide {
                     None => return false,
                 };
                 self.build_binary_op(code, op, in0_vars, in1_vars, rvn, num_lanes);
+                self.lane_progress = true;
             }
             OpCode::CPUI_MULTIEQUAL => {
                 if !self.build_multiequal(data, op, rvn, num_lanes, skip_lanes) {
@@ -8069,16 +8163,19 @@ impl LaneDivide {
                 if !self.build_right_shift(data, op, rvn, num_lanes, skip_lanes) {
                     return false;
                 }
+                self.lane_progress = true;
             }
             OpCode::CPUI_INT_LEFT => {
                 if !self.build_left_shift(data, op, rvn, num_lanes, skip_lanes) {
                     return false;
                 }
+                self.lane_progress = true;
             }
             OpCode::CPUI_INT_ZEXT => {
                 if !self.build_zext(data, op, rvn, num_lanes, skip_lanes) {
                     return false;
                 }
+                self.lane_progress = true;
             }
             _ => return false,
         }
@@ -8116,7 +8213,10 @@ impl LaneDivide {
             }
         }
         self.tm.clear_varnode_marks(data);
-        retval
+        if !retval || (!self.lane_progress && !self.whole_input_ops.is_empty()) {
+            return false;
+        }
+        true
     }
 
     /// Apply the constructed transform (C++ base `TransformManager::apply`).

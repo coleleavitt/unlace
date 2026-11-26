@@ -900,7 +900,10 @@ impl FunctionTestCollection {
                     let mut raw = String::new();
                     let nodes = count_nodes(&tree.root, "function", &name, &mut raw);
                     let raws = raw.lines().count();
-                    results.push_str(&format!("Tree -- {name}: {nodes} nodes, {raws} raw\n"));
+                    let lang = tree.lang.print_name();
+                    results.push_str(&format!(
+                        "Tree -- {name}: {lang}, {nodes} nodes, {raws} raw\n"
+                    ));
                     results.push_str(&raw);
                 }
             }

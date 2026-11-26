@@ -336,15 +336,22 @@ fn test_filemanage_discover_ghidra_root_development_layout() {
 fn test_filemanage_discover_ghidra_root_install_layout() {
     let t = TempTree::new("instroot");
     // argv0 path components: .../inst/Ghidra/bin/decomp ; install witness
-    // is inst/server/server.conf (a directory, per the C++ scan)
+    // is the regular file inst/server/server.conf
     t.mkdir("inst/Ghidra/bin");
-    t.mkdir("inst/server/server.conf");
+    t.mkdir("inst/server");
+    t.mkfile("inst/server/server.conf");
 
     let argv0 = format!("{}/inst/Ghidra/bin/decomp", t.path());
     assert_eq!(
         FileManage::discover_ghidra_root(&argv0),
         format!("{}/inst", t.path())
     );
+
+    // a directory named server.conf is not the witness
+    t.mkdir("other/Ghidra/bin");
+    t.mkdir("other/server/server.conf");
+    let argv0 = format!("{}/other/Ghidra/bin/decomp", t.path());
+    assert_eq!(FileManage::discover_ghidra_root(&argv0), "");
 }
 
 #[test]

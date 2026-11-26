@@ -3609,6 +3609,9 @@ emitters of `langrust.rs` and `langgo.rs`, and every pass that asks `OutLang` wh
 construct means behave as they do for the base language. A flavour changes what the printer
 writes and nothing about the recovered function. With no flavour, and with a file that sets
 only `base`, the output is the base language's byte for byte.
+A file may also set `name`: a string with some text in it, which the JSON document reports as
+`language_flavour`. `Flavour::name` returns it. Without `name` the CLI takes the file's stem
+(`crates/unlace-cli/src/langfile.rs`). The name does not change the printer.
 
 The profile is not the whole of a language. A statement emitter may write a keyword as text,
 a pass may test `out_lang` where a capability would do, and a form selects which language's
@@ -6392,6 +6395,17 @@ records anything, and `code` is byte-identical with and without the capture.
 typed nodes; the kinds and members are listed in `docs/cli.md`, "The JSON documents",
 `--ctree`):
 
+- A constant (`const` node) has a `type` when the printer printed it for a Varnode. The
+  constant branch of `push_vn_explicit_ir` records that Varnode and the op that reads it
+  (`rpn_constant`), and the type is `fd.vn_type_read_facing(vn, op)`: the type the printer chose
+  the spelling with, spelled as every other `type` in the tree (`declarator_parts`). A constant
+  the printer spells from a value alone has none: a subscript index, a call argument with no
+  Varnode behind it (the `0x10` of `memcpy(dst, src, 0x10)`), a `case` label, the `true` of a
+  `while`. On seven fixture binaries checked for this change (the sample and six x86-64 fixtures), 1,352 of
+  8,261 constants carry a type; 6,133 of the 6,909 untyped ones are subscript indexes, 764 call
+  arguments, 11 case labels and one `while` condition. The type does not change
+  the text: the reference printer prints the tree the same way with or without it.
+
 - An expression is the recorded node and the recorded nodes under it. A `HiddenFunction`
   token is its one operand. A binary operator applied again to one of its own operands
   with no parentheses between them (the operand is a recorded node with the same token
@@ -6477,6 +6491,17 @@ each cast argument in a `cast` node and moves the spans behind it
 (`ExportTree::insert_cast`, `FuncDetail::cast_tree_arguments`); if the tree then does
 not print back to the edited text it is dropped with that reason.
 
+**Languages.** The tree records its output language (`ExportTree::lang`; the JSON member
+`language`). The builder reads each language's statement forms from its profile: the test of
+`if`, `while` and `for` is parenthesised when `caps.paren_conditions` says so, a statement ends
+with the profile's `kw_semicolon` (Go has none, so a statement ends at its line), Go's `while`
+spelling is also its `for` (a header with a `;` is a three-part `for`), and Rust's `loop {` is a
+`while` with an empty test. Rust's `match` is a `switch` whose items are `arm` nodes (a pattern
+list and a block; the wildcard is text), and its header is bare. An attribute line above the
+prototype is an `attribute` node, and a line comment above the prototype or in a block is a
+comment node. The printer writes the same forms back, and a form the reader does not cover is
+kept as a `raw` node.
+
 The reference printer (`ctreeexport::CPrinter`, the defaults of the `Printer` trait)
 prints a tree as follows; it is the builder's check and what `print_c` and
 `unlace::unstable::printer` run. Header children print one per line; the prototype is
@@ -6520,14 +6545,16 @@ Corpus checks (2026-11-26). The harness's tree pass
 render with unbroken lines and prints it back: 5,344 functions are printed, 4,871 of them
 in C; all 4,871 export a tree that prints back byte for byte; 4,858 trees hold no `raw`
 node and 13 hold `raw` lines only above the prototype (132 lines of `structdefs` type
-definitions and the `bytearrayc` helper preamble); the 473 functions printed in Go, Rust
-or Java export no tree. The test fails on a tree that prints back differently, on a C
-function without a tree and on a `raw` node inside a function body.
+definitions and the `bytearrayc` helper preamble). The
+test fails on a tree that prints back differently, on a function without a tree and on a
+C `raw` node inside a function body; the other languages' `raw` nodes are counted per
+language (`docs/architecture/ctree.md`, section 11).
 `crates/unlace/examples/ctree_roundtrip.rs` over `decompile-all --json --ctree` of every
 fixture binary in the repository (1,482 binaries, 47,525 functions with code): the
 38,332 functions printed in C all have a tree that prints back byte for byte; 38,327 of
 those trees hold no `raw` node and five hold nine between them, all of it text nested
-past level 61; 9,193 functions are printed in another output language. The example
+past level 61; The 9,193 functions printed in another output language are measured in
+section 11 of `docs/architecture/ctree.md`. The example
 exits 2 on a document or tree it cannot read, so a run that reads nothing is not a clean
 run.
 

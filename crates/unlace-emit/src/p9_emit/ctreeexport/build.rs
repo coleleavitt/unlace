@@ -745,7 +745,8 @@ impl<'a> Builder<'a> {
                 return Err("the text above the prototype does not parse into lines".to_string());
             }
             self.blank_lines(&mut children, prev_line, self.line_of[i], 0);
-            let comment = self.toks[i].kind == TokenKind::Comment
+            let comment = (self.toks[i].kind == TokenKind::Comment
+                || self.toks[i].text.starts_with("//"))
                 && self.toks[i].col == 0
                 && (i + 1 == count || self.line_of[i + 1] != self.line_of[i]);
             let attribute = self.toks[i].text.starts_with('#');

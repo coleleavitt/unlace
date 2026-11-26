@@ -345,28 +345,31 @@ fn dereferenced(data: &Funcdata, family: &[VarnodeId]) -> bool {
     false
 }
 
-/// Is `v` a string literal: a constant, or the engine's `PTRSUB` off the
-/// constant zero, that resolves to a character array unlace recovered
-/// (`charptr::constant_is_string`)? Any other constant is a number as
-/// often as an address -- `0x2000` is a buffer size and the address of
-/// `.init` -- so it proves nothing.
+/// Is `v` a string literal: a constant, the engine's `PTRSUB` off the constant
+/// zero, or the COPY of a constant `ptrsubcharconstant` folds such a `PTRSUB`
+/// (and a literal `PTRADD` on it) into, that resolves to a character array
+/// unlace recovered (`charptr::constant_is_string`)? Any other constant is a
+/// number as often as an address -- `0x2000` is a buffer size and the address
+/// of `.init` -- so it proves nothing.
 fn addresses_a_string(data: &Funcdata, v: VarnodeId) -> bool {
     let Some(node) = data.vbank().get(v) else {
         return false;
     };
+    let constant =
+        |c: Option<VarnodeId>| c.filter(|&c| data.vbank().get(c).is_some_and(|c| c.is_constant()));
     let (reader, constant) = if node.is_constant() {
         (node.descend_iter().next(), Some(v))
     } else {
         let def = node.get_def();
         let base = def
             .and_then(|d| data.obank().get(d))
-            .filter(|o| o.code() == OpCode::CPUI_PTRSUB)
-            .filter(|o| {
-                o.get_in(0)
-                    .and_then(|b| data.vbank().get(b))
-                    .is_some_and(|b| b.is_constant() && b.get_offset() == 0)
-            })
-            .and_then(|o| o.get_in(1));
+            .and_then(|o| match o.code() {
+                OpCode::CPUI_PTRSUB => constant(o.get_in(0))
+                    .filter(|&b| data.vbank().get(b).is_some_and(|b| b.get_offset() == 0))
+                    .and_then(|_| o.get_in(1)),
+                OpCode::CPUI_COPY => constant(o.get_in(0)),
+                _ => None,
+            });
         (def, base)
     };
     match (reader, constant) {

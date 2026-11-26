@@ -3891,15 +3891,21 @@ fn a_float_in_a_general_register_keeps_its_integer_uses_round_trip() {
 }
 
 /// The compilers a round trip is run with: every one of `gcc` and `clang` that
-/// runs here, or `cc` when neither does.
+/// runs here, or `cc` when neither does. A host with none fails the test rather
+/// than passing a round trip it never ran.
 fn round_trip_compilers() -> Vec<&'static str> {
     let runs = |cc: &str| process::optional_output(Command::new(cc).arg("--version")).is_some();
     let found: Vec<&'static str> = ["gcc", "clang"].into_iter().filter(|cc| runs(cc)).collect();
-    if found.is_empty() && runs("cc") {
+    let found = if found.is_empty() && runs("cc") {
         vec!["cc"]
     } else {
         found
-    }
+    };
+    assert!(
+        !found.is_empty(),
+        "the round trip requires gcc, clang or cc"
+    );
+    found
 }
 
 /// Compile `src` with each of [`round_trip_compilers`] (a pointer handed to an
@@ -4303,10 +4309,10 @@ fn a_nan_returned_in_s0_round_trips() {
             "qnanf_ ", "core ", "logish ", "use ", "qp ", "sn ", "nn ", "put2 ",
         ],
     );
-    // The errno slot sits at address 0, the pspec's `Reset` vector; mapGlobals prints
-    // the wider access as `_Reset`.
+    // The errno slot is the object's own `err`: its MOVW/MOVT pair is relocated
+    // against that symbol (`reloc_apply`), so it prints by name.
     let src = format!(
-        "#include <stdio.h>\n#include <string.h>\n#include <math.h>\n{BITS}int dat_0;\nint _Reset;\n{printed}\n\
+        "#include <stdio.h>\n#include <string.h>\n#include <math.h>\n{BITS}int err;\n{printed}\n\
          int main(void) {{\n  float out[4] = {{0}};\n  put2(3.0f, out);\n  \
          printf(\"%f %f %f %f %llx %llx %llx %llx\\n\", use(-3.0f), use(0.0f), use(4.0f), logish(-3.0f), \
          BITS(qp()), BITS(sn()), BITS(nn()), BITS(out[2]));\n  return 0;\n}}\n"
@@ -5350,8 +5356,12 @@ fn a_return_merged_in_pieces_stays_void() {
 /// `floatret_parse_gcc_O1.o` and `floatret_parse_armel.o` (soft-float ARM):
 /// `parse`, `parse2` and `parsef` return what `strtod` and `strtof` return, and
 /// `rp` keeps `parse`'s bits as an integer, `rp2` stores `parse2`'s `double`, and
-/// Code-proven imports receive their known floating-point contracts on x86-64;
-/// ARM retains its exclusion for incompatible floating-point ABI rows.
+/// Code-proven imports receive their known floating-point contracts on x86-64.
+/// On the soft-float object, which states the base standard, `armbasepcs` binds
+/// the `.o`'s undefined `strtod` to the core-register model, so `parse` and
+/// `parse2` return its `double` in `r0:r1`. `parsef` is not pinned there: its
+/// `r0` is `strtof`'s call output itself, which return recovery does not count
+/// as a result, so it still prints `void`.
 #[test]
 fn a_known_float_import_preserves_its_floating_return() {
     let sp = specs();
@@ -5374,7 +5384,11 @@ fn a_known_float_import_preserves_its_floating_return() {
                 "return strtof(",
             ]
         } else {
-            &["void parse(", "void parse2(", "void parsef("]
+            &[
+                "double parse(char *",
+                "double parse2(char *",
+                "return strtod(",
+            ]
         };
         for want in wants {
             assert!(
@@ -8018,6 +8032,9 @@ int main(void) {
 /// clang builds (at -O0 its double conversion prints as partial-variable
 /// assignments, at -O2 its double return is lost, in either arm), and
 /// `pctx_print` out of gcc -O2, whose jump table prints as a call in either arm.
+/// `libctypes` is held at `opaque`: under `streams` `FILE` carries glibc's
+/// fields, and its printed body would redefine the `FILE` the round trip's
+/// `<stdio.h>` declares.
 #[test]
 fn a_pointer_field_round_trips_through_the_printed_c() {
     const PRELUDE: &str = "#include <stdbool.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\
@@ -8105,6 +8122,10 @@ int main(void) {
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
+    assert!(
+        !compilers.is_empty(),
+        "fieldtype round trip requires a C compiler"
+    );
     for fixture in [
         "fieldtype_gcc_O0_x86_64",
         "fieldtype_clang_O0_x86_64",
@@ -8140,6 +8161,9 @@ int main(void) {
                 "--option",
                 "fieldtype",
                 opt,
+                "--option",
+                "libctypes",
+                "opaque",
             ];
             let (stdout, stderr, ok) = run_unlace(&args);
             assert!(ok, "unlace decompile-all failed: {stderr}");
@@ -8157,6 +8181,9 @@ int main(void) {
                     "--option",
                     "fieldtype",
                     opt,
+                    "--option",
+                    "libctypes",
+                    "opaque",
                 ];
                 let (all, stderr, ok) = run_unlace(&args);
                 assert!(ok, "unlace decompile-all failed: {stderr}");
@@ -9763,6 +9790,9 @@ fn castsign_leaves_a_locked_declaration_alone() {
 /// `0x80000000` as an `unsigned int`, so `p[-0x80000000]` would point forward.
 /// `main` reads those through a 48 GiB `MAP_NORESERVE` map, and prints the same
 /// line in the binary and the round trip when the map is refused.
+/// `structheadless` is held off: it gives `wide_cmp`'s `void *` a synthesized
+/// record for its two byte reads (0x11 and 0x13), so no subscript is left to
+/// check there.
 #[test]
 fn a_pointer_plus_whole_elements_round_trips_through_the_printed_c() {
     let fx = repo_root().join("crates/unlace-analysis/tests/fixtures");
@@ -9798,6 +9828,9 @@ fn a_pointer_plus_whole_elements_round_trips_through_the_printed_c() {
                 "--option",
                 "castarith",
                 arm,
+                "--option",
+                "structheadless",
+                "off",
             ];
             let (stdout, stderr, ok) = run_unlace(&args);
             assert!(ok, "unlace decompile-all failed: {stderr}");
@@ -9855,10 +9888,11 @@ fn a_pointer_plus_whole_elements_round_trips_through_the_printed_c() {
                 !body.contains("(unsigned int)((unsigned char *)"),
                 "{build} castarith {arm}: a widening castimplied leaves out came back over a subscript\n{body}"
             );
-            if !runs_here || !have_cc {
-                eprintln!("castarith round trip: no x86-64 host or no `cc`, spelling checked only");
+            if !runs_here {
+                eprintln!("castarith round trip: no x86-64 host, spelling checked only");
                 continue;
             }
+            assert!(have_cc, "castarith round trip requires `cc`");
             let expected = process::required_output(&mut Command::new(bin));
             let dir = std::env::temp_dir().join(format!(
                 "unlace-castarith-rt-{}-{build}-{arm}",
@@ -12401,6 +12435,10 @@ fn bejoin_round_trip(label: &str, src_text: &str, printed: &str) {
         .into_iter()
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
+    assert!(
+        !compilers.is_empty(),
+        "bejoin round trip requires a C compiler"
+    );
     for cc in &compilers {
         for level in ["-O0", "-O2"] {
             let dir = std::env::temp_dir().join(format!(
@@ -13071,7 +13109,9 @@ fn bejoin_reads_an_ints_stale_low_half_as_the_long_long_it_matches() {
 /// is compiled with gcc and clang at -O0 and -O2 against `bejoin_trunc.c`, the
 /// 64-bit arguments split high word first; `pick64` and `tabs64` keep their
 /// fix. PowerPC -O1 and -O2 narrow `pick64` and `tabs64` to one register for a
-/// reason unrelated to the join, so they are left out there.
+/// reason unrelated to the join, so they are left out there. `armpairparam` is
+/// held off, so ARM big-endian passes its 64-bit arguments split as SPARC and
+/// PowerPC do: on it, `lua_fits` and `min_len` take one `long long` each.
 #[test]
 fn a_branch_chosen_flag_or_an_int_truncation_keeps_its_int_in_the_first_register() {
     const ALL: [&str; 8] = [
@@ -13098,6 +13138,9 @@ fn a_branch_chosen_flag_or_an_int_truncation_keeps_its_int_in_the_first_register
             "--option",
             "bejoin",
             "on",
+            "--option",
+            "armpairparam",
+            "off",
         ]);
         assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, funcs);

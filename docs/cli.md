@@ -1454,14 +1454,14 @@ C, `>>>` and `>>` in Java); `minus` is the binary operator. Where the base langu
 two operators as one token (Go's `>>` for both shifts), set one of the two keys. A `[forms]`
 or `[caps]` key set to the base language's own value is accepted and changes nothing.
 
-What a flavour does not change: type names and declarations (there is no `[types]` table:
-the type speller belongs to the base language), punctuation (braces, `;`, `,`, parentheses,
-`[]`), compound assignments and `++`, the conditional `?:`, unary minus, `&` and `*` as
-address-of and dereference, casts, calls, an or of enum constants (`A|B`), and anything a
-language's own emitters write as text (Rust's `loop`, `let` and `as`, Go's `func` and
-`:=`). Identifiers are checked against the base language's reserved words, not against the
-flavour's spellings. `decompile-project` and `decompile-graph` are C by contract and refuse
-the flag.
+What a flavour does not change: type names, declarations and type definitions (there is no
+`[types]` table: the type speller belongs to the base language), punctuation (braces, `;`,
+`,`, parentheses, `[]`), compound assignments and `++`, the conditional `?:`, unary minus,
+`&` and `*` as address-of and dereference, casts, calls, an or of enum constants (`A|B`),
+and anything a language's own emitters write as text (Rust's `loop`, `let` and `as`, Go's
+`func` and `:=`). Identifiers are checked against the base language's reserved words, not
+against the flavour's spellings. `decompile-project` and `decompile-graph` are C by contract
+and refuse the flag.
 
 In a Rust flavour, `forms.goto = "c-goto"` with `keywords.goto` and `forms.label = "c-colon"`
 print the jump Rust has no statement for as a `goto` and its target as a label line, where

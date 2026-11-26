@@ -117,6 +117,9 @@ mod local_array_bits;
 #[path = "array_record.rs"]
 mod array_record;
 
+#[path = "ctree_cli.rs"]
+mod ctree_cli;
+
 #[path = "aif_lea_padding.rs"]
 mod aif_lea_padding;
 

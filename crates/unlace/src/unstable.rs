@@ -5,6 +5,8 @@
 //! (`notes/extensibility-plan.md`) can be used and corrected before they are
 //! promised. The rest of the crate is the stable surface.
 
+pub mod ctree;
 pub mod flavour;
 pub mod hooks;
 pub mod mapping;
+pub mod printer;

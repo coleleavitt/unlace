@@ -15,7 +15,7 @@ mod p9_emit;
 pub use p9_emit::*;
 #[doc(hidden)]
 pub use unlace_bandb::*;
-pub use unlace_ctree::{ctree, ctreebuild};
+pub use unlace_ctree::{ctree, ctreebuild, ctreehooks};
 
 /// The pass hooks this crate's own modules provide: each module's `provide`, in the driver's
 /// order. The driver composes the crates' tables into the default pipeline's

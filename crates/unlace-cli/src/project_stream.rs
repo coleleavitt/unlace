@@ -1029,6 +1029,7 @@ fn export(
         want_tokens: false,
         want_storage: false,
         want_pointer_arguments: false,
+        want_ctree: false,
     };
 
     let (mut writer, (mut type_blocks, retries)) = std::thread::scope(

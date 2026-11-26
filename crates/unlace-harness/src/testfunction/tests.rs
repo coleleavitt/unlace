@@ -259,6 +259,38 @@ fn load_real_datatest_parses_script_and_tests() {
 }
 
 #[test]
+fn the_tree_pass_reports_one_line_per_printed_function() {
+    // boolless.xml prints one function; with the specs at hand its script runs, and the
+    // tree of what `print C` printed prints back with no text left untyped.
+    let specs = repo_root().join("specs").to_str().unwrap().to_string();
+    let mut c = FunctionTestCollection::with_spec_roots(vec![specs]);
+    c.load_test(&datatest("boolless.xml"))
+        .expect("boolless parses");
+    let mut failures = Vec::new();
+    let out = c.check_trees(&mut failures);
+    assert_eq!(failures, Vec::<String>::new());
+    assert_eq!((c.get_tests_applied(), c.get_tests_succeeded()), (1, 1));
+    let lines: Vec<&str> = out.lines().collect();
+    let [line] = lines.as_slice() else {
+        panic!("{out}");
+    };
+    let counts = line.strip_prefix("Tree -- boolless: ").expect(line);
+    let (nodes, raw) = counts.split_once(" nodes, ").expect(line);
+    assert!(
+        nodes.parse::<usize>().is_ok_and(|nodes| nodes > 20),
+        "{line}"
+    );
+    assert_eq!(raw, "0 raw");
+
+    // Without the specs the script fails at its first engine command: nothing is printed.
+    let mut c = FunctionTestCollection::new();
+    c.load_test(&datatest("boolless.xml"))
+        .expect("boolless parses");
+    assert_eq!(c.check_trees(&mut failures), "");
+    assert_eq!((c.get_tests_applied(), c.get_tests_succeeded()), (0, 0));
+}
+
+#[test]
 fn end_to_end_real_datatest_error_path_grammar() {
     // Drive lzcount.xml end-to-end through the ported console.  The engine
     // commands (`lo fu`/`decompile`/`print C`) are stubs in the merged tree, so

@@ -9,6 +9,7 @@
 //! bodies is a run-level failure.
 
 mod callee_first;
+pub(crate) mod ctreejson;
 mod custom_reg_callers;
 mod functions_serialize;
 mod omit;
@@ -27,6 +28,8 @@ pub(crate) struct Extra {
     pub(crate) tokens: bool,
     /// `--storage`: each variable's `storage` list.
     pub(crate) storage: bool,
+    /// `--ctree`: the C syntax tree of the code (`ctree`, `ctree_error`).
+    pub(crate) ctree: bool,
 }
 
 use std::collections::BTreeSet;
@@ -880,6 +883,7 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
                 want_tokens: false,
                 want_storage: args.jobs_storage,
                 want_pointer_arguments: args.jobs_pointerargs,
+                want_ctree: false,
             };
             let mut pending = entries.into_iter();
             let mut pulled = 0usize;
@@ -1662,6 +1666,7 @@ pub(crate) fn decompile_entries_with(
         want_tokens: args.extra.tokens,
         want_storage: args.extra.storage,
         want_pointer_arguments: pointer_arguments,
+        want_ctree: args.extra.ctree,
         ..DecompileOptions::default()
     };
     prog.arch_mut().unlace_tail_callee_batch = tail_callees;
@@ -2956,6 +2961,9 @@ fn function_json(
     if let Some(inside) = interior.get(&f.byte_address) {
         record.push(("interior_to".into(), crate::interior::json(inside)));
     }
+    if extra.ctree {
+        record.extend(ctreejson::fields(f));
+    }
     Json::Object(record)
 }
 
@@ -3331,6 +3339,7 @@ pub(crate) fn parse_args_with_filters(
                 }
             }
             "--no-vars" => no_vars = true,
+            "--ctree" if matches!(cmd, "decompile-all" | "decompile") => extra.ctree = true,
             "--omit" if matches!(cmd, "decompile-all" | "decompile") => {
                 omit.add(&take(argv, &mut i, "--omit")?)?
             }
@@ -3555,6 +3564,9 @@ pub(crate) fn parse_args_with_filters(
             return Err("--rust-signature-manifest requires an unmodified object image without raw, slice, target, ISA, image-selection, assertion, or function-definition overrides".into());
         }
     }
+    if extra.ctree && !json {
+        return Err("--ctree selects --json record keys; add --json".into());
+    }
     if !omit.is_empty() {
         if !json {
             return Err("--omit selects --json record keys; add --json".into());
@@ -3672,6 +3684,13 @@ pub(crate) fn parse_args_with_filters(
         if raw_image {
             return Err(
                 "--jobs does not apply to --raw-image input (the entry seeds are the load)".into(),
+            );
+        }
+        if extra.ctree {
+            return Err(
+                "--ctree and --jobs are exclusive: a worker's record does not carry the tree. \
+                 Re-run with --jobs 1."
+                    .into(),
             );
         }
         if !assertions.is_empty() {
@@ -3824,7 +3843,7 @@ fn parse_entry_selector(s: &str) -> Result<EntrySelector, String> {
 
 fn usage_decompile_all() {
     eprintln!(
-        "usage: unlace decompile-all <binary> [--json] [--project FILE] [--functions a,b,..] [--addr 0xVMA].. \\\n\
+        "usage: unlace decompile-all <binary> [--json] [--ctree] [--project FILE] [--functions a,b,..] [--addr 0xVMA].. \\\n\
          \x20                   [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
          \x20                   [--tokens] [--storage] \\\n\
          \x20                   [--max-fn-seconds N] [--max-fn-memory MiB] \\\n\
@@ -3845,6 +3864,10 @@ fn usage_decompile_all() {
          {{kind,message,line,address}}, each at the address it was recorded\n\
          at (a header warning at the entry); `error` is set only for a failed\n\
          function.\n\
+         --ctree (with --json, not with --jobs above 1) adds the C syntax tree of\n\
+         each function's code to its record: `ctree`, its statements and expressions\n\
+         as nested nodes with kind, operands, type, line span and addresses, and\n\
+         `ctree_error`, set when the function has no tree.\n\
          --omit KEY[,KEY].. (with --json) leaves those record collections out of\n\
          every record -- aliases, line_mappings, variables (with stack_objects),\n\
          types -- and lists them in a top-level `omitted` array, so an omitted\n\

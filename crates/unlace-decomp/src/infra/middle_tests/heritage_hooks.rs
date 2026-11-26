@@ -719,3 +719,25 @@ fn join_padding_is_a_constant_read_and_never_a_written_location() {
         }
     }
 }
+
+#[test]
+fn rename_recurse_walks_a_deep_dominator_chain() {
+    const DEPTH: usize = 200_000;
+    let walk = std::thread::Builder::new()
+        .stack_size(1 << 20)
+        .spawn(|| {
+            let mut fd = build_fd();
+            let edges: Vec<(usize, usize)> = (0..DEPTH - 1).map(|i| (i, i + 1)).collect();
+            let blocks = build_cfg(&mut fd, DEPTH, &edges);
+            let mut heritage = Heritage::new();
+            heritage.domchild = (0..DEPTH)
+                .map(|i| blocks.get(i + 1).copied().into_iter().collect())
+                .collect();
+            let mut varstack = Default::default();
+            heritage
+                .rename_recurse(&mut fd, blocks[0], &mut varstack)
+                .unwrap();
+        })
+        .unwrap();
+    walk.join().unwrap();
+}

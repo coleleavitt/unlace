@@ -422,15 +422,17 @@ pub fn cookie_check_op(
     found
 }
 
-/// The CALL op to strip, with the entry-side scramble ops feeding it.
+/// Does the call declare no output of its own: either no locked output at all
+/// or a locked `void`? Such a checker is stated to produce no value, so the
+/// return register and every register it does not touch pass through it.
 #[doc(hidden)]
 pub fn call_has_locked_void_output(data: &Funcdata, op: OpId) -> bool {
     let Some(index) = data.get_call_specs_index(op) else {
         return false;
     };
     let proto = data.get_call_specs(index).proto();
-    proto.is_output_locked()
-        && proto.get_output_type().map(|ty| ty.get_metatype())
+    !proto.is_output_locked()
+        || proto.get_output_type().map(|ty| ty.get_metatype())
             == Some(crate::dtype::type_metatype::TYPE_VOID)
 }
 
@@ -516,6 +518,16 @@ impl Action for ActionStripMsvcStackGuard {
         &mut self.base
     }
     fn clone_filtered(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Action>> {
+        {
+            use std::io::Write;
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("/tmp/claude-1000/dbg.txt")
+            {
+                let _ = writeln!(f, "C {}", grouplist.contains(self.get_group()));
+            }
+        };
         if !grouplist.contains(self.get_group()) {
             return None;
         }
@@ -526,6 +538,21 @@ impl Action for ActionStripMsvcStackGuard {
     }
 
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        {
+            use std::io::Write;
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("/tmp/claude-1000/dbg.txt")
+            {
+                let _ = writeln!(
+                    f,
+                    "A nc={} sp={}",
+                    data.num_calls(),
+                    stack_pointer_storage(data).is_some()
+                );
+            }
+        };
         let strip = self.enabled
             || data
                 .get_arch()
@@ -539,6 +566,22 @@ impl Action for ActionStripMsvcStackGuard {
             return 0;
         };
         let mut calls = cookie_check_calls(data, &sp, !strip, !strip);
+        {
+            use std::io::Write;
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("/tmp/claude-1000/dbg.txt")
+            {
+                let _ = writeln!(
+                    f,
+                    "X nc={} found={} strip={}",
+                    data.num_calls(),
+                    calls.len(),
+                    strip
+                );
+            }
+        };
         if !strip {
             if calls.is_empty() {
                 return 0;

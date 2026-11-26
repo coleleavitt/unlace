@@ -930,3 +930,52 @@ fn intersect_keeps_a_wrapping_range_whose_left_end_rounds_past_the_top() {
     none.intersect(&even);
     assert!(none.is_empty());
 }
+
+#[test]
+fn pull_back_sub_slot1_swaps_the_wrapped_bounds() {
+    // 9938: val - x for x in [6,9) lands in [2,5), so the bounds must come from
+    // the opposite ends of the range.
+    let mut range = CircleRange::new(2, 5, 1, 1);
+    assert!(range.pull_back_binary(OpCode::CPUI_INT_SUB, 10, 1, 1, 1));
+    for v in 0..=0xffu64 {
+        assert_eq!(range.contains_val(v), (6..=8).contains(&v), "value {v:#x}");
+    }
+}
+
+#[test]
+fn pull_back_sext_odd_phase_has_no_preimage() {
+    // 9938: 0x101..0x105 step 2 holds no sign-extended byte.
+    let mut range = CircleRange::new(0x101, 0x105, 2, 2);
+    range.pull_back_unary(OpCode::CPUI_INT_SEXT, 1, 2);
+    for v in 0..=0xffu64 {
+        assert!(!range.contains_val(v), "value {v:#x}");
+    }
+}
+
+#[test]
+fn push_forward_right_shift_of_a_wrapped_range_covers_the_low_half() {
+    // 9938: a 1-byte shift right by 1 of [0xf0,0x10) covers [0,0x80); a zero
+    // shift keeps the input range.
+    let in1 = CircleRange::new(0xf0, 0x10, 1, 1);
+    let in2 = CircleRange::new(1, 2, 1, 1);
+    let mut res = CircleRange::new_empty();
+    assert!(res.push_forward_binary(OpCode::CPUI_INT_RIGHT, &in1, &in2, 1, 1, 32));
+    assert_eq!((res.get_min(), res.get_end()), (0, 0x80));
+    let zero = CircleRange::new(0, 1, 1, 1);
+    let mut kept = CircleRange::new_empty();
+    assert!(kept.push_forward_binary(OpCode::CPUI_INT_RIGHT, &in1, &zero, 1, 1, 32));
+    assert!(kept.contains_val(0xf5));
+}
+
+#[test]
+fn push_forward_subpiece_of_a_wrapped_range_covers_every_byte() {
+    // 9938: the 2-byte range [0x180,0x120) wraps past 0xffff; its high byte
+    // takes every value.
+    let in1 = CircleRange::new(0x180, 0x120, 2, 1);
+    let in2 = CircleRange::new(1, 2, 2, 1);
+    let mut res = CircleRange::new_empty();
+    assert!(res.push_forward_binary(OpCode::CPUI_SUBPIECE, &in1, &in2, 2, 1, 32));
+    for v in 0..=0xffu64 {
+        assert!(res.contains_val(v), "value {v:#x}");
+    }
+}

@@ -2437,6 +2437,14 @@ no array covers it) prints as `char buf[8200]`, `char buf[1001]` as
 buf[32]`. The source size is anywhere in the last 16 bytes of the gap, and the
 frame alone cannot say where. The call that receives the buffer often can.
 
+**An open range on an upward stack (`varmap.rs (ScopeLocal::restructure)`).** On a stack
+that grows toward larger addresses the endpoint hint is only the top of the local range,
+not the end of the frame. An open range that is followed by the endpoint therefore keeps
+its element size, or grows to `(highind + 1)` elements when that is larger. It does not
+reach the endpoint. Without this, a local whose address is passed to a call (for example
+`copyin(uaddr, &flag, 4)`) prints as an array of hundreds of millions of elements. A
+downward stack keeps the gap to the next hint.
+
 `crates/unlace-bandb-base/src/p6_variables/arraysize.rs (gather)`
 runs in `restructure_varnode` after the open hints are gathered. For every call
 it reads the argument a library buffer function takes the buffer in and the

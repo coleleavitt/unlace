@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<processor_spec>
+  <programcounter register="PC"/>
+  <register_data>
+    <register name="contextreg" hidden="true"/>
+  </register_data>
+  <default_symbols>
+    <symbol name="RESET" address="ram:0000" entry="true"/>
+  </default_symbols>
+</processor_spec>

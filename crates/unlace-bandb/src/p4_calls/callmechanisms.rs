@@ -191,10 +191,17 @@ pub fn evaluation_model(data: &crate::funcdata::Funcdata) -> Option<Rc<crate::fs
 
 /// Apply the callee model's declared return-boundary effects once per lifted call.
 pub fn apply_return(data: &mut crate::funcdata::Funcdata, index: i32) -> UnlaceResult<()> {
+    eprintln!("DBGCM effects={}", data.get_arch().call_mechanism_effects);
     if !data.get_arch().call_mechanism_effects {
         return Ok(());
     }
     let call = data.get_call_specs(index);
+    eprintln!(
+        "DBGCM model={} noret={} id={}",
+        call.proto().has_model(),
+        call.proto().is_no_return(),
+        call.proto().get_inject_upon_return()
+    );
     if !call.proto().has_model() || call.proto().is_no_return() {
         return Ok(());
     }

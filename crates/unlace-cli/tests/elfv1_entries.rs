@@ -651,6 +651,7 @@ fn elfv1_calls_keep_their_short_circuit_condition() {
             );
             text
         });
+        std::fs::copy(&path, format!("/tmp/t_misc_elf_{address}.elf")).unwrap();
         std::fs::remove_file(&path).unwrap();
         assert!(off.contains(") && ("), "{address}\n{off}");
         assert_eq!(default, off, "{address}");

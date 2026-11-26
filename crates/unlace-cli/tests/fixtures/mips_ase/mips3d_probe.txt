@@ -222,27 +222,3 @@ nop
 add zero, zero, zero
 movf zero, zero, 0x0
 nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop
-nop

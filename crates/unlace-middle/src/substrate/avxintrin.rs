@@ -97,7 +97,7 @@ pub fn intrinsic_sized(name: &str, size: i32, src: i32) -> Option<(String, Vec<u
         ("permil", "permute"),
     ] {
         for ty in ["ps", "pd"] {
-            if m == format!("{op}{ty}") {
+            if m.strip_prefix(op) == Some(ty) {
                 let n = if matches!(op, "sqrt" | "rcp" | "rsqrt") {
                     1
                 } else if matches!(op, "blendv" | "blend" | "shuf") {

@@ -1,0 +1,1 @@
+long lw(long fd, const void *b, long n) { register long r7 __asm__("r7") = 4; register long r0 __asm__("r0") = fd; register long r1 __asm__("r1") = (long)b; register long r2 __asm__("r2") = n; __asm__ volatile("svc 0" : "+r"(r0) : "r"(r7), "r"(r1), "r"(r2) : "memory"); return r0; }

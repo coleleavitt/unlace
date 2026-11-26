@@ -2397,6 +2397,34 @@ wrappers': `faccessat` takes three registers, `ppoll` one more than its
 wrapper. A number the table does not know, one computed at run time as in the
 C library's `syscall` dispatcher, reads all of `a0`..`a3`: such a function
 hands its own `a3` to the kernel, and taking fewer would drop a real parameter.
+
+ARM and AArch64 read their argument registers the same way, up to the count the
+`syscalltables` entry for the constant number gives
+(`syscallregs.rs (arm_floor)`); a number with no count, or no constant
+number, keeps the written-registers rule. AArch64 `svc #0x80` is Darwin, whose
+number is in `x16` rather than Linux's `x8` (`syscallregs.rs
+(darwin_storage)`). `auto` also acts on a Mach-O executable, dylib or bundle
+(`loader/format/macho_userland.rs`), which is a program for Darwin's user space
+as a kext or a kernel collection is not.
+
+**(unlace) ARM and AArch64 system calls by name — `option syscallnames`, default on,
+`crates/unlace-middle/src/substrate/syscallnames.rs (name_for)`.** When
+`syscallregs` has given an ARM `software_interrupt` or AArch64 `CallSupervisor`
+its number register and that register is a constant (or the zero-extension of
+one), `op_callother_ir` prints the call as the system call it is, with the number
+dropped and the arguments cut to the table's count:
+
+- AArch64 `svc #0` uses the Linux generic numbering (`sys_write(a0,a1,a2)`);
+- AArch64 `svc #0x80` with a positive number is a Darwin BSD call;
+- AArch64 `svc #0x80` with a negative number, sign-extended from the register, is
+  a Mach trap (`mach_msg_trap`, `task_self_trap`);
+- ARM `svc #0` uses the Linux EABI numbering.
+
+`tools/gen_syscall_tables.py` generates the four tables. The Linux numbers come
+from the uapi `unistd` headers. The Darwin BSD numbers come from the `SYS_*`
+macros of IDA 9.5's XNU 12377 type library. The Mach traps and their argument
+counts come from Hex-Rays ARM's `svc_codes_t` enum and trap prototypes. Every
+other count comes from the i386 `linuxsyscall` table by name.
 Where it does not, its flag test still reads as a fourth parameter, as it did
 before. A call that sets up fewer registers than the kernel's entry takes, with
 no call before it, shows the rest as the function's parameters, since the

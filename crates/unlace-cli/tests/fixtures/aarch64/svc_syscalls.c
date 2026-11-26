@@ -1,0 +1,4 @@
+long lw(long fd, const void *b, long n) { register long x8 __asm__("x8") = 64; register long x0 __asm__("x0") = fd; register long x1 __asm__("x1") = (long)b; register long x2 __asm__("x2") = n; __asm__ volatile("svc 0" : "+r"(x0) : "r"(x8), "r"(x1), "r"(x2) : "memory"); return x0; }
+void lexit(int c) { register long x8 __asm__("x8") = 94; register long x0 __asm__("x0") = c; __asm__ volatile("svc 0" :: "r"(x8), "r"(x0)); for (;;); }
+long dw(long fd, const void *b, long n) { register long x16 __asm__("x16") = 4; register long x0 __asm__("x0") = fd; register long x1 __asm__("x1") = (long)b; register long x2 __asm__("x2") = n; __asm__ volatile("svc 0x80" : "+r"(x0) : "r"(x16), "r"(x1), "r"(x2) : "memory"); return x0; }
+unsigned ts(void) { register long x16 __asm__("x16") = -28; register long x0 __asm__("x0"); __asm__ volatile("svc 0x80" : "=r"(x0) : "r"(x16)); return x0; }

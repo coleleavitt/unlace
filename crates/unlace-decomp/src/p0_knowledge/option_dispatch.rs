@@ -403,6 +403,7 @@ unlace_options! { self, p1;
     "itaniumeh" => registered!(crate::itaniumeh::ItaniumEh),
     "vexzeroupper" => registered!(crate::coreoptions::VexZeroUpper),
     "vectorabi" => registered!(crate::coreoptions::VectorAbi),
+    "syscallnames" => registered!(crate::syscallnames::SyscallNames),
     "neonintrin" => registered!(crate::neonintrin::NeonIntrin),
     "lanefuse" => registered!(crate::coreoptions::LaneFuse),
     "strcodelen" => registered!(crate::analysisgates::Strcodelen),

@@ -6928,7 +6928,8 @@ pub(crate) fn bootstrap_object(
     // system's user space, whose system calls return a result: `option
     // syscallregs auto` acts only when it is.
     sleigh.base_mut().unwrap().image_os_userland =
-        unlace_analysis::loader::format::elf_userland::is_os_userland_image(&bytes);
+        unlace_analysis::loader::format::elf_userland::is_os_userland_image(&bytes)
+            || unlace_analysis::loader::format::macho_userland::is_macho_userland_image(&bytes);
     // (unlace `linuxsyscall`) And whether it is an ELF built for Linux: `option
     // linuxsyscall auto` names an x86 `int 0x80` only when it is.
     sleigh.base_mut().unwrap().image_linux_elf =

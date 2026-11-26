@@ -104,6 +104,21 @@ fn test_edge_udiv_divide_by_zero_error() {
 }
 
 #[test]
+fn test_edge_leftshift_past_width_is_zero() {
+    let mut out = [0u64; 2];
+    leftshift128(&[1, 0], &mut out, 130);
+    assert_eq!(out, [0, 0]);
+}
+
+#[test]
+fn test_edge_udiv_narrow_zero_divisor_error() {
+    let mut q = [0u64; 2];
+    let mut r = [0u64; 2];
+    let err = udiv128(&[5, 0], &[0, 0], &mut q, &mut r).unwrap_err();
+    assert_eq!(err, UnlaceError::lowlevel("divide by 0"));
+}
+
+#[test]
 fn test_edge_set_u128() {
     let mut res = [0xffu64, 0xffu64];
     set_u128(&mut res, 0xdead_beef_dead_beef);

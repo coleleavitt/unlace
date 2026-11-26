@@ -1428,6 +1428,44 @@ fn w10_equate_survives_size4_fold_via_collapse_subpiece() {
     );
 }
 
+/// PIECE with a zero high half is a zero extension, so the low half's equate carries over
+/// (`PcodeOp::collapseConstantSymbol`, op.cc:532-534).
+#[test]
+fn piece_zero_high_half_carries_equate() {
+    let mut fd = build_fd_with_localmap();
+    let sym = add_equate(&mut fd, symbol_dispflags::FORCE_CHAR, 0x61);
+    let src = fd.new_constant(4, 0x61);
+    fd.vbank_mut()
+        .get_mut(src)
+        .unwrap()
+        .set_unlace_symbol_entry(sym);
+
+    let hi0 = fd.new_constant(4, 0);
+    let (zero_hi, _o) = def_op(&mut fd, OpCode::CPUI_PIECE, &[hi0, src], 8);
+    let folded = fd.new_constant(8, 0x61);
+    collapse_constant_symbol(zero_hi, folded, &mut fd);
+    assert!(
+        fd.vbank()
+            .get(folded)
+            .unwrap()
+            .unlace_symbol_entry()
+            .is_some()
+    );
+
+    let hi1 = fd.new_constant(4, 1);
+    let (nonzero_hi, _o2) = def_op(&mut fd, OpCode::CPUI_PIECE, &[hi1, src], 8);
+    let folded_hi = fd.new_constant(8, 0x1_0000_0061);
+    collapse_constant_symbol(nonzero_hi, folded_hi, &mut fd);
+    assert!(
+        fd.vbank()
+            .get(folded_hi)
+            .unwrap()
+            .unlace_symbol_entry()
+            .is_none(),
+        "a nonzero high half must not carry the equate"
+    );
+}
+
 /// Adversarial #2: a non-folding equate (the constant is NOT size-folded;
 /// the value stays put) keeps working — a same-size COPY collapse re-binds
 /// the equate just like the 16 convert equates that never fold size.

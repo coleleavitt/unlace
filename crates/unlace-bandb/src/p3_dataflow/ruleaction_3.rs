@@ -2120,6 +2120,17 @@ fn collapse_constant_symbol(op: OpId, new_const: VarnodeId, data: &mut Funcdata)
                 in1
             }
         }
+        OpCode::CPUI_PIECE => {
+            // Only a zero high half keeps the low half's value, so its equate carries over.
+            let hi = in0
+                .and_then(|v| data.vbank().get(v))
+                .map(|v| v.get_offset())
+                .unwrap_or(1);
+            if hi != 0 {
+                return;
+            }
+            in1
+        }
         _ => return, // default: not a symbol-propagating collapse
     };
     let copy_vn = match copy_vn {

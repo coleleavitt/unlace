@@ -88,6 +88,45 @@ changed; `Error`, `Language`, `FunctionInfo` and `Decompiled` are `#[non_exhaust
 document only gains keys. Option names and their values follow the catalog and can change between
 releases; `unlace catalog --check` reports drift. `unlace_cli::embed` is not stable.
 
+## Unstable extension points (`unlace::unstable`)
+
+`unlace::unstable` holds extension points that are **not** part of the stable surface: its types are
+the engine's own and change with it. Pin the crate version when you build on it.
+
+### `unlace::unstable::ctree`: rewrite the C syntax tree before it prints
+
+The engine prints every function from a C syntax tree (`docs/architecture/ctree.md`) that it takes
+through four levels: `Built`, `Statements`, `Rewritten`, `Final`. `Decompiler::with_tree_hook(level,
+callback)` runs `callback(&mut CTree, &Funcdata)` on every printed function when its tree reaches
+`level`, before the built-in rewrites of that level; the module re-exports the tree types (`CTree`,
+`CMaturity`, `Stmt`, `StmtKind`, `Expr`, `ExprKind`, the ids) and `Funcdata`.
+
+```rust
+use unlace::unstable::ctree::{CMaturity, StmtKind};
+
+// Print each function without its calls to `log_debug`.
+let mut decompiler = unlace::Decompiler::open("a.out")?.with_tree_hook(
+    CMaturity::Statements,
+    |tree, fd| {
+        let hidden: Vec<_> = (0..fd.num_calls())
+            .map(|i| fd.get_call_specs(i))
+            .filter(|call| call.get_name() == "log_debug")
+            .map(|call| call.get_op())
+            .collect();
+        for id in tree.stmt_ids() {
+            if let StmtKind::Stmts { ops, .. } = &mut tree.stmt_mut(id).kind {
+                ops.retain(|op| !hidden.contains(op));
+            }
+        }
+    },
+);
+```
+
+Runnable: `cargo run -p unlace --example tree_hook -- /usr/bin/true main __stack_chk_fail`. Which
+edits the printer honours, and that a callback runs once per print (twice per `decompile`, which
+prints the text and then the line map), is in `docs/architecture/ctree.md` section 10. A hook
+survives the reload a later builder method causes.
+
 ## For a framework with its own loader (fugue-style integration)
 
 A framework like fugue already parses the container, maps segments, and recovers function

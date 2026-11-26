@@ -295,6 +295,11 @@ impl Session {
         &self.prog.arch().archid
     }
 
+    /// The loaded program's architecture, where `unlace::unstable` registers its hooks.
+    pub fn arch_mut(&mut self) -> &mut unlace_decomp::architecture::Architecture {
+        self.prog.arch_mut()
+    }
+
     /// The function inventory, one record per entry address, address-ordered
     /// (`unlace functions`).
     pub fn functions(&self) -> Vec<Entry> {

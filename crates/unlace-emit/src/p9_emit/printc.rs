@@ -4990,9 +4990,6 @@ impl PrintC {
         } else {
             None
         };
-        if let Some(tree) = self.ctree.as_mut() {
-            crate::ctreebuild::split_statements(fd, tree);
-        }
         self.ctree_rewrite(fd, arch);
         if !self.emit_ctree_body(fd, arch, sroot) {
             self.emit_block_graph(fd, arch, sroot);

@@ -6203,6 +6203,46 @@ block printer makes for the same block, so the output with the option on is the
 output with it off; a difference is a bug. The tree is dropped when the body is
 printed.
 
+**The tree schedule.** `PrintC::ctree_rewrite` is only a runner. Every rewrite of the
+tree described above is a row of one schedule (`tree_schedule`, `printc/ctreeprint.rs`):
+a name, the level the tree has when the row runs, and what it runs. The runner takes the
+levels in order (`built`, `statements`, `rewritten`, `final`). For each row it raises the
+tree to the row's level and runs it; within a level the callbacks an embedder registered
+at that level run first, in registration order, then the built-in rows that take the tree
+to the next level:
+
+| Level | Built-in rows, in order |
+|---|---|
+| `built` | `statements` (`split_statements`), `plans` (`ctree_take_plans`) |
+| `statements` | `tryforms`, `iteforms`, `boolreturn`, `retternary`, `noretfirst`, `returnruns` (the `boolreturn` folds), `orexit`, `nestedand` |
+| `rewritten` | `listtries`, `resttries`, `javarests`, `switcharms`, `labels` |
+| `final` | none: the tree prints |
+
+Each `if` row visits, in statement order, the statements that are their block's own node
+and whose block is a `BlockIf`, and skips one an earlier row gave a form (`tryforms`: a
+`Try` or `JavaTry`; `iteforms`: an assignment; `boolreturn` and `retternary`: a `return`),
+so the rows give the result the former single statement loop gave: the `try` forms, then
+the assignment forms, then, outside conditions, `boolreturn`, `retternary` and
+`noretfirst` in that order of precedence. A row whose option is off, or whose output
+language is not C where the option is C-only, does nothing.
+
+A registered callback (`TreeHookRegistry` on the architecture,
+`crates/unlace-ctree/src/ctreehooks.rs`; `ArchTreeHookExt::on_ctree`;
+`Decompiler::with_tree_hook` in `unlace::unstable::ctree`) gets the tree for writing and
+the function for reading. At `built` it sees one statement per structured block; at
+`statements` the split leaves with the print plans moved in; at `rewritten` the result of
+the built-in rewrites, before the label lines, the recorded `try` forms and the switch
+arms; at `final` the tree that prints. The printer prints from the tree and from the
+structured blocks its statements name, so it honours the edits the built-in rows make: an
+op taken out of a `Stmts` leaf is not printed, a graph or list sequence prints its
+statements in the tree's order, a statement turned into an empty sequence prints nothing,
+and the `return`, `&&`/`||` and moved-arm forms print as described above. A callback runs
+once per print of a function, and one decompile prints a function more than once when line
+mappings or tokens are asked for (the text, then the markup pass), so it must make the
+same edit each time. With no callback registered the schedule is the built-in rows alone
+and the output is unchanged. With `UNLACE_STAGE_DIFF` set, each row reports the lines of
+the tree's dump (`CTree::dump`) it changed, as stage `ctree:<row name>`.
+
 
 ## (unlace) Per-stage attribution of text cleanup removals (`UNLACE_STAGE_DIFF`)
 

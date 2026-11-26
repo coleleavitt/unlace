@@ -9,6 +9,7 @@
 //! multi-goto block) reaches the block printer's own dispatch, `emit_block_raw`. Each kind prints
 //! what the block printer prints for its origin block, call for call.
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use super::modifiers;
@@ -23,6 +24,7 @@ use crate::context::BlockId;
 use crate::context::OpId;
 use crate::context::VarnodeId;
 use crate::ctree::{CMaturity, ExprId, ExprKind, StmtId, StmtKind};
+use crate::ctreehooks::{TreeCallback, TreeHookRegistry};
 use crate::iteboolean::IteBoolMatch;
 use crate::iteregion::IteAssignMatch;
 
@@ -34,6 +36,109 @@ pub(super) enum IteForm {
     Ternary(IteAssignMatch),
 }
 use crate::prettyprint::Emit;
+
+/// One row of the tree schedule: a rewrite of the C syntax tree and the level the tree has
+/// when the row runs.
+pub(super) struct TreePass<'a> {
+    pub name: &'a str,
+    pub level: CMaturity,
+    run: TreeRun<'a>,
+}
+
+/// What a row of the tree schedule runs.
+enum TreeRun<'a> {
+    /// A built-in rewrite. It reads what only the printer knows: what a leaf prints, its label
+    /// and comments, the print plans, the output language.
+    Printer(BuiltinRewrite),
+    /// A callback an embedder registered (`TreeHookRegistry`).
+    Hook(&'a RefCell<TreeCallback>),
+}
+
+type BuiltinRewrite = fn(&mut PrintC, &Funcdata, &Architecture);
+
+/// The built-in rows of the tree schedule, in the order they run. The rows of `built` split the
+/// leaves into statements and move the print plans into the tree; the rows of `statements` are
+/// the structural rewrites, each named after the option or print form it applies; the rows of
+/// `rewritten` settle what the printer reads back from the finished tree (the `try` forms of
+/// lists, the switch arms, the label lines).
+const BUILTIN_REWRITES: [(&str, CMaturity, BuiltinRewrite); 15] = [
+    ("statements", CMaturity::Built, |p, fd, _| {
+        if let Some(tree) = p.ctree.as_mut() {
+            crate::ctreebuild::split_statements(fd, tree);
+        }
+    }),
+    ("plans", CMaturity::Built, |p, _, _| p.ctree_take_plans()),
+    ("tryforms", CMaturity::Statements, |p, fd, _| {
+        p.ctree_try_forms(fd)
+    }),
+    ("iteforms", CMaturity::Statements, PrintC::ctree_ite_forms),
+    (
+        "boolreturn",
+        CMaturity::Statements,
+        PrintC::ctree_bool_returns,
+    ),
+    (
+        "retternary",
+        CMaturity::Statements,
+        PrintC::ctree_return_ternaries,
+    ),
+    (
+        "noretfirst",
+        CMaturity::Statements,
+        PrintC::ctree_noret_first,
+    ),
+    (
+        "returnruns",
+        CMaturity::Statements,
+        PrintC::ctree_return_runs,
+    ),
+    ("orexit", CMaturity::Statements, PrintC::ctree_equal_exits),
+    (
+        "nestedand",
+        CMaturity::Statements,
+        PrintC::ctree_nested_ands,
+    ),
+    ("listtries", CMaturity::Rewritten, |p, fd, _| {
+        p.ctree_list_tries(fd)
+    }),
+    ("resttries", CMaturity::Rewritten, |p, fd, _| {
+        p.ctree_rest_tries(fd)
+    }),
+    ("javarests", CMaturity::Rewritten, |p, fd, _| {
+        p.ctree_java_rests(fd)
+    }),
+    ("switcharms", CMaturity::Rewritten, |p, fd, _| {
+        p.ctree_switch_arms(fd)
+    }),
+    ("labels", CMaturity::Rewritten, |p, fd, _| {
+        p.ctree_labels(fd)
+    }),
+];
+
+/// The name a registered callback's row carries.
+const HOOK_ROW: &str = "hook";
+
+/// The tree schedule of one print: level by level, lowest first, the callbacks registered at
+/// the level (they see the tree as the level defines it) and then the built-in rows that take
+/// the tree to the next level.
+pub(super) fn tree_schedule(hooks: &TreeHookRegistry) -> impl Iterator<Item = TreePass<'_>> {
+    CMaturity::LEVELS.into_iter().flat_map(move |level| {
+        let registered = hooks.callbacks(level).iter().map(move |callback| TreePass {
+            name: HOOK_ROW,
+            level,
+            run: TreeRun::Hook(callback),
+        });
+        let builtin = BUILTIN_REWRITES
+            .iter()
+            .filter(move |row| row.1 == level)
+            .map(|&(name, level, run)| TreePass {
+                name,
+                level,
+                run: TreeRun::Printer(run),
+            });
+        registered.chain(builtin)
+    })
+}
 
 impl PrintC {
     /// The function body from the tree's root, when the root is the sequence built from
@@ -237,19 +342,77 @@ impl PrintC {
         }
     }
 
-    /// Take the tree to `rewritten`. First each `if` on an `eh_unwinding()` exceptional edge
-    /// that prints as a `try` (`eh_try_match`; `itaniumeh`) becomes a `Try` statement, which
-    /// no later rewrite touches. Then each `if` the `iteboolean` or `iteregion` print form
-    /// applies to (the same tests, in the same order, `emit_block_if` used to make while
-    /// printing) becomes the assignment statement it prints as. With `option boolreturn on`
-    /// (C output), an `if` whose arms only return `1` and `0` becomes `return c` or
-    /// `return !c` (`bool_return_shape`).
+    /// Run the tree schedule (`tree_schedule`): every rewrite of the C syntax tree, a built-in
+    /// row or a registered callback, at the level it names, lowest level first. The tree is
+    /// raised to a row's level before the row runs and to `final` after the last one. With
+    /// `UNLACE_STAGE_DIFF` set, each row reports the lines of the tree's dump it changed, as
+    /// stage `ctree:<row name>`.
     pub(super) fn ctree_rewrite(&mut self, fd: &Funcdata, arch: &Architecture) {
+        let hooks = arch.unlace_tables.get::<TreeHookRegistry>();
+        let trace = crate::stagediff::stage_diff_enabled();
+        for pass in tree_schedule(hooks) {
+            let Some(tree) = self.ctree.as_mut() else {
+                return;
+            };
+            tree.advance(pass.level);
+            let before = trace.then(|| tree.dump());
+            match pass.run {
+                TreeRun::Printer(run) => run(self, fd, arch),
+                TreeRun::Hook(callback) => (callback.borrow_mut())(tree, fd),
+            }
+            if let (Some(before), Some(tree)) = (before, self.ctree.as_ref()) {
+                let stage = format!("ctree:{}", pass.name);
+                crate::stagediff::trace_stage_diff(fd.get_name(), &stage, &before, &tree.dump());
+            }
+        }
+        if let Some(tree) = self.ctree.as_mut() {
+            tree.advance(CMaturity::Final);
+        }
+    }
+
+    /// The statements an `if` rewrite visits, in arena order: each statement that is its origin
+    /// block's own node and whose block is a `BlockIf`, unless an earlier row already gave it
+    /// the form `taken` names.
+    fn rewritable_ifs(
+        &self,
+        fd: &Funcdata,
+        taken: fn(&StmtKind) -> bool,
+    ) -> Vec<(StmtId, BlockId)> {
+        let Some(tree) = self.ctree.as_ref() else {
+            return Vec::new();
+        };
+        tree.stmt_ids()
+            .into_iter()
+            .filter_map(|id| {
+                let stmt = tree.stmt(id);
+                let blk = stmt.origin?;
+                (tree.node_for(blk) == Some(id)
+                    && fd.sblocks_ref().block(blk).get_type() == BlockType::If
+                    && !taken(&stmt.kind))
+                .then_some((id, blk))
+            })
+            .collect()
+    }
+
+    /// [`rewritable_ifs`](Self::rewritable_ifs) in statement position: the `if`s no earlier row
+    /// gave a `try`, an assignment or a `return` form, outside conditions.
+    fn plain_ifs(&self, fd: &Funcdata, taken: fn(&StmtKind) -> bool) -> Vec<(StmtId, BlockId)> {
+        let mut ifs = self.rewritable_ifs(fd, taken);
+        if let Some(tree) = self.ctree.as_ref() {
+            ifs.retain(|(id, _)| !tree.is_condition(*id));
+        }
+        ifs
+    }
+
+    /// Row `tryforms`: each `if` that opens a DEX `try` statement on its own becomes a
+    /// `JavaTry` statement (`javatry`), and each `if` on an `eh_unwinding()` exceptional edge
+    /// that prints as a `try` (`eh_try_match`; `itaniumeh`) a `Try` statement. No later row
+    /// touches either.
+    fn ctree_try_forms(&mut self, fd: &Funcdata) {
         let Some(ids) = self.ctree.as_ref().map(|tree| tree.stmt_ids()) else {
             return;
         };
-        self.ctree_take_plans();
-        for &id in &ids {
+        for id in ids {
             let Some(blk) = self.ctree.as_ref().and_then(|tree| {
                 let stmt = tree.stmt(id);
                 let blk = stmt.origin?;
@@ -279,93 +442,18 @@ impl PrintC {
                 };
             }
         }
-        let bool_return = arch.unlace_options.get::<crate::ctree::Boolreturn>().0
-            && self.out_lang == crate::lang::OutLang::C;
-        let ret_ternary = arch.unlace_options.get::<crate::ctree::Retternary>().0
-            && self.out_lang == crate::lang::OutLang::C;
-        let noret_first = arch.unlace_options.get::<crate::ctree::Noretfirst>().0
-            && self.out_lang == crate::lang::OutLang::C;
-        let or_exit = arch.unlace_options.get::<crate::ctree::Orexit>().0
-            && self.out_lang == crate::lang::OutLang::C;
-        let nested_and = arch.unlace_options.get::<crate::ctree::Nestedand>().0
-            && self.out_lang == crate::lang::OutLang::C;
-        for id in ids {
-            let Some(blk) = self.ctree.as_ref().and_then(|tree| {
-                let blk = tree.stmt(id).origin?;
-                (tree.node_for(blk) == Some(id)).then_some(blk)
-            }) else {
-                continue;
-            };
-            if fd.sblocks_ref().block(blk).get_type() != BlockType::If
-                || self.ctree.as_ref().is_some_and(|tree| {
-                    matches!(tree.stmt(id).kind, StmtKind::Try { .. } | StmtKind::JavaTry)
-                })
-            {
-                continue;
-            }
+    }
+
+    /// Row `iteforms`: each `if` the `iteboolean` or `iteregion` print form applies to (the
+    /// same tests, in the same order, `emit_block_if` used to make while printing) becomes the
+    /// assignment statement it prints as.
+    fn ctree_ite_forms(&mut self, fd: &Funcdata, arch: &Architecture) {
+        for (id, blk) in self.rewritable_ifs(fd, is_try_form) {
             let form = match self.ite_boolean_match(fd, blk) {
                 Some(m) => Some(IteForm::Bool(m)),
                 None => self.ite_ternary_match(fd, arch, blk).map(IteForm::Ternary),
             };
-            let Some(form) = form else {
-                if self
-                    .ctree
-                    .as_ref()
-                    .is_some_and(|tree| tree.is_condition(id))
-                {
-                    continue;
-                }
-                if bool_return
-                    && let Some((cond_block, ret_op, negate)) = self.bool_return_shape(fd, blk)
-                {
-                    if let Some(tree) = self.ctree.as_mut() {
-                        let branch = tree.add_expr(ExprKind::Branch(cond_block));
-                        let value = if negate {
-                            tree.add_expr(ExprKind::Not(branch))
-                        } else {
-                            branch
-                        };
-                        tree.stmt_mut(id).kind = StmtKind::Return {
-                            value: Some(value),
-                            op: Some(ret_op),
-                        };
-                    }
-                } else if ret_ternary
-                    && let Some((cond_block, ret_op, shape)) = self.return_ternary_shape(fd, blk)
-                {
-                    if let Some(tree) = self.ctree.as_mut() {
-                        let cond = tree.add_expr(ExprKind::Branch(cond_block));
-                        let value = match shape {
-                            ReturnValue::Ternary { yes, no } => {
-                                let yes = tree.add_expr(ExprKind::Op(yes));
-                                let no = tree.add_expr(ExprKind::Op(no));
-                                tree.add_expr(ExprKind::Ternary(cond, yes, no))
-                            }
-                            ReturnValue::Logic { negate, and, other } => {
-                                let left = if negate {
-                                    tree.add_expr(ExprKind::Not(cond))
-                                } else {
-                                    cond
-                                };
-                                let right = tree.add_expr(ExprKind::Op(other));
-                                tree.add_expr(if and {
-                                    ExprKind::And(left, right)
-                                } else {
-                                    ExprKind::Or(left, right)
-                                })
-                            }
-                        };
-                        tree.stmt_mut(id).kind = StmtKind::Return {
-                            value: Some(value),
-                            op: Some(ret_op),
-                        };
-                    }
-                } else if noret_first {
-                    self.noret_first(fd, id, blk);
-                }
-                continue;
-            };
-            let Some(tree) = self.ctree.as_mut() else {
+            let (Some(form), Some(tree)) = (form, self.ctree.as_mut()) else {
                 continue;
             };
             let assign = match form {
@@ -397,38 +485,139 @@ impl PrintC {
             let expr = tree.add_expr(assign);
             tree.stmt_mut(id).kind = StmtKind::Expr(expr);
         }
-        if bool_return {
-            let ids = self
-                .ctree
-                .as_ref()
-                .map(|tree| {
-                    let mut ids = tree.stmt_ids();
-                    ids.retain(|id| !tree.is_condition(*id));
-                    ids
-                })
-                .unwrap_or_default();
-            for id in ids {
-                self.fold_return_ite(fd, id);
-                self.fold_return_run(fd, id);
-            }
+    }
+
+    /// Row `boolreturn` (`option boolreturn`, C output): an `if` whose arms only return `1`
+    /// and `0` becomes `return c` or `return !c` (`bool_return_shape`).
+    fn ctree_bool_returns(&mut self, fd: &Funcdata, arch: &Architecture) {
+        if !arch.unlace_options.get::<crate::ctree::Boolreturn>().0
+            || self.out_lang != crate::lang::OutLang::C
+        {
+            return;
         }
-        if or_exit {
-            for id in ids_rev(self.ctree.as_ref()) {
-                self.fold_equal_exits(fd, id);
-            }
+        for (id, blk) in self.plain_ifs(fd, is_ite_form) {
+            let Some((cond_block, ret_op, negate)) = self.bool_return_shape(fd, blk) else {
+                continue;
+            };
+            let Some(tree) = self.ctree.as_mut() else {
+                continue;
+            };
+            let branch = tree.add_expr(ExprKind::Branch(cond_block));
+            let value = if negate {
+                tree.add_expr(ExprKind::Not(branch))
+            } else {
+                branch
+            };
+            tree.stmt_mut(id).kind = StmtKind::Return {
+                value: Some(value),
+                op: Some(ret_op),
+            };
         }
-        if nested_and {
-            for id in ids_rev(self.ctree.as_ref()) {
-                while self.fold_nested_and(fd, id) {}
-            }
+    }
+
+    /// Row `retternary` (`option retternary`, C output): an `if` whose arms only return a
+    /// constant or a variable becomes one `return` (`return_ternary_shape`).
+    fn ctree_return_ternaries(&mut self, fd: &Funcdata, arch: &Architecture) {
+        if !arch.unlace_options.get::<crate::ctree::Retternary>().0
+            || self.out_lang != crate::lang::OutLang::C
+        {
+            return;
         }
-        self.ctree_list_tries(fd);
-        self.ctree_rest_tries(fd);
-        self.ctree_java_rests(fd);
-        self.ctree_switch_arms(fd);
-        self.ctree_labels(fd);
-        if let Some(tree) = self.ctree.as_mut() {
-            tree.advance(CMaturity::Rewritten);
+        for (id, blk) in self.plain_ifs(fd, is_value_form) {
+            let Some((cond_block, ret_op, shape)) = self.return_ternary_shape(fd, blk) else {
+                continue;
+            };
+            let Some(tree) = self.ctree.as_mut() else {
+                continue;
+            };
+            let cond = tree.add_expr(ExprKind::Branch(cond_block));
+            let value = match shape {
+                ReturnValue::Ternary { yes, no } => {
+                    let yes = tree.add_expr(ExprKind::Op(yes));
+                    let no = tree.add_expr(ExprKind::Op(no));
+                    tree.add_expr(ExprKind::Ternary(cond, yes, no))
+                }
+                ReturnValue::Logic { negate, and, other } => {
+                    let left = if negate {
+                        tree.add_expr(ExprKind::Not(cond))
+                    } else {
+                        cond
+                    };
+                    let right = tree.add_expr(ExprKind::Op(other));
+                    tree.add_expr(if and {
+                        ExprKind::And(left, right)
+                    } else {
+                        ExprKind::Or(left, right)
+                    })
+                }
+            };
+            tree.stmt_mut(id).kind = StmtKind::Return {
+                value: Some(value),
+                op: Some(ret_op),
+            };
+        }
+    }
+
+    /// Row `noretfirst` (`option noretfirst`, C output): [`noret_first`](Self::noret_first) on
+    /// each `if` no earlier row rewrote.
+    fn ctree_noret_first(&mut self, fd: &Funcdata, arch: &Architecture) {
+        if !arch.unlace_options.get::<crate::ctree::Noretfirst>().0
+            || self.out_lang != crate::lang::OutLang::C
+        {
+            return;
+        }
+        for (id, blk) in self.plain_ifs(fd, is_value_form) {
+            self.noret_first(fd, id, blk);
+        }
+    }
+
+    /// Row `returnruns` (`option boolreturn`, C output): fold each `if`/`else` of two run
+    /// values (`fold_return_ite`) and each list's trailing run of guards (`fold_return_run`)
+    /// into one `return`.
+    fn ctree_return_runs(&mut self, fd: &Funcdata, arch: &Architecture) {
+        if !arch.unlace_options.get::<crate::ctree::Boolreturn>().0
+            || self.out_lang != crate::lang::OutLang::C
+        {
+            return;
+        }
+        let ids = self
+            .ctree
+            .as_ref()
+            .map(|tree| {
+                let mut ids = tree.stmt_ids();
+                ids.retain(|id| !tree.is_condition(*id));
+                ids
+            })
+            .unwrap_or_default();
+        for id in ids {
+            self.fold_return_ite(fd, id);
+            self.fold_return_run(fd, id);
+        }
+    }
+
+    /// Row `orexit` (`option orexit`, C output): [`fold_equal_exits`](Self::fold_equal_exits)
+    /// on every sequence, an `if` before the statements inside it.
+    fn ctree_equal_exits(&mut self, fd: &Funcdata, arch: &Architecture) {
+        if !arch.unlace_options.get::<crate::ctree::Orexit>().0
+            || self.out_lang != crate::lang::OutLang::C
+        {
+            return;
+        }
+        for id in ids_rev(self.ctree.as_ref()) {
+            self.fold_equal_exits(fd, id);
+        }
+    }
+
+    /// Row `nestedand` (`option nestedand`, C output): [`fold_nested_and`](Self::fold_nested_and)
+    /// on every `if`, until it folds no more.
+    fn ctree_nested_ands(&mut self, fd: &Funcdata, arch: &Architecture) {
+        if !arch.unlace_options.get::<crate::ctree::Nestedand>().0
+            || self.out_lang != crate::lang::OutLang::C
+        {
+            return;
+        }
+        for id in ids_rev(self.ctree.as_ref()) {
+            while self.fold_nested_and(fd, id) {}
         }
     }
 
@@ -2066,6 +2255,21 @@ fn first_branch(tree: &crate::ctree::CTree, expr: ExprId) -> Option<BlockId> {
         }
         _ => None,
     }
+}
+
+/// A `try` form (row `tryforms`).
+fn is_try_form(kind: &StmtKind) -> bool {
+    matches!(kind, StmtKind::Try { .. } | StmtKind::JavaTry)
+}
+
+/// A `try` form or an assignment form (rows `tryforms`, `iteforms`).
+fn is_ite_form(kind: &StmtKind) -> bool {
+    is_try_form(kind) || matches!(kind, StmtKind::Expr(_))
+}
+
+/// A `try`, an assignment or a `return` form (rows `tryforms` to `retternary`).
+fn is_value_form(kind: &StmtKind) -> bool {
+    is_ite_form(kind) || matches!(kind, StmtKind::Return { .. })
 }
 
 /// Every statement of `tree`, last added first (an `if` before the statements inside it).

@@ -20,6 +20,11 @@ jumps) and `voidtailreturn` (the elided `RETURN`) now live in the tree when it i
 (`ctree_take_plans`); the switch arm plans and the suppressed labels are still printer state.
 Spec: `docs/spec/09-emission.md`, "Printing through the C syntax tree".
 
+Status (2026-11-26): the rewrites run from one schedule (section 10): every built-in rewrite is a
+named row at a `CMaturity` level, embedder callbacks are rows of the same schedule
+(`crates/unlace-ctree/src/ctreehooks.rs`, `Decompiler::with_tree_hook` in `unlace::unstable`), and
+the tree now reaches `final` before it prints.
+
 Today the printer walks the structured block graph and the p-code ops directly and writes text as it
 goes. Every C-level cleanup (a diamond printed as a ternary, an if-chain printed as a switch, a goto
 printed as `break`, a trailing `return;` left out) is either a mark set on the IR in P8 and matched
@@ -291,3 +296,57 @@ unlace-middle ─┬─ unlace-structure ─┐
 4. The tree printer for `Seq`, `Ops` and plain `If`, `Opaque` for the rest, selected by `ctree on`.
 5. The corpus proof (section 6.3), then node kinds out of `Opaque` one at a time, then `statements`,
    then the rewrites of section 4.
+
+## 10. The tree schedule and hooks
+
+`PrintC::ctree_rewrite` runs one schedule (`tree_schedule` in `printc/ctreeprint.rs`). A row has a
+name, a level and what it runs. The runner takes the levels in order; for each row it raises the tree
+to the row's level, then runs it. Within a level the registered callbacks run first (they see the
+tree as section 5 defines the level), then the built-in rows that take the tree to the next level.
+
+| Level | Rows | The tree a callback at this level sees |
+|---|---|---|
+| `built` | `statements`, `plans` | one statement per structured block; leaves are `Ops` |
+| `statements` | `tryforms`, `iteforms`, `boolreturn`, `retternary`, `noretfirst`, `returnruns`, `orexit`, `nestedand` | leaves split into `Stmts`; `switchmerge`, `gotonext` and `voidtailreturn` moved in |
+| `rewritten` | `listtries`, `resttries`, `javarests`, `switcharms`, `labels` | the structural rewrites done |
+| `final` | (none) | label nodes placed; this tree prints |
+
+The built-in rows are functions of the printer, because their tests read what only the printer
+knows: what a leaf prints, its label line and comments, the print plans, the output language. A row
+named after an option does nothing when the option is off.
+
+**Registering a callback.** From code that links the engine:
+
+```rust
+use unlace_decomp::ctree::{CMaturity, StmtKind};
+use unlace_decomp::ctreehooks::ArchTreeHookExt;
+
+arch.on_ctree(CMaturity::Statements, |tree, fd| { /* &mut CTree, &Funcdata */ });
+```
+
+From the facade, `unlace::unstable::ctree` re-exports the tree types and adds
+`Decompiler::with_tree_hook(level, callback)`; `cargo run -p unlace --example tree_hook -- BIN FUNC
+CALLEE` prints a function without its calls to one callee. The registry (`TreeHookRegistry`) is a
+table on the `Architecture`, like the p-code hooks of `crates/unlace-decomp/src/infra/hooks.rs`. It
+has no option and no CLI surface, and an empty registry changes nothing.
+
+**What a callback may change.** It gets `&mut CTree` and `&Funcdata`. The printer prints from the
+tree and from the structured blocks the statements name (`Stmt::origin`), so the edits it honours are
+the ones the built-in rows make:
+
+- remove an op from a `Stmts` leaf: the statement is not printed;
+- reorder or drop the statements of a `Seq` built from a list or graph block;
+- turn a statement into an empty `Seq`: it prints nothing;
+- give an `if` the forms the built-in rewrites give it: a `Return` of a `Branch`/`Not`/`And`/`Or`/
+  `Ternary` value, an `And`/`Or` chain as its condition, `Seq[if, moved arm]`;
+- change the goto type of a `Goto`.
+
+A statement kind the walk does not expect for its origin block prints from the block instead, so a
+wrong edit falls back to the block printer's text rather than failing.
+
+**When it runs.** Once per print of a function. A decompile that asks for line mappings or tokens
+prints the function twice (the text, then the markup pass), and each print builds its own tree, so a
+callback must make the same edit each time it is called for a function.
+
+**Tracing.** With `UNLACE_STAGE_DIFF` set, each row reports on stderr the lines of `CTree::dump` it
+added or removed, as stage `ctree:<row name>` (a registered callback's row is named `hook`).

@@ -825,6 +825,15 @@ pub fn print_unicode(s: &mut String, onechar: int4) {
     }
 }
 
+/// One codepoint of a double-quoted C string body: a single quote needs no escape there.
+pub fn print_unicode_in_string(s: &mut String, onechar: int4) {
+    if onechar == 0x27 {
+        s.push('\'');
+    } else {
+        print_unicode(s, onechar);
+    }
+}
+
 /// The Rust spelling of one codepoint inside a double-quoted string body.
 ///
 /// (unlace outlang) Rust's escape set is a strict subset of C's in the ways that
@@ -16350,7 +16359,7 @@ impl PrintC {
     /// One codepoint of a string literal, escaped for the output language.
     fn push_escaped_codepoint(&self, s: &mut String, codepoint: int4) {
         match self.lang().forms.string_escape {
-            crate::lang::StringEscape::CEscapes => print_unicode(s, codepoint),
+            crate::lang::StringEscape::CEscapes => print_unicode_in_string(s, codepoint),
             crate::lang::StringEscape::RustEscapes => print_unicode_rust(s, codepoint),
             crate::lang::StringEscape::JavaEscapes => {
                 crate::langjava::print_unicode_java(s, codepoint)

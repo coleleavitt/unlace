@@ -79,6 +79,7 @@ fn script_args(binary: &str, target: &str) -> super::DecompileArgs {
         trace: false,
         cfg_dot: false,
         options: Vec::new(),
+        language_file: None,
         rules: Vec::new(),
         defer_fast_funcdisc: false,
         kasserts: Vec::new(),
@@ -181,6 +182,65 @@ fn deferred_fast_funcdisc_outranks_the_preset() {
         last(script(false)).as_deref(),
         Some("option fast_funcdisc on")
     );
+}
+
+/// A flavour goes in after the options: `option setlanguage` selects a language by name,
+/// which drops a flavour installed before it.
+#[test]
+fn the_language_file_command_follows_the_language_options() {
+    let file = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
+    std::fs::write(file.path(), "base = \"c\"\n").unwrap();
+    let path = file.path().to_str().unwrap();
+    let mut args = script_args("/x/a.out", "main");
+    args.options = vec![("setlanguage".into(), "c-language".into())];
+    args.language_file = Some(crate::langfile::LanguageFile::read(path).unwrap());
+    let script = build_script(&args, Path::new("/tmp/unlace_c_x.c"), LISTING, None);
+    let lines: Vec<&str> = script.lines().collect();
+    let command = format!("language file {path}");
+    let at = lines
+        .iter()
+        .position(|line| *line == command)
+        .unwrap_or_else(|| panic!("no {command:?} in:\n{script}"));
+    assert!(
+        lines[..at].contains(&"option setlanguage c-language"),
+        "{script}"
+    );
+    assert!(
+        lines[at..]
+            .iter()
+            .all(|line| !line.starts_with("option setlanguage")
+                && !line.starts_with("option outlang")),
+        "{script}"
+    );
+    let read_symbols = lines.iter().position(|line| *line == "read symbols");
+    assert!(read_symbols.is_some_and(|read| at < read), "{script}");
+}
+
+/// Recorded `decomp_dbg` transcript: the flavour file was replaced after `unlace` checked it.
+const REFUSED_LANGUAGE_FILE: &str = "\
+[decomp]> load file /x/fauxware
+/x/fauxware successfully loaded: x86:LE:64:default:gcc
+[decomp]> option setlanguage c-language
+Decompiler produces c-language
+[decomp]> language file /x/pseudo.toml
+Execution error: /x/pseudo.toml: keywords.retrun: unknown keyword (the keywords are: break)
+[decomp]> read symbols
+[decomp]> quit
+";
+
+#[test]
+fn reports_a_language_file_the_console_refused() {
+    assert_eq!(
+        super::language_file_failure(REFUSED_LANGUAGE_FILE).as_deref(),
+        Some("/x/pseudo.toml: keywords.retrun: unknown keyword (the keywords are: break)")
+    );
+    let accepted = REFUSED_LANGUAGE_FILE.replace(
+        "Execution error: /x/pseudo.toml: keywords.retrun: unknown keyword (the keywords are: break)\n",
+        "",
+    );
+    assert_eq!(super::language_file_failure(&accepted), None);
+    // Another command's diagnostic is not this one's.
+    assert_eq!(super::language_file_failure(EMPTY_SCOPE), None);
 }
 
 /// Recorded `decomp_dbg` transcript: the empty-scope load failure (DIV-88),

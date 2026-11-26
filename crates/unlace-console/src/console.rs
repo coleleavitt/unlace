@@ -1869,6 +1869,35 @@ impl IfaceCommandAction for IfcUnlaceRewriteRules {
 /// (unlace) `functions`: print the canonical executable function inventory.
 pub struct IfcUnlaceFunctions;
 
+/// (unlace) `language file <path>`: print through the flavour in the TOML file at `path`, a
+/// profile over a base output language (`unlace_decomp::langflavour`). It selects the base
+/// language; `option setlanguage` after it drops the flavour.
+pub struct IfcUnlaceLanguageFile;
+
+impl IfaceCommandAction for IfcUnlaceLanguageFile {
+    fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
+        use unlace_decomp::printc::ArchPrintExt;
+        let path = s.read_filename();
+        if path.is_empty() {
+            return Err(IfaceError::parse("No filename specified"));
+        }
+        let prog = dcp_mut(status)?
+            .conf
+            .as_mut()
+            .ok_or_else(|| IfaceError::execution("No load image present"))?;
+        let flavour = std::fs::read_to_string(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|text| unlace_decomp::langflavour::load(&text).map_err(|e| e.to_string()))
+            .map_err(|e| IfaceError::execution(format!("{path}: {e}")))?;
+        prog.arch_mut().print_mut().set_flavour(flavour);
+        Ok(())
+    }
+
+    fn module(&self) -> String {
+        DECOMPILE_MODULE.to_string()
+    }
+}
+
 pub struct IfcCallwidePrepare;
 
 impl IfaceCommandAction for IfcCallwidePrepare {
@@ -2228,6 +2257,7 @@ pub fn register_unlace_commands(status: &mut IfaceStatus) {
     status.register_com(Box::new(IfcUnlaceMode), &["mode"]);
     status.register_com(Box::new(IfcUnlaceQuality), &["quality"]);
     status.register_com(Box::new(IfcUnlaceFunctions), &["functions"]);
+    status.register_com(Box::new(IfcUnlaceLanguageFile), &["language", "file"]);
     status.register_com(Box::new(IfcCallwidePrepare), &["callwide", "prepare"]);
     status.register_com(Box::new(IfcUnlaceRewriteRules), &["rewrite", "rules"]);
     status.register_com(Box::new(IfcUnlaceRegionTree), &["region", "tree"]);

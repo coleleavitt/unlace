@@ -174,6 +174,8 @@ pub(crate) struct PoolConfig<'a> {
     pub(crate) binary: &'a str,
     pub(crate) mode: &'static str,
     pub(crate) options: &'a [(String, String)],
+    /// `--language-file`: the flavour file each worker reads again.
+    pub(crate) language_file: Option<&'a str>,
     /// `--rules` files: a worker registers them on its own load.
     pub(crate) rules: &'a [String],
     pub(crate) func_decls: Vec<String>,
@@ -1219,6 +1221,7 @@ impl Worker {
             ("--slice", cfg.slice),
             ("--target", cfg.target),
             ("--sleighpath", cfg.sleighpath),
+            ("--language-file", cfg.language_file),
         ] {
             if let Some(v) = value {
                 cmd.arg(flag).arg(v);

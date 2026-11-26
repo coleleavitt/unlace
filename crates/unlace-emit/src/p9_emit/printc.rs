@@ -1771,6 +1771,9 @@ pub struct PrintC {
     /// reads (`crate::lang`).  Refreshed per document alongside `rt_ctx`;
     /// `OutLang::C` until then, so an out-of-band print is never non-C.
     pub out_lang: crate::lang::OutLang,
+    /// (unlace) The flavour whose profile stands in for `out_lang`'s own
+    /// ([`set_flavour`](PrintC::set_flavour)); `None` renders the built-in language.
+    flavour: Option<&'static crate::langflavour::Flavour>,
     /// (unlace warnstyle, DIV-39) Warning slugs collected under `warn_inline` by
     /// [`emit_comment_group`](PrintC::emit_comment_group) /
     /// [`emit_comment_func_header`](PrintC::emit_comment_func_header), flushed
@@ -1880,6 +1883,7 @@ impl PrintC {
             switch_plans: Default::default(),
             rt_ctx: RealTypeCtx::OFF,
             out_lang: crate::lang::OutLang::C,
+            flavour: None,
             eol_warns: Vec::new(),
             warnings: Vec::new(),
             local_name_overrides: std::collections::HashMap::new(),
@@ -1921,7 +1925,27 @@ impl PrintC {
     /// profile rather than a second emitter.
     #[inline]
     pub fn lang(&self) -> &'static crate::lang::LangProfile {
-        self.out_lang.profile()
+        match self.flavour {
+            Some(flavour) => flavour.profile(),
+            None => self.out_lang.profile(),
+        }
+    }
+
+    /// (unlace) Render `flavour`: its base language's printer over its profile. Selecting a
+    /// language by name ([`set_name`](PrintC::set_name)) drops it.
+    pub fn set_flavour(&mut self, flavour: &'static crate::langflavour::Flavour) {
+        self.set_name(flavour.base().print_name());
+        self.flavour = Some(flavour);
+    }
+
+    /// (unlace) The text the operator token `tok` opens with: its own, or the one the
+    /// flavour being rendered gives it.
+    #[inline]
+    pub fn op_spelling(&self, tok: &'static OpToken) -> &'static str {
+        match self.flavour {
+            Some(flavour) => flavour.spelling(tok),
+            None => tok.print1,
+        }
     }
 
     /// The printer name (C++ `PrintLanguage::getName`, `"c-language"`).
@@ -1941,6 +1965,7 @@ impl PrintC {
         self.name = name.to_string();
         self.out_lang =
             crate::lang::OutLang::from_print_name(name).unwrap_or(crate::lang::OutLang::C);
+        self.flavour = None;
         if self.plain_line_size.is_some() && !self.emit.emits_markup() {
             self.emit = self.plain_emit();
         }
@@ -2522,7 +2547,7 @@ impl PrintC {
         match entry.tok.token_type {
             TokenType::Binary => {
                 let text = match entry.visited {
-                    1 => entry.tok.print1,
+                    1 => self.op_spelling(entry.tok),
                     2 if !entry.tok.print2.is_empty() => entry.tok.print2,
                     _ => return,
                 };
@@ -2556,8 +2581,11 @@ impl PrintC {
                         record.calls.push(candidate.call);
                     }
                 }
-                self.emit
-                    .tag_op(entry.tok.print1, SyntaxHighlight::NoColor, &op_markup);
+                self.emit.tag_op(
+                    self.op_spelling(entry.tok),
+                    SyntaxHighlight::NoColor,
+                    &op_markup,
+                );
                 self.emit.spaces(entry.tok.spacing, entry.tok.bump);
             }
             TokenType::Postsurround => {
@@ -4548,6 +4576,7 @@ impl PrintC {
     pub fn declarations_of(arch: &Architecture, fd: &Funcdata) -> PrintC {
         let mut print = PrintC::new();
         print.set_name(&arch.print().name);
+        print.flavour = arch.print().flavour;
         print.options = arch.print().options;
         print.doc_function_full(fd, arch);
         print
@@ -5227,7 +5256,7 @@ impl PrintC {
                     return;
                 }
                 self.emit.tag_op(
-                    tokens::BOOLEAN_NOT.print1,
+                    self.op_spelling(&tokens::BOOLEAN_NOT),
                     SyntaxHighlight::NoColor,
                     &MarkupRef::none(),
                 );
@@ -5248,14 +5277,12 @@ impl PrintC {
             ExprKind::And(left, right) | ExprKind::Or(left, right) => {
                 let and = matches!(kind, ExprKind::And(..));
                 self.emit_return_operand(fd, arch, left, and);
-                token(
-                    &mut self.emit,
-                    if and {
-                        tokens::BOOLEAN_AND.print1
-                    } else {
-                        tokens::BOOLEAN_OR.print1
-                    },
-                );
+                let text = self.op_spelling(if and {
+                    &tokens::BOOLEAN_AND
+                } else {
+                    &tokens::BOOLEAN_OR
+                });
+                token(&mut self.emit, text);
                 self.emit_return_operand(fd, arch, right, and);
             }
             _ => {}
@@ -6752,14 +6779,14 @@ impl PrintC {
         self.push_vn_explicit_ir(fd, arch, m.dest, m.assign_op);
         self.emit.spaces(1, 0);
         self.emit.tag_op(
-            tokens::ASSIGNMENT.print1,
+            self.op_spelling(&tokens::ASSIGNMENT),
             SyntaxHighlight::NoColor,
             &MarkupRef::none(),
         );
         self.emit.spaces(1, 0);
         if m.negate {
             self.emit.tag_op(
-                tokens::BOOLEAN_NOT.print1,
+                self.op_spelling(&tokens::BOOLEAN_NOT),
                 SyntaxHighlight::NoColor,
                 &MarkupRef::none(),
             );
@@ -6903,7 +6930,7 @@ impl PrintC {
         // ` = `
         self.emit.spaces(1, 0);
         self.emit.tag_op(
-            tokens::ASSIGNMENT.print1,
+            self.op_spelling(&tokens::ASSIGNMENT),
             SyntaxHighlight::NoColor,
             &MarkupRef::none(),
         );
@@ -6945,11 +6972,14 @@ impl PrintC {
         }
         // ` : B ` / ` } else { B }`
         self.emit.spaces(1, 0);
-        self.emit.tag_op(
-            if ternary { ":" } else { "} else {" },
-            SyntaxHighlight::NoColor,
-            &MarkupRef::none(),
-        );
+        if ternary {
+            self.emit
+                .tag_op(":", SyntaxHighlight::NoColor, &MarkupRef::none());
+        } else {
+            let separator = format!("}} {} {{", self.lang().kw_else);
+            self.emit
+                .tag_op(&separator, SyntaxHighlight::NoColor, &MarkupRef::none());
+        }
         self.emit.spaces(1, 0);
         self.op_push_ir(fd, arch, m.else_op, None);
         self.cast_implied.set_arm_drops(Vec::new());

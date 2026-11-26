@@ -672,6 +672,9 @@ mod unpack_pklite_cli;
 #[path = "unstructured_goto_cli.rs"]
 mod unstructured_goto_cli;
 
+#[path = "language_file_cli.rs"]
+mod language_file_cli;
+
 #[path = "variadic_return_register.rs"]
 mod variadic_return_register;
 

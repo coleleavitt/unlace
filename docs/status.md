@@ -68,6 +68,10 @@ no row checks its output, so treat its results as unverified. [`specs/Ghidra/Pro
 - **Output (`--option outlang`).** `c` is the default. `rust` and `go` are selectable. The printer also
   has a Java output language in code, but `outlang` does not accept it, so it is not supported.
   [`crates/unlace-decomp/phases.toml` (`outlang`); `crates/unlace-emit/src/p9_emit/lang.rs`]
+- **Language files (`--language-file`).** A TOML file over one of the output languages that respells
+  keywords and operators and changes a few forms; each field is accepted only for the base languages
+  whose printer honours it everywhere. Experimental.
+  [`crates/unlace-emit/src/p9_emit/langflavour.rs`; `docs/cli.md`, "Language files"]
 
 ## Front ends
 
@@ -97,6 +101,8 @@ Opt-in or unfinished. Each is off by default or marked above:
 - **Ghidra front end**: 5 unchecked items in `docs/ghidra-integration.md`.
 - **Known failures** listed under Architectures.
 - **Java output language** in the printer: not reachable through `outlang`.
+- **Language files** (`--language-file`, `unlace::unstable::flavour`): the format and the set of
+  overridable fields can change.
 - **Tier 3 architectures**: decompile without an output check.
 
 Option-level status (tier, default, what each flip does) is in [docs/options.md](options.md), which is

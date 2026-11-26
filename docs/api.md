@@ -89,6 +89,22 @@ document only gains keys. Option names and their values follow the catalog and c
 releases; `unlace catalog --check` reports drift. `unlace_cli::embed` is not stable.
 `unlace::unstable` is outside this promise: each part below can change or go away in any release.
 
+### unlace::unstable::flavour — language files
+
+`Decompiler::with_language_file(path)?` prints through a language flavour, the TOML file
+`--language-file` takes (`docs/cli.md`, "Language files"): a base language (`c`, `rust`, `go`,
+`java`) with keyword and operator spellings, forms and capabilities overridden. The file is
+read and checked when the method is called. An unknown field, a value its field does not take
+or an override the base language's printer cannot honour is `Error::Request` naming the field;
+an unreadable file is `Error::Io`. The file names its base language, so `with_language` does
+not apply with it: the load refuses the pair. `Decompiled::json` reports the base language in
+`"language"`.
+
+```rust
+let mut decompiler = unlace::Decompiler::open("a.out")?.with_language_file("pseudo.toml")?;
+println!("{}", decompiler.decompile_named("main")?.c);
+```
+
 ### unlace::unstable::hooks — custom passes and rewrite rule files
 
 The hook types are the engine's own. `use unlace::unstable::hooks::DecompilerHooks` adds three

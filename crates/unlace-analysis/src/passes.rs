@@ -443,7 +443,9 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         passes.push(Box::new(crate::loader::elfgotimports::ElfGotImportPass));
         // (unlace) An ARM ELF that states the base procedure-call standard binds
         // its external functions to the base-standard model (#681).
-        passes.push(Box::new(crate::loader::armbasepcs::ArmBasePcsPass));
+        if std::env::var_os("DBG_NO_BASEPCS").is_none() {
+            passes.push(Box::new(crate::loader::armbasepcs::ArmBasePcsPass));
+        }
     }
 
     // S1 PE/Mach-O/ELF import-slot call binding (PeImportCallPass): paint

@@ -7135,6 +7135,7 @@ fn commit_model_facts(
         };
         models.insert((code_space.get_index(), fact.func_addr), model);
     }
+    eprintln!("DBGMF commit {:x?}", models.keys().collect::<Vec<_>>());
     prog.arch_mut().loader_proto_models = Rc::new(models);
 }
 

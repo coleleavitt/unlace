@@ -1433,6 +1433,18 @@ answers from the load walk (a `<commit>` child seen under a constructor)
 without decoding. The one visible difference is when a corrupt element is
 reported: at its first use instead of at load. `UNLACE_SLA_LAZY=0` decodes
 the whole `.sla` at load, as an XML decoder always does.
+
+The walk is skipped when the `.sla` cache's uncompressed copy carries its
+result: `crates/unlace-slacomp/src/slacache.rs (read_image)` appends the
+encoded layout (`crates/unlace-sleigh/src/lazysla.rs (index_raw_image)`:
+every range above, the template count and the commit flag, as LEB128
+integers) and a trailer naming the stream's and the layout's lengths to the
+`.slr` it writes, in the same rename as the stream, so the two cannot drift
+apart; a copy from before layouts were kept gets one on its next read.
+`SlaStream::inflate` reads the layout back when the trailer is present and its
+lengths add up, and walks the stream otherwise (a compressed `.sla`, a
+Ghidra-built one, a small image without a copy). The eager decoder takes the
+stream part of such an image and ignores the layout.
 The decompressed buffer is then *handed* to the packed decoder rather than
 copied into it (`crates/unlace-base/src/marshal.rs
 (PackedDecode::ingest_owned)`): the inflate buffer becomes the decoder's leading

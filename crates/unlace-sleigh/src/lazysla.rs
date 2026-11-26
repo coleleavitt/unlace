@@ -5,14 +5,23 @@
 //! inflated stream, and one run resolves a few dozen constructors. A lazy load
 //! keeps the inflated stream ([`SlaSource`]) and walks the subtable bodies once
 //! with the flat [`Scan`] cursor, recording where each constructor and each
-//! decision tree lies, instead of decoding them. The regular decoders then run
-//! over those byte ranges the first time something is read: a constructor when
-//! it is resolved, printed or built ([`LazySubtable::constructor`]), its
-//! templates when the p-code builder needs them ([`SlaSource::template`]), a
-//! decision node when a resolution walks through it ([`LazyDecision`]). Every
-//! decode is the eager one over the same bytes, so the values are those an
-//! eager load makes; a corrupt element is reported at its first use instead of
-//! at load. The non-subtable symbols are decoded at load as before.
+//! decision tree lies ([`Layout`]), instead of decoding them. The regular
+//! decoders then run over those byte ranges the first time something is read:
+//! a constructor when it is resolved, printed or built
+//! ([`LazySubtable::constructor`]), its templates when the p-code builder needs
+//! them ([`SlaSource::template`]), a decision node when a resolution walks
+//! through it ([`LazyDecision`]). Every decode is the eager one over the same
+//! bytes, so the values are those an eager load makes; a corrupt element is
+//! reported at its first use instead of at load. The non-subtable symbols are
+//! decoded at load as before.
+//!
+//! The walk itself is a fifth of what is left of a load, so the `.sla` cache's
+//! uncompressed copy carries its result: [`index_raw_image`] appends the
+//! encoded [`Layout`] and a trailer to the copy when the cache writes it, and
+//! [`SlaStream::inflate`] reads the layout back instead of walking. The layout
+//! lives in the same file as the stream it describes, written in one rename,
+//! and names the stream's length; a copy without one, a Ghidra-built `.sla`,
+//! or a compressed image is walked.
 //!
 //! Constructor bodies and decision trees carry no address-space attributes, so
 //! they decode against an empty manager; templates decode against the engine's
@@ -46,27 +55,110 @@ pub fn lazy_enabled() -> bool {
     std::env::var_os(LAZY_ENV).is_none_or(|v| v != "0")
 }
 
-/// The inflated `.sla` stream, split at the symbol contents: everything before
-/// `content_start` (header, spaces, scopes, symbol headers) is decoded at load
-/// through a regular decoder; the contents are scanned by [`Self::scan_contents`].
-pub struct SlaStream {
-    bytes: Vec<u8>,
-    content_start: usize,
+/// The trailer that ends an uncompressed image carrying a layout: `slx`, the
+/// layout encoding's version, then the stream's and the layout's lengths as
+/// little-endian `u64`s.
+const LAYOUT_TRAILER: [u8; 4] = *b"slx\x01";
+const TRAILER_LEN: usize = LAYOUT_TRAILER.len() + 16;
+
+/// The parts of an uncompressed image ([`sla::RAW_SLA_HEADER`] and the packed
+/// stream, optionally followed by an encoded [`Layout`] and its trailer): the
+/// stream, and the layout when the trailer names it. `None` for any other
+/// image.
+pub fn split_raw_image(image: &[u8]) -> Option<(&[u8], Option<&[u8]>)> {
+    let body = image.strip_prefix(&sla::RAW_SLA_HEADER)?;
+    let Some(lengths) = body
+        .strip_suffix(&LAYOUT_TRAILER)
+        .and_then(|rest| rest.get(rest.len().checked_sub(16)?..))
+    else {
+        return Some((body, None));
+    };
+    let stream_len = u64::from_le_bytes(lengths[..8].try_into().expect("8 bytes")) as usize; // u64 -> usize: byte count
+    let layout_len = u64::from_le_bytes(lengths[8..].try_into().expect("8 bytes")) as usize; // u64 -> usize: byte count
+    if stream_len.checked_add(layout_len)? != body.len() - TRAILER_LEN {
+        return Some((body, None));
+    }
+    Some((
+        &body[..stream_len],
+        Some(&body[stream_len..stream_len + layout_len]),
+    ))
 }
 
-impl SlaStream {
-    /// The stream of a `.sla` image: a compressed one inflated, or the `.sla` cache's
-    /// uncompressed copy ([`sla::RAW_SLA_HEADER`]) as it is.
-    pub fn inflate(sla_bytes: &[u8]) -> UnlaceResult<SlaStream> {
-        match sla_bytes.strip_prefix(&sla::RAW_SLA_HEADER) {
-            Some(stream) => SlaStream::new(stream.to_vec()),
-            None => SlaStream::new(sla::inflate_sla(sla_bytes)?),
-        }
+/// Append the encoded [`Layout`] of the uncompressed image `image` (header and
+/// stream, nothing else) and the trailer that names it, after walking the
+/// stream once; an image already carrying a layout is left as it is.
+pub fn index_raw_image(image: &mut Vec<u8>) -> UnlaceResult<()> {
+    let (stream, layout) =
+        split_raw_image(image).ok_or_else(|| UnlaceError::lowlevel("Missing SLA format header"))?;
+    if layout.is_some() {
+        return Ok(());
     }
+    let stream_len = stream.len();
+    let encoded = Layout::walk(stream)?.encode();
+    image.extend_from_slice(&encoded);
+    image.extend_from_slice(&(stream_len as u64).to_le_bytes()); // usize -> u64: byte count
+    image.extend_from_slice(&(encoded.len() as u64).to_le_bytes()); // usize -> u64: byte count
+    image.extend_from_slice(&LAYOUT_TRAILER);
+    Ok(())
+}
 
-    /// Split an inflated `<sleigh>` stream at its symbol contents.
-    pub fn new(bytes: Vec<u8>) -> UnlaceResult<SlaStream> {
-        let mut scan = Scan::new(&bytes, 0);
+/// Where the pieces of a stream's symbol table lie: what the load walk records,
+/// and what the `.sla` cache's copy carries so the walk can be skipped.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Layout {
+    /// Where the symbol contents start (after the scopes and symbol headers).
+    content_start: usize,
+    /// The number of `<construct_tpl>` elements: the template handle space.
+    templates: usize,
+    /// The runs of non-subtable content elements, in stream order.
+    rest: Vec<Span>,
+    subtables: Vec<SubtableLayout>,
+}
+
+/// A byte range of the stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Span {
+    start: usize,
+    end: usize,
+}
+
+/// One `<subtable_sym>`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SubtableLayout {
+    id: u32,
+    /// Whether any constructor has a `<commit>` child (a SLEIGH `globalset`).
+    has_commits: bool,
+    constructors: Vec<ConstructorLayout>,
+    tree: Option<DecisionLayout>,
+}
+
+/// One `<constructor>`: its range and the handle of its first template.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ConstructorLayout {
+    span: Span,
+    first_template: ConstructTplHandle,
+}
+
+/// One `<decision>` as the walk leaves it: an inner node's field and its
+/// children's ranges, a terminal node just its range.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DecisionLayout {
+    span: Span,
+    inner: Option<InnerLayout>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct InnerLayout {
+    contextdecision: bool,
+    startbit: i32,
+    bitsize: i32,
+    children: Vec<Span>,
+}
+
+impl Layout {
+    /// Walk a `<sleigh>` stream.
+    fn walk(bytes: &[u8]) -> UnlaceResult<Layout> {
+        let mut scan = Scan::new(bytes, 0);
         scan.open_id(sla::ELEM_SLEIGH.get_id())?;
         scan.skip_attributes()?;
         loop {
@@ -92,64 +184,283 @@ impl SlaStream {
         for _ in 0..scopes.saturating_add(symbols) {
             scan.skip_element()?;
         }
-        let content_start = scan.pos();
-        Ok(SlaStream {
-            bytes,
-            content_start,
-        })
-    }
-
-    /// Hand the stream up to the symbol contents to `decoder`.
-    pub fn ingest_prefix(&self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
-        decoder.ingest_stream(&self.bytes[..self.content_start])
-    }
-
-    /// Walk the symbol contents: each `<subtable_sym>` becomes a
-    /// [`LazySubtable`] (returned with its symbol id), and the other elements
-    /// are copied, in order, into one stream to decode now.
-    pub fn scan_contents(
-        self,
-        const_space: Rc<AddrSpace>,
-    ) -> UnlaceResult<(Rc<SlaSource>, Vec<(u32, LazySubtable)>, Vec<u8>)> {
-        let mut scan = Scan::new(&self.bytes, self.content_start);
-        let mut layouts: Vec<(u32, SubtableLayout)> = Vec::new();
-        let mut rest: Vec<u8> = Vec::new();
-        let mut templates: usize = 0;
+        let mut layout = Layout {
+            content_start: scan.pos(),
+            ..Layout::default()
+        };
         loop {
             match scan.peek()? {
                 Record::Start(id) if id == sla::ELEM_SUBTABLE_SYM => {
-                    layouts.push(scan_subtable(&mut scan, &mut templates)?);
+                    let subtable = scan_subtable(&mut scan, &mut layout.templates)?;
+                    layout.subtables.push(subtable);
                 }
                 Record::Start(_) => {
                     let start = scan.pos();
                     scan.skip_element()?;
-                    rest.extend_from_slice(&self.bytes[start..scan.pos()]);
+                    match layout.rest.last_mut() {
+                        Some(run) if run.end == start => run.end = scan.pos(),
+                        _ => layout.rest.push(Span {
+                            start,
+                            end: scan.pos(),
+                        }),
+                    }
                 }
                 Record::End(_) => break,
                 Record::Attribute(_) => return Err(UnlaceError::decoder("Corrupt stream")),
             }
         }
+        Ok(layout)
+    }
+
+    /// The layout as bytes (unsigned LEB128 integers; see [`Self::decode`]).
+    fn encode(&self) -> Vec<u8> {
+        fn put(out: &mut Vec<u8>, mut v: u64) {
+            while v >= 0x80 {
+                out.push((v as u8) | 0x80); // low 7 bits
+                v >>= 7;
+            }
+            out.push(v as u8); // the last 7 bits
+        }
+        fn put_span(out: &mut Vec<u8>, span: Span) {
+            put(out, span.start as u64); // usize -> u64: byte offset
+            put(out, span.end as u64);
+        }
+        let mut out = Vec::new();
+        put(&mut out, self.content_start as u64);
+        put(&mut out, self.templates as u64);
+        put(&mut out, self.rest.len() as u64);
+        for run in &self.rest {
+            put_span(&mut out, *run);
+        }
+        put(&mut out, self.subtables.len() as u64);
+        for sub in &self.subtables {
+            put(&mut out, u64::from(sub.id));
+            put(&mut out, u64::from(sub.has_commits));
+            put(&mut out, sub.constructors.len() as u64);
+            for ct in &sub.constructors {
+                put_span(&mut out, ct.span);
+                put(&mut out, ct.first_template as u64);
+            }
+            match &sub.tree {
+                None => put(&mut out, 0),
+                Some(tree) => {
+                    put(&mut out, 1);
+                    put_span(&mut out, tree.span);
+                    match &tree.inner {
+                        None => put(&mut out, 0),
+                        Some(inner) => {
+                            put(&mut out, 1);
+                            put(&mut out, u64::from(inner.contextdecision));
+                            put(&mut out, inner.startbit as u32 as u64); // i32 bits, reinterpreted
+                            put(&mut out, inner.bitsize as u32 as u64);
+                            put(&mut out, inner.children.len() as u64);
+                            for child in &inner.children {
+                                put_span(&mut out, *child);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// A layout from [`Self::encode`]'s bytes. Only the shape is checked here;
+    /// every offset is bounds-checked by the scans and decoders that use it.
+    fn decode(bytes: &[u8]) -> UnlaceResult<Layout> {
+        struct Reader<'a>(&'a [u8]);
+        impl Reader<'_> {
+            fn get(&mut self) -> UnlaceResult<u64> {
+                let mut v: u64 = 0;
+                for shift in (0..64).step_by(7) {
+                    let (&b, rest) = self
+                        .0
+                        .split_first()
+                        .ok_or_else(|| UnlaceError::decoder("Truncated .sla layout"))?;
+                    self.0 = rest;
+                    v |= u64::from(b & 0x7f) << shift;
+                    if b & 0x80 == 0 {
+                        return Ok(v);
+                    }
+                }
+                Err(UnlaceError::decoder("Corrupt .sla layout"))
+            }
+            fn size(&mut self) -> UnlaceResult<usize> {
+                usize::try_from(self.get()?)
+                    .map_err(|_| UnlaceError::decoder("Corrupt .sla layout"))
+            }
+            fn span(&mut self) -> UnlaceResult<Span> {
+                Ok(Span {
+                    start: self.size()?,
+                    end: self.size()?,
+                })
+            }
+            fn flag(&mut self) -> UnlaceResult<bool> {
+                match self.get()? {
+                    0 => Ok(false),
+                    1 => Ok(true),
+                    _ => Err(UnlaceError::decoder("Corrupt .sla layout")),
+                }
+            }
+            fn count(&mut self) -> UnlaceResult<usize> {
+                let n = self.size()?;
+                // Every counted item takes at least one byte.
+                if n > self.0.len() {
+                    return Err(UnlaceError::decoder("Corrupt .sla layout"));
+                }
+                Ok(n)
+            }
+        }
+        let mut r = Reader(bytes);
+        let mut layout = Layout {
+            content_start: r.size()?,
+            templates: r.size()?,
+            ..Layout::default()
+        };
+        for _ in 0..r.count()? {
+            let run = r.span()?;
+            layout.rest.push(run);
+        }
+        for _ in 0..r.count()? {
+            let id = r.get()? as u32; // symbol id, C++ uintm
+            let has_commits = r.flag()?;
+            let mut constructors = Vec::new();
+            for _ in 0..r.count()? {
+                constructors.push(ConstructorLayout {
+                    span: r.span()?,
+                    first_template: r.size()?,
+                });
+            }
+            let tree = if r.flag()? {
+                let span = r.span()?;
+                let inner = if r.flag()? {
+                    let contextdecision = r.flag()?;
+                    let startbit = r.get()? as u32 as i32; // the i32 bits put by encode
+                    let bitsize = r.get()? as u32 as i32;
+                    let mut children = Vec::new();
+                    for _ in 0..r.count()? {
+                        children.push(r.span()?);
+                    }
+                    Some(InnerLayout {
+                        contextdecision,
+                        startbit,
+                        bitsize,
+                        children,
+                    })
+                } else {
+                    None
+                };
+                Some(DecisionLayout { span, inner })
+            } else {
+                None
+            };
+            layout.subtables.push(SubtableLayout {
+                id,
+                has_commits,
+                constructors,
+                tree,
+            });
+        }
+        if !r.0.is_empty() {
+            return Err(UnlaceError::decoder("Corrupt .sla layout"));
+        }
+        Ok(layout)
+    }
+}
+
+/// The inflated `.sla` stream and its [`Layout`]: everything before
+/// `content_start` (header, spaces, scopes, symbol headers) is decoded at load
+/// through a regular decoder; the contents become lazy subtables and a stream
+/// of the other symbols in [`Self::scan_contents`].
+pub struct SlaStream {
+    bytes: Vec<u8>,
+    layout: Layout,
+}
+
+impl SlaStream {
+    /// The stream of a `.sla` image: a compressed one inflated and walked, or
+    /// the `.sla` cache's uncompressed copy as it is, with the layout it
+    /// carries ([`index_raw_image`]) or walked when it carries none.
+    pub fn inflate(sla_bytes: &[u8]) -> UnlaceResult<SlaStream> {
+        match split_raw_image(sla_bytes) {
+            Some((stream, Some(layout))) => Ok(SlaStream {
+                bytes: stream.to_vec(),
+                layout: Layout::decode(layout)?,
+            }),
+            Some((stream, None)) => SlaStream::new(stream.to_vec()),
+            None => SlaStream::new(sla::inflate_sla(sla_bytes)?),
+        }
+    }
+
+    /// Walk an inflated `<sleigh>` stream.
+    pub fn new(bytes: Vec<u8>) -> UnlaceResult<SlaStream> {
+        let layout = Layout::walk(&bytes)?;
+        Ok(SlaStream { bytes, layout })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn layout(&self) -> &Layout {
+        &self.layout
+    }
+
+    /// Hand the stream up to the symbol contents to `decoder`.
+    pub fn ingest_prefix(&self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
+        let prefix = self
+            .bytes
+            .get(..self.layout.content_start)
+            .ok_or_else(|| UnlaceError::decoder("Corrupt .sla layout"))?;
+        decoder.ingest_stream(prefix)
+    }
+
+    /// The symbol contents: each `<subtable_sym>` becomes a [`LazySubtable`]
+    /// (returned with its symbol id), and the other elements are copied, in
+    /// order, into one stream to decode now.
+    pub fn scan_contents(
+        self,
+        const_space: Rc<AddrSpace>,
+    ) -> UnlaceResult<(Rc<SlaSource>, Vec<(u32, LazySubtable)>, Vec<u8>)> {
+        let SlaStream { bytes, layout } = self;
+        let mut rest: Vec<u8> = Vec::new();
+        for run in &layout.rest {
+            let bytes = bytes
+                .get(run.start..run.end)
+                .ok_or_else(|| UnlaceError::decoder("Corrupt .sla layout"))?;
+            rest.extend_from_slice(bytes);
+        }
         let source = Rc::new(SlaSource {
-            bytes: self.bytes,
-            templates: (0..templates).map(|_| TemplateSlot::default()).collect(),
-            subtable_sizes: layouts
+            bytes,
+            templates: (0..layout.templates)
+                .map(|_| TemplateSlot::default())
+                .collect(),
+            subtable_sizes: layout
+                .subtables
                 .iter()
-                .map(|(id, layout)| (*id, layout.constructors.len() as i32)) // size_t -> int4 as in C++
+                .map(|sub| (sub.id, sub.constructors.len() as i32)) // size_t -> int4 as in C++
                 .collect(),
             const_space,
             no_spaces: AddrSpaceManager::new(),
         });
-        let subtables = layouts
+        let subtables = layout
+            .subtables
             .into_iter()
-            .map(|(id, layout)| {
+            .map(|sub| {
                 let lazy = LazySubtable {
                     source: Rc::clone(&source),
-                    id,
-                    constructors: layout.constructors,
-                    tree: layout.tree,
-                    has_commits: layout.has_commits,
+                    id: sub.id,
+                    constructors: sub
+                        .constructors
+                        .into_iter()
+                        .map(|ct| LazyConstructor {
+                            start: ct.span.start,
+                            end: ct.span.end,
+                            first_template: ct.first_template,
+                            ct: OnceCell::new(),
+                        })
+                        .collect(),
+                    tree: sub.tree.map(LazyDecision::from),
+                    has_commits: sub.has_commits,
                 };
-                (id, lazy)
+                (sub.id, lazy)
             })
             .collect();
         Ok((source, subtables, rest))
@@ -260,20 +571,10 @@ fn template_header(bytes: &[u8]) -> UnlaceResult<(i32, u32)> {
     Ok((sectionid, delayslot))
 }
 
-/// Where a subtable's pieces lie in the stream.
-struct SubtableLayout {
-    constructors: Vec<LazyConstructor>,
-    tree: Option<LazyDecision>,
-    has_commits: bool,
-}
-
 /// Walk one `<subtable_sym>` element: its id, every constructor's byte range
-/// and template count, and the decision tree's range. (`numct` is not read:
+/// and template count, and the decision tree's root. (`numct` is not read:
 /// the eager decode only reserves with it, and counts what it decodes.)
-fn scan_subtable(
-    scan: &mut Scan<'_>,
-    templates: &mut usize,
-) -> UnlaceResult<(u32, SubtableLayout)> {
+fn scan_subtable(scan: &mut Scan<'_>, templates: &mut usize) -> UnlaceResult<SubtableLayout> {
     scan.open()?;
     let mut id: Option<u32> = None;
     while let Some((attrib, value)) = scan.attribute()? {
@@ -281,11 +582,11 @@ fn scan_subtable(
             id = Some(value.unsigned()? as u32); // C++ implicit uintb -> uintm
         }
     }
-    let id = id.ok_or_else(|| UnlaceError::decoder("Attribute missing: id"))?;
     let mut layout = SubtableLayout {
+        id: id.ok_or_else(|| UnlaceError::decoder("Attribute missing: id"))?,
+        has_commits: false,
         constructors: Vec::new(),
         tree: None,
-        has_commits: false,
     };
     loop {
         match scan.peek()? {
@@ -299,15 +600,16 @@ fn scan_subtable(
                         layout.has_commits = true;
                     }
                 })?;
-                layout.constructors.push(LazyConstructor {
-                    start,
-                    end: scan.pos(),
+                layout.constructors.push(ConstructorLayout {
+                    span: Span {
+                        start,
+                        end: scan.pos(),
+                    },
                     first_template,
-                    ct: OnceCell::new(),
                 });
             }
             Record::Start(el) if el == sla::ELEM_DECISION => {
-                layout.tree = Some(LazyDecision::scan(scan)?);
+                layout.tree = Some(scan_decision(scan)?);
             }
             Record::Start(_) => scan.skip_element()?,
             Record::End(_) => break,
@@ -315,7 +617,57 @@ fn scan_subtable(
         }
     }
     scan.close()?;
-    Ok((id, layout))
+    Ok(layout)
+}
+
+/// Walk the `<decision>` at the cursor. An inner node's children become
+/// pending nodes right away (the walk passes over them anyway); a terminal
+/// node is left for `DecisionNode::decode` at its first visit.
+fn scan_decision(scan: &mut Scan<'_>) -> UnlaceResult<DecisionLayout> {
+    let start = scan.pos();
+    scan.open_id(sla::ELEM_DECISION.get_id())?;
+    let mut contextdecision = false;
+    let mut startbit: i32 = 0;
+    let mut bitsize: i32 = 0;
+    while let Some((id, value)) = scan.attribute()? {
+        if id == sla::ATTRIB_CONTEXT {
+            contextdecision = value.boolean()?;
+        } else if id == sla::ATTRIB_STARTBIT {
+            startbit = value.signed()? as i32; // C++ implicit intb -> int4
+        } else if id == sla::ATTRIB_SIZE {
+            bitsize = value.signed()? as i32; // C++ implicit intb -> int4
+        }
+    }
+    let mut children = Vec::new();
+    loop {
+        match scan.peek()? {
+            Record::Start(el) => {
+                let child_start = scan.pos();
+                scan.skip_element()?;
+                if bitsize != 0 && el == sla::ELEM_DECISION {
+                    children.push(Span {
+                        start: child_start,
+                        end: scan.pos(),
+                    });
+                }
+            }
+            Record::End(_) => break,
+            Record::Attribute(_) => return Err(UnlaceError::decoder("Corrupt stream")),
+        }
+    }
+    scan.close()?;
+    Ok(DecisionLayout {
+        span: Span {
+            start,
+            end: scan.pos(),
+        },
+        inner: (bitsize != 0).then_some(InnerLayout {
+            contextdecision,
+            startbit,
+            bitsize,
+            children,
+        }),
+    })
 }
 
 /// A subtable kept as its `.sla` bytes: constructors and decision nodes are
@@ -491,65 +843,39 @@ enum Node {
     },
 }
 
-impl LazyDecision {
-    /// Walk the `<decision>` at the cursor. An inner node's children become
-    /// pending nodes right away (the walk passes over them anyway); a terminal
-    /// node is left for `DecisionNode::decode` at its first visit.
-    fn scan(scan: &mut Scan<'_>) -> UnlaceResult<LazyDecision> {
-        let start = scan.pos();
-        scan.open_id(sla::ELEM_DECISION.get_id())?;
-        let mut contextdecision = false;
-        let mut startbit: i32 = 0;
-        let mut bitsize: i32 = 0;
-        while let Some((id, value)) = scan.attribute()? {
-            if id == sla::ATTRIB_CONTEXT {
-                contextdecision = value.boolean()?;
-            } else if id == sla::ATTRIB_STARTBIT {
-                startbit = value.signed()? as i32; // C++ implicit intb -> int4
-            } else if id == sla::ATTRIB_SIZE {
-                bitsize = value.signed()? as i32; // C++ implicit intb -> int4
-            }
-        }
-        let mut children = Vec::new();
-        loop {
-            match scan.peek()? {
-                Record::Start(el) => {
-                    let child_start = scan.pos();
-                    scan.skip_element()?;
-                    if bitsize != 0 && el == sla::ELEM_DECISION {
-                        children.push(LazyDecision {
-                            start: child_start,
-                            end: scan.pos(),
-                            node: OnceCell::new(),
-                        });
-                    }
-                }
-                Record::End(_) => break,
-                Record::Attribute(_) => return Err(UnlaceError::decoder("Corrupt stream")),
-            }
-        }
-        scan.close()?;
+impl From<DecisionLayout> for LazyDecision {
+    fn from(layout: DecisionLayout) -> LazyDecision {
         let node = OnceCell::new();
-        if bitsize != 0 {
+        if let Some(inner) = layout.inner {
             let _ = node.set(Node::Inner {
-                contextdecision,
-                startbit,
-                bitsize,
-                children,
+                contextdecision: inner.contextdecision,
+                startbit: inner.startbit,
+                bitsize: inner.bitsize,
+                children: inner
+                    .children
+                    .into_iter()
+                    .map(|span| LazyDecision {
+                        start: span.start,
+                        end: span.end,
+                        node: OnceCell::new(),
+                    })
+                    .collect(),
             });
         }
-        Ok(LazyDecision {
-            start,
-            end: scan.pos(),
+        LazyDecision {
+            start: layout.span.start,
+            end: layout.span.end,
             node,
-        })
+        }
     }
+}
 
+impl LazyDecision {
     fn node(&self, source: &SlaSource, numct: i32) -> UnlaceResult<&Node> {
         if let Some(node) = self.node.get() {
             return Ok(node);
         }
-        let scanned = LazyDecision::scan(&mut Scan::new(&source.bytes, self.start))?;
+        let scanned = LazyDecision::from(scan_decision(&mut Scan::new(&source.bytes, self.start))?);
         let node = match scanned.node.into_inner() {
             Some(inner) => inner,
             None => {

@@ -79,11 +79,19 @@ fn the_first_read_of_a_cached_image_leaves_an_uncompressed_copy() {
     let compressed = fs::read(&sla).expect("read .sla");
 
     let image = read_image(&sla).expect("first read");
-    assert_eq!(image, raw_sla_image(&compressed).expect("inflate"));
+    let inflated = raw_sla_image(&compressed).expect("inflate");
+    let (stream, layout) = split_raw_image(&image).expect("an slr image");
+    assert_eq!(stream, &inflated[RAW_SLA_HEADER.len()..]);
+    assert!(layout.is_some(), "the copy carries the stream's layout");
     assert_eq!(fs::read(&raw).expect("the copy"), image);
     assert!(!stale.exists(), "the earlier key's copy is removed");
     assert_eq!(read_image(&sla).expect("second read"), image);
     assert_eq!(element_ids(&image), element_ids(&compressed));
+
+    // A copy from before layouts were kept gets one on its next read.
+    fs::write(&raw, &inflated).expect("a copy without a layout");
+    assert_eq!(read_image(&sla).expect("read"), image);
+    assert_eq!(fs::read(&raw).expect("the copy"), image);
 
     let small = compile_cached(&repo_specs().join("Toy/data/languages/toy_builder_le.slaspec"))
         .expect("compile into the cache");

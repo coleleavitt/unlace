@@ -23,10 +23,12 @@
 //!   both compile, and the last rename wins with identical bytes.
 //! - **Uncompressed copy.** The first load of a cached image of at least 2 MiB leaves
 //!   `<cache>/<lang>-<key>.slr` beside it: the same packed element stream behind an `slr` header
-//!   (`unlace_sleigh::slaformat::RAW_SLA_HEADER`), with the same key, so it is current exactly
-//!   when the `.sla` is; the copies of that language under earlier keys are removed then.
-//!   [`read_image`] returns the copy when it exists, else the `.sla`; the decoder takes either
-//!   and decodes the same elements, and the copy skips the inflate of each later load.
+//!   (`unlace_sleigh::slaformat::RAW_SLA_HEADER`), followed by the stream's layout (where its
+//!   constructors and decision trees lie, `unlace_sleigh::lazysla::index_raw_image`), with the
+//!   same key, so it is current exactly when the `.sla` is; the copies of that language under
+//!   earlier keys are removed then. [`read_image`] returns the copy when it exists, else the
+//!   `.sla`; the decoder takes either and decodes the same elements, and the copy skips the
+//!   inflate and the layout walk of each later load.
 //! - **Prebuilt images.** A `.sla` that exists as a regular file (not a symlink) and is at least
 //!   as new as its `.slaspec` and every include is used as is (a `SLEIGHHOME` or
 //!   `--sleighpath` directory of prebuilt images, or an in-tree build). A `.sla` with no
@@ -39,6 +41,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::SystemTime;
 
+use unlace_sleigh::lazysla::{index_raw_image, split_raw_image};
 use unlace_sleigh::slaformat::{RAW_SLA_HEADER, raw_sla_image};
 
 use crate::slgh_compile::SleighCompile;
@@ -411,16 +414,20 @@ const RAW_EXTENSION: &str = "slr";
 const MIN_RAW_IMAGE: usize = 2 << 20;
 
 /// The bytes to decode for the `.sla` at `sla` (a path from [`sla_path`]): for a cached image
-/// of at least [`MIN_RAW_IMAGE`], its uncompressed copy `<lang>-<key>.slr`, made beside it on
-/// first read (best effort; the copy and the image share the key, so the copy is current exactly
-/// when the image is), else the `.sla` itself. Both decode to the same elements; the copy skips
-/// the inflate.
+/// of at least [`MIN_RAW_IMAGE`], its uncompressed copy `<lang>-<key>.slr` with its layout, made
+/// beside it on first read (best effort; the copy and the image share the key, so the copy is
+/// current exactly when the image is), else the `.sla` itself. Both decode to the same elements;
+/// the copy skips the inflate and the layout walk. A copy without a layout (from an earlier
+/// unlace) gets one.
 pub fn read_image(sla: impl AsRef<Path>) -> io::Result<Vec<u8>> {
     let sla = sla.as_ref();
     let raw = sla.with_extension(RAW_EXTENSION);
-    if let Ok(image) = fs::read(&raw)
-        && image.starts_with(&RAW_SLA_HEADER)
+    if let Ok(mut image) = fs::read(&raw)
+        && let Some((_, layout)) = split_raw_image(&image)
     {
+        if layout.is_none() && index_raw_image(&mut image).is_ok() {
+            write_raw_image(&raw, &image);
+        }
         return Ok(image);
     }
     let compressed = fs::read(sla)?;
@@ -428,8 +435,8 @@ pub fn read_image(sla: impl AsRef<Path>) -> io::Result<Vec<u8>> {
         return Ok(compressed);
     }
     match raw_sla_image(&compressed) {
-        Ok(image) => {
-            if image.len() >= MIN_RAW_IMAGE {
+        Ok(mut image) => {
+            if image.len() >= MIN_RAW_IMAGE && index_raw_image(&mut image).is_ok() {
                 write_raw_image(&raw, &image);
             }
             Ok(image)

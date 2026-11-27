@@ -35,6 +35,13 @@
 //!   registers and reaches the claimed tail calls: it is not loaded or stored
 //!   through, stored, counted or passed to another call.
 //!
+//! A RETURN that hands back a constant the function loaded into the register
+//! only to return it needs no test ([`returns_constant`]): a comparator's
+//! `return -1;` beside `return strcmp(..);`. Where the RETURN's block joins
+//! paths that leave the register alone ([`climb_starts`]), each predecessor
+//! answers for itself: gcc gives a comparator's `mov $-1,%eax` and its
+//! `sub %edx,%eax; jne` one `ret`.
+//!
 //! A value the function only computed and handed to the RETURN is one upstream
 //! already returns; the test that chooses between the two returns is the use
 //! upstream refuses. The other conditions turn away some of the scratch
@@ -125,8 +132,67 @@ pub fn returns_decided_value(
         return false;
     }
     let (calls, rets): (Vec<OpId>, Vec<OpId>) = tails.iter().copied().unzip();
-    decided_origin(data, ret, addr, *size, &rets)
-        .is_some_and(|origin| only_decides(data, origin, &calls))
+    climb_starts(data, ret, addr, *size).is_some_and(|starts| {
+        starts.into_iter().all(|start| {
+            returns_constant(data, start, addr, *size)
+                || decided_origin(data, start, addr, *size, &rets)
+                    .is_some_and(|origin| only_decides(data, origin, &calls))
+        })
+    })
+}
+
+/// Where a climb from a RETURN starts: the op it walks back from (inclusive) in
+/// `bl`, and the successor it came from when it starts at a predecessor's end.
+#[derive(Clone, Copy)]
+struct Climb {
+    bl: BlockId,
+    cur: Option<OpId>,
+    from: Option<BlockId>,
+}
+
+/// The places the climbs from `ret` start: the op before it, or, when its block
+/// joins paths the return register passes through untouched, the end of each
+/// predecessor, so that every path answers for itself. gcc gives a comparator's
+/// `mov $-1,%eax` and its `sub %edx,%eax; jne` the one `ret`.
+fn climb_starts(data: &Funcdata, ret: OpId, addr: &Address, size: int4) -> Option<Vec<Climb>> {
+    let bl = data.obank().get(ret)?.get_parent()?;
+    let at_ret = Climb {
+        bl,
+        cur: data.op_previous_op(ret),
+        from: None,
+    };
+    let b = data.bblocks_ref().block(bl);
+    if b.size_in() < 2 || bl == data.bblocks_get_block(0) {
+        return Some(vec![at_ret]);
+    }
+    let mut cur = at_ret.cur;
+    while let Some(op) = cur {
+        let o = data.obank().get(op)?;
+        let touches = o
+            .get_out()
+            .into_iter()
+            .chain((0..o.num_input()).filter_map(|i| o.get_in(i)))
+            .filter_map(|v| data.vbank().get(v))
+            .any(|v| overlaps(v.get_addr(), v.get_size(), addr, size));
+        if matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)
+            || (touches && !crate::passthrough::is_injected_noop(data, op))
+        {
+            return Some(vec![at_ret]);
+        }
+        cur = data.op_previous_op(op);
+    }
+    Some(
+        (0..b.size_in())
+            .map(|k| {
+                let pred = b.get_in(k);
+                Climb {
+                    bl: pred,
+                    cur: data.bb_op_tail(pred),
+                    from: Some(bl),
+                }
+            })
+            .collect(),
+    )
 }
 
 /// Does any claimed tail callee take a parameter in a byte of `pieces`?
@@ -217,10 +283,26 @@ fn write_of(data: &Funcdata, op: OpId, addr: &Address, size: int4) -> Write {
     }
 }
 
-/// How wide the value `op` writes is: its output, or the input an extension
-/// widened (`RAX = zext(EAX)` after every x86-64 32-bit write).
+/// How wide the value `op` writes is: its output, the input an extension
+/// widened (`RAX = zext(EAX)` after every x86-64 32-bit write), or for a COPY of
+/// a constant the bytes its value needs (AArch64 `mov w0,#-1` lifts to
+/// `x0 = 0xffffffff`).
 fn value_width(data: &Funcdata, op: OpId) -> Option<int4> {
     let o = data.obank().get(op)?;
+    if o.code() == OpCode::CPUI_COPY {
+        if let Some(c) = o
+            .get_in(0)
+            .and_then(|v| data.vbank().get(v))
+            .filter(|v| v.is_constant())
+        {
+            let bits = 64 - c.get_offset().leading_zeros() as int4;
+            let need = [1, 2, 4, 8]
+                .into_iter()
+                .find(|w| bits <= w * 8)
+                .unwrap_or(8);
+            return Some(need.min(o.get_out().and_then(|v| data.vbank().get(v))?.get_size()));
+        }
+    }
     let vn = match o.code() {
         OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => o.get_in(0)?,
         _ => o.get_out()?,
@@ -291,10 +373,12 @@ fn last_write_is_own(data: &Funcdata, ret: OpId, addr: &Address, size: int4) -> 
 /// ([`condition_feeders`]), and not be the side where that test found the value
 /// equal to a constant ([`returns_the_constant`]); the climb then goes on to
 /// the op that wrote the value other than by copying it. Any other write of the value before the
-/// test, a join, the entry, a call or [`CHAIN_BLOCKS`] blocks first refuse.
+/// test, a join, the entry, a call or [`CHAIN_BLOCKS`] blocks first refuse. A climb
+/// started at a predecessor's end ([`climb_starts`]) reads that block's branch
+/// toward the RETURN's block as the first step up would.
 fn decided_origin(
     data: &Funcdata,
-    ret: OpId,
+    start: Climb,
     addr: &Address,
     size: int4,
     tail_rets: &[OpId],
@@ -303,12 +387,14 @@ fn decided_origin(
         .iter()
         .filter_map(|&r| data.obank().get(r).and_then(|o| o.get_parent()))
         .collect();
-    let mut bl = data.obank().get(ret)?.get_parent()?;
+    let mut bl = start.bl;
     let mut tracked = (addr.clone(), size);
-    let mut cur = data.op_previous_op(ret);
-    let mut feeders: Option<Vec<OpId>> = None;
+    let mut cur = start.cur;
+    let mut feeders = start
+        .from
+        .and_then(|from| tail_branch(data, bl, from, &tail_blocks));
     let mut decided = false;
-    let mut side: Option<(BlockId, BlockId)> = None;
+    let mut side = start.from.map(|from| (bl, from));
     for _ in 0..CHAIN_BLOCKS {
         while let Some(op) = cur {
             let o = data.obank().get(op)?;
@@ -345,17 +431,88 @@ fn decided_origin(
         }
         let pred = b.get_in(0);
         if !decided {
-            let p = data.bblocks_ref().block(pred);
-            let other = (0..p.size_out()).map(|k| p.get_out(k)).find(|&s| s != bl);
-            feeders = other
-                .filter(|&o| reaches_tail(data, o, &tail_blocks))
-                .map(|_| condition_feeders(data, pred));
+            feeders = tail_branch(data, pred, bl, &tail_blocks);
             side = Some((pred, bl));
         }
         bl = pred;
         cur = data.bb_op_tail(pred);
     }
     None
+}
+
+/// The flag computations of the CBRANCH ending `pred` ([`condition_feeders`]),
+/// when its side other than `bl` reaches a block of `tail_blocks`.
+fn tail_branch(
+    data: &Funcdata,
+    pred: BlockId,
+    bl: BlockId,
+    tail_blocks: &[BlockId],
+) -> Option<Vec<OpId>> {
+    let p = data.bblocks_ref().block(pred);
+    let other = (0..p.size_out()).map(|k| p.get_out(k)).find(|&s| s != bl);
+    other
+        .filter(|&o| reaches_tail(data, o, tail_blocks))
+        .map(|_| condition_feeders(data, pred))
+}
+
+/// Does the climb from `start` reach a constant the function loaded into
+/// `[addr, addr+size)` only to return it (`mov $-1,%eax; ret`)?
+///
+/// Walks up the single-predecessor chain to the last write of the register,
+/// through the copies and extensions that carry it (x86-64's
+/// `RAX = ZEXT(EAX)`), and accepts a COPY of a constant. An op on the way that
+/// reads the register refuses: `mov $1,%eax; mov %eax,g(%rip); ret` stores the
+/// constant, as a `void` function does. A function that returns a constant
+/// beside a tail call to a value-returning callee returns an integer of the
+/// callee's width: a comparator's `return -1`.
+fn returns_constant(data: &Funcdata, start: Climb, addr: &Address, size: int4) -> bool {
+    let mut bl = start.bl;
+    let mut tracked = (addr.clone(), size);
+    let mut cur = start.cur;
+    for _ in 0..CHAIN_BLOCKS {
+        while let Some(op) = cur {
+            let Some(o) = data.obank().get(op) else {
+                return false;
+            };
+            if matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
+                return false;
+            }
+            if crate::passthrough::is_injected_noop(data, op) {
+                cur = data.op_previous_op(op);
+                continue;
+            }
+            let hits = |v: VarnodeId| {
+                data.vbank()
+                    .get(v)
+                    .is_some_and(|v| overlaps(v.get_addr(), v.get_size(), &tracked.0, tracked.1))
+            };
+            cur = data.op_previous_op(op);
+            if !o.get_out().is_some_and(hits) {
+                if (0..o.num_input()).filter_map(|i| o.get_in(i)).any(hits) {
+                    return false;
+                }
+                continue;
+            }
+            if o.code() == OpCode::CPUI_COPY
+                && o.get_in(0)
+                    .and_then(|v| data.vbank().get(v))
+                    .is_some_and(|v| v.is_constant())
+            {
+                return true;
+            }
+            match register_copy_source(data, op) {
+                Some(source) => tracked = source,
+                None => return false,
+            }
+        }
+        let b = data.bblocks_ref().block(bl);
+        if bl == data.bblocks_get_block(0) || b.size_in() != 1 {
+            return false;
+        }
+        bl = b.get_in(0);
+        cur = data.bb_op_tail(bl);
+    }
+    false
 }
 
 /// The register a COPY or extension `op` reads, when it moves one register's

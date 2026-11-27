@@ -293,6 +293,9 @@ fn aggressive_carries_every_default_off_option() {
         "charnum",
         "constright",
         "signeddec",
+        // `strcmpfold` (notes/netstruct-gaps.md gap 2) is a printer idiom whose speed effect
+        // was within noise; its preset membership waits on its own corpus sweep.
+        "strcmpfold",
         // `orchainbool` (issue #10) is swept in its own PR; preset membership waits on it.
         "orchainbool",
         // `orchainlive` (issue #10) is swept in its own PR; preset membership waits on it.

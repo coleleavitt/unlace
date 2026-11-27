@@ -163,6 +163,21 @@ fn run_cost(data: &Funcdata, id: BlockId, header: &[OpId]) -> Option<(usize, usi
     }
 }
 
+/// Does the run `members` fit the copy bounds: no jump, at most `MAX_RUN_OPS` printed
+/// ops and `MAX_RUN_CALLS` calls. Checked over the whole copied tail, since a
+/// non-list `rl` visits only its own arm in `plan`.
+fn run_fits(data: &Funcdata, members: &[BlockId], header: &[OpId]) -> bool {
+    let (mut ops, mut calls) = (0, 0);
+    for &c in members {
+        let Some((o, n)) = run_cost(data, c, header) else {
+            return false;
+        };
+        ops += o;
+        calls += n;
+    }
+    ops <= MAX_RUN_OPS && calls <= MAX_RUN_CALLS
+}
+
 /// Where flow goes: a leaf, or out of a switch through a case that ends in `break;`.
 #[derive(Clone, Copy, PartialEq)]
 enum Dest {
@@ -387,7 +402,8 @@ fn plan(
         && k > 0
         && is_loop(graph, w)
         && loop_body(graph, w) == Some(rl)
-        && innermost_loop(graph, g) == Some(w))
+        && innermost_loop(graph, g) == Some(w)
+        && run_fits(data, &graph.block(rl).get_list()[k..], header))
     .then_some((rl, k, Plan::Latch(w)))
 }
 

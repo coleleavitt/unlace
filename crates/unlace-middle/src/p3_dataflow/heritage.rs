@@ -5419,6 +5419,7 @@ impl Heritage {
         let copy_typeop = typeop_skeleton(OpCode::CPUI_COPY);
         // (unlace `fillrefine`) A piece of a constant write is that constant's bytes.
         let fill = insertop.and_then(|op| super::fillrefine::copied_constant(fd, op));
+        let mut prev: Option<crate::context::OpId> = None;
         for &vn in vnlist {
             let (vnoff, vnsize) = {
                 let v = fd.vbank().get(vn).expect("split_pieces: piece vn");
@@ -5450,16 +5451,17 @@ impl Heritage {
                 .expect("split_pieces: set output");
             // C++ `opInsert(newop,bl,insertiter)` where insertiter points just
             // after the write (or block begin).  When `after_anchor` is set we
-            // insert directly after it (op_insert_after); each successive piece
-            // also goes after the write, preserving the C++ order where the
-            // iterator is recomputed from the same write each loop.
-            match after_anchor {
-                Some(anchor) => fd.op_insert_after(newop, anchor),
-                None => {
+            // insert directly after it (op_insert_after). A fill piece goes after
+            // the piece before it, so the copies keep the order of `vnlist`.
+            match (prev, after_anchor) {
+                (Some(before), _) if fill.is_some() => fd.op_insert_after(newop, before),
+                (_, Some(anchor)) => fd.op_insert_after(newop, anchor),
+                (_, None) => {
                     let head = fd.bb_op_head(bl);
                     fd.op_insert(newop, bl, head);
                 }
             }
+            prev = Some(newop);
         }
     }
 

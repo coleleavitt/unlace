@@ -1114,7 +1114,10 @@ loop (`loopcontinue` on, and for a do-while only when the output language's
 `continue;` runs the test, `do_while_continue`), `R` is copied before the
 jump, which prints `continue;`. `R` is the shortest such run, at most 12
 printed ops and one call, built of statements and `if`s with no jump, loop,
-switch, `return` or `for` header statement, and never holds `G`. With
+switch, `return` or `for` header statement, and never holds `G`. The bounds are checked over every member
+the copy takes, so a copy after an `if` arm reaches the list's end, not just the arm: a `R` that holds a jump
+(any `goto`, including a back-jump to its own head) is refused, because each copy would keep that jump and
+offer a new candidate, and the pass would nest copies without bound. With
 `loopbreak_recovery` on, a goto to where flow goes after its innermost loop,
 with no switch in between, prints `break;`. The copies are new print-tree
 nodes over the same basic blocks (`BlockGraph::unlace_clone_subtree`), so no

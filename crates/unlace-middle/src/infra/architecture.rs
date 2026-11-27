@@ -4858,7 +4858,17 @@ impl Architecture {
                 // the stack across a call; ActionInternalStorage unmaps their
                 // eventual-constant spills so the value forwards across the call.
                 "internal_storage" => {
-                    self.decode_internal_storage_block(child, &mut model)?;
+                    for vd in self.decode_storage_list(child, "internal_storage")? {
+                        model.push_internal_storage(vd);
+                    }
+                }
+                // else if (subId == ELEM_LIKELYTRASH) { while peekElement: likelytrash.back().decode() }
+                // — registers whose value on entry is likely garbage (x86 EAX/ECX);
+                // ActionLikelyTrash cuts their flow into INDIRECTs and high-byte masks.
+                "likelytrash" => {
+                    for vd in self.decode_storage_list(child, "likelytrash")? {
+                        model.push_likely_trash(vd);
+                    }
                 }
                 _ => {}
             }
@@ -5096,15 +5106,16 @@ impl Architecture {
         Ok(())
     }
 
-    /// Decode an `<internal_storage>` block (C++ `ProtoModel::decode`,
-    /// `fspec.cc:2673`): each `<register>`/`<varnode>`/`<addr>` child is a storage
-    /// `VarnodeData` appended to the model's internal-storage list (sorted by
-    /// `push_internal_storage`).  Same storage resolution as `decode_effect_block`.
-    fn decode_internal_storage_block(
+    /// Decode the storage list of a `<likelytrash>` or `<internal_storage>` block
+    /// named `elem` (C++ `ProtoModel::decode`, `fspec.cc:2673`): each
+    /// `<register>`/`<varnode>`/`<addr>` child is one storage `VarnodeData`.
+    /// Same storage resolution as `decode_effect_block`.
+    fn decode_storage_list(
         &self,
         block: &Rc<unlace_base::xml::Element>,
-        model: &mut ProtoModel,
-    ) -> UnlaceResult<()> {
+        elem: &str,
+    ) -> UnlaceResult<Vec<unlace_num::pcoderaw::VarnodeData>> {
+        let mut out = Vec::new();
         for child in block.get_children().iter() {
             let vd = match child.get_name() {
                 "register" => {
@@ -5114,13 +5125,13 @@ impl Architecture {
                 }
                 "varnode" | "addr" => {
                     let spname = attr_str(child, "space").ok_or_else(|| {
-                        UnlaceError::lowlevel("<varnode> internal_storage has no space")
+                        UnlaceError::lowlevel(format!("<varnode> {elem} has no space"))
                     })?;
                     let space = self
                         .manage()
                         .get_space_by_name(&spname)
                         .ok_or_else(|| {
-                            UnlaceError::lowlevel("<varnode> internal_storage unknown space")
+                            UnlaceError::lowlevel(format!("<varnode> {elem} unknown space"))
                         })?
                         .clone();
                     let offset = attr_str(child, "offset")
@@ -5137,9 +5148,9 @@ impl Architecture {
                 }
                 _ => continue,
             };
-            model.push_internal_storage(vd);
+            out.push(vd);
         }
-        Ok(())
+        Ok(out)
     }
 
     /// Decode the `<pentry>`/`<group>` children of an `<input>`/`<output>`

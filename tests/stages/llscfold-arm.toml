@@ -11,6 +11,11 @@
 #   long long add64(long long *p, long long x) { return __sync_fetch_and_add(p, x); }
 #   long long or64(long long *p, long long x) { return __sync_fetch_and_or(p, x); }
 #   long long xchg64(long long *p, long long x) { return __atomic_exchange_n(p, x, 5); }
+#
+# The script runs with option irverify on (GH-1561): rule subvar_compzero
+# narrows a one-bit test in each of the five loops into a COPY of a new
+# BOOL_NEGATE, which SubvariableFlow once inserted after that COPY in the same
+# block; irverify then named oppool1 for all five (the irverify assertion).
 
 [image]
 arch = 'ARM:LE:32:v8:default'
@@ -54,6 +59,7 @@ hex = '00482de900c0a0e15bf07ff59f0fbce192eface100005ee3fbffff1a5bf07ff50088bde8'
 
 [script]
 commands = [
+    'option irverify on',
     'option atomics gcc',
     'option llscfold on',
     'load function cas32',
@@ -105,3 +111,8 @@ name = 'llscfold off keeps the monitor test'
 min = 2
 max = 8
 regex = 'hasExclusiveAccess'
+
+[[match]]
+name = 'no pass leaves a narrowed bit test read ahead of its definition (irverify, GH-1561)'
+count = 0
+literal = 'irverify:'

@@ -1,0 +1,87 @@
+# unlace issue testcase: the MSVC `push ecx` that reserves a local does not
+# make ECX, x86win's likely-trash register, an input (default correctness fix,
+# no option).
+#
+# Issue:      unlace GH-1325 - the compiler-spec decoder dropped <likelytrash>,
+#             so ActionLikelyTrash had no register to trace (likelytrash.toml
+#             covers x86gcc's EAX).
+# Stage:      P4 calls - the model decode (`infra/architecture.rs`,
+#             decode_proto_model) and ActionLikelyTrash
+#             (`p9_emit/coreaction_render.rs`, group protorecovery; C++
+#             coreaction.cc:2198).
+#
+# Hand-assembled i386 bytes in the shape MSVC emits for a 4-byte local:
+#
+#     401000 win_pushaddr: 51              push ecx        ; reserve a local
+#                          8b c4           mov  eax, esp
+#                          50              push eax        ; its address
+#                          e8 f7000000     call g_ptr
+#                          83 c4 04        add  esp, 4
+#                          8b 04 24        mov  eax, [esp]
+#                          59              pop  ecx
+#                          c3              ret
+#     401020 win_pushslot: 51              push ecx
+#                          e8 ea000000     call g_void
+#                          58              pop  eax
+#                          c3              ret
+#
+# ECX's entry value reaches only the INDIRECT g_ptr puts on the slot, so it
+# becomes an indirect creation and the local is no longer seeded from ECX
+# (before the fix: `v1 = a0;` with ECX a parameter; #1, #2 fail).
+# win_pushslot returns the pushed ECX, so ECX stays an input (#3 holds both
+# before and after).
+
+[image]
+arch = 'x86:LE:32:default:windows'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'win_pushaddr' },
+    { space = 'ram', offset = '0x401020', name = 'win_pushslot' },
+    { space = 'ram', offset = '0x401100', name = 'g_ptr' },
+    { space = 'ram', offset = '0x401110', name = 'g_void' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+readonly = true
+hex = '518bc450e8f700000083c4048b042459c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401020'
+readonly = true
+hex = '51e8ea00000058c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401100'
+readonly = true
+hex = 'c3000000000000000000000000000000c3'
+
+[script]
+commands = [
+    'parse line extern void g_ptr(int4 *p);',
+    'parse line extern void g_void(void);',
+    'lo fu win_pushaddr',
+    'decompile',
+    'print C',
+    'lo fu win_pushslot',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'LIKELYTRASH-MSVC #1: the slot push ecx reserves is not seeded from ECX'
+count = 0
+literal = 'v1 = a0;'
+
+[[match]]
+name = 'LIKELYTRASH-MSVC #2: win_pushaddr takes no parameter'
+count = 1
+literal = 'win_pushaddr(void)'
+
+[[match]]
+name = 'LIKELYTRASH-MSVC #3: a pushed ECX that is popped and returned stays an input'
+count = 1
+literal = 'return a0;'

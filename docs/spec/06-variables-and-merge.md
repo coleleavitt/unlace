@@ -2509,12 +2509,7 @@ hook), and the frame-layout pass that types the buffer is
 `v4.version = 4; v4.ihl = a2; v4.tot_len = 0x1c00; v4.protocol = 0x11;`, and the
 ICMP echo buffer as `icmphdr v2;` with `v2.type = 8; v2.code = 0;`.
 
-Two cases stay as the code has them. A constant word that covers both bitfield
-bytes and plain bytes (gcc -O2 writes `tos` and `tot_len` in the same word as
-`ihl`/`version`, `0x28001045`) prints raw, `*(unsigned int *)&v3 = 0x28001045;`:
-the bitfield insert has no record for the plain bytes, and dropping them would
-lose the stored value, while `subflow.rs` keeps a bitfield struct from being split
-into pieces. A union member, such as `icmphdr`'s `un.echo`, prints as the bytes it
+A constant word that covers bitfield bytes and plain bytes (gcc -O2 writes `tos` and `tot_len` in the same word as `ihl`/`version`, `0x28001045`) is split at the struct's fields, as the global case already is: the bitfield bytes stay one piece each, which `RuleBitFieldOut` names from the struct that contains them, and the plain fields are their own stores. The split is `SplitDatatype` on a constant copy into a bitfield struct, or into its partial struct when the copy lands in a field-sized piece of one (`subflow.rs` `RuleSplitCopy`, `get_component`). A copy that is not a constant is still not split along bitfields. `send_syn` prints `v3.version = 4; v3.ihl = 5; v3.tos = 0x10; v3.tot_len = 0x2800;` and `v7.doff = 5; v7.syn = 1; v7.window = 0xd016;`. A union member, such as `icmphdr`'s `un.echo`, prints as the bytes it
 is (`((unsigned short *)&v2)[2]`), since the union is a hole in the record. The
 option is a flip because it declares the buffer by the packet a `sendto` sends
 rather than by bytes the code stores; with it off the buffer is `uint1 v4 [16]`

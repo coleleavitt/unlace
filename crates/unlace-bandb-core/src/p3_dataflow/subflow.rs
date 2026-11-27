@@ -4613,6 +4613,9 @@ impl SplitDatatype {
             let (sub, newoff) = cur_type.get_sub_type(cur_off)?;
             match sub {
                 None => {
+                    if holds_bitfields(ct, offset, 1) {
+                        return Ok((Some(types.get_base(1, type_metatype::TYPE_UNKNOWN)?), false));
+                    }
                     let hole = ct.get_hole_size(offset)?;
                     if hole > 0 {
                         let hole = if hole > 8 { 8 } else { hole };
@@ -6152,6 +6155,23 @@ impl Rule for RuleSplitCopy {
             .get_type_def_facing()
             .clone();
         let metain = in_type.get_metatype();
+        let mut out_type = out_type;
+        let own_meta = out_type.get_metatype();
+        if data.vbank().get(in0).expect("stale in0").is_constant()
+            && own_meta != type_metatype::TYPE_STRUCT
+            && own_meta != type_metatype::TYPE_PARTIALSTRUCT
+            && own_meta != type_metatype::TYPE_ARRAY
+        {
+            if let Some((container, off)) = crate::bitfield::bitfield_container(data, out) {
+                let arch = Rc::clone(data.get_arch());
+                let size = data.vbank().get(out).expect("stale out").get_size();
+                if let Some(types) = arch.types() {
+                    if let Ok(part) = types.get_type_partial_struct(container, off, size) {
+                        out_type = part;
+                    }
+                }
+            }
+        }
         let metaout = out_type.get_metatype();
         if metain != type_metatype::TYPE_PARTIALSTRUCT
             && metaout != type_metatype::TYPE_PARTIALSTRUCT

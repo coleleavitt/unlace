@@ -602,7 +602,7 @@ impl Rule for RuleBitFieldOut {
 /// A struct split at its constant fields (`SplitDatatype`) reaches the rule as a
 /// piece typed as its bytes, so the stack symbol that contains the piece names
 /// the bitfields; otherwise the varnode's own type.
-fn bitfield_container(data: &Funcdata, vn: VarnodeId) -> Option<(Rc<Datatype>, int4)> {
+pub(crate) fn bitfield_container(data: &Funcdata, vn: VarnodeId) -> Option<(Rc<Datatype>, int4)> {
     let v = data.vbank().get(vn)?;
     let containing = data.get_scope_local().and_then(|sl| {
         sl.query_container_for_link_matching(

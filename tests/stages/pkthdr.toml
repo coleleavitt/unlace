@@ -120,3 +120,18 @@ literal = 'v3.tos = 0x10;'
 name = 'PKTHDR #13: on, the total length of the first word is named'
 count = 1
 literal = 'v3.tot_len = 0x2800;'
+
+[[match]]
+name = 'PKTHDR #14: on, send_syn names the TCP data offset bitfield'
+count = 1
+literal = 'v7.doff = 5;'
+
+[[match]]
+name = 'PKTHDR #15: on, send_syn names the TCP SYN flag'
+count = 1
+literal = 'v7.syn = 1;'
+
+[[match]]
+name = 'PKTHDR #16: on, send_syn names the TCP window'
+count = 1
+literal = 'v7.window = 0xd016;'

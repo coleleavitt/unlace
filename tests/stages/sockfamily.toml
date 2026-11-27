@@ -1,0 +1,98 @@
+# A frame object handed to a `const struct sockaddr *` parameter and given the
+# constant AF_INET is declared `sockaddr_in` (option sockfamily). connect_to and
+# send_syn (fixtures/netstruct/netstruct.c) fill a `struct sockaddr_in` field
+# by field and pass it to connect and sendto, whose prototypes name only the
+# generic `struct sockaddr`; typed from the call, the port and the IPv4 address
+# landed in `char sa_data[14]` and printed a byte at a time.
+#
+# Stage model: P6 stack-frame-layout
+# (crates/unlace-bandb-base/src/p6_variables/sockfamily.rs, run by
+# restructure_varnode before the merge), with the typelib reader
+# (crates/unlace-console/src/typelib.rs, seed) interning sockaddr_in and
+# sockaddr_un beside sockaddr while the option is on. Bytes:
+# netstruct-gcc-O2-dyn, gcc 15.3.0 -O2 -s against glibc 2.43
+# (fixtures/netstruct/build.sh), so connect and sendto keep their import names;
+# the stripped static images name no libc callee, so no prototype reaches them.
+#
+# Option: sockfamily (default on). Pass 1 is the default (#1-#6), pass 2 sets
+# it off and keeps the generic header (#7-#9).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netstruct-gcc-O2-dyn',
+    'read symbols',
+    'load function sub_15e0',
+    'decompile',
+    'print C',
+    'load function sub_14f0',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netstruct-gcc-O2-dyn',
+    'option sockfamily off',
+    'read symbols',
+    'load function sub_15e0',
+    'decompile',
+    'print C',
+    'load function sub_14f0',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'SOCKFAMILY #1: by default connect_to declares the AF_INET record'
+count = 1
+literal = 'sockaddr_in v2;'
+
+[[match]]
+name = 'SOCKFAMILY #2: by default the port is sin_port'
+count = 1
+literal = 'v2.sin_port = bswap(a1);'
+
+[[match]]
+name = 'SOCKFAMILY #3: by default the address is sin_addr'
+count = 1
+literal = 'v2.sin_addr.s_addr = inet_addr(a0);'
+
+[[match]]
+name = 'SOCKFAMILY #4: by default connect takes the record through the cast the source has'
+count = 1
+literal = 'if (connect(fd,(sockaddr *)&v2,0x10) <= -1) {'
+
+[[match]]
+name = 'SOCKFAMILY #5: by default send_syn stores the destination port into sin_port'
+count = 1
+literal = 'v4.sin_port = v1;'
+
+[[match]]
+name = 'SOCKFAMILY #6: by default sendto takes the record cast to the generic header'
+count = 1
+literal = 'sendto(a0,&v5,0x28,0,(sockaddr *)&v4,0x10);'
+
+[[match]]
+name = 'SOCKFAMILY #7: off, the port is stored into sa_data a byte at a time in both functions'
+count = 2
+literal = 'v4.sa_data[1] = SUB21(v1,1);'
+
+[[match]]
+name = 'SOCKFAMILY #8: off, the IPv4 address is split into four shifted bytes'
+count = 1
+literal = 'v4.sa_data[5] = (char)(v3 >> 0x18);'
+
+[[match]]
+name = 'SOCKFAMILY #9: off, connect takes the generic header uncast'
+count = 1
+literal = 'if (connect(fd,&v4,0x10) <= -1) {'

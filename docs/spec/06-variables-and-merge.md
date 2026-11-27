@@ -2454,6 +2454,36 @@ element read through a wider cast, or an array of the wider element indexed
 through a byte cast, and a program that walks an `int` array byte by byte
 reads better upstream's way (`option indexstride off`).
 
+**A socket address by its family (unlace `sockfamily`, default `on`).**
+`connect`, `bind` and `sendto` declare their address `const struct sockaddr *`,
+so the frame object reaching that parameter is typed as the generic header
+(`sa_family`, `char sa_data[14]`). The object a program fills is the family's
+own record, cast at the call, and typed as the header its port and IPv4
+address stores land in `sa_data` and are split a byte at a time
+(`v4.sa_data[0] = (char)v1; v4.sa_data[1] = SUB21(v1,1);`, the address as
+four shifted bytes). With the option on,
+`crates/unlace-bandb-base/src/p6_variables/sockfamily.rs (settle)` runs in
+`restructure_varnode` beside `indexstride` and retypes every unlocked hint
+typed `sockaddr` whose family slot the function writes only with the constant
+`AF_INET` (2) or `AF_UNIX` (1): `sockfamily.rs (family_stored)` reads every
+write to the slot (a 2-, 4- or 8-byte COPY of a constant starting there, the
+family being its first two bytes in the space's byte order; the INDIRECTs a
+call leaves are ignored and any other write refuses the change), and
+`sockfamily.rs (held_record)` takes `sockaddr_in` or `sockaddr_un` only when
+the type factory already holds it as a structure with a 2-byte field at offset
+0, so a BSD layout with `sin_len` first is left alone. `AF_INET6` is left
+alone because its value differs across platforms. The records come from the
+target's own type library: `crates/unlace-console/src/typelib.rs (seed)`
+interns them with `sockaddr` while the option is on, since every socket
+prototype names only the generic header. The call then passes `(sockaddr
+*)&v2`, the cast the source has. Turned on it moves none of the 675 datatest
+assertions. It stays a flip because it declares the object by what the code
+stores into it rather than by the declared parameter: a program that really
+declares `struct sockaddr` and fills `sa_data` itself prints as the family
+record (`option sockfamily off`). A value stored whole into `sin_addr` takes
+`struct in_addr` from the field, so the parameter it comes from can be
+declared `in_addr`.
+
 **An escaped buffer's length (unlace `arraysize`, default `on`).** An open range
 that `attempt_join` does not extend ends where the next hint starts, and
 `adjust_fit` trims it to the mapped range. For a buffer whose address escapes to

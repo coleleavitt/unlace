@@ -28,6 +28,7 @@ pub mod paramcopyhoist;
 pub mod pointeevalue;
 pub mod registerepochs;
 pub mod slotptr;
+pub mod sockfamily;
 pub mod spphistack; // (unlace `spphistack`) a bare input stack pointer at a phi is a stack address
 pub mod stablenames;
 pub mod stackexitanchor; // (unlace) the epilogue settles the last unknown call's purge

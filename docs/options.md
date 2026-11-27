@@ -290,6 +290,9 @@ Three tiers:
 | a char buffer is declared int v2 [258] beside ((char *)v2)[v1] = 0 | [`indexstride`](#indexstride----on--off-default-on) |
 | an indexed byte store into a stack array prints with a (char *) cast | [`indexstride`](#indexstride----on--off-default-on) |
 | a receive buffer compared with an inlined strncmp is declared as a short or int array | [`indexstride`](#indexstride----on--off-default-on) |
+| a port is stored as v4.sa_data[0] = (char)v1 and v4.sa_data[1] = SUB21(v1,1) | [`sockfamily`](#sockfamily----on--off-default-on) |
+| a sockaddr local's IPv4 address is stored as four shifted bytes into sa_data | [`sockfamily`](#sockfamily----on--off-default-on) |
+| *(unsigned int *)&v4.sa_data[2] = a2; beside v4.sa_family = 2 | [`sockfamily`](#sockfamily----on--off-default-on) |
 | an out-parameter local is passed as (int *)&v2 to waitpid or wait | [`castobject`](#castobject----on--off-default-on) |
 | a stack local is declared unsigned int where the callee that fills it declares int * | [`castobject`](#castobject----on--off-default-on) |
 | return (int)v1 >> 8 & 0xff; over an unsigned int status filled by waitpid | [`castobject`](#castobject----on--off-default-on) |
@@ -2195,6 +2198,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default (0/675 datatest assertions move; speed: retired user instructions over every function of /usr/bin/nc (103) and /usr/bin/ping (185), off/on alternating, median -0.4% and -2.0%, inside the noise of identical runs). The tell it fixes is a stack buffer that the code indexes byte by byte (`((char *)v2)[v1] = 0`, a NUL terminator after `recv`/`read`) declared `int v2 [258]` because an inlined `strncmp`/`memcmp` reads its first bytes as one wider word. Flip off to see upstream's merge, where the widest fixed read at the start decides the element: both declarations describe the same bytes, and a program that really walks an `int` array byte by byte reads better that way.
 - **Where / provenance:** P6/stack-frame-layout · unlace · type-inference · netstruct
 - **Example:** `option indexstride on`
+
+### `sockfamily` -- on | off, default `on`
+
+- **Symptoms:** a port is stored as v4.sa_data[0] = (char)v1 and v4.sa_data[1] = SUB21(v1,1); a sockaddr local's IPv4 address is stored as four shifted bytes into sa_data; *(unsigned int *)&v4.sa_data[2] = a2; beside v4.sa_family = 2.
+- **What it does:** Declare a frame object that reaches a `const struct sockaddr *` parameter (`connect`, `bind`, `sendto`) as its family's address record when the function writes its family slot only with the constant `AF_INET` (2) or `AF_UNIX` (1): `sockaddr_in` or `sockaddr_un` instead of the generic `sockaddr` the prototype names. Typed from the call, the port and address stores land in `char sa_data[14]` and print a byte at a time (`v4.sa_data[0] = (char)v1; v4.sa_data[1] = SUB21(v1,1);`, the address as four shifted bytes); as `sockaddr_in` they are `v4.sin_port` and `v4.sin_addr`. The record is the target type library's own (`typelib` interns `sockaddr_in` and `sockaddr_un` with `sockaddr` while the option is on) and must start with a 2-byte family, so a BSD layout with `sin_len` first is left alone; `AF_INET6` is left alone because its value differs across platforms.
+- **When to flip:** On by default (0/675 datatest assertions move; speed: retired user instructions over every function of /usr/bin/nc (103) and /usr/bin/ping (185), off/on alternating, median -0.4% and -2.0%, inside the noise of identical runs). The tell it fixes is a socket address local declared `sockaddr` whose port or IPv4 address is written into `sa_data` byte by byte (`v4.sa_data[2] = (char)v3; v4.sa_data[3] = (char)(v3 >> 8);`) or through casts (`*(unsigned int *)&v4.sa_data[2] = a2;`). Flip off to declare the object by the parameter it reaches, which is right for a program that really declares `struct sockaddr` and fills `sa_data` itself. A value stored whole into `sin_addr` takes `struct in_addr` from the field, so a parameter it comes from can print as `in_addr a2`.
+- **Where / provenance:** P6/stack-frame-layout · unlace · type-inference · netstruct
+- **Example:** `option sockfamily on`
 
 ### `castobject` -- on | off, default `on`
 

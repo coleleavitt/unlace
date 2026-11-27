@@ -2151,6 +2151,25 @@ tier = "transform"
 symptoms = ["a char buffer is declared int v2 [258] beside ((char *)v2)[v1] = 0", "an indexed byte store into a stack array prints with a (char *) cast", "a receive buffer compared with an inlined strncmp is declared as a short or int array"]
 
 [[option]]
+option = "sockfamily"
+values = ["on", "off"]
+default = "on"
+destructive_as_default = false
+phase = "P6"
+subphase = "stack-frame-layout"
+strength = "HARD"
+rewind = "P6"
+issue = "netstruct"
+summary = "Declare a frame object that reaches a `const struct sockaddr *` parameter (`connect`, `bind`, `sendto`) as its family's address record when the function writes its family slot only with the constant `AF_INET` (2) or `AF_UNIX` (1): `sockaddr_in` or `sockaddr_un` instead of the generic `sockaddr` the prototype names. Typed from the call, the port and address stores land in `char sa_data[14]` and print a byte at a time (`v4.sa_data[0] = (char)v1; v4.sa_data[1] = SUB21(v1,1);`, the address as four shifted bytes); as `sockaddr_in` they are `v4.sin_port` and `v4.sin_addr`. The record is the target type library's own (`typelib` interns `sockaddr_in` and `sockaddr_un` with `sockaddr` while the option is on) and must start with a 2-byte family, so a BSD layout with `sin_len` first is left alone; `AF_INET6` is left alone because its value differs across platforms."
+use_when = "On by default (0/675 datatest assertions move; speed: retired user instructions over every function of /usr/bin/nc (103) and /usr/bin/ping (185), off/on alternating, median -0.4% and -2.0%, inside the noise of identical runs). The tell it fixes is a socket address local declared `sockaddr` whose port or IPv4 address is written into `sa_data` byte by byte (`v4.sa_data[2] = (char)v3; v4.sa_data[3] = (char)(v3 >> 8);`) or through casts (`*(unsigned int *)&v4.sa_data[2] = a2;`). Flip off to declare the object by the parameter it reaches, which is right for a program that really declares `struct sockaddr` and fills `sa_data` itself. A value stored whole into `sin_addr` takes `struct in_addr` from the field, so a parameter it comes from can print as `in_addr a2`."
+example = "option sockfamily on"
+source_decompiler = "unlace"
+inspiration = "External feedback on a stripped static x86-64 IRC client: sockaddr fields came out as individual bytes; reproduced by tests/stages/fixtures/netstruct (connect_to, send_syn)"
+change_kind = "type-inference"
+tier = "transform"
+symptoms = ["a port is stored as v4.sa_data[0] = (char)v1 and v4.sa_data[1] = SUB21(v1,1)", "a sockaddr local's IPv4 address is stored as four shifted bytes into sa_data", "*(unsigned int *)&v4.sa_data[2] = a2; beside v4.sa_family = 2"]
+
+[[option]]
 option = "castobject"
 values = ["on", "off"]
 default = "on"

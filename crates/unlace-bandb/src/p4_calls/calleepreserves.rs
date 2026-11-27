@@ -79,6 +79,10 @@
 //!   stack probe writes `RSP`/`R10`/`R11` and `x86-64-win.cspec` names none of
 //!   them. That body is admitted on a second, independent mark instead, by
 //!   [`calleescratchbody`](crate::calleescratchbody).
+//! * **A body the caller relies on is its own evidence.** A caller that reads
+//!   the register after the call before writing it was compiled against the
+//!   callee's real clobber set (gcc `-fipa-ra`), and a callee that is a body
+//!   is then admitted by [`calleeiparead`](crate::calleeiparead).
 //! * **The return register needs its own evidence.** The gate above asks the
 //!   callee to have written a register the convention promises is *preserved*,
 //!   which a helper that clobbers only what it is allowed to never does. The
@@ -155,6 +159,7 @@ pub fn callee_preserves_range(
     }
     body_departs_from_convention(data, fc, w)
         || crate::calleescratchbody::scratch_body_is_a_body(data, w)
+        || crate::calleeiparead::caller_relies_on(data, fc, w, addr, size)
 }
 
 /// Does the decoded body demonstrably depart from the convention the effect list

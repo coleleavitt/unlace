@@ -826,7 +826,7 @@ impl FunctionTestCollection {
     /// console's own text, and the tree has no node for a wrapped line). The
     /// result has one line per printed function:
     ///
-    /// - `Tree -- <function>: <nodes> nodes, <raw> raw`: the tree prints back to
+    /// - `Tree -- <function>: <language>, <nodes> nodes, <raw> raw`: the tree prints back to
     ///   the function's text byte for byte;
     /// - `NoTree -- <function>: <reason>`: the function exports no tree;
     /// - `Mismatch -- <function>: line <n>`: the tree prints back differently

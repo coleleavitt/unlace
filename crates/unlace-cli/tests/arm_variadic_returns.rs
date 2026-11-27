@@ -154,14 +154,17 @@ fn body<'a>(code: &'a str, name: &str) -> &'a str {
 
 fn assert_base_standard_returns(code: &str) {
     let w1 = body(code, "w1");
-    assert!(w1.contains(" = vr(k,k + 1,"), "{w1}");
+    assert!(
+        w1.contains("return (int)") && w1.contains("vr(k,k + 1,"),
+        "{w1}"
+    );
     assert!(!w1.contains("CONCAT44"), "{w1}");
     let x1 = body(code, "x1");
     assert!(x1.contains("return vf1(k,k + 1).a;"), "{x1}");
     let n1 = body(code, "n1");
     assert!(n1.contains(" = g(k);") && n1.contains("// d0"), "{n1}");
     let t1 = body(code, "t1");
-    assert!(t1.contains(" = vr(k,2);"), "{t1}");
+    assert!(t1.contains("return vr(k,2);"), "{t1}");
     assert!(!t1.contains("CONCAT44"), "{t1}");
 }
 

@@ -2728,6 +2728,20 @@ before a rule folds the `xor`. With the earliest INDIRECT kept, a switch index
 read from such a field after a call stays an unknown value instead of folding
 to the value stored before the call (#871; Ghidra reaches the same state by
 folding the `xor` before its second restructure pass).
+(unlace) The partial's alias gather also keeps the stack addresses its calls
+receive (`p6_variables/jtpartialalias.rs`). With no call inputs, a stack
+address formed in a register and passed to a callee (`add x1, sp, #0x20; bl f`)
+is a dead register write, and dead code removes it before
+`ActionRestructureVarnode` gathers aliases; when every use of the stack pointer
+goes that way the gather finds no stack pointer at all, every local is marked
+unaliased, and a switch index read back after the call folds to the value
+stored before it (#871). After each heritage pass of the partial, unlace walks
+the stack pointer's additive expressions as `gatherAdditiveBase` does and
+records the offset of every pointer that leaves them: a register value nothing
+reads, a stored value, a constant-offset pointer used by anything but a load or
+store address, and an indexed load or store address. The partial's restructure
+adds these offsets to its alias list before `markUnaliased`. The full
+decompile sees the same pointers as call arguments and does not record them.
 (unlace) Under a per-function budget (`00-overview.md`, *The watchdog*) the loop is bounded in
 time as well: `flow.rs (FlowInfo::recover_jump_tables)` asks the drive's
 deadline before each table and after its attempt, and `jumptable.rs

@@ -66,9 +66,9 @@ literal = 'sub_401160('
 [[match]]
 name = 'RETPOLINETHUNK #2: on, the call goes through the loaded pointer'
 count = 1
-regex = 'return \(\*\w+\)\(\w+\) \+ 5;'
+regex = 'return \(\*\*\(code \*\*\)&tab\[\(a0 & 1\) \* 8UL\]\)\(a1\) \+ 5;'
 
 [[match]]
 name = 'RETPOLINETHUNK #3: on, the pointer comes from the table'
 count = 1
-regex = '\w+ = \*\([^\n]*tab\['
+regex = '\(\*\*\(code \*\*\)&tab\['

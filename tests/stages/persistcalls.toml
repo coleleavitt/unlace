@@ -3,13 +3,13 @@
 # one more inside a branch every eighth step: 288 calls. small touches two
 # globals across three calls. Pass 1 is upstream placement (option off):
 # every global is guarded at every call, and the guards survive dead-code
-# removal, so churn's live IR holds 84250 ops. Pass 2 is the default:
+# removal, so churn's live IR holds 83690 ops. Pass 2 is the default:
 # churn's pass guards 319 RAM ranges at 288 calls (91,872 guards), past the
 # 65,536-guard threshold, so each global keeps only the guards next to its
 # accesses (the call before its read, the call after its write, the last
 # call before a return or before a join that needs the value after it),
-# 1053 of its 73,728, and the live IR drops to 3670 ops; the skipped
-# guards and joins keep their op numbers, so every pass creates 95006. small, far below the threshold,
+# 1053 of its 73,728, and the live IR drops to 3110 ops; the skipped
+# guards and joins keep their op numbers, so every pass creates 94726. small, far below the threshold,
 # keeps every guard. Pass 3 is persistcalls on: small loses one guard that
 # only hands a value to the next (16 ops to 15). Each function prints the
 # same body in every pass. Two
@@ -105,7 +105,7 @@ commands = [
 [[match]]
 name = 'persistcalls #1: all three passes print churn'
 count = 3
-regex = '^uint8 churn\(int8 a0\)$'
+regex = '^uint8 churn\(uint8 a0\)$'
 
 [[match]]
 name = "persistcalls #2: all three passes keep churn's 288 calls and small's 3"
@@ -130,17 +130,17 @@ regex = '^  return sink\(v1\) \+ h0;$'
 [[match]]
 name = "persistcalls #6: upstream placement keeps every guard in churn's live IR"
 count = 2
-literal = 'Count - pcode = 84250'
+literal = 'Count - pcode = 83690'
 
 [[match]]
 name = "persistcalls #7: every pass numbers churn's ops as upstream placement does"
 count = 5
-literal = 'Count - created = 95006'
+literal = 'Count - created = 94726'
 
 [[match]]
 name = 'persistcalls #8: past the threshold churn keeps the guards next to its accesses'
 count = 3
-literal = 'Count - pcode = 3670'
+literal = 'Count - pcode = 3110'
 
 [[match]]
 name = 'persistcalls #9: small keeps every guard below the threshold'

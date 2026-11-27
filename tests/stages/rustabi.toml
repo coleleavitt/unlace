@@ -49,7 +49,9 @@
 # a byte-tested first register, a twice-read second one - but the callee
 # PROVABLY never writes RDX. Nothing at the call site separates the two, so the
 # call seam decodes the callee (`probe_callee_return_writes`) and refuses the
-# pair. The reader must therefore render IDENTICALLY in both passes.
+# pair. The reader must therefore render IDENTICALLY in both passes. The
+# RDX it reads is its own incoming RDX, which crosses the call untouched
+# (calleeiparead), and the call returns RAX alone.
 
 [image]
 arch = 'x86:LE:64:default:gcc'
@@ -157,9 +159,9 @@ literal = 'SUB128(v2,0) & 1'
 [[match]]
 name = 'RUSTABI #9: a callee proven never to write the second return register is not paired -- the reader is unchanged in BOTH passes'
 count = 2
-literal = 'int8 v3; // rdx'
+literal = 'v1 = a2 + 1;'
 
 [[match]]
-name = 'RUSTABI #10: and its call keeps no output in either pass'
+name = 'RUSTABI #10: and its call returns RAX alone in either pass'
 count = 2
-regex = '^  scalar_callee\(\);$'
+regex = 'scalar_callee\([^)]*\) & 1'

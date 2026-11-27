@@ -12,6 +12,7 @@ pub mod coreaction_stackptr;
 pub mod endptrbound;
 pub mod funcdata_facing;
 pub mod funcdata_spacebase;
+pub mod jtpartialalias;
 pub mod localstackviews;
 pub mod stackobjectalias;
 pub mod stackobjectasserts;

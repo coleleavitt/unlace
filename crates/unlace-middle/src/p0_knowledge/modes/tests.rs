@@ -187,6 +187,7 @@ fn aggressive_carries_every_default_off_option() {
     /// `rustprobestack` did not clear its default wall-time confidence bounds.
     /// `highsliceguard` added 10.8% CPU time when recovering the upstream table.
     /// `rustarrayzero` missed the initial default-on CPU median budget.
+    /// `irverify` re-walks the function after every pass and is a debugging aid.
     /// `ppcapu` selects the e500 model, whose scalar call arguments are not
     /// yet recovered, so it requires an explicit option.
     const EXCLUDED_ON_PURPOSE: &[&str] = &[
@@ -212,6 +213,7 @@ fn aggressive_carries_every_default_off_option() {
         "rustprobestack",
         "highsliceguard",
         "rustarrayzero",
+        "irverify",
         // `lazyfuncs` changes no output, but its saving is a single-function
         // property: the whole-binary surfaces the presets drive (decompile-all,
         // the web front-end, the benchmark) materialize every target they walk

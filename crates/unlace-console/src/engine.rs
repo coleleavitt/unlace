@@ -4692,9 +4692,21 @@ fn named_entry_count(entries: &[FunctionEntry]) -> usize {
     entries
         .iter()
         .filter(|entry| {
-            !is_generic_placeholder_name(&entry.name) && !is_structural_entry_name(&entry.name)
+            !is_generic_placeholder_name(&entry.name)
+                && !is_structural_entry_name(&entry.name)
+                && !is_minted_nullsub_name(entry)
         })
         .count()
+}
+
+/// Is `entry` named `nullsub_<digits>` from its own placeholder (`nullsubs`,
+/// [`thunknames::name_nullsubs`])? The name says no more than the address does.
+fn is_minted_nullsub_name(entry: &FunctionEntry) -> bool {
+    entry.name.strip_prefix("nullsub_").is_some_and(|digits| {
+        minted_function_names(&entry.addr)
+            .iter()
+            .any(|minted| minted.split_once('_').is_some_and(|(_, d)| d == digits))
+    })
 }
 
 /// (unlace, RE-need `changing-namestyle-invalidates-discovered`) Every default
@@ -7118,8 +7130,13 @@ fn commit_model_facts(
         return;
     }
     let mut models = (*prog.arch().loader_proto_models).clone();
+    let mut resolved = std::collections::HashMap::new();
     for fact in facts {
-        let Some(model) = prog.arch().get_model(fact.model).cloned() else {
+        let Some(model) = resolved
+            .entry(fact.model)
+            .or_insert_with(|| unlace_decomp::typedcallabi::bound_model(prog.arch(), fact.model))
+            .clone()
+        else {
             continue;
         };
         let model = if let Some(inputs) = &fact.leaf_stack_inputs {
@@ -7852,6 +7869,18 @@ fn commit_analysis_output(
     };
     let eager = if lazy_funcs {
         let mut eager = crate::lazyfuncs::fact_entries(&out);
+        if prog
+            .arch()
+            .unlace_options
+            .get::<unlace_decomp::analysisgates::Nullsubs>()
+            .0
+        {
+            eager.extend(thunknames::nullsub_entries(
+                prog.arch(),
+                code_space,
+                &out.entries,
+            ));
+        }
         let named_thunks = thunknames::thunks_to(&jump_thunks, &eager);
         eager.extend(named_thunks);
         eager

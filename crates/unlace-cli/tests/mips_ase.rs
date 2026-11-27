@@ -60,7 +60,18 @@ fn every_mips3d_and_smartmips_encoding_decodes_as_binutils_names_it() {
         assert_eq!(code, 0, "{object}: {stderr}");
         let want = std::fs::read_to_string(fixture(expected)).unwrap();
         let want: Vec<&str> = want.lines().collect();
-        assert_eq!(rows(&stdout), want, "{object}");
+        let got = rows(&stdout);
+        assert!(got.len() <= want.len(), "{object}: {got:?}");
+        let (listed, zero_fill) = want.split_at(got.len());
+        assert_eq!(got, listed, "{object}");
+        assert!(
+            stderr.contains("the bytes above it are not in the image"),
+            "{object}: the walk must stop at the image's end: {stderr}"
+        );
+        assert!(
+            zero_fill.iter().all(|row| *row == "nop"),
+            "{object}: the listing past the image end is the loader's zero fill"
+        );
     }
 }
 

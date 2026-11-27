@@ -1,0 +1,100 @@
+# A call sealed by an int3 pad concludes its callee no-return, and the
+# statically linked MSVC CRT's _exit / abort / terminate chain follows
+# (noreturntrap, noreturn_disc and noreturn_propagate, unlace#837).
+#
+# On Holley EFI's SLABHIDDevice.dll (i386, VC++ 2008 static CRT, stripped) IDA
+# 9.5 marks 14 called functions no-return and unlace found 8 of them; the six
+# it missed were _exit 0x1000742f, abort 0x1000d2e0, terminate 0x1000a972,
+# unexpected 0x1000a9ab, _inconsistency 0x1000a9be and CallUnexpected
+# 0x10009fcd. _exit is doexit(code, 1, 0) and returns only when its third
+# argument is nonzero, abort ends call _exit ; int3 ; int3, and terminate is
+# reached only by the jmp of its callers, so its code sat in a neighbour's span.
+# abort printed `sub_1000742f(3); (*(void (*)(void))swi(3))(); // int3-pad x2`.
+#
+# The script loads noreturntrap_i686.exe (assembled from
+# fixtures/noreturntrap/noreturntrap.s, which lays the chain out the same way):
+# exit_ 0x401014, abort_ 0x40103a, terminate's code 0x401053, unexpected_
+# 0x401066, inconsistency_ 0x401073, user_inconsistency 0x401080 (calls
+# inconsistency_ when its argument is negative), user_unexpected 0x401091,
+# logmsg 0x40109f (returns; fatal_log ends call logmsg ; int3, but user_logmsg
+# 0x4010ac continues after its call).
+#
+# Pass 1 (defaults): abort_'s one sealed call concludes exit_, abort_ follows,
+# and unexpected_ / inconsistency_ follow through terminate's code, so their
+# callers print // no-return; logmsg's continued call vetoes its sealed one.
+# Pass 2 (option noreturntrap off): none of the chain is concluded.
+# #1, #2 and #3 fail without the fix. Stage: P1 no-return discovery.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/noreturntrap_i686.exe',
+    'option listing on',
+    'read symbols',
+    'load function sub_40103a',
+    'decompile',
+    'print C',
+    'load function sub_401080',
+    'decompile',
+    'print C',
+    'load function sub_401091',
+    'decompile',
+    'print C',
+    'load function sub_4010ac',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/noreturntrap_i686.exe',
+    'option listing on',
+    'option noreturntrap off',
+    'read symbols',
+    'load function sub_40103a',
+    'decompile',
+    'print C',
+    'load function sub_401080',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'NORETURNTRAP #1: abort calls the _exit it ends in as a no-return call'
+count = 1
+regex = 'sub_401014\(3\); // no-return'
+
+[[match]]
+name = 'NORETURNTRAP #2: _inconsistency, which jumps into terminate, is no-return'
+count = 1
+regex = 'sub_401073\(\); // no-return'
+
+[[match]]
+name = 'NORETURNTRAP #3: unexpected, which jumps into terminate, is no-return'
+count = 1
+regex = 'sub_401066\(\); // no-return'
+
+[[match]]
+name = 'NORETURNTRAP #4: the int3 pad prints only where _exit is not concluded'
+count = 1
+regex = 'swi\(3\)'
+
+[[match]]
+name = 'NORETURNTRAP #5: logmsg is called after it returns, so it stays returning'
+count = 0
+regex = 'sub_40109f\([^)]*\); // no-return'
+
+[[match]]
+name = 'NORETURNTRAP #6: both passes call _inconsistency'
+count = 2
+regex = 'sub_401073\(\);'

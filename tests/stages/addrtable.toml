@@ -48,12 +48,12 @@ commands = [
 [[match]]
 name = 'ADDRTABLE #1: off, the slot load is a cast byte offset'
 count = 1
-literal = 'v1 = *(code **)((a0 % 3) * 8UL + 0x2022b0);'
+literal = 'return (**(code **)((a0 % 3) * 8UL + 0x2022b0))(a1) + 1;'
 
 [[match]]
 name = 'ADDRTABLE #2: on, the call indexes the typed table'
 count = 1
-literal = 'v1 = AddrTable002022b0[a0 % 3];'
+literal = 'return (*AddrTable002022b0[a0 % 3])(a1) + 1;'
 
 [[match]]
 name = 'ADDRTABLE #3: on, the store indexes it too'

@@ -275,6 +275,8 @@ fn the_tree_pass_reports_one_line_per_printed_function() {
         panic!("{out}");
     };
     let counts = line.strip_prefix("Tree -- boolless: ").expect(line);
+    let (language, counts) = counts.split_once(", ").expect(line);
+    assert_eq!(language, "c-language", "{line}");
     let (nodes, raw) = counts.split_once(" nodes, ").expect(line);
     assert!(
         nodes.parse::<usize>().is_ok_and(|nodes| nodes > 20),

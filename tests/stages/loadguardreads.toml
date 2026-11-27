@@ -10,6 +10,14 @@
 # reads reach, and one per guarded range a later read sees on top of its
 # stack, 51,311 fewer ops for the same live IR and body. The fixture's
 # source and provenance are beside it.
+#
+# The counts are measured with option stackguard off: gather's canary
+# check runs through the 65 calls' INDIRECTs, which the P7 strip has
+# followed since its walk reached depth 256, and stripping it moves the
+# op counts these heritage assertions compare. gcc -fipa-ra keeps x, idx and
+# acc in rcx, rdx and r8 across the 65 calls to reg, which writes only rax;
+# keeping a register the caller reads after a call (calleeiparead) builds one
+# INDIRECT fewer for the same live IR (#7: 29824 -> 29823).
 
 [image]
 arch = 'x86:LE:64:default:gcc'
@@ -19,6 +27,7 @@ commands = [
     'clear architecture',
     'load file crates/unlace-analysis/tests/fixtures/loadguardreads_x86_64',
     'read symbols',
+    'option stackguard off',
     'load function gather',
     'decompile',
     'print C',
@@ -58,4 +67,4 @@ literal = 'Count - created = 81135'
 [[match]]
 name = 'loadguardreads #7: a guard COPY is built only per Varnode reached and per guard read again'
 count = 1
-literal = 'Count - created = 29824'
+literal = 'Count - created = 29823'

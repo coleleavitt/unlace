@@ -77,7 +77,7 @@ literal = 'return __security_cookie;'
 [[match]]
 name = 'UNLACE-PELOADCONFIG #3: the guard stubs and op_shl, listed only by the guard function table, are functions'
 count = 3
-regex = '0x1400010[01]0 sub_1400010[01]0|0x140001120 sub_140001120'
+regex = '0x1400010[01]0 (null)?sub_1400010[01]0|0x140001120 sub_140001120'
 
 [[match]]
 name = 'UNLACE-PELOADCONFIG #4: the delay-load thunks are named'

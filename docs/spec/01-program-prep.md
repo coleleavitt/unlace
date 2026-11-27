@@ -3800,7 +3800,11 @@ funcsym stream:
   a return doing nothing but its own stack and link-register work (`LOAD`,
   `INT_ADD`, `INT_AND`, `COPY`) becomes `nullsub_<addr>` with the placeholder's
   address spelling, IDA's `AF_NULLSUB`. On MIPS and SPARC those ops would be the
-  delay slot's, so the return must be alone. A name in use is left alone.
+  delay slot's, so the return must be alone. A name in use is left alone. Under
+  `lazyfuncs` such an entry gets its function up front, as a named thunk does,
+  so it is named the same in both modes. The name says no more than the
+  address, so a name miss does not count it among the names the image carries:
+  an image of placeholders and nullsubs still gets the `--addr` advice.
 - **Jump thunks** (unlace `thunknames`, default on,
   `crates/unlace-console/src/engine/thunknames.rs`): a function
   whose first instruction is a direct unconditional branch is a thunk (a

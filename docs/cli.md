@@ -170,6 +170,7 @@ settings, and hands them to a child process through that child's environment.
 | `UNLACE_OBJCIVARS`, `UNLACE_OBJCSDK`, `UNLACE_SWIFTTYPES`, `UNLACE_CODESTRINGS` | `objcivars`, `objcsdk`, `swifttypes`, `codestrings` |
 | `UNLACE_LOAD_OBJC`, `UNLACE_LOAD_STRINGS`, `UNLACE_LOAD_MMAP` | `off` skips the Objective-C or string pass at load, or copies a thin Mach-O instead of mapping it |
 | `unlace_pdb_path`, `unlace_pdb_symsrv`, `unlace_fid_db`, `UNLACE_FLIRT_SIGS` | the `.pdb` file and symbol store, the `.fid` database, the FLIRT `.sig` files |
+| `UNLACE_NORET_RULES` | the no-return rename rule file (`name ptn rpl` lines), see the spec chapter 01 "Rename rules" |
 | `UNLACE_ARM_ISA` | the ARM/Thumb decode mode of a 32-bit ARM load that names none; read once into `LoadOptions::arm_isa` at each environment-mode load, and an unrecognized value fails each load that reads it |
 
 Trace, debug and fault-injection variables (`UNLACE_*_TRACE`, `UNLACE_*_DEBUG`,

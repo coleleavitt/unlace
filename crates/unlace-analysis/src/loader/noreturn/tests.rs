@@ -417,7 +417,7 @@ fn run_over_fauxware_flags_exit_only() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fauxware");
     let bytes = std::fs::read(path).expect("read fauxware fixture");
     let file = object::File::parse(bytes.as_slice()).expect("parse fauxware");
-    let out = scan_noreturn(&file, &bytes, Compiler::Gcc, false);
+    let out = scan_noreturn(&file, &bytes, Compiler::Gcc, false, &[]);
     let exit = out
         .noreturn
         .iter()
@@ -456,7 +456,7 @@ fn cpp_mangled_noreturn_emits_plt_stub_address() {
     );
     let bytes = std::fs::read(path).expect("read cpp_noreturn fixture");
     let file = object::File::parse(bytes.as_slice()).expect("parse cpp_noreturn");
-    let out = scan_noreturn(&file, &bytes, Compiler::Gcc, false);
+    let out = scan_noreturn(&file, &bytes, Compiler::Gcc, false, &[]);
 
     // The mangled std::terminate import is flagged under its RAW name (the
     // funcsym is later demangled to `std::terminate`; the scan matches the
@@ -507,7 +507,7 @@ fn cxx_throw_family_emits_plt_stub_address() {
     );
     let bytes = std::fs::read(path).expect("read cxxthrow fixture");
     let file = object::File::parse(bytes.as_slice()).expect("parse cxxthrow fixture");
-    let out = scan_noreturn(&file, &bytes, Compiler::Clang, false);
+    let out = scan_noreturn(&file, &bytes, Compiler::Clang, false, &[]);
 
     // PINNED: the `@plt` stubs at 0x401030 / 0x401040 (objdump -d -j .plt.sec).
     for (name, stub) in [
@@ -597,7 +597,7 @@ fn rust_process_exit_keeps_its_address_and_refuses_returning_names() {
                 .is_ok_and(|name| name.starts_with("_ZN3std7process4exit17h"))
         })
         .expect("fixture has the standard process exit function");
-    let rust = scan_noreturn(&file, &bytes, Compiler::Rustc, false);
+    let rust = scan_noreturn(&file, &bytes, Compiler::Rustc, false, &[]);
     assert!(
         rust.noreturn
             .iter()
@@ -622,7 +622,7 @@ fn rust_process_exit_keeps_its_address_and_refuses_returning_names() {
         Compiler::Go,
         Compiler::Unknown,
     ] {
-        let other = scan_noreturn(&file, &bytes, compiler, false);
+        let other = scan_noreturn(&file, &bytes, compiler, false, &[]);
         assert!(
             !other
                 .noreturn
@@ -793,7 +793,7 @@ fn real_go_binary_detected_and_flags_runtime_gopanic() {
 
     // (2) Matching under the Go arm: `runtime.gopanic` (a defined FUNC in
     // `.symtab`) is flagged no-return, carrying its real code address.
-    let go_out = scan_noreturn(&file, &bytes, Compiler::Go, false);
+    let go_out = scan_noreturn(&file, &bytes, Compiler::Go, false, &[]);
     let gopanic = go_out
         .noreturn
         .iter()
@@ -820,11 +820,31 @@ fn real_go_binary_detected_and_flags_runtime_gopanic() {
     // names: the widening is gated on Go detection. (The base ELF list could
     // in principle still match a name like `exit`, but `runtime.gopanic` is
     // Go-only, so this isolates the gating.)
-    let c_out = scan_noreturn(&file, &bytes, Compiler::Gcc, false);
+    let c_out = scan_noreturn(&file, &bytes, Compiler::Gcc, false, &[]);
     assert!(
         !c_out.noreturn.iter().any(|f| f.name == "runtime.gopanic"),
         "runtime.gopanic must NOT be flagged under the C arm (Go list is gated)"
     );
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn rename_rule_counts_a_wrapper_as_its_replacement() {
+    let (exact, wildcard) = sets();
+    let rules = parse_rules("wrap wrapper_exit_* exit\n").unwrap();
+    assert!(renamed_hit(
+        "wrapper_exit_3",
+        &rules,
+        &exact,
+        &wildcard,
+        false
+    ));
+    assert!(!renamed_hit(
+        "wrapper_run",
+        &rules,
+        &exact,
+        &wildcard,
+        false
+    ));
 }

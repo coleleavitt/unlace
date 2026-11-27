@@ -58,6 +58,8 @@ pub const PDB_SYMSRV_ENV: &str = "unlace_pdb_symsrv";
 pub const FID_DB_ENV: &str = "unlace_fid_db";
 /// The FLIRT `.sig` files, or directories of them, to match.
 pub const FLIRT_SIGS_ENV: &str = "UNLACE_FLIRT_SIGS";
+/// The no-return rename rule file (`name ptn rpl` lines, see `loader::noretrules`).
+pub const NORET_RULES_ENV: &str = "UNLACE_NORET_RULES";
 /// `off` skips the Objective-C metadata pass at load.
 pub const LOAD_OBJC_ENV: &str = "UNLACE_LOAD_OBJC";
 /// `off` skips the string-literal pass at load.
@@ -141,6 +143,8 @@ pub struct LoadOptions {
     pub fid_db: Option<PathBuf>,
     /// FLIRT `.sig` files, or directories whose `*.sig` files are all taken.
     pub flirt_sigs: Vec<PathBuf>,
+    /// The no-return rename rule file, whose rules name a wrapper a listed no-return function counts as.
+    pub noret_rules: Option<PathBuf>,
     /// The Go toolchain release, which picks the `runtime.g` layout. The
     /// bootstrap takes it from the image's build info, else from here.
     pub go_version: Option<(u16, u16)>,
@@ -200,6 +204,7 @@ impl Default for LoadOptions {
             pdb_symsrv: None,
             fid_db: None,
             flirt_sigs: Vec::new(),
+            noret_rules: None,
             go_version: None,
             load_objc: true,
             load_strings: true,
@@ -256,6 +261,7 @@ impl LoadOptions {
             pdb_symsrv: read::pdb_symsrv(vars),
             fid_db: read::fid_db(vars),
             flirt_sigs: read::flirt_sigs(vars),
+            noret_rules: read::noret_rules(vars),
             go_version: read::go_version(vars),
             load_objc: read::load_objc(vars),
             load_strings: read::load_strings(vars),
@@ -624,6 +630,10 @@ pub mod read {
             .unwrap_or_default()
     }
 
+    pub fn noret_rules(v: &Vars<'_>) -> Option<PathBuf> {
+        path(v, NORET_RULES_ENV)
+    }
+
     fn load_pass(v: &Vars<'_>, name: &str) -> bool {
         !v.var(name).is_ok_and(|value| {
             matches!(
@@ -789,6 +799,10 @@ pub mod env {
 
     pub fn flirt_sigs() -> Vec<PathBuf> {
         read::flirt_sigs(&Vars::process())
+    }
+
+    pub fn noret_rules() -> Option<PathBuf> {
+        read::noret_rules(&Vars::process())
     }
 
     pub fn load_objc() -> bool {

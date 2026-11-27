@@ -15117,6 +15117,15 @@ the call site, dead fall-through never decoded — is inherited from the engine'
 flow layer (`crates/unlace-lift/src/p2_lift/flow.rs`), never
 re-implemented per pass.
 
+**Rename rules** (`UNLACE_NORET_RULES`, `crates/unlace-analysis/src/loader/noretrules.rs`,
+the `cfg/noret.cfg` analog) are a user file read at load, one `name ptn rpl` rule per
+line, `#` for comments. A function whose name matches `ptn` (a glob, `*` for any run of
+characters) counts as `rpl` for the Known name match, so one rule names a family of
+wrappers around `exit` or `abort`. The first matching rule in file order wins. The
+function keeps its own installed name; only the no-return match uses `rpl`. A file that
+does not parse (an invalid line, a duplicated rule name, a pattern that matches every name)
+is reported on stderr and gives no rules. Unset, the pass is unchanged.
+
 **Known names** (`noreturn_known`,
 `crates/unlace-analysis/src/loader/noreturn.rs (NoReturnKnownPass)`, the
 `NoReturnFunctionAnalyzer` port) flags every function symbol whose name — leading

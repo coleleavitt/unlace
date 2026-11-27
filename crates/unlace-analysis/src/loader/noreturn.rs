@@ -46,6 +46,7 @@
 use object::SymbolKind;
 use object::read::{Object, ObjectSymbol};
 
+use super::noretrules::{NoRetRule, parse_rules, rename_for_noreturn};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, NoReturnFact, Phase};
 use crate::sourcelang::Compiler;
 
@@ -282,6 +283,7 @@ fn scan_noreturn(
     bytes: &[u8],
     compiler: Compiler,
     ladder: bool,
+    rules: &[NoRetRule],
 ) -> AnalysisOutput {
     let mut out = AnalysisOutput::default();
     // Per-format base list (PR-10): an ELF gets the vendored ELF list (+ the
@@ -325,6 +327,7 @@ fn scan_noreturn(
     let rust_exit = file.format() == object::BinaryFormat::Elf && compiler == Compiler::Rustc;
     let mut emit = |out: &mut AnalysisOutput, addr: u64, n: String| {
         let hit = name_matches_ladder(&n, &exact, &wildcard, ladder)
+            || renamed_hit(&n, rules, &exact, &wildcard, ladder)
             || (rust_paths && rust_path(&n).is_some_and(|p| path_matches(&p, &exact, &wildcard)))
             || (rust_exit && rustnoreturn::process_exit(&n));
         if hit && seen.insert((addr, n.clone())) {
@@ -373,10 +376,42 @@ fn scan_noreturn(
     out
 }
 
+/// The rename rules of the file `UNLACE_NORET_RULES` (or the load options) names.
+/// A file that does not parse is reported on stderr and gives no rules.
+fn noret_rule_file() -> Vec<NoRetRule> {
+    use unlace_decomp::loadoptions::{env, scoped};
+    let Some(path) = scoped(|o| o.noret_rules.clone()).unwrap_or_else(env::noret_rules) else {
+        return Vec::new();
+    };
+    match std::fs::read_to_string(&path)
+        .map_err(|e| e.to_string())
+        .and_then(|text| parse_rules(&text))
+    {
+        Ok(rules) => rules,
+        Err(e) => {
+            eprintln!("noreturn: {}: {e}; no rename rules applied", path.display());
+            Vec::new()
+        }
+    }
+}
+
+/// Whether the function `name` counts as a listed no-return name once the first
+/// rule of `rules` that matches it renames it.
+fn renamed_hit(
+    name: &str,
+    rules: &[NoRetRule],
+    exact: &[String],
+    wildcard: &[String],
+    ladder: bool,
+) -> bool {
+    rename_for_noreturn(name, rules)
+        .is_some_and(|rpl| name_matches_ladder(rpl, exact, wildcard, ladder))
+}
+
 /// (unlace `armfuncmode`) The addresses (Thumb bit cleared) of the image's
 /// functions and PLT stubs the base ELF list names as never returning.
 pub(crate) fn known_noreturn_addrs(file: &object::File) -> std::collections::BTreeSet<u64> {
-    scan_noreturn(file, &[], Compiler::Unknown, false)
+    scan_noreturn(file, &[], Compiler::Unknown, false, &[])
         .noreturn
         .iter()
         .map(|fact| fact.addr & !1)
@@ -398,6 +433,7 @@ impl AnalysisPass for NoReturnKnownPass {
             ctx.bytes,
             self.compiler,
             unlace_decomp::loadoptions::nameladder_enabled(),
+            &noret_rule_file(),
         );
         if let Some(image) = ctx.image {
             let (imports, _) = crate::protos::loaded_import_addrs(ctx.file, ctx.bytes, image);

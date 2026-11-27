@@ -228,6 +228,8 @@ def _store(con, run_id: int, b: dict, gt: dict, cards: dict, doc: dict | None,
            keep_code: bool, binary_metrics: dict | None = None) -> None:
     bid = db.upsert_binary(con, b)
     paired = pair(gt, doc)[0] if (doc and keep_code) else {}
+    if doc:
+        binary_metrics = {**metrics.binary_source_free(doc), **(binary_metrics or {})}
     rows = []
     for key, fn in gt["functions"].items():
         fid = db.upsert_function(con, bid, fn.get("key") or key, fn["name"], fn["entry"],

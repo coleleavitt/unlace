@@ -264,6 +264,21 @@ def source_free(rec: dict) -> dict:
     return out
 
 
+SOURCE_FREE_COUNTS = ("null_deref_sites", "impossible_lvalue_sites", "lost_frame_offset_sites",
+                      "leaked_temp_decls", "stale_return_result")
+
+
+def binary_source_free(doc: dict) -> dict:
+    """The counters of SOURCE_FREE_COUNTS summed over every function of a
+    decompile-all document: the only signal a binary without DWARF gets."""
+    totals = {k: 0.0 for k in SOURCE_FREE_COUNTS}
+    for rec in doc.get("functions") or []:
+        card = source_free(rec)
+        for k in totals:
+            totals[k] += card.get(k, 0.0)
+    return totals
+
+
 def score(gt_fn: dict, rec: dict | None, ctx: dict) -> dict:
     """The scorecard of one ground-truth function. `ctx`:
     `shift` (pred address - gt address for this function), `names` (pred entry

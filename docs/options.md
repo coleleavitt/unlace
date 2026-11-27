@@ -1260,6 +1260,11 @@ Three tiers:
 | warning text wanted inline at the end of the statement it describes | [`warnstyle`](#warnstyle----inline--banner-default-inline) |
 | terse warning slugs unwanted; full upstream warning text needed | [`warnstyle`](#warnstyle----inline--banner-default-inline) |
 | warning style needs to match upstream ghidra for diffing | [`warnstyle`](#warnstyle----inline--banner-default-inline) |
+| warning comments clutter a project export with branch-flip or tail-call notes | [`warnlevel`](#warnlevel----caveats--all-default-all) |
+| a // no-return comment after a call to exit or abort | [`warnlevel`](#warnlevel----caveats--all-default-all) |
+| every PLT stub carries a // jump-as-call comment | [`warnlevel`](#warnlevel----caveats--all-default-all) |
+| a branch-flip or tail-call comment wanted to check a rewrite | [`warnlevel`](#warnlevel----caveats--all-default-all) |
+| the --json warnings list misses rewrite warnings | [`warnlevel`](#warnlevel----caveats--all-default-all) |
 | an AArch64 function that tags a pointer (irg, addg) decompiles to return a0 | [`acleintrinsics`](#acleintrinsics----on--off-default-on) |
 | stg, st2g or stzg leave no trace in the output of MTE-hardened AArch64 code | [`acleintrinsics`](#acleintrinsics----on--off-default-on) |
 | DataMemoryBarrier(2,3) or DataSynchronizationBarrier(3,3,0) where the source called __dmb or __dsb | [`acleintrinsics`](#acleintrinsics----on--off-default-on) |
@@ -4355,6 +4360,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Inline by default (DIV-38): usage(1); // no-return, if (v8) { // branch-flip, prototype-line // early-return x3. Flip to banner to reproduce upstream Ghidra's full warning text or to grep for the long-form messages. Unknown warning texts keep their full text behind a warn: marker; user/dwarf_lines comments always keep banner lines.
 - **Where / provenance:** P9/warning-style · unlace · presentation-default · unlace-cnorm-fmt
 - **Example:** `option warnstyle banner`
+
+### `warnlevel` -- caveats | all, default `all`
+
+- **Symptoms:** warning comments clutter a project export with branch-flip or tail-call notes; a // no-return comment after a call to exit or abort; every PLT stub carries a // jump-as-call comment; a branch-flip or tail-call comment wanted to check a rewrite; the --json warnings list misses rewrite warnings.
+- **What it does:** Choose which analysis warnings print. all (the default) prints every warning. caveats prints only the warnings that tell the reader something the C does not show, and leaves out three kinds. The first is narration of a readability rewrite after which the C means the same: branch-flip, tail-call, return-dupe, crossjump-dupe, and the P8 header counts early-return, switch-return, ite-dedupe, ternary and else-flattened. The second is a no-return on a call to a function that is no-return by name: exit, abort, __assert_fail and the rest of the ElfFunctionsThatDoNotReturn list noreturn_known reads. The third is a jump-as-call whose target is fixed: a named or direct callee, a constant, a global slot, or a load from a constant address, as in a PLT stub's jmp *slot. No jump table can hide behind such a jump. A no-return on any other callee, a jump-as-call through a computed target and every other warning still print. The choice applies to both warnstyle forms, and a warning left out is not listed in the --json warnings either. Printing only.
+- **When to flip:** all by default, so every rewrite the printer made is marked: where a branch was flipped (branchflip), where a jump prints as a call (tailcalljump, a PLT stub), and every no-return call. Set caveats for a project export an agent or a reader will scan: on stripped /usr/bin/ls it cuts the export's warning comments from 709 to 37, keeping the 35 no-return calls to unnamed functions, the one jump-as-call through a parameter and one flow warning, and the C with its comments stripped is unchanged. Under caveats a flipped if/else, a tail call and a PLT stub no longer say so.
+- **Where / provenance:** P9/warning-style · unlace · presentation-default · unlace-warnlevel
+- **Example:** `option warnlevel all`
 
 ### `acleintrinsics` -- on | off, default `on`
 

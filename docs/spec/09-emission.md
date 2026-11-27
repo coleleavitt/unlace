@@ -542,6 +542,48 @@ warnstyle banner` restores upstream Ghidra's full
 `/* WARNING: ... */` lines, exercised by
 `tests/stages/cnorm-warnstyle.toml`.
 
+**Warning level (P9/`warning-style`, `option warnlevel`).** Which warnings
+print at all is a separate choice from how they look, and it applies to both
+styles. A warning is either a caveat, telling the reader something the C does
+not show, or narration of a rewrite made for readability, after which the C
+means the same as before. The default `all` writes every warning, as upstream
+does. Under `caveats`,
+`printc.rs (PrintC::emit_comment_group, emit_comment_func_header)` asks
+`warnlevel.rs (elided)` about each WARNING comment before collecting or printing
+it, and leaves three kinds out.
+
+- Narration, matched on the warning's kind (`functionwarnings.rs
+  (Warning::kind)`): `branch-flip`, `tail-call`, `return-dupe`,
+  `crossjump-dupe`, and the P8 header counts `early-return`, `switch-return`,
+  `ite-dedupe`, `ternary` and `else-flattened`.
+- A `no-return` on a call whose callee is no-return by name. The callee is
+  the call spec recorded at the warning's address, and its name is matched
+  against the `ElfFunctionsThatDoNotReturn` list `noreturn_known` reads
+  (`noreturn_externmatch.rs (is_known_noreturn_name)`), so `exit`, `abort` and
+  `__assert_fail` lose the comment while a discovered `sub_1cc60` keeps it.
+- A `jump-as-call` whose call goes to one fixed target: a named callee, a
+  direct `CALL`, a constant, an unwritten global (persist) slot, or a `LOAD`
+  from a constant address. This is the `jmp *slot` of a PLT stub, which no jump
+  table can hide behind; a jump through a computed target, which may be a
+  switch whose cases went missing, keeps the comment.
+
+A header warning is matched only as narration: a function-wide `no-return`
+says the function itself never returns, which is not the call at its entry.
+An elided comment is marked emitted and recorded nowhere, so the `--json`
+`warnings` list and `warning_kinds` (which record what the render wrote) leave
+it out. It also stops counting as a comment that forces braces under
+`braceelide`. On a stripped `/usr/bin/ls` project export `caveats` takes the
+warning comments from 709 to 37: 307 `branch-flip`, 127 `tail-call`, 69
+`return-dupe`, 12 `early-return`, 9 `ternary` and 2 `crossjump-dupe` go,
+as do 41 of 76 `no-return` (`abort`, `__assert_fail`, `exit`, `_exit`) and
+105 of 106 `jump-as-call` (every PLT stub). The default stays `all` because
+most of that is information, not repetition: only the 41 `no-return`
+comments repeat what the call already says, while a `branch-flip` or
+`tail-call` says where the C's shape differs from the machine code and a
+`jump-as-call` says where a call is a jump. `caveats` suits an export an
+agent or a reader scans for meaning, where those notes are noise; the
+agent skill's export command sets it.
+
 ## 9.1 Casts
 
 An equal-width `CAST` involving a complete struct or union transfers its object
@@ -4436,9 +4478,12 @@ lines is exactly the set removed from under the labels. Finally the
 README gains a second **layout** and an in-progress render
 (`crates/unlace-console/src/project.rs (render_readme,
 ReadmeLayout, render_readme_streaming)`), the first describing the
-streamed `.c`/`.asm` and the two extra files, the second adding a banner
-and a status table while the export runs; the `Standard` layout is
-byte-identical to what the single renderer emitted before it was split.
+streamed `.c`/`.asm`, the feed form of `index.jsonl` and `.streaming`, the second adding a banner
+and a status table while the export runs. The `Standard` layout lists the
+address-ordered `index.jsonl` that every non-stream CLI export writes
+(`crates/unlace-cli/src/project_stream.rs (address_index)`). `Document`, the
+layout the wasm `project` command renders, is the same without that entry,
+because that one-document export carries no index.
 A third layout, `Progress`, is only ever rendered while a run is going: a
 `--progress` export writes the `Standard` artifacts at the end, so
 its running README inventories those, adds the feed form of `index.jsonl` and

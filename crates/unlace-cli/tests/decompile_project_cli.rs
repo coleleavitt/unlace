@@ -1280,8 +1280,8 @@ fn progress_project(fixture_name: &str, tag: &str, extra: &[&str]) -> PathBuf {
     dir
 }
 
-/// The final `index.jsonl` of a `--progress` export, checked against its
-/// `.c`: contiguous `seq`, ascending addresses, and offsets that slice each block.
+/// The final `index.jsonl` of a non-stream export, checked against its `.c`:
+/// contiguous `seq`, ascending addresses, and offsets that slice each block.
 fn assert_final_index(dir: &std::path::Path, file_name: &str) -> String {
     let c = std::fs::read_to_string(dir.join(format!("{file_name}.c"))).unwrap();
     let index = std::fs::read_to_string(dir.join("index.jsonl")).unwrap();
@@ -1313,11 +1313,10 @@ fn assert_final_index(dir: &std::path::Path, file_name: &str) -> String {
     index
 }
 
-/// `--progress` is the non-stream export plus `index.jsonl`: the four artifacts
-/// are byte-identical to it, and so is the whole folder from one job count to
-/// the next.
+/// `--progress` leaves the non-stream export's folder: every artifact and the
+/// index are byte-identical to it, from one job count to the next.
 #[test]
-fn a_progress_export_is_the_non_stream_export_plus_its_index() {
+fn a_progress_export_is_the_non_stream_export() {
     let name = "dwarfstructs_x86_64";
     let plain = out_dir("progress_plain");
     let (_, stderr, ok) = run_unlace(&[
@@ -1335,14 +1334,13 @@ fn a_progress_export_is_the_non_stream_export_plus_its_index() {
         &specs(),
     ]);
     assert!(ok, "the reference project export failed: {stderr}");
-    assert!(!plain.join("index.jsonl").exists());
+    assert_final_index(&plain, name);
 
     let runs = [
         progress_project(name, "progress_j3", &["--jobs", "3", "--jobs-chunk", "1"]),
         progress_project(name, "progress_j2", &["--jobs", "2"]),
         progress_project(name, "progress_j1", &["--option", "protoorder", "off"]),
     ];
-    let mut indexes = Vec::new();
     for dir in &runs {
         assert!(
             !dir.join(".streaming").exists(),
@@ -1353,6 +1351,7 @@ fn a_progress_export_is_the_non_stream_export_plus_its_index() {
             format!("{name}.h"),
             format!("{name}.asm"),
             "README.md".into(),
+            "index.jsonl".into(),
         ] {
             assert_eq!(
                 std::fs::read(dir.join(&artifact)).unwrap(),
@@ -1361,12 +1360,7 @@ fn a_progress_export_is_the_non_stream_export_plus_its_index() {
                 dir.display()
             );
         }
-        indexes.push(assert_final_index(dir, name));
     }
-    assert!(
-        indexes.windows(2).all(|w| w[0] == w[1]),
-        "index.jsonl depends on the job count"
-    );
     for dir in runs.iter().chain([&plain]) {
         let _ = std::fs::remove_dir_all(dir);
     }

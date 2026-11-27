@@ -1,26 +1,25 @@
 //! `decompile-project --progress`: the non-stream export, reported on.
 //!
 //! [`decompile_project`] runs unchanged — the same serial or pooled decompile,
-//! the same merge and structure naming, the same four artifacts written at the
-//! end — so the folder it leaves is the non-stream export's plus `index.jsonl`,
-//! and exactly as reproducible under `--jobs N` as that export is.  What this
-//! module adds is the report while it runs: `.streaming` and the running README
-//! on one clock, and `index.jsonl` as a per-function feed in completion order,
-//! replaced at the end by the address-ordered index of the final `.c`.
+//! the same merge and structure naming, the same artifacts written at the end —
+//! so the folder it leaves is the non-stream export's, and exactly as
+//! reproducible under `--jobs N` as that export is.  What this module adds is
+//! the report while it runs: `.streaming` and the running README on one clock,
+//! and `index.jsonl` as a per-function feed in completion order, which the
+//! export replaces at the end with the address-ordered index of the final `.c`.
 
 use std::fs::File;
 use std::io::Write;
-use std::path::Path;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use unlace_console::engine::ConsoleProgram;
-use unlace_console::project::{AsmPhase, FuncResult, ReadmeFacts, StreamPhase, render_c};
+use unlace_console::project::{AsmPhase, FuncResult, ReadmeFacts, StreamPhase};
 
 use super::{
     CLOCK_GRANULARITY, INDEX_FILE, Layout, README_EVERY, STATUS_FILE, StreamRun, TICK, create,
-    index_line, write_atomic,
+    index_line,
 };
 use crate::decompile_all::{Args, DriverDefaults, load_program};
 use crate::decompile_project::{ExportWatch, ProjectCompletion, decompile_project};
@@ -216,26 +215,10 @@ impl ExportWatch for ProgressWatch<'_> {
         self.run.publish_progress(false);
     }
 
-    fn written(
-        &self,
-        out_dir: &Path,
-        file_name: &str,
-        results: &[FuncResult],
-    ) -> Result<Vec<(String, usize)>, String> {
+    fn written(&self, c_bytes: u64) {
         self.feed.lock().unwrap_or_else(|e| e.into_inner()).file = None;
-        let mut offset = format!("#include \"{file_name}.h\"\n\n").len() as u64;
-        let mut index = String::new();
-        for (seq, r) in results.iter().enumerate() {
-            let len = render_c(std::slice::from_ref(r)).len();
-            index.push_str(&index_line(seq, r, Some((offset, len))));
-            offset += len as u64;
-        }
-        write_atomic(&out_dir.join(INDEX_FILE), index.as_bytes())?;
-        {
-            let mut shared = self.run.lock();
-            shared.status.c_bytes = offset;
-            shared.status.asm = AsmPhase::Complete;
-        }
-        Ok(vec![(INDEX_FILE.to_string(), index.len())])
+        let mut shared = self.run.lock();
+        shared.status.c_bytes = c_bytes;
+        shared.status.asm = AsmPhase::Complete;
     }
 }

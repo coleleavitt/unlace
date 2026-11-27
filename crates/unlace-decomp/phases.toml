@@ -2758,6 +2758,25 @@ tier = "transform"
 symptoms = "a min or max prints as a1 * (unsigned int)(a1 < a0) + a0 * (unsigned int)(a1 >= a0)|a select prints as a sum of two products with (unsigned int) casts of complementary compares|tricore sel or sat prints as multiplications by booleans"
 
 [[settable]]
+option = "strcmpfold"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "condition-form"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-strcmpfold"
+summary = "C output only: print a compare against a short constant string that the compiler inlined as reads of a char array compared with immediates as the call it came from: `(*(unsigned short *)v2 == 0x4853) && (v2[2] == ' ')` prints `strncmp(v2, \"SH \", 3) == 0`. gcc and clang turn an equality-only `strcmp`/`strncmp`/`memcmp` against a constant into a compare of `min(n, strlen + 1)` bytes when the buffer is known to hold them; gcc emits the widest pieces first, one branch each to a fail label, the last overlapping on x86 (`compare_by_pieces`), and LLVM xors each load with its constant and ors them into one test (`ExpandMemCmp`). The fold accepts one expression (a compare, a `&&` of `==` or `||` of `!=`, an `INT_OR` of `INT_XOR`/`INT_SUB` terms against zero) or one structured `&&`/`||` condition whose leaves print only their test, when every read is of one array of one-byte elements (char, a one-byte integer or undefined1) or through one pointer to bytes or void, the reads cover one run with no gap, overlapping reads agree, one read is wider than a byte, and every byte is printable but a final NUL. A run ending in its only NUL prints `strcmp(base, \"text\") == 0`; any other prints `strncmp(base, \"text\", n)`. Reads of separate variables, single bytes, ordered results, struct fields and non-byte objects keep their compares (`crates/unlace-emit/src/p9_emit/strcmpfold.rs`)."
+use_when = "Off by default. Turn on when reading command and protocol parsers built with gcc or clang at -O2, where `strncmp(buf, \"PING\", 4) == 0` reads as `*(unsigned int *)v2 == 0x474e4950`. The fold is exact (the compare holds exactly when the call returns 0), but the source may have been `memcmp` or a hand-written byte test; leave it off to see the compares the code makes. Measured on: 0/675 datatest assertions move, and the stage corpus moves only indexstride #3/#4, which pin the unfolded compares; the C of every function of /usr/bin/nc and /usr/bin/ping is unchanged. Speed over those functions (decomp_dbg, 7 off/on pairs, user instructions) was inside the noise of identical runs (medians +6.3% and -2.2% against identical-run spreads of 15.5% and 8.1%), which does not show the 5% budget holds, so it stays off."
+example = "option strcmpfold on"
+source_decompiler = "unlace"
+inspiration = "External feedback on a stripped static x86-64 IRC client (notes/netstruct-gaps.md, gcc's inline strncmp); gcc builtins.cc expand_builtin_memcmp / expr.cc compare_by_pieces / tree-ssa-strlen.cc handle_builtin_string_cmp and LLVM SimplifyLibCalls / ExpandMemCmp define the shapes"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = "a buffer compare prints as (*(unsigned short *)v2 == 0x4853) && (v2[2] == ' ') where the source called strncmp|*(unsigned int *)buf == 0x474e4950 where the source compared with \"PING\"|a char array is tested against hexadecimal constants whose bytes are printable text"
+
+[[settable]]
 option = "msvcstrappend"
 values = "on|off"
 default = "off"

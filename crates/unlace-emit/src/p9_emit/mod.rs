@@ -149,6 +149,7 @@ pub mod evmstorage;
 pub mod fidproto; // (unlace) the prototype a .fid record carries, and its check against the body
 pub mod reglocals;
 pub mod selectmul; // (unlace `selectmul`) a*zext(c) + b*zext(!c) prints as c ? a : b
+pub mod strcmpfold; // (unlace `strcmpfold`) an inlined compare against a constant string prints as strncmp
 pub mod wideconst; // (unlace `wideconst`) a constant wider than 64 bits prints as one literal
 
 pub mod widenedadd;

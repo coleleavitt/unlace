@@ -2504,6 +2504,17 @@ gaps without walking every record; it is always present, `{}` for a run with
 no warnings. Like `unstructured_gotos`, a
 warning does not change the verdict: `error` stays reserved for a function that
 failed to decompile, and the exit status is the same with or without warnings.
+Which warnings are written at all is `--option warnlevel all|caveats`. The default
+`all` writes every one. Under `caveats` three kinds are neither printed nor listed: narration of a
+readability rewrite after which the C means the same (`branch-flip`, `tail-call`,
+`return-dupe`, `crossjump-dupe`, `early-return`, `switch-return`, `ite-dedupe`,
+`ternary`, `else-flattened`); a `no-return` on a call to a function that is
+no-return by name (`exit`, `abort`, `__assert_fail`, ...); and a `jump-as-call`
+whose target is fixed, such as a PLT stub's `jmp *slot`. A `no-return` on any
+other callee and a `jump-as-call` through a computed target still print.
+`caveats` is the setting for a project export an agent or a reader will scan: on a
+stripped `/usr/bin/ls` it takes the export's warning comments from 709 to 37, and the
+C with its comments stripped is unchanged.
 A variable's `kind` is `arg` for a parameter, `stack` for a local with a frame
 offset, and `register` for a local the C declares outside the stack frame (a register,
 a temporary, or a value with no storage of its own). A `register` row carries the
@@ -4945,6 +4956,7 @@ unlace decompile-project ./a.out -o proj --functions main,parse
 unlace decompile-project ./a.out --jobs 12               # 12 processes, protoorder-off artifacts
 unlace decompile-project ./a.out --stream --jobs 12      # readable while it fills
 unlace decompile-project ./a.out --progress --jobs 12    # progress, artifacts at the end
+unlace decompile-project ./a.out --option warnlevel caveats   # only the warnings a reader needs
 ```
 
 The project-export face of the same in-process core
@@ -4972,8 +4984,8 @@ Project exports use the same aggregate verdict as `decompile-all`. Individual fa
 remain comments/prototype tombstones and count in the final README. A mixed export with
 at least one body exits `0`; a non-empty selection that produces zero bodies exits `1`
 with the completed-file summary on stdout and a run-level diagnostic on stderr. The
-verdict is taken only after the `.c`, `.h`, `.asm`, README and, under `--stream`,
-`index.jsonl` have been finalized. `--assert` directives follow the same rules as on
+verdict is taken only after the `.c`, `.h`, `.asm`, README and `index.jsonl` have been
+finalized. `--assert` directives follow the same rules as on
 `decompile-all`: every rejection is printed on stderr, `--assert-strict` makes one exit
 `1`, and a directive the pipeline refused exits `1` on its own, again only after the
 artifacts are written.
@@ -5020,6 +5032,12 @@ binary and attempt recompilation:
   object. The sections table lists the loader's named, mapped sections at their
   load addresses — for a relocatable object, the synthetic layout the rest of
   the export uses, not every section at file offset zero.
+- `index.jsonl` — one compact JSON object per function in the `.c`'s address order,
+  with the schema of the streamed index below: `seq` is the line number, and
+  `c_offset`/`c_len` slice the `.c` to exactly that function's block, so a reader seeks
+  a function by name or address instead of scanning the `.c`. It is rewritten whole by
+  every export, so it never describes an earlier run's `.c`. The web UI's zip and
+  `unlace_wasm project` return the other four artifacts and no index.
 
 The artifact format is purely additive and has no exporter-specific transform
 (spec §9.7); the set of emitted definitions follows the selected P1 discovery
@@ -5124,7 +5142,8 @@ that, and they are the contract:
   type definitions until the export completes and does not compile against the `.c`
   until then. At `--jobs N` its final type block is the worker-shard merge described
   above.
-- `index.jsonl` — new, and kept after the run.
+- `index.jsonl` — appended as each block lands, in decompile order, instead of written
+  once in address order, and kept after the run.
 - `.streaming` — new, and removed when the run succeeds.
 - `README.md` — rewritten whole at most every five seconds. While the export runs it
   opens with a streaming banner and a `## Streaming status` table; its file inventory
@@ -5306,14 +5325,14 @@ folder content-addressed.
 `--progress` runs the non-stream export unchanged — the same serial or pooled
 decompile, the static longest-first plan, the structure-naming replay, the positional
 merge — and reports on it while it runs. When it succeeds, `<name>.c`, `<name>.h`,
-`<name>.asm` and `README.md` are byte-identical to `unlace decompile-project` with the
-same arguments minus `--progress`, and `index.jsonl` is the address-ordered index of
-that `.c`, the same file whatever the job count. So the folder is as reproducible as
+`<name>.asm`, `README.md` and `index.jsonl` are byte-identical to `unlace
+decompile-project` with the same arguments minus `--progress`, whatever the job count.
+So the folder is as reproducible as
 the non-stream export: under `--jobs N` it does not depend on `N` and is the `--jobs 1
 --option protoorder off` answer (the `--jobs` bullets above give the exceptions, which
 apply here unchanged). Measured on `/usr/bin/ssh` (1,090 functions): `--progress` runs
-at `--jobs 4` and `--jobs 2` and a plain `--jobs 4` run leave identical folders apart
-from `index.jsonl`, and the CPU time of the two `--jobs 4` arms is within run-to-run
+at `--jobs 4` and `--jobs 2` and a plain `--jobs 4` run leave identical `.c`, `.h`,
+`.asm` and `README.md`, and the CPU time of the two `--jobs 4` arms is within run-to-run
 noise (158–170 s user each).
 
 **What appears when.** The load is reported as under `--stream`: `README.md` and
@@ -5336,8 +5355,8 @@ run's, and `index.jsonl` is truncated. `.streaming` moves to `decompiling` with
 - Once every function is in, `phase` is `finalizing` while the pool finishes naming
   structures and the artifacts are built (`asm` then reads `sweeping`). The README stops
   being rewritten at that point.
-- At the end the four artifacts are written, `index.jsonl` is **replaced** (one atomic
-  rename) by the final index, and `.streaming` is removed.
+- At the end the artifacts are written, the export's address-ordered `index.jsonl`
+  **replaces** the feed (one atomic rename), and `.streaming` is removed.
 
 So `index.jsonl` changes meaning once: while `.streaming` exists it is the feed; once
 `.streaming` is gone it is the final index, sorted by address, `seq` its line number,

@@ -1,0 +1,127 @@
+# Which analysis warnings print (`option warnlevel all|caveats`).
+#
+# Issue: a project export wrote a `// branch-flip`, `// tail-call`,
+# `// jump-as-call` or `// no-return` comment on hundreds of lines. Most of
+# them mark where the C differs from the machine code (a flipped if/else, a
+# jump printed as a call), but a reader scanning an export for meaning wants
+# only the warnings that change what the C says, and `exit(1)` already says it
+# does not return.
+#
+# Stage / sub-stage: P9 warning-style (`p9_emit/warnlevel.rs (elided)`, asked
+# by `PrintC::emit_comment_group` and `emit_comment_func_header`).
+#
+# P0 assertion: `option warnlevel all|caveats`.
+#
+# The XML wrapper only supplies the harness architecture. The first load,
+# `elf_got_noreturn_x86_64`, runs under `caveats`: `check`'s call to `abort`
+# loses its comment, and `main`'s call to `die`, which is no-return only
+# because the Listing propagates it, keeps it. The second load,
+# `callerptr_x86_64`, decompiles a PLT stub (`strdup`), `main` (a flipped
+# guard), `push` (an `exit(1)`) and `add_none` (a tail call) at the default
+# `all`, which writes every warning, and again under `caveats`.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/elf_got_noreturn_x86_64',
+    'option warnlevel caveats',
+    'option listing on',
+    'read symbols',
+    'load function check',
+    'decompile',
+    'print C',
+    'load function main',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/callerptr_x86_64',
+    'read symbols',
+    'load function strdup',
+    'decompile',
+    'print C',
+    'load function main',
+    'decompile',
+    'print C',
+    'load function push',
+    'decompile',
+    'print C',
+    'load function add_none',
+    'decompile',
+    'print C',
+    'option warnlevel caveats',
+    'load function strdup',
+    'decompile',
+    'print C',
+    'load function main',
+    'decompile',
+    'print C',
+    'load function push',
+    'decompile',
+    'print C',
+    'load function add_none',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'WARNLEVEL #1: caveats drops the no-return comment of a call to abort'
+count = 1
+regex = '^\s*abort\(\);$'
+
+[[match]]
+name = 'WARNLEVEL #2: caveats keeps the no-return of a callee only the analysis knows'
+count = 1
+regex = '^\s*die\("usage"\); // no-return$'
+
+[[match]]
+name = 'WARNLEVEL #3: caveats drops the jump-as-call of a jump through one GOT slot'
+count = 1
+regex = '\(\*dat_3fd0\)\(\);$'
+
+[[match]]
+name = 'WARNLEVEL #4: the default all keeps it'
+count = 1
+literal = '(*dat_3fd0)(); // jump-as-call'
+
+[[match]]
+name = 'WARNLEVEL #5: the flipped guard prints the same at both levels'
+count = 2
+regex = '^\s*if \(head\) \{'
+
+[[match]]
+name = 'WARNLEVEL #6: only the default all says the guard was flipped'
+count = 1
+literal = 'if (head) { // branch-flip'
+
+[[match]]
+name = 'WARNLEVEL #7: the default all keeps the no-return comment of exit, caveats drops it'
+count = 1
+literal = 'exit(1); // no-return'
+
+[[match]]
+name = 'WARNLEVEL #8: the exit call prints at both levels'
+count = 2
+regex = '^\s*exit\(1\);( // no-return)?$'
+
+[[match]]
+name = 'WARNLEVEL #9: only the default all says the call was a jump'
+count = 1
+literal = 'push(0); // tail-call'
+
+[[match]]
+name = 'WARNLEVEL #10: the tail call prints at both levels'
+count = 2
+regex = '^\s*push\(0\);( // tail-call)?$'

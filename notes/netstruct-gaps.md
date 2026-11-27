@@ -71,10 +71,12 @@ htons(40)), `mov WORD PTR [rsp+0x18],0x640` (ttl 64, protocol 6),
 feedback's `0xa0051045`, `0x640` and `0x787d1850` are the same three words
 (tot_len 1440; ttl/protocol; doff 5, PSH|ACK, window 0x7d78).
 
-Three things are missing, in the order they would have to land:
+Three things were missing, in the order they would have to land:
 
-1. The 16-byte vector store makes the first 16 bytes one variable, and every
-   narrower store after it re-assigns the whole variable through a CONCAT:
+1. Fixed by `fillrefine` (spec 03, "Frame ranges under a constant fill";
+   stage test `tests/stages/fillrefine.toml`). The 16-byte vector store made
+   the first 16 bytes one variable, and every narrower store after it
+   re-assigned the whole variable through a CONCAT:
 
    ```c
    char v5 [16]; // stack - 0x48
@@ -86,8 +88,22 @@ Three things are missing, in the order they would have to land:
 
    This is the general -O2 shape of "zero a struct, then fill fields", not
    specific to packets, and it would print the same with an `iphdr` type.
-   `memsetrecover` collapses fill runs only into a typed char array
-   (`RuleMemsetCopy` over `StringSequence`), so it does not fire here.
+   `Heritage::placeMultiequals` refines a range only when no write covers
+   it, and gcc's widest-mode clear (`clear_by_pieces`) always does; neither
+   gcc's nor LLVM's dead-store elimination can trim a clear whose live bytes
+   sit between field stores. A range cleared by fills and then filled is now
+   refined at its accesses, so the -O2 packet prints one store per field (the
+   -O0 shape) with the zero kept only where no field store overwrites it:
+
+   ```c
+   v7 = 0;
+   v5 = 0;
+   v4 = 0x3412;
+   v6 = 0x640;
+   v3 = 0x28001045;
+   v12 = 0x1000000;
+   v14 = 0xd0160250;
+   ```
 2. The types. The built-in `linux-x86_64.ktl` defines `iphdr`, `tcphdr`,
    `udphdr` and `icmphdr`, but leaves the bitfield bytes (`ihl:4 version:4`,
    tcphdr's `doff` and flags) as holes, and is served only to dynamic images.

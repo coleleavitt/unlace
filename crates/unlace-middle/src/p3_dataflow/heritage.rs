@@ -5406,23 +5406,36 @@ impl Heritage {
                 }
             };
         let sub_typeop = typeop_skeleton(OpCode::CPUI_SUBPIECE);
+        let copy_typeop = typeop_skeleton(OpCode::CPUI_COPY);
+        // (unlace `fillrefine`) A piece of a constant write is that constant's bytes.
+        let fill = insertop.and_then(|op| super::fillrefine::copied_constant(fd, op));
         for &vn in vnlist {
             let (vnoff, vnsize) = {
                 let v = fd.vbank().get(vn).expect("split_pieces: piece vn");
                 (v.get_addr().get_offset(), v.get_size())
             };
-            let newop = fd.new_op(2, opaddress.clone());
-            fd.op_set_opcode(newop, sub_typeop.clone());
             let diff: uintb = spc.wrap_offset(if isbigendian {
                 baseoff.wrapping_sub(vnoff.wrapping_add(vnsize as u64))
             } else {
                 vnoff.wrapping_sub(baseoff)
             });
-            fd.op_set_input(newop, startvn, 0)
-                .expect("split_pieces: set in0");
-            let cvn = fd.new_constant(4, diff);
-            fd.op_set_input(newop, cvn, 1)
-                .expect("split_pieces: set in1");
+            let newop = if let Some(value) = fill {
+                let newop = fd.new_op(1, opaddress.clone());
+                fd.op_set_opcode(newop, copy_typeop.clone());
+                let cvn = fd.new_constant(vnsize, super::fillrefine::piece(value, diff, vnsize));
+                fd.op_set_input(newop, cvn, 0)
+                    .expect("split_pieces: set fill");
+                newop
+            } else {
+                let newop = fd.new_op(2, opaddress.clone());
+                fd.op_set_opcode(newop, sub_typeop.clone());
+                fd.op_set_input(newop, startvn, 0)
+                    .expect("split_pieces: set in0");
+                let cvn = fd.new_constant(4, diff);
+                fd.op_set_input(newop, cvn, 1)
+                    .expect("split_pieces: set in1");
+                newop
+            };
             fd.op_set_output(newop, vn)
                 .expect("split_pieces: set output");
             // C++ `opInsert(newop,bl,insertiter)` where insertiter points just
@@ -5902,8 +5915,18 @@ impl Heritage {
                     &writevars,
                     &inputvars,
                 );
+            let fill_split = !byte_copy
+                && !pair_split
+                && super::fillrefine::split_fill(
+                    fd,
+                    &memrange.addr,
+                    memrange.size,
+                    maxw,
+                    &writevars,
+                    &inputvars,
+                );
             let normal = memrange.size > 4 && maxw < memrange.size;
-            if byte_copy || pair_split || normal {
+            if byte_copy || pair_split || normal || fill_split {
                 if let Some(refiter) = self.refinement(
                     fd,
                     idx,

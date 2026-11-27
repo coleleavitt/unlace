@@ -55,7 +55,7 @@ commands = [
 [[match]]
 name = 'SOCKFAMILY #1: by default connect_to declares the AF_INET record'
 count = 1
-literal = 'sockaddr_in v2;'
+literal = 'sockaddr_in v2; // ax | eax | stack - 0x38'
 
 [[match]]
 name = 'SOCKFAMILY #2: by default the port is sin_port'
@@ -75,17 +75,17 @@ literal = 'if (connect(fd,(sockaddr *)&v2,0x10) <= -1) {'
 [[match]]
 name = 'SOCKFAMILY #5: by default send_syn stores the destination port into sin_port'
 count = 1
-literal = 'v4.sin_port = v1;'
+literal = 'v2.sin_port = v1;'
 
 [[match]]
 name = 'SOCKFAMILY #6: by default sendto takes the record cast to the generic header'
 count = 1
-literal = 'sendto(a0,&v5,0x28,0,(sockaddr *)&v4,0x10);'
+literal = 'sendto(a0,&v3,0x28,0,(sockaddr *)&v2,0x10);'
 
 [[match]]
 name = 'SOCKFAMILY #7: off, the port is stored into sa_data a byte at a time in both functions'
 count = 2
-literal = 'v4.sa_data[1] = SUB21(v1,1);'
+literal = '.sa_data[1] = SUB21(v1,1);'
 
 [[match]]
 name = 'SOCKFAMILY #8: off, the IPv4 address is split into four shifted bytes'

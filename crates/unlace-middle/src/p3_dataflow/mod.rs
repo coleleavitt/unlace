@@ -4,6 +4,7 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod calloverlap;
+pub mod fillrefine;
 pub mod heritage;
 pub mod loadguardreads;
 pub mod programslice;

@@ -272,7 +272,7 @@ def run_case(args, cfg_name, opt, case):
             row(fn, "decomp", rest.strip())
             continue
         src = work / (fn + ".c")
-        src.write_text('#include "orig.h"\n#include "shim.h"\n\n' + code + "\n")
+        src.write_text('#include "vector.h"\n#include "orig.h"\n#include "shim.h"\n\n' + code + "\n")
         fobj, exe = work / (fn + ".o"), work / (fn + ".exe")
         rc, out, err = sh(cc + ["-c", "-std=c11", "-" + args.emit_opt, "-fwrapv", "-fno-strict-aliasing", "-w",
                                 "-I", str(proj), "-I", str(HERE)] + cfg["flags"] + [str(src), "-o", str(fobj)])

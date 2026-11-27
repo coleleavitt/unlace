@@ -11,6 +11,7 @@ program is run with the original and with the decompiled function on the same fi
 |---|---|
 | `cases/*.c` | One small program per construct: loops, calls and arguments, globals and aliasing, structs, arrays, switches, signed/unsigned and width conversions, floats, tail calls, noreturn, varargs. Each `main` calls the functions under test on fixed inputs and prints every result and side effect. |
 | `cases/case.h` | `T` marks a function under test (`weak, noinline`), `P` prints one value. |
+| `vector.h` | The Intel vector types the emitted C names (`__m128i`, `__m256d`, ...) and the `ZEXT1632`, `ZEXT1664`, `ZEXT3264` widths. Included before `orig.h`, because the header uses some of them. |
 | `shim.h` | The p-code helper spellings unlace prints (`CONCATxy`, `SUBxy`, `ZEXTxy`, `SEXTxy`, `CARRYn`, `SCARRYn`, `SBORROWn`, `NAN`, `POPCOUNT`, `builtin_memcpy`, ...). Everything else comes from unlace's own export header. |
 | `run.py` | The driver (Python 3, stdlib only). |
 | `baseline.toml` | Outcome of every row on the host named in `notes/semantic-results.md`. |
@@ -26,8 +27,8 @@ For each configuration (compiler + target), optimisation level and case:
 2. `unlace decompile-project <ref> --functions <T list>,main` writes `orig.c` and `orig.h`.
    `main` is decompiled but not checked: it is the caller of every function under test, and
    a decompile-all run settles some return types by what the callers read.
-3. For each function the driver builds a translation unit: `#include "orig.h"`, `#include
-   "shim.h"` and that function's body from `orig.c`, compiled `-std=c11 -O0 -fwrapv
+3. For each function the driver builds a translation unit: `#include "vector.h"`,
+   `#include "orig.h"`, `#include "shim.h"` and that function's body from `orig.c`, compiled `-std=c11 -O0 -fwrapv
    -fno-strict-aliasing` (`--emit-opt` changes the level). Because the original is weak, linking
    that object beside the case object makes every call reach the decompiled body.
 4. A name the emitted object needs by address (`dat_402070`, `sub_401200`) is resolved against

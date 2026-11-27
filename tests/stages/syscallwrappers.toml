@@ -110,7 +110,7 @@ literal = '  send(v1,v4,1,0);'
 [[match]]
 name = "SYSCALLWRAPPERS #7: glibc sendto takes the sockaddr_in"
 count = 1
-literal = '  sendto(a0,&v5,0x28,0,(sockaddr *)&v4,0x10);'
+literal = '  sendto(a0,&v3,0x28,0,(sockaddr *)&v2,0x10);'
 
 [[match]]
 name = "SYSCALLWRAPPERS #8: off, socket stays a placeholder"

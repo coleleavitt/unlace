@@ -63,10 +63,6 @@ pub(crate) struct ArmScan {
 ///   idiom, Thumb and A32), the literal plus that `pc` landing on it;
 /// - a direct `bl`/`blx`/`b.w` (Thumb-2) or `bl`/`b` (A32) to it.
 pub(crate) fn scan(file: &object::File, entries: &[u64]) -> ArmScan {
-    #[expect(
-        clippy::disallowed_types,
-        reason = "Membership only; the BTreeSet orders the results."
-    )]
     let mut wanted: std::collections::HashMap<u64, u64> = std::collections::HashMap::new();
     for &e in entries {
         wanted.insert(e, e);
@@ -91,7 +87,6 @@ pub(crate) fn scan(file: &object::File, entries: &[u64]) -> ArmScan {
             u32::from_be_bytes([b[0], b[1], b[2], b[3]])
         }
     };
-    #[expect(clippy::disallowed_types, reason = "Membership only.")]
     let (mut movw, mut movt) = (
         std::collections::HashSet::new(),
         std::collections::HashSet::new(),

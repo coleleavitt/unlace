@@ -26,10 +26,6 @@
 //! the AES, DES and CRC tables are derived here from their definitions, and the
 //! unit tests pin each against its published first entries.
 
-#[expect(
-    clippy::disallowed_types,
-    reason = "The signature index is lookup-only; scan order determines hits."
-)]
 use std::collections::HashMap;
 
 /// What a signature matched.
@@ -506,10 +502,6 @@ fn alphabets(region: &Region, out: &mut Vec<Hit>) {
 /// match wholly inside a longer one dropped.
 pub(crate) fn scan(regions: &[Region], little_endian: bool) -> Vec<Hit> {
     let pats = patterns(little_endian);
-    #[expect(
-        clippy::disallowed_types,
-        reason = "Lookup only; each bucket preserves pattern order and hits are sorted."
-    )]
     let mut by_key: HashMap<[u8; 4], Vec<usize>> = HashMap::new();
     for (i, p) in pats.iter().enumerate() {
         let key = [p.bytes[0], p.bytes[1], p.bytes[2], p.bytes[3]];

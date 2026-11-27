@@ -567,10 +567,6 @@ pub(super) fn image_loads(section: &object::Section) -> bool {
 
 /// (unlace `calleevote`) The function entries found stored so far.
 struct StoredScan {
-    #[expect(
-        clippy::disallowed_types,
-        reason = "Membership only; the separate BTreeSet orders the results."
-    )]
     wanted: std::collections::HashSet<u64>,
     out: BTreeSet<u64>,
 }

@@ -2304,10 +2304,6 @@ fn resolve_targets_with_policy(
     // Dedup the explicitly-selected targets by entry offset: `--addr 0xX` and
     // `--functions f` can resolve to the same function, and decompiling it twice
     // just wastes work + duplicates the JSON entry.
-    #[expect(
-        clippy::disallowed_types,
-        reason = "Membership only; retain keeps explicit targets in input order."
-    )]
     let mut seen = std::collections::HashSet::new();
     targets.retain(|e| seen.insert(e.addr.get_offset()));
 

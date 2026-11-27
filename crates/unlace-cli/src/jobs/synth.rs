@@ -4,10 +4,6 @@
 //! worker when replay cannot settle. The parent module owns process lifetime
 //! and chunk scheduling.
 
-#[expect(
-    clippy::disallowed_types,
-    reason = "These are lookup caches; observable output order is explicit."
-)]
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -76,15 +72,7 @@ pub(super) fn name_structs_serially(
     let held = base.held();
 
     // Every kept first and sweep decompile, with the answers it was given.
-    #[expect(
-        clippy::disallowed_types,
-        reason = "Iteration writes distinct target slots and sums an order-independent count."
-    )]
     let mut firsts: HashMap<usize, KeptFirst> = HashMap::new();
-    #[expect(
-        clippy::disallowed_types,
-        reason = "Lookup only; the target sequence orders the sweep."
-    )]
     let mut sweeps: HashMap<usize, (AnswerKey, FuncResult)> = HashMap::new();
     let mut forced = 0usize;
     let mut round = 0;
@@ -372,10 +360,6 @@ struct SynthPlan {
     sweep: Vec<Option<Vec<Option<String>>>>,
     stale: Vec<String>,
     table: Vec<u8>,
-    #[expect(
-        clippy::disallowed_types,
-        reason = "Lookup only; table serialization precedes conversion to this index."
-    )]
     minted: HashMap<String, SynthRequest>,
 }
 

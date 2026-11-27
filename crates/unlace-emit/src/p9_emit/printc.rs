@@ -5206,6 +5206,10 @@ impl PrintC {
         if self.context.is_set(modifiers::ONLY_BRANCH)
             || self.context.is_set(modifiers::COMMA_SEPARATE)
         {
+            if let Some((fold, equal, op)) = self.strcmp_block_fold(fd, arch, blk) {
+                self.emit_strcmp_condition(fd, arch, &fold, equal, op);
+                return;
+            }
             let b1 = fd.sblocks_ref().block(blk).get_block(1);
             let opc = fd
                 .sblocks_ref()
@@ -5333,6 +5337,10 @@ impl PrintC {
                 self.emit_return_expr(fd, arch, no, value);
             }
             ExprKind::And(left, right) | ExprKind::Or(left, right) => {
+                if let Some((fold, equal, op)) = self.strcmp_expr_fold(fd, arch, expr) {
+                    self.emit_strcmp_condition(fd, arch, &fold, equal, op);
+                    return;
+                }
                 let and = matches!(kind, ExprKind::And(..));
                 self.emit_return_operand(fd, arch, left, and);
                 let text = self.op_spelling(if and {
@@ -5423,6 +5431,10 @@ impl PrintC {
             Some(tree) => tree.expr(expr).kind.clone(),
             None => return,
         };
+        if let Some((fold, equal, op)) = self.strcmp_expr_fold(fd, arch, expr) {
+            self.emit_strcmp_condition(fd, arch, &fold, equal, op);
+            return;
+        }
         let is_or = matches!(kind, ExprKind::Or(..));
         match kind {
             ExprKind::Branch(block) => self.emit_block(fd, arch, block),
@@ -8443,6 +8455,22 @@ impl PrintC {
                     crate::printlanguage::SyntaxHighlight::const_color,
                     op_key(op),
                 ));
+                return;
+            }
+        }
+        if matches!(
+            opc,
+            OpCode::CPUI_INT_EQUAL
+                | OpCode::CPUI_INT_NOTEQUAL
+                | OpCode::CPUI_BOOL_AND
+                | OpCode::CPUI_BOOL_OR
+        ) {
+            if let Some((fold, equal)) = self.strcmp_op_fold(fd, arch, op) {
+                let negated = self.context.is_set(modifiers::NEGATETOKEN);
+                if negated {
+                    self.context.unset_mod(modifiers::NEGATETOKEN);
+                }
+                self.push_strcmp_fold(fd, arch, &fold, equal != negated, op);
                 return;
             }
         }
@@ -18383,6 +18411,7 @@ mod ctreeprint;
 mod ctreerecord;
 mod javasyncprint;
 mod javatryprint;
+mod strcmpprint;
 
 #[path = "rustarrayinit.rs"]
 mod rustarrayinit;

@@ -64,7 +64,20 @@ return (uint4)(*(unsigned int *)v2 == 0x474e4950) * 2;
 Folding that back to `strncmp`/`memcmp` is a printer idiom over a
 conjunction of equality tests of consecutive bytes of one char object against
 printable constants. It is a judgement call (the source may have been
-`memcmp`, or byte tests) and is not implemented.
+`memcmp`, or byte tests), so it is the `strcmpfold` option
+(`docs/spec/09-emission.md`), which prints
+
+```c
+if (strncmp(v2,"SH ",3) == 0)
+  return 1;
+return (uint4)(strncmp(v2,"PING",4) == 0) * 2;
+```
+
+`tests/stages/fixtures/strcmpfold` holds the gcc, clang and AArch64 shapes.
+What it leaves: a buffer the frame layout splits into one variable per
+compare (nothing indexes it, so `buf[0..1]` and `buf[2]` are separate
+locals), ordered results, and compares through a pointer whose reads
+recovered a struct type (`a0->field_0x0 == 0x50545448`).
 
 ## iphdr / tcphdr
 

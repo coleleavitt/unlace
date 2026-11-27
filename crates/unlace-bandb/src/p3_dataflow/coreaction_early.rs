@@ -437,6 +437,7 @@ impl Action for ActionHeritage {
             ctx.error = Some(error);
             return -1;
         }
+        crate::jtpartialalias::record(data);
         if data
             .get_arch()
             .unlace_options

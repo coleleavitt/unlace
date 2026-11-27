@@ -14,6 +14,11 @@
 # passes count churn's ops only: at readonlycalls 82177, one guard more
 # than churn would build, it keeps them; at readonlycalls on it drops
 # them. The fixture's source, provenance and native oracle are beside it.
+#
+# The counts are measured with option stackguard off: escaped's canary
+# check runs through the 64 calls' INDIRECTs, which the P7 strip has
+# followed since its walk reached depth 256, and stripping it moves the
+# op counts these heritage assertions compare.
 
 [image]
 arch = 'x86:LE:64:default:gcc'
@@ -23,6 +28,7 @@ commands = [
     'clear architecture',
     'load file crates/unlace-analysis/tests/fixtures/prunedssa_x86_64',
     'read symbols',
+    'option stackguard off',
     'option readonlycalls off',
     'load function churn',
     'decompile',

@@ -2352,6 +2352,15 @@ classified:
   output, are the same as the walk over every path. On the CPython function,
   13 passes now take 15 s in all.
 
+  Taking the matching piece of a PIECE, or a SUBPIECE whose input the value
+  overlaps, costs no level, however long the chain: heritage joins of a wide
+  struct build PIECE chains of one step per field. Only these steps keep the
+  level, so reaching a Varnode, offset and level already on the path is a
+  cycle through PIECE and SUBPIECE alone. Valid SSA has none; on IR with one
+  (the random graphs of the memo tests) the revisit ends that path with no
+  use, bounded, instead of recursing until the native stack overflows. The
+  revisit walks nothing the first visit does not, so the answer is unchanged.
+
   *(unlace decompile-all watchdog)* Every `ancestor_op_use` step and every step
   of an `only_op_use` walk also probes the drive's budget through
   `crates/unlace-middle/src/substrate/budget.rs (budget_probe)`;

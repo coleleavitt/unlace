@@ -23,23 +23,29 @@ Every prototype-driven typing needs the callee's name, and
 - `flirt` with IDA 9.x `sig/pc/glibc_amd64.sig` names none of these: the
   signature set predates the glibc 2.41 wrappers that push the system call
   number and call `__syscall_cancel`.
-- `typelib` serves only an image with `.dynstr`
-  (`crates/unlace-analysis/src/analyzers/protos/typelib.rs (target)`), so a
-  static image gets no library prototypes even for names it does know.
 - `libcsigs` types imports only, so an unstripped static image's `send`,
   `connect` and `___snprintf_chk` stay untyped too.
 
-The consequence for main's sender buffer: its only typed access is gcc's
-inline `strcpy(dest, "\n")`, one `mov WORD PTR [rsp],0xa`, so it is declared
-`unsigned short v4 [516]`. In the dynamic image `__snprintf_chk`'s `char *`
-reaches it and it is `char s [1032]` already; no frame-layout rule can tell
-the two apart without a name (treating any escaped buffer of unknown element
-as bytes would also turn every `int x; f(&x)` into `char x[4]`).
+`syscallwrappers` (`docs/spec/01-program-prep.md`) now names the system-call
+wrappers by the number they load, in glibc's direct and `__syscall_cancel`
+shapes and musl's `__syscall_cp` shape, and `typelib` serves a static Linux
+image (glibc by its `.note.ABI-tag`, else musl), so `socket`, `connect`,
+`close`, `recv`, `send` and `sendto` print by name with their prototypes in
+`netstruct-gcc-O2` and in the musl build `netstruct-musl-O2` (whose `socket`
+mixes `socket` and `fcntl` calls and stays unnamed).
 
-Follow-up: name x86-64 glibc and musl system-call wrappers by their number
-(both the `push N; call __syscall_cancel` and the `mov eax,N; syscall` shapes)
-from the Linux x86-64 table, as `syscallnames` does for ARM `svc`, and let
-`typelib` serve a static glibc or musl image under the names it recognises.
+What is left: main's sender buffer is still `unsigned short v4 [516]`. Its only
+typed access is gcc's inline `strcpy(dest, "\n")`, one `mov WORD PTR [rsp],0xa`;
+`send` takes `const void *`, and the `char *` that types it in the dynamic image
+(`char s [1032]`) comes from `__snprintf_chk` and `strlen`, which make no system
+call: one is an ordinary function, the other an IRELATIVE slot whose resolver
+picks `__strlen_avx2` or a sibling. No frame-layout rule can tell the two
+apart without a name (treating any escaped buffer of unknown element as bytes
+would also turn every `int x; f(&x)` into `char x[4]`).
+
+Follow-up: name glibc's IRELATIVE string functions by the resolver's
+candidates (`strlen`, `strncmp`, `memset`) and the FORTIFY `__X_chk` functions,
+for which no instruction-level identity like a system-call number exists.
 
 ## gcc's inline strncmp
 
@@ -103,7 +109,7 @@ Three things are missing, in the order they would have to land:
    (`RuleMemsetCopy` over `StringSequence`), so it does not fire here.
 2. The types. The built-in `linux-x86_64.ktl` defines `iphdr`, `tcphdr`,
    `udphdr` and `icmphdr`, but leaves the bitfield bytes (`ihl:4 version:4`,
-   tcphdr's `doff` and flags) as holes, and is served only to dynamic images.
+   tcphdr's `doff` and flags) as holes.
 3. The recognition. No prototype says a buffer is a packet (`sendto` takes
    `const void *`). A heuristic option could type a frame object that reaches
    a call, whose first byte is a constant 0x45-0x4f and whose byte 9 is 1, 6

@@ -650,6 +650,7 @@ unlace_options! { self, p1;
     },
     "noreturntrap" => registered!(crate::analysisgates::Noreturntrap),
     "fid" => registered!(crate::analysisgates::Fid),
+    "syscallwrappers" => registered!(crate::analysisgates::SyscallWrappers),
     "rtti" => registered!(crate::analysisgates::Rtti),
     "msvceh" => registered!(crate::analysisgates::Msvceh),
     "delphi" => registered!(crate::analysisgates::Delphi),

@@ -11,14 +11,29 @@ fn fixture(name: &str) -> Vec<u8> {
 fn only_an_x86_64_elf_naming_its_c_library_is_a_target() {
     let glibc = fixture("libctypes_glibc_x86_64");
     let file = object::File::parse(&*glibc).unwrap();
-    assert_eq!(target(&file), Some(("linux x86_64", true)));
+    assert_eq!(target(&file, &glibc), Some(("linux x86_64", true)));
     let musl = fixture("typelib_musl_x86_64");
     let file = object::File::parse(&*musl).unwrap();
-    assert_eq!(target(&file), Some(("linux x86_64", false)));
+    assert_eq!(target(&file, &musl), Some(("linux x86_64", false)));
     let mips = fixture("libctypes_mips32_glibc_le32");
     let file = object::File::parse(&*mips).unwrap();
-    assert_eq!(target(&file), None);
+    assert_eq!(target(&file, &mips), None);
     assert_eq!(any_target(&file), "elf mips");
+}
+
+#[test]
+fn a_static_linux_image_is_glibc_by_its_abi_tag_and_musl_without_one() {
+    let netstruct = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/stages/fixtures/netstruct");
+    for (name, glibc) in [("netstruct-gcc-O2", true), ("netstruct-musl-O2", false)] {
+        let bytes = std::fs::read(netstruct.join(name)).unwrap();
+        let file = object::File::parse(&*bytes).unwrap();
+        assert_eq!(
+            target(&file, &bytes),
+            Some(("linux x86_64", glibc)),
+            "{name}"
+        );
+    }
 }
 
 #[test]
@@ -70,7 +85,7 @@ fn a_pe_is_named_for_the_built_in_windows_library() {
     ] {
         let pe = fixture(name);
         let file = object::File::parse(&*pe).unwrap();
-        assert_eq!(target(&file), None, "{name}");
+        assert_eq!(target(&file, &pe), None, "{name}");
         assert_eq!(any_target(&file), expected, "{name}");
         assert_eq!(crate::uefi::pe_subsystem(&pe), Some(subsystem), "{name}");
     }

@@ -599,6 +599,16 @@ crate::unlace_flag!(
 );
 
 crate::unlace_flag!(
+    /// (unlace `syscallwrappers`) Name the system-call wrappers of a stripped static
+    /// x86-64 Linux image by the call they make (a Listing consumer); default **on**.
+    SyscallWrappers,
+    "syscallwrappers",
+    "x86-64 system-call wrapper names",
+    unset: false,
+    shipped: true
+);
+
+crate::unlace_flag!(
     /// (unlace `noreturntrap`, unlace#837) One call site sealed by an x86 `int3` pad that
     /// runs into the next function, with no call site the compiler continued after, is
     /// enough for `noreturn_disc` to conclude the callee no-return. Listing-gated; default on.

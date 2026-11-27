@@ -84,7 +84,10 @@ fn only_printable_text_with_at_most_a_final_nul_folds() {
     assert!(fold(&[piece(&buf, 0, b"A\0B\0")]).is_none());
     assert!(fold(&[piece(&buf, 0, b"\x7fELF")]).is_none());
     assert!(fold(&[piece(&buf, 0, b"\0\0")]).is_none());
-    assert_eq!(fold(&[piece(&buf, 0, b"\r\n")]).unwrap().callee, Callee::Strncmp);
+    assert_eq!(
+        fold(&[piece(&buf, 0, b"\r\n")]).unwrap().callee,
+        Callee::Strncmp
+    );
 }
 
 #[test]

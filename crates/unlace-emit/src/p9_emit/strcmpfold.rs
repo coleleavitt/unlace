@@ -128,9 +128,9 @@ fn byte_array(ty: &Datatype) -> bool {
 fn byte_pointer(ty: &Datatype) -> bool {
     use type_metatype::{TYPE_INT, TYPE_PTR, TYPE_UINT, TYPE_UNKNOWN, TYPE_VOID};
     match ty.get_metatype() {
-        TYPE_PTR => ty.get_ptr_to().is_some_and(|to| {
-            byte(&to) || byte_array(&to) || to.get_metatype() == TYPE_VOID
-        }),
+        TYPE_PTR => ty
+            .get_ptr_to()
+            .is_some_and(|to| byte(&to) || byte_array(&to) || to.get_metatype() == TYPE_VOID),
         TYPE_INT | TYPE_UINT | TYPE_UNKNOWN => !ty.is_enum_type(),
         _ => false,
     }
@@ -215,14 +215,19 @@ fn load_base(fd: &Funcdata, load: (OpId, &PcodeOp)) -> Option<(Base, u32)> {
             OpCode::CPUI_CAST | OpCode::CPUI_COPY => (def.get_in(0)?, 0),
             OpCode::CPUI_PTRADD => {
                 let count = constant(fd, def.get_in(1)?)?;
-                (def.get_in(0)?, count.wrapping_mul(constant(fd, def.get_in(2)?)?))
+                (
+                    def.get_in(0)?,
+                    count.wrapping_mul(constant(fd, def.get_in(2)?)?),
+                )
             }
             OpCode::CPUI_PTRSUB => (def.get_in(0)?, constant(fd, def.get_in(1)?)?),
-            OpCode::CPUI_INT_ADD => match (constant(fd, def.get_in(0)?), constant(fd, def.get_in(1)?)) {
-                (None, Some(c)) => (def.get_in(0)?, c),
-                (Some(c), None) => (def.get_in(1)?, c),
-                _ => break,
-            },
+            OpCode::CPUI_INT_ADD => {
+                match (constant(fd, def.get_in(0)?), constant(fd, def.get_in(1)?)) {
+                    (None, Some(c)) => (def.get_in(0)?, c),
+                    (Some(c), None) => (def.get_in(1)?, c),
+                    _ => break,
+                }
+            }
             _ => break,
         };
         offset = offset.wrapping_add(step);
@@ -274,7 +279,10 @@ fn push_read(
         Some(_) => return None,
         None => {
             let (name, offset, ty) = object(vn)?;
-            (Base::Variable { name, ty }, u32::try_from(offset.max(0)).ok()?)
+            (
+                Base::Variable { name, ty },
+                u32::try_from(offset.max(0)).ok()?,
+            )
         }
     };
     let big = v.get_space().is_big_endian();

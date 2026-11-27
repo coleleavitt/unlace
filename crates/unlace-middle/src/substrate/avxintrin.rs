@@ -45,6 +45,9 @@ pub fn intrinsic_sized(name: &str, size: i32, src: i32) -> Option<(String, Vec<u
         ));
     }
     let (mnem, ext) = name.rsplit_once('_')?;
+    if let Some(named) = vnni_ifma_popcnt(mnem, ext, size) {
+        return Some(named);
+    }
     if !matches!(
         ext,
         "avx" | "avx2" | "fma" | "avx512f" | "avx512bw" | "avx512dq" | "avx512vl" | "avx512cd"
@@ -341,6 +344,32 @@ fn rest_fma((kind, form, ty): (&str, &str, &str), w: &str) -> (String, Vec<usize
     };
     let w = if matches!(ty, "ss" | "sd") { "" } else { w };
     (format!("_mm{w}_f{kind}_{ty}"), order)
+}
+
+/// The AVX-512 VNNI, IFMA and popcount user-ops. The spec tags them `_avx512` or
+/// `_avxifma`, which the extension list in `intrinsic_sized` does not admit, so they are
+/// matched here by their exact pair.
+fn vnni_ifma_popcnt(mnem: &str, ext: &str, size: i32) -> Option<(String, Vec<usize>)> {
+    let (op, ty, args) = match (mnem, ext) {
+        ("vpopcntb", "avx512") => ("popcnt", "epi8", 1),
+        ("vpopcntw", "avx512") => ("popcnt", "epi16", 1),
+        ("vpopcntd", "avx512") => ("popcnt", "epi32", 1),
+        ("vpopcntq", "avx512") => ("popcnt", "epi64", 1),
+        ("vpdpbusd", "avx512") => ("dpbusd", "epi32", 3),
+        ("vpdpbusds", "avx512") => ("dpbusds", "epi32", 3),
+        ("vpdpwssd", "avx512") => ("dpwssd", "epi32", 3),
+        ("vpdpwssds", "avx512") => ("dpwssds", "epi32", 3),
+        ("vpmadd52luq", "avx512" | "avxifma") => ("madd52lo", "epu64", 3),
+        ("vpmadd52huq", "avx512" | "avxifma") => ("madd52hi", "epu64", 3),
+        _ => return None,
+    };
+    let w = match size {
+        16 => "",
+        32 => "256",
+        64 => "512",
+        _ => return None,
+    };
+    Some((format!("_mm{w}_{op}_{ty}"), (0..args).collect()))
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).

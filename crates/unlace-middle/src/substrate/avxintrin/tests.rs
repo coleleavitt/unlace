@@ -1,4 +1,31 @@
 use super::*;
+#[test]
+fn vnni_ifma_popcnt_names() {
+    assert_eq!(
+        intrinsic("vpopcntb_avx512", 64),
+        Some(("_mm512_popcnt_epi8".into(), vec![0]))
+    );
+    assert_eq!(
+        intrinsic("vpopcntq_avx512", 16),
+        Some(("_mm_popcnt_epi64".into(), vec![0]))
+    );
+    assert_eq!(
+        intrinsic("vpdpbusd_avx512", 32),
+        Some(("_mm256_dpbusd_epi32".into(), vec![0, 1, 2]))
+    );
+    assert_eq!(
+        intrinsic("vpdpwssds_avx512", 64),
+        Some(("_mm512_dpwssds_epi32".into(), vec![0, 1, 2]))
+    );
+    assert_eq!(
+        intrinsic("vpmadd52huq_avxifma", 32),
+        Some(("_mm256_madd52hi_epu64".into(), vec![0, 1, 2]))
+    );
+    assert_eq!(
+        intrinsic("vpmadd52luq_avx512_mask", 64),
+        Some(("_mm512_mask_madd52lo_epu64".into(), vec![0, 1, 2, 3, 4]))
+    );
+}
 
 #[test]
 fn element_pair_conversions() {

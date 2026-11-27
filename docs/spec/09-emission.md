@@ -5270,6 +5270,9 @@ argument when the op has no result. The table covers:
 - packed integer arithmetic, saturating and unsigned forms, compares, shifts,
   min/max, averages, packs, unpacks and permutes (`_mm256_adds_epu8`,
   `_mm256_max_epu8`, `_mm256_cmpgt_epi32`, `_mm256_permutevar8x32_epi32`);
+- the AVX-512 VNNI, IFMA and popcount forms `vpopcnt{b,w,d,q}`, `vpdpbusd(s)`,
+  `vpdpwssd(s)` and `vpmadd52{l,h}uq`, which the spec tags `_avx512` or
+  `_avxifma` (`_mm512_popcnt_epi8`, `_mm256_dpbusd_epi32`, `_mm512_madd52lo_epu64`);
 - the bitwise forms on the whole register (`_mm256_and_si256`);
 - the AVX-512CD and AVX-512F/VL forms `vplzcnt{d,q}`, `vpconflict{d,q}` and
   `vpternlog{d,q}` (`_mm512_lzcnt_epi64`, `_mm_conflict_epi32`,

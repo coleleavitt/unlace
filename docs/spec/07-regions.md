@@ -535,10 +535,11 @@ recognition happens after chapter 03 has already guarded the checker call, the
 destructive arm records the first match's instruction address in the function's
 P0 override store and requests a full pipeline restart. When `msvcstackguard`
 is off, the recognizer instead collects every
-exact checker whose output is locked `void`, records the full set, and requests
-one restart; this remains complete beyond the driver's eight-reflow limit. On
-replay, `Heritage::guard_calls` preserves only the exact logical ABI output
-slice at seeded calls and only when the effect is actually `KILLEDBYCALL`. If
+exact checker that declares no output (no locked output, or a locked `void`),
+records the full set, and requests one restart; this remains complete beyond the
+driver's eight-reflow limit. On replay, `Heritage::guard_calls` preserves only
+the exact logical ABI output slice at seeded calls, when its effect is
+`KILLEDBYCALL` or the model's unknown-effect output register (x86-32 EAX). If
 the slice is contained by a wider heritaged XMM range, killed INDIRECT creations
 remain on its flanks and a PIECE rejoins them after the call; the wider range is
 never globally downgraded. An explicit effect override and every ABI-return

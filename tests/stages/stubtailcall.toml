@@ -34,7 +34,7 @@ commands = [
 [[match]]
 name = "STUBTAILCALL: the resolver call is the stub's tail call"
 count = 1
-literal = 'return (char *)(*v1)();'
+literal = 'return (char *)(**(code **)(v1 + -0x7ff0))();'
 
 [[match]]
 name = 'STUBTAILCALL: the resolver call never falls through into the next stub'

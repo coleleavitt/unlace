@@ -2911,6 +2911,36 @@ impl Funcdata {
         found
     }
 
+    /// A PIECE or SUBPIECE step of [`ancestor_op_use`](Self::ancestor_op_use),
+    /// which costs no level. Only these steps keep the level, so a state already
+    /// on the path at the same level is a cycle through them alone: valid SSA has
+    /// none, and on IR with one the revisit ends the path instead of recursing
+    /// until the native stack overflows. The revisit walks nothing the first
+    /// visit does not, so the answer is the full walk's.
+    #[allow(clippy::too_many_arguments)]
+    fn ancestor_free_step(
+        &mut self,
+        memo: &mut AncestorMemo,
+        maxlevel: int4,
+        invn: VarnodeId,
+        op: OpId,
+        trial: &mut crate::fspec::ParamTrial,
+        offset: int4,
+        main_flags: unlace_base::types::uint4,
+    ) -> Ancestry {
+        let state = (invn, offset, maxlevel);
+        if memo.free_path.contains(&state) {
+            return Ancestry::Unused {
+                cut: 0,
+                bounded: true,
+            };
+        }
+        memo.free_path.push(state);
+        let found = self.ancestor_op_use_in(memo, maxlevel, invn, op, trial, offset, main_flags);
+        memo.free_path.pop();
+        found
+    }
+
     /// The C++ `ancestorOpUse` body for one Varnode, recursing through
     /// [`ancestor_op_use_in`](Self::ancestor_op_use_in).
     #[allow(clippy::too_many_arguments)]
@@ -3097,7 +3127,7 @@ impl Funcdata {
                 if offset == 0 {
                     if let Some(in1) = in1 {
                         return self
-                            .ancestor_op_use_in(memo, maxlevel, in1, op, trial, 0, main_flags);
+                            .ancestor_free_step(memo, maxlevel, in1, op, trial, 0, main_flags);
                     }
                     return Ancestry::NONE;
                 }
@@ -3105,7 +3135,7 @@ impl Funcdata {
                     let in0 = self.obank().get(def).and_then(|o| o.get_in(0));
                     if let Some(in0) = in0 {
                         return self
-                            .ancestor_op_use_in(memo, maxlevel, in0, op, trial, 0, main_flags);
+                            .ancestor_free_step(memo, maxlevel, in0, op, trial, 0, main_flags);
                     }
                 }
                 Ancestry::NONE
@@ -3166,7 +3196,7 @@ impl Funcdata {
                     .unwrap_or(false);
                 if space_internal || incidental || in0_incid || overlap_match {
                     if let Some(in0) = in0 {
-                        return self.ancestor_op_use_in(
+                        return self.ancestor_free_step(
                             memo,
                             maxlevel,
                             in0,
@@ -3244,6 +3274,9 @@ type AncestorKey = (VarnodeId, int4, uint4);
 struct AncestorMemo {
     /// The MULTIEQUALs marked on the current path, outermost first.
     path: Vec<OpId>,
+    /// The Varnode, offset and level of each PIECE or SUBPIECE step on the
+    /// current path.
+    free_path: Vec<(VarnodeId, int4, int4)>,
     /// (unlace) `callresultuse`: the trial's root is a call result on every
     /// path, so a CALL output or creation ends a path as a use.
     call_result_root: bool,

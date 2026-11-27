@@ -125,12 +125,12 @@ literal = 'gEfiPeiRscHandlerPpiGuid is installed by ReportStatusCodeRouterPei.ef
 [[match]]
 name = 'UEFIPROTO #10: a PEI service read from below the IDT is a member call'
 count = 1
-literal = '(*(*v2)->LocatePpi)(v2,&gEfiPeiRscHandlerPpiGuid,0,NULL,&v6);'
+literal = '(*(*v2)->LocatePpi)(v2,&gEfiPeiRscHandlerPpiGuid,0,NULL,&v5);'
 
 [[match]]
 name = 'UEFIPROTO #11: a call through the located PPI names its member'
 count = 1
-literal = '(*v6->Register)('
+literal = '(*v5->Register)('
 
 [[match]]
 name = 'UEFIPROTO #12: the PPI descriptor a PEIM installs is named from its GUID'
@@ -140,7 +140,7 @@ literal = 'PeiServicesInstallPpi(&mEfiPeiRscHandlerPpiDescriptor);'
 [[match]]
 name = 'UEFIPROTO #13: the IDT read is GetPeiServicesTablePointer'
 count = 2
-literal = 'v2 = GetPeiServicesTablePointer();'
+literal = 'v1 = GetPeiServicesTablePointer();'
 
 [[match]]
 name = "UEFIPROTO #14: the function an installed PPI points at has the member's prototype"

@@ -814,7 +814,7 @@ fn locked_void_checker_is_marked_but_not_removed_when_stripping_is_off() {
     fc.proto_mut().set_output_lock(true);
     fd.push_call_specs(fc);
     let site = fd.obank().get(call).unwrap().get_addr().clone();
-    assert!(call_has_locked_void_output(&fd, call));
+    assert!(call_declares_no_output(&fd, call));
 
     let mut act = ActionStripMsvcStackGuard::new(false, "returnsplit");
     let mut ctx = ActionContext::default();

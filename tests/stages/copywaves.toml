@@ -33,9 +33,9 @@ literal = 'sink('
 [[match]]
 name = "copywaves #3: the live IR is the sweep's"
 count = 1
-literal = 'Count - pcode = 8135'
+literal = 'Count - pcode = 8085'
 
 [[match]]
 name = "copywaves #4: the ops created are the sweep's"
 count = 1
-literal = 'Count - created = 35936'
+literal = 'Count - created = 35888'

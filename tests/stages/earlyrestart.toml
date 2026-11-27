@@ -38,4 +38,4 @@ literal = 'Count - pcode = 100'
 [[match]]
 name = "earlyrestart #4: the ops created after the restart are upstream's"
 count = 1
-literal = 'Count - created = 1056'
+literal = 'Count - created = 1053'

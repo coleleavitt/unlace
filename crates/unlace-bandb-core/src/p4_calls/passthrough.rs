@@ -491,7 +491,10 @@ pub fn tests_the_vararg_count(data: &Funcdata) -> bool {
 
 /// Does the entry block read the return-only register before writing it,
 /// counting a read by a `STORE` of its value only with `stores`? An injected
-/// no-op moves nothing: a MIPS mode switch's `v0 = v0` is no such read.
+/// no-op moves nothing: a MIPS mode switch's `v0 = v0` is no such read. A read
+/// counts when its least significant byte, where the count lives (`al`), is
+/// unwritten: gcc's `sete %al; ...; or %edx,%eax` reads the upper bytes of the
+/// `eax` it never wrote, beside the `al` it did, and tests no count.
 fn vararg_count_read(data: &Funcdata, stores: bool) -> bool {
     if data.bblocks_get_size() == 0 {
         return false;
@@ -523,10 +526,14 @@ fn vararg_count_read(data: &Funcdata, stores: bool) -> bool {
             if !return_only(proto, v.get_addr(), v.get_size()) {
                 continue;
             }
-            let (off, end) = (v.get_offset(), v.get_offset() + v.get_size() as u64);
+            let low = if v.get_addr().is_big_endian() {
+                v.get_offset() + v.get_size().max(1) as u64 - 1
+            } else {
+                v.get_offset()
+            };
             if !written
                 .iter()
-                .any(|&(w, ws)| w <= off && end <= w + ws as u64)
+                .any(|&(w, ws)| w <= low && low < w + ws as u64)
             {
                 return true;
             }

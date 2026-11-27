@@ -642,6 +642,7 @@ unlace_options! { self, p1;
     "noreturn_reach" => {
         registered!(crate::analysisgates::NoreturnReach)
     },
+    "noreturntrap" => registered!(crate::analysisgates::Noreturntrap),
     "fid" => registered!(crate::analysisgates::Fid),
     "syscallwrappers" => registered!(crate::analysisgates::SyscallWrappers),
     "rtti" => registered!(crate::analysisgates::Rtti),

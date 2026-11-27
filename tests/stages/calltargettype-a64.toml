@@ -75,27 +75,27 @@ commands = [
 [[match]]
 name = 'CALLTARGETTYPE-A64 #1: on types a float call float (*)(float)'
 count = 1
-literal = 'float (*v1)(float); // pc | x8'
+literal = '(**(float (**)(float))&fstore[(a1 & 1) * 8UL])(a0 + a0)'
 
 [[match]]
 name = 'CALLTARGETTYPE-A64 #2: the float call itself prints as it did'
 count = 2
-regex = 'return \(float\)\(\*v1\)\(a0 \+ a0\) \+ 1\.0f?;'
+regex = 'return \(float\)\(\*\*\(.*\)&fstore\[\(a1 & 1\) \* 8UL\]\)\(a0 \+ a0\) \+ 1\.0f?;'
 
 [[match]]
 name = 'CALLTARGETTYPE-A64 #3: on types an integer call'
 count = 1
-literal = 'int (*v1)(unsigned int,unsigned int); // pc | x8'
+literal = '(**(int (**)(unsigned int,unsigned int))&fstore[(a0 & 1) * 8UL])(a1,a2)'
 
 [[match]]
 name = 'CALLTARGETTYPE-A64 #4: a float held as an integer in s0 keeps the call untyped'
 count = 2
-literal = 'unsigned int v2; // s0'
+literal = 'unsigned int v1; // s0'
 
 [[match]]
 name = 'CALLTARGETTYPE-A64 #5: that call prints as it did'
 count = 2
-literal = '*a1 = (*v1)(v2);'
+literal = '*a1 = (**(void **)&fstore[(a0 & 1) * 8UL])(v1);'
 
 [[match]]
 name = 'CALLTARGETTYPE-A64 #6: no integer function type is built over s0'

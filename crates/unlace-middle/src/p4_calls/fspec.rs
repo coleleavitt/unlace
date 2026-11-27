@@ -5987,8 +5987,12 @@ impl FuncProto {
             self.store_mut().set_input(i, nm, pieces);
         }
     }
-    /// Get the return value data-type (C++ `getOutputType`).
+    /// Get the return value data-type (C++ `getOutputType`); `None` with no store,
+    /// whose unrecovered output states no type.
     pub fn get_output_type(&self) -> Option<&Rc<Datatype>> {
+        if !self.has_store() {
+            return None;
+        }
         // Borrow chain: get_output returns &dyn, get_type returns Option<&Rc>.
         // The lifetime is tied to &self via store(); safe.
         self.store().get_output().get_type()

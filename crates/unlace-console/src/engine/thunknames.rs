@@ -174,6 +174,21 @@ fn is_nullsub(arch: &Architecture, code_space: &Rc<AddrSpace>, vma: u64) -> bool
     false
 }
 
+/// (unlace `nullsubs`) The `entries` whose body is a bare return ([`is_nullsub`]).
+/// Under `lazyfuncs` they get their `Function` up front, so [`name_nullsubs`]
+/// names them as it names every eager entry.
+pub(super) fn nullsub_entries(
+    arch: &Architecture,
+    code_space: &Rc<AddrSpace>,
+    entries: &[u64],
+) -> Vec<u64> {
+    entries
+        .iter()
+        .copied()
+        .filter(|&vma| is_nullsub(arch, code_space, vma))
+        .collect()
+}
+
 /// (unlace `nullsubs`) Rename every discovered entry still named by a placeholder
 /// whose body is a bare return (see [`is_nullsub`]) `nullsub_<addr>`, keeping the
 /// placeholder's address spelling (`sub_401000` becomes `nullsub_401000`), IDA's

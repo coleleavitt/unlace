@@ -6,7 +6,7 @@
 //! `v6`), and a second directive naming `v6` reached the wrong variable.
 //!
 //! Fixture: `unlace-analysis/tests/fixtures/stablenames_x86_64` (source beside
-//! it), whose `mix` prints thirteen numbered locals, and the static glibc
+//! it), whose `mix` prints twelve numbered locals, and the static glibc
 //! `mcount_x86_64`, whose `handle_intel.constprop.0` keeps many same-width
 //! temporaries at one instruction. Every case pins upstream's type merge
 //! (`typemerge on`): the default `storage` mode keeps apart same-typed locals
@@ -113,15 +113,15 @@ fn renames_only_in(
 }
 
 #[test]
-fn the_fixture_numbers_thirteen_locals() {
+fn the_fixture_numbers_twelve_locals() {
     let names = declared(&decompile(&[]));
-    let expected: BTreeSet<String> = (1..=13).map(|i| format!("v{i}")).collect();
+    let expected: BTreeSet<String> = (1..=12).map(|i| format!("v{i}")).collect();
     assert_eq!(names, expected);
 }
 
 #[test]
 fn renaming_a_middle_local_keeps_every_other_number() {
-    renames_only(&["name v6 vowels"], &[("vowels", "v6")]);
+    renames_only(&["name v5 vowels"], &[("vowels", "v5")]);
 }
 
 #[test]
@@ -129,18 +129,18 @@ fn renaming_the_first_local_keeps_every_other_number() {
     renames_only(&["name v1 c"], &[("c", "v1")]);
 }
 
-/// `v13` is two values the analysis merged in one register; the rename names
+/// `v12` is two values the analysis merged in one register; the rename names
 /// the variable once, under one declaration.
 #[test]
 fn renaming_the_last_local_keeps_every_other_number() {
-    renames_only(&["name v13 acc"], &[("acc", "v13")]);
+    renames_only(&["name v12 acc"], &[("acc", "v12")]);
 }
 
 #[test]
 fn two_renames_keep_every_other_number() {
     renames_only(
-        &["name v6 vowels", "name v11 digits"],
-        &[("vowels", "v6"), ("digits", "v11")],
+        &["name v5 vowels", "name v10 digits"],
+        &[("vowels", "v5"), ("digits", "v10")],
     );
 }
 
@@ -151,45 +151,45 @@ fn renaming_an_argument_keeps_every_local_number() {
 
 #[test]
 fn renaming_back_to_the_printed_name_changes_nothing() {
-    assert_eq!(decompile(&["name v6 t", "name t v6"]), decompile(&[]));
+    assert_eq!(decompile(&["name v5 t", "name t v5"]), decompile(&[]));
 }
 
-/// `v7` is taken, so the local printed as `v7` takes a number past the last;
-/// the number `v3` left stays unused, and nothing else moves.
+/// `v6` is taken, so the local printed as `v6` takes a number past the last;
+/// the number `v2` left stays unused, and nothing else moves.
 #[test]
 fn renaming_onto_another_locals_number_gives_that_local_a_new_one() {
-    renames_only(&["name v3 v7"], &[("v7", "v3"), ("v14", "v7")]);
+    renames_only(&["name v2 v6"], &[("v6", "v2"), ("v13", "v6")]);
     renames_only(
-        &["name v1 c", "name v6 v9"],
-        &[("c", "v1"), ("v9", "v6"), ("v14", "v9")],
+        &["name v1 c", "name v5 v8"],
+        &[("c", "v1"), ("v8", "v5"), ("v13", "v8")],
     );
 }
 
-/// A name-only rename names the whole printed variable: `v5` spans four
-/// registers and used to split, leaving the `rax` part behind as a new `v14`;
-/// `v7` used to come back retyped `unsigned long` with a cast at its compare.
+/// A name-only rename names the whole printed variable: `v4` spans four
+/// registers and used to split, leaving the `rax` part behind as a new `v13`;
+/// `v6` used to come back retyped `unsigned long` with a cast at its compare.
 #[test]
 fn a_rename_neither_splits_nor_retypes_the_variable() {
-    renames_only(&["name v5 hash"], &[("hash", "v5")]);
-    renames_only(&["name v7 best"], &[("best", "v7")]);
+    renames_only(&["name v4 hash"], &[("hash", "v4")]);
+    renames_only(&["name v6 best"], &[("best", "v6")]);
 }
 
 /// Two such renames in one batch, and a rename of a renamed local.
 #[test]
 fn successive_renames_name_the_whole_variable() {
     renames_only(
-        &["name v5 hash", "name v7 best"],
-        &[("hash", "v5"), ("best", "v7")],
+        &["name v4 hash", "name v6 best"],
+        &[("hash", "v4"), ("best", "v6")],
     );
-    renames_only(&["name v5 hash", "name hash h"], &[("h", "v5")]);
+    renames_only(&["name v4 hash", "name hash h"], &[("h", "v4")]);
 }
 
 /// The console carries a rename across every later decompile: one rename per
 /// decompile, the second naming a local by the number the first left alone.
 #[test]
 fn console_renames_survive_later_decompiles() {
-    let script = "load function mix\ndecompile\nprint C\nrename v5 hash\ndecompile\nprint C\n\
-                  rename v7 best\ndecompile\nprint C\nrename hash h\ndecompile\nprint C";
+    let script = "load function mix\ndecompile\nprint C\nrename v4 hash\ndecompile\nprint C\n\
+                  rename v6 best\ndecompile\nprint C\nrename hash h\ndecompile\nprint C";
     let out = console(script);
     let printed: Vec<&str> = out
         .split(" mix(")
@@ -199,9 +199,9 @@ fn console_renames_survive_later_decompiles() {
     assert_eq!(printed.len(), 4, "{out}");
     let plain = format!(" mix({}", printed[0]);
     let steps: [&[(&str, &str)]; 3] = [
-        &[("hash", "v5")],
-        &[("hash", "v5"), ("best", "v7")],
-        &[("h", "v5"), ("best", "v7")],
+        &[("hash", "v4")],
+        &[("hash", "v4"), ("best", "v6")],
+        &[("h", "v4"), ("best", "v6")],
     ];
     for (step, renames) in printed[1..].iter().zip(steps) {
         let code = format!(" mix({step}");
@@ -255,14 +255,14 @@ fn console(script: &str) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
-/// Under Ghidra names the register locals read `iVar6` and the stack array
-/// still reads `v4`; both keep their numbers.
+/// Under Ghidra names the register locals read `iVar5` and the stack array
+/// still reads `v3`; both keep their numbers.
 #[test]
 fn ghidra_names_keep_their_numbers() {
     renames_only_with(
         &["--option", "namestyle", "ghidra"],
-        &["name iVar6 vowels"],
-        &[("vowels", "iVar6")],
+        &["name iVar5 vowels"],
+        &[("vowels", "iVar5")],
     );
 }
 
@@ -294,7 +294,7 @@ fn locals_sharing_temporaries_at_an_instruction_keep_their_numbers() {
 #[test]
 fn a_retype_that_changes_merging_keeps_every_number() {
     let plain = declared(&decompile(&[]));
-    assert_eq!(declared(&decompile(&["type v8 unsigned long"])), plain);
+    assert_eq!(declared(&decompile(&["type v7 unsigned long"])), plain);
 }
 
 /// Retyping leaves the C as it was apart from the retyped declaration
@@ -323,34 +323,34 @@ fn retypes_only_in(
 }
 
 /// A retype that keeps a local's width types the whole printed variable:
-/// `type v5 unsigned long` used to split `v5`'s `rax` part off as a new
-/// `v14`, `type v13 long` merged `v12` and `v5` differently and added a
-/// `v14`, and in `handle_intel` `type v6 unsigned long` and `type v9 int` each
+/// `type v4 unsigned long` used to split `v4`'s `rax` part off as a new
+/// `v13`, `type v12 long` merged `v11` and `v4` differently and added a
+/// `v13`, and in `handle_intel` `type v6 unsigned long` and `type v9 int` each
 /// added a `v11`.
 #[test]
 fn a_same_width_retype_types_the_whole_variable() {
     retypes_only_in(
         "stablenames_x86_64",
         "mix",
-        &["type v5 unsigned long"],
+        &["type v4 unsigned long"],
         &[],
-        ("  unsigned long v5;", "  long v5;"),
+        ("  unsigned long v4;", "  long v4;"),
         &["(unsigned long)", "(long)"],
     );
     retypes_only_in(
         "stablenames_x86_64",
         "mix",
-        &["type v13 long"],
+        &["type v12 long"],
         &[],
-        ("  long v13;", "  unsigned long v13;"),
+        ("  long v12;", "  unsigned long v12;"),
         &[],
     );
     retypes_only_in(
         "stablenames_x86_64",
         "mix",
-        &["type v8 unsigned long"],
+        &["type v7 unsigned long"],
         &[],
-        ("  unsigned long v8;", "  long v8;"),
+        ("  unsigned long v7;", "  long v7;"),
         &[],
     );
     let function = "handle_intel.constprop.0";
@@ -378,8 +378,8 @@ fn a_rename_then_a_retype_types_the_whole_variable() {
     retypes_only_in(
         "stablenames_x86_64",
         "mix",
-        &["name v5 hash", "type hash unsigned long hash"],
-        &[("hash", "v5")],
+        &["name v4 hash", "type hash unsigned long hash"],
+        &[("hash", "v4")],
         ("  unsigned long hash;", "  long hash;"),
         &["(unsigned long)", "(long)"],
     );
@@ -389,8 +389,8 @@ fn a_rename_then_a_retype_types_the_whole_variable() {
 /// retyped local is renamed.
 #[test]
 fn console_retypes_survive_later_decompiles() {
-    let script = "load function mix\ndecompile\nprint C\nretype v5 unsigned long\ndecompile\nprint C\n\
-                  decompile\nprint C\nrename v5 hash\ndecompile\nprint C";
+    let script = "load function mix\ndecompile\nprint C\nretype v4 unsigned long\ndecompile\nprint C\n\
+                  decompile\nprint C\nrename v4 hash\ndecompile\nprint C";
     let out = console(script);
     let printed: Vec<String> = out
         .split(" mix(")
@@ -406,9 +406,9 @@ fn console_retypes_survive_later_decompiles() {
     let uncast = |code: &str| code.replace("(uint8)", "").replace("(int8)", "");
     let plain = lines_renamed(&uncast(&printed[0]), &[]);
     for (code, decl, renames) in [
-        (&printed[1], "  uint8 v5;", &[][..]),
-        (&printed[2], "  uint8 v5;", &[][..]),
-        (&printed[3], "  uint8 hash;", &[("hash", "v5")][..]),
+        (&printed[1], "  uint8 v4;", &[][..]),
+        (&printed[2], "  uint8 v4;", &[][..]),
+        (&printed[3], "  uint8 hash;", &[("hash", "v4")][..]),
     ] {
         assert!(code.contains(decl), "{decl}:\n{code}");
         let code = uncast(&code.replacen(decl, &decl.replace("uint8", "int8"), 1));
@@ -480,14 +480,14 @@ fn a_structure_pointer_retype_keeps_its_name() {
 }
 
 /// The type is locked only on what the variable's own operations define:
-/// `mix`'s `v10` points into the stack buffer `v4`, and a lock that also
+/// `mix`'s `v9` points into the stack buffer `v3`, and a lock that also
 /// took varnodes of the same storage and instruction re-laid the frame
-/// around the pointer, losing `v4`.
+/// around the pointer, losing `v3`.
 #[test]
 fn a_structure_pointer_retype_locks_only_the_variable() {
     let typedef = "typedef struct S { long a; long b; int c; int d; char *e; long f[4]; } S;";
-    let code = decompile(&[typedef, "type v10 S *v10"]);
-    assert!(code.contains("  S *v10;"), "{code}");
+    let code = decompile(&[typedef, "type v9 S *v9"]);
+    assert!(code.contains("  S *v9;"), "{code}");
     assert_eq!(declared(&code), declared(&decompile(&[])), "{code}");
 }
 
@@ -822,9 +822,9 @@ fn a_suffixed_rename_is_applied_as_printed() {
         ))
     };
     for (directive, decl, printed) in [
-        ("name v6 is_vowel", "  int is_vowel_1;", "is_vowel_1"),
-        ("name v6 mix", "  int mix_1;", "mix_1"),
-        ("name v6 a0", "  int a0_1;", "a0_1"),
+        ("name v5 is_vowel", "  int is_vowel_1;", "is_vowel_1"),
+        ("name v5 mix", "  int mix_1;", "mix_1"),
+        ("name v5 a0", "  int a0_1;", "a0_1"),
     ] {
         let (code, rows) = outcomes("stablenames_x86_64", "mix", &[directive]);
         assert!(code.contains(decl), "{directive}:\n{code}");
@@ -834,7 +834,7 @@ fn a_suffixed_rename_is_applied_as_printed() {
             "{directive}"
         );
     }
-    let (code, rows) = outcomes("stablenames_x86_64", "mix", &["name v6 dup", "name v7 dup"]);
+    let (code, rows) = outcomes("stablenames_x86_64", "mix", &["name v5 dup", "name v6 dup"]);
     assert!(
         code.contains("  int dup_1; // r8d") && code.contains(" dup; // r9 | rsi"),
         "{code}"
@@ -857,35 +857,35 @@ fn a_suffixed_rename_is_applied_as_printed() {
 /// one symbol named:`.
 #[test]
 fn a_suffixed_name_reaches_the_local_shown_under_it() {
-    let code = decompile(&["name v6 is_vowel", "name is_vowel_1 vowels"]);
+    let code = decompile(&["name v5 is_vowel", "name is_vowel_1 vowels"]);
     assert!(
         code.contains("  int vowels; // r8d") && !code.contains("is_vowel_1"),
         "{code}"
     );
     let code = decompile(&[
-        "name v6 is_vowel",
+        "name v5 is_vowel",
         "name is_vowel_1 vowels",
         "name vowels count",
     ]);
     assert!(code.contains("  int count; // r8d"), "{code}");
-    let code = decompile(&["name v6 is_vowel", "type is_vowel_1 unsigned int"]);
+    let code = decompile(&["name v5 is_vowel", "type is_vowel_1 unsigned int"]);
     assert!(code.contains("  unsigned int is_vowel_1; // r8d"), "{code}");
-    let code = decompile(&["name v6 a0", "name a0_1 vowels"]);
+    let code = decompile(&["name v5 a0", "name a0_1 vowels"]);
     assert!(
         code.contains("  int vowels; // r8d") && code.contains("long mix(long a0,"),
         "{code}"
     );
-    let code = decompile(&["name v6 dup", "name v7 dup", "name dup_1 vowels"]);
+    let code = decompile(&["name v5 dup", "name v6 dup", "name dup_1 vowels"]);
     assert!(
         code.contains("  int vowels; // r8d") && code.contains(" dup; // r9 | rsi"),
         "{code}"
     );
-    let code = decompile(&["name v6 dup", "name v7 dup", "name dup last"]);
+    let code = decompile(&["name v5 dup", "name v6 dup", "name dup last"]);
     assert!(
         code.contains("  int dup; // r8d") && code.contains(" last; // r9 | rsi"),
         "{code}"
     );
-    let code = decompile(&["name v4 mix", "name mix_1 buf"]);
+    let code = decompile(&["name v3 mix", "name mix_1 buf"]);
     assert!(code.contains("  char buf [32]; // stack - 0x48"), "{code}");
     let code = decompile_in(
         "retypeoutparam_x86_64",
@@ -933,7 +933,7 @@ fn a_shared_name_the_print_cannot_tell_apart_is_rejected() {
 #[test]
 fn console_suffixed_names_reach_their_locals() {
     let out = console(
-        "load function mix\ndecompile\nrename v6 dup\nrename v7 dup\ndecompile\nprint C\n\
+        "load function mix\ndecompile\nrename v5 dup\nrename v6 dup\ndecompile\nprint C\n\
          rename dup_1 vowels\ndecompile\nprint C\nrename dup last\nretype vowels unsigned int\ndecompile\nprint C",
     );
     for refusal in ["No symbol", "More than one", "Rejected"] {
@@ -956,9 +956,9 @@ fn console_suffixed_names_reach_their_locals() {
 fn a_stack_retype_that_changes_the_width_is_refused_before_it_applies() {
     let plain = decompile(&[]);
     for (directive, reason) in [
-        ("type v4 long", "Storage is 32 bytes, the stated type is 8"),
+        ("type v3 long", "Storage is 32 bytes, the stated type is 8"),
         (
-            "type v4 unsigned char",
+            "type v3 unsigned char",
             "Storage is 32 bytes, the stated type is 1",
         ),
     ] {
@@ -971,9 +971,9 @@ fn a_stack_retype_that_changes_the_width_is_refused_before_it_applies() {
         assert_eq!(code.trim_end(), plain.trim_end(), "{directive}");
     }
     for (directive, decl) in [
-        ("type v4 unsigned char[32]", "  unsigned char v4 [32];"),
-        ("type v4 char[64]", "  char v4 [64];"),
-        ("type v4 char[16]", "  char v4 [16];"),
+        ("type v3 unsigned char[32]", "  unsigned char v3 [32];"),
+        ("type v3 char[64]", "  char v3 [64];"),
+        ("type v3 char[16]", "  char v3 [16];"),
     ] {
         let code = decompile(&[directive]);
         assert!(code.contains(decl), "{directive}:\n{code}");
@@ -1001,15 +1001,15 @@ fn a_stack_retype_that_changes_the_width_is_refused_before_it_applies() {
     }
 }
 
-/// A local cannot take a C keyword or a type's name: `name v6 int` used to
+/// A local cannot take a C keyword or a type's name: `name v5 int` used to
 /// print `int int;`.
 #[test]
 fn a_keyword_or_type_name_is_refused() {
     let binary = common::fixture("stablenames_x86_64");
     for (directive, reason) in [
-        ("name v6 int", "`int` is a C keyword"),
-        ("name v6 uint4", "`uint4` names a type"),
-        ("type v6 unsigned int while", "`while` is a C keyword"),
+        ("name v5 int", "`int` is a C keyword"),
+        ("name v5 uint4", "`uint4` names a type"),
+        ("type v5 unsigned int while", "`while` is a C keyword"),
     ] {
         let (text, stderr, code) = common::run_unlace(&[
             "decompile",
@@ -1026,9 +1026,9 @@ fn a_keyword_or_type_name_is_refused() {
             stderr.contains("rejected") && stderr.contains(reason),
             "{directive}: {stderr}"
         );
-        assert!(text.contains(" v6;"), "{directive}:\n{text}");
+        assert!(text.contains(" v5;"), "{directive}:\n{text}");
     }
-    let out = console("load function mix\ndecompile\nrename v6 int\nretype v6 unsigned int while");
+    let out = console("load function mix\ndecompile\nrename v5 int\nretype v5 unsigned int while");
     assert!(
         out.contains("`int` is a C keyword") && out.contains("`while` is a C keyword"),
         "{out}"

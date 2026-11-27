@@ -22,6 +22,12 @@ fn bootstrap(ehcold: bool) -> ConsoleProgram {
     prog.arch_mut()
         .set_unlace_option("ehcold", if ehcold { "on" } else { "off" })
         .expect("ehcold flips");
+    // functails (default on since #1559) withholds the same single-owner parts.
+    if !ehcold {
+        prog.arch_mut()
+            .set_unlace_option("functails", "off")
+            .expect("functails flips");
+    }
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");
     prog

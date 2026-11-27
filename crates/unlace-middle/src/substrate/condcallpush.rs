@@ -29,8 +29,9 @@ crate::unlace_flag!(
 /// Bound on the varnodes visited walking back from the branch.
 const MAX_WALK: usize = 32;
 
-/// Is `op` a `STORE` lifted from the same instruction as a call whose result its block's
-/// branch tests?
+/// Is `op` a `STORE` lifted from the same instruction as a call, before that call, whose result
+/// its block's branch tests? A store after the call at its address is a return-boundary effect
+/// installed for the callee (`callmechanisms`), not the push.
 pub fn is_call_push(data: &Funcdata, op: OpId) -> bool {
     let Some(o) = data.obank().get(op) else {
         return false;
@@ -42,11 +43,15 @@ pub fn is_call_push(data: &Funcdata, op: OpId) -> bool {
         return false;
     };
     let addr = o.get_addr().clone();
-    let call = data.bb_ops(bb).into_iter().find(|&c| {
-        data.obank()
-            .get(c)
-            .is_some_and(|c| c.is_call() && *c.get_addr() == addr)
-    });
+    let call = data
+        .bb_ops(bb)
+        .into_iter()
+        .skip_while(|&c| c != op)
+        .find(|&c| {
+            data.obank()
+                .get(c)
+                .is_some_and(|c| c.is_call() && *c.get_addr() == addr)
+        });
     call.is_some_and(|call| branch_reads_call(data, bb, call))
 }
 

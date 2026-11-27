@@ -1,0 +1,72 @@
+# unlace issue #20: option `phiarm on` split one source variable at a join that
+# feeds a loop. phiarm-loopexit.toml pins the loop counter read at its loop exit;
+# this file pins the value a loop starts from.
+#
+# openssh umac.c zero_pad, built by gcc 15.3 -O2: three loops share `p` and
+# `nbytes`. The `nbytes` computed after the first loop (0x40113e) enters the
+# second loop on its entry edge (0x401149) and also reaches the join before the
+# third (0x401173, through 0x4011b2). It never comes back along a back edge, so
+# `phiarm.rs (loop_carried)` treated it as an arm value of its own and the join
+# printed as a second variable: `v3 = a1; ... v3 = ((a1 - 1) + (int)a0) -
+# (int)v2; if (v3 <= 7) { a1 = v3; goto ...; } a1 = v3;`. The third loop's head
+# split its pointer the same way (`v4 = v1;`). A join that is a loop head, or
+# whose output reaches one, is now the loop variable, and so is an arm that
+# reaches a loop head along either edge; with `phiarm on` the function prints as
+# it does with the option off.
+#
+# Bytes: gcc 15.3 -O2 -fno-inline -fno-tree-loop-distribute-patterns
+# -fno-stack-protector -fcf-protection=none -no-pie (the last loop stays a loop
+# instead of a memset call):
+#
+#   typedef uint8_t UINT8; typedef uint64_t UWORD;
+#   void zero_pad(UINT8 *p, int nbytes) {
+#       if (nbytes >= (int)sizeof(UWORD)) {
+#           while ((ptrdiff_t)p % sizeof(UWORD)) { *p = 0; nbytes--; p++; }
+#           while (nbytes >= (int)sizeof(UWORD)) {
+#               *(UWORD *)p = 0; nbytes -= sizeof(UWORD); p += sizeof(UWORD); }
+#       }
+#       while (nbytes) { *p = 0; nbytes--; p++; }
+#   }
+#
+# Default off: the function prints the same without the option.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401120', name = 'zero_pad' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401120'
+readonly = true
+hex = '83fe077e4e4889f840f6c707741b6690c600004889c24883c001a80775f28d743eff29d683fe077e694889c7660f1f84000000000066662e0f1f84000000000083ee0848c707000000004883c70883fe0777ed89f04801f885f674344889c24829fa83e2017419c607004883c7014839f8741e669066662e0f1f840000000000c607004883c702c647ff004839f875f0c3c34889c7ebbc'
+
+[script]
+commands = [
+    'option phiarm on',
+    'lo fu zero_pad',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'issue #20: nbytes keeps one name, no second esi variable (phiarm on)'
+count = 0
+literal = '// esi'
+
+[[match]]
+name = 'issue #20: the count computed after the first loop is assigned to nbytes itself (phiarm on)'
+count = 1
+literal = 'a1 = ((a1 - 1) + (int4)a0) - (int4)v2;'
+
+[[match]]
+name = 'issue #20: no copy into nbytes from a split variable (phiarm on)'
+count = 0
+regex = '^ *a1 = v[0-9]+;$'
+
+[[match]]
+name = 'issue #20: the third loop keeps its pointer in one variable (phiarm on)'
+count = 0
+literal = 'v4'

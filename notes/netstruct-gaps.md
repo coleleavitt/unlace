@@ -90,10 +90,12 @@ htons(40)), `mov WORD PTR [rsp+0x18],0x640` (ttl 64, protocol 6),
 feedback's `0xa0051045`, `0x640` and `0x787d1850` are the same three words
 (tot_len 1440; ttl/protocol; doff 5, PSH|ACK, window 0x7d78).
 
-Three things are missing, in the order they would have to land:
+Three things were missing, in the order they would have to land:
 
-1. The 16-byte vector store makes the first 16 bytes one variable, and every
-   narrower store after it re-assigns the whole variable through a CONCAT:
+1. Fixed by `fillrefine` (spec 03, "Frame ranges under a constant fill";
+   stage test `tests/stages/fillrefine.toml`). The 16-byte vector store made
+   the first 16 bytes one variable, and every narrower store after it
+   re-assigned the whole variable through a CONCAT:
 
    ```c
    char v5 [16]; // stack - 0x48
@@ -105,15 +107,46 @@ Three things are missing, in the order they would have to land:
 
    This is the general -O2 shape of "zero a struct, then fill fields", not
    specific to packets, and it would print the same with an `iphdr` type.
-   `memsetrecover` collapses fill runs only into a typed char array
-   (`RuleMemsetCopy` over `StringSequence`), so it does not fire here.
-2. The types. The built-in `linux-x86_64.ktl` defines `iphdr`, `tcphdr`,
-   `udphdr` and `icmphdr`, but leaves the bitfield bytes (`ihl:4 version:4`,
-   tcphdr's `doff` and flags) as holes.
-3. The recognition. No prototype says a buffer is a packet (`sendto` takes
-   `const void *`). A heuristic option could type a frame object that reaches
-   a call, whose first byte is a constant 0x45-0x4f and whose byte 9 is 1, 6
-   or 17, as `struct { struct iphdr ip; struct tcphdr|udphdr|icmphdr l4; }`.
+   `Heritage::placeMultiequals` refines a range only when no write covers
+   it, and gcc's widest-mode clear (`clear_by_pieces`) always does; neither
+   gcc's nor LLVM's dead-store elimination can trim a clear whose live bytes
+   sit between field stores. A range cleared by fills and then filled is now
+   refined at its accesses, so the -O2 packet prints one store per field (the
+   -O0 shape) with the zero kept only where no field store overwrites it:
+
+   ```c
+   v7 = 0;
+   v5 = 0;
+   v4 = 0x3412;
+   v6 = 0x640;
+   v3 = 0x28001045;
+   v12 = 0x1000000;
+   v14 = 0xd0160250;
+   ```
+2. Fixed by the libc types: `libctypes` now defines `iphdr`, `tcphdr`, `udphdr`
+   and `icmphdr` with their bitfields (`ihl:4 version:4`, tcphdr's `doff` and
+   flags, measured with gcc 15.3 against glibc 2.43); `icmphdr`'s `un` union is
+   still a hole.
+3. Fixed by the `pkthdr` option (P6, default off; spec 06, "A raw socket's
+   packet buffer by its headers"; stage test `tests/stages/pkthdr.toml`). A frame
+   object whose first byte is a constant 0x45, or that a `sendto` on a `SOCK_RAW`
+   socket reads, is typed as its IPv4 header and the layer-4 header its protocol
+   byte names. A constant written into a bitfield struct is split at its field
+   boundaries (unconditional), so the words print by field:
+
+   ```c
+   iphdr v3;
+   tcphdr v7;
+   v3.version = 4;
+   v3.ihl = 5;
+   v3.tos = 0x10;
+   v3.tot_len = 0x2800;
+   v3.ttl = 0x40;
+   v3.protocol = 6;
+   v7.doff = 5;
+   v7.syn = 1;
+   v7.window = 0xd016;
+   ```
 
 At -O0 (`gcc -O0 -static -s netstruct.c`, not committed: no assertion needs
 it) the packet is zeroed by a call and filled a byte at a time, so it

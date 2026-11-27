@@ -3858,6 +3858,22 @@ impl ConsoleProgram {
                 unlace_base::notes::say_once(&path, &format!("[unlace typelib] {message}"));
             }
         }
+        // (unlace `pkthdr`) The network headers the frame layout names a packet by.
+        if self
+            .arch()
+            .unlace_options
+            .get::<unlace_decomp::pkthdr::PktHdr>()
+            .0
+        {
+            let (_, word_size) = self.arch().data_org();
+            if let Err(err) = unlace_analysis::analyzers::protos::libctypes::intern_packet_headers(
+                self.arch().types(),
+                word_size,
+            ) {
+                let path = self.image_path();
+                unlace_base::notes::say_once(&path, &format!("[unlace pkthdr] {}", err.explain()));
+            }
+        }
         let committed = commit_analysis_output(self, &code_space, merged, zero_size_data_names);
         self.stash_float_scan();
         committed

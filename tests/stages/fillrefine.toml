@@ -1,0 +1,76 @@
+# A frame range a constant write covers is refined at its accesses' boundaries.
+# send_syn (fixtures/netstruct/netstruct.c) clears a 40-byte packet with
+# `memset(packet, 0, sizeof packet)`, which gcc -O2 expands as
+# `pxor xmm0,xmm0; movaps [rsp+0x10],xmm0; movaps [rsp+0x20],xmm0;
+# mov QWORD PTR [rsp+0x30],0`, then fills the IPv4 and TCP header fields with
+# narrower stores. `Heritage::placeMultiequals` (heritage.cc:2611) refines a
+# range only when no write covers all of it, so every field store after the
+# 16-byte zero re-assigned the whole buffer through a CONCAT:
+# `v5 = CONCAT28(0x640,v5); v5 = CONCAT124(v5,0x28001045);`.
+#
+# Stage model: P3 heritage refinement
+# (crates/unlace-middle/src/p3_dataflow/fillrefine.rs). A constant has no
+# layout of its own, so a range whose covering writes are all constants is
+# refined like one no write covers, and each piece of the constant is its own
+# constant COPY. Bytes: netstruct-gcc-O2 (stripped static, the feedback's
+# shape) and netstruct-gcc-O2-dyn, gcc 15.3.0 -O2 against glibc 2.43
+# (fixtures/netstruct/build.sh). Unconditional (a correctness fix of the
+# refinement gate), so there is one pass.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netstruct-gcc-O2',
+    'read symbols',
+    'load function sub_402b00',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netstruct-gcc-O2-dyn',
+    'read symbols',
+    'load function sub_14f0',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'FILLREFINE #1: no field store re-assigns the cleared buffer through a CONCAT'
+count = 0
+literal = 'CONCAT'
+
+[[match]]
+name = 'FILLREFINE #2: no piece of the 16-byte zero is left as an unfolded SUBPIECE'
+count = 0
+literal = 'SUB16'
+
+[[match]]
+name = 'FILLREFINE #3: the first IPv4 word (version/IHL, tos, tot_len) is its own store'
+count = 2
+literal = ' = 0x28001045;'
+
+[[match]]
+name = 'FILLREFINE #4: ttl and protocol are their own store'
+count = 2
+literal = ' = 0x640;'
+
+[[match]]
+name = 'FILLREFINE #5: the IPv4 id is its own store'
+count = 2
+literal = ' = 0x3412;'
+
+[[match]]
+name = 'FILLREFINE #6: the TCP sequence number is its own store'
+count = 2
+literal = ' = 0x1000000;'

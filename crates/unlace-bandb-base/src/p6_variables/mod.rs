@@ -25,6 +25,7 @@ pub mod libcnames;
 pub mod naming;
 pub mod nulterminator;
 pub mod paramcopyhoist;
+pub mod pkthdr;
 pub mod pointeevalue;
 pub mod registerepochs;
 pub mod slotptr;

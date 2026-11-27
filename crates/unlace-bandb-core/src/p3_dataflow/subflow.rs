@@ -4512,6 +4512,20 @@ struct Component {
     offset: int4,
 }
 
+/// (unlace) Whether bitfields occupy any of the bytes `[offset, offset + size)`
+/// of `ct`, a structure or a partial one. `getSubType` and `getHoleSize` see
+/// only whole fields, so a split would cut an `iphdr`'s `ihl`/`version` byte out
+/// as a hole the bitfield rules can no longer name.
+fn holds_bitfields(ct: &Datatype, offset: int4, size: int4) -> bool {
+    if !ct.has_bitfields() {
+        return false;
+    }
+    match (ct.get_partial_base(), ct.get_partial_offset()) {
+        (Some(base), Some(base_off)) => base.has_bit_fields_in_range(base_off + offset, size),
+        _ => ct.has_bit_fields_in_range(offset, size),
+    }
+}
+
 /// Split a p-code COPY, LOAD, or STORE based on the underlying composite
 /// data-type (C++ `SplitDatatype`).
 ///
@@ -4599,6 +4613,9 @@ impl SplitDatatype {
             let (sub, newoff) = cur_type.get_sub_type(cur_off)?;
             match sub {
                 None => {
+                    if holds_bitfields(ct, offset, 1) {
+                        return Ok((Some(types.get_base(1, type_metatype::TYPE_UNKNOWN)?), false));
+                    }
                     let hole = ct.get_hole_size(offset)?;
                     if hole > 0 {
                         let hole = if hole > 8 { 8 } else { hole };
@@ -4700,6 +4717,15 @@ impl SplitDatatype {
             return Ok(false);
         }
         if out_category == 2 && in_category == 2 {
+            return Ok(false);
+        }
+        // (unlace) A non-constant copy is not split along bitfields: the bitfield
+        // rules name it from the whole write. A constant is split: its bitfield
+        // byte stays one piece, which `RuleBitFieldOut` names from the struct.
+        if !in_constant
+            && (holds_bitfields(in_base, 0, in_base.get_size())
+                || holds_bitfields(out_base, 0, out_base.get_size()))
+        {
             return Ok(false);
         }
         if !in_constant
@@ -6129,6 +6155,23 @@ impl Rule for RuleSplitCopy {
             .get_type_def_facing()
             .clone();
         let metain = in_type.get_metatype();
+        let mut out_type = out_type;
+        let own_meta = out_type.get_metatype();
+        if data.vbank().get(in0).expect("stale in0").is_constant()
+            && own_meta != type_metatype::TYPE_STRUCT
+            && own_meta != type_metatype::TYPE_PARTIALSTRUCT
+            && own_meta != type_metatype::TYPE_ARRAY
+        {
+            if let Some((container, off)) = crate::bitfield::bitfield_container(data, out) {
+                let arch = Rc::clone(data.get_arch());
+                let size = data.vbank().get(out).expect("stale out").get_size();
+                if let Some(types) = arch.types() {
+                    if let Ok(part) = types.get_type_partial_struct(container, off, size) {
+                        out_type = part;
+                    }
+                }
+            }
+        }
         let metaout = out_type.get_metatype();
         if metain != type_metatype::TYPE_PARTIALSTRUCT
             && metaout != type_metatype::TYPE_PARTIALSTRUCT

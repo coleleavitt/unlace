@@ -1,0 +1,137 @@
+# A raw socket's packet buffer is typed as the header the sender builds (option
+# pkthdr, default off). sub_1270 (netraw.c send_udp) builds an IPv4 header and a
+# UDP header in one stack buffer and sends it on a SOCK_RAW socket of
+# IPPROTO_RAW, so the buffer is the packet; sub_1380 (send_ping) sends an ICMP
+# echo on a SOCK_RAW socket of IPPROTO_ICMP, so its buffer is the icmphdr.
+#
+# Stage model: P6 stack-frame-layout (crates/unlace-bandb-base/src/p6_variables/
+# pkthdr.rs, run by restructure_varnode before the merge), with the console
+# hook that interns the libctypes header records while the option is on. Bytes:
+# netraw-gcc-O2-dyn, gcc 15.3.0 -O2 -s against glibc 2.43 (fixtures/netstruct/
+# build.sh), so socket and sendto keep their import names.
+#
+# Option: pkthdr (default off). Pass 1 is the default (#1-#2), pass 2 sets it on
+# (#3-#8). The bitfield words of the packet still print as raw constants, so
+# only the named fields are asserted.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netraw-gcc-O2-dyn',
+    'read symbols',
+    'load function sub_1270',
+    'decompile',
+    'print C',
+    'load function sub_1380',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netraw-gcc-O2-dyn',
+    'option pkthdr on',
+    'read symbols',
+    'load function sub_1270',
+    'decompile',
+    'print C',
+    'load function sub_1380',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netstruct-gcc-O2',
+    'option pkthdr on',
+    'read symbols',
+    'load function sub_402b00',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'PKTHDR #1: by default the UDP packet buffer is bytes'
+count = 1
+literal = 'uint1 v4 [16];'
+
+[[match]]
+name = 'PKTHDR #2: by default the first IPv4 byte is stored as a byte'
+count = 1
+literal = 'v4[0] = a2 & 0xf | 0x40;'
+
+[[match]]
+name = 'PKTHDR #3: on, the UDP packet buffer is declared iphdr'
+count = 1
+literal = 'iphdr v4;'
+
+[[match]]
+name = 'PKTHDR #4: on, the UDP header that follows it is declared udphdr'
+count = 1
+literal = 'udphdr v5;'
+
+[[match]]
+name = 'PKTHDR #5: on, the version and IHL bitfields are named'
+count = 1
+literal = 'v4.version = 4;'
+
+[[match]]
+name = 'PKTHDR #6: on, the IHL bitfield is named and takes the argument'
+count = 1
+literal = 'v4.ihl = a2;'
+
+[[match]]
+name = 'PKTHDR #7: on, the protocol and the total length are named'
+count = 1
+literal = 'v4.protocol = 0x11;'
+
+[[match]]
+name = 'PKTHDR #8: on, the ICMP echo buffer is declared icmphdr'
+count = 1
+literal = 'icmphdr v2;'
+
+[[match]]
+name = 'PKTHDR #9: on, the ICMP type is named'
+count = 1
+literal = 'v2.type = 8;'
+
+[[match]]
+name = 'PKTHDR #10: on, send_syn names the IPv4 version and IHL bitfields'
+count = 1
+literal = 'v3.version = 4;'
+
+[[match]]
+name = 'PKTHDR #11: on, send_syn names the IHL bitfield'
+count = 1
+literal = 'v3.ihl = 5;'
+
+[[match]]
+name = 'PKTHDR #12: on, send_syn names the TOS and the total length of the first word'
+count = 1
+literal = 'v3.tos = 0x10;'
+
+[[match]]
+name = 'PKTHDR #13: on, the total length of the first word is named'
+count = 1
+literal = 'v3.tot_len = 0x2800;'
+
+[[match]]
+name = 'PKTHDR #14: on, send_syn names the TCP data offset bitfield'
+count = 1
+literal = 'v7.doff = 5;'
+
+[[match]]
+name = 'PKTHDR #15: on, send_syn names the TCP SYN flag'
+count = 1
+literal = 'v7.syn = 1;'
+
+[[match]]
+name = 'PKTHDR #16: on, send_syn names the TCP window'
+count = 1
+literal = 'v7.window = 0xd016;'

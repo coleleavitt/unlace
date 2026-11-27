@@ -5416,37 +5416,52 @@ impl Heritage {
                 }
             };
         let sub_typeop = typeop_skeleton(OpCode::CPUI_SUBPIECE);
+        let copy_typeop = typeop_skeleton(OpCode::CPUI_COPY);
+        // (unlace `fillrefine`) A piece of a constant write is that constant's bytes.
+        let fill = insertop.and_then(|op| super::fillrefine::copied_constant(fd, op));
+        let mut prev: Option<crate::context::OpId> = None;
         for &vn in vnlist {
             let (vnoff, vnsize) = {
                 let v = fd.vbank().get(vn).expect("split_pieces: piece vn");
                 (v.get_addr().get_offset(), v.get_size())
             };
-            let newop = fd.new_op(2, opaddress.clone());
-            fd.op_set_opcode(newop, sub_typeop.clone());
             let diff: uintb = spc.wrap_offset(if isbigendian {
                 baseoff.wrapping_sub(vnoff.wrapping_add(vnsize as u64))
             } else {
                 vnoff.wrapping_sub(baseoff)
             });
-            fd.op_set_input(newop, startvn, 0)
-                .expect("split_pieces: set in0");
-            let cvn = fd.new_constant(4, diff);
-            fd.op_set_input(newop, cvn, 1)
-                .expect("split_pieces: set in1");
+            let newop = if let Some(value) = fill {
+                let newop = fd.new_op(1, opaddress.clone());
+                fd.op_set_opcode(newop, copy_typeop.clone());
+                let cvn = fd.new_constant(vnsize, super::fillrefine::piece(value, diff, vnsize));
+                fd.op_set_input(newop, cvn, 0)
+                    .expect("split_pieces: set fill");
+                newop
+            } else {
+                let newop = fd.new_op(2, opaddress.clone());
+                fd.op_set_opcode(newop, sub_typeop.clone());
+                fd.op_set_input(newop, startvn, 0)
+                    .expect("split_pieces: set in0");
+                let cvn = fd.new_constant(4, diff);
+                fd.op_set_input(newop, cvn, 1)
+                    .expect("split_pieces: set in1");
+                newop
+            };
             fd.op_set_output(newop, vn)
                 .expect("split_pieces: set output");
             // C++ `opInsert(newop,bl,insertiter)` where insertiter points just
             // after the write (or block begin).  When `after_anchor` is set we
-            // insert directly after it (op_insert_after); each successive piece
-            // also goes after the write, preserving the C++ order where the
-            // iterator is recomputed from the same write each loop.
-            match after_anchor {
-                Some(anchor) => fd.op_insert_after(newop, anchor),
-                None => {
+            // insert directly after it (op_insert_after). A fill piece goes after
+            // the piece before it, so the copies keep the order of `vnlist`.
+            match (prev, after_anchor) {
+                (Some(before), _) if fill.is_some() => fd.op_insert_after(newop, before),
+                (_, Some(anchor)) => fd.op_insert_after(newop, anchor),
+                (_, None) => {
                     let head = fd.bb_op_head(bl);
                     fd.op_insert(newop, bl, head);
                 }
             }
+            prev = Some(newop);
         }
     }
 
@@ -5912,8 +5927,18 @@ impl Heritage {
                     &writevars,
                     &inputvars,
                 );
+            let fill_split = !byte_copy
+                && !pair_split
+                && super::fillrefine::split_fill(
+                    fd,
+                    &memrange.addr,
+                    memrange.size,
+                    maxw,
+                    &writevars,
+                    &inputvars,
+                );
             let normal = memrange.size > 4 && maxw < memrange.size;
-            if byte_copy || pair_split || normal {
+            if byte_copy || pair_split || normal || fill_split {
                 if let Some(refiter) = self.refinement(
                     fd,
                     idx,

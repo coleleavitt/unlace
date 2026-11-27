@@ -300,6 +300,8 @@ fn aggressive_carries_every_default_off_option() {
         "orchainbool",
         // `orchainlive` (issue #10) is swept in its own PR; preset membership waits on it.
         "orchainlive",
+        // `pkthdr` (netstruct gap 3) types raw-socket packet buffers by a heuristic; preset membership waits on a decbench sweep.
+        "pkthdr",
         // `phithread` (issue #20) landed without a corpus sweep.
         "phithread",
         // The options below were registered without a preset decision. They are

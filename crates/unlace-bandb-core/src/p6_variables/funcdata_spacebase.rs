@@ -684,6 +684,7 @@ impl FuncdataSpacebaseExt for Funcdata {
         state.gather_symbols(&hints);
         crate::indexstride::settle(self, &mut state);
         crate::sockfamily::settle(self, &mut state, &space);
+        crate::pkthdr::settle(self, &mut state, &space);
         crate::arrayextent::extend_unbounded(self, &mut state, &space, &unbounded);
 
         super::callarrayextent::coalesce_delay_slot_init(self, &mut state, &space);

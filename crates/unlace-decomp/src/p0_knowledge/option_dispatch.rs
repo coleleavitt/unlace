@@ -262,6 +262,7 @@ unlace_options! { self, p1;
     "castobject" => registered!(crate::castobject::CastObject),
     "indexstride" => registered!(crate::indexstride::IndexStride),
     "sockfamily" => registered!(crate::sockfamily::SockFamily),
+    "pkthdr" => registered!(crate::pkthdr::PktHdr),
     "calleeargs" => registered!(crate::calleestackargs::UnlaceCalleeargs),
     "calleeargsmsvc" => registered!(crate::calleestackargs::UnlaceCalleeargsMsvc),
     "argclobber" => registered!(crate::argclobber::ArgClobber),

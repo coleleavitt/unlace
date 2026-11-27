@@ -296,6 +296,9 @@ Three tiers:
 | a port is stored as v4.sa_data[0] = (char)v1 and v4.sa_data[1] = SUB21(v1,1) | [`sockfamily`](#sockfamily----on--off-default-on) |
 | a sockaddr local's IPv4 address is stored as four shifted bytes into sa_data | [`sockfamily`](#sockfamily----on--off-default-on) |
 | *(unsigned int *)&v4.sa_data[2] = a2; beside v4.sa_family = 2 | [`sockfamily`](#sockfamily----on--off-default-on) |
+| a packet buffer's first word prints as a raw constant such as v3 = 0x28001045 or 0xa0051045 | [`pkthdr`](#pkthdr----on--off-default-off) |
+| a raw sender stores 0x640 (ttl 64, protocol 6) into an anonymous unsigned short | [`pkthdr`](#pkthdr----on--off-default-off) |
+| sendto on a SOCK_RAW socket takes a buffer declared as scalars or a char array | [`pkthdr`](#pkthdr----on--off-default-off) |
 | an out-parameter local is passed as (int *)&v2 to waitpid or wait | [`castobject`](#castobject----on--off-default-on) |
 | a stack local is declared unsigned int where the callee that fills it declares int * | [`castobject`](#castobject----on--off-default-on) |
 | return (int)v1 >> 8 & 0xff; over an unsigned int status filled by waitpid | [`castobject`](#castobject----on--off-default-on) |
@@ -2231,6 +2234,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default (0/675 datatest assertions move; speed: retired user instructions over every function of /usr/bin/nc (103) and /usr/bin/ping (185), off/on alternating, median -0.4% and -2.0%, inside the noise of identical runs). The tell it fixes is a socket address local declared `sockaddr` whose port or IPv4 address is written into `sa_data` byte by byte (`v4.sa_data[2] = (char)v3; v4.sa_data[3] = (char)(v3 >> 8);`) or through casts (`*(unsigned int *)&v4.sa_data[2] = a2;`). Flip off to declare the object by the parameter it reaches, which is right for a program that really declares `struct sockaddr` and fills `sa_data` itself. A value stored whole into `sin_addr` takes `struct in_addr` from the field, so a parameter it comes from can print as `in_addr a2`.
 - **Where / provenance:** P6/stack-frame-layout · unlace · type-inference · netstruct
 - **Example:** `option sockfamily on`
+
+### `pkthdr` -- on | off, default `off`
+
+- **Symptoms:** a packet buffer's first word prints as a raw constant such as v3 = 0x28001045 or 0xa0051045; a raw sender stores 0x640 (ttl 64, protocol 6) into an anonymous unsigned short; sendto on a SOCK_RAW socket takes a buffer declared as scalars or a char array.
+- **What it does:** Declare a frame buffer a function builds an IPv4 packet in as the packet's headers: `iphdr` at its start and, 20 bytes on, the `tcphdr`, `udphdr` or `icmphdr` its protocol names. A buffer is taken as a packet when every store to its first byte is the constant 0x45 (version 4, IHL 5) and every store to its protocol byte one constant, or when it is the buffer of a `sendto` on a `socket(AF_INET, SOCK_RAW, protocol)` the same function created and the program supplies the IP header (`IPPROTO_RAW`, or `setsockopt(fd, IPPROTO_IP, IP_HDRINCL, ...)`); a raw socket of a transport protocol without `IP_HDRINCL` carries that transport header at the buffer's start. The records are `libctypes`' published layouts with their bitfields (`ihl`/`version`, `doff`, the TCP flags), interned while the option is on, so the IPv4 version and IHL bits print by name (`v3.version = 4; v3.ihl = a2;`). A constant word that also covers plain bytes, such as gcc -O2's `0x28001045`, is split at the struct's fields and names each bitfield (spec 06, `pkthdr`).
+- **When to flip:** Off by default: it reads a packet out of constants, and a local whose first byte is 0x45 next to a constant ninth byte is not always one. Turn it on for a raw-socket sender or packet crafter whose header fields print as anonymous locals and raw constants (`v3 = 0x28001045; v6 = 0x640;`, the feedback's `0xa0051045` and `0x640`). A record the factory already holds under the same name and width (the image's own DWARF) is used as it is; one held incomplete or at another width is not used.
+- **Where / provenance:** P6/stack-frame-layout · unlace · type-inference · netstruct
+- **Example:** `option pkthdr on`
 
 ### `castobject` -- on | off, default `on`
 

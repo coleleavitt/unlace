@@ -52,6 +52,6 @@ jobs:
       - name: Seed corpus, crash corpus and random sweep
         env:
           UNLACE_FUZZ_ITERS: ${{ github.event.inputs.iterations || '200000' }}
-      UNLACE_SPECS: ${{ github.workspace }}/specs
-      SLEIGHHOME: ${{ github.workspace }}/specs
+          UNLACE_SPECS: ${{ github.workspace }}/specs
+          SLEIGHHOME: ${{ github.workspace }}/specs
         run: cargo test -p unlace-fuzz

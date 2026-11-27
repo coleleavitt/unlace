@@ -9358,7 +9358,10 @@ on other paths holds a frame address and is dereferenced there, which made
 of the engine's `PTRADD`/`PTRSUB` (`dereferenced`; an add of two variables
 carries nothing, since either operand could be the base); it is computed from
 the stack pointer by copies and literal offsets alone (`frame_address`);
-it is a string literal (`unlace_charptr::constant_is_string`) -- any other
+it is a string literal (`unlace_charptr::constant_is_string`), whether the
+argument is the constant itself, the `PTRSUB` off the constant zero that names
+it, or the `COPY` of the constant `ptrsubcharconstant` folds that `PTRSUB` (and
+a literal `PTRADD` on it, `"first"` at `_IO_stdin_used + 8`) into -- any other
 constant is a number as often as an address, and coreutils -O0 `tr` passes
 `squeeze_filter` the buffer size `0x2000`, which is also the address of
 `.init`; it is the result of a call whose declared prototype returns a pointer
@@ -9902,6 +9905,26 @@ single `double` and leaves that value unused (an asm-forced evaluation, as in
 a floating output entry that a narrow write fills, so the rule changes nothing
 elsewhere. The stage test
 `tests/stages/gh873-zerofillreturn-a64.toml` runs clang and gcc AArch64 code.
+
+### (unlace) A floating result in a higher vector register (`hfareturn.rs`)
+
+AAPCS64 returns a homogeneous floating-point aggregate one member per vector
+register from `v0` (`struct { float x, y, z; }` in `s0`, `s1`, `s2`). A member
+the function returns untouched from its own argument fails the ancestor check,
+and the fill-in cannot then start at `s1`. After `drop_zero_fill`,
+`keep_lower_results` (`crates/unlace-bandb-core/src/p4_calls/hfareturn.rs`)
+marks active the first lane of each lower floating output entry that every
+RETURN reads as the function's own input, below the highest entry holding a
+value the function computes (not a constant, not a COPY of one). It then
+retires the zero fill above each active first lane narrower than a doubleword
+(`s0`, `s1`), where two or more entries have one, and the output step joins
+the members, one first lane per entry in ascending order, at a join address.
+The fill above a whole doubleword lane (`d0`, `d1`, or x86-64's `xmm0` holding
+two floats) is `drop_zero_fill`'s alone. Retiring it there joined gcc `-O0`'s
+`fa`, whose `d1` is reloaded from a frame slot a call result was stored to
+through a pointer, which `drop_zero_fill` keeps as `q0`. On x86-64 it joined
+`xmm1` to the pair in `xmm0` of a function returning `struct { float x, y, z;
+}`, whose callers read the eight bytes of `xmm0`, into an `undefined12`.
 
 ### (unlace) The registers a zeroing epilogue clears (`zerocallregs.rs`)
 

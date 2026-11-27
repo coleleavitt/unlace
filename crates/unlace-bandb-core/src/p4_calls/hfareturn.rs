@@ -13,6 +13,16 @@
 //! result (a compiler does not compute a dead value), so
 //! [`keep_lower_results`] also keeps the first lane of each lower floating
 //! output entry the RETURNs read as the function's own input.
+//!
+//! A first lane that is a whole doubleword (`d0`, `d1`, x86-64's `xmm0` holding
+//! two floats) is `zerofillreturn`'s: it retires the zero fill above one only
+//! where every later register returns a member it proves, and keeps `q0` whole
+//! otherwise (a `d1` reloaded from a frame slot a call result was stored to
+//! through a pointer). So [`keep_lower_results`] retires the fill above
+//! narrower lanes alone (`s0`, `s1`, `s2`), and only where two or more
+//! registers have one: x86-64 SysV returns `struct { float x, y, z; }` as `x`,`y`
+//! in `xmm0` and `z` in `xmm1`, and that keeps returning `xmm0`, the eight
+//! bytes its callers read.
 
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::type_class;
@@ -21,6 +31,9 @@ use crate::funcdata::Funcdata;
 use unlace_base::address::Address;
 use unlace_base::space::VarnodeStorage;
 use unlace_num::opcodes::OpCode;
+
+/// The width of a whole doubleword lane, whose fill `zerofillreturn` decides.
+const DOUBLEWORD: i32 = 8;
 
 /// The index among the model's floating output entries of the entry holding
 /// `[off, off+size)` in the space `space`.
@@ -113,7 +126,10 @@ fn retire_member_fill(
             .map(|e| (e, off == entries[e].0))
     };
     let firsts: Vec<usize> = (0..active.get_num_trials())
-        .filter(|&i| active.get_trial(i).is_active())
+        .filter(|&i| {
+            let t = active.get_trial(i);
+            t.is_active() && t.get_size() < DOUBLEWORD
+        })
         .filter_map(|i| {
             lane_of(active, i)
                 .filter(|(_, first)| *first)

@@ -421,9 +421,8 @@ pub(super) fn named_aggregate(
                 flags::has_bitfields
             };
             let shell = types.get_type_struct(name)?;
-            return types.set_fields_struct_raw(
-                &shell, fields, bitfields, agg.size, agg.align, extra,
-            );
+            return types
+                .set_fields_struct_raw(&shell, fields, bitfields, agg.size, agg.align, extra);
         }
     }
     let shell = types.get_type_struct(name)?;

@@ -612,8 +612,9 @@ fn glibc_bitfields_fit_their_byte() {
             assert_eq!(*held & mask, 0, "{name}::{} overlaps a bitfield", row.name);
             *held |= mask;
             assert!(
-                fields.iter().all(|f| row.off < f.offset
-                    || row.off >= f.offset + f.field_type.get_size()),
+                fields
+                    .iter()
+                    .all(|f| row.off < f.offset || row.off >= f.offset + f.field_type.get_size()),
                 "{name}::{} shares its byte with a field",
                 row.name
             );
@@ -622,7 +623,12 @@ fn glibc_bitfields_fit_their_byte() {
                 .find(|b| b.name == row.name)
                 .unwrap_or_else(|| panic!("{name}::{} was not built", row.name));
             assert_eq!(
-                (built.byte_offset, built.byte_size, built.least_sig_bit, built.num_bits),
+                (
+                    built.byte_offset,
+                    built.byte_size,
+                    built.least_sig_bit,
+                    built.num_bits
+                ),
                 (row.off, 1, lsb, width),
                 "{name}::{}",
                 row.name
@@ -636,7 +642,12 @@ fn glibc_bitfields_fit_their_byte() {
 fn the_packet_headers_carry_their_bitfields() {
     let types = factory();
     intern_packet_headers(&types, 1).expect("intern the headers");
-    for (name, width, bitfields) in [("iphdr", 20, 2), ("tcphdr", 20, 9), ("udphdr", 8, 0), ("icmphdr", 8, 0)] {
+    for (name, width, bitfields) in [
+        ("iphdr", 20, 2),
+        ("tcphdr", 20, 9),
+        ("udphdr", 8, 0),
+        ("icmphdr", 8, 0),
+    ] {
         let record = types
             .find_by_name(name)
             .expect("lookup")

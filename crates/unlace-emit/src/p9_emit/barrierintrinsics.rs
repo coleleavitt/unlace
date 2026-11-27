@@ -1,40 +1,59 @@
-//! PowerPC barrier user ops printed as the GCC and Clang barrier builtins.
+//! Barrier and synchronisation user ops printed as the builtins the source called.
 //!
-//! SLEIGH lifts `sync L` as `sync(tmp)` with `tmp = L`, and `isync` as
-//! `instructionSynchronize()`. The source that produced them called
-//! `__sync()`, `__lwsync()`, `__ptesync()` or `__isync()`. The rewrite is
-//! keyed on the user-op name and changes only the spelling of the call; the
-//! `sync` operand must be a constant, directly or through one COPY, and any
+//! SLEIGH lifts PowerPC `sync L` as `sync(tmp)` with `tmp = L`, and `isync` as
+//! `instructionSynchronize()`; these print as `__sync()`, `__lwsync()`, `__ptesync()`
+//! or `__isync()`. MIPS `sync` is `SYNC(stype)` and prints as `_sync(stype)`, and
+//! RISC-V `sfence.vma rs1,rs2` prints as `_sfence(rs1, rs2)`. The MIPS `synci` and the
+//! RISC-V `fence` forms are not named: `synci` lifts to no user op, and `fence` drops
+//! its predecessor and successor sets, so a full fence cannot be told from the rest.
+//! The rewrite is keyed on the user-op name and changes only the spelling of the call;
+//! the PowerPC `sync` operand must be a constant, directly or through one COPY, and any
 //! other value keeps the SLEIGH name.
 
-use crate::acleintrinsics::Intrinsic;
+use crate::acleintrinsics::{Arg, Intrinsic};
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-/// The barrier builtin a PowerPC user op prints as, when `barrierintrinsics` is on.
+/// The builtin a user op prints as, when `barrierintrinsics` is on.
 #[doc(hidden)]
 pub fn intrinsic(fd: &Funcdata, arch: &Architecture, op: OpId, name: &[u8]) -> Option<Intrinsic> {
     if !arch
         .unlace_options
         .get::<crate::printc::BarrierIntrinsics>()
         .0
-        || !arch.archid.starts_with("PowerPC:")
     {
         return None;
     }
     let o = fd.obank().get(op)?;
     let operands: Vec<VarnodeId> = (1..o.num_input()).filter_map(|i| o.get_in(i)).collect();
-    let l = match operands.as_slice() {
-        &[l] => constant(fd, l),
-        _ => None,
-    };
-    let name = spelling(name, l)?;
+    if arch.archid.starts_with("PowerPC:") {
+        let l = match operands.as_slice() {
+            &[l] => constant(fd, l),
+            _ => None,
+        };
+        return Some(Intrinsic {
+            name: spelling(name, l)?,
+            args: Vec::new(),
+        });
+    }
+    let spelled = other_spelling(arch.archid.split(':').next()?, name)?;
     Some(Intrinsic {
-        name,
-        args: Vec::new(),
+        name: spelled,
+        args: operands.into_iter().map(Arg::Vn).collect(),
     })
+}
+
+/// The builtin a MIPS or RISC-V user op named `name` prints as, given the processor
+/// family of the architecture ID.
+#[doc(hidden)]
+pub fn other_spelling(family: &str, name: &[u8]) -> Option<&'static str> {
+    match (family, name) {
+        ("MIPS", b"SYNC") => Some("_sync"),
+        ("RISCV", b"sfence.vma") => Some("_sfence"),
+        _ => None,
+    }
 }
 
 /// The builtin a user op named `name` prints as, given the constant `l` of a

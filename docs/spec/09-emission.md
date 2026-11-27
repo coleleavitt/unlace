@@ -5618,17 +5618,20 @@ exist only when the same option has set the `ShowMemTag` context (chapter
 02). `off` restores the SLEIGH names and the tag-free lift. Pinned by
 `tests/stages/acleintrinsics.toml`.
 
-### PowerPC barrier intrinsics (`barrierintrinsics`)
+### Barrier and sync intrinsics (`barrierintrinsics`)
 
-**(unlace) `option barrierintrinsics on|off`, default `off`, PowerPC only,
+**(unlace) `option barrierintrinsics on|off`, default `off`,
 `crates/unlace-emit/src/p9_emit/barrierintrinsics.rs`.** SLEIGH lifts `sync L` as
 `sync(tmp)` with `tmp = L`, and `isync` as `instructionSynchronize()`. With the option on, a
 `sync` whose operand is the constant 0, 1 or 2 prints as `__sync()`, `__lwsync()` or
 `__ptesync()`, and `instructionSynchronize()` prints as `__isync()`. The operand may be the
 constant itself or the result of one COPY from it; any other operand keeps the SLEIGH name. The
 rewrite is keyed on the user-op name and is tried after `acleintrinsics`, so on an AArch64 image
-it has no effect. Only the spelling of the call changes. The MIPS `sync`/`synci` and RISC-V
-`fence`/`fence.i` names are not yet covered.
+it has no effect. On MIPS, `SYNC(stype)` prints as `_sync(stype)`; on RISC-V,
+`sfence.vma rs1,rs2` prints as `_sfence(rs1, rs2)`. The operands stay as arguments in both
+cases. Not named: MIPS `synci`, which lifts to no user op at all, and the RISC-V `fence`
+forms, whose user op drops the predecessor and successor sets, so a full fence cannot be
+told apart from the others. Only the spelling of the call changes.
 
 ### Rust formatting macros
 

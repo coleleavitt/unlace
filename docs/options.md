@@ -1870,8 +1870,8 @@ The control surface: each of these can make output worse on the wrong source sha
 ### `barrierintrinsics` -- on | off, default `off`
 
 - **Symptoms:** a PowerPC lwsync prints as sync(1) where the source called __lwsync; a PowerPC isync prints as instructionSynchronize() where the source called __isync; a PowerPC ptesync prints as sync(2) where the source called __ptesync.
-- **What it does:** On PowerPC, print a sync user op whose L operand is 0, 1 or 2 as the GCC and Clang barrier builtin __sync, __lwsync or __ptesync, and an instructionSynchronize user op as __isync, the names the Hex-Rays PowerPC plugin prints. Only the spelling of the call changes: the SLEIGH user ops keep their operands and their place in the flow.
-- **When to flip:** Off by default, so the output keeps the SLEIGH names sync(L) and instructionSynchronize() and existing consumers see no change. Turn on to read PowerPC barrier code under the names the source called, which separates lwsync and ptesync from a full sync; a sync whose operand is not a constant keeps its SLEIGH name.
+- **What it does:** Print barrier and sync user ops under the builtin names the source called. On PowerPC, a sync user op whose L operand is 0, 1 or 2 prints as the GCC and Clang barrier builtin __sync, __lwsync or __ptesync, and an instructionSynchronize user op as __isync. On MIPS, SYNC prints as _sync(stype), and on RISC-V sfence.vma prints as _sfence(rs1, rs2), the names the Hex-Rays plugins print. Only the spelling of the call changes: the SLEIGH user ops keep their operands and their place in the flow.
+- **When to flip:** Off by default, so the output keeps the SLEIGH names sync(L) and instructionSynchronize() and existing consumers see no change. Turn on to read PowerPC, MIPS and RISC-V barrier code under the names the source called, which separates lwsync and ptesync from a full sync; a sync whose operand is not a constant keeps its SLEIGH name.
 - **Where / provenance:** P9/naming-policy · unlace · presentation-default · unlace-barrierintrinsics
 - **Example:** `option barrierintrinsics on`
 

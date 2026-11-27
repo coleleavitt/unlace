@@ -22,7 +22,10 @@
 #     401033  cmp  $0x6,%edx             ; the tag half, JS_TAG_EXCEPTION
 #
 # read_tag_clobber is the control: no_payload provably never writes rdx, so
-# the bounded callee decode refuses the pair and the call keeps no output.
+# the bounded callee decode refuses the pair and the call returns RAX alone.
+# The 7 the caller left in rdx before the call is still there after it
+# (calleeiparead: the caller reads rdx before writing it), so the tag test
+# folds and no unassigned rdx local is left.
 #
 # Phase: P4 output prototype (unlace_callretpair.rs, always on).  The join
 # output and both halves are pinned; the control keeps its bare call.
@@ -78,14 +81,14 @@ count = 1
 literal = 'return *SUB168(v1,0) + SUB168(v1,8);'
 
 [[match]]
-name = 'CALLRETPAIR #4: the unassigned rdx local survives only in the control, and is gone where the pair formed'
-count = 1
-literal = 'int8 v2; // rdx'
+name = 'CALLRETPAIR #4: no unassigned rdx local survives, in the pair or in the control'
+count = 0
+regex = '^  int8 v[0-9]+; // rdx$'
 
 [[match]]
-name = 'CALLRETPAIR #5: the control keeps its bare call, because the bounded callee decode proves no_payload never writes rdx'
+name = 'CALLRETPAIR #5: the control is not paired: its call returns RAX alone and the 7 left in rdx crosses it'
 count = 1
-regex = '^  no_payload\(a0,a1,7\);$'
+regex = 'no_payload\([^)]*\) \+ 7;$'
 
 [[match]]
 name = 'CALLRETPAIR #6: the integer return stays separate from the pointer payload'

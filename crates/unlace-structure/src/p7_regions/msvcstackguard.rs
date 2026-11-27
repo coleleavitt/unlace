@@ -422,28 +422,30 @@ pub fn cookie_check_op(
     found
 }
 
-/// The CALL op to strip, with the entry-side scramble ops feeding it.
+/// Does the call declare no output of its own: either no locked output at all
+/// or a locked `void`? Such a checker is stated to produce no value, so the
+/// return register and every register it does not touch pass through it.
 #[doc(hidden)]
-pub fn call_has_locked_void_output(data: &Funcdata, op: OpId) -> bool {
+pub fn call_declares_no_output(data: &Funcdata, op: OpId) -> bool {
     let Some(index) = data.get_call_specs_index(op) else {
         return false;
     };
     let proto = data.get_call_specs(index).proto();
-    proto.is_output_locked()
-        && proto.get_output_type().map(|ty| ty.get_metatype())
+    !proto.is_output_locked()
+        || proto.get_output_type().map(|ty| ty.get_metatype())
             == Some(crate::dtype::type_metatype::TYPE_VOID)
 }
 
 fn cookie_check_calls(
     data: &Funcdata,
     sp: &(Rc<AddrSpace>, uintb, int4),
-    require_locked_void: bool,
+    require_no_output: bool,
     skip_marked: bool,
 ) -> Vec<(OpId, Vec<OpId>)> {
     let mut found = Vec::new();
     for i in 0..data.num_calls() {
         let op = data.get_call_specs(i).get_op();
-        if require_locked_void && !call_has_locked_void_output(data, op) {
+        if require_no_output && !call_declares_no_output(data, op) {
             continue;
         }
         if skip_marked {

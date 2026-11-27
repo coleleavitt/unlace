@@ -7609,7 +7609,7 @@ symptoms = "a call to a one-instruction b thunk prints sub_<addr> although the t
 [[settable]]
 option = "nullsubs"
 values = "on|off"
-default = "off"
+default = "on"
 destructive = false
 phase = "P1"
 subphase = "code-data-partition"
@@ -7617,7 +7617,7 @@ strength = "HARD"
 rewind = "P1"
 issue = "ida-gap-kernel-autoanalysis-5"
 summary = "Name a placeholder function whose body is a bare return nullsub_<addr>, IDA's AF_NULLSUB. After at most one instruction that emits no p-code (endbr64, bti), the first instruction must be a return doing nothing but its own stack and link-register work (on MIPS and SPARC, where those ops would be a delay slot's, the return alone). The placeholder's address spelling is kept (sub_401000 becomes nullsub_401000); a function with a real name, or whose new name is taken, is left alone."
-use_when = "Off by default. Turn it on to tell empty callbacks, stubbed-out hooks and no-op virtual functions apart from code at a glance: calls to them read nullsub_<addr>(), as in IDA: on IDA 9.5's own databases of its pe/elf/coff/dex loaders it names the same 8/41/2/4 functions IDA names nullsub_."
+use_when = "On by default: empty callbacks, stubbed-out hooks and no-op virtual functions read as nullsub_<addr>() instead of sub_<addr>(), as in IDA: on IDA 9.5's own databases of its pe/elf/coff/dex loaders it names the same 8/41/2/4 functions IDA names nullsub_. Turn it off to keep the sub_<addr> spelling."
 example = "--option nullsubs on"
 source_decompiler = "unlace"
 inspiration = "IDA 9.5 libida sub_633B40 (nullsub_%zu, AF_NULLSUB)"

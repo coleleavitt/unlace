@@ -813,11 +813,17 @@ the flow builder makes about the same two ops.
 `msvcstackguard` has a narrower algebraic answer for the late P7 cookie shape.
 In its destructive arm the first exact direct, unread-output,
 one-cookie-cancel match records that instruction address and requests a restart.
-Independently, the preservation arm collects every exact locked-`void` match,
-records the full set, and requests one restart; marking the whole set at once
-keeps duplicated epilogues from exhausting the outer eight-reflow limit. On
-replay `Heritage::guard_calls` downgrades only an actual `KILLEDBYCALL` effect on
-ABI output storage at a seeded site. An explicit prototype effect and every ABI
+Independently, the preservation arm collects every exact match that declares no
+output (no locked output at all, or a locked `void`), records the full set, and
+requests one restart; marking the whole set at once keeps duplicated epilogues
+from exhausting the outer eight-reflow limit. A checker that declares no output
+leaves the return register unchanged, so on replay `Heritage::guard_calls`
+downgrades the effect on ABI output storage at a seeded site to `UNAFFECTED`
+whether the model lists that storage as `KILLEDBYCALL` (x86-64 RAX) or leaves it
+as its unknown-effect output register (x86-32 `__cdecl` EAX). In the second case
+the downgrade also keeps the output-active trial from re-killing the register,
+which is what turned an x86-32 caller's return value into `void`
+(`crates/unlace-cli/tests/msvccookie_return_cli.rs`). An explicit prototype effect and every ABI
 return-storage write recovered from the callee body veto the downgrade, even
 when an ordinary nested call leaves that summary incomplete. The write probe
 retains positive register writes and STORE spaces recovered before that

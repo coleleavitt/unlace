@@ -1447,8 +1447,8 @@ Three tiers:
 | a function that never returns prints as a plain void f(void) with no marker | [`noreturnself`](#noreturnself----on--off-default-on) |
 | a function ending in exit() or abort() on every path is indistinguishable from one that returns | [`noreturnself`](#noreturnself----on--off-default-on) |
 | the no-return verdict appears only at the call sites of the function | [`noreturnself`](#noreturnself----on--off-default-on) |
-| calls to empty functions read as sub_<addr>() like any other | [`nullsubs`](#nullsubs----on--off-default-off) |
-| a virtual table slot points at a function that only returns | [`nullsubs`](#nullsubs----on--off-default-off) |
+| calls to empty functions read as sub_<addr>() like any other | [`nullsubs`](#nullsubs----on--off-default-on) |
+| a virtual table slot points at a function that only returns | [`nullsubs`](#nullsubs----on--off-default-on) |
 | an untyped MIPS32 big-endian producer loses its low return word despite a declared 64-bit consumer | [`callwide`](#callwide----on--off-default-off) |
 | producer and caller disagree about a complete big-endian eight-byte integer return | [`callwide`](#callwide----on--off-default-off) |
 | a long long return on a big-endian 32-bit target prints CONCAT44 with the low word first | [`bejoin`](#bejoin----off--evidence--callers--on-default-callers) |
@@ -4713,11 +4713,11 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **Where / provenance:** P2/flow-classification · unlace · presentation-default · unlace-noreturnself
 - **Example:** `option noreturnself off`
 
-### `nullsubs` -- on | off, default `off`
+### `nullsubs` -- on | off, default `on`
 
 - **Symptoms:** calls to empty functions read as sub_<addr>() like any other; a virtual table slot points at a function that only returns.
 - **What it does:** Name a placeholder function whose body is a bare return nullsub_<addr>, IDA's AF_NULLSUB. After at most one instruction that emits no p-code (endbr64, bti), the first instruction must be a return doing nothing but its own stack and link-register work (on MIPS and SPARC, where those ops would be a delay slot's, the return alone). The placeholder's address spelling is kept (sub_401000 becomes nullsub_401000); a function with a real name, or whose new name is taken, is left alone.
-- **When to flip:** Off by default. Turn it on to tell empty callbacks, stubbed-out hooks and no-op virtual functions apart from code at a glance: calls to them read nullsub_<addr>(), as in IDA: on IDA 9.5's own databases of its pe/elf/coff/dex loaders it names the same 8/41/2/4 functions IDA names nullsub_.
+- **When to flip:** On by default: empty callbacks, stubbed-out hooks and no-op virtual functions read as nullsub_<addr>() instead of sub_<addr>(), as in IDA: on IDA 9.5's own databases of its pe/elf/coff/dex loaders it names the same 8/41/2/4 functions IDA names nullsub_. Turn it off to keep the sub_<addr> spelling.
 - **Where / provenance:** P1/code-data-partition · unlace · presentation-default · ida-gap-kernel-autoanalysis-5
 - **Example:** `--option nullsubs on`
 

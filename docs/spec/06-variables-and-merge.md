@@ -2426,6 +2426,34 @@ to `[N+1]` in ordinary gcc/clang/MSVC output. It is therefore an opt-in tool:
 flip it on for a string-heavy target whose stack buffers are known to be
 NUL-terminated strings. Off, the layout is upstream's split.
 
+**An indexed array's element (unlace `indexstride`, default `on`).**
+`gatherOpen` types the open range of an indexed frame base by the element the
+index steps over, and `RangeHint::preferred` throws an open range out against a
+fixed range at the same start whenever the two do not reconcile, so the widest
+fixed access at an array's start decides its element. gcc's inline expansion
+of `strncmp(buf, "SH ", 3)` and `strncmp(buf, "PING", 4)` reads a receive
+buffer as one 2-byte, one 1-byte and one 4-byte compare, and beside `buf[n] =
+0` the `char buf[1024]` became `int v2 [258]` with the store printed
+`((char *)v2)[v1] = 0`. With the option on,
+`crates/unlace-bandb-base/src/p6_variables/indexstride.rs (settle_hints)` runs
+in `restructure_varnode` after the open hints and symbols are gathered and
+before `arrayextent` extends them. For every indexed open hint (one with a
+known index reach, `highind >= 0`) whose element is unlocked integer storage,
+it drops each fixed hint the array takes (`indexstride.rs (covers)`): unlocked
+integer or unknown storage, wider than the element and a whole number of
+elements wide, starting on an element boundary, and lying inside the elements
+the index is already known to reach. The access itself is untouched; mapped
+into the array, it prints as a cast of the elements it covers (`*(unsigned int
+*)v2 == 0x474e4950`). A locked type, a shared-storage view, a pointer, float
+or aggregate access, a constant store (upstream's constant absorption already
+weighs it, and the return address a `call` pushes at an index base is one),
+and an access past the proven reach keep upstream's merge.
+Turned on it moves none of the 675 datatest assertions. It stays a flip,
+because both declarations describe the same bytes: an array of the index's
+element read through a wider cast, or an array of the wider element indexed
+through a byte cast, and a program that walks an `int` array byte by byte
+reads better upstream's way (`option indexstride off`).
+
 **An escaped buffer's length (unlace `arraysize`, default `on`).** An open range
 that `attempt_join` does not extend ends where the next hint starts, and
 `adjust_fit` trims it to the mapped range. For a buffer whose address escapes to

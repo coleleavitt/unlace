@@ -287,6 +287,9 @@ Three tiers:
 | a local char buffer is declared 8 bytes longer than the length passed to fgets/snprintf/read with it, e.g. char v3 [8200] beside fgets(v3,0x2000,fp) | [`arraysize`](#arraysize----off--on--calls-default-on) |
 | a stack array's size is a multiple of 16 plus 8 and it ends where the stack-protector canary slot starts | [`arraysize`](#arraysize----off--on--calls-default-on) |
 | a buffer passed to __snprintf_chk(buf, n, 1, 0x100, ...) is declared longer than the 0x100 object size the call carries | [`arraysize`](#arraysize----off--on--calls-default-on) |
+| a char buffer is declared int v2 [258] beside ((char *)v2)[v1] = 0 | [`indexstride`](#indexstride----on--off-default-on) |
+| an indexed byte store into a stack array prints with a (char *) cast | [`indexstride`](#indexstride----on--off-default-on) |
+| a receive buffer compared with an inlined strncmp is declared as a short or int array | [`indexstride`](#indexstride----on--off-default-on) |
 | an out-parameter local is passed as (int *)&v2 to waitpid or wait | [`castobject`](#castobject----on--off-default-on) |
 | a stack local is declared unsigned int where the callee that fills it declares int * | [`castobject`](#castobject----on--off-default-on) |
 | return (int)v1 >> 8 & 0xff; over an unsigned int status filled by waitpid | [`castobject`](#castobject----on--off-default-on) |
@@ -2184,6 +2187,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default. The tell it fixes is a local `char` buffer declared 1 to 15 bytes longer than the length every call passes with it (`char v3 [8200];` beside `fgets(v3,0x2000,fp)`), the extra bytes being the alignment padding up to the next local or the stack guard. Flip `off` to see the frame gap upstream assigns. Known guesses `on` makes: a function that passes a shorter length than its buffer (`fgets(buf, 20, fp)` into a 24-byte array) is declared at that length; a stack structure whose first member is a `char` array filled by a library call (at `_FORTIFY_SOURCE=2` the `str*`/`printf`/`fgets` object size is the member's) is declared as that member; a terminator written after the result was capped by a comparison still adds its byte. `calls` also sizes buffers passed with a constant to the binary's own functions (`umaxtostr`-style helpers take no length and stay as they are); it is off by default because a constant beside a buffer need not be its length, and on ARM firmware it shrinks buffers below their size.
 - **Where / provenance:** P6/stack-frame-layout · unlace · type-inference · ty17-stack-array-size
 - **Example:** `option arraysize off`
+
+### `indexstride` -- on | off, default `on`
+
+- **Symptoms:** a char buffer is declared int v2 [258] beside ((char *)v2)[v1] = 0; an indexed byte store into a stack array prints with a (char *) cast; a receive buffer compared with an inlined strncmp is declared as a short or int array.
+- **What it does:** Declare an indexed stack array with the element its index steps by when a wider integer access lies inside the elements the index is known to reach. `RangeHint::preferred` (varmap.cc:126-157) throws the indexed open range out against a fixed range at the same start, so the widest fixed read decides the element: gcc's inline `strncmp(buf,"SH ",3)` and `strncmp(buf,"PING",4)` read the buffer as one 2-byte and one 4-byte compare, and beside `buf[n] = 0` the `char buf[1024]` was declared `int v2 [258]` with the store printed `((char *)v2)[v1] = 0`. With the option on the wider unlocked integer hints inside the index's proven reach (starting on an element boundary, a multiple of the element wide) are dropped before the merge, so the array keeps the element and those reads print as casts (`*(int *)v2 == 0x474e4950`). Locked types, shared-storage views, pointer, float and aggregate accesses, and accesses past the proven reach keep upstream's merge.
+- **When to flip:** On by default (0/675 datatest assertions move; speed: retired user instructions over every function of /usr/bin/nc (103) and /usr/bin/ping (185), off/on alternating, median -0.4% and -2.0%, inside the noise of identical runs). The tell it fixes is a stack buffer that the code indexes byte by byte (`((char *)v2)[v1] = 0`, a NUL terminator after `recv`/`read`) declared `int v2 [258]` because an inlined `strncmp`/`memcmp` reads its first bytes as one wider word. Flip off to see upstream's merge, where the widest fixed read at the start decides the element: both declarations describe the same bytes, and a program that really walks an `int` array byte by byte reads better that way.
+- **Where / provenance:** P6/stack-frame-layout · unlace · type-inference · netstruct
+- **Example:** `option indexstride on`
 
 ### `castobject` -- on | off, default `on`
 

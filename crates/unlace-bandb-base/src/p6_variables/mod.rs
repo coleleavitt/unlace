@@ -18,6 +18,7 @@ pub mod globalvalue;
 pub mod guardedreadtrim;
 pub mod hideshadow;
 pub mod impliedrefs;
+pub mod indexstride;
 pub mod indirectonly;
 pub mod isolated;
 pub mod libcnames;

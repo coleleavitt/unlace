@@ -1,0 +1,78 @@
+# An indexed stack buffer keeps the element its index steps by (option
+# indexstride). read_command (fixtures/netstruct/netstruct.c) reads a
+# `char buf[1024]` with recv, stores `buf[n] = 0`, and tests it with
+# `strncmp(buf, "SH ", 3)` and `strncmp(buf, "PING", 4)`, which gcc -O2 inlines
+# as one 2-byte, one 1-byte and one 4-byte compare at the buffer's start.
+# `RangeHint::preferred` (varmap.cc:126-157) throws the indexed open range out
+# against those fixed ranges, so the buffer was declared `int v2 [258]` and the
+# NUL store printed through a char cast.
+#
+# Stage model: P6 stack-frame-layout
+# (crates/unlace-bandb-base/src/p6_variables/indexstride.rs, run by
+# restructure_varnode before the merge). Bytes: netstruct-gcc-O2, gcc 15.3.0
+# -O2 -static -s (fixtures/netstruct/build.sh), the stripped static shape the
+# feedback was about; no callee is named there, so the index is the only
+# evidence.
+#
+# Option: indexstride (default on). Pass 1 is the default (#1-#4), pass 2 sets
+# it off and keeps upstream's merge (#5, #6).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netstruct-gcc-O2',
+    'read symbols',
+    'load function sub_402c90',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netstruct-gcc-O2',
+    'option indexstride off',
+    'read symbols',
+    'load function sub_402c90',
+    'decompile',
+    'print C',
+]
+
+
+[[match]]
+name = 'INDEXSTRIDE #1: by default the receive buffer is a char array'
+count = 1
+literal = 'char v2 [1032]; // stack - 0x418'
+
+[[match]]
+name = 'INDEXSTRIDE #2: by default the NUL store indexes it directly'
+count = 1
+literal = "v2[v1] = '\\0';"
+
+[[match]]
+name = 'INDEXSTRIDE #3: by default the inlined strncmp reads print as casts'
+count = 1
+literal = "if ((*(unsigned short *)v2 == 0x4853) && (v2[2] == ' '))"
+
+[[match]]
+name = 'INDEXSTRIDE #4: by default the 4-byte compare is a cast of the char array'
+count = 1
+literal = 'return (uint4)(*(unsigned int *)v2 == 0x474e4950) * 2;'
+
+[[match]]
+name = 'INDEXSTRIDE #5: off, the inlined 4-byte compare decides the element'
+count = 1
+literal = 'int4 v2 [258]; // stack - 0x418'
+
+[[match]]
+name = 'INDEXSTRIDE #6: off, the indexed NUL store goes through a char cast'
+count = 1
+literal = '((char *)v2)[v1] = 0;'

@@ -255,6 +255,7 @@ unlace_options! { self, p1;
     "nulterminator" => registered!(crate::nulterminator::NulTerminator),
     "endptrbound" => registered!(crate::endptrbound::EndPtrBound),
     "castobject" => registered!(crate::castobject::CastObject),
+    "indexstride" => registered!(crate::indexstride::IndexStride),
     "calleeargs" => registered!(crate::calleestackargs::UnlaceCalleeargs),
     "calleeargsmsvc" => registered!(crate::calleestackargs::UnlaceCalleeargsMsvc),
     "argclobber" => registered!(crate::argclobber::ArgClobber),

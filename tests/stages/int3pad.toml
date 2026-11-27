@@ -74,9 +74,9 @@ literal = '// int3-pad x4'
 [[match]]
 name = "INT3PAD #2: the trap is the function's return value except when it ends the flow"
 count = 2
-regex = 'return \(\*v[0-9]+\)\(\);'
+regex = 'return \(\*\(code \*\)swi\(3\)\)\(\);'
 
 [[match]]
 name = 'INT3PAD #3: int3pad halt renders the trap as a statement, not a returned call'
 count = 1
-literal = 'swi(3))(); // int3-pad x4'
+regex = '^\s+\(\*\(code \*\)swi\(3\)\)\(\); // int3-pad x4$'

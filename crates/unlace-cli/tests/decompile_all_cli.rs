@@ -4303,10 +4303,10 @@ fn a_nan_returned_in_s0_round_trips() {
             "qnanf_ ", "core ", "logish ", "use ", "qp ", "sn ", "nn ", "put2 ",
         ],
     );
-    // The errno slot sits at address 0, the pspec's `Reset` vector; mapGlobals prints
-    // the wider access as `_Reset`.
+    // The errno slot is the object's own `err`: its MOVW/MOVT pair is relocated
+    // against that symbol (`reloc_apply`), so it prints by name.
     let src = format!(
-        "#include <stdio.h>\n#include <string.h>\n#include <math.h>\n{BITS}int dat_0;\nint _Reset;\n{printed}\n\
+        "#include <stdio.h>\n#include <string.h>\n#include <math.h>\n{BITS}int err;\n{printed}\n\
          int main(void) {{\n  float out[4] = {{0}};\n  put2(3.0f, out);\n  \
          printf(\"%f %f %f %f %llx %llx %llx %llx\\n\", use(-3.0f), use(0.0f), use(4.0f), logish(-3.0f), \
          BITS(qp()), BITS(sn()), BITS(nn()), BITS(out[2]));\n  return 0;\n}}\n"
@@ -5350,8 +5350,12 @@ fn a_return_merged_in_pieces_stays_void() {
 /// `floatret_parse_gcc_O1.o` and `floatret_parse_armel.o` (soft-float ARM):
 /// `parse`, `parse2` and `parsef` return what `strtod` and `strtof` return, and
 /// `rp` keeps `parse`'s bits as an integer, `rp2` stores `parse2`'s `double`, and
-/// Code-proven imports receive their known floating-point contracts on x86-64;
-/// ARM retains its exclusion for incompatible floating-point ABI rows.
+/// Code-proven imports receive their known floating-point contracts on x86-64.
+/// On the soft-float object, which states the base standard, `armbasepcs` binds
+/// the `.o`'s undefined `strtod` to the core-register model, so `parse` and
+/// `parse2` return its `double` whole in `r0:r1`. `parsef` keeps no return: its
+/// `r0` is `strtof`'s call output itself, which return recovery does not count
+/// as a result.
 #[test]
 fn a_known_float_import_preserves_its_floating_return() {
     let sp = specs();
@@ -5374,7 +5378,12 @@ fn a_known_float_import_preserves_its_floating_return() {
                 "return strtof(",
             ]
         } else {
-            &["void parse(", "void parse2(", "void parsef("]
+            &[
+                "double parse(char *",
+                "double parse2(char *",
+                "return strtod(",
+                "void parsef(",
+            ]
         };
         for want in wants {
             assert!(
@@ -5432,14 +5441,14 @@ fn soft_float_imports_keep_their_core_register_values() {
 
 /// `floatret_armrows_soft` and `floatret_armrows_hard` (soft-float and
 /// hard-float ARM): `clampd` returns `strtod`'s result or 0, and `rd` copies
-/// its bits into a `uint64_t`. With the libc table's `double` rows the soft
-/// image printed `double sub_10224(..)` beside `rd`'s `unsigned long long v1 =
-/// sub_10224()`, which converts 2.25 to 2, where the rows' absence returns the
-/// right `CONCAT44(v2,v1)`; the hard image printed `unsigned int sub_101f0(..)`
-/// returning `SUB84(v1,0)`, the low half of `d0`. ARM gets none of the rows
-/// with `armfloatreturn` off. Under the default preset's hard-float contract
-/// the hard image takes `strtod`'s row, and `parse` and `clampd` return their
-/// doubles whole in `d0`.
+/// its bits into a `uint64_t`. The soft image states the base standard, which
+/// returns a `double` whole in `r0:r1`, so it takes the rows whatever the
+/// option: `clampd` is `double sub_10224(..)`, and `rd` keeps the bits it copies
+/// (`unsigned long long v1 = sub_10224()` converted 2.25 to 2). The hard image
+/// printed `unsigned int sub_101f0(..)` returning `SUB84(v1,0)`, the low half
+/// of `d0`, and gets none of the rows with `armfloatreturn` off. Under the
+/// default preset's hard-float contract it takes `strtod`'s row, and `parse`
+/// and `clampd` return their doubles whole in `d0`.
 #[test]
 fn arm_images_get_no_double_libc_rows() {
     let sp = specs();
@@ -5460,17 +5469,27 @@ fn arm_images_get_no_double_libc_rows() {
             &sp,
         ]);
         assert!(ok, "unlace decompile-all failed on {name}: {stderr}");
-        for bad in ["double", "SUB84("] {
-            assert!(
-                !stdout.contains(bad),
-                "{name}: `{bad}` from a libc row ARM does not return whole:\n{stdout}"
-            );
-        }
+        assert!(
+            !stdout.contains("SUB84("),
+            "{name}: a double return is cut to its low word:\n{stdout}"
+        );
         if name.ends_with("soft") {
+            for want in [
+                "double strtod(char *a0,char **a1)",
+                "double sub_10224(char *a0)",
+                "{ .from = sub_10224(a0) }).to;",
+                "{ .from = sub_10214(a0) }).to;",
+            ] {
+                assert!(stdout.contains(want), "{name}: missing `{want}`:\n{stdout}");
+            }
             assert!(
-                stdout.contains("unsigned long long sub_10224(")
-                    && stdout.contains("return CONCAT44(v2,v1);"),
-                "{name}: `clampd` no longer returns its r0:r1 bits:\n{stdout}"
+                !stdout.contains("v1 = sub_10224(a0);") && !stdout.contains("v1 = sub_10214(a0);"),
+                "{name}: a bit copy of a double prints as a conversion:\n{stdout}"
+            );
+        } else {
+            assert!(
+                !stdout.contains("double"),
+                "{name}: `double` from a libc row with `armfloatreturn` off:\n{stdout}"
             );
         }
         let (preset, stderr, ok) = run_unlace(&["decompile-all", &bin, "--sleighpath", &sp]);
@@ -8018,6 +8037,9 @@ int main(void) {
 /// clang builds (at -O0 its double conversion prints as partial-variable
 /// assignments, at -O2 its double return is lost, in either arm), and
 /// `pctx_print` out of gcc -O2, whose jump table prints as a call in either arm.
+/// `libctypes` is held at `opaque`: under `streams` `FILE` carries glibc's
+/// fields, and its printed body would redefine the `FILE` the round trip's
+/// `<stdio.h>` declares.
 #[test]
 fn a_pointer_field_round_trips_through_the_printed_c() {
     const PRELUDE: &str = "#include <stdbool.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\
@@ -8140,6 +8162,9 @@ int main(void) {
                 "--option",
                 "fieldtype",
                 opt,
+                "--option",
+                "libctypes",
+                "opaque",
             ];
             let (stdout, stderr, ok) = run_unlace(&args);
             assert!(ok, "unlace decompile-all failed: {stderr}");
@@ -8157,6 +8182,9 @@ int main(void) {
                     "--option",
                     "fieldtype",
                     opt,
+                    "--option",
+                    "libctypes",
+                    "opaque",
                 ];
                 let (all, stderr, ok) = run_unlace(&args);
                 assert!(ok, "unlace decompile-all failed: {stderr}");
@@ -9763,6 +9791,9 @@ fn castsign_leaves_a_locked_declaration_alone() {
 /// `0x80000000` as an `unsigned int`, so `p[-0x80000000]` would point forward.
 /// `main` reads those through a 48 GiB `MAP_NORESERVE` map, and prints the same
 /// line in the binary and the round trip when the map is refused.
+/// `structheadless` is held off: it gives `wide_cmp`'s `void *` a synthesized
+/// record for its two byte reads (0x11 and 0x13), so no subscript is left to
+/// check there.
 #[test]
 fn a_pointer_plus_whole_elements_round_trips_through_the_printed_c() {
     let fx = repo_root().join("crates/unlace-analysis/tests/fixtures");
@@ -9798,6 +9829,9 @@ fn a_pointer_plus_whole_elements_round_trips_through_the_printed_c() {
                 "--option",
                 "castarith",
                 arm,
+                "--option",
+                "structheadless",
+                "off",
             ];
             let (stdout, stderr, ok) = run_unlace(&args);
             assert!(ok, "unlace decompile-all failed: {stderr}");
@@ -13071,7 +13105,9 @@ fn bejoin_reads_an_ints_stale_low_half_as_the_long_long_it_matches() {
 /// is compiled with gcc and clang at -O0 and -O2 against `bejoin_trunc.c`, the
 /// 64-bit arguments split high word first; `pick64` and `tabs64` keep their
 /// fix. PowerPC -O1 and -O2 narrow `pick64` and `tabs64` to one register for a
-/// reason unrelated to the join, so they are left out there.
+/// reason unrelated to the join, so they are left out there. `armpairparam` is
+/// held off, so ARM big-endian passes its 64-bit arguments split as SPARC and
+/// PowerPC do: on it, `lua_fits` and `min_len` take one `long long` each.
 #[test]
 fn a_branch_chosen_flag_or_an_int_truncation_keeps_its_int_in_the_first_register() {
     const ALL: [&str; 8] = [
@@ -13098,6 +13134,9 @@ fn a_branch_chosen_flag_or_an_int_truncation_keeps_its_int_in_the_first_register
             "--option",
             "bejoin",
             "on",
+            "--option",
+            "armpairparam",
+            "off",
         ]);
         assert!(ok, "unlace decompile-all {fixture} failed: {stderr}");
         let printed = callrettype_functions(&stdout, funcs);

@@ -2352,6 +2352,15 @@ classified:
   output, are the same as the walk over every path. On the CPython function,
   13 passes now take 15 s in all.
 
+  Taking the matching piece of a PIECE, or a SUBPIECE whose input the value
+  overlaps, costs no level, however long the chain: heritage joins of a wide
+  struct build PIECE chains of one step per field. Only these steps keep the
+  level, so reaching a Varnode, offset and level already on the path is a
+  cycle through PIECE and SUBPIECE alone. Valid SSA has none; on IR with one
+  (the random graphs of the memo tests) the revisit ends that path with no
+  use, bounded, instead of recursing until the native stack overflows. The
+  revisit walks nothing the first visit does not, so the answer is unchanged.
+
   *(unlace decompile-all watchdog)* Every `ancestor_op_use` step and every step
   of an `only_op_use` walk also probes the drive's budget through
   `crates/unlace-middle/src/substrate/budget.rs (budget_probe)`;
@@ -4598,7 +4607,14 @@ global or weak function symbol and every resolved import is bound to
 `__stdcall_softfp` (`crates/unlace-analysis/src/loader/armbasepcs.rs`,
 analysis pass `armbasepcs`, model facts committed through the loader-bound model
 table). The binding covers the function's own decompile, its declared (DWARF or
-library) prototype, and every direct call to it. `float scale(float v, int n)` on a
+library) prototype, and every direct call to it. The bound model is the
+soft-float model below, with its argument extension
+(`typedcallabi.rs (bound_model)`), and a declaration that names no convention
+is locked onto the function's symbol under it too
+(`unlace-console/src/assertions.rs (lock_prototype_on_symbol)`), so a caller
+lays the declared callee out as the callee's own decompile does: a softfp
+`double t1(int k)` tail-calling `double vr(int n, ...)` returns `vr(k,2)`
+rather than `r0:r1` its callee was read as never setting. `float scale(float v, int n)` on a
 soft-float big-endian or Cortex-M object read its result from `s0`, or lost it,
 and the `__aeabi_fadd` result it returns went unused (#681). A local function
 keeps the default layout as above. MIPS, PowerPC and RISC-V specs have no soft-float model, so a
@@ -7677,10 +7693,16 @@ at a direct, unlocked, non-variadic CALL is an argument when all of these hold:
   the call or block start before it, is SysV's vector-register count (`xor
   %eax,%eax`), and a variadic callee may state an optional tail register it saves
   (gnulib `open_safer(char const *,int,...)` saves only `rdx`);
-- the calling function is not variadic itself: its entry block does not read that
-  return-only register before writing it or calling anything (`test %al,%al`). Its
-  own recovery would read every register its prologue saves, and one argument
-  supplied here is enough to tip the saved tail into its list;
+- the calling function is not variadic itself: its entry block does not read the
+  least significant byte of that return-only register, where the count lives,
+  before writing it or calling anything (`test %al,%al`). Its own recovery would
+  read every register its prologue saves, and one argument supplied here is
+  enough to tip the saved tail into its list. gcc's `sete %al; ...; or
+  %edx,%eax` reads the upper bytes of an `eax` whose `al` the function wrote
+  itself, and reads no count (coreutils ls's dirs-first comparators open that
+  way, and a whole-register test took them for variadic and left them without
+  any claim; by default, across coreutils 9.11 at gcc -O2, the three copies of
+  `rev_xstrcoll_df_version` now pass `filevercmp` its second argument);
 - the callee's read of `R` is for something other than a **variadic tail**
   (`varargtail.rs`). A stated parameter whose value, through
   value-preserving operations (copies, phis, width changes, a mask by a
@@ -8451,6 +8473,30 @@ the storage is a single register and every own RETURN passes
   of it (a `mov %eax,g(%rip)` lifts to a COPY into the global's varnode and
   counts as one), a CALLOTHER or BRANCHIND reading it, or another call while
   it sits in an argument register refuses.
+
+An own RETURN that hands back a constant needs no test (`returns_constant`):
+climbing its single-predecessor chain through the copies and extensions that
+carry the register (`RAX = zext(EAX)`), the last write is a COPY of a constant,
+and no op on the way reads the register, as `mov $1,%eax; mov %eax,g(%rip);
+ret` would to store it. That is a comparator's `return -1;` beside `return
+strcmp(..);`. The first condition still holds it to the callee's width, and a
+COPY of a constant counts as the bytes its value needs, so AArch64's `mov
+w0,#-1`, which lifts to `x0 = 0xffffffff`, is four bytes. Where the RETURN's
+block is a join that the register passes through untouched and no call sits
+in (`climb_starts`), both climbs start at the end of each predecessor instead,
+reading that block's branch toward the join as their first step up, and every
+path must pass. gcc gives coreutils ls's dirs-first comparators one `ret` for
+`mov $-1,%eax` and for the `sub %edx,%eax; jne` of `1 - is_dir(a)`: the first
+path returns its constant, the second the difference it tested on the way to
+`jmp strcmp`, so `strcmp_df_name` returns `int` and `return -1;` where it
+printed `unsigned long` and `return 0xffffffff;`
+(`tests/stages/mixedtailret-shared-ret.toml`). Over the 103 programs of
+coreutils 9.11 built by gcc -O2 for x86-64 (20,531 functions), the option on
+changes 93 functions beyond the three the default changes (the vararg-count
+read under `passthrough` above): 90 signatures, every one `unsigned long` to `int` where DWARF says
+`int` (the 30 dirs-first comparators in each of `ls`, `dir` and `vdir`), and
+three `target_directory_operand`s whose `AT_FDCWD` prints `return -100;` where
+it printed `return 0xffffff9c;`; none is DWARF `void`.
 
 The last two turn away some of what a `void` function leaves in its return
 register, not all of it. A first version of the rule had only the first
@@ -9358,7 +9404,10 @@ on other paths holds a frame address and is dereferenced there, which made
 of the engine's `PTRADD`/`PTRSUB` (`dereferenced`; an add of two variables
 carries nothing, since either operand could be the base); it is computed from
 the stack pointer by copies and literal offsets alone (`frame_address`);
-it is a string literal (`unlace_charptr::constant_is_string`) -- any other
+it is a string literal (`unlace_charptr::constant_is_string`), whether the
+argument is the constant itself, the `PTRSUB` off the constant zero that names
+it, or the `COPY` of the constant `ptrsubcharconstant` folds that `PTRSUB` (and
+a literal `PTRADD` on it, `"first"` at `_IO_stdin_used + 8`) into -- any other
 constant is a number as often as an address, and coreutils -O0 `tr` passes
 `squeeze_filter` the buffer size `0x2000`, which is also the address of
 `.init`; it is the result of a call whose declared prototype returns a pointer
@@ -9902,6 +9951,26 @@ single `double` and leaves that value unused (an asm-forced evaluation, as in
 a floating output entry that a narrow write fills, so the rule changes nothing
 elsewhere. The stage test
 `tests/stages/gh873-zerofillreturn-a64.toml` runs clang and gcc AArch64 code.
+
+### (unlace) A floating result in a higher vector register (`hfareturn.rs`)
+
+AAPCS64 returns a homogeneous floating-point aggregate one member per vector
+register from `v0` (`struct { float x, y, z; }` in `s0`, `s1`, `s2`). A member
+the function returns untouched from its own argument fails the ancestor check,
+and the fill-in cannot then start at `s1`. After `drop_zero_fill`,
+`keep_lower_results` (`crates/unlace-bandb-core/src/p4_calls/hfareturn.rs`)
+marks active the first lane of each lower floating output entry that every
+RETURN reads as the function's own input, below the highest entry holding a
+value the function computes (not a constant, not a COPY of one). It then
+retires the zero fill above each active first lane narrower than a doubleword
+(`s0`, `s1`), where two or more entries have one, and the output step joins
+the members, one first lane per entry in ascending order, at a join address.
+The fill above a whole doubleword lane (`d0`, `d1`, or x86-64's `xmm0` holding
+two floats) is `drop_zero_fill`'s alone. Retiring it there joined gcc `-O0`'s
+`fa`, whose `d1` is reloaded from a frame slot a call result was stored to
+through a pointer, which `drop_zero_fill` keeps as `q0`. On x86-64 it joined
+`xmm1` to the pair in `xmm0` of a function returning `struct { float x, y, z;
+}`, whose callers read the eight bytes of `xmm0`, into an `undefined12`.
 
 ### (unlace) The registers a zeroing epilogue clears (`zerocallregs.rs`)
 

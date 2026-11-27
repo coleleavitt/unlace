@@ -6,6 +6,7 @@
 pub mod callbacktype; // (unlace) a callback takes the prototype of the slot it is passed to
 pub mod calleearitylive; // (unlace) extend a partial argument list when the callee body agrees
 pub mod calleefilledarg; // (unlace) a register the callee loads itself is no slot, and no evidence about the slots after it
+pub mod calleeiparead; // (unlace) a register the caller reads across a call is evidence for calleepreserves
 pub mod calleepreserves; // (unlace) the decoded callee's writes narrow the cspec killedbycall set
 pub mod calleereadarg; // (unlace) keep a refused argument the callee's own body reads
 pub mod calleeretpreserves; // (unlace) the decoded callee's silence answers for the call's return register

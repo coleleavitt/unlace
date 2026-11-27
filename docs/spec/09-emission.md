@@ -431,7 +431,15 @@ or from a call whose prototype returns a float or double, is stored through
 the reverse union: `v1 = ((union { float from; unsigned int to; }){ .from =
 adjust_value(first) }).to;`. The call is judged by its prototype's logical
 result width, not the ABI register (an x87 `ST0` result is wider than the
-`float` it holds). Integer operations such as the sign-bit XOR keep the word
+`float` it holds). The store through the reverse union holds without
+`stackviews` too, for any variable declared as an integer word: a plain
+assignment would convert the value. A call whose prototype locks no output
+counts when its callee's own decompile stated a float return
+(`callrettype`) in the storage and width the call's result is read from: on a
+soft-float ARM image `rd`'s `strd` of `clampd`'s `r0:r1` printed
+`v1 = sub_10224(a0);`, turning 2.25 into 2, and now prints
+`v1 = ((union { double from; unsigned long long to; }){ .from = sub_10224(a0) }).to;`.
+Integer operations such as the sign-bit XOR keep the word
 as integer, and values already declared as floats keep their ordinary
 expression. Unnamed expressions and declarations that are not integer words
 keep ordinary emission. `FLOAT_INT2FLOAT` remains a numeric conversion of its
@@ -2693,6 +2701,13 @@ Such an input that belongs to another variable reports its own frame offset, not
 that variable's base: a register copied from the field at -0x80 of a record at
 -0x98 says `stack - 0x80` (this also moves 10 of 4,908 functions' comments under
 `--mode reliable`, e.g. `stack - 0x208` to `stack - 0x1c0`).
+A global (an address in the default data or code space) is never a home of
+a local: a local whose value was loaded from or stored to a global names only
+its own storage, and the walk does not follow a COPY or MULTIEQUAL input that
+is a global belonging to another variable. On coreutils `ls` `main` this
+drops comments like `long *ptr; // ram 0x2b380 | rbx`, which said the local
+lived in the global it was copied from; a variable that is itself a global
+keeps its address.
 Register copies used only to supply outgoing CALL or CALLIND arguments are
 transport locations, so they do not contribute to a local's source comment.
 `crates/unlace-bandb-base/src/p6_variables/calltransport.rs` checks that

@@ -5,15 +5,22 @@
 # read-only word is guarded at every call, while the pruned joins place no
 # MULTIEQUAL where a unique temporary is not live (upstream built 704
 # joins dead-code removal deletes, 118816 ops created for churn against
-# 118112 here, for the same live IR). escaped's slots are address-tied,
+# 118112 here, for the same live IR, when this file was written; keeping
+# churn's RDX across sink, which writes only RAX (calleeiparead), has since
+# taken 48 creations and 50 live ops off every pass). escaped's slots are address-tied,
 # so they keep every guard in every pass. Pass 2 is the default: churn's
 # 256 read-only ranges at its 321 calls (82,176 guards) reach
 # readonlycalls' 65,536-guard threshold, the guards on read-only memory
-# the function never writes go, and churn's live IR drops from 90311 to
-# 8135 ops. Each function prints the same body in both passes. Two more
+# the function never writes go, and churn's live IR drops from 90261 to
+# 8085 ops. Each function prints the same body in both passes. Two more
 # passes count churn's ops only: at readonlycalls 82177, one guard more
 # than churn would build, it keeps them; at readonlycalls on it drops
 # them. The fixture's source, provenance and native oracle are beside it.
+#
+# The counts are measured with option stackguard off: escaped's canary
+# check runs through the 64 calls' INDIRECTs, which the P7 strip has
+# followed since its walk reached depth 256, and stripping it moves the
+# op counts these heritage assertions compare.
 
 [image]
 arch = 'x86:LE:64:default:gcc'
@@ -23,6 +30,7 @@ commands = [
     'clear architecture',
     'load file crates/unlace-analysis/tests/fixtures/prunedssa_x86_64',
     'read symbols',
+    'option stackguard off',
     'option readonlycalls off',
     'load function churn',
     'decompile',
@@ -79,7 +87,7 @@ regex = '^  v[0-9]+\[0\] = (0x)?[0-9a-f]+;$'
 [[match]]
 name = "prunedssa #6: readonlycalls off keeps the read-only guards in churn's live IR"
 count = 2
-literal = 'Count - pcode = 90311'
+literal = 'Count - pcode = 90261'
 
 [[match]]
 name = "prunedssa #7: upstream's dead joins are never built for churn"
@@ -89,17 +97,17 @@ literal = 'Count - created = 118816'
 [[match]]
 name = 'prunedssa #8: prunedssa builds no dead joins for churn'
 count = 2
-literal = 'Count - created = 118112'
+literal = 'Count - created = 118064'
 
 [[match]]
 name = "prunedssa #9: readonlycalls drops the read-only guards from churn's live IR"
 count = 2
-literal = 'Count - pcode = 8135'
+literal = 'Count - pcode = 8085'
 
 [[match]]
 name = 'prunedssa #10: the default builds the fewest ops for churn'
 count = 2
-literal = 'Count - created = 35936'
+literal = 'Count - created = 35888'
 
 [[match]]
 name = "prunedssa #11: escaped's address-tied slots keep every guard in every pass"

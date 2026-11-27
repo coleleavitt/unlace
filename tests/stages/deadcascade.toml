@@ -45,9 +45,9 @@ literal = 'sink('
 [[match]]
 name = 'deadcascade #3: every pass leaves the same live IR'
 count = 3
-literal = 'Count - pcode = 8135'
+literal = 'Count - pcode = 8085'
 
 [[match]]
 name = 'deadcascade #4: every pass creates the same ops'
 count = 3
-literal = 'Count - created = 35936'
+literal = 'Count - created = 35888'

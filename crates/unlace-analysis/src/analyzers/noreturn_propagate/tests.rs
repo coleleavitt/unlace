@@ -390,13 +390,97 @@ fn import_stub_is_not_concluded_from_its_neighbour() {
     );
     let recog = ErrorRecognizer::disabled();
     let concluded = |stubs: &BTreeSet<u64>| -> Vec<u64> {
-        propagate_noreturn(&listing, &recog, &BTreeSet::new(), true, stubs, None)
-            .iter()
-            .map(|f| f.addr)
-            .collect()
+        propagate_noreturn(
+            &listing,
+            &recog,
+            &BTreeSet::new(),
+            true,
+            stubs,
+            None,
+            &BTreeSet::new(),
+        )
+        .iter()
+        .map(|f| f.addr)
+        .collect()
     };
     assert_eq!(concluded(&BTreeSet::new()), vec![0x10]);
     assert!(concluded(&[0x10, 0x20].into_iter().collect()).is_empty());
+}
+
+/// MSVC's `terminate` is reached only by the `jmp` of `unexpected` and
+/// `_inconsistency`, so it is no function entry and its code sits in the span of
+/// the function before it. A jump there is walked like the jumper's own code; a
+/// jump to another function's entry stays a tail call that may return. The
+/// no-return `abort` it calls is known only from `noreturn_disc` (the seeds).
+#[test]
+fn jump_into_a_shared_tail_is_walked() {
+    use crate::listing::model::DiscoveredFunction;
+    let func = |entry: u64| DiscoveredFunction {
+        entry,
+        name: None,
+        from_symbol: true,
+        has_no_return: false,
+        call_fixup: None,
+    };
+    let ret = |addr: u64| rinsn(addr, None, vec![], false, false, true, false, false, false);
+    let jmp = |addr: u64, to: u64| {
+        rinsn(
+            addr,
+            None,
+            vec![to],
+            false,
+            true,
+            false,
+            false,
+            false,
+            false,
+        )
+    };
+    let insns = vec![
+        ret(0x10),
+        rinsn(
+            0x11,
+            Some(0x12),
+            vec![0x60],
+            true,
+            false,
+            false,
+            false,
+            false,
+            true,
+        ),
+        ret(0x12),
+        jmp(0x20, 0x11),
+        jmp(0x30, 0x40),
+        ret(0x40),
+        ret(0x60),
+    ];
+    let listing = Listing::from_model_for_test(
+        insns,
+        [0x10, 0x20, 0x30, 0x40, 0x60]
+            .into_iter()
+            .map(func)
+            .collect(),
+        Vec::new(),
+        vec![(0, 0x100)],
+    );
+    let recog = ErrorRecognizer::disabled();
+    let concluded = |seeds: &BTreeSet<u64>| -> Vec<u64> {
+        propagate_noreturn(
+            &listing,
+            &recog,
+            &BTreeSet::new(),
+            true,
+            &BTreeSet::new(),
+            None,
+            seeds,
+        )
+        .iter()
+        .map(|f| f.addr)
+        .collect()
+    };
+    assert_eq!(concluded(&[0x60].into_iter().collect()), vec![0x20]);
+    assert!(concluded(&BTreeSet::new()).is_empty());
 }
 
 #[test]

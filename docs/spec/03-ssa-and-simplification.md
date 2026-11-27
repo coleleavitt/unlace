@@ -759,6 +759,43 @@ moves: the walk must still be complete, the range must still be a register the
 walk proves untouched, an explicit effect override still wins, and only *killed
 by call* is ever downgraded.
 
+**A caller that reads the register is the third mark.** gcc's `-fipa-ra`
+allocates a caller's registers against what each callee really clobbers, so
+gcc 15 keeps an accumulator in `RDX` across `call add` when `add` is `lea
+rax,[rdi+rsi]; ret` (GH-1497). `x86-64-gcc.cspec` lists `RDX` in
+`<killedbycall>` as the high half of a 128-bit return; the INDIRECT creation
+left every later read of the accumulator with no definition, and the loop printed
+`v2 = v3` from a `v3` nothing assigns. `add` writes neither a preserved
+register nor memory, so neither mark above admits it, and the return-register
+arm below declines `RDX` because it carries arguments. The caller-read clause
+(`crates/unlace-bandb/src/p4_calls/calleeiparead.rs (caller_relies_on)`)
+admits the body when the caller itself reads a byte of the register after the
+call that no op between the call and the read has written again. A caller
+compiled to the convention never does that with a killed register except to
+read the call's result, and a callee whose complete walk never writes the
+register returns nothing in it, so such a read is what the caller was compiled
+to rely on. The forward walk (`calleeiparead.rs (caller_reads_across)`) follows
+the op order of the call's block and then its successors, tracks which bytes
+of the range are still the value from the call, ends a path where all of them
+are written again or at the next CALL or CALLIND, skips INDIRECT and
+MULTIEQUAL markers, does not count `x ^ x` or `x - x`, and declines after 4096
+ops. A register only a later call's argument trial would read is not a read
+(trials are not ops during heritage), so that register keeps the convention's
+answer and no call gains an argument from it. The callee must still be a body in
+the return-register arm's sense (`calleeretpreserves.rs (body_is_a_body)`):
+more than one instruction and a write to a register the convention names. The
+clause answers only for a register the model returns a value in as the second
+half of a pair, the register entry that is not first in its class
+(`callretpair.rs (pair_of)`'s reading; `RDX` beside `RAX`): the first-in-class
+return register and a locked non-void declared output are the call's result
+(`calleeiparead.rs (the_calls_result)`) and stay with the return-register arm,
+so a callee that hands its argument back untouched in `RAX` and writes `RBX`
+keeps its two-register `RBX:RAX` result. Fixtures built by gcc at `-O2` show
+the clause at work beyond GH-1497: the `persistcalls` and `prunedssa`
+`churn` functions keep their accumulator in `RDX` across every call to a
+`sink` that writes only `RAX`, and printed it as hundreds of locals nothing
+assigns until the read across the call kept it.
+
 **The return register is a different question.** That positive finding — a write
 to a register the model marks `<unaffected>` — is the signature of a hand-rolled
 helper, and a helper that clobbers only what its convention already allows never
@@ -847,11 +884,17 @@ the flow builder makes about the same two ops.
 `msvcstackguard` has a narrower algebraic answer for the late P7 cookie shape.
 In its destructive arm the first exact direct, unread-output,
 one-cookie-cancel match records that instruction address and requests a restart.
-Independently, the preservation arm collects every exact locked-`void` match,
-records the full set, and requests one restart; marking the whole set at once
-keeps duplicated epilogues from exhausting the outer eight-reflow limit. On
-replay `Heritage::guard_calls` downgrades only an actual `KILLEDBYCALL` effect on
-ABI output storage at a seeded site. An explicit prototype effect and every ABI
+Independently, the preservation arm collects every exact match that declares no
+output (no locked output at all, or a locked `void`), records the full set, and
+requests one restart; marking the whole set at once keeps duplicated epilogues
+from exhausting the outer eight-reflow limit. A checker that declares no output
+leaves the return register unchanged, so on replay `Heritage::guard_calls`
+downgrades the effect on ABI output storage at a seeded site to `UNAFFECTED`
+whether the model lists that storage as `KILLEDBYCALL` (x86-64 RAX) or leaves it
+as its unknown-effect output register (x86-32 `__cdecl` EAX). In the second case
+the downgrade also keeps the output-active trial from re-killing the register,
+which is what turned an x86-32 caller's return value into `void`
+(`crates/unlace-cli/tests/msvccookie_return_cli.rs`). An explicit prototype effect and every ABI
 return-storage write recovered from the callee body veto the downgrade, even
 when an ordinary nested call leaves that summary incomplete. The write probe
 retains positive register writes and STORE spaces recovered before that
@@ -3577,7 +3620,10 @@ a time.
 coreaction.cc:894). In a block, two MULTIEQUALs merge when their inputs agree slot by slot: a COPY input stands for its
 source, and two values count as equal when `functional_equality_level` says so. The later one is destroyed and its
 readers move to the earlier output, or the reverse when `preferred_output` says the other survives (a value that feeds
-a RETURN, or an address-tied one, wins). This is the strict Ghidra-parity merge that ActionLateCse does not do: it changes
+a RETURN, or an address-tied one, wins). Two MULTIEQUALs whose outputs name different storage, one of them a
+global, never merge: the global's join carries the global's own value past the block, and moving its readers to
+the other join would make Merge print a copy into the global that the binary never stores (`gi = v2;` after both
+arms of a branch stored it). This is the strict Ghidra-parity merge that ActionLateCse does not do: it changes
 output for every function where two identical MULTIEQUALs appear in one block.
 
 Option `implweight N` changes `ActionMarkExplicit`

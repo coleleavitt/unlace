@@ -16,16 +16,17 @@
 //!
 //! - the join variable is not address-tied, persistent or an input, and some op
 //!   that is not a MULTIEQUAL or INDIRECT reads it;
-//! - the slot's predecessor is not dominated by the join block (not a loop back
-//!   edge, so an induction update stays in its loop variable);
+//! - the join is not a loop variable: its block is not a loop head and its
+//!   output is not loop-carried ([`loop_carried`]), so neither an induction
+//!   update nor a loop's initial value is split from the loop variable;
 //! - the input is written by an op that is not a COPY, MULTIEQUAL or INDIRECT
 //!   (an assignment `r = a;` to the join variable stays merged) and that does
 //!   not read the join value;
 //! - the input is not address-tied, persistent or an input, and some op other
 //!   than this MULTIEQUAL that is not a MULTIEQUAL or INDIRECT reads it;
 //! - the input is not loop-carried ([`loop_carried`]): no COPY or MULTIEQUAL
-//!   output of it reaches a MULTIEQUAL along a back edge, so a loop counter read
-//!   at its loop exit stays the loop variable.
+//!   output of it reaches a MULTIEQUAL in a loop head, so a loop counter read
+//!   at its loop exit, or the value a loop starts from, stays the loop variable.
 
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -50,7 +51,7 @@ pub fn arm_slots(ctx: &mut dyn MergeContext, op: OpId) -> Vec<int4> {
     }
     let bl = ctx.op_parent(op);
     let nin = ctx.op_num_input(op);
-    if ctx.block_num_in(bl) != nin {
+    if ctx.block_num_in(bl) != nin || loop_head(ctx, op) || loop_carried(ctx, out, op) {
         return slots;
     }
     for slot in 0..nin {
@@ -58,9 +59,6 @@ pub fn arm_slots(ctx: &mut dyn MergeContext, op: OpId) -> Vec<int4> {
             continue;
         };
         if vn == out || ctx.vn_is_input(vn) || !ctx.vn_is_written(vn) {
-            continue;
-        }
-        if ctx.block_dominates(bl, ctx.block_in(bl, slot)) {
             continue;
         }
         let Some(def) = ctx.vn_def(vn) else {
@@ -89,10 +87,11 @@ pub fn arm_slots(ctx: &mut dyn MergeContext, op: OpId) -> Vec<int4> {
 const LOOP_CARRIED_LIMIT: usize = 64;
 
 /// Is `vn` loop-carried? Walk its COPY and MULTIEQUAL descendants (never the
-/// join `join` itself) and report whether one of them is a MULTIEQUAL input
-/// that arrives on a back edge, i.e. its predecessor is dominated by the
-/// MULTIEQUAL's block. Such a value is the same source variable on every
-/// iteration, so a loop exit that reads it is the loop variable, not a second one.
+/// join `join` itself) and report whether one of them is a MULTIEQUAL in a loop
+/// head ([`loop_head`]). The value then enters that loop as the loop variable,
+/// along a back edge as its next value or along the entry edge as the value the
+/// loop starts from; either way a join that reads it is the loop variable, not a
+/// second one.
 fn loop_carried(ctx: &dyn MergeContext, vn: VarnodeId, join: OpId) -> bool {
     let mut work = vec![vn];
     let mut seen: Vec<VarnodeId> = Vec::new();
@@ -106,17 +105,8 @@ fn loop_carried(ctx: &dyn MergeContext, vn: VarnodeId, join: OpId) -> bool {
                 continue;
             }
             match ctx.op_code(reader) {
-                OpCode::CPUI_MULTIEQUAL => {
-                    let bl = ctx.op_parent(reader);
-                    for slot in 0..ctx.op_num_input(reader) {
-                        if ctx.op_in(reader, slot) == Some(cur)
-                            && ctx.block_dominates(bl, ctx.block_in(bl, slot))
-                        {
-                            return true;
-                        }
-                    }
-                }
-                OpCode::CPUI_COPY => {}
+                OpCode::CPUI_MULTIEQUAL if loop_head(ctx, reader) => return true,
+                OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_COPY => {}
                 _ => continue,
             }
             if let Some(out) = ctx.op_out(reader) {
@@ -125,6 +115,13 @@ fn loop_carried(ctx: &dyn MergeContext, vn: VarnodeId, join: OpId) -> bool {
         }
     }
     false
+}
+
+/// Is MULTIEQUAL `op` in a loop head, a block that dominates one of its
+/// predecessors (the source of a back edge)?
+fn loop_head(ctx: &dyn MergeContext, op: OpId) -> bool {
+    let bl = ctx.op_parent(op);
+    (0..ctx.block_num_in(bl)).any(|slot| ctx.block_dominates(bl, ctx.block_in(bl, slot)))
 }
 
 /// Is `high` a variable a trim must not move (address-tied, persistent, input)?

@@ -1644,6 +1644,54 @@ fn is_possible_alias(
 ///
 /// The crossing arm compares byte ranges (`is_possible_alias`); the
 /// `inflateTest` arm asks the merge pass (`Merge::inflate_test`).
+/// (unlace foldcallret) Would printing the indirect-call target `vn` inside its
+/// call give an operand of `vn`'s expression a statement of its own?  The target
+/// is then read where the call prints, so its operands live until there: an
+/// operand's input that [`Merge::inflate_test`] says cannot be stretched over
+/// `vn`'s cover is the one the inflate arm below would make explicit (on x86-16
+/// `pickfar`, `a0` shares `bx` with `a0 * 2`), and the target keeps its own
+/// statement instead.
+fn target_operands_inflate(data: &mut Funcdata, vn: crate::context::VarnodeId) -> bool {
+    let Some(high) = data.vbank().get(vn).and_then(|v| v.get_high()) else {
+        return true;
+    };
+    let mut pending = vec![vn];
+    let mut leaves = Vec::new();
+    while let Some(cur) = pending.pop() {
+        if pending.len() + leaves.len() > 32 {
+            return true;
+        }
+        let Some(op) = data
+            .vbank()
+            .get(cur)
+            .and_then(|v| v.get_def())
+            .and_then(|def| data.obank().get(def))
+        else {
+            continue;
+        };
+        let slots = match op.code() {
+            OpCode::CPUI_LOAD => 1..2,
+            _ => 0..op.num_input(),
+        };
+        for input in slots.filter_map(|slot| op.get_in(slot)) {
+            let Some(value) = data.vbank().get(input) else {
+                continue;
+            };
+            if value.is_constant() {
+                continue;
+            }
+            if value.is_written() && !value.is_explicit() && !value.is_addr_tied() {
+                pending.push(input);
+            } else {
+                leaves.push(input);
+            }
+        }
+    }
+    leaves
+        .into_iter()
+        .any(|leaf| data.with_covermerge(|merge, data| merge.inflate_test(data, leaf, high)))
+}
+
 fn check_implied_cover(
     data: &mut Funcdata,
     vn: crate::context::VarnodeId,
@@ -1770,10 +1818,15 @@ fn check_implied_cover(
                 return false;
             }
         }
-        // loads / calls crossing calls.
+        // loads / calls crossing calls.  (unlace foldcallret) The call that reads
+        // `vn` is not one: see [`crate::callretfold::consumes`].
         let ncalls = data.num_calls();
         for i in 0..ncalls {
             let callop = data.get_call_specs(i).get_op();
+            if crate::callretfold::consumes(data, vn, callop) && !target_operands_inflate(data, vn)
+            {
+                continue;
+            }
             let (blk, point) = op_cover_pair(data, callop);
             let crosses = data
                 .vbank()

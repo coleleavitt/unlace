@@ -3793,14 +3793,18 @@ funcsym stream:
   calls `os_unfair_lock_lock_with_options` through an island on iOS 16 and
   through `HomeKit`'s rewritten stub on iOS 14, and both render the name.
 
-- **Empty functions** (unlace `nullsubs`, default off,
+- **Empty functions** (unlace `nullsubs`, default on,
   `crates/unlace-console/src/engine/thunknames.rs (name_nullsubs)`): after
   the thunks are named, a discovered function still named by a placeholder whose
   first instruction, after at most one that emits no p-code (`endbr64`, `bti`), is
   a return doing nothing but its own stack and link-register work (`LOAD`,
   `INT_ADD`, `INT_AND`, `COPY`) becomes `nullsub_<addr>` with the placeholder's
   address spelling, IDA's `AF_NULLSUB`. On MIPS and SPARC those ops would be the
-  delay slot's, so the return must be alone. A name in use is left alone.
+  delay slot's, so the return must be alone. A name in use is left alone. Under
+  `lazyfuncs` such an entry gets its function up front, as a named thunk does,
+  so it is named the same in both modes. The name says no more than the
+  address, so a name miss does not count it among the names the image carries:
+  an image of placeholders and nullsubs still gets the `--addr` advice.
 - **Jump thunks** (unlace `thunknames`, default on,
   `crates/unlace-console/src/engine/thunknames.rs`): a function
   whose first instruction is a direct unconditional branch is a thunk (a
@@ -15217,6 +15221,33 @@ symbols, default `auto` mode, so the Listing is built) this names
 `__CxxThrowException@8` and the helpers that only throw. The legacy tally had a third arm ahead of those two — the
 successor is not a decoded instruction start.
 
+**(unlace) One sealed call is enough — `option noreturntrap`, default on,
+`crates/unlace-analysis/src/analyzers/noreturn_disc/disctrap.rs (sealed_by_trap)`,
+unlace#837.** The three-vote threshold misses a no-return routine the binary calls
+from one sealed site. The statically linked VC++ 2008 CRT is that shape: `_exit` is
+`doexit(code, 1, 0)`, and `doexit` returns exactly when its third argument is
+nonzero, so no structural rule proves `_exit` from its body; `abort` ends `call
+_exit ; int3 ; int3`, the next function starting after the pad; and `raise` calls
+`_exit` once more where its fall-through is a join. With `_exit` returning,
+`abort`, `terminate`, `unexpected`, `_inconsistency` and `CallUnexpected` all
+returned too, which on SLABHIDDevice.dll was six of the fourteen functions IDA 9.5
+marks no-return, and `abort` printed its pad as `(*(void (*)(void))swi(3))(); //
+int3-pad x2`. Under the option a callee is also concluded when one of its call
+sites is **sealed** — the successor is an `int3` and the run of `0xcc` bytes from
+there ends at another function's entry or in data, so the compiler left nothing to
+continue in — and none of its call sites is **continued**: a call whose successor is
+a decoded instruction that is not padding, not a function entry, and that no
+reference but the call's own fall-through reaches, which is code the compiler
+expected to run after the callee returned. A successor that is a join (a branch
+targets it too) counts neither way. `__debugbreak()` after a returning call is not
+sealed, because the compiler emits the rest of the function behind that `int3`.
+The rule reads what the compiler believed rather than the callee, so it is a
+judgement call with its own option; flipping it off restores the three-vote
+requirement. On SLABHIDDevice.dll, CP210xManufacturing.dll and SLABHIDtoUART.dll it
+concludes `_exit` and, through the promotion rule and the propagation below,
+`abort`, `unexpected`, `_inconsistency` and `CallUnexpected`
+(`tests/stages/noreturntrap.toml`).
+
 That third arm is a statement about unlace, not about the program. The Listing walk
 (§1.7) pushes **every** call's fall-through onto its per-function instruction
 worklist unconditionally, and that worklist drains before the function is left, so
@@ -15238,8 +15269,13 @@ that never reach the threshold on their own.
 **Propagation fixpoint** (angr; `noreturn_propagate`,
 `crates/unlace-analysis/src/analyzers/noreturn_propagate/mod.rs
 (propagate_noreturn)`, the CFGFast returning-analysis idea): seed the terminal set
-from the Known-flagged functions, then sweep the call graph to a fixpoint with
-**no evidence threshold**. The base rule is a strict tail-call rule
+from the Known-flagged functions and, when `noreturn_disc` is on, from what the
+evidence tally concludes over the same Listing (`discovered_seeds`), then sweep
+the call graph to a fixpoint with **no evidence threshold**. The two consumers run
+side by side over one Listing and each commits its own facts, so before the
+seeding a wrapper of a routine only the tally finds never joined the terminal set:
+MSVC's `terminate` ends in `call abort`, `abort` in `call _exit`, and only the
+tally concludes those two. The base rule is a strict tail-call rule
 (`function_is_no_return`), conservative by construction: a function is concluded
 no-return only when its last *real* instruction — trailing NOP padding skipped,
 closing exactly the blind spot above — is a CALL or tail JMP to a terminal-set
@@ -15296,8 +15332,9 @@ they do not depend on the known-name analyzer being enabled. A wrapper that call
 a marked leaf and then has unreachable INT3 bytes is handled by the reachability
 rule below. Marking the leaf does not conclude a wrapper with a reachable return,
 an unresolved jump, or an unmodelled escaping path. Without a known or explicit
-no-return fact, a call followed by INT3 alone does not establish that its callee
-cannot return. The existing `listing`, `noreturn_propagate`, and `noreturn_reach`
+no-return fact, a call followed by INT3 establishes that its callee cannot return
+only under `noreturntrap` (above): the pad must run into the next function, and no
+other call site may continue after the callee. The existing `listing`, `noreturn_propagate`, and `noreturn_reach`
 gates still control this inference.
 
 A seed need not be a function: an import a `-fno-plt` build reaches only through
@@ -15345,7 +15382,14 @@ Two rules fold into the same fixpoint, both Ghidra-derived:
   terminal callee as ending its path, and concludes no-return iff no RETURN is
   reachable and at least one path ends at such a transfer. Every uncertainty — a
   reachable RETURN, an unresolved indirect jump, an escape to a possibly-returning
-  neighbour, a call with no modelled fall-through — answers "returns". (ida) The
+  neighbour, a call with no modelled fall-through — answers "returns". An escape is
+  a transfer out of `[entry, next entry)` to another function's entry that is not
+  terminal: a tail call returns when its target does. A transfer out of the span to
+  code that is no function's entry is walked as the function's own code. MSVC's
+  `terminate` is that code: `unexpected`, `_inconsistency` and `CallUnexpected`
+  reach it only by `jmp`, so the Listing walk makes it no entry and its bytes sit in
+  the span of the function before it; treating the jump as an escape kept all three
+  returning although every path through `terminate` ends in `abort`. (ida) The
   one recorded over-conclusion and its fix: a GCC `-O2` hot/cold-split check
   (`jcc <.cold>` where the cold fragment is `call abort`) was short-circuited like
   an unconditional transfer, skipping the returning fall-through arm and marking

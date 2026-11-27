@@ -67,11 +67,11 @@ fn a_directive_the_output_does_not_show_is_reported() {
     )
     .expect("parses");
 
-    let renamed = unlace_console::hightarget::apply_local(&mut fd, "v5", "hash", None, 8, None)
+    let renamed = unlace_console::hightarget::apply_local(&mut fd, "v4", "hash", None, 8, None)
         .expect("applies")
         .expect("binds a Symbol");
     let retyped =
-        unlace_console::hightarget::apply_local(&mut fd, "v7", "", Some(float4.clone()), 8, None)
+        unlace_console::hightarget::apply_local(&mut fd, "v6", "", Some(float4.clone()), 8, None)
             .expect("applies")
             .expect("binds a Symbol");
     let expected =
@@ -86,7 +86,7 @@ fn a_directive_the_output_does_not_show_is_reported() {
     assert!(
         unapplied
             .iter()
-            .any(|(i, reason)| *i == 1 && reason.starts_with("`v7` is declared as")),
+            .any(|(i, reason)| *i == 1 && reason.starts_with("`v6` is declared as")),
         "{unapplied:?}"
     );
 

@@ -38,7 +38,7 @@ const LOWER_BOUND: [u32; 64] = [
 ];
 
 /// `n` copies of [`SELECT`]'s dispatch in a chain: case 1 of stage `k` runs
-/// stage `k + 1`, so each restart reveals one more switch. Stage `k`'s cases
+/// stage `k + 1`, so each switch is reached only through the one before it. Stage `k`'s cases
 /// return `100 + 10k`, `+ 2`, `+ 3`, and its default `+ 9`.
 fn nested(n: usize) -> Vec<u32> {
     const STAGE: usize = 31;
@@ -152,13 +152,28 @@ fn a_call_written_switch_index_keeps_every_table_case() {
     }
 }
 
+/// The guard's bounds survive as the switch's case set: rows 5 to 9 are its
+/// cases, every other index takes the guard's `99` as the default, and no row
+/// below 5 is a case.
 #[test]
 fn rows_a_lower_bound_guard_excludes_do_not_become_cases() {
     for (endian, code, flat) in decompile_both("ppc64-delayed-lower-bound", &LOWER_BOUND) {
+        for (index, value) in (5..=9).zip(0x2d..=0x31) {
+            assert!(
+                flat.contains(&format!("case {index}: return {value:#x};")),
+                "{endian:?}: lost case {index}: {code}"
+            );
+        }
         assert!(
-            flat.contains("5 <="),
-            "{endian:?}: dropped the lower bound: {code}"
+            flat.contains("default: return 99;"),
+            "{endian:?}: dropped the guard's default: {code}"
         );
+        for index in 0..5 {
+            assert!(
+                !flat.contains(&format!("case {index}:")),
+                "{endian:?}: dropped the lower bound, {index} became a case: {code}"
+            );
+        }
         for value in 0x28..=0x2c {
             assert!(
                 !flat.contains(&format!(": return {value:#x};")),
@@ -168,17 +183,23 @@ fn rows_a_lower_bound_guard_excludes_do_not_become_cases() {
     }
 }
 
+/// Each stage's index is the slot `get_state` writes, and the jump-table partial
+/// keeps a stack address a call receives aliased (#871), so every stage's table
+/// is recovered in the first flow: no restart is left pending and all nine
+/// switches print. The partial used to fold each index to the value stored
+/// before the call and reject the table, so each restart revealed one more stage
+/// until the restart budget ran out.
 #[test]
-fn an_exhausted_restart_budget_keeps_the_analyzed_body() {
+fn a_nested_chain_recovers_every_switch_in_one_flow() {
     for (endian, code, _) in decompile_both("ppc64-delayed-nested-switch", &nested(9)) {
         assert!(
             !code.contains("structuring declined"),
             "{endian:?}: lost the body: {code}"
         );
         assert!(
-            code.contains("Exceeded maximum restarts with more pending"),
-            "{endian:?}: {code}"
+            !code.contains("Exceeded maximum restarts"),
+            "{endian:?}: a stage needed a restart: {code}"
         );
-        assert!(code.matches("switch(").count() >= 8, "{endian:?}: {code}");
+        assert_eq!(code.matches("switch(").count(), 9, "{endian:?}: {code}");
     }
 }

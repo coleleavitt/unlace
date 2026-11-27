@@ -4412,6 +4412,11 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::coreoptions::Flirt>()
                 .0
         }
+        "syscallwrappers" => {
+            arch.unlace_options
+                .get::<unlace_decomp::analysisgates::SyscallWrappers>()
+                .0
+        }
         // (unlace) MSVC RTTI / vftable recovery — a standalone load-time pass whose
         // class-name + RTTI_* labels are computed at LOAD but COMMITTED only when
         // this gate is on. Default-OFF (output-changing: adds named data symbols),

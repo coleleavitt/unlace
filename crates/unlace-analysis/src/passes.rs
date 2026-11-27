@@ -816,6 +816,12 @@ fn listing_consumer_passes(arch: &Architecture) -> Vec<(bool, Box<dyn AnalysisPa
                 .0,
             Box::new(crate::flirt::FlirtPass),
         ),
+        (
+            arch.unlace_options
+                .get::<unlace_decomp::analysisgates::SyscallWrappers>()
+                .0,
+            Box::new(crate::syscallwrappers::SyscallWrappersPass),
+        ),
         // (unlace `formatstring static`) The load-time format-string resolver: a
         // Listing consumer like the rest, because the call edges are what it
         // walks. `full` runs it too — the decompile-time loop then covers only

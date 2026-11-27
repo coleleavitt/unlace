@@ -2635,19 +2635,30 @@ impl BlockGraph {
     /// (unlace `crossjumptail`) A copy of the print tree under `id`: the same basic
     /// blocks, jump targets and edges, without the labels of the original.
     pub fn unlace_clone_subtree(&mut self, id: BlockId) -> BlockId {
+        let node = self.unlace_copy_unlabelled(id);
+        let mut pending: Vec<(BlockId, BlockId)> = self.arena[id]
+            .list
+            .iter()
+            .rev()
+            .map(|&m| (m, node))
+            .collect();
+        while let Some((src, parent)) = pending.pop() {
+            let c = self.unlace_copy_unlabelled(src);
+            self.unlace_push_component(parent, c);
+            pending.extend(self.arena[src].list.iter().rev().map(|&m| (m, c)));
+        }
+        node
+    }
+
+    fn unlace_copy_unlabelled(&mut self, id: BlockId) -> BlockId {
         let mut copy = self.arena[id].clone();
         copy.clear_flag(
             block_flags::f_unstructured_targ
                 | block_flags::f_label_bumpup
                 | block_flags::f_interior_gotoin,
         );
-        let members = std::mem::take(&mut copy.list);
-        let node = self.arena.insert(copy);
-        for m in members {
-            let c = self.unlace_clone_subtree(m);
-            self.unlace_push_component(node, c);
-        }
-        node
+        copy.list.clear();
+        self.arena.insert(copy)
     }
 
     pub fn unlace_flatten_ifelse(&mut self, if_id: BlockId) -> bool {

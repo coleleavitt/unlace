@@ -6,3 +6,5 @@ set -e
 cd "$(dirname "$0")"
 gcc -O2 -static -s -o netstruct-gcc-O2 netstruct.c
 gcc -O2 -s -o netstruct-gcc-O2-dyn netstruct.c
+gcc -O2 -static -s -o netraw-gcc-O2 netraw.c
+gcc -O2 -s -o netraw-gcc-O2-dyn netraw.c

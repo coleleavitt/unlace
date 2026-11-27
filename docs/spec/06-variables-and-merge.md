@@ -2488,6 +2488,38 @@ record (`option sockfamily off`). A value stored whole into `sin_addr` takes
 `struct in_addr` from the field, so the parameter it comes from can be
 declared `in_addr`.
 
+**A raw socket's packet buffer by its headers (unlace `pkthdr`, default `off`).** A
+buffer a program builds a packet in and sends on a raw socket is the packet's
+headers, but the call takes `const void *`, so nothing names it. With the option
+on, a frame object is typed as the libc header records its bytes are: `iphdr` at
+its start and, 20 bytes on, the `tcphdr`, `udphdr` or `icmphdr` its protocol
+names. Two triggers mark a buffer: every store to its first byte is the constant
+`0x45` (version 4, IHL 5), or it is the buffer of a `sendto` on a
+`socket(AF_INET, SOCK_RAW, protocol)` the same function created, when the program
+supplies the IP header (`IPPROTO_RAW`, or `setsockopt(fd, IPPROTO_IP,
+IP_HDRINCL, ...)`). A raw socket of a transport protocol without `IP_HDRINCL`
+carries the transport header at the buffer's start, and the kernel builds the IP
+header itself, so only the transport record is declared. The records are the
+layouts `crates/unlace-analysis/src/analyzers/protos/libctypes/glibc.rs` publishes,
+with their bitfields (`ihl`/`version`, `doff`, the TCP flags). The console interns
+them while the option is on (`crates/unlace-console/src/engine.rs`, the `pkthdr`
+hook), and the frame-layout pass that types the buffer is
+`crates/unlace-bandb-base/src/p6_variables/pkthdr.rs`. On `netraw-gcc-O2-dyn`
+(`tests/stages/pkthdr.toml`) the UDP buffer prints as `iphdr v4; udphdr v5;` with
+`v4.version = 4; v4.ihl = a2; v4.tot_len = 0x1c00; v4.protocol = 0x11;`, and the
+ICMP echo buffer as `icmphdr v2;` with `v2.type = 8; v2.code = 0;`.
+
+Two cases stay as the code has them. A constant word that covers both bitfield
+bytes and plain bytes (gcc -O2 writes `tos` and `tot_len` in the same word as
+`ihl`/`version`, `0x28001045`) prints raw, `*(unsigned int *)&v3 = 0x28001045;`:
+the bitfield insert has no record for the plain bytes, and dropping them would
+lose the stored value, while `subflow.rs` keeps a bitfield struct from being split
+into pieces. A union member, such as `icmphdr`'s `un.echo`, prints as the bytes it
+is (`((unsigned short *)&v2)[2]`), since the union is a hole in the record. The
+option is a flip because it declares the buffer by the packet a `sendto` sends
+rather than by bytes the code stores; with it off the buffer is `uint1 v4 [16]`
+and the stores print as bytes (`v4[0] = a2 & 0xf | 0x40;`).
+
 **An escaped buffer's length (unlace `arraysize`, default `on`).** An open range
 that `attempt_join` does not extend ends where the next hint starts, and
 `adjust_fit` trims it to the mapped range. For a buffer whose address escapes to

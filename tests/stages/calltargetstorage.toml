@@ -155,7 +155,7 @@ regex = '^  \(\*\(void \(\*\)\(void\)\)o->done\)\(\);'
 [[match]]
 name = "CALLTARGETSTORAGE #11: the local a void * field is read into takes the call's type"
 count = 1
-literal = 'int (*v2)(int,long); // tmp'
+literal = '(*(int (*)(int,long))o->add)(x,(long)v1)'
 
 [[match]]
 name = 'CALLTARGETSTORAGE #12: Rust declares the parameter alike with the option off and on'

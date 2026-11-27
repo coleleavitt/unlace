@@ -62,4 +62,4 @@ literal = '(uint8)((uint4)(v1 >> 0xc) + (uint4)((v1 & 0xfff) != 0)));'
 [[match]]
 name = 'NARROWED-CALL-INPUT #2: the call goes through the typed field'
 count = 1
-literal = 'v2 = p->fn;'
+literal = 'return (*p->fn)('

@@ -3264,6 +3264,27 @@ questions in full over the whole distance, for its own folds, because those are
 the ones it released; the `foldcallretphi` entry below has that half. Provenance:
 `docs/features/gh657/`.
 
+A folded call's operands are inflated with its output's cover, as
+`ActionMarkImplied` inflates the inputs of every implied value, so the call lies
+inside the cover of a value it reads. The load-crosses-call arm of
+`checkImpliedCover` does not count an indirect call whose target is that value
+and nothing else reads it, directly or through implied ops such as a vtable
+slot load (`crates/unlace-bandb-base/src/p6_variables/callretfold.rs
+(consumes)`): the call evaluates its target before it runs, so the target
+prints inside the folded call. `blx r3` on `r3 = o->f` prints
+`return (int)(*o->f)(2.5,k + 1);`, a vtable call `(*a0->vptr->scaled)(a0,a1)`,
+a jump table `(*(code *)(*(int4 *)(sel * 4UL + 0x100040) + 0x100040L))()`,
+where each had a `code *` temporary assigned on the line before. A value also
+read past the call, or passed as an argument, is still crossed by it and keeps
+its statement. Inlining the target extends the cover of the target's own
+operands too, so the merge rules could give one of them a statement instead.
+The target therefore keeps its statement when `Merge::inflateTest` refuses to
+stretch a leaf operand of its expression over the target's variable
+(`coreaction_cleanup.rs (target_operands_inflate)`): on x86-16 `pickfar`
+(`tests/stages/segmentize.toml`) the table index `a0 * 2` shares `bx` with
+`a0`, so `v1 = (code *)*(unsigned short *)(a0 * 2 + 0x42);` stays ahead of
+`return (*v1)();` rather than `a0 * 2` gaining a statement of its own.
+
 The second span also keeps ordinary calls ahead of separate printed statements
 that read their own INDIRECT effects. A phi-edge COPY can snapshot an updated
 out-parameter after the call but before its result's final branch condition;

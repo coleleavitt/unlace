@@ -73,8 +73,8 @@ fn a_throwing_call_keeps_its_error_test() {
         on.contains("callfix.Counter.advance(by:times:)(a2,3,a1);"),
         "{on}"
     );
-    assert!(on.contains("v5 = swift_error();"), "{on}");
-    assert!(on.contains("swift_release(v5);"), "{on}");
+    assert!(on.contains("v4 = swift_error();"), "{on}");
+    assert!(on.contains("swift_release(v4);"), "{on}");
     // A non-mutating struct method takes `self` by value.
     assert!(on.contains("callfix.Counter.peek(_:)(a2,*a1)"), "{on}");
     let off = decompile(

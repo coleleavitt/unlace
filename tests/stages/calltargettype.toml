@@ -268,32 +268,32 @@ literal = '(**(void (**)(void))(a0 * 8UL + 0x200000))();'
 [[match]]
 name = 'CALLTARGETTYPE #3: off declares the called temporaries void *'
 count = 4
-literal = 'void *v1; // tmp'
+regex = '\(\*\*\(void \*\*\)\(a0 \* 8UL \+ 0x200100\)\)\(a1,7\)|\(\*\(void \*\)\*a0\)\(a1\)'
 
 [[match]]
 name = 'CALLTARGETTYPE #4: on declares the local from its call'
 count = 2
-literal = 'int (*v1)(unsigned int,unsigned long); // tmp'
+literal = '(**(int (**)(unsigned int,unsigned long))(a0 * 8UL + 0x200100))(a1,7)'
 
 [[match]]
 name = 'CALLTARGETTYPE #5: on loads the local through a pointer to its type'
 count = 2
-literal = 'v1 = *(int (**)(unsigned int,unsigned long))(a0 * 8UL + 0x200100);'
+literal = '*(int (**)(unsigned int,unsigned long))(a0 * 8UL + 0x200100)'
 
 [[match]]
 name = 'CALLTARGETTYPE #6: on declares the field temporary from its call'
 count = 2
-literal = 'int (*v1)(unsigned int); // tmp'
+literal = '(*(int (*)(unsigned int))*a0)(a1)'
 
 [[match]]
 name = 'CALLTARGETTYPE #7: on casts the field to the call type where off cast it to void *'
 count = 2
-literal = 'v1 = (int (*)(unsigned int))*a0;'
+literal = '(int (*)(unsigned int))*a0'
 
 [[match]]
 name = 'CALLTARGETTYPE #8: off casts the field to void *, as twice does in both ctypes passes'
 count = 6
-literal = 'v1 = (void *)*a0;'
+regex = 'v1 = \(void \*\)\*a0;|\(\*\(void \*\)\*a0\)\(a1\)'
 
 [[match]]
 name = 'CALLTARGETTYPE #9: off and ctypes off call the local of two arities bare'
@@ -323,12 +323,12 @@ regex = 'v1 = \*\(void \*\*\)\(.*0x200200\);'
 [[match]]
 name = 'CALLTARGETTYPE #14: a float held as an integer in xmm0 keeps the call untyped'
 count = 4
-literal = 'void *v2; // tmp'
+literal = '*a1 = (**(void **)((a0 & 1) * 8UL + 0x200300))(v1);'
 
 [[match]]
 name = 'CALLTARGETTYPE #15: the float call prints as it did'
 count = 6
-literal = '*a1 = (*v2)(v1);'
+regex = '\*a1 = \(\*\*\((void|code) \*\*\)\(\(a0 & 1\) \* 8UL \+ 0x200300\)\)\(v1\);'
 
 [[match]]
 name = 'CALLTARGETTYPE #16: no integer function type is built over xmm0'
@@ -343,7 +343,7 @@ literal = '(**(code **)(a0 * 8UL + 0x200000))();'
 [[match]]
 name = 'CALLTARGETTYPE #18: ctypes off keeps code * temporaries'
 count = 4
-literal = 'code *v1; // tmp'
+regex = '\(\*\*\(code \*\*\)\(a0 \* 8UL \+ 0x200100\)\)\(a1,7\)|\(\*\(code \*\)\*a0\)\(a1\)'
 
 [[match]]
 name = 'CALLTARGETTYPE #19: ctypes off builds no function type'

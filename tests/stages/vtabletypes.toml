@@ -56,12 +56,12 @@ commands = [
 [[match]]
 name = 'VTABLETYPES #1: on, the call goes through the named slot with its arguments'
 count = 1
-literal = 'v2 = (*a0->vptr->area)(a0,a1);'
+literal = 'v1 = (*a0->vptr->area)(a0,a1);'
 
 [[match]]
 name = 'VTABLETYPES #2: on, the second slot is named too'
 count = 1
-literal = 'v1 = a0->vptr->scaled;'
+literal = '(*a0->vptr->scaled)(a0,a1)'
 
 [[match]]
 name = "VTABLETYPES #3: on, a method's call on this goes through its class's slot"
@@ -76,7 +76,7 @@ regex = '^  (Tr::)?area\(v3,a0\);'
 [[match]]
 name = 'VTABLETYPES #5: off, the slot load is cast arithmetic and the first call loses an argument'
 count = 1
-literal = 'v2 = (*(code *)**(unsigned long **)a0)(a0,CONCAT44(v3,a1));'
+literal = 'v1 = (*(code *)**(unsigned long **)a0)(a0,CONCAT44(v2,a1));'
 
 [[match]]
 name = "VTABLETYPES #6: off, the method's call on this takes no arguments"

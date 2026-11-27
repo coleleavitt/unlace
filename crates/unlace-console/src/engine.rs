@@ -7118,8 +7118,13 @@ fn commit_model_facts(
         return;
     }
     let mut models = (*prog.arch().loader_proto_models).clone();
+    let mut resolved = std::collections::HashMap::new();
     for fact in facts {
-        let Some(model) = prog.arch().get_model(fact.model).cloned() else {
+        let Some(model) = resolved
+            .entry(fact.model)
+            .or_insert_with(|| unlace_decomp::typedcallabi::bound_model(prog.arch(), fact.model))
+            .clone()
+        else {
             continue;
         };
         let model = if let Some(inputs) = &fact.leaf_stack_inputs {

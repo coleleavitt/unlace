@@ -104,6 +104,16 @@ pub fn soft_model(arch: &Architecture, evidence: Option<bool>) -> Option<Rc<Prot
     Some(Rc::new(model))
 }
 
+/// The model a loader binding to `name` stands for: the soft-float model, with
+/// its argument extension, for the base standard ([`soft_model`]); the spec's
+/// own model of that name otherwise.
+pub fn bound_model(arch: &Architecture, name: &str) -> Option<Rc<ProtoModel>> {
+    if name == SOFT_FLOAT_MODEL {
+        return soft_model(arch, Some(false));
+    }
+    arch.get_model(name).cloned()
+}
+
 /// The image states no floating-point hardware.  A declaration that names no
 /// convention is laid out under the soft-float model only there: an image with
 /// an FPU may still pass a function's floating-point values in VFP registers

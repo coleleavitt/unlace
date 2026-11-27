@@ -32,7 +32,7 @@
 //! (it accepts a lone `gp_offset` store while this option is on) and marks the prototype
 //! variadic. With the value `builtin` the call prints as `__builtin_va_arg`.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -207,15 +207,15 @@ struct Read {
 
 #[derive(Default)]
 struct Walk {
-    reads: HashMap<BlockId, Vec<Read>>,
+    reads: BTreeMap<BlockId, Vec<Read>>,
     /// Blocks that load an `overflow_arg_area` field (stack offset).
-    overflow: HashMap<BlockId, HashSet<i64>>,
+    overflow: BTreeMap<BlockId, HashSet<i64>>,
     /// Blocks whose ops compare an offset field (stack offset, fp limit?) with a limit.
-    tests: HashMap<BlockId, Vec<(i64, bool)>>,
+    tests: BTreeMap<BlockId, Vec<(i64, bool)>>,
     /// Stores of an offset field derived from its own load: (block, field, op).
     steps: Vec<(BlockId, i64, OpId)>,
     /// Stores per block: (stack offset, size, value).
-    stores: HashMap<BlockId, Vec<(i64, int4, Val)>>,
+    stores: BTreeMap<BlockId, Vec<(i64, int4, Val)>>,
 }
 
 const GP_LIMITS: [u64; 4] = [0x27, 0x28, 0x2f, 0x30];
@@ -415,6 +415,7 @@ pub fn rewrite(data: &mut Funcdata) {
                 .collect();
             let mut s = State::default();
             if sps.len() == 1 {
+                // determinism:allow: the set holds one value, so its order does not matter
                 if let Some(Some(v)) = sps.iter().next() {
                     if matches!(v, Val::Sp(_)) {
                         s.vals.insert(sp, *v);

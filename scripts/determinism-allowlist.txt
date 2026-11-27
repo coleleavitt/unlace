@@ -21,7 +21,6 @@ crates/unlace-analysis/src/loadimage_cil.rs records 2
 crates/unlace-analysis/src/loadimage_object.rs definitions 1
 crates/unlace-analysis/src/loadimage_object.rs imports 1
 crates/unlace-bandb-base/src/p3_dataflow/stackreadscope.rs lowered 1
-crates/unlace-bandb-core/src/p4_calls/calleevote.rs sites 2
 crates/unlace-bandb-core/src/p4_calls/calleevote.rs stated 1
 crates/unlace-bandb/src/p4_calls/callbacktype.rs by_caller 3
 crates/unlace-bandb/src/p4_calls/vaarg.rs cut 1
@@ -29,7 +28,6 @@ crates/unlace-bandb/src/p4_calls/vaarg.rs members 2
 crates/unlace-bandb/src/p4_calls/vaarg.rs reads 3
 crates/unlace-bandb/src/p4_calls/vaarg.rs stores 1
 crates/unlace-bandb/src/p4_calls/vaarg.rs va 1
-crates/unlace-cli/src/decompile_all/callee_first.rs changed 1
 crates/unlace-cli/src/jobs/synth.rs firsts 1
 crates/unlace-emit/src/p9_emit/stackversions.rs copies 1
 crates/unlace-emit/src/p9_emit/stackversions.rs versions 1

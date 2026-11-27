@@ -25,7 +25,7 @@
 //! visits), so a register loop variable first holding a constant hides the test: such a ladder is
 //! left as it was. Apple arm64 and Windows keep their own `va_list`.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 
 use unlace_base::address::Address;
 use unlace_base::types::{int4, uintb};
@@ -331,6 +331,7 @@ fn reach(
         .copied()
         .filter(|b| Some(*b) != avoid)
         .collect();
+    // determinism:allow: the BFS only fills a set, so the order of its seeds does not matter
     let mut queue: VecDeque<BlockId> = seen.iter().copied().collect();
     while let Some(b) = queue.pop_front() {
         let blk = data.bblocks_ref().block(b);
@@ -356,7 +357,7 @@ struct Site {
     field: i64,
     at_sp: i64,
     /// The blocks the expansion occupies: between a field test and the read.
-    ladder: HashSet<BlockId>,
+    ladder: BTreeSet<BlockId>,
     /// The predecessors of the read that take the register arm.
     reg_arm: HashSet<BlockId>,
 }
@@ -480,11 +481,12 @@ pub fn rewrite(data: &mut Funcdata) {
         let back = reach(data, &[jb], false, None);
         let fwd = reach(
             data,
+            // determinism:allow: reach returns a set, so the order of its starts does not matter
             &fblocks.iter().copied().collect::<Vec<_>>(),
             true,
             None,
         );
-        let ladder: HashSet<BlockId> = back.intersection(&fwd).copied().collect();
+        let ladder: BTreeSet<BlockId> = back.intersection(&fwd).copied().collect();
         if !reg_arm.iter().any(|p| fblocks.contains(p)) {
             continue;
         }

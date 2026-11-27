@@ -1,0 +1,143 @@
+# A stripped static x86-64 image names its system-call wrappers by the number
+# they load (option syscallwrappers), so the libc prototypes type their callers.
+# netstruct.c (fixtures/netstruct) calls socket, connect, close, recv, send and
+# sendto; linked statically and stripped, every one of them printed as
+# sub_<addr> and its arguments stayed untyped.
+#
+# Stage model: P1 external-refinement, a Listing consumer
+# (crates/unlace-analysis/src/analyzers/syscallwrappers.rs), whose names are
+# signature renames that bring the built-in libc prototype and, through the type
+# library served to a static Linux image (protos/typelib.rs target), the
+# prototypes the built-in tables lack (connect, sendto). Bytes:
+# netstruct-gcc-O2 (gcc 15.3.0 -O2 -static -s, glibc 2.43: socket is
+# `mov eax,0x29; syscall`, the others `push NR; call __syscall_cancel`) and
+# netstruct-musl-O2 (zig 0.15.2 cc, musl: `mov edi,NR; call __syscall_cp`;
+# fixtures/netstruct/build.sh).
+#
+# Option: syscallwrappers (default on). Pass 1 is the glibc image by default
+# (#1-#7, with #3 and #4 counting pass 3 too), pass 2 the same with the option
+# off (#8-#10), pass 3 the musl image by default (#11-#13). main's line buffer
+# stays `unsigned short v4 [516]` in every pass: send takes `const void *`, and
+# __snprintf_chk and strlen, whose `char *` types it in the dynamic image, make
+# no system call.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netstruct-gcc-O2',
+    'option listing on',
+    'read symbols',
+    'load function sub_402710',
+    'decompile',
+    'print C',
+    'load function sub_402b00',
+    'decompile',
+    'print C',
+    'load function sub_402bf0',
+    'decompile',
+    'print C',
+    'load function sub_402c90',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netstruct-gcc-O2',
+    'option listing on',
+    'option syscallwrappers off',
+    'read symbols',
+    'load function sub_402bf0',
+    'decompile',
+    'print C',
+    'load function sub_402c90',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netstruct-musl-O2',
+    'option listing on',
+    'read symbols',
+    'load function sub_1002400',
+    'decompile',
+    'print C',
+    'load function sub_1002490',
+    'decompile',
+    'print C',
+    'load function sub_1002500',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = "SYSCALLWRAPPERS #1: glibc socket, `mov eax,0x29; syscall`, is named"
+count = 1
+literal = '  v1 = socket(2,1,0);'
+
+[[match]]
+name = "SYSCALLWRAPPERS #2: glibc connect takes the type library's prototype and the sockaddr_in"
+count = 1
+literal = '  if (connect(v1,(sockaddr *)&v2,0x10) <= -1) {'
+
+[[match]]
+name = "SYSCALLWRAPPERS #3: close is named in main and connect_to of both images"
+count = 4
+literal = 'close(v1);'
+
+[[match]]
+name = "SYSCALLWRAPPERS #4: recv is named in both images"
+count = 2
+literal = '  v1 = recv(a0,v2,0x3ff,0);'
+
+[[match]]
+name = "SYSCALLWRAPPERS #5: the glibc recv buffer is the 1024 chars the prototype's length bounds"
+count = 1
+literal = '  char v2 [1024]; // stack - 0x418'
+
+[[match]]
+name = "SYSCALLWRAPPERS #6: glibc send is named"
+count = 1
+literal = '  send(v1,v4,1,0);'
+
+[[match]]
+name = "SYSCALLWRAPPERS #7: glibc sendto takes the sockaddr_in"
+count = 1
+literal = '  sendto(a0,&v5,0x28,0,(sockaddr *)&v4,0x10);'
+
+[[match]]
+name = "SYSCALLWRAPPERS #8: off, socket stays a placeholder"
+count = 1
+literal = '  v1 = sub_412f60(2,1,0);'
+
+[[match]]
+name = "SYSCALLWRAPPERS #9: off, connect stays a placeholder with an untyped address"
+count = 1
+literal = '  if ((int4)sub_412ed0(v1,&v2,0x10) <= -1) {'
+
+[[match]]
+name = "SYSCALLWRAPPERS #10: off, recv stays a placeholder"
+count = 1
+literal = '  v1 = sub_412f00(a0,v2,0x3ff,0);'
+
+[[match]]
+name = "SYSCALLWRAPPERS #11: musl connect, `mov edi,0x2a; call __syscall_cp`, is named"
+count = 1
+literal = '    if (connect(v1,(sockaddr *)&v3,0x10) < 0) {'
+
+[[match]]
+name = "SYSCALLWRAPPERS #12: musl send is named at both calls"
+count = 2
+literal = '    send(v1,v4,sub_1006180(v4),0);'
+
+[[match]]
+name = "SYSCALLWRAPPERS #13: musl socket, which retries and calls fcntl, is not named"
+count = 1
+literal = '  v1 = sub_1002cb4(2,1,0);'

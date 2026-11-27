@@ -4697,10 +4697,16 @@ moves.
   is the same knowledge generated: every function a platform's C library
   declares, with its prototype, and every record with the size, alignment and
   member offsets the platform's compiler gives it. Three libraries are built
-  in: one for an x86-64 Linux ELF dynamically linked against glibc or musl
+  in: one for an x86-64 Linux ELF linked against glibc or musl
   (1,447 functions, 347 records, 190 typedefs), and one each for an x86 and an
   x64 PE, the Windows API (7,962 and 8,111 functions); on every other image the
-  option does nothing. `off` reads no library and `typelib <file>` reads a library file in
+  option does nothing. A dynamic image names its C library in `.dynstr` or its
+  interpreter. A static one (static-pie included) names none, so an x86-64 ELF
+  whose `.dynstr`, if it has one, names neither, with no interpreter and no
+  imported symbol, that `elf_userland::is_linux_image` accepts is served as glibc
+  when it carries the `.note.ABI-tag` glibc's start files put in every
+  executable, and as musl otherwise (`typelib.rs (target)`); it has no imports,
+  so only the names below are typed from it. `off` reads no library and `typelib <file>` reads a library file in
   place of the built-in one, for an image of the target the file names.
 
   *Format.* A library is a text file. Three header lines name the format
@@ -4866,10 +4872,10 @@ moves.
 
   *Names beyond imports.* As IDA applies a library to every name in the
   database, every library also declares a function the image defines when
-  FLIRT, FID or a PDB named it and nothing declared it
+  FLIRT, FID, `syscallwrappers` or a PDB named it and nothing declared it
   (`names_beyond_imports`): per address, the name the image's own metadata
   states (a PDB) when every such name there agrees, else a signature name
-  (FLIRT, FID) when every signature name there agrees. An address that already
+  (FLIRT, FID, `syscallwrappers`) when every signature name there agrees. An address that already
   has a prototype, or is an import, is left alone.
 
   *After load.* A `--types` header or an `--assert prototype` for the same
@@ -9909,6 +9915,59 @@ both
   239/233/3/3; `json_typegen` and `wasm2es6js` (1.94.0 nightlies) take 1.95.0 and get
   137/132/3/2 and 67/66/0/1. A wrong name is a function with another's identical
   code.
+- **(unlace) System-call wrappers by number** (`syscallwrappers`, default on,
+  Listing-gated;
+  `crates/unlace-analysis/src/analyzers/syscallwrappers.rs (SyscallWrappersPass)`):
+  a stripped static x86-64 Linux image keeps no name for its C library, so no
+  prototype reaches a libc call; FLIRT's IDA `glibc_amd64.sig` predates the glibc
+  2.41 wrappers and names none of them. The functions that enter the kernel name
+  themselves by the number they load, in three shapes: glibc's direct `mov
+  eax,NR; syscall`, glibc 2.41+'s `push NR; call __syscall_cancel` (the number is
+  the seventh argument, passed on through `__internal_syscall_cancel` to
+  `__syscall_cancel_arch`), and musl's `mov edi,NR; call __syscall_cp` (the number
+  first, the arguments one register up). The pass recognises none of them by
+  bytes. A candidate is an unnamed Listing function of at most 64 instructions
+  whose own body loads a constant into `eax` before a `syscall`, or passes a
+  constant (a pushed immediate or `edi`) to a `call`, or that tail-jumps into
+  such a function up to three jumps deep; the test reads the decoded mnemonics
+  and operands, so a function that fails it builds no p-code. From its
+  entry the lifted p-code is walked through calls, returns and tail jumps, up to
+  three frames deep and both ways at every conditional branch,
+  tracking for each register and stack slot a constant, one of the function's
+  own parameters, the entry stack pointer plus an offset, or anything else; a
+  call past the depth clobbers the caller-saved registers, and a call to a non-code
+  address or a known no-return function ends its path. Every `syscall` reached
+  is a site. The function is the wrapper of call `N` when the walk finished
+  within 4,096 instructions with no indirect jump or call in the function
+  itself, every site loads the same constant `N`, the Linux x86-64 table names
+  `N` with a known argument count, and at every site each argument the call
+  takes is the function's own parameter in the same position, or every site fits
+  one form of a libc function spelled differently from the call: `recv`/`send`
+  are `recvfrom`/`sendto` with zero address arguments, glibc's `open` is
+  `openat(AT_FDCWD, ...)`, `_exit` is `exit_group`, `fstatat` is `newfstatat`,
+  and the `va_arg` mode of `open`/`openat` and third argument of `fcntl`/`ioctl`
+  take any value. A function whose sites all lie in one other wrapper of the same
+  name is a forwarder and is not named. Of several wrappers of one name, the one
+  that calls out before entering the kernel (glibc's cancellable function) keeps
+  it and a single direct twin is named `__N_nocancel`; several twins stay
+  unnamed, and without exactly one caller none is named. The names are
+  signature renames (`FidMatch`, `by_signature`), so they replace only
+  placeholders, give way to a name the image's own metadata states, and take the
+  built-in libc prototype (`apply_renamed_library_facts`) or the type library's
+  (`names_beyond_imports`). The table is `syscalltables.rs (LINUX_X86_64)`,
+  generated by `tools/gen_syscall_tables.py` from the kernel's
+  `arch/x86/entry/syscalls/syscall_64.tbl`, its argument counts from the i386
+  table by name and else from the entry point's declaration in
+  `include/linux/syscalls.h`.
+
+  LOSS: a function whose sites disagree is not named, which leaves musl's
+  `socket` (it retries without `SOCK_CLOEXEC` and then calls `fcntl`) and
+  glibc's `__close_nocancel`/`__close_nocancel_nostatus` pair unnamed. A name
+  types only what its prototype types: `send` takes `const void *`, so a buffer
+  whose only typed use is a `send` keeps the element type its stores give it; on
+  `netstruct-gcc-O2` `main`'s line buffer is still `unsigned short[516]`, typed as
+  `char` only by `__snprintf_chk` and `strlen`, which make no system call.
+  x86-64 only.
 - **FLIRT signature writer** (`unlace flirt make`, a build-time command that no
   decompile reaches;
   `crates/unlace-analysis/src/analyzers/flirt/flirtpat.rs (patterns_from_object)`,

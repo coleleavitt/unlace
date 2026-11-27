@@ -91,6 +91,7 @@ fn listing_consumer_schedule_pairs_each_pass_with_its_option() {
             ("fid", false),
             ("itaniumrtti", true),
             ("flirt", false),
+            ("syscallwrappers", true),
             ("formatstring", false),
             ("goitabargs", false)
         ]

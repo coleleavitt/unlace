@@ -1,0 +1,114 @@
+# unlace issue testcase: EAX, x86gcc's likely-trash register, stops reading as
+# an input when its entry value only reaches a high-byte mask or a call's
+# INDIRECT, and stays an input when the function really uses it (default
+# correctness fix, no option).
+#
+# Issue:      unlace GH-1325 - ActionLikelyTrash never removed a trash
+#             register. Its apply was ported (#1334), but the compiler-spec
+#             decoder had no <likelytrash> arm, so every prototype model's
+#             trash list was empty and the action walked nothing.
+# Stage:      P4 calls - the model decode (`infra/architecture.rs`,
+#             decode_proto_model) and ActionLikelyTrash
+#             (`p9_emit/coreaction_render.rs`, group protorecovery; C++
+#             coreaction.cc:2198).
+#
+# Hand-assembled i386 bytes:
+#
+#     402000 gcc_andmask:  25 00ff ffff    and  eax, 0xffffff00
+#                          83 c8 01        or   eax, 1
+#                          c3              ret
+#     402030 gcc_pushslot: 50              push eax
+#                          e8 da000000     call g_void
+#                          58              pop  eax
+#                          c3              ret
+#     402040 gcc_pushaddr: 50              push eax        ; reserve a local
+#                          54              push esp        ; its address
+#                          e8 b9000000     call g_ptr
+#                          83 c4 04        add  esp, 4
+#                          8b 04 24        mov  eax, [esp]
+#                          59              pop  ecx
+#                          c3              ret
+#
+# gcc_andmask keeps only EAX's upper bytes, which traceTrash takes as trash:
+# the mask becomes zero and the function returns 1 (before the fix:
+# `return a0 & 0xffffff00 | 1;` with EAX a parameter; #1, #2 fail).
+# gcc_pushaddr's `push eax` only reserves the slot g_ptr fills, so EAX's
+# entry value reaches nothing but the call's INDIRECT on that slot, which
+# becomes an indirect creation (before: `v1 = a0;`; #3, #4 fail).
+# gcc_pushslot returns the pushed value, a COPY reader, so EAX stays an
+# input (#5 holds both before and after).
+
+[image]
+arch = 'x86:LE:32:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x402000', name = 'gcc_andmask' },
+    { space = 'ram', offset = '0x402030', name = 'gcc_pushslot' },
+    { space = 'ram', offset = '0x402040', name = 'gcc_pushaddr' },
+    { space = 'ram', offset = '0x402100', name = 'g_ptr' },
+    { space = 'ram', offset = '0x402110', name = 'g_void' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402000'
+readonly = true
+hex = '2500ffffff83c801c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402030'
+readonly = true
+hex = '50e8da00000058c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402040'
+readonly = true
+hex = '5054e8b900000083c4048b042459c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402100'
+readonly = true
+hex = 'c3000000000000000000000000000000c3'
+
+[script]
+commands = [
+    'parse line extern void g_ptr(int4 *p);',
+    'parse line extern void g_void(void);',
+    'lo fu gcc_andmask',
+    'decompile',
+    'print C',
+    'lo fu gcc_pushslot',
+    'decompile',
+    'print C',
+    'lo fu gcc_pushaddr',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'LIKELYTRASH #1: the high-byte mask of EAX entry value folds away, leaving return 1'
+count = 1
+literal = 'return 1;'
+
+[[match]]
+name = 'LIKELYTRASH #2: gcc_andmask takes no parameter'
+count = 1
+literal = 'gcc_andmask(void)'
+
+[[match]]
+name = 'LIKELYTRASH #3: the slot push eax reserves is not seeded from EAX'
+count = 0
+literal = 'v1 = a0;'
+
+[[match]]
+name = 'LIKELYTRASH #4: gcc_pushaddr takes no parameter'
+count = 1
+literal = 'gcc_pushaddr(void)'
+
+[[match]]
+name = 'LIKELYTRASH #5: a pushed EAX that is popped and returned stays an input'
+count = 1
+literal = 'return a0;'

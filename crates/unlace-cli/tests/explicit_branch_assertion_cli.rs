@@ -8,7 +8,6 @@
 //! `jmp 0x407b20` at `0x401148` is a tail call to a function the same body also
 //! calls directly.
 
-use std::path::PathBuf;
 use std::process::Command;
 
 const NEAR_MISS_ENTRY: &str = "0x401090";
@@ -20,12 +19,7 @@ struct Run {
     code: String,
 }
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture() -> String {
     repo_root()

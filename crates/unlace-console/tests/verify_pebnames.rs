@@ -16,20 +16,13 @@
 
 use crate::common;
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object, bootstrap_from_raw};
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// `mov rax,gs:[0x60]; movzx ecx,byte [rax+2]; test ecx,ecx; jne dbg;
 /// mov eax,[rax+0xbc]; and eax,0x70; cmp eax,0x70; je dbg; mov rax,gs:[0x30];

@@ -115,12 +115,7 @@ impl Drop for TeFixture {
     }
 }
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn specs() -> Vec<String> {
     vec![

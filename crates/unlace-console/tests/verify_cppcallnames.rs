@@ -35,12 +35,7 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture() -> PathBuf {
     repo_root().join("crates/unlace-analysis/tests/fixtures/cpp_noreturn_x86_64")

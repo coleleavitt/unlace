@@ -4,18 +4,11 @@
 //! 2-byte character codes, and `tests/stages/unlace-short-utf16-window.toml` keeps
 //! the collision of the two mappings.
 
-use std::path::PathBuf;
-
 use unlace_console::assertions::{self, Body, Directive};
 use unlace_console::engine::{ConsoleProgram, EntrySelector, bootstrap_from_object};
 use unlace_console::project::decompile_targets;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn load() -> ConsoleProgram {
     let root = repo_root();

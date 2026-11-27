@@ -1,8 +1,6 @@
 //! Maturity levels end to end (`docs/spec/00-overview.md` §0.10): a full `decompile` climbs
 //! every level in schedule order, and `phase status` reports where the function got.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
@@ -10,12 +8,7 @@ use unlace_console::ifacedecomp::{
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::maturity::{Fact, Maturity};
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Run `cmds` on the x86-64 `fmt` fixture; return the console transcript and the decompile
 /// module's data.

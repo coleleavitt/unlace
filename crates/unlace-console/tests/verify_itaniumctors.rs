@@ -6,8 +6,6 @@
 //! graph names anything. The addresses below are the `-O0` build's; the names they
 //! must carry are the ones its unstripped twin's symbol table gives them.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// `zoo::Animal::Animal(int)` and its copy constructor.
@@ -25,12 +23,7 @@ const COUNTER_CTOR_AND_DTOR: [u64; 2] = [0x1598, 0x15c2];
 /// `zoo::Animal::speak`, slot 0: a virtual method that is not a destructor.
 const ANIMAL_SPEAK: u64 = 0x13e0;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn bootstrap(fixture: &str, rtti: bool) -> ConsoleProgram {
     let bin = repo_root()

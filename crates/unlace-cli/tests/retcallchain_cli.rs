@@ -11,19 +11,13 @@
 //! calls by default, and overriding the FIRST link keeps #504's continuation
 //! behavior intact.
 
-use std::path::PathBuf;
 use std::process::Command;
 
 /// The `ret` of each link in `chain_entry`, and the plain epilogue after them.
 const FIRST_LINK_RET: &str = "0x8049019";
 const EPILOGUE_RET: &str = "0x8049032";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture() -> String {
     repo_root()

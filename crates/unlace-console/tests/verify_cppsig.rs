@@ -21,20 +21,13 @@
 //! names are the only signature source in the file, which is exactly the
 //! situation the feature exists for.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the stripped C++ fixture with `cppsig` set to `mode`, commit the analysis
 /// facts under that gate, decompile `func` and return the captured C.

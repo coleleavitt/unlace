@@ -5,15 +5,10 @@
 mod arm_images;
 use crate::common;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Output};
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn run(command: &str, binary: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_unlace"))

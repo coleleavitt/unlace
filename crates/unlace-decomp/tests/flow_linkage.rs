@@ -36,7 +36,6 @@
 //! format, comparing against the fixture's op lines for the same instruction
 //! range.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -63,12 +62,7 @@ use unlace_sleigh::translate::{PcodeEmit, Translate, UniqueLayout, register_tran
 // Repo / fixture plumbing  (mirrors tests/corpus_bootstrap.rs)
 // ===========================================================================
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The pinned lift fixtures this gate drives, across architectures (>= 5).  Each
 /// entry is `(fixture, full archid)`.  The fixtures are chosen to be straight-line

@@ -4,7 +4,6 @@
 //! mode, clears the upper halves of their parent registers.  Pin the raw p-code
 //! so stale values in RAX/RDX cannot survive the lift.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -16,12 +15,7 @@ use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::translate::{PcodeEmit, Translate};
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 struct MemImg {
     base: u64,

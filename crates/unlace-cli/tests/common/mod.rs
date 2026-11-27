@@ -23,12 +23,7 @@ pub const CC_GCC15_DEMOTE: &[&str] = &[
     "-Wno-return-mismatch",
 ];
 
-pub fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+pub use unlace_testkit::repo_root;
 
 pub fn fixture(name: &str) -> String {
     repo_root()

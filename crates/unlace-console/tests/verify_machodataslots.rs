@@ -15,7 +15,6 @@
 //! - **Addresses** (`macho_dataslotaddr_arm64`, from `macho_dataslotaddr.c`): a
 //!   slot's own value passed on is `&<import>` when on, `dat_<slot>` when off.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -57,12 +56,7 @@ const READS: [(u64, u64, &str, &str); 4] = [
 ];
 const IMPORTED_CALL_STUB: u64 = 0x100000554;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn boot() -> ConsoleProgram {
     boot_fixture(BIN)

@@ -16,15 +16,9 @@
 mod arm_images;
 use crate::common;
 
-use std::path::PathBuf;
 use std::process::Command;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture() -> String {
     repo_root()

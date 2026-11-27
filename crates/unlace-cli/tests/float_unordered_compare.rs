@@ -45,7 +45,7 @@ fn float_compare_flags_keep_their_unordered_case() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     if compilers.is_empty() {
-        eprintln!("skipping native float compare round trip: no GCC or Clang");
+        unlace_testkit::skip("native float compare round trip: no GCC or Clang");
         return;
     }
     let dir = common::scratch_file("float-unordered-compare", "dir");

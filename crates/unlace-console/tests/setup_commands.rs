@@ -11,7 +11,6 @@
 //! resolves, a volatile range is set, a context default is painted, a comment is
 //! recorded.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_file};
@@ -24,12 +23,7 @@ use unlace_console::interface::IfaceStatus;
 use unlace_decomp::dtype::type_metatype;
 use unlace_decomp::varnode::varnode_flags;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the 8051 `boolless` corpus into a [`ConsoleProgram`].
 fn boot_program() -> ConsoleProgram {

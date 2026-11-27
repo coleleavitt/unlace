@@ -26,6 +26,7 @@ unlace-decomp-dylib = { workspace = true, optional = true }
 dynamic_linking = ["dep:unlace-decomp-dylib", "unlace-console/dynamic_linking"]
 
 [dev-dependencies]
+unlace-testkit.workspace = true
 unlace-slacomp.workspace = true
 serde_json = "1"
 toml = { version = "1.1", default-features = false, features = ["parse", "serde", "std", "display"] }

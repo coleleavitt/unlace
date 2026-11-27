@@ -12,20 +12,13 @@
 //! no `unlace_analysis` pass (this one included) can fire there. Same reason
 //! `verify_cppsig.rs` / `verify_cppproto.rs` / `verify_fdeinterior.rs` exist.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap `fauxware`, commit the analysis facts, decompile `func` and return
 /// the captured C.

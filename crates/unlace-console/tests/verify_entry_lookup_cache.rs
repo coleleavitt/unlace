@@ -5,18 +5,11 @@
 //! Fixture: `unlace-analysis/tests/fixtures/fauxware`, a small unstripped x86-64 ELF
 //! whose `authenticate` sits at 0x400664 and calls `strcmp` through its PLT stub.
 
-use std::path::PathBuf;
-
 use unlace_console::assertions::{self, Body, Directive};
 use unlace_console::engine::{ConsoleProgram, EntrySelector, bootstrap_from_object};
 use unlace_console::project::decompile_targets;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn load() -> ConsoleProgram {
     let root = repo_root();

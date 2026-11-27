@@ -14,8 +14,6 @@
 //! knowledge: the un-stripped twin names that same address `_main` from its own
 //! symbol table, and the pass leaves it alone.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
@@ -25,12 +23,7 @@ use unlace_console::ifaceterm::ConsoleCommands;
 /// `LC_MAIN`'s entry: `__TEXT.vmaddr (0x100000000) + entryoff (0x5b0)`.
 const ENTRY: &str = "sub_1000005b0";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn bootstrap(fixture: &str) -> ConsoleProgram {
     let bin = repo_root()

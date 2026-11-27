@@ -16,7 +16,6 @@
 //! dynamic relocations. Guarded on `rustc` being on PATH; an installed
 //! compiler must build the fixture successfully.
 
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::rc::Rc;
 
@@ -42,12 +41,7 @@ fn main() {
 }
 "#;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// `true` if a runnable `rustc` is on PATH.
 fn rustc_available() -> bool {

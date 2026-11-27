@@ -17,8 +17,6 @@
 //! twenty-four more calls; declaring that instruction a `return` cuts the body
 //! to its first statement.
 
-use std::path::PathBuf;
-
 use unlace_console::assertions::{self, Body, Directive, Outcome};
 use unlace_console::engine::{ConsoleProgram, EntrySelector, bootstrap_from_object};
 use unlace_console::project::decompile_targets;
@@ -28,12 +26,7 @@ const SUB_13C9: u64 = 0x13c9;
 /// The indirect `call *%rdx` inside it.
 const INDIRECT_CALL: u64 = 0x1405;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture and run the analysis commit.
 fn load() -> ConsoleProgram {

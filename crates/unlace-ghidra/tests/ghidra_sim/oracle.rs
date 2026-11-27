@@ -34,7 +34,7 @@
 //! invariant of the packed protocol.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -87,12 +87,7 @@ use super::{AnswerSource, QUERY_COMMAND_IDS, resp_bytes, resp_empty, resp_except
 pub const ELEM_INST: ElementId = ElementId::new("inst", 98);
 
 /// The repository root (the tests run from the crate directory).
-pub fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("repo root resolves")
-}
+pub use unlace_testkit::repo_root;
 
 /// A recording `PcodeEmit` capturing each op `one_instruction` produces.
 #[derive(Default)]

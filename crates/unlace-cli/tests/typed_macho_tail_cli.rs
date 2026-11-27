@@ -2,18 +2,12 @@
 //! `jmp qword ptr [slot]`: the slot's callable type/prototype must seed the
 //! CALLIND before parameter recovery, without treating arbitrary data as code.
 
-use std::path::PathBuf;
 use std::process::Command;
 
 const STUB: &str = "0x1000005cc";
 const SLOT: &str = "0x100003000";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture() -> String {
     repo_root()

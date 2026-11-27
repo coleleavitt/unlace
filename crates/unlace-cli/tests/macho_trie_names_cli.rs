@@ -9,17 +9,11 @@
 //! one of three exports). Integration tests require the built processor specs
 //! under `specs/`.
 
-use std::path::PathBuf;
 use std::process::{Command, Output};
 
 const FIXTURES: [&str; 2] = ["macho_trie_exports_arm64", "macho_trie_exports_info_arm64"];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn unlace(args: &[&str]) -> Output {
     let specs = repo_root().join("specs");

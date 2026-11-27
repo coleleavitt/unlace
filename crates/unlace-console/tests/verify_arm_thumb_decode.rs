@@ -29,12 +29,7 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The vendored LINKED ARM Thumb fixture (built in the unlace-dev container;
 /// `arm-linux-gnueabihf-gcc -mthumb -static -nostdlib -e _start`). ET_EXEC with

@@ -16,7 +16,6 @@
 //! pointer / Rust manager index normalized away).  16 fixtures, 16 distinct
 //! SLEIGH languages, 1171 instructions — 100% required.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -33,12 +32,7 @@ use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit};
 
 /// Repository root (the test reads corpus XML + built `.sla` files from it).
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// goldenOpName: the canonical enum names (unlace_goldengen.cc's ZPULL/SPULL
 /// fix is already the unlace `get_opname` behavior).

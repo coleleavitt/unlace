@@ -12,12 +12,7 @@ use unlace_decomp::loadoptions::LoadOptions;
 use unlace_decomp::memoryspecs::SpecRoot;
 use unlace_decomp::sleigh_arch::LanguageDatabase;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn specs() -> [SpecRoot; 1] {
     [repo_root().join("specs").into()]

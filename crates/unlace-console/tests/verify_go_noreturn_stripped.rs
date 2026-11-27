@@ -18,7 +18,6 @@
 //! the fixture successfully. The list-matching logic is pinned hermetically
 //! by the unit tests in `unlace-analysis` (`pclntab/gonoreturn.rs`).
 
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
@@ -27,12 +26,7 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// `true` if a runnable `go` toolchain is on PATH.
 fn go_available() -> bool {

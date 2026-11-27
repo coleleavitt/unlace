@@ -32,20 +32,13 @@
 //! companion and gets at the fixture through `load file`; this file is the
 //! cross-crate one.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the shapes fixture, decompile each of `funcs` and return the
 /// concatenated C.

@@ -56,12 +56,7 @@ const COMPUTE_NAME: &str = "pdb_demo_compute";
 /// The env var naming the `.pdb` to apply (the fid `unlace_fid_db` precedent).
 const PDB_PATH_ENV: &str = "unlace_pdb_path";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixtures() -> PathBuf {
     repo_root().join("crates/unlace-analysis/tests/fixtures")

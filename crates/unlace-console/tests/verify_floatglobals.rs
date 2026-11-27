@@ -8,17 +8,11 @@
 //! `xmm0` at clang -O0.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 use object::{Object, ObjectSymbol};
 use unlace_console::engine::bootstrap_from_object;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The float globals the scan finds in `fixture`, by symbol name and width.
 fn float_globals(fixture: &str) -> BTreeMap<String, u8> {

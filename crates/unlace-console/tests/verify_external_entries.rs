@@ -34,12 +34,7 @@ use std::path::PathBuf;
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::project::decompile_targets;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// `ptx.o` — the vendored ET_REL fixture, whose undefined externals
 /// (`xnmalloc`, `xstrtoimax`, …) take extern-area addresses.

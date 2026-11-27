@@ -8,7 +8,6 @@
 //! Requires built `.sla` specs for each fixture.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
 
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_image};
 use unlace_console::inspect::{FUNCTION_ROW_CAP, function_rows};
@@ -17,12 +16,7 @@ use unlace_decomp::prettyprint::TokenKind;
 use unlace_decomp::printc::ArchPrintExt;
 use unlace_decomp::srcmap::verify;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn load(binary: &str, language: Option<&str>) -> ConsoleProgram {
     let specs = vec![repo_root().join("specs").to_string_lossy().into_owned()];

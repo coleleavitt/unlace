@@ -36,12 +36,7 @@ use unlace_base::address::Address;
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit};
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn spec_roots() -> Vec<String> {
     vec![repo_root().join("specs").to_str().unwrap().to_string()]

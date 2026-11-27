@@ -31,12 +31,7 @@ const MAIN_VMA: u64 = 0x100000448;
 /// The pinned VMA of `_read_thrice` in `macho_gotdata_local`.
 const READ_THRICE_VMA: u64 = 0x100000510;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixtures() -> PathBuf {
     repo_root().join("crates/unlace-analysis/tests/fixtures")

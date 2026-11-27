@@ -45,12 +45,7 @@ const BRANCHES: [(u64, u64); 2] = [(0x10588, 0x1058c), (0x103f4, 0x10404)];
 /// fall-through both run into the entry of `_start_c`.
 const SKIP_INTO_ENTRY: (u64, u64) = (0x10430, 0x10434);
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture(name: &str) -> PathBuf {
     repo_root()

@@ -41,6 +41,7 @@ unlace-decomp-dylib = { workspace = true, optional = true }
 dynamic_linking = ["dep:unlace-decomp-dylib"]
 
 [dev-dependencies]
+unlace-testkit.workspace = true
 # The ghidra-sim test harness (tests/ghidra_sim/) answers the wire queries from
 # unlace's OWN analysis of real vendored ELFs: unlace-console provides the
 # in-process bootstrap/decompile drive (the CLI path — also the differential

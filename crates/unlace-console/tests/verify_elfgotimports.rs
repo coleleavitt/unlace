@@ -12,7 +12,6 @@
 //! - **Both**: `exported_value` / `&exported_value` are unchanged. That slot names
 //!   a defined symbol, which `dynrelocs` fills in and folds; it is not painted.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -55,12 +54,7 @@ const AARCH64: Fixture = Fixture {
     ],
 };
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn name_at(prog: &ConsoleProgram, vma: u64) -> String {
     let code_space = prog

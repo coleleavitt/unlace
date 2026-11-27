@@ -67,12 +67,7 @@ use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 const BOX_AREA_VMA_X64: u64 = 0x1_4000_1040;
 const BOX_AREA_VMA_X86: u64 = 0x0040_1030;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixtures() -> PathBuf {
     repo_root().join("crates/unlace-analysis/tests/fixtures")

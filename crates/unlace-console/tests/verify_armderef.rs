@@ -8,7 +8,6 @@
 //! without `-fPIC` and reach `g_cfg` through a literal-pool word. `pic_keep`
 //! and `abs_write` access it again after a call, from a callee-saved register.
 
-use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use unlace_analysis::listing::xrefs::{self, XrefIndex, XrefKind};
@@ -30,12 +29,7 @@ const ACCESSES: [(u64, u64, XrefKind); 9] = [
 /// `ldr r4,[r3,r2]`) and a pool word (`abs_write`'s `ldr r5,=g_cfg`).
 const ADDRESS_LOADS: [(u64, u64); 2] = [(0x10100, 0x111d8), (0x10134, 0x111d8)];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn build() -> XrefIndex {
     let bin = repo_root().join("crates/unlace-analysis/tests/fixtures/armderef_arm_le32");

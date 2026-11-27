@@ -35,12 +35,7 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The vendored operand-refs fixture: `main`=0x40112e materializes the address of
 /// the `.rodata` string `"hi"`@0x402004 with `movabs $0x402004,%rax` and passes it

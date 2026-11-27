@@ -8,7 +8,6 @@
 //! This test keeps the pass's off/on proof on the real object-loader path because
 //! the XML datatest bootstrap never runs resolver-backed analysis passes.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -17,12 +16,7 @@ use unlace_console::engine::bootstrap_from_object;
 
 const CALLER: u64 = 0x140001000;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn decompile() -> String {
     let root = repo_root();

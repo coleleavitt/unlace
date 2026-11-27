@@ -18,7 +18,6 @@
 //! `XmlArchitecture` → `build_translator` → `init_post_engine`).  Like the
 //! `verify_w10_*` files, a fixture whose `.sla` is not built SKIPs cleanly.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -39,12 +38,7 @@ use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 // ===========================================================================
 // Datatest XML parsing + bootstrap (the decompile_e2e.rs mechanics).

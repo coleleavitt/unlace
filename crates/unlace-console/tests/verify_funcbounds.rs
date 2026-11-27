@@ -19,7 +19,6 @@
 //! whose `0x13c9` function calls `sub_1129` … `sub_1393` in sequence, so a bound
 //! that lands after the first call is trivially observable in the body.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -47,12 +46,7 @@ const LEAF_END: u64 = 0x1141;
 /// immediately before a discovered foreign-entry cutoff.
 const CALLBACK_ENTRY: u64 = 0x8048820;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture.
 fn load() -> ConsoleProgram {

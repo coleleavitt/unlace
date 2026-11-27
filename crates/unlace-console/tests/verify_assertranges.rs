@@ -18,8 +18,6 @@
 //!     `0x40402c`, `bias` at `0x404028`) and reads `0x50000000` twice, and
 //!   * `latch` stores to `0x50000004`, calls, and reads it back.
 
-use std::path::PathBuf;
-
 use unlace_console::assertions::{self, Body, Directive, Outcome};
 use unlace_console::engine::{ConsoleProgram, EntrySelector, bootstrap_from_object};
 use unlace_console::project::decompile_targets;
@@ -31,12 +29,7 @@ const MMIO: u64 = 0x5000_0000;
 /// The device word `latch` writes, calls across, and reads back.
 const LATCH_MMIO: u64 = 0x5000_0004;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture and run the analysis commit.
 fn load() -> ConsoleProgram {

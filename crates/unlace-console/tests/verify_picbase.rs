@@ -43,12 +43,7 @@ const UNUSED: u64 = 0x804a04e;
 /// The `.data` word `inherits` reads and writes through the base.
 const COUNTER: u64 = 0x804b074;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture() -> PathBuf {
     repo_root().join("crates/unlace-analysis/tests/fixtures/picbase_i386")

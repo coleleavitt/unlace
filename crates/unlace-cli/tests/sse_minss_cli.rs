@@ -30,7 +30,7 @@ fn minss_keeps_source_nan_payload_and_signed_zero() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     if compilers.is_empty() {
-        eprintln!("skipping native MINSS round trip: no GCC or Clang");
+        unlace_testkit::skip("native MINSS round trip: no GCC or Clang");
         return;
     }
     let dir = common::scratch_file("sse-minss", "dir");

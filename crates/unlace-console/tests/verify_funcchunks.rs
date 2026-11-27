@@ -1,8 +1,6 @@
 //! End-to-end gate for `funcchunks`: the function chunk model over a real
 //! x86-64 ELF where two functions share one tail placed after a third.
 
-use std::path::PathBuf;
-
 use unlace_analysis::listing::Listing;
 use unlace_analysis::listing::funcchunks::ChunkModel;
 use unlace_console::engine::bootstrap_from_object;
@@ -12,12 +10,7 @@ const G: u64 = 0x401024;
 const H: u64 = 0x401030;
 const SHARED: u64 = 0x401036;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn listing_of(bin: &str, extra_seeds: &[u64]) -> Listing {
     let specs = repo_root().join("specs");

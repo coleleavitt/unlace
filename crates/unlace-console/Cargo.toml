@@ -32,6 +32,7 @@ unlace-decomp-dylib = { workspace = true, optional = true }
 dynamic_linking = ["dep:unlace-decomp-dylib"]
 
 [dev-dependencies]
+unlace-testkit.workspace = true
 unlace-stagefile.workspace = true
 unlace-slacomp.workspace = true
 object = { workspace = true, features = ["write"] }

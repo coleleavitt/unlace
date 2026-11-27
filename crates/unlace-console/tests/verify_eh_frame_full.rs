@@ -26,16 +26,9 @@
 //! the analysis facts are committed at `read symbols` (`commit_pending_analysis`),
 //! gated by the per-pass flags — so the option must be flipped BEFORE that commit.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::bootstrap_from_object;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The vendored stripped C++ try/catch fixture (shared with the unlace-analysis
 /// LSDA unit tests).

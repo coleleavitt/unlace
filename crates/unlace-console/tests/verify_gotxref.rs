@@ -8,8 +8,6 @@
 //! `set_timeout`. Its string literals are PC-relative pairs whose displacement
 //! words are themselves mapped addresses, which no pointer may be filed for.
 
-use std::path::PathBuf;
-
 use unlace_analysis::listing::xrefs::{self, XrefIndex, XrefKind};
 use unlace_console::engine::bootstrap_from_object;
 
@@ -38,12 +36,7 @@ const FORMS_REARM_NEXT: u64 = 0x100fc;
 /// The pool loads whose words are displacements that look like addresses.
 const DISPLACEMENTS: [(u64, u64); 3] = [(0x100d4, 0x110e4), (0x100dc, 0x120f4), (0x100f8, 0x110dc)];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn index() -> XrefIndex {
     let bin = repo_root().join("crates/unlace-analysis/tests/fixtures/gotxref_arm_le32");

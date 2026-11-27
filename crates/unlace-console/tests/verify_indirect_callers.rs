@@ -17,8 +17,6 @@
 //! `specs/` (compiled into the `.sla` cache on first use); when it is absent the test prints that
 //! and returns early.
 
-use std::path::PathBuf;
-
 use unlace_analysis::listing::xrefs::{self, XrefIndex, XrefKind};
 use unlace_console::engine::bootstrap_from_object;
 
@@ -29,12 +27,7 @@ const DIRECT_CALLS_ONLY: u64 = 0x40071d;
 /// The `puts` PLT stub — `JMP qword ptr [0x601000]`, a `BRANCHIND`.
 const FORWARDING_VENEER: u64 = 0x400510;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The index `unlace xrefs` answers out of.
 fn index() -> XrefIndex {

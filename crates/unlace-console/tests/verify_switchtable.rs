@@ -33,8 +33,6 @@
 //! (4-byte `.long` entries, 8-byte `.quad` entries) and in how the literal's
 //! address is materialized (`PUSH imm32`, RIP-relative `LEA`).
 
-use std::path::PathBuf;
-
 use unlace_analysis::listing::xrefs::{self, XrefIndex, XrefKind};
 use unlace_console::engine::bootstrap_from_object;
 
@@ -112,12 +110,7 @@ const PE_MSVC: Delta = Delta {
     reached: [0x140001000, 0x140001010, 0x140001020, 0x140001030],
 };
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the named fixture and build the index `unlace xrefs` / `unlace strings` answer out
 /// of.

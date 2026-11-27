@@ -65,12 +65,7 @@ const ARM64: Fixture = Fixture {
     imp_vma: GREET_IMP_VMA_ARM64,
 };
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixtures() -> PathBuf {
     repo_root().join("crates/unlace-analysis/tests/fixtures")

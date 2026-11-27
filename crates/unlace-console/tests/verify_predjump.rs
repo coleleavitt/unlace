@@ -31,12 +31,7 @@ const PREDICATED_JUMPS: [u64; 3] = [0x1009c, 0x100b2, 0x100c4];
 /// `unguarded`'s dispatch, its entry.
 const UNGUARDED: u64 = 0x100d8;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture() -> PathBuf {
     repo_root().join("crates/unlace-analysis/tests/fixtures/predjump_arm_le32")

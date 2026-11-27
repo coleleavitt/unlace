@@ -22,12 +22,7 @@ use unlace_analysis::listing::{
 };
 use unlace_console::engine::bootstrap_from_object;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fauxware() -> PathBuf {
     repo_root().join("crates/unlace-analysis/tests/fixtures/fauxware")

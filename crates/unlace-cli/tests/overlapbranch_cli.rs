@@ -14,15 +14,9 @@
 //! the `option overlapbranch off` pass proves the clauses are discriminating
 //! rather than vacuous — with the option off both artefacts are emitted.
 
-use std::path::PathBuf;
 use std::process::Command;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture() -> String {
     repo_root()

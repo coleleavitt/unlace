@@ -6,7 +6,7 @@ use std::process::Command;
 #[test]
 fn unlocked_sparc_math_wrappers_preserve_entry_values() {
     if process::optional_output(Command::new("clang").arg("--version")).is_none() {
-        eprintln!("skipping SPARC compiler control: Clang unavailable");
+        unlace_testkit::skip("SPARC compiler control: Clang unavailable");
         return;
     }
     if !common::host::cc_targets("clang", "sparc-linux-gnu") {

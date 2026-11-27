@@ -3,18 +3,11 @@
 //! Fixture `tailcallentryall_x86_64` (stripped): `helper`@0x40101f is reached
 //! only by the tail `jmp` that ends `f`@0x401012, across `g`@0x401019.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 const HELPER: &str = "sub_40101f";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn bootstrap(all: bool) -> ConsoleProgram {
     let spec_roots = vec![repo_root().join("specs").to_str().unwrap().to_string()];

@@ -20,8 +20,6 @@
 //! * the non-executable segments never become a container, which is what keeps
 //!   a data address from acquiring a body.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_sleigh::loadimage::section_flags;
 
@@ -30,12 +28,7 @@ const FIRST: &str = "sub_100";
 /// The callee, and the last entry of the executable segment.
 const SECOND: &str = "sub_110";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn bootstrap(name: &str) -> ConsoleProgram {
     let bin = repo_root()

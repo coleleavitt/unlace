@@ -6,7 +6,6 @@
 //! failing run must not go green just because nobody was reading it.
 
 use std::io::Read;
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 fn run_with_closed_stdout(args: &[&str]) -> std::process::Output {
@@ -47,12 +46,7 @@ fn assert_quiet_success(output: &std::process::Output) {
     );
 }
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 #[test]
 fn closed_stdout_is_a_quiet_terminal_condition() {

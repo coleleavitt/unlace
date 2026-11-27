@@ -14,8 +14,6 @@
 //! `-fPIC` with `.rodata` linked into `.text`: a string at an odd address in
 //! the executable section is a datum, not a Thumb pointer.
 
-use std::path::PathBuf;
-
 use unlace_analysis::listing::xrefs::{self, XrefIndex, XrefKind};
 use unlace_console::engine::bootstrap_from_object;
 
@@ -58,12 +56,7 @@ const DISPLACEMENTS: [(u64, u64); 6] = [
     (0x10220, 0x12594),
 ];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn index() -> XrefIndex {
     index_of("gotxref_thumb_le32")

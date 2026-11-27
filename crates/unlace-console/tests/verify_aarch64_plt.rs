@@ -36,12 +36,7 @@ use unlace_console::ifaceterm::ConsoleCommands;
 const PUTS_PLT: &str = "sub_4004d0";
 const PRINTF_PLT: &str = "sub_4004e0";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The linked AArch64 PLT fixture (shared with the unlace-analysis loader gates).
 fn plt_aarch64() -> PathBuf {

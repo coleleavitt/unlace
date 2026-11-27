@@ -11,7 +11,6 @@
 //! Bootstrap mechanics are the datatest-XML ones the other `verify_*` integration
 //! tests use inline (the gate's helpers are private to its own test binary).
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -29,12 +28,7 @@ use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn find_named(el: &Rc<Element>, name: &str, out: &mut Vec<Rc<Element>>) {
     if el.get_name() == name {

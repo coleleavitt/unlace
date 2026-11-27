@@ -26,12 +26,7 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The vendored stripped x86-64 fixture (built `gcc -O2
 /// -fno-asynchronous-unwind-tables -fcf-protection=none -no-pie -fno-pic

@@ -14,7 +14,6 @@
 //! `ptrace(2,v1,NULL,(void *)0x804a004)` — the signature typed the third and
 //! fourth arguments, where the spelling alone gave `ptrace(2,v1,0,0x804a004)`.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -26,12 +25,7 @@ const CALLER: u64 = 0x8049000;
 /// The varargs wrapper the operator identifies as `ptrace`.
 const WRAPPER: u64 = 0x8049027;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture.
 fn load() -> ConsoleProgram {

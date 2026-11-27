@@ -7,18 +7,12 @@
 //! the indexed stream against a plain-`Vec` model of the same contract, driven
 //! through the public API on a real image.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn load() -> ConsoleProgram {
     let root = repo_root();

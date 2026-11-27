@@ -19,8 +19,6 @@
 //!   the image's copy of a writable slot is not evidence of anything.
 //! * `reads_number` reads a read-only word holding 42.
 
-use std::path::PathBuf;
-
 use unlace_analysis::listing::xrefs::{self, XrefIndex, XrefKind};
 use unlace_console::engine::bootstrap_from_object;
 
@@ -38,12 +36,7 @@ const POOL_PROMPT: u64 = 0x10028;
 /// The `ldr r0,[0x10048]` whose pool word holds 42.
 const READS_NUMBER: u64 = 0x10040;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture and build the index `unlace xrefs` / `unlace strings` answer out of.
 fn index() -> XrefIndex {

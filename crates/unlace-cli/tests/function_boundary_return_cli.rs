@@ -5,15 +5,9 @@
 //! reduction: it exercises the same flow decision on a second architecture and
 //! keeps an ordinary adjacent function as the adversarial boundary control.
 
-use std::path::PathBuf;
 use std::process::{Command, Output};
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture() -> String {
     repo_root()

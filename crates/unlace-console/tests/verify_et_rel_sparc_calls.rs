@@ -6,16 +6,9 @@
 //! encoders every call targets its own instruction and every global reads
 //! address zero, so the calls render as `sub_<addr>` and the global is lost.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::bootstrap_from_object;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 #[test]
 fn sparc_calls_and_split_immediates_resolve_to_their_targets() {

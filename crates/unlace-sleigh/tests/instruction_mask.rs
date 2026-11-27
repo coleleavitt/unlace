@@ -13,7 +13,6 @@
 //!   add eax, ecx               = 01 c8               (opcode 01 + modrm c8)
 //!   mov eax, [rbx+0x12345678]  = 8b 83 78 56 34 12   (opcode 8b + modrm 83 + disp32)
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -23,12 +22,7 @@ use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::{OpObject, Sleigh};
 use unlace_sleigh::translate::{AssemblyEmit, Translate};
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// A trivial in-memory load image: bytes at a fixed VMA, zero elsewhere.
 struct MemImg {

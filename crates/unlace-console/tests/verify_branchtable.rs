@@ -13,7 +13,6 @@
 //! 8-byte slots, an unscaled `add pc,pc,r0`, and an `ldrls` table whose third
 //! word has bit 0 set.
 
-use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use unlace_analysis::listing::xrefs::{self, XrefIndex, XrefKind};
@@ -87,12 +86,7 @@ const EARLY_SLOTS: [u64; 5] = [0x1041c, 0x10420, 0x10424, 0x10428, 0x1042c];
 /// The `ldr` form's table words, `.word case0` to `.word case4`.
 const LDR_TABLE: [u64; 5] = [0x102a4, 0x102a8, 0x102ac, 0x102b0, 0x102b4];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The fixture's reference index under the default options, built once for
 /// every test that reads it.

@@ -20,19 +20,12 @@
 //! vendored `.ldefs` (not the built `.sla`), so this gate does NOT require
 //! compiled into the `.sla` cache on first use. The vendored description files are required.
 
-use std::path::PathBuf;
-
 use unlace_base::marshal::IdRegistry;
 use unlace_decomp::sleigh_arch::{LanguageDatabase, SleighArchitecture, register_sleigh_arch_ids};
 use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The same per-module id registration the console bootstrap's `build_registry`
 /// does (minus the option elements, which language resolution does not need).

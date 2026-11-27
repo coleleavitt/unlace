@@ -26,7 +26,6 @@
 //!    x86-64's too, the declaration mints no `group` at all there
 //!    (`AnalysisOutput::libctypes_refused`).
 
-use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Mutex;
 
@@ -43,12 +42,7 @@ const X86_64_ENTRY: u64 = 0x1189;
 /// threads of one process, so they take turns.
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap `fixture` with `libctypes` asking for `glibc`, declare `getgrnam` at `entry`,
 /// and hand back the `group` the declaration minted, if any.

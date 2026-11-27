@@ -19,8 +19,6 @@
 //! function at all and the park would be a silent no-op. The other tests run
 //! with `fast_funcdisc` on.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
@@ -31,12 +29,7 @@ use unlace_console::ifaceterm::ConsoleCommands;
 /// for it before `pemain` renames it.
 const MAIN: &str = "sub_140001000";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn bootstrap(fast_funcdisc: bool) -> ConsoleProgram {
     let bin = repo_root().join("crates/unlace-analysis/tests/fixtures/crtmain_x86_64.exe");

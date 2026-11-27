@@ -24,8 +24,6 @@
 //! 2. **Parity** — for BOTH option states the whole-binary loop's rendered C for
 //!    `main` is byte-identical to the console command's.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
@@ -36,12 +34,7 @@ use unlace_console::project::decompile_targets;
 /// The four arches whose `fmt_<arch>` fixture is vendored.
 const ARCHES: &[&str] = &["x86_64", "aarch64", "arm", "riscv64"];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap `fmt_<arch>`, run the analysis commit (`read symbols`), and apply the
 /// `formatstring` gate.

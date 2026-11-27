@@ -26,12 +26,7 @@ use unlace_decomp::decompile_drive::{
     decompile_func_full_with_override_dyn, extract_variables, print_c,
 };
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The vendored fauxware fixture (shared with the unlace-analysis loader gate).
 fn fauxware() -> PathBuf {

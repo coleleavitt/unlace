@@ -24,7 +24,6 @@
 //! there has a function map for `query_call` to miss.
 //! `tests/stages/tailcallframe.toml` covers the decision on hand-built bytes.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -39,12 +38,7 @@ const RENDERER: u64 = 0x1170;
 /// was decoded into the callback.
 const RENDERER_BODY: &str = "* 7 + 3";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture with `tailcallframe` in the requested state.
 fn load(tailcallframe: bool) -> ConsoleProgram {

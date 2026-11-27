@@ -87,7 +87,7 @@ fn updated_out_parameter_snapshots_round_trip_without_disabling_safe_folds() {
         })
         .collect();
     let Some(compiler) = compilers.first() else {
-        eprintln!("skipping out-parameter snapshot: no native C compiler");
+        unlace_testkit::skip("out-parameter snapshot: no native C compiler");
         return;
     };
     let image = common::scratch_file("call-outparam-snapshot", "elf");

@@ -13,7 +13,6 @@
 //! the op count toward the oracle (it need not fully reach 7 if merge / type /
 //! structuring are the remaining blockers — those are reported, not closed).
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, SeqNum};
@@ -37,12 +36,7 @@ use unlace_sleigh::translate::register_translate_ids;
 // Repo plumbing (mirrors decompile_e2e.rs / heritage_b3.rs).
 // ===========================================================================
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 struct SymbolFn {
     name: String,

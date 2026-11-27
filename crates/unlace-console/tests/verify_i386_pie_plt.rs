@@ -38,12 +38,7 @@ use unlace_console::ifaceterm::ConsoleCommands;
 const DCGETTEXT_PLT: &str = "sub_eb0";
 const EXIT_PLT: &str = "sub_fb0";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The linked i386-PIE `nl` fixture (vendored under the unlace-analysis fixtures).
 fn i386_pie_nl() -> PathBuf {

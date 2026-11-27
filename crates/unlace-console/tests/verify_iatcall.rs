@@ -13,8 +13,6 @@
 //! that jump is the import's other half, which the index already folds into one
 //! callable, not a call site of it.
 
-use std::path::PathBuf;
-
 use unlace_analysis::listing::xrefs::{self, XrefIndex, XrefKind};
 use unlace_console::engine::bootstrap_from_object;
 
@@ -29,12 +27,7 @@ const CALL_SITES: [(u64, u64); 2] = [(0x140001000, 0x140001004), (0x140001040, 0
 /// The one direct call in the program, which was always an edge.
 const DIRECT_CALL: (u64, u64) = (0x14000104f, 0x140001010);
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture and build the index `unlace xrefs` answers out of.
 fn index() -> XrefIndex {

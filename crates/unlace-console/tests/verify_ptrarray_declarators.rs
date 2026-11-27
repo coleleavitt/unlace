@@ -13,8 +13,6 @@
 //! `get_names` returns `char *(*)[3]`. `use_names` keeps a `char *[2]` array of
 //! pointers, the mirror type that must stay unparenthesised.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
@@ -23,12 +21,7 @@ use unlace_console::ifaceterm::ConsoleCommands;
 
 const FIXTURE: &str = "ptrarraydecl_x86_64";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture, decompile `func`, and return the captured C.
 fn decompile(func: &str) -> String {

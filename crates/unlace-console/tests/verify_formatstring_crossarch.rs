@@ -43,12 +43,7 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// One of the vendored `printf("%d %s\n", argc, argv[0])` fixtures
 /// (`fmt_aarch64` / `fmt_arm` / `fmt_riscv64`), built from the same source as the

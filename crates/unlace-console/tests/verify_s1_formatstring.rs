@@ -29,12 +29,7 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The vendored `printf("%d %s\n", argc, argv[0])` fixture (`main`=0x401136,
 /// `printf@plt`=0x401040, format constant @0x402004).

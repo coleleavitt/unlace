@@ -1,19 +1,12 @@
 //! Relocatable-object entry selectors retain and resolve object coordinates.
 
-use std::path::PathBuf;
-
 use unlace_base::{address::Address, xml::DocumentStorage};
 use unlace_console::engine::{
     ConsoleProgram, EntryLookupError, EntryProvenance, EntrySelector, bootstrap_from_file,
     bootstrap_from_object, bootstrap_from_root,
 };
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn boot_fixture(name: &str) -> ConsoleProgram {
     let root = repo_root();

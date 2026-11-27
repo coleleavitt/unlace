@@ -172,7 +172,7 @@ fn decompile_imported_kind(binary: &std::path::Path, floating: bool) -> String {
 #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
 fn a_stored_variadic_integer_round_trips_without_claiming_unused_registers() {
     if process::optional_output(Command::new("gcc").arg("--version")).is_none() {
-        eprintln!("skipping native x86-64 fixture: gcc unavailable");
+        unlace_testkit::skip("native x86-64 fixture: gcc unavailable");
         return;
     }
     let fixture = common::repo_root().join("tests/cli/fixtures/variadic-secondary-reader");

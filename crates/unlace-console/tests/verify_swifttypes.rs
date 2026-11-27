@@ -12,8 +12,6 @@
 //! Two-state: with `swifttypes` off no layout, record or parameter is
 //! installed; on, every expected one is.
 
-use std::path::PathBuf;
-
 use unlace_base::address::Address;
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_decomp::dtype::TypeFactory;
@@ -90,12 +88,7 @@ const PARAMS: &[(u64, i32, &str, &str, &str)] = &[
     (0x2ce0, 0, "Self", "RDI", "swift.type_metadata *"),
 ];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn load(types_on: bool) -> ConsoleProgram {
     load_fixture(FIXTURE, types_on)

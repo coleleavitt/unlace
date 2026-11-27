@@ -24,8 +24,6 @@
 //! that address, so the Call cross-reference is filed either way and `unlace xrefs
 //! --to 0x349688c1` still reports the call site.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// The overlapping call's target — outside every section of the fixture.
@@ -35,12 +33,7 @@ const ENTRY: &str = "sub_401000";
 /// The one function reached by a real, mapped CALL.
 const CALLEE: &str = "sub_401010";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture with the bounded recursive discovery on (the consumer that commits
 /// the walk's CALL targets).

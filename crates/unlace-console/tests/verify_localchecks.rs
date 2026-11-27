@@ -6,19 +6,12 @@
 //! check is run against the C of the pass the directives were applied to,
 //! which still prints the old names and types, so those expectations are unmet.
 
-use std::path::PathBuf;
-
 use unlace_console::assertions;
 use unlace_console::decompile_step::{DecompileSeed, decompile_one};
 use unlace_console::engine::{EntrySelector, bootstrap_from_object};
 use unlace_console::grammar::{DataOrg, parse_type};
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn refusals(
     prog: &unlace_console::engine::ConsoleProgram,

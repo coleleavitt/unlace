@@ -9,16 +9,9 @@
 //! SPLIT shape, where `G`'s literal reference resolves onto `F`'s own first word,
 //! moves `F`'s entry four bytes in, as `poolentry` does; it is pinned here.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::bootstrap_from_object;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn bootstrap(slide: bool) -> unlace_console::engine::ConsoleProgram {
     let specs = repo_root().join("specs");

@@ -12,15 +12,9 @@
 //!
 //! Integration tests require the built processor specs under `specs/`.
 
-use std::path::PathBuf;
 use std::process::Command;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// A checked-in non-PIE x86-64 ELF whose entry point is a two-entry (irreducible)
 /// loop: the structurer keeps exactly one residual goto for it.

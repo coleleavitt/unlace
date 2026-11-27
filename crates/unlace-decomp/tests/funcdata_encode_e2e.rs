@@ -20,7 +20,6 @@
 //! and the gate requires at least a few functions to validate.
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::{ATTRIB_UNIQ, Address, ELEM_ADDR, ELEM_RANGELIST, ELEM_SEQNUM};
@@ -55,12 +54,7 @@ use unlace_sleigh::translate::{ELEM_OP, register_translate_ids};
 
 const FIXTURES: &[&str] = &["boolless", "ccmp", "gp", "lzcount", "condexesub"];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 // ===========================================================================
 // Datatest XML parsing (copied from decompile_e2e.rs).

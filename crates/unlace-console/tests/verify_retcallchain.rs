@@ -10,8 +10,6 @@
 //! `retcallchain_i386.s`), whose `chain_entry` is three links followed by a
 //! plain epilogue.
 
-use std::path::PathBuf;
-
 use unlace_base::address::Address;
 use unlace_console::assertions::{self, Body, Directive};
 use unlace_console::engine::{ConsoleProgram, EntrySelector, bootstrap_from_object};
@@ -31,12 +29,7 @@ const FIRST_LINK: u64 = 0x0804_a000;
 /// The three callees the chain reaches, by the global each `ret` pops.
 const CALLS: [&str; 3] = ["(*dat_804a000)()", "(*dat_804a004)()", "(*dat_804a008)()"];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture and run the analysis commit.
 fn load_fixture(fixture: &str) -> ConsoleProgram {

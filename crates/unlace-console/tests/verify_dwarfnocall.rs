@@ -4,20 +4,13 @@
 //! the source list shifted the real arguments onto the wrong names. Two-pass: off
 //! reproduces the source prototype, the default drops the location-less parameters.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn decompile(func: &str, nocall: bool) -> String {
     let root = repo_root();

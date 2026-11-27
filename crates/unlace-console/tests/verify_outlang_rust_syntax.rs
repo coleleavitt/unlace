@@ -32,12 +32,7 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The stripped shadow `faillog` (23 KB): small enough to decompile whole in a
 /// unit-test budget, and it still carries loops, switches, calls and casts.

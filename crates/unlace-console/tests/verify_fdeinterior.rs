@@ -21,8 +21,6 @@
 //! linker gives the whole PLT ONE FDE, so `fdeinterior` must never touch an import
 //! stub. Every named function the default run registers is still registered.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
@@ -34,12 +32,7 @@ const PAD: &str = "sub_4012e2";
 /// `guarded`'s entry — the FDE `pcBegin` that covers the pad.
 const OWNER: &str = "sub_4012d6";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the stripped C++ try/catch fixture with the LSDA landing-pad oracle on,
 /// then commit the (deferred) analysis facts.

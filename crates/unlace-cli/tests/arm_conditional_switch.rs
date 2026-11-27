@@ -143,7 +143,7 @@ int main(void) {{
         )
         .unwrap();
         if compilers.is_empty() {
-            eprintln!("skipping emitted C execution: GCC and Clang are unavailable");
+            unlace_testkit::skip("emitted C execution: GCC and Clang are unavailable");
         }
         for cc in &compilers {
             for opt in ["-O0", "-O2"] {

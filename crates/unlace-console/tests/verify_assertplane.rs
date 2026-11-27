@@ -20,8 +20,6 @@
 //! result, which the default folds into its `if` -- leaving no register local
 //! and renumbering the buffer to `v1`.  The plane is under test here, not the fold.
 
-use std::path::PathBuf;
-
 use unlace_console::assertions::{self, Body, Directive, Outcome};
 use unlace_console::engine::{
     ConsoleProgram, EntrySelector, bootstrap_from_file, bootstrap_from_object,
@@ -30,12 +28,7 @@ use unlace_console::project::decompile_targets;
 
 const TARGET: &str = "authenticate";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture and run the analysis commit.
 fn load() -> ConsoleProgram {

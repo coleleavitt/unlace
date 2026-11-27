@@ -22,8 +22,6 @@
 //! only ever REMOVES the duplicate second entry — it adds nothing, and every
 //! named function keeps or grows its extent.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// `(global entry symbol, the husk's anonymous twin, the whole routine's size)`.
@@ -35,12 +33,7 @@ const SPLIT: &[(&str, &str, u64)] = &[
     ("__do_global_ctors_aux", "sub_948", 120),
 ];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture the way every `unlace` driver does on a non-x86-64 image
 /// (DIV-20/DIV-68: the Listing plus the discovery bundle).

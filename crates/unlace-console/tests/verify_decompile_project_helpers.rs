@@ -26,12 +26,7 @@ use unlace_console::project_stream::{
 };
 use unlace_sleigh::loadimage::section_flags;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The vendored fauxware fixture (shared with the unlace-analysis loader gate).
 fn fauxware() -> PathBuf {

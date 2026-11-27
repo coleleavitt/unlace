@@ -13,12 +13,7 @@ use unlace_base::address::Address;
 use unlace_console::engine::{ArmIsa, ConsoleProgram, bootstrap_from_object_with_isa};
 use unlace_console::project::decompile_targets;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn specs() -> Vec<String> {
     vec![

@@ -18,7 +18,7 @@ fn printed_integer_conversions_match_native_rounding() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     if compilers.is_empty() {
-        eprintln!("skipping native rounding round trip: no GCC or Clang");
+        unlace_testkit::skip("native rounding round trip: no GCC or Clang");
         return;
     }
     let dir = common::scratch_file("integer-float-rounding", "dir");

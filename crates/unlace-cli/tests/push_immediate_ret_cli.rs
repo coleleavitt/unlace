@@ -1,14 +1,8 @@
 //! End-to-end coverage for one-store PUSH-immediate/RET tail recovery.
 
-use std::path::PathBuf;
 use std::process::Command;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture() -> String {
     repo_root()

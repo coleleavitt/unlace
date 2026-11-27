@@ -27,12 +27,7 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The vendored C++ no-return fixture (shared with the unlace-analysis
 /// `noreturn::tests::cpp_mangled_noreturn_emits_plt_stub_address` unit test).

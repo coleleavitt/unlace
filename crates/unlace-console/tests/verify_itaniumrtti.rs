@@ -25,8 +25,6 @@
 //!   are recovered — `shapes::Shape::vfunc_2`, `shapes::Shape_vtable`,
 //!   `shapes::Widget::vfunc_for_Drawable_0`.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// A `__class_type_info` (base-less) class: its four slots are `~Shape` (complete),
@@ -62,12 +60,7 @@ const HIDDEN_SCALED: &str = "anonymous_namespace::Hidden::vfunc_2";
 /// The one exported entry point, which must survive both passes untouched.
 const EXPORTED: &str = "probe_shapes";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the stripped hidden-visibility C++ fixture with `itaniumrtti` in the requested
 /// state, then commit the (deferred) analysis facts.

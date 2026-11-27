@@ -26,7 +26,6 @@
 //! inventory holds anything a whole-binary run would decompile without paying
 //! for the enumeration twice (RE-need `function-inventory-silently-lists`).
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -37,12 +36,7 @@ use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 const ENTRY: u64 = 0x402001;
 const EXTENT: i32 = 11;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn boot(rel: &str) -> ConsoleProgram {
     let root = repo_root();

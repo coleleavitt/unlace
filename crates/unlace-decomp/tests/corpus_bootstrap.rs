@@ -57,7 +57,6 @@
 //! compares exactly that prefix (and the fixtures chosen for it — `floatprint`,
 //! `gp`, `lzcount` — are straight-line at entry for >= 20 ops).
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -86,12 +85,7 @@ use unlace_sleigh::translate::{Translate, UniqueLayout, register_translate_ids};
 // Repo / fixture plumbing
 // ===========================================================================
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The pinned lift-fixture set (one per distinct SLEIGH language id), from
 /// `tests/golden/vectors/lift/README.md`.  Each entry is `(fixture, full

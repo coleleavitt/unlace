@@ -6,7 +6,6 @@
 //! force at each address — and that is what these gates pin, on x86-64 (a
 //! handful of split points) and on ARM after several `TMode` paints (many).
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -33,12 +32,7 @@ impl LoadImage for DummyImg {
     fn adjust_vma(&mut self, _adjust: i64) {}
 }
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn engine(rel: &str) -> (Sleigh, Rc<AddrSpace>) {
     let path = repo_root().join("specs/Ghidra/Processors").join(rel);

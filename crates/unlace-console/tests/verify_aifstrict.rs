@@ -41,12 +41,7 @@ use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture() -> PathBuf {
     repo_root().join("crates/unlace-analysis/tests/fixtures/cortexm_aifstrict_le32")

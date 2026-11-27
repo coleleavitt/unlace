@@ -7,17 +7,11 @@
 //! runs of the same command must produce the same bytes.
 
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 use std::process::Command;
 
 use serde_json::Value;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture(name: &str) -> String {
     repo_root()

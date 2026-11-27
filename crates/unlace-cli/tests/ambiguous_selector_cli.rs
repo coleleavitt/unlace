@@ -2,15 +2,9 @@
 //! on the image in hand: a linked image has no section-qualified coordinates,
 //! so only the address separates two same-named entries.
 
-use std::path::PathBuf;
 use std::process::Command;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture(name: &str) -> String {
     repo_root()

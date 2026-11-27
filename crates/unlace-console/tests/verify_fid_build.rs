@@ -36,12 +36,7 @@ use unlace_analysis::fid::db::{FidDatabase, FidDb};
 use unlace_analysis::loadimage_object::ObjectLoadImage;
 use unlace_console::engine::bootstrap_from_object;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture_o() -> PathBuf {
     repo_root().join("crates/unlace-analysis/tests/fixtures/fid_lib_x86_64.o")

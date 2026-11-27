@@ -17,8 +17,6 @@
 //! * **option ON (the fix):** the four `__unwind_info` starts are recovered as
 //!   `sub_<addr>` entries.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// The four function starts `__TEXT,__unwind_info` records, each reachable by no
@@ -30,12 +28,7 @@ const UNWIND_ONLY: [&str; 4] = [
     "sub_1000003bc",
 ];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn bootstrap(unwindstarts: bool) -> ConsoleProgram {
     let bin = repo_root()

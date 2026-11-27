@@ -3,7 +3,6 @@
 //! These tests require the built SLEIGH fixtures and check structural output;
 //! the separate datatest corpus verifies emitted-C expectations.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -32,12 +31,7 @@ use unlace_sleigh::translate::register_translate_ids;
 /// the lift-fixture pin set uses).  >= 5 required by the gate.
 const FIXTURES: &[&str] = &["boolless", "ccmp", "gp", "lzcount", "condexesub"];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 // ===========================================================================
 // Datatest XML parsing.

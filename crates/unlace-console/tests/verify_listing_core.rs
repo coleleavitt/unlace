@@ -19,12 +19,7 @@ use std::path::PathBuf;
 use unlace_analysis::listing::{FlowKind, Listing, RefKind};
 use unlace_console::engine::bootstrap_from_object;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The vendored non-PIE x86-64 fauxware fixture (shared with several gates). Its
 /// `main` (0x40071d) calls `authenticate` (0x400664), has a CBRANCH `je` at

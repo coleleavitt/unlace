@@ -21,7 +21,6 @@
 //! is empty there and the option is structurally inert — which is also why the
 //! default-on flip moves 0/675 datatest assertions.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -40,12 +39,7 @@ const NO_PC: u64 = 0x448;
 const TEXT_LO: u64 = 0x400;
 const TEXT_HI: u64 = 0x457;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture.
 fn load() -> ConsoleProgram {

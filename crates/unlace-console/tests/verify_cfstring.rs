@@ -52,12 +52,7 @@ const ENTRIES: [(u64, &str, u64, &str); 3] = [
     (0x100000550, "&_kAfter", 0x100004048, "after the long one"),
 ];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixtures() -> PathBuf {
     repo_root().join("crates/unlace-analysis/tests/fixtures")

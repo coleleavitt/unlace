@@ -22,7 +22,6 @@
 //! and the off/ident arms live here, where the env var can be set around each
 //! load. Same limit, same reason, as `verify_symbolnamerepair.rs`.
 
-use std::path::PathBuf;
 use std::sync::Mutex;
 
 use unlace_console::engine::bootstrap_from_object;
@@ -33,12 +32,7 @@ use unlace_decomp::symbolnamechars::{NameChars, SYMBOLNAMECHARS_ENV};
 /// gate is a process-global env var, and every object load reads it.
 static GATE: Mutex<()> = Mutex::new(());
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture(name: &str) -> String {
     repo_root()

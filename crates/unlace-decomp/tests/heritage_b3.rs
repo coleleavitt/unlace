@@ -25,7 +25,6 @@
 //! stub).  The gate documents that exact extra varnode and otherwise requires a
 //! match.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, SeqNum};
@@ -48,12 +47,7 @@ use unlace_sleigh::translate::register_translate_ids;
 // Repo plumbing (mirrors decompile_e2e.rs / corpus_bootstrap.rs).
 // ===========================================================================
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 struct SymbolFn {
     name: String,

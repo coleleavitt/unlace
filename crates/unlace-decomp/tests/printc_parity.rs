@@ -67,12 +67,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("condexesub", "func"),
 ];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 // ===========================================================================
 // Datatest XML parsing (subset of decompile_e2e).

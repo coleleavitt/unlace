@@ -54,12 +54,7 @@ const PHANTOM: &str = "sub_1400011d0";
 const STATIC_LEAF: u64 = 0x140001340;
 const STATIC_PHANTOM: &str = "sub_140001350";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture(ext: &str) -> PathBuf {
     repo_root().join(format!(

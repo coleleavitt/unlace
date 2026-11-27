@@ -55,7 +55,7 @@ fn mapped_byte_accesses_compile_and_preserve_bytes() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     if compilers.is_empty() {
-        eprintln!("skipping mapped-array round trip: no GCC or Clang");
+        unlace_testkit::skip("mapped-array round trip: no GCC or Clang");
         return;
     }
     let dir = common::scratch_file("mapped-array-c", "dir");
@@ -202,7 +202,7 @@ fn arm_copy_uses_target_endian_and_preserves_struct_and_volatile_controls() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     if compilers.is_empty() {
-        eprintln!("skipping ARM mapped-array round trip: no GCC or Clang");
+        unlace_testkit::skip("ARM mapped-array round trip: no GCC or Clang");
         return;
     }
     let dir = common::scratch_file("mapped-array-arm", "dir");

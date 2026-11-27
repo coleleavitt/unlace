@@ -19,20 +19,13 @@
 //! * **determinism** — two loads of the same bytes produce the same folded
 //!   spelling, which a `DefaultHasher`/`RandomState` fold would not.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::bootstrap_from_object;
 use unlace_decomp::symbolnamebound::{DEFAULT_SCOPE_DEPTH, bound_scope_path};
 
 /// The fixture's symbol nests 1000 `::` components (`deep_scope_x86_64.s`).
 const FIXTURE_DEPTH: usize = 1000;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture(name: &str) -> String {
     repo_root()

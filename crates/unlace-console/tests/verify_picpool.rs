@@ -23,8 +23,6 @@
 //! floor off the composed address — applying it there would report nothing on
 //! either binary.
 
-use std::path::PathBuf;
-
 use unlace_analysis::listing::xrefs::{self, XrefIndex, XrefKind};
 use unlace_console::engine::bootstrap_from_object;
 
@@ -44,12 +42,7 @@ const COMPOSES_SECOND: u64 = 0x43c;
 /// The `add r0,r0,#4` that forms `NUMBER` without ever reading the PC.
 const NO_PC: u64 = 0x448;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture and build the index `unlace xrefs` / `unlace strings` answer out of.
 fn index() -> XrefIndex {

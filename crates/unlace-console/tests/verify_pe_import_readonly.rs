@@ -2,8 +2,6 @@
 //! read-only memory. The Windows loader overwrites an IAT slot before execution,
 //! so its on-disk hint/name RVA is not a constant even though the section is RX.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
@@ -14,12 +12,7 @@ const FIXTURE: &str = "pe_iatincode_readonly_i386.exe";
 const ENTRY: u64 = 0x401010;
 const NAMED_CALL: &str = "VirtualAlloc(0x40,GetModuleHandleA(NULL));";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn load(options: &[(&str, &str)]) -> ConsoleProgram {
     let root = repo_root();

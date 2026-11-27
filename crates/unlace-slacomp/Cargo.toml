@@ -19,6 +19,7 @@ unlace-num.workspace = true
 unlace-sleigh.workspace = true
 
 [dev-dependencies]
+unlace-testkit.workspace = true
 # Compare decompressed .sla element streams in the encoding tests.
 flate2.workspace = true
 sha2 = "0.11"

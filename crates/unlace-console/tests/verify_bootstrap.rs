@@ -19,12 +19,7 @@ const X86_ADD: [u8; 5] = [0x48, 0x8d, 0x04, 0x1f, 0xc3];
 /// Thumb `movs r0, #7; bx lr`, which decodes as something else in A32.
 const THUMB_RETURN_7: [u8; 4] = [0x07, 0x20, 0x70, 0x47];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn specs() -> Vec<String> {
     vec![repo_root().join("specs").to_string_lossy().into_owned()]

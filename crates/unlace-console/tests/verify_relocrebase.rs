@@ -28,12 +28,7 @@ use std::path::PathBuf;
 use unlace_analysis::loader::reloc_object::RELOC_BASE;
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture(name: &str) -> PathBuf {
     repo_root()

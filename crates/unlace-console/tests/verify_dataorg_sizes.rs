@@ -15,16 +15,10 @@
 //! **long-double split** — 10 on x86 ELF (the x87 extended value width, which no
 //! `sizeof` can match) versus 8 under MSVC, where `long double` aliases `double`.
 //!
-use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The decoded scalar widths, in declaration order:
 /// `(char, short, int, long, long long, pointer, float, double, long double)`.

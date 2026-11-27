@@ -16,8 +16,6 @@
 //! `mov eax,0x2a; ret`, so a directive that reached the lifter is visible in one
 //! line of C and one that did not is equally visible.
 
-use std::path::PathBuf;
-
 use unlace_console::assertions::{self, Body, Directive, Outcome};
 use unlace_console::engine::{ConsoleProgram, EntrySelector, bootstrap_from_object};
 use unlace_console::project::decompile_targets;
@@ -27,12 +25,7 @@ const SAMPLE: u64 = 0x401140;
 /// `mov eax,0x2a; ret`.
 const RETURN_42: [u8; 6] = [0xb8, 0x2a, 0x00, 0x00, 0x00, 0xc3];
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Bootstrap the fixture, WITHOUT the analysis commit: a byte overlay has to be
 /// stated before it, which is the ordering under test.

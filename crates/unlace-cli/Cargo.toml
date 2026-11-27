@@ -42,6 +42,7 @@ embed-specs = []
 dynamic_linking = ["dep:unlace-decomp-dylib", "unlace-console/dynamic_linking"]
 
 [dev-dependencies]
+unlace-testkit.workspace = true
 unlace-stagefile.workspace = true
 flirt-sig.workspace = true
 object.workspace = true

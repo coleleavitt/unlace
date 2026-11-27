@@ -29,6 +29,7 @@ slotmap.workspace = true
 toml = { version = "1.1", default-features = false, features = ["parse", "std"] }
 
 [dev-dependencies]
+unlace-testkit.workspace = true
 unlace-stagefile.workspace = true
 unlace-slacomp.workspace = true
 # Verifier-only: the datatest <stringmatch> engine (item w10-structure-printbody).

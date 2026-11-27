@@ -34,12 +34,7 @@ impl LoadImage for DummyImg {
     fn adjust_vma(&mut self, _adjust: i64) {}
 }
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Every vendored language, sorted, as `(processor, `.sla` file name, `.sla` path)`; the path
 /// names the `.slaspec`'s sibling, which `unlace_slacomp::slacache` compiles on first read.

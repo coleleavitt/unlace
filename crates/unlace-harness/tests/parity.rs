@@ -40,12 +40,7 @@ use unlace_harness::testfunction::{FileRun, Pass, describe_test_file, run_files_
 /// The engine keeps a few process-wide settings; the two corpora run one after the other.
 static SERIAL: Mutex<()> = Mutex::new(());
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("the repository root")
-}
+use unlace_testkit::repo_root;
 
 /// One assertion of a corpus run: its repository-relative file, its name, whether it passed and
 /// whether a TOML stage test (its own baseline) owns it.

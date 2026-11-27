@@ -14,8 +14,6 @@
 //! the way a target outside a declared extent already was: a halt stub, a
 //! `flows into unmapped memory` warning, and the rest of the body.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::project::decompile_targets;
 
@@ -24,12 +22,7 @@ const ENTRY: u64 = 0x401000;
 /// The `jmp` that leaves the image, and where it goes.
 const BRANCH_SITE: u64 = 0x40100c;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn boot() -> ConsoleProgram {
     let root = repo_root();

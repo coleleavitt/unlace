@@ -43,12 +43,7 @@ use unlace_console::ifaceterm::ConsoleCommands;
 /// README; `-static -no-pie` keeps it stable).
 const UNLACE_CRC32_VMA: u64 = 0x4017c0;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture_dir() -> PathBuf {
     repo_root().join("tests/fixtures/fid")

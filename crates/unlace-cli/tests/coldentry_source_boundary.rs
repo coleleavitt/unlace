@@ -23,7 +23,7 @@ fn fixture(source: &str, frame: bool) -> Option<Fixture> {
         .into_iter()
         .find(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
     else {
-        eprintln!("skipping ELF assembly fixture: no GCC or Clang");
+        unlace_testkit::skip("ELF assembly fixture: no GCC or Clang");
         return None;
     };
     let dir = common::scratch_file("coldentry-source", "dir");

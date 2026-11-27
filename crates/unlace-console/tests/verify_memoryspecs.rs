@@ -13,12 +13,7 @@ use unlace_decomp::memoryspecs::{MemorySpecs, SpecRoot};
 const FUNCS: [&str; 3] = ["authenticate", "accepted", "main"];
 const X86_64_SLA: &str = "Ghidra/Processors/x86/data/languages/x86-64.sla";
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn specs_dir() -> PathBuf {
     repo_root().join("specs")

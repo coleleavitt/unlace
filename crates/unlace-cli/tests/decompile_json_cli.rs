@@ -17,12 +17,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static TEMP_ID: AtomicU64 = AtomicU64::new(0);
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// A checked-in x86-64 ELF with real code and real symbols — the fixture both
 /// acceptance probes target.

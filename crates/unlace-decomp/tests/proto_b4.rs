@@ -14,7 +14,6 @@
 //! 8051 default model its real ACC output `<pentry>`, so the recovery fires for
 //! every 8051 function — no boolless special-casing.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, SeqNum};
@@ -38,12 +37,7 @@ use unlace_sleigh::translate::register_translate_ids;
 // Repo plumbing (mirrors deadcode_b4.rs, plus the cspec read for proto recovery).
 // ===========================================================================
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 struct SymbolFn {
     name: String,

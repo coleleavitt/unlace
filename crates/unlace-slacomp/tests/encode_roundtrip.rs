@@ -5,7 +5,6 @@
 //! differently. Independent C++ compiler comparisons live in compiler_parity.rs.
 
 use std::io::Read;
-use std::path::PathBuf;
 
 use unlace_base::address::Address;
 use unlace_base::error::{UnlaceError, UnlaceResult};
@@ -18,12 +17,7 @@ use unlace_sleigh::sleigh::Sleigh;
 
 use unlace_slacomp::encode::encode_to_sla_bytes;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 struct DummyImg;
 impl LoadImage for DummyImg {

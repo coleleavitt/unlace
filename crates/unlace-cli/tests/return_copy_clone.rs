@@ -103,7 +103,7 @@ fn decompile(image: &Path, extra: &[&str]) -> Vec<String> {
 #[test]
 fn split_return_writes_each_global_once() {
     let Some(cc) = compiler() else {
-        eprintln!("skipping return copy clone round trip: no GCC or Clang");
+        unlace_testkit::skip("return copy clone round trip: no GCC or Clang");
         return;
     };
     let dir = common::scratch_file("return-copy-clone", "dir");

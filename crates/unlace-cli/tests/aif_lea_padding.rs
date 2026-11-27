@@ -88,7 +88,7 @@ fn a_zero_extending_lea_stays_at_the_discovered_entry_and_round_trips() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     let Some(&builder) = compilers.first() else {
-        eprintln!("skipping native LEA round trip: no GCC or Clang");
+        unlace_testkit::skip("native LEA round trip: no GCC or Clang");
         return;
     };
     for (body, arguments) in [
@@ -148,7 +148,7 @@ fn full_width_self_lea_padding_still_moves_the_entry_to_the_body() {
         .into_iter()
         .find(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
     else {
-        eprintln!("skipping LEA padding fixture: no GCC or Clang");
+        unlace_testkit::skip("LEA padding fixture: no GCC or Clang");
         return;
     };
     let fixture = fixture(cc, "lea (%rsi),%rsi\nmov %rsi,%rax\nret");

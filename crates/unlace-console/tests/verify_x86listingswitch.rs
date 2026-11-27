@@ -18,12 +18,7 @@ const DEFAULT: u64 = 0x1004f0;
 const HELPER: u64 = 0x100510;
 const ENTRY: u64 = 0x100000;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixture() -> PathBuf {
     repo_root().join("crates/unlace-analysis/tests/fixtures/x86listingswitch_i386")

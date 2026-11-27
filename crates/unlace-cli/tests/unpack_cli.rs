@@ -8,12 +8,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// The vendored UPX 3.96 witness; see its `.provenance` sidecar.
 fn packed_fixture() -> String {

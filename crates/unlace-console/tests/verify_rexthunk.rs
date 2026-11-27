@@ -16,8 +16,6 @@
 //! ending in `48 FF 60 48` and reaches it only through a pointer, an `imm64`, a
 //! function table, a `.pdata` record, an export or an `E9` stub.
 
-use std::path::PathBuf;
-
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
@@ -31,12 +29,7 @@ const THUNK: u64 = 0x140001040;
 const EXIT_THUNK: u64 = 0x140001057;
 const SLOT: u64 = 0x140002050;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// Load a fixture and commit its analysis.
 fn boot_fixture(name: &str) -> ConsoleProgram {

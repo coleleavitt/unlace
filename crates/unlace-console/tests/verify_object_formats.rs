@@ -37,12 +37,7 @@ use unlace_console::ifacedecomp::{
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_sleigh::loadimage::section_flags;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../unlace-analysis/tests/fixtures")

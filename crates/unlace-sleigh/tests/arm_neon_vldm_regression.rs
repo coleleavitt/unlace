@@ -20,7 +20,6 @@
 //! repeats the deep assembly and lift. The repeated results gate complete
 //! resets when the expanded parser arena is reused.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -32,12 +31,7 @@ use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit, Translate};
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 /// In-memory image: the instruction bytes at `base`, zero-filled elsewhere so
 /// the decoder's read-ahead never errors.

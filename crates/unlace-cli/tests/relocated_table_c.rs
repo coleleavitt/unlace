@@ -19,7 +19,7 @@ fn relocated_tables_preserve_values_after_independent_relayout() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     if compilers.is_empty() {
-        eprintln!("skipping native table round trip: no GCC or Clang");
+        unlace_testkit::skip("native table round trip: no GCC or Clang");
         return;
     }
     let dir = common::scratch_file("relocated-table-c", "dir");

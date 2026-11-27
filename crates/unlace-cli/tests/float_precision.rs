@@ -29,7 +29,7 @@ fn widened_scalar_and_simd_arithmetic_matches_native_bits() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     if compilers.is_empty() {
-        eprintln!("skipping native precision round trip: no GCC or Clang");
+        unlace_testkit::skip("native precision round trip: no GCC or Clang");
         return;
     }
     let dir = common::scratch_file("float-precision", "dir");

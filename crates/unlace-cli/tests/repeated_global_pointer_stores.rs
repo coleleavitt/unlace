@@ -13,7 +13,7 @@ fn repeated_global_pointer_stores_preserve_aliasing_and_early_returns() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     if compilers.is_empty() {
-        eprintln!("skipping native pointer-store round trip: no GCC or Clang");
+        unlace_testkit::skip("native pointer-store round trip: no GCC or Clang");
         return;
     }
     let root = tempfile::tempdir().unwrap();

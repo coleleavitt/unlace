@@ -1401,6 +1401,7 @@ dependencies = [
  "unlace-slacomp",
  "unlace-sleigh",
  "unlace-stagefile",
+ "unlace-testkit",
 ]
 
 [[package]]
@@ -1419,6 +1420,7 @@ dependencies = [
  "unlace-slacomp",
  "unlace-sleigh",
  "unlace-stagefile",
+ "unlace-testkit",
 ]
 
 [[package]]
@@ -1452,6 +1454,7 @@ dependencies = [
  "unlace-sleigh",
  "unlace-stagefile",
  "unlace-structure",
+ "unlace-testkit",
 ]
 
 [[package]]
@@ -1501,6 +1504,7 @@ dependencies = [
  "unlace-decomp-dylib",
  "unlace-num",
  "unlace-sleigh",
+ "unlace-testkit",
 ]
 
 [[package]]
@@ -1518,6 +1522,7 @@ dependencies = [
  "unlace-slacomp",
  "unlace-sleigh",
  "unlace-stagefile",
+ "unlace-testkit",
 ]
 
 [[package]]
@@ -1619,6 +1624,7 @@ dependencies = [
  "unlace-base",
  "unlace-num",
  "unlace-sleigh",
+ "unlace-testkit",
 ]
 
 [[package]]
@@ -1629,6 +1635,7 @@ dependencies = [
  "unlace-num",
  "unlace-slacomp",
  "unlace-stagefile",
+ "unlace-testkit",
 ]
 
 [[package]]
@@ -1651,6 +1658,10 @@ dependencies = [
  "unlace-num",
  "unlace-sleigh",
 ]
+
+[[package]]
+name = "unlace-testkit"
+version = "0.1.0"
 
 [[package]]
 name = "unlace-wasm"

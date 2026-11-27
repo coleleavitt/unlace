@@ -1,7 +1,6 @@
 //! Precedence regression for the typed Mach-O import tail: a prototype forced
 //! at the CALLIND instruction must win over the callable type on its slot.
 
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -10,12 +9,7 @@ use unlace_console::engine::{EntrySelector, bootstrap_from_object};
 use unlace_console::grammar::{DataOrg, parse_protopieces};
 use unlace_decomp::dtype::type_metatype;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 #[test]
 fn callsite_prototype_override_wins_over_slot_prototype() {

@@ -27,12 +27,7 @@ impl Drop for SyntheticFixture {
     }
 }
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap()
-}
+use unlace_testkit::repo_root;
 
 fn unsupported_arm_relocations() -> SyntheticFixture {
     let mut object = write::Object::new(BinaryFormat::Elf, Architecture::Arm, Endianness::Little);

@@ -58,6 +58,40 @@ fn bitwise_transfers_are_sound_and_optimal() {
     }
 }
 
+/// `shl`, `add` and `sub` are sound: every concrete result lies in the abstract result. They are
+/// not optimal (carries out of unknown bits are dropped), so only membership is checked.
+#[test]
+fn shift_and_arithmetic_transfers_are_sound() {
+    const W: u32 = 4;
+    let mask = (1u64 << W) - 1;
+    for ca in 0..81u64 {
+        for k in 0..W {
+            let a = decode(ca, W);
+            let got = a.shl(k);
+            let got_w = KnownBits {
+                zero: got.zero & mask,
+                one: got.one & mask,
+            };
+            for &x in &members(a, W) {
+                assert!(got_w.contains((x << k) & mask), "shl a={a:?} k={k} x={x}");
+            }
+        }
+        for cb in 0..81u64 {
+            let (a, b) = (decode(ca, W), decode(cb, W));
+            let (ma, mb) = (members(a, W), members(b, W));
+            let (sum, dif) = (a.add(b, 1), a.sub(b, 1));
+            for &x in &ma {
+                for &y in &mb {
+                    let s = x.wrapping_add(y) & mask;
+                    let d = x.wrapping_sub(y) & mask;
+                    assert!(sum.contains(s), "add a={a:?} b={b:?} x={x} y={y}");
+                    assert!(dif.contains(d), "sub a={a:?} b={b:?} x={x} y={y}");
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn constants_and_nz_mask() {
     let k = KnownBits::constant(0x1_00FF, 2);

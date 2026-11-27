@@ -1,10 +1,11 @@
 //! (unlace #1276, from the archived Rocq `KnownBits.v`) The known-bits value domain: an abstract
 //! value is a pair of masks, `zero` (bits known to be 0) and `one` (bits known to be 1). The
 //! non-zero mask (`nzm`, `calc_nz_mask`) is the `!zero` half of this domain; this module adds the
-//! known-one half and the bitwise transfers. `and`, `or` and `xor` are exact per bit, so each
-//! result is the best abstraction of the operation (every forced bit is recorded). Nothing reads
-//! this domain yet; the transfers are proved sound and optimal by the tests below, so a later
-//! pass can use them behind an option.
+//! known-one half and the transfers. `and`, `or` and `xor` are exact per bit, so each result is
+//! the best abstraction of the operation. `shl` by a constant is exact too. `add` and `sub` are
+//! sound but not optimal: they keep only the low bits that both inputs know. Nothing reads this
+//! domain yet; the tests below check these transfers, so a later pass can use them behind an
+//! option.
 
 use unlace_base::address::calc_mask;
 
@@ -67,6 +68,44 @@ impl KnownBits {
         KnownBits {
             zero: (self.zero & other.zero) | (self.one & other.one),
             one: (self.zero & other.one) | (self.one & other.zero),
+        }
+    }
+
+    /// `a << k` for a constant `k`: the vacated low bits are known 0 and the rest shift up.
+    pub fn shl(self, k: u32) -> KnownBits {
+        if k >= 64 {
+            return KnownBits {
+                zero: u64::MAX,
+                one: 0,
+            };
+        }
+        KnownBits {
+            zero: (self.zero << k) | ((1u64 << k) - 1),
+            one: self.one << k,
+        }
+    }
+
+    /// `a + b` and `a - b` over `size` bytes. Only the low bits both inputs know are exact,
+    /// the carry out of an unknown bit is not tracked, so the result is sound but not optimal.
+    pub fn add(self, other: KnownBits, size: i32) -> KnownBits {
+        self.low_known_combine(other, size, u64::wrapping_add)
+    }
+
+    pub fn sub(self, other: KnownBits, size: i32) -> KnownBits {
+        self.low_known_combine(other, size, u64::wrapping_sub)
+    }
+
+    fn low_known_combine(self, other: KnownBits, size: i32, op: fn(u64, u64) -> u64) -> KnownBits {
+        let both = (self.zero | self.one) & (other.zero | other.one);
+        let k = both.trailing_ones().min(8 * size as u32);
+        if k == 0 {
+            return KnownBits::unknown();
+        }
+        let low = if k >= 64 { u64::MAX } else { (1u64 << k) - 1 };
+        let sum = op(self.one, other.one) & low;
+        KnownBits {
+            zero: !sum & low,
+            one: sum,
         }
     }
 }

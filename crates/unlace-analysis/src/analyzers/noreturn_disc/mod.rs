@@ -75,6 +75,7 @@ use crate::listing::{Listing, RefKind};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, NoReturnFact, Phase};
 
 pub mod discstrict;
+mod disctrap;
 
 /// Ghidra's `FindNoReturnFunctionsAnalyzer` evidence threshold: a callee is
 /// concluded no-return once at least this many of its call sites show no valid
@@ -104,7 +105,12 @@ impl AnalysisPass for NoReturnDiscoveredPass {
         let Some(listing) = ctx.listing else {
             return out;
         };
-        for fact in discover_noreturn(listing) {
+        let trap = ctx
+            .arch
+            .unlace_options
+            .get::<unlace_decomp::analysisgates::Noreturntrap>()
+            .0;
+        for fact in discover_noreturn(listing, trap.then_some(ctx.file)) {
             out.noreturn.push(fact);
         }
         out
@@ -261,10 +267,17 @@ fn last_act_is_terminal_call(listing: &Listing, entry: u64, terminal: &BTreeSet<
 ///    instruction is a call to an already-discovered-no-return function is itself
 ///    no-return — so a wrapper-of-a-wrapper converges.
 ///
+/// With `trap` (the image, under `noreturntrap`), one call site sealed by an
+/// `int3` pad and none contradicting it also concludes the callee
+/// ([`disctrap`]).
+///
 /// The result is keyed by entry VMA (a `BTreeMap` so the emitted facts are
 /// address-ordered and deduped). The `terminal` set seeds with the Known-list
 /// no-return functions so a tail-call to (e.g.) `exit` already counts.
-fn discover_noreturn(listing: &Listing) -> Vec<NoReturnFact> {
+pub(crate) fn discover_noreturn(
+    listing: &Listing,
+    trap: Option<&object::File>,
+) -> Vec<NoReturnFact> {
     let mut discovered: BTreeMap<u64, NoReturnFact> = BTreeMap::new();
     // The "already no-return" anchor set: the Known-seeded functions plus
     // everything discovered so far. A call to one of these is a no-fall-through
@@ -295,6 +308,7 @@ fn discover_noreturn(listing: &Listing) -> Vec<NoReturnFact> {
             }
             // Rule 1: direct call-site evidence. Rule 2: terminal-call promotion.
             let concluded = no_fallthrough_evidence(listing, entry) >= EVIDENCE_THRESHOLD
+                || trap.is_some_and(|file| disctrap::sealed_by_trap(listing, file, entry))
                 || last_act_is_terminal_call(listing, entry, &terminal);
             if concluded {
                 let name = listing

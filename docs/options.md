@@ -610,6 +610,10 @@ Three tiers:
 | unreachable write()/return tail keeps a fatal wrapper looking like it returns | [`noreturn_reach`](#noreturn_reach----on--off-default-on) |
 | switch whose every arm ends in a no-return call not concluded no-return | [`noreturn_reach`](#noreturn_reach----on--off-default-on) |
 | caller decodes garbage past an sshpkt_fatal-style wrapper | [`noreturn_reach`](#noreturn_reach----on--off-default-on) |
+| abort() prints its int3 pad as a call through swi(3) after _exit(3) | [`noreturntrap`](#noreturntrap----on--off-default-on) |
+| static CRT _exit, abort or terminate not marked no-return on a PE | [`noreturntrap`](#noreturntrap----on--off-default-on) |
+| a no-return routine called from one site followed by int3 stays returning | [`noreturntrap`](#noreturntrap----on--off-default-on) |
+| dead SEH epilogue printed after a call to abort | [`noreturntrap`](#noreturntrap----on--off-default-on) |
 | rust or go string argument renders as a raw rodata address beside its length instead of the literal text | [`fatstr`](#fatstr----off--auto--always-default-auto) |
 | takes_str(&DAT_00102000, 15) where the 15 bytes at that address are plainly the string | [`fatstr`](#fatstr----off--auto--always-default-auto) |
 | string literals recovered on C binaries but never on rust or go ones | [`fatstr`](#fatstr----off--auto--always-default-auto) |
@@ -2905,6 +2909,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default (DIV-19), a no-op unless the Listing is built (option listing on) and noreturn_propagate is on. With listing on it concludes internal fatal wrappers that unlace's tail-call rule (noreturn_propagate/noreturn_error) misses because the no-return call is mid-body, the return is dead, or the function routes through a switch — where unlace would otherwise decode the cold error path / adjacent function's bytes as live code past the wrapper call, ballooning the caller and inflating GED vs ghidra (openssh sshpkt_fatal/ssh_tun_confirm, shadow oom). This is the general 'Non-Returning Functions - Discovered' reachability that ghidra runs by default. Flip OFF (with listing on) to fall back to the strict tail-call rule (keeps the post-call fall-through code).
 - **Where / provenance:** P1/external-refinement · ghidra · correctness-fix · unlace-analysis-noreturn-reach
 - **Example:** `option listing on --option noreturn_reach on`
+
+### `noreturntrap` -- on | off, default `on`
+
+- **Symptoms:** abort() prints its int3 pad as a call through swi(3) after _exit(3); static CRT _exit, abort or terminate not marked no-return on a PE; a no-return routine called from one site followed by int3 stays returning; dead SEH epilogue printed after a call to abort.
+- **What it does:** REMOVES CODE: let one call site sealed by an x86 int3 pad conclude its callee no-return in noreturn_disc. MSVC, and clang and rustc targeting Windows, end a function whose last act is a call to a noreturn callee with that call and an int3 pad, and the next function starts after the pad: the compiler left nothing to continue in. noreturn_disc counted such a site as one vote of the three it needs, so a no-return routine called from one such site stayed returning. The statically linked VC++ 2008 CRT is that shape: _exit is doexit(code, 1, 0), which returns only when its third argument is nonzero, abort ends call _exit ; int3 ; int3, and raise calls _exit once more where its fall-through is a join, so _exit had one vote and abort, terminate, unexpected, _inconsistency and CallUnexpected all stayed returning though IDA marks them no-return. A sealed site counts only when no call site of the same callee falls through to decoded code that nothing but the call reaches (a call the compiler expected to return from); a fall-through that is a join, padding or another function's entry says nothing. __debugbreak() after a returning call is not sealed: the compiler emits the rest of the function behind that int3. Requires the Listing and noreturn_disc; inert on every other processor.
+- **When to flip:** On by default, a no-op unless the Listing is built and noreturn_disc is on. On a statically linked MSVC or clang-cl PE it concludes the CRT's _exit, and through it abort, unexpected, _inconsistency and CallUnexpected (each jumps into terminate's code, which ends in abort), no-return, so their callers stop printing the int3 pad as a call through swi(3) and the dead epilogue after abort(). Flip off to require three sealed or fall-through-less call sites again, or when a hand-written routine ends in call f ; int3 although f returns.
+- **Where / provenance:** P1/external-refinement · unlace · analysis-enablement · unlace-noreturntrap
+- **Example:** `option noreturntrap off`
 
 ### `fatstr` -- off | auto | always, default `auto`
 

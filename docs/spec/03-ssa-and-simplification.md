@@ -3543,7 +3543,10 @@ a time.
 coreaction.cc:894). In a block, two MULTIEQUALs merge when their inputs agree slot by slot: a COPY input stands for its
 source, and two values count as equal when `functional_equality_level` says so. The later one is destroyed and its
 readers move to the earlier output, or the reverse when `preferred_output` says the other survives (a value that feeds
-a RETURN, or an address-tied one, wins). This is the strict Ghidra-parity merge that ActionLateCse does not do: it changes
+a RETURN, or an address-tied one, wins). Two MULTIEQUALs whose outputs name different storage, one of them a
+global, never merge: the global's join carries the global's own value past the block, and moving its readers to
+the other join would make Merge print a copy into the global that the binary never stores (`gi = v2;` after both
+arms of a branch stored it). This is the strict Ghidra-parity merge that ActionLateCse does not do: it changes
 output for every function where two identical MULTIEQUALs appear in one block.
 
 Option `implweight N` changes `ActionMarkExplicit`

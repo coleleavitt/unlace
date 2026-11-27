@@ -308,7 +308,7 @@ literal = 'return (*v1)(a1,a1) + v2;'
 [[match]]
 name = 'CALLTARGETTYPE #11: a local holding a function address keeps void *'
 count = 4
-literal = 'void *v2; // ram 0x200100 | rbp'
+literal = 'void *v2; // rbp'
 
 [[match]]
 name = 'CALLTARGETTYPE #12: the address is still stored into it'

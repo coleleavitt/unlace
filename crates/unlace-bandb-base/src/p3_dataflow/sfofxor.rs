@@ -1,12 +1,11 @@
 //! x86 `SF != OF` signed-less idiom (unlace#1271, option `sfofxor`).
 //!
-//! The x86 `jl` and `jge` conditions read `SF xor OF` after a `cmp`. The lifter models the
-//! flags over the compared operands `a` and `b`: `INT_SLESS(a, b)` for one and `INT_SBORROW(a, b)`
-//! for the other. Their XOR is the signed `a < b` predicate for the sign flag as the ISA defines it
-//! (the sign of `a - b`), so under `sfofxor` (default off) [`RuleSfOfXor`] folds the one-byte XOR
-//! to `INT_SLESS(a, b)`. The lifter's own flag definitions must be checked before the option is
-//! trusted. The match is strictly structural: both inputs are direct definitions of the same two
-//! operands in the same order, and anything else is left alone.
+//! The x86 `jl` and `jge` conditions read `SF xor OF` after a `cmp a, b`. The lifter defines
+//! `SF = (a - b) s< 0` (`INT_SLESS(INT_SUB(a, b), 0)`) and `OF` as `INT_SBORROW(a, b)`. Their XOR is
+//! `a s< b`, so under `sfofxor` (default off) [`RuleSfOfXor`] folds the one-byte XOR of those two
+//! flags to `INT_SLESS(a, b)`. The match is strictly structural: the sign flag and the borrow must
+//! read the same two operands in the same order. The XOR of `INT_SLESS(a, b)` with
+//! `INT_SBORROW(a, b)` is the sign flag, not `a s< b`, so that pair is left alone.
 
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -24,7 +23,8 @@ crate::unlace_flag!(
     shipped: false
 );
 
-/// Fold `INT_XOR(INT_SLESS(a, b), INT_SBORROW(a, b))` (or the BOOL_XOR form) to `INT_SLESS(a, b)`.
+/// Fold `INT_XOR(SF, OF)` (or the BOOL_XOR form) to `INT_SLESS(a, b)`, where `SF` is
+/// `INT_SLESS(INT_SUB(a, b), 0)` and `OF` is `INT_SBORROW(a, b)`.
 pub struct RuleSfOfXor {
     group: String,
 }
@@ -61,20 +61,13 @@ impl Rule for RuleSfOfXor {
         let (Some(x), Some(y)) = (op_in(data, op, 0), op_in(data, op, 1)) else {
             return 0;
         };
-        let (Some(dx), Some(dy)) = (vn_def(data, x), vn_def(data, y)) else {
+        let folded = [(x, y), (y, x)].into_iter().find_map(|(sign, borrow)| {
+            let (a, b) = sign_of_difference(data, sign)?;
+            (operands(data, borrow, OpCode::CPUI_INT_SBORROW)? == (a, b)).then_some((a, b))
+        });
+        let Some((a, b)) = folded else {
             return 0;
         };
-        let (sless, sborrow) = match (op_code(data, dx), op_code(data, dy)) {
-            (Some(OpCode::CPUI_INT_SLESS), Some(OpCode::CPUI_INT_SBORROW)) => (dx, dy),
-            (Some(OpCode::CPUI_INT_SBORROW), Some(OpCode::CPUI_INT_SLESS)) => (dy, dx),
-            _ => return 0,
-        };
-        let (Some(a), Some(b)) = (op_in(data, sless, 0), op_in(data, sless, 1)) else {
-            return 0;
-        };
-        if (op_in(data, sborrow, 0), op_in(data, sborrow, 1)) != (Some(a), Some(b)) {
-            return 0;
-        }
         data.op_set_opcode(op, TypeOp::new(OpCode::CPUI_INT_SLESS, 0, "INT_SLESS"));
         data.op_set_input(op, a, 0)
             .expect("RuleSfOfXor: opSetInput a (internal invariant)");
@@ -84,15 +77,33 @@ impl Rule for RuleSfOfXor {
     }
 }
 
+/// `(a, b)` when `vn` is `INT_SLESS(INT_SUB(a, b), 0)`, the x86 sign flag after `a - b`.
+fn sign_of_difference(data: &Funcdata, vn: VarnodeId) -> Option<(VarnodeId, VarnodeId)> {
+    let (diff, zero) = operands(data, vn, OpCode::CPUI_INT_SLESS)?;
+    let zv = data.vbank().get(zero)?;
+    if !zv.is_constant() || zv.get_offset() != 0 {
+        return None;
+    }
+    operands(data, diff, OpCode::CPUI_INT_SUB)
+}
+
+/// The two inputs of `vn`'s defining op when that op has `code`.
+fn operands(data: &Funcdata, vn: VarnodeId, code: OpCode) -> Option<(VarnodeId, VarnodeId)> {
+    let def = data.vbank().get(vn)?.get_def()?;
+    let o = data.obank().get(def)?;
+    if o.code() != code {
+        return None;
+    }
+    Some((o.get_in(0)?, o.get_in(1)?))
+}
+
 fn op_in(data: &Funcdata, op: OpId, slot: int4) -> Option<VarnodeId> {
     data.obank().get(op).and_then(|o| o.get_in(slot))
 }
-fn op_code(data: &Funcdata, op: OpId) -> Option<OpCode> {
-    data.obank().get(op).map(|o| o.code())
-}
-fn vn_def(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
-    data.vbank().get(vn).and_then(|v| v.get_def())
-}
+
+#[cfg(test)]
+#[path = "sfofxor/tests.rs"]
+mod tests;
 fn vn_size(data: &Funcdata, vn: VarnodeId) -> int4 {
     data.vbank().get(vn).map(|v| v.get_size()).unwrap_or(0)
 }

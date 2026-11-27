@@ -1399,6 +1399,9 @@ Three tiers:
 | a std::vector or std::map type spelled with its allocator and comparator | [`cppshortnames`](#cppshortnames----on--off-default-off) |
 | __cxx11 or __1 in front of a std function name | [`cppshortnames`](#cppshortnames----on--off-default-off) |
 | C++ type names too long to read | [`cppshortnames`](#cppshortnames----on--off-default-off) |
+| a function named main::{lambda(int)#1}::operator() in the output | [`cpplambda`](#cpplambda----on--off-default-off) |
+| a lambda body that does not read as one | [`cpplambda`](#cpplambda----on--off-default-off) |
+| a closure class name longer than the body it names | [`cpplambda`](#cpplambda----on--off-default-off) |
 | a local holding open()'s result named v1 | [`libcnames`](#libcnames----on--off-default-on) |
 | read's byte count kept as a vN | [`libcnames`](#libcnames----on--off-default-on) |
 | a stack buffer passed to read() or ReadFile() named vN | [`libcnames`](#libcnames----on--off-default-on) |
@@ -4642,6 +4645,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Turn on for C++ binaries: `std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > *` prints `std::string *`, and `std::__cxx11::basic_string::_M_append` prints `std::basic_string::_M_append`. Off by default because it respells names that stage assertions and CLI tests spell in full.
 - **Where / provenance:** P9/naming-policy · ida · presentation-default · unlace-cppshortnames
 - **Example:** `option cppshortnames on`
+
+### `cpplambda` -- on | off, default `off`
+
+- **Symptoms:** a function named main::{lambda(int)#1}::operator() in the output; a lambda body that does not read as one; a closure class name longer than the body it names.
+- **What it does:** Print a C++ lambda's closure class as `lambda`. A lambda's class has no name in the source, so a demangler spells it as a brace group that carries the parameter list and a counter: `main::{lambda(int)#1}::operator()`. With the option on, each such group in a function name prints as `lambda`: `main::lambda::operator()`. Only the printed function name changes; the symbol, the types and every directive keep the demangled name. A clang `$_<n>` closure name is not rewritten.
+- **When to flip:** Turn on for a C++ binary whose lambdas show up as functions of an anonymous class, when the reader wants the call site to say `lambda` instead of the class's demangled brace group. Off by default because it renames a function that the symbol table names in full.
+- **Where / provenance:** P9/naming-policy · ida · presentation-default · unlace-cpplambda
+- **Example:** `option cpplambda on`
 
 ### `libcnames` -- on | off, default `on`
 

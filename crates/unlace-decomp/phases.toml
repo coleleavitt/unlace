@@ -5548,6 +5548,25 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "cpplambda"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "naming-policy"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-cpplambda"
+summary = "Print a C++ lambda's closure class as `lambda`. A lambda's class has no name in the source, so a demangler spells it as a brace group that carries the parameter list and a counter: `main::{lambda(int)#1}::operator()`. With the option on, each such group in a function name prints as `lambda`: `main::lambda::operator()`. Only the printed function name changes; the symbol, the types and every directive keep the demangled name. A clang `$_<n>` closure name is not rewritten."
+use_when = "Turn on for a C++ binary whose lambdas show up as functions of an anonymous class, when the reader wants the call site to say `lambda` instead of the class's demangled brace group. Off by default because it renames a function that the symbol table names in full."
+example = "option cpplambda on"
+source_decompiler = "ida"
+inspiration = "IDA prints a lambda's operator() under its brace-group class name; the lambda is what a reader looks for."
+change_kind = "presentation-default"
+tier = "core"
+symptoms = "a function named main::{lambda(int)#1}::operator() in the output|a lambda body that does not read as one|a closure class name longer than the body it names"
+
+[[settable]]
 option = "libcnames"
 values = "on|off"
 default = "on"

@@ -404,6 +404,7 @@ unlace_options! { self, p1;
     "flownames" => registered!(crate::flownames::FlowNames),
     "declorder" => registered!(crate::declorder::DeclOrder),
     "cppshortnames" => registered!(crate::cppshortnames::CppShortNames),
+    "cpplambda" => registered!(crate::cppshortnames::CppLambda),
     "castwiden" => registered!(crate::castwiden::CastWidenMode),
     "ptrdepthcap" => registered!(crate::coreaction_infertypes::Ptrdepthcap),
     "calltargettype" => registered!(crate::coreoptions::CallTargetType),

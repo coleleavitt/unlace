@@ -112,3 +112,17 @@ fn an_inline_namespace_scope_goes_only_after_std() {
         path(&["ns", "__1", "x"])
     );
 }
+
+#[test]
+fn a_lambda_closure_class_prints_as_lambda() {
+    assert_eq!(
+        short_lambda("main::{lambda(int)#1}::operator()"),
+        "main::lambda::operator()"
+    );
+    assert_eq!(
+        short_lambda("f::{lambda()#1}::operator()::{lambda(int)#2}::operator()"),
+        "f::lambda::operator()::lambda::operator()"
+    );
+    assert_eq!(short_lambda("main"), "main");
+    assert_eq!(short_lambda("f::{lambda(int)#1"), "f::{lambda(int)#1");
+}

@@ -3400,6 +3400,17 @@ carries its whole demangled path, as every name of a standalone load does
 because the demangled symbol name no longer has the template arguments that
 would tell `std::string` from `std::wstring`.
 
+**(unlace) cpplambda — a lambda's closure class prints as `lambda`.** A lambda's
+class has no source name, so a demangler spells it as a brace group carrying its
+parameter list and a counter (`main::{lambda(int)#1}::operator()`). With `cpplambda`
+on (P9 `naming-policy`, default off), `cppshortnames.rs (function_name)` rewrites
+each such group in a printed function name to `lambda` (`main::lambda::operator()`),
+through `cppshortnames.rs (short_lambda)`. The rewrite matches the demangled marker
+`{lambda(` that the detector `analyzers/demangle/lambda.rs (is_lambda_closure)` also
+keys on. It touches only the printed name: the symbol keeps the demangled name, and
+so does every type and directive. A clang `$_<n>` closure name is detected but not
+rewritten.
+
 ## 9.4 Strings & comments
 
 **String literals.** A constant pointer whose target type is a character type

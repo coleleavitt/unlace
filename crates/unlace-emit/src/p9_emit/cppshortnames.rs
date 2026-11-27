@@ -17,6 +17,9 @@
 //!   `std::map<K, V, std::less<K>, std::allocator<std::pair<K const, V> > >` is
 //!   `std::map<K, V>`.
 //!
+//! With `cpplambda` on, a lambda's closure class (`{lambda(int)#1}`) in a function
+//! name prints as `lambda`.
+//!
 //! An argument is a default only when it names the container's own element (or,
 //! for a map, its own key and value pair); a name nested deeper than 32
 //! template levels, longer than 4 KiB, or with unbalanced brackets prints as it
@@ -278,6 +281,14 @@ fn drop_inline_namespaces(s: &str) -> String {
 /// function by its whole demangled path (`std::__cxx11::basic_string::_M_append`),
 /// with no scope list for [`short_scopes`] to shorten.
 pub fn function_name(arch: &crate::architecture::Architecture, name: String) -> String {
+    let name = if arch.unlace_options.get::<CppLambda>().0 {
+        match short_lambda(&name) {
+            Cow::Owned(short) => short,
+            Cow::Borrowed(_) => name,
+        }
+    } else {
+        name
+    };
     if !arch.unlace_options.get::<CppShortNames>().0 {
         return name;
     }
@@ -287,12 +298,45 @@ pub fn function_name(arch: &crate::architecture::Architecture, name: String) -> 
     }
 }
 
+/// The closure-class marker a demangler prints for a lambda (`{lambda(int)#1}`).
+const LAMBDA_OPEN: &str = "{lambda(";
+
+/// `name` with each lambda closure class (`{lambda(int)#1}`) spelled `lambda`, or
+/// `name` itself when it names no lambda. An unclosed marker is left as it is.
+pub fn short_lambda(name: &str) -> Cow<'_, str> {
+    if !name.contains(LAMBDA_OPEN) {
+        return Cow::Borrowed(name);
+    }
+    let mut out = String::with_capacity(name.len());
+    let mut rest = name;
+    while let Some(at) = rest.find(LAMBDA_OPEN) {
+        let Some(close) = rest[at..].find('}') else {
+            break;
+        };
+        out.push_str(&rest[..at]);
+        out.push_str("lambda");
+        rest = &rest[at + close + 1..];
+    }
+    out.push_str(rest);
+    Cow::Owned(out)
+}
+
 crate::unlace_flag!(
     /// (unlace `cppshortnames`) Print the short spelling of standard C++ names.
     /// See [`crate::cppshortnames`].
     CppShortNames,
     "cppshortnames",
     "short standard C++ names",
+    unset: false,
+    shipped: false
+);
+
+crate::unlace_flag!(
+    /// (unlace `cpplambda`) Print a lambda's closure class as `lambda`.
+    /// See [`crate::cppshortnames`].
+    CppLambda,
+    "cpplambda",
+    "name lambda closure classes",
     unset: false,
     shipped: false
 );

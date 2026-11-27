@@ -64,7 +64,7 @@ use unlace_decomp::printc::ArchPrintExt;
 
 /// The status file, present only while an export is running.
 const STATUS_FILE: &str = ".streaming";
-const INDEX_FILE: &str = "index.jsonl";
+pub(crate) const INDEX_FILE: &str = "index.jsonl";
 const README_FILE: &str = "README.md";
 
 /// How long the writer waits for a result before going round its clock again.
@@ -416,7 +416,7 @@ fn temp_path(path: &Path) -> PathBuf {
 /// Replace `path` in one step: a reader polling the status file or the README
 /// must never see a half-written one.  A failed rename takes the staged file
 /// with it — the folder an agent reads is no place to leave debris.
-fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let temp = temp_path(path);
     std::fs::write(&temp, bytes).map_err(|e| format!("cannot write {}: {e}", temp.display()))?;
     std::fs::rename(&temp, path).map_err(|e| {
@@ -868,6 +868,19 @@ fn index_line(seq: usize, r: &FuncResult, span: Option<(u64, usize)>) -> String 
         ),
     ]);
     format!("{}\n", dumps_compact(&line))
+}
+
+/// The finished `index.jsonl` of a `.c` built from `results`: one line per
+/// function in that order, each with the span of its block.
+pub(crate) fn address_index(file_name: &str, results: &[FuncResult]) -> String {
+    let mut offset = format!("#include \"{file_name}.h\"\n\n").len() as u64;
+    let mut index = String::new();
+    for (seq, r) in results.iter().enumerate() {
+        let len = render_c(std::slice::from_ref(r)).len();
+        index.push_str(&index_line(seq, r, Some((offset, len))));
+        offset += len as u64;
+    }
+    index
 }
 
 // --- the export --------------------------------------------------------------

@@ -2390,7 +2390,7 @@ and drops the incremental artifacts, which is what cost reproducibility. It does
 schedule or write anything itself: it runs the non-stream export
 (`crates/unlace-cli/src/decompile_project.rs (decompile_project,
 ExportWatch)`) with an observer attached, so the static plan, the
-structure-naming replay, the positional merge and the four artifacts are that
+structure-naming replay, the positional merge and the artifacts are that
 export's, byte for byte, and the folder is exactly as independent of the job
 count as the non-stream export is. The observer is told about the load, the
 resolved target set, every target's *first* result — from the pool's planned
@@ -2402,7 +2402,10 @@ written artifacts. Later decisions about a function (the structure-naming pass,
 the convergence sweeps) are not reported, because the feed is progress, not the
 answer: it is appended to `index.jsonl` in completion order with no `.c` span,
 and the file is replaced at the end by the address-ordered index computed from
-the final results, the one artifact this layout adds. One clock thread publishes
+the final results, the one every non-stream export writes beside its `.c`
+(`crates/unlace-cli/src/project_stream.rs (address_index)`), so a reader finds
+functions by offset whether or not the run streamed; `.streaming` is the one
+file this layout adds. One clock thread publishes
 `.streaming` throughout and the running README until every function is in; a
 lock shared with the move to `finalizing` keeps a late running README from
 landing on top of the export's own. The previous export's `.c`, `.h` and `.asm`

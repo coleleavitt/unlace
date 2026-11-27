@@ -170,3 +170,7 @@ impl Rule for RuleFloatIdentity {
         fold(data, op)
     }
 }
+
+#[cfg(test)]
+#[path = "floatidentity/tests.rs"]
+mod tests;

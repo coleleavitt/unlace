@@ -95,27 +95,12 @@ int cmd_mid(void)
     return memcmp(buf + 4, "abc", 3) == 0;
 }
 
-/* memcmp through a pointer parameter (strncmp would stay a call: the
-   pointee's size is unknown). */
-int is_http(const char *p)
-{
-    return memcmp(p, "HTTP/", 5) == 0;
-}
-
 /* Through a pointer that steps over bytes first, so it is a char pointer. */
 int cmd_part(const char *p)
 {
     while (*p == ' ')
         p++;
     return memcmp(p, "PART", 4) == 0;
-}
-
-/* Through a pointer parameter whose first read is a word: it is typed int *. */
-int line_quit(const char *p, long n)
-{
-    if (n < 5 || p[n - 1] != '\n')
-        return 0;
-    return memcmp(p, "QUIT", 4) == 0;
 }
 
 /* An if-else chain of commands. */

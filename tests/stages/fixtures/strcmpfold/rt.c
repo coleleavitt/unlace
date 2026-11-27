@@ -8,8 +8,8 @@ typedef unsigned long size_t;
 int cmd_sh(void), cmd_ping(void), cmd_privmsg(void), cmd_header(void);
 int cmd_ok(void), cmd_ab(void), cmd_quit(void), cmd_mid(void);
 int cmd_method(void), cmd_order(void), not_gap(void), not_two(void);
-int not_byte(void), cmd_split(void), is_http(const char *), not_int(int);
-int cmd_part(const char *), line_quit(const char *, long);
+int not_byte(void), cmd_split(void), not_int(int);
+int cmd_part(const char *);
 
 static long sys3(long n, long a, long b, long c)
 {
@@ -78,8 +78,8 @@ int main(void)
     int r = cmd_sh() + cmd_ping() + cmd_privmsg() + cmd_header() + cmd_ok() + cmd_ab() +
             cmd_quit() + cmd_mid() + cmd_method() + cmd_order() + not_gap() + not_two() +
             not_byte() + cmd_split();
-    long got = rd(line, sizeof line - 1);
-    return r + is_http(line) + not_int(r) + cmd_part(line) + line_quit(line, got);
+    rd(line, sizeof line - 1);
+    return r + not_int(r) + cmd_part(line);
 }
 
 void _start(void)

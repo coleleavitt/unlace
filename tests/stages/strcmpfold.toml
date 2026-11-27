@@ -14,8 +14,8 @@
 # fixtures/netstruct (gcc -O2 -static -s).
 #
 # Option: strcmpfold. Each pass sets it: on for gcc (#1-#12), clang (#13-#16),
-# AArch64 (#17-#19) and netstruct (#20, #21); off for gcc and netstruct (#22,
-# #23), which print the compares the code makes.
+# AArch64 (#17-#19), netstruct (#20, #21) and the dyn gcc image (#24, #25); off for
+# gcc and netstruct (#22, #23), which print the compares the code makes.
 
 [image]
 arch = 'x86:LE:64:default:gcc'
@@ -65,7 +65,17 @@ commands = [
     'load function cmd_split',
     'decompile',
     'print C',
-    'load function is_http',
+    'clear architecture',
+    'load file tests/stages/fixtures/strcmpfold/strcmpfold-gcc-O2-dyn',
+    'option strcmpfold on',
+    'read symbols',
+    'load function cmd_part',
+    'decompile',
+    'print C',
+    'load function cmd_join',
+    'decompile',
+    'print C',
+    'load function cmd_oper',
     'decompile',
     'print C',
     'clear architecture',
@@ -170,11 +180,11 @@ literal = "if ((v2 != 0x4853) || (v1 = 0, v3 != ' '))"
 [[match]]
 name = 'STRCMPFOLD #11: a struct read through a pointer is not folded'
 count = 1
-literal = "return ((a0->field_0x0 == 0x50545448) && (a0->field_0x4 == '/'));"
+literal = 'a0->field_0x0 == 0x4e494f4a'
 
 [[match]]
 name = 'STRCMPFOLD #12: the folds above are every call the script prints'
-count = 17
+count = 18
 regex = 'strn?cmp\('
 
 [[match]]
@@ -231,3 +241,13 @@ literal = "if ((*(unsigned short *)v2 == 0x4853) && (v2[2] == ' '))"
 name = 'STRCMPFOLD #23: off, netstruct prints the word compare'
 count = 1
 literal = 'return (uint4)(*(unsigned int *)v2 == 0x474e4950) * 2;'
+
+[[match]]
+name = 'STRCMPFOLD #24: a char pointer compare through strlen folds to strncmp'
+count = 1
+literal = 'return (5 <= strlen(a0)) && strncmp(a0 + 1,"OPER",4) == 0;'
+
+[[match]]
+name = 'STRCMPFOLD #25: an int * pointer keeps its word compare, dyn image too'
+count = 1
+literal = 'return (4 <= strlen((char *)a0)) && *a0 == 0x54524150;'

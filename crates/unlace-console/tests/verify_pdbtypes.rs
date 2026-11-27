@@ -1,12 +1,13 @@
 //! End-to-end gate for `pdbtypes` and `pdblines`: a clang-cl `/Od /Z7` x64 PE
 //! whose matching `.pdb` sits beside it. With the options off the functions are
 //! named (the `pdb` pass) but untyped; with `pdbtypes` on, `rect_area` takes its
-//! source parameters and its stack array is `buf`; with `pdblines` on, its body
-//! carries `pdb_types.cpp:N` comments. Fixture recipe: `tests/fixtures/README.md`.
+//! source parameters and its scope holds the stack array `buf` (its stores only
+//! feed its own reads, so the printed C folds them away); with `pdblines` on, its
+//! body carries `pdb_types.cpp:N` comments. Fixture recipe: `tests/fixtures/README.md`.
 
 use std::path::PathBuf;
 
-use unlace_console::engine::bootstrap_from_object;
+use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
@@ -19,7 +20,7 @@ fn repo_root() -> PathBuf {
         .unwrap()
 }
 
-fn decompile(func: &str, options: &[(&str, &str)]) -> String {
+fn program(options: &[(&str, &str)]) -> ConsoleProgram {
     let root = repo_root();
     let spec_roots = vec![root.join("specs").to_str().unwrap().to_string()];
     let path = root
@@ -36,6 +37,11 @@ fn decompile(func: &str, options: &[(&str, &str)]) -> String {
     }
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");
+    prog
+}
+
+fn decompile(func: &str, options: &[(&str, &str)]) -> String {
+    let prog = program(options);
     let cmds: Vec<String> = [
         format!("load function {func}"),
         "decompile".into(),
@@ -66,7 +72,22 @@ fn pdbtypes_names_parameters_and_locals() {
     );
     let on = decompile("rect_area", &[("pdbtypes", "on")]);
     assert!(on.contains("scale"), "on names the parameter, got:\n{on}");
-    assert!(on.contains("buf"), "on names the stack array, got:\n{on}");
+
+    // `sub rsp,0x28` puts `buf[0..3]` at `[rsp+0x0..0xc]`: entry SP - 40.
+    let prog = program(&[("pdbtypes", "on")]);
+    let entry = prog.lookup_symbol("rect_area").expect("rect_area");
+    let locals = prog.dwarf_locals_for(entry.get_offset());
+    let buf = locals
+        .iter()
+        .find(|(name, ..)| name == "buf")
+        .unwrap_or_else(|| panic!("on seeds the stack array, got {locals:?}"));
+    assert_eq!(buf.1.num_elements(), Some(4), "{buf:?}");
+    assert_eq!(buf.1.get_size(), 16, "{buf:?}");
+    assert_eq!(buf.2.get_offset(), (-40i64) as u64, "{buf:?}");
+    assert!(
+        program(&[]).dwarf_locals_for(entry.get_offset()).is_empty(),
+        "off seeds no PDB locals"
+    );
 }
 
 #[test]

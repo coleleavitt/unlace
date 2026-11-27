@@ -36,6 +36,7 @@ MODULE_BAND = {
     "calleesaved": "middle", "coalescecap": "middle",
     "remote_provider": "middle",
     "calloverlap": "middle", "loadguardreads": "middle", "revisitrefine": "middle",
+    "fillrefine": "middle",
 }
 SRC = "crates/unlace-decomp/src"
 # The middle band's own crate (crate-split step 9): same folder layout, scanned with SRC as one tree.

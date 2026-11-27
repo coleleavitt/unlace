@@ -83,13 +83,6 @@
 # Wiring `assignDefaultNames` names it after every other local, so it becomes
 # `v7`, the highest index in the function, as the ordering guarantees.
 #
-# That slot existed only because heritage kept the 16-byte union whole under
-# gcc's `pxor`/`movaps` clear of `ifr` and joined the `ifr_qlen` store to it
-# through a CONCAT. Since `fillrefine` (spec 03, "Frame ranges under a
-# constant fill") the cleared union is refined at `ifr_qlen`, every slot of the
-# frame has a covering high, and the locals are numbered in address order, so
-# #6-#8 now pin that layout; #1 still pins that no placeholder survives.
-#
 # Pass 1 is the default pipeline and asserts the fix.  Pass 2 sets
 # `option dedupvardecls off` to pin that neither witness depends on the P9
 # declaration collapse: this is a P6 naming fix, so the off path renders
@@ -263,16 +256,16 @@ count = 2
 literal = 'v13 = *a1;'
 
 [[match]]
-name = 'undefname #6: the cleared ifreq union is refined at ifr_qlen, its own named local'
+name = 'undefname #6: the ifreq union slot no high covers wholly is named by the wired assignDefaultNames'
 count = 2
-literal = 'unsigned int v3; // esi | stack - 0x38'
+literal = 'char v5 [16]; // stack - 0x38'
 
 [[match]]
-name = 'undefname #7: and the rest of the cleared union is a named char run after it'
+name = 'undefname #7: and it takes the highest index in the function, after every other local'
 count = 2
-literal = 'char v4 [12]; // stack - 0x34'
+literal = 'unsigned long v4; // stack - 0x28'
 
 [[match]]
-name = 'undefname #8: the body writes ifr_qlen through that name, not a CONCAT of the union'
+name = 'undefname #8: the body writes that slot through the same name'
 count = 2
-literal = 'v3 = a1;'
+literal = 'v5 = CONCAT124(v3._0_12_,a1);'

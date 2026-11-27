@@ -434,6 +434,19 @@ whole-range heritage: one a vector is moved through, one covered by a constant
 that is not a fill (a pointer stored over a reused slot), one only narrower
 reads touch (they are `SUBPIECE`s of it and print as partial members), one a
 narrower write reaches before the clear, and every register range.
+The copies of a fill's pieces are inserted in the order of the pieces, each after
+the one before it (`heritage.rs (split_pieces)`); the pieces of other splits keep
+their insertion order. Without that a clear printed its bytes in reverse, `a[0] = 0`
+after `a[7] = 0`.
+
+A range a call sees through memory the printed C does not show is kept whole
+(`fillrefine.rs (call_sees_unnamed)`). That is a stack argument slot of the call
+overlapping the range (the `movq $0x0,(%rsp)` in front of a no-argument call's
+argument), and a pointer into the range passed to a call that names no extent for it:
+no constant argument from the range's size up to 0x1000 (`sendto(fd,&buf,0x28,...)`
+names 40 bytes; a code address is not a size). The printed call then shows the whole
+object, not its first field, so the pieces would be read as separate variables.
+
 
 **Refinement pieces keep the store mark**
 (`crates/unlace-bandb-base/src/p3_dataflow/splitstorekeep.rs

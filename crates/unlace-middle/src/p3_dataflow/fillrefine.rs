@@ -52,6 +52,7 @@
 use std::collections::BTreeMap;
 
 use unlace_base::address::Address;
+use unlace_base::space::VarnodeStorage;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
@@ -97,6 +98,9 @@ pub fn split_fill(
         .iter()
         .any(|&vn| span(vn).is_some_and(|(_, sz)| sz == size as usize))
     {
+        return false;
+    }
+    if call_sees_unnamed(fd, addr, size) {
         return false;
     }
     let mut by_instruction: BTreeMap<u64, Vec<VarnodeId>> = BTreeMap::new();
@@ -145,6 +149,94 @@ pub fn split_fill(
         && fields
             .iter()
             .all(|&field| clears.iter().any(|&clear| comes_before(fd, clear, field)))
+}
+
+/// Whether a call in `fd` sees the stack range `addr..addr+size` through memory
+/// the printed C does not show (unlace `fillrefine`): an outgoing stack argument
+/// that overlaps it, or a pointer into the stack that the call does not name the
+/// extent of (no constant argument from `size` up to 0x1000, so a code address
+/// is no size). Refining either splits what the call reads as one object.
+fn call_sees_unnamed(fd: &Funcdata, addr: &Address, size: int4) -> bool {
+    let Some(space) = addr.get_space() else {
+        return false;
+    };
+    let Some(sp) = fd
+        .get_arch()
+        .manage()
+        .get_stack_space()
+        .and_then(|stack| stack.get_spacebase(0).ok())
+    else {
+        return false;
+    };
+    let lo = addr.get_offset();
+    let hi = lo.wrapping_add(size as u64);
+    let is_constant_size = |vn: VarnodeId| {
+        fd.vbank()
+            .get(vn)
+            .is_some_and(|v| v.is_constant() && (size as uintb..=0x1000).contains(&v.get_offset()))
+    };
+    for op in fd.obank().iter_alive().collect::<Vec<_>>() {
+        let Some(call) = fd.obank().get(op) else {
+            continue;
+        };
+        if !matches!(call.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
+            continue;
+        }
+        let args: Vec<VarnodeId> = (1..).map_while(|i| call.get_in(i)).collect();
+        let named = args.iter().any(|&vn| is_constant_size(vn));
+        for &vn in &args {
+            let Some(v) = fd.vbank().get(vn) else {
+                continue;
+            };
+            if v.get_space().get_index() == space.get_index()
+                && v.get_addr().get_offset() < hi
+                && v.get_addr().get_offset().wrapping_add(v.get_size() as u64) > lo
+            {
+                return true;
+            }
+            if !named && stack_pointer_derived(fd, vn, &sp) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Whether `vn` is the stack pointer plus a constant, through copies and additions.
+fn stack_pointer_derived(fd: &Funcdata, vn: VarnodeId, sp: &VarnodeStorage) -> bool {
+    let mut cur = vn;
+    for _ in 0..8 {
+        let Some(v) = fd.vbank().get(cur) else {
+            return false;
+        };
+        if v.is_constant() {
+            return false;
+        }
+        if v.get_space().get_index() == sp.space.as_ref().map(|s| s.get_index()).unwrap_or(-1)
+            && v.get_addr().get_offset() == sp.offset
+            && v.get_size() as u32 == sp.size
+        {
+            return true;
+        }
+        let Some(op) = v.get_def().and_then(|d| fd.obank().get(d)) else {
+            return false;
+        };
+        cur = match op.code() {
+            OpCode::CPUI_COPY => op.get_in(0),
+            OpCode::CPUI_INT_ADD => match (op.get_in(0), op.get_in(1)) {
+                (Some(a), Some(b)) if fd.vbank().get(b).is_some_and(|x| x.is_constant()) => Some(a),
+                (Some(a), Some(b)) if fd.vbank().get(a).is_some_and(|x| x.is_constant()) => Some(b),
+                (Some(a), _) => Some(a),
+                _ => None,
+            },
+            _ => None,
+        }
+        .unwrap_or(cur);
+        if cur == vn {
+            return false;
+        }
+    }
+    false
 }
 
 /// Whether `first` runs before `second` on every path to it: earlier in the

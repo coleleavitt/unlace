@@ -1,0 +1,253 @@
+# A compare against a short constant string that gcc or clang inlined prints as
+# the call (option strcmpfold). At -O2 an equality-only strncmp/strcmp/memcmp
+# against a constant becomes reads of the buffer compared with immediates:
+# gcc compares the widest pieces first with a branch after each (2 + 1 bytes
+# for "SH ", one word for "PING"), clang xors each load with its constant and
+# ors them into one test (printed as a || of !=), and AArch64 chains the tests
+# with ccmp (a && of ==). fixtures/strcmpfold/strcmpfold.c holds one function
+# per shape plus compares that are not string compares; netstruct's
+# read_command (sub_402c90) is the shape the external feedback reported.
+#
+# Stage model: P9 condition-form (crates/unlace-emit/src/p9_emit/strcmpfold.rs,
+# printc/strcmpprint.rs). Bytes: fixtures/strcmpfold/build.sh (gcc 15.3.0 and
+# clang 22.1.8 -O2 for x86-64, clang for AArch64, static, no libc) and
+# fixtures/netstruct (gcc -O2 -static -s).
+#
+# Option: strcmpfold. Each pass sets it: on for gcc (#1-#12), clang (#13-#16),
+# AArch64 (#17-#19), netstruct (#20, #21) and the dyn gcc image (#24, #25); off for
+# gcc and netstruct (#22, #23), which print the compares the code makes.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/strcmpfold/strcmpfold-gcc-O2',
+    'option strcmpfold on',
+    'read symbols',
+    'load function cmd_sh',
+    'decompile',
+    'print C',
+    'load function cmd_ping',
+    'decompile',
+    'print C',
+    'load function cmd_quit',
+    'decompile',
+    'print C',
+    'load function cmd_method',
+    'decompile',
+    'print C',
+    'load function not_gap',
+    'decompile',
+    'print C',
+    'load function not_int',
+    'decompile',
+    'print C',
+    'load function not_byte',
+    'decompile',
+    'print C',
+    'load function not_two',
+    'decompile',
+    'print C',
+    'load function cmd_order',
+    'decompile',
+    'print C',
+    'load function cmd_split',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/strcmpfold/strcmpfold-gcc-O2-dyn',
+    'option strcmpfold on',
+    'read symbols',
+    'load function cmd_part',
+    'decompile',
+    'print C',
+    'load function cmd_join',
+    'decompile',
+    'print C',
+    'load function cmd_oper',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/strcmpfold/strcmpfold-clang-O2',
+    'option strcmpfold on',
+    'read symbols',
+    'load function cmd_sh',
+    'decompile',
+    'print C',
+    'load function cmd_ok',
+    'decompile',
+    'print C',
+    'load function cmd_mid',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/strcmpfold/strcmpfold-clang-O2-aarch64',
+    'option strcmpfold on',
+    'read symbols',
+    'load function cmd_sh',
+    'decompile',
+    'print C',
+    'load function cmd_ab',
+    'decompile',
+    'print C',
+    'load function cmd_method',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netstruct-gcc-O2',
+    'option strcmpfold on',
+    'read symbols',
+    'load function sub_402c90',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/strcmpfold/strcmpfold-gcc-O2',
+    'option strcmpfold off',
+    'read symbols',
+    'load function cmd_sh',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netstruct-gcc-O2',
+    'option strcmpfold off',
+    'read symbols',
+    'load function sub_402c90',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'STRCMPFOLD #1: gcc 2 + 1 byte branches are one strncmp'
+count = 1
+literal = ['if (strncmp(v2,"SH ",3) == 0)', 'return handle(&v2[3]);']
+
+[[match]]
+name = 'STRCMPFOLD #2: gcc one-word compare as a value is strncmp'
+count = 1
+literal = 'return strncmp(v2,"PING",4) == 0;'
+
+[[match]]
+name = 'STRCMPFOLD #3: an inequality prints != 0'
+count = 1
+literal = 'if (strncmp(v2,"QUIT",4) != 0)'
+
+[[match]]
+name = 'STRCMPFOLD #4: each test of an if-else chain folds on its own'
+count = 1
+literal = ['if (strncmp(v2,"GET ",4) == 0)', '    return 1;', '  if (strncmp(v2,"PUT ",4) == 0)']
+
+[[match]]
+name = 'STRCMPFOLD #5: two bytes with a gap keep their compares'
+count = 1
+literal = "return !(v2[0] != 'S') && v2[2] == ' ';"
+
+[[match]]
+name = 'STRCMPFOLD #6: an int that equals "PING" is not a string'
+count = 1
+literal = 'return a0 == 0x474e4950;'
+
+[[match]]
+name = 'STRCMPFOLD #7: a single byte keeps its compare'
+count = 1
+literal = "return v2[0] == '#';"
+
+[[match]]
+name = 'STRCMPFOLD #8: a run across two buffers folds only the part in one'
+count = 1
+literal = "return (strncmp(v2,\"SH\",2) == 0) && v3[2] == ' ';"
+
+[[match]]
+name = 'STRCMPFOLD #9: an ordered result (byte subtraction) is not folded'
+count = 1
+literal = 'v1 = (uint4)v3[0] - 0x41;'
+
+[[match]]
+name = 'STRCMPFOLD #10: a buffer split into one variable per compare is not folded'
+count = 1
+literal = "if ((v2 != 0x4853) || (v1 = 0, v3 != ' '))"
+
+[[match]]
+name = 'STRCMPFOLD #11: a struct read through a pointer is not folded'
+count = 1
+literal = 'a0->field_0x0 == 0x4e494f4a'
+
+[[match]]
+name = 'STRCMPFOLD #12: the folds above are every call the script prints'
+count = 18
+regex = 'strn?cmp\('
+
+[[match]]
+name = 'STRCMPFOLD #13: clang xor/or reduction (|| of !=) is one strncmp'
+count = 1
+literal = 'if (strncmp(v2,"SH ",3) != 0)'
+
+[[match]]
+name = 'STRCMPFOLD #14: a run ending in its only NUL is strcmp'
+count = 1
+literal = 'return strcmp(v2,"OK") == 0;'
+
+[[match]]
+name = 'STRCMPFOLD #15: a compare inside the buffer starts at &v2[k]'
+count = 1
+literal = "return v3 == 'c' && strncmp(&v2[4],\"ab\",2) == 0;"
+
+[[match]]
+name = 'STRCMPFOLD #16: the clang 4-byte load truncated to 2 bytes folds as 2 bytes'
+count = 0
+literal = '(int2)*(unsigned int *)'
+
+[[match]]
+name = 'STRCMPFOLD #17: AArch64 ccmp chain is one strncmp'
+count = 1
+literal = 'if (strncmp(v1,"SH ",3) != 0)'
+
+[[match]]
+name = 'STRCMPFOLD #18: AArch64 strncmp past the NUL is strcmp'
+count = 1
+literal = 'return strcmp(v1,"AB") == 0;'
+
+[[match]]
+name = 'STRCMPFOLD #19: AArch64 if-else chain'
+count = 1
+literal = "if (strncmp(v1,\"POST\",4) != 0 || v3 != ' ')"
+
+[[match]]
+name = 'STRCMPFOLD #20: netstruct "SH " is one strncmp'
+count = 1
+literal = ['if (strncmp(v2,"SH ",3) == 0)', 'return 1;']
+
+[[match]]
+name = 'STRCMPFOLD #21: netstruct "PING" is strncmp inside the arithmetic'
+count = 1
+literal = 'return (uint4)(strncmp(v2,"PING",4) == 0) * 2;'
+
+[[match]]
+name = 'STRCMPFOLD #22: off, gcc and netstruct print the 2 + 1 byte compares'
+count = 2
+literal = "if ((*(unsigned short *)v2 == 0x4853) && (v2[2] == ' '))"
+
+[[match]]
+name = 'STRCMPFOLD #23: off, netstruct prints the word compare'
+count = 1
+literal = 'return (uint4)(*(unsigned int *)v2 == 0x474e4950) * 2;'
+
+[[match]]
+name = 'STRCMPFOLD #24: a char pointer compare through strlen folds to strncmp'
+count = 1
+literal = 'return (5 <= strlen(a0)) && strncmp(a0 + 1,"OPER",4) == 0;'
+
+[[match]]
+name = 'STRCMPFOLD #25: an int * pointer keeps its word compare, dyn image too'
+count = 1
+literal = 'return (4 <= strlen((char *)a0)) && *a0 == 0x54524150;'

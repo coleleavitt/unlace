@@ -442,6 +442,7 @@ unlace_options! { self, p1;
     "wideconst" => registered!(crate::wideconst::WideConst),
     "evmstorage" => registered!(crate::evmstorage::EvmStorage),
     "selectmul" => registered!(crate::selectmul::SelectMul),
+    "strcmpfold" => registered!(crate::strcmpfold::StrcmpFold),
     "elemptr" => registered!(crate::elemptr::ElemPtr),
     "protoorder" => registered!(crate::protoorder::ProtoOrderMode),
     "calleevote" => registered!(crate::calleevote::CalleeVoteMode),

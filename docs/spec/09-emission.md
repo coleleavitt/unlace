@@ -2651,6 +2651,61 @@ the condition is the strict compare or `!=` of the pair, the operand of a negati
 the first input's boolean. A term in a named variable, a float compare and a single
 product (`a * zext(c)` with no complement) keep the arithmetic.
 
+(unlace `strcmpfold`, default off) A compare against a short constant string that
+the compiler inlined prints as the call it came from
+(`crates/unlace-emit/src/p9_emit/strcmpfold.rs`, `printc/strcmpprint.rs`). When only
+equality is asked and the buffer is known to hold the bytes, gcc's
+`handle_builtin_string_cmp` (`tree-ssa-strlen.cc`) turns `strcmp` and `strncmp` into
+`__builtin_memcmp_eq` over `min(n, strlen + 1)` bytes, and LLVM's `SimplifyLibCalls`
+turns them into `memcmp` over the same count. With a constant count gcc's
+`compare_by_pieces` (`expr.cc`) loads the widest pieces first and branches to one fail
+label after each, letting the last piece overlap the one before on x86; LLVM's
+`ExpandMemCmp` xors each load with its constant and ors the results into one compare
+with zero (two loads to a block on x86-64, all of them on AArch64, whose backend makes
+the test a `ccmp` chain). `strncmp(buf, "SH ", 3) == 0` on a `char buf[64]` printed as
+`(*(unsigned short *)v2 == 0x4853) && (v2[2] == ' ')`, and `strncmp(buf, "PING", 4) == 0`
+as `*(unsigned int *)v2 == 0x474e4950`.
+
+Under C output the tests are looked for in three places: an `INT_EQUAL`, `INT_NOTEQUAL`,
+`BOOL_AND` or `BOOL_OR` at the top of `op_push_ir_inner`; a structured condition block
+(`emit_block_condition`) whose leaves, joined all by `&&` or all by `||`, are basic
+blocks ending in a `CBRANCH`, each after the first printing nothing before its test;
+and a `&&` or `||` of the C syntax tree (`nestedand`, `orexit`, `boolreturn`) over such
+blocks. A test is walked through implied Varnodes only: `BOOL_AND` when every byte must
+hold, `BOOL_OR` when one must not, `BOOL_NEGATE` swapping the two, and at the bottom an
+`INT_EQUAL` or `INT_NOTEQUAL` of a term with a constant. A term is a read of a named
+variable or a `LOAD`, narrowed by `SUBPIECE` or widened by `INT_ZEXT` (whose high bytes
+the constant must leave zero), or, against zero, an `INT_OR` of such reads, each possibly
+`INT_XOR`ed with or `INT_SUB`tracting a constant. A branch counts with the sense it
+prints, its condition negated when the branch prints flipped. A `LOAD`'s address is walked through implied `CAST`, `COPY`,
+constant `PTRADD` and `PTRSUB` and `INT_ADD` of a constant to the pointer it steps from.
+Each read contributes the bytes it must hold, placed by the read's offset inside its
+variable or from its pointer and ordered by the space's endianness.
+
+The bytes fold only as one inlined string compare: every read is of the same variable,
+an array of one-byte elements (`char`, a one-byte integer or `undefined1`: the type each
+read's high carries need not be the declared one), or through the same pointer (one
+variable, or one Varnode when the pointer is an expression) whose type points to bytes,
+to `void` or to an array of bytes, or is an integer used as an address; together they
+cover one run with no gap, inside the array when it is one; where reads overlap they hold the same byte; at least one read is wider
+than a byte, so a test of single bytes is left as written; and every byte is printable
+ASCII, tab, newline or carriage return, except that the last may be NUL. A run whose
+only NUL is its last byte prints `strcmp(base, "text") == 0` without the NUL (gcc and
+LLVM compare `strcmp`'s terminator, and `strncmp`'s when the bound reaches it); any
+other run prints `strncmp(base, "text", n) == 0`, which holds for exactly the same bytes
+as `memcmp` because the text has no NUL. A `||` chain or a negated test prints `!= 0`,
+and a pending negation of the compare (`negatetoken`) swaps the relation. The base is
+the variable's name, or `&name[k]` when the run starts at byte `k`, or the pointer,
+`p + k` when the run starts `k` bytes past it. A part of a chain
+that folds where the whole does not still prints as its own call, which compares the
+same bytes. These keep their compares: a run across two variables (the frame layout
+splits a buffer nothing indexes into one variable per compare), a read through a
+pointer to a struct (a parameter whose reads recovered one, `a0->field_0x0`), an ordered result (gcc
+subtracts byte by byte when the bound is at most 3, `inline_string_cmp`; LLVM
+compares byte-swapped words), the tests after the first in gcc's 0/1 value form, whose
+condition assigns the result between them (`(v2 != 0x4b4f) || (v1 = 0, v3[2])`, of which
+only the first test folds), and 16-byte vector compares.
+
 (unlace `cstringconst`, default on) A pointer-wide constant inside a string-literal
 section prints as the literal there, whatever type it reaches the printer with
 (`crates/unlace-emit/src/p9_emit/cstringconst.rs`). `pushConstant`

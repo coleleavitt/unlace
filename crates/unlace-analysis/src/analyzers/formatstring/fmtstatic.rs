@@ -469,7 +469,7 @@ fn previous_instruction(listing: &Listing, vma: u64) -> Option<u64> {
 pub(super) type Key = (usize, u64, u32);
 
 /// One lifted instruction per address, for the whole pass.
-pub(super) type LiftCache = HashMap<u64, Rc<Lifted>>;
+pub(crate) type LiftCache = HashMap<u64, Rc<Lifted>>;
 
 pub(super) fn key_of(vn: &VarnodeData) -> Option<Key> {
     let space = vn.space.as_ref()?;
@@ -477,11 +477,11 @@ pub(super) fn key_of(vn: &VarnodeData) -> Option<Key> {
 }
 
 /// The p-code of one instruction, captured whole (opcode, output, inputs).
-pub(super) struct Lifted {
-    pub(super) ops: Vec<(OpCode, Option<VarnodeData>, Vec<VarnodeData>)>,
+pub(crate) struct Lifted {
+    pub(crate) ops: Vec<(OpCode, Option<VarnodeData>, Vec<VarnodeData>)>,
     /// Did the decode succeed? A failed one folds to nothing rather than to the
     /// partial op list it emitted.
-    pub(super) ok: bool,
+    pub(crate) ok: bool,
 }
 
 impl PcodeEmit for Lifted {
@@ -534,7 +534,7 @@ fn fold(
 
 /// The p-code of the instruction at `vma`, lifted once per binary: neighbouring
 /// call sites share most of their window.
-pub(super) fn lift(ctx: &AnalysisCtx, vma: u64, lifts: &mut LiftCache) -> Option<Rc<Lifted>> {
+pub(crate) fn lift(ctx: &AnalysisCtx, vma: u64, lifts: &mut LiftCache) -> Option<Rc<Lifted>> {
     if let Some(l) = lifts.get(&vma) {
         return Some(Rc::clone(l));
     }

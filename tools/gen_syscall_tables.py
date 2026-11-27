@@ -2,18 +2,22 @@
 """Generate crates/unlace-middle/src/substrate/syscalltables.rs.
 
 Linux numbers come from the kernel's uapi headers (zig's copy: lib/libc/include/
-{aarch64,arm}-linux-any/asm/unistd*.h), the Darwin BSD numbers from the SYS_* macros of
-IDA 9.5's XNU type library and the Mach traps (with their prototypes) from Hex-Rays ARM's
-svc_codes_t enum, both read out of the IDA 9.5 SQLite dumps. Argument counts come from the
-i386 table in linuxsyscall.rs by name, and from the prototype for a Mach trap.
+{aarch64,arm}-linux-any/asm/unistd*.h), the x86-64 ones from the kernel's
+arch/x86/entry/syscalls/syscall_64.tbl (the common and 64 ABIs), the Darwin BSD numbers
+from the SYS_* macros of IDA 9.5's XNU type library and the Mach traps (with their
+prototypes) from Hex-Rays ARM's svc_codes_t enum, both read out of the IDA 9.5 SQLite dumps.
+Argument counts come from the i386 table in linuxsyscall.rs by name, from the prototype for
+a Mach trap, and for an x86-64 name the i386 table lacks, from the kernel's declaration of
+the table's entry point in include/linux/syscalls.h.
 
-usage: gen_syscall_tables.py ZIG_LIBC_INCLUDE IDA_TILS_SQLITE HEXARM_SQLITE > syscalltables.rs
+usage: gen_syscall_tables.py ZIG_LIBC_INCLUDE IDA_TILS_SQLITE HEXARM_SQLITE LINUX_SRC \
+           > syscalltables.rs
 """
 import re
 import sqlite3
 import sys
 
-inc, tils, hexarm = sys.argv[1:4]
+inc, tils, hexarm, kernel = sys.argv[1:5]
 
 def arities():
     src = open("crates/unlace-lift/src/p2_lift/linuxsyscall.rs").read()
@@ -28,6 +32,23 @@ def linux(path, base_expr):
         if m:
             out[int(m.group(2))] = m.group(1)
     return sorted(out.items())
+
+def x86_64_table(src):
+    out = {}
+    for line in open(f"{src}/arch/x86/entry/syscalls/syscall_64.tbl"):
+        f = line.split()
+        if len(f) >= 3 and not f[0].startswith("#") and f[1] in ("common", "64"):
+            out[int(f[0])] = (f[2], f[3] if len(f) > 3 else None)
+    return sorted(out.items())
+
+def kernel_arities(src):
+    out = {}
+    text = open(f"{src}/include/linux/syscalls.h").read()
+    for m in re.finditer(r"\basmlinkage\s+long\s+sys_(\w+)\s*\(([^)]*)\)", text):
+        params = " ".join(m.group(2).split())
+        n = 0 if params in ("", "void") else params.count(",") + 1
+        out.setdefault(m.group(1), set()).add(n)
+    return {name: n.pop() for name, n in out.items() if len(n) == 1}
 
 def darwin():
     db = sqlite3.connect(f"file:{tils}?mode=ro", uri=True)
@@ -93,5 +114,15 @@ print()
 print("/// Darwin Mach traps (`svc #0x80`, negative number in `x16`).")
 print("pub static MACH_TRAPS: &[(i64, &str, Option<u8>)] = &[")
 for n, name, a in mach():
+    print(row(n, name, a))
+print("];")
+print()
+print("/// Linux x86-64 (`syscall`, number in `rax`).")
+print("pub static LINUX_X86_64: &[(i64, &str, Option<u8>)] = &[")
+DEFINED = kernel_arities(kernel)
+for n, (name, entry) in x86_64_table(kernel):
+    a = ARITY.get(name)
+    if a is None and entry and entry.startswith("sys_"):
+        a = DEFINED.get(entry[4:])
     print(row(n, name, a))
 print("];")

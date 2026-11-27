@@ -7,8 +7,8 @@
 //! imports at which addresses. It interns nothing and types nothing.
 //!
 //! A target is an object format, an operating system, a machine and a C
-//! library. Built-in libraries serve an x86-64 Linux ELF dynamically linked
-//! against glibc or musl, and an x86 or x64 PE (`windows x86`,
+//! library. Built-in libraries serve an x86-64 Linux ELF linked against glibc or
+//! musl, dynamically or statically, and an x86 or x64 PE (`windows x86`,
 //! `windows x86_64`, the Windows API). Every other image is named by its
 //! format and machine ([`any_target`]), which no built-in library matches, so
 //! only a text library of that target or an IDA type library (`.til`), which
@@ -30,14 +30,30 @@ pub struct TypeLibPass;
 
 /// The library target of an x86-64 ELF and whether its C library is glibc, or
 /// `None` when the image names neither glibc nor musl.
-fn target(file: &object::File) -> Option<(&'static str, bool)> {
+///
+/// A static image (static-pie included) names no library. One built for Linux
+/// with no interpreter and no imports is served as glibc when it carries the
+/// `.note.ABI-tag` glibc's start files put in every executable, and as musl
+/// otherwise; only names a signature source gives its functions
+/// (`syscallwrappers`, FLIRT, FID) are typed from it.
+fn target(file: &object::File, bytes: &[u8]) -> Option<(&'static str, bool)> {
     if file.format() != object::BinaryFormat::Elf
         || file.architecture() != object::Architecture::X86_64
     {
         return None;
     }
     let section = |name: &str| file.section_by_name(name).and_then(|s| s.data().ok());
-    let mut names = section(".dynstr")?.split(|b| *b == 0);
+    let static_linux = || {
+        (section(".interp").is_none()
+            && section(".note.android.ident").is_none()
+            && file.imports().is_ok_and(|imports| imports.is_empty())
+            && crate::loader::format::elf_userland::is_linux_image(bytes))
+        .then(|| ("linux x86_64", section(".note.ABI-tag").is_some()))
+    };
+    let Some(dynstr) = section(".dynstr") else {
+        return static_linux();
+    };
+    let mut names = dynstr.split(|b| *b == 0);
     if names
         .clone()
         .any(|s| s == b"libc.so.6" || s.starts_with(b"GLIBC_"))
@@ -45,7 +61,10 @@ fn target(file: &object::File) -> Option<(&'static str, bool)> {
         return Some(("linux x86_64", true));
     }
     let musl_loader = section(".interp").is_some_and(|s| s.windows(8).any(|w| w == b"/ld-musl"));
-    (musl_loader || names.any(|s| s.starts_with(b"libc.musl-"))).then_some(("linux x86_64", false))
+    if musl_loader || names.any(|s| s.starts_with(b"libc.musl-")) {
+        return Some(("linux x86_64", false));
+    }
+    static_linux()
 }
 
 /// The target of an image no built-in library serves: its format and machine.
@@ -228,7 +247,8 @@ impl AnalysisPass for TypeLibPass {
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let mut out = AnalysisOutput::default();
-        let (target, glibc) = target(ctx.file).unwrap_or_else(|| (any_target(ctx.file), false));
+        let (target, glibc) =
+            target(ctx.file, ctx.bytes).unwrap_or_else(|| (any_target(ctx.file), false));
         let Some(image) = ctx.image else {
             return out;
         };

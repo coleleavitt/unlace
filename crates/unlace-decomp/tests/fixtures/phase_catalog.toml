@@ -5438,6 +5438,25 @@ tier = "analysis"
 symptoms = ["a stripped static binary lists libc functions as sub_<addr>", "unlace cannot use flirt .sig signatures", "memcpy and printf in a static binary have no names"]
 
 [[option]]
+option = "syscallwrappers"
+values = ["on", "off"]
+default = "on"
+destructive_as_default = false
+phase = "P1"
+subphase = "external-refinement"
+strength = "HARD"
+rewind = "P1"
+issue = "unlace-syscall-wrappers"
+summary = "Name the system-call wrappers of a stripped static x86-64 Linux image by the call they make, so the libc prototype tables and the type library type their callers. A Listing consumer: from each unnamed function of at most 64 instructions that can reach a `syscall` instruction within three call or jump edges, the lifted p-code is walked through calls, returns and tail jumps (up to three frames, both ways at every branch) tracking constants, the function's own parameters and stack slots. Every `syscall` reached must load one constant number from the Linux x86-64 table, and pass the function's own parameters in the call's own positions, or fit a libc form whose parameters differ (`recv`/`send` as `recvfrom`/`sendto` with no address, glibc `open` as `openat(AT_FDCWD, ...)`, the `va_arg` mode of `open`/`openat` and third argument of `fcntl`/`ioctl`). That covers glibc's direct `mov eax,NR; syscall` wrappers, glibc 2.41+'s `push NR; call __syscall_cancel` and musl's `mov edi,NR; call __syscall_cp`. A forwarder to another wrapper of the same name is not named, and of two wrappers of one name the one that calls out first keeps it while the direct one is named `__N_nocancel` (glibc's non-cancellable twin); any other collision names neither. Names are signature renames: they replace only placeholders."
+use_when = "On by default; a no-op unless the Listing is built (the decompiling CLI surfaces build it) and the image is an x86-64 Linux ELF. Flip off when a stripped static image's sub_<addr> placeholders should stay unnamed, or to compare against the unnamed calls."
+example = "option syscallwrappers off"
+source_decompiler = "unlace"
+inspiration = "netstruct feedback (notes/netstruct-gaps.md): IDA 9.x glibc_amd64.sig names none of glibc 2.41+'s __syscall_cancel wrappers; Hex-Rays names system calls at the instruction (linux_syscall), not their libc wrappers"
+change_kind = "analysis-enablement"
+tier = "analysis"
+symptoms = ["a stripped static binary calls sub_<addr>(fd,buf,len,0) where the source called recv or send", "socket, connect, sendto or close in a static glibc or musl binary have no names", "a buffer passed to send in a stripped static binary is typed unsigned short[] or int[] instead of char[]", "flirt glibc_amd64.sig names none of the syscall wrappers of a glibc 2.41 or later static binary"]
+
+[[option]]
 option = "flirttil"
 values = ["on", "off"]
 default = "off"

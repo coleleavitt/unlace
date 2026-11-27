@@ -955,6 +955,10 @@ Three tiers:
 | a stripped static binary lists libc functions as sub_<addr> | [`flirt`](#flirt----on--off-default-off) |
 | unlace cannot use flirt .sig signatures | [`flirt`](#flirt----on--off-default-off) |
 | memcpy and printf in a static binary have no names | [`flirt`](#flirt----on--off-default-off) |
+| a stripped static binary calls sub_<addr>(fd,buf,len,0) where the source called recv or send | [`syscallwrappers`](#syscallwrappers----on--off-default-on) |
+| socket, connect, sendto or close in a static glibc or musl binary have no names | [`syscallwrappers`](#syscallwrappers----on--off-default-on) |
+| a buffer passed to send in a stripped static binary is typed unsigned short[] or int[] instead of char[] | [`syscallwrappers`](#syscallwrappers----on--off-default-on) |
+| flirt glibc_amd64.sig names none of the syscall wrappers of a glibc 2.41 or later static binary | [`syscallwrappers`](#syscallwrappers----on--off-default-on) |
 | a FLIRT-named library function has no prototype although its type library exists | [`flirttil`](#flirttil----on--off-default-off) |
 | a libc function named through FLIRT prints untyped arguments and raw record offsets | [`flirttil`](#flirttil----on--off-default-off) |
 | an ids file beside a signature names a type library that never loads | [`flirttil`](#flirttil----on--off-default-off) |
@@ -3706,6 +3710,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** Off (default). Flip on with listing on and UNLACE_FLIRT_SIGS pointing at .sig files (for example IDA's sig/pc/glibc_amd64.sig for a static x86-64 glibc binary) when a stripped statically linked binary shows hundreds of sub_ functions that are library code.
 - **Where / provenance:** P1/external-refinement · unlace · analysis-enablement · unlace-flirt
 - **Example:** `UNLACE_FLIRT_SIGS=$IDADIR/sig/pc/glibc_amd64.sig unlace functions ./static-stripped --option listing on --option flirt on`
+
+### `syscallwrappers` -- on | off, default `on`
+
+- **Symptoms:** a stripped static binary calls sub_<addr>(fd,buf,len,0) where the source called recv or send; socket, connect, sendto or close in a static glibc or musl binary have no names; a buffer passed to send in a stripped static binary is typed unsigned short[] or int[] instead of char[]; flirt glibc_amd64.sig names none of the syscall wrappers of a glibc 2.41 or later static binary.
+- **What it does:** Name the system-call wrappers of a stripped static x86-64 Linux image by the call they make, so the libc prototype tables and the type library type their callers. A Listing consumer: from each unnamed function of at most 64 instructions that can reach a `syscall` instruction within three call or jump edges, the lifted p-code is walked through calls, returns and tail jumps (up to three frames, both ways at every branch) tracking constants, the function's own parameters and stack slots. Every `syscall` reached must load one constant number from the Linux x86-64 table, and pass the function's own parameters in the call's own positions, or fit a libc form whose parameters differ (`recv`/`send` as `recvfrom`/`sendto` with no address, glibc `open` as `openat(AT_FDCWD, ...)`, the `va_arg` mode of `open`/`openat` and third argument of `fcntl`/`ioctl`). That covers glibc's direct `mov eax,NR; syscall` wrappers, glibc 2.41+'s `push NR; call __syscall_cancel` and musl's `mov edi,NR; call __syscall_cp`. A forwarder to another wrapper of the same name is not named, and of two wrappers of one name the one that calls out first keeps it while the direct one is named `__N_nocancel` (glibc's non-cancellable twin); any other collision names neither. Names are signature renames: they replace only placeholders.
+- **When to flip:** On by default; a no-op unless the Listing is built (the decompiling CLI surfaces build it) and the image is an x86-64 Linux ELF. Flip off when a stripped static image's sub_<addr> placeholders should stay unnamed, or to compare against the unnamed calls.
+- **Where / provenance:** P1/external-refinement · unlace · analysis-enablement · unlace-syscall-wrappers
+- **Example:** `option syscallwrappers off`
 
 ### `flirttil` -- on | off, default `off`
 

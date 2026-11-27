@@ -599,6 +599,16 @@ crate::unlace_flag!(
 );
 
 crate::unlace_flag!(
+    /// (unlace `syscallwrappers`) Name the system-call wrappers of a stripped static
+    /// x86-64 Linux image by the call they make (a Listing consumer); default **on**.
+    SyscallWrappers,
+    "syscallwrappers",
+    "x86-64 system-call wrapper names",
+    unset: false,
+    shipped: true
+);
+
+crate::unlace_flag!(
     /// (unlace) Gate the MSVC RTTI / vftable recovery pass (`rtti`); default **off**.
     /// The unlace analog of Ghidra's `RttiAnalyzer` (a Microsoft-PE analyzer): on a
     /// Windows PE it parses the `CompleteObjectLocator` → RTTI3/2/1 → RTTI0 graph in

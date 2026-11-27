@@ -92,6 +92,11 @@ unlace_options! { self, p1;
         self.print_mut().options.set_warn_inline(val);
         Ok(msg)
     },
+    "warnlevel" => {
+        let (caveats, msg) = crate::warnlevel::OptionWarnLevel.apply(p1)?;
+        self.print_mut().options.warn_caveats = caveats;
+        Ok(msg)
+    },
     "partialaccess" => {
         let value = on_or_off(p1)?;
         self.print_mut().options.partial_access = value;
@@ -438,6 +443,7 @@ unlace_options! { self, p1;
     "wideconst" => registered!(crate::wideconst::WideConst),
     "evmstorage" => registered!(crate::evmstorage::EvmStorage),
     "selectmul" => registered!(crate::selectmul::SelectMul),
+    "strcmpfold" => registered!(crate::strcmpfold::StrcmpFold),
     "elemptr" => registered!(crate::elemptr::ElemPtr),
     "protoorder" => registered!(crate::protoorder::ProtoOrderMode),
     "calleevote" => registered!(crate::calleevote::CalleeVoteMode),

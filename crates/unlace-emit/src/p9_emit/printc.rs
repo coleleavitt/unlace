@@ -475,6 +475,10 @@ pub struct PrintCOptions {
     /// statement they describe instead of full `/* WARNING: ... */` banner
     /// lines (DIV-39, `option warnstyle inline|banner`).
     pub warn_inline: bool,
+    /// (unlace) Only caveats print: narration of readability rewrites and the
+    /// warnings a statement already states are left out (`option warnlevel
+    /// caveats|all`, [`crate::warnlevel`]).
+    pub warn_caveats: bool,
     /// Render unconditional C loops with the condition at the top.
     pub inf_loop_top: bool,
     /// Render supported mapped byte-array transfers with standard C helpers.
@@ -532,7 +536,8 @@ impl PrintCOptions {
             truthy_cond: true,    // (unlace) DIV-37; no upstream equivalent
             brace_elide: true,    // (unlace) DIV-38; no upstream equivalent
             inf_loop_top: true,
-            warn_inline: true, // (unlace) DIV-39; no upstream equivalent
+            warn_inline: true,   // (unlace) DIV-39; no upstream equivalent
+            warn_caveats: false, // (unlace) opt-in; no upstream equivalent
             bytearray_c: false,
             partial_access: true, // (unlace) `option partialaccess off` restores `name._<off>_<size>_`
             header_carries_types: false,
@@ -3691,6 +3696,9 @@ impl PrintC {
             );
         }
         for text in headers {
+            if self.options.warn_caveats && crate::warnlevel::elided(fd, &text, func_addr, true) {
+                continue;
+            }
             // (unlace warnstyle, DIV-39) Inline mode: header warnings collect as
             // slugs and flush at the end of the prototype line.
             let warning = crate::functionwarnings::Warning::new(Some(off), &text);
@@ -5198,6 +5206,10 @@ impl PrintC {
         if self.context.is_set(modifiers::ONLY_BRANCH)
             || self.context.is_set(modifiers::COMMA_SEPARATE)
         {
+            if let Some((fold, equal, op)) = self.strcmp_block_fold(fd, arch, blk) {
+                self.emit_strcmp_condition(fd, arch, &fold, equal, op);
+                return;
+            }
             let b1 = fd.sblocks_ref().block(blk).get_block(1);
             let opc = fd
                 .sblocks_ref()
@@ -5325,6 +5337,10 @@ impl PrintC {
                 self.emit_return_expr(fd, arch, no, value);
             }
             ExprKind::And(left, right) | ExprKind::Or(left, right) => {
+                if let Some((fold, equal, op)) = self.strcmp_expr_fold(fd, arch, expr) {
+                    self.emit_strcmp_condition(fd, arch, &fold, equal, op);
+                    return;
+                }
                 let and = matches!(kind, ExprKind::And(..));
                 self.emit_return_operand(fd, arch, left, and);
                 let text = self.op_spelling(if and {
@@ -5415,6 +5431,10 @@ impl PrintC {
             Some(tree) => tree.expr(expr).kind.clone(),
             None => return,
         };
+        if let Some((fold, equal, op)) = self.strcmp_expr_fold(fd, arch, expr) {
+            self.emit_strcmp_condition(fd, arch, &fold, equal, op);
+            return;
+        }
         let is_or = matches!(kind, ExprKind::Or(..));
         match kind {
             ExprKind::Branch(block) => self.emit_block(fd, arch, block),
@@ -5665,6 +5685,13 @@ impl PrintC {
             // (unlace warnstyle, DIV-39) Inline mode: a WARNING comment becomes a
             // terse `// slug` collected for the owning line's end; every other
             // comment type keeps the banner-line render.
+            if self.options.warn_caveats
+                && (tp & ct::WARNING) != 0
+                && crate::warnlevel::elided(fd, &String::from_utf8_lossy(&text), &addr, false)
+            {
+                self.commsorter.mark_last_emitted();
+                continue;
+            }
             if self.options.warn_inline && (tp & ct::WARNING) != 0 {
                 if let (Some(space), text_str) = (
                     addr.get_space().map(std::rc::Rc::clone),
@@ -6584,11 +6611,20 @@ impl PrintC {
         // exactly as the real statement walk does before its has_next loop.
         self.commsorter.setup_op_list(None);
         while self.commsorter.has_next() {
-            let (emitted, tp) = {
+            let (emitted, tp, elided) = {
                 let c = self.commsorter.get_next();
-                (c.is_emitted(), c.get_type())
+                let tp = c.get_type();
+                let elided = self.options.warn_caveats
+                    && (tp & crate::comment::comment_type::WARNING) != 0
+                    && crate::warnlevel::elided(
+                        fd,
+                        &String::from_utf8_lossy(c.get_text()),
+                        c.get_addr(),
+                        false,
+                    );
+                (c.is_emitted(), tp, elided)
             };
-            if emitted {
+            if emitted || elided {
                 continue;
             }
             let inline_ok =
@@ -8419,6 +8455,22 @@ impl PrintC {
                     crate::printlanguage::SyntaxHighlight::const_color,
                     op_key(op),
                 ));
+                return;
+            }
+        }
+        if matches!(
+            opc,
+            OpCode::CPUI_INT_EQUAL
+                | OpCode::CPUI_INT_NOTEQUAL
+                | OpCode::CPUI_BOOL_AND
+                | OpCode::CPUI_BOOL_OR
+        ) {
+            if let Some((fold, equal)) = self.strcmp_op_fold(fd, arch, op) {
+                let negated = self.context.is_set(modifiers::NEGATETOKEN);
+                if negated {
+                    self.context.unset_mod(modifiers::NEGATETOKEN);
+                }
+                self.push_strcmp_fold(fd, arch, &fold, equal != negated, op);
                 return;
             }
         }
@@ -18359,6 +18411,7 @@ mod ctreeprint;
 mod ctreerecord;
 mod javasyncprint;
 mod javatryprint;
+mod strcmpprint;
 
 #[path = "rustarrayinit.rs"]
 mod rustarrayinit;

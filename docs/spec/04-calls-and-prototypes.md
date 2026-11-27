@@ -316,12 +316,13 @@ pointer past the return-address pop; `EXTRAPOP_UNKNOWN = 0x8000` means
 likely-trash and internal-storage register lists, the local/parameter stack
 ranges, and optional entry/return p-code injections. Models are decoded from
 the compiler spec at engine build: `crates/unlace-middle/src/infra/architecture.rs
-(decode_default_proto, decode_pentry_list, decode_effect_block)` parses the
+(decode_default_proto, decode_pentry_list, decode_effect_block,
+decode_storage_list)` parses the
 cspec's `<default_proto><prototype>` — its `<pentry>`/`<group>` storage
 entries, `<rule>` model rules, a synthetic pointer-conversion rule when the
-list carries a `pointermax` attribute, and the
-`<unaffected>`/`<killedbycall>`/`<returnaddress>`/`<internal_storage>` effect
-blocks — and registers the result as the default model
+list carries a `pointermax` attribute, the
+`<unaffected>`/`<killedbycall>`/`<returnaddress>` effect blocks, and the
+`<internal_storage>` and `<likelytrash>` register lists — and registers the result as the default model
 (`Architecture::register_model`).
 
 Compiler-spec prototype p-code is registered before snippet compilation by
@@ -4307,18 +4308,27 @@ enables the INDIRECT-propagating variant, `crates/unlace-middle/src/infra/action
 (ActionUnjustifiedParams)`, the fullloop-tail repair that re-justifies an
 input recovered off-center in its containing entry.
 
-### `ActionLikelyTrash` — registers the call clobbers (protorecovery)
+### `ActionLikelyTrash` — registers whose entry value is garbage (protorecovery)
 
-`ActionLikelyTrash` (`coreaction_render.rs`, C++ `coreaction.cc:2198`, group `protorecovery`, flags `0`, no option) walks the
-prototype's likely-trash list (`FuncProto::trash_list`, the registers the calling convention declares a call may clobber). For each entry it finds the covering input Varnode with `find_covered_input`, skips it when it is
-type- or name-locked, and runs `trace_trash` over its descendants. The trace follows SUBPIECE and MULTIEQUAL/PIECE
-outputs, and INDIRECT outputs that are not indirect stores, and accepts only routes that stay trash: an INT_AND whose constant is an
-all-ones mask above a 1-, 2- or 4-byte boundary (it clears the low bytes, a sub-register truncation), or an INDIRECT. Persistent outputs, any other reader,
-and a MULTIEQUAL/PIECE whose inputs are not all marked, end the trace as not-trash. When the whole trace is trash, each INDIRECT
-reader has its in0 replaced by a zero constant and is marked for indirect creation (`mark_indirect_creation(op, false)`), and each
-INT_AND reader has its mask input replaced by zero, so the call's clobbered register no longer reaches the rest of the function.
-Each rewritten op counts as one change. This changes decompiled output for any function where a clobbered register that a call
-overwrites is read only through such a path.
+`ActionLikelyTrash` (`coreaction_render.rs`, C++ `coreaction.cc:2198`, group `protorecovery`, flags `0`, no option) removes
+the entry value of a register the calling convention lists as likely trash: a register a function reads on entry only
+because its code keeps bytes of it around, not because the caller passed a value. The list is the prototype model's
+`<likelytrash>` block (x86gcc: EAX; x86win: ECX; DSP56300: its address, offset and flag registers), decoded into
+`ProtoModel::likelytrash` with the model; `FuncProto::trash_list` returns the prototype's own override, else the model's
+list, else nothing. For each entry the action finds the input Varnode the entry covers (`find_covered_input`), skips it
+when it is type- or name-locked, and runs `trace_trash` forward from it. The trace follows SUBPIECE outputs, the outputs
+of INDIRECTs that are indirect stores, and the outputs of MULTIEQUAL/PIECE ops whose every input is already marked
+(directly, or up a chain of INDIRECTs). It collects the absorbing reads: an INDIRECT that is not an indirect store, and
+an INT_AND whose constant keeps only the bytes above a 1-, 2- or 4-byte boundary (it discards the low bytes the
+function wrote). A persistent output, any other reader (a COPY into a returned value, an arithmetic op), or a
+MULTIEQUAL/PIECE left with an unmarked input ends the trace as not trash. When the whole trace stays trash, each
+collected INDIRECT gets a zero constant as in0 and is marked as an indirect creation (`mark_indirect_creation(op,
+false)`), so the call produces the value, and each collected INT_AND gets zero as its mask; the register's entry
+value then reaches nothing and no longer reads as an input parameter. Each rewritten op counts as one change. The
+common cases are the MSVC `push ecx` (and gcc `push eax`) that reserves a local whose address a call fills, which
+would otherwise print as the local seeded from a register parameter, and a write of a register's low bytes that
+keeps its upper bytes (`and eax, 0xffffff00`), which would otherwise make the register a parameter
+(`tests/stages/likelytrash.toml`, `tests/stages/likelytrash-msvc.toml`).
 
 ## 4.3 Call-site ops
 

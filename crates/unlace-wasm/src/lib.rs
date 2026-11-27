@@ -35,8 +35,8 @@ mod json;
 use unlace_console::assertions::{Directive, Outcome};
 use unlace_console::engine::{ConsoleProgram, EntrySelector, FunctionEntry};
 use unlace_console::project::{
-    DecompileOptions, FAST_WHOLE_BINARY_FN_BUDGET_SECONDS, FuncResult, build_asm, build_c,
-    build_header, build_readme, collect_dat_addrs, decompile_export_targets,
+    DecompileOptions, FAST_WHOLE_BINARY_FN_BUDGET_SECONDS, FuncResult, ReadmeLayout, build_asm,
+    build_c, build_header, build_readme, collect_dat_addrs, decompile_export_targets,
     decompile_targets_with,
 };
 use unlace_decomp::decompile_drive::{print_c_recompile_prelude, print_c_types};
@@ -529,6 +529,7 @@ fn project(binary: &str, prog: &mut ConsoleProgram, display: &str) -> Result<Str
         display,
         prog,
         &results,
+        ReadmeLayout::Document,
     );
 
     let ok = results.iter().filter(|r| r.error.is_none()).count();

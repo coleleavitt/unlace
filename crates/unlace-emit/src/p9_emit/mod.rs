@@ -132,6 +132,7 @@ pub mod typeround; // (unlace) the declared-signedness rounding decision
 pub mod typeshadow; // (unlace) the signedness vote re-derived as a constraint solve, measured not applied
 pub mod unknowncasts;
 pub mod unsignedread; // (unlace) an unsigned read of an expression C evaluates as signed casts it
+pub mod warnlevel;
 pub mod warnstyle;
 pub mod widelocal;
 
@@ -149,6 +150,7 @@ pub mod evmstorage;
 pub mod fidproto; // (unlace) the prototype a .fid record carries, and its check against the body
 pub mod reglocals;
 pub mod selectmul; // (unlace `selectmul`) a*zext(c) + b*zext(!c) prints as c ? a : b
+pub mod strcmpfold; // (unlace `strcmpfold`) an inlined compare against a constant string prints as strncmp
 pub mod wideconst; // (unlace `wideconst`) a constant wider than 64 bits prints as one literal
 
 pub mod widenedadd;

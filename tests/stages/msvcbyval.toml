@@ -107,7 +107,7 @@ commands = [
 [[match]]
 name = "MSVCBYVAL #1: only shift8's declined call keeps MakeStack's hidden return pointer alone"
 count = 1
-literal = 'MakeStack(a1);'
+literal = ['Arr::Arr((Arr *)v1,a1);', 'MakeStack(a0);']
 
 [[match]]
 name = 'MSVCBYVAL #2: the reserving push of ecx is never read as a parameter of Build'
@@ -147,12 +147,12 @@ literal = 'Pair::Pair((Pair *)&v1,a0);'
 [[match]]
 name = 'MSVCBYVAL #9: a deferred pop in the cleanup is declined'
 count = 1
-literal = 'MakeStack(a0);'
+literal = ['Arr::Arr((Arr *)&v2,a1);', 'MakeStack(a0);']
 
 [[match]]
 name = 'MSVCBYVAL #10: a local released by the cleanup is declined'
 count = 1
-literal = 'MakeStack((Arr *)&v2);'
+literal = 'MakeStack((Arr *)v2);'
 
 [[match]]
 name = 'MSVCBYVAL #11: the reserving push of ecx is never read as a parameter of Fresh'
@@ -187,7 +187,7 @@ literal = 'Take4(5,v1);'
 [[match]]
 name = 'MSVCBYVAL #17: dead reserving pushes above the arguments leave shift8 declined'
 count = 1
-literal = 'void sub_4011e0(unsigned int a0,Arr *a1,Arr *a2,unsigned int a3)'
+literal = 'void sub_4011e0(Arr *a0,Arr *a1,unsigned int a2)'
 
 [[match]]
 name = 'MSVCBYVAL #18: a 6-byte class padded to 8 by sub esp,8 is still sized (Put)'
@@ -197,7 +197,7 @@ literal = 'Put(v1,v2);'
 [[match]]
 name = 'MSVCBYVAL #19: a local whose address is taken and that the cleanup releases is declined (podfold)'
 count = 1
-literal = 'Take(*a1,a1[1],v1);'
+literal = 'Take(*a0,a0[1],v1);'
 
 [[match]]
 name = 'MSVCBYVAL #20: a cleanup split over two add esp is declined'

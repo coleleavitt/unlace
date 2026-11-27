@@ -12,6 +12,11 @@
 # into a symbol reference and prints as the raw literal.  Stage model: S5 sub-stage
 # const-pointer ("is this constant an address?"); unlace_inferfuncentry.rs (always on)
 # skips the rejection for a constant that resolves exactly to a function entry.
+#
+# The script runs with option irverify on (GH-1561): rule subvar_compzero
+# narrows a one-bit test into a COPY of a new BOOL_NEGATE, which a later rule
+# of the same pool folds into a BOOL_OR; SubvariableFlow once inserted it
+# after that COPY in the same block, and irverify named oppool1 (GH6930 #3).
 
 [image]
 arch = 'x86:LE:64:default:gcc'
@@ -97,6 +102,7 @@ hex = 'f30f1efac3'
 
 [script]
 commands = [
+    'option irverify on',
     'lo fu evhttp_send_reply_chunk_with_cb',
     'decompile',
     'print C',
@@ -112,3 +118,8 @@ literal = 'bufferevent_setcb(*(unsigned long *)(v2 + 0x10),0,0x100000,evhttp_err
 name = 'GH6930 #2: 0x100000 resolves to its function name'
 count = 1
 literal = 'bufferevent_setcb(*(unsigned long *)(v2 + 0x10),0,evhttp_write_cb,evhttp_error_cb,v2)'
+
+[[match]]
+name = 'GH6930 #3: no pass leaves the folded BOOL_OR read ahead of its definition (irverify, GH-1561)'
+count = 0
+literal = 'irverify:'

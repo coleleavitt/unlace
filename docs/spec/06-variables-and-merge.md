@@ -1543,6 +1543,15 @@ mechanism (`crates/unlace-middle/src/p6_variables/varmap.rs
 (ScopeLocal::mark_not_mapped)`) later excludes an unaliased return-value
 staging slot (`funcdata_spacebase.rs (Funcdata::check_unaliased_return)`).
 
+**Saved slots that escape.** A saved-register COPY does not mark its slot not-mapped when a
+direct pointer lands inside it. A direct pointer is a stack-pointer-derived value with a constant
+offset and no variable index (`Funcdata::direct_alias_offsets`, `slot_holds_direct_alias`).
+Compilers that allocate a local by pushing a register (`push {r7,lr}`) pass the address of that
+slot to a callee, so the slot holds a variable and stays mapped. A pointer built with a variable
+index (an array access) does not count. The change renames what prints for such slots and is not
+an option: the old exclusion let a callee write through the pointer while the caller still
+propagated the old value across the call.
+
 `savedregisterspills.rs (ActionRestrictLocalSavedLanes)` handles the
 split-lane case the exact-width pass cannot see: SLEIGH may represent a
 16-byte unaffected register effect, such as Win64 XMM6, as several smaller

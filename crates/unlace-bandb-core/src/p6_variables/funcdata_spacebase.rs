@@ -71,6 +71,17 @@ pub trait FuncdataSpacebaseExt {
     ) -> bool;
 }
 
+/// Whether a sorted list of direct alias offsets has one inside `[off, off + size)`
+/// (C++ `ActionRestrictLocal::isSaveSlotAliased`).
+fn slot_holds_direct_alias(aliases: &[uintb], off: uintb, size: int4) -> bool {
+    let last = off.wrapping_add(size as uintb).wrapping_sub(1);
+    if last < off {
+        return false;
+    }
+    let i = aliases.partition_point(|&a| a < off);
+    i < aliases.len() && aliases[i] <= last
+}
+
 /// [`Funcdata`] methods for stack and spacebase recovery private to this module.
 trait FuncdataSpacebaseLocalExt {
     fn record_frame_layout_pass(&self, space: &Rc<unlace_base::space::AddrSpace>);
@@ -81,6 +92,7 @@ trait FuncdataSpacebaseLocalExt {
         state: &mut crate::varmap::MapState,
     );
     fn is_read_active(&self, vn: VarnodeId) -> bool;
+    fn direct_alias_offsets(&self, space: &Rc<unlace_base::space::AddrSpace>) -> Vec<uintb>;
     fn gather_open(
         &mut self,
         space: &Rc<unlace_base::space::AddrSpace>,
@@ -587,6 +599,13 @@ impl FuncdataSpacebaseExt for Funcdata {
                 }
                 outs.push((ospace, ov.get_offset(), ov.get_size()));
             }
+            let outs: Vec<_> = outs
+                .into_iter()
+                .filter(|(ospace, ooff, osize)| {
+                    let aliases = self.direct_alias_offsets(ospace);
+                    !slot_holds_direct_alias(&aliases, *ooff, *osize)
+                })
+                .collect();
             if let Some(lm) = self.get_scope_local_mut() {
                 for (ospace, ooff, osize) in outs {
                     // markNotMapped(outvn->getSpace(),getOffset(),getSize(),false);
@@ -1072,6 +1091,27 @@ impl FuncdataSpacebaseExt for Funcdata {
 }
 
 impl FuncdataSpacebaseLocalExt for Funcdata {
+    /// Sorted offsets of the pointers into `space` that are a constant offset from
+    /// the base register, without a variable index (C++ `ActionRestrictLocal::collectDirectAlias`).
+    fn direct_alias_offsets(&self, space: &Rc<unlace_base::space::AddrSpace>) -> Vec<uintb> {
+        let bounds = proto_boundaries(self.get_func_proto());
+        let mut checker = crate::varmap::AliasChecker::new();
+        let mut access = FuncdataAliasAccess {
+            fd: self,
+            exempt_scramble: false,
+        };
+        checker.gather(Rc::clone(space), bounds.as_ref(), false, &mut access);
+        let mut alias: Vec<uintb> = checker
+            .get_add_base()
+            .iter()
+            .zip(checker.get_alias())
+            .filter(|(ab, _)| ab.index.is_none())
+            .map(|(_, &offset)| offset)
+            .collect();
+        alias.sort_unstable();
+        alias
+    }
+
     /// (unlace `framelayout`) Snapshot the NO_CATEGORY stack Symbols this pass
     /// recovered into the `Funcdata`'s frame-slot union.
     fn record_frame_layout_pass(&self, space: &Rc<unlace_base::space::AddrSpace>) {

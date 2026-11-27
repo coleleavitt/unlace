@@ -54,7 +54,7 @@ commands = [
 [[match]]
 name = 'spphistack aarch64 #1: off, the walk is named after the stack pointer'
 count = 1
-literal = 'v4 = (int4 *)Register00000008;'
+literal = 'v5 = (int4 *)Register00000008;'
 
 [[match]]
 name = 'spphistack aarch64 #2: only the off pass names the stack pointer storage'
@@ -64,4 +64,4 @@ literal = 'Register000'
 [[match]]
 name = 'spphistack aarch64 #3: on, the walk starts at a stack reference'
 count = 1
-literal = 'v4 = (int4 *)(unsigned long)&Stack0000000000000000;'
+literal = 'v5 = (int4 *)(unsigned long)&Stack0000000000000000;'

@@ -93,4 +93,4 @@ literal = '_0_16_ + 0xc'
 [[match]]
 name = 'constspaceload #5: the buffer still escapes to the callee'
 count = 1
-regex = 'sink\(&v[0-9]+,&Stackfffffff8\);'
+regex = 'sink\(&v[0-9]+,v1\);'

@@ -95,7 +95,7 @@ literal = '(*dat_403008)(a0);'
 [[match]]
 name = 'STACKCOOKIE #4: the epilogue check still receives the cookie in ECX'
 count = 1
-regex = 'sub_4010f0\(v[0-9]+ \^ \(uint4\)&Stack'
+regex = 'sub_4010f0\(v1 \^ \(uint4\)v2\);'
 
 [[match]]
 name = "STACKCOOKIE #5: without an SEH frame a pushed key ^ esp is the call's argument"
@@ -130,4 +130,4 @@ literal = '= (*dat_403028)(dat_403021 ^ (uint4)&Stackffffffe8,7);'
 [[match]]
 name = 'STACKCOOKIE #11: key ^ ebp pushed under an EBP SEH frame is an argument'
 count = 1
-literal = '= (*dat_403004)(dat_403021 ^ (uint4)&Stackfffffffc);'
+literal = '= (*dat_403004)(dat_403021 ^ (uint4)v1);'

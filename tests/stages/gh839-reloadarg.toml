@@ -192,7 +192,7 @@ literal = '__printf_chk(1,"%d %p\n",a0,v1);'
 [[match]]
 name = 'GH839 #9: fa3 passes both frame addresses and the return address'
 count = 1
-literal = 'use3(&Stackfffffffffffffff8,v1,v2);'
+literal = 'use3(v1,v2,v3);'
 
 [[match]]
 name = 'GH839 #10: f1 and f4 keep the junk rdx below the real rcx'

@@ -71,4 +71,4 @@ literal = 'printf("%d %p\n",a0,v1);'
 [[match]]
 name = 'GH839-A64 #3: fa3 passes the saved frame pointer'
 count = 1
-literal = 'use3(&Stackfffffffffffffff0,v1);'
+literal = 'use3(v1,v2);'

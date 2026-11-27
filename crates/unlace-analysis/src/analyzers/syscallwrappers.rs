@@ -60,9 +60,9 @@
 //!
 //! Only a function the image left unnamed is a candidate, its own body (up to
 //! the next function entry) at most [`MAX_BODY_INSNS`] instructions, and only
-//! one from which the Listing's edges reach a `syscall` instruction through at
-//! most [`MAX_FRAMES`] calls ([`reaching`]), so the cost follows the number of
-//! system call sites rather than the size of the image. The names go out as signature
+//! one whose body loads a constant into `eax` before a `syscall` or passes a
+//! constant (a pushed immediate or `edi`) into a `call`, or that tail-jumps into
+//! one ([`candidates`]): the test reads the Listing's decoded text. The names go out as signature
 //! renames ([`FidMatch`] with `by_signature`): they replace only placeholders,
 //! give way to a name the image's metadata states, and at the commit bring the
 //! prototype the built-in tables or the type library declare for them. Each
@@ -70,7 +70,7 @@
 //! Listing's call targets found (no FDE or symbol says it is a function) has no
 //! function to rename otherwise.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use object::Object;
 use unlace_base::space::spacetype;
@@ -79,7 +79,7 @@ use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
 use crate::formatstring::fmtstatic::{LiftCache, Lifted, lift};
-use crate::listing::{FlowKind, Listing, RefKind};
+use crate::listing::Listing;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, FidMatch, Phase};
 
 #[cfg(test)]
@@ -711,49 +711,61 @@ enum Next {
 /// every jump into the run is followed back too, and every call into it at one
 /// more call. A run that a jump enters in the middle (musl's `__syscall_cp` is a
 /// `jmp` into its helper) is still reached from the jump's own function.
-fn reaching(walker: &mut Walker<'_, '_>) -> BTreeSet<u64> {
-    let listing = walker.listing;
-    let mut queue: VecDeque<(u64, usize)> = listing
-        .instructions()
-        .filter(|(_, insn)| insn.flow.kind == FlowKind::CallOther)
-        .map(|(&at, _)| at)
-        .filter(|&at| {
-            lift(walker.ctx, at, &mut walker.lifts).is_some_and(|l| {
-                l.ops.iter().any(|(opc, _, ins)| {
-                    *opc == OpCode::CPUI_CALLOTHER
-                        && ins.first().is_some_and(|t| t.offset == walker.syscall)
-                })
-            })
-        })
-        .map(|at| (at, 0))
-        .collect();
-    let mut seen = BTreeSet::new();
-    let mut entries = BTreeSet::new();
-    while let Some((at, calls)) = queue.pop_front() {
-        if !seen.insert(at) {
-            continue;
+/// The candidates: functions of the Listing whose own body loads a constant into
+/// `eax` before a `syscall`, or passes a constant (a pushed immediate or `edi`)
+/// into a `call`, and the functions that tail-jump into those, up to
+/// [`MAX_FRAMES`] jumps deep. The test reads the decoded mnemonics and operands.
+fn candidates(listing: &Listing) -> Vec<u64> {
+    let mut set = BTreeSet::new();
+    let mut jumps = Vec::new();
+    for (&entry, _) in listing.functions() {
+        let end = listing.next_function_after(entry).map(|g| g.entry);
+        let mut const_rax = false;
+        let mut const_arg = false;
+        let mut shaped = false;
+        let mut targets = Vec::new();
+        for (_, insn) in listing
+            .instructions_in_range(entry, end)
+            .take(MAX_BODY_INSNS)
+        {
+            let (m, ops) = (insn.mnemonic.as_str(), insn.operands.as_str());
+            shaped |= (m.eq_ignore_ascii_case("syscall") && const_rax)
+                || (m.eq_ignore_ascii_case("call") && const_arg);
+            if m.eq_ignore_ascii_case("jmp") {
+                targets.extend(
+                    ops.strip_prefix("0x")
+                        .and_then(|h| u64::from_str_radix(h, 16).ok()),
+                );
+            }
+            const_rax |= const_load(m, ops, "eax")
+                || (m.eq_ignore_ascii_case("xor") && ops.eq_ignore_ascii_case("eax,eax"));
+            const_arg |= const_load(m, ops, "edi")
+                || (m.eq_ignore_ascii_case("push") && ops.starts_with("0x"));
         }
-        let mut cur = at;
-        for _ in 0..MAX_BODY_INSNS {
-            for r in listing.refs_to(cur) {
-                let next = match r.kind {
-                    RefKind::Code => calls,
-                    RefKind::Call if calls < MAX_FRAMES => calls + 1,
-                    _ => continue,
-                };
-                queue.push_back((r.from, next));
+        if shaped {
+            set.insert(entry);
+        }
+        jumps.push((entry, targets));
+    }
+    for _ in 0..MAX_FRAMES {
+        let before = set.len();
+        for (entry, targets) in &jumps {
+            if targets.iter().any(|t| set.contains(t)) {
+                set.insert(*entry);
             }
-            if listing.function_at(cur).is_some() {
-                entries.insert(cur);
-                break;
-            }
-            match listing.instruction_entry_before(cur) {
-                Some((before, insn)) if insn.fall_through == Some(cur) => cur = before,
-                _ => break,
-            }
+        }
+        if set.len() == before {
+            break;
         }
     }
-    entries
+    set.into_iter().collect()
+}
+
+fn const_load(mnemonic: &str, operands: &str, reg: &str) -> bool {
+    mnemonic.eq_ignore_ascii_case("mov")
+        && operands
+            .split_once(',')
+            .is_some_and(|(dst, src)| dst.eq_ignore_ascii_case(reg) && src.starts_with("0x"))
 }
 
 pub struct SyscallWrappersPass;
@@ -796,7 +808,7 @@ impl AnalysisPass for SyscallWrappersPass {
             lifts: LiftCache::new(),
         };
         let mut found = BTreeMap::new();
-        for entry in reaching(&mut walker) {
+        for entry in candidates(listing) {
             let Some(f) = listing.function_at(entry) else {
                 continue;
             };

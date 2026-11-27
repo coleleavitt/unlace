@@ -9927,9 +9927,12 @@ both
   `__syscall_cancel_arch`), and musl's `mov edi,NR; call __syscall_cp` (the number
   first, the arguments one register up). The pass recognises none of them by
   bytes. A candidate is an unnamed Listing function of at most 64 instructions
-  from which a `syscall` instruction is reachable within three call or jump
-  edges. From its entry the lifted p-code is walked through calls, returns and
-  tail jumps, up to three frames deep and both ways at every conditional branch,
+  whose own body loads a constant into `eax` before a `syscall`, or passes a
+  constant (a pushed immediate or `edi`) to a `call`, or that tail-jumps into
+  such a function up to three jumps deep; the test reads the decoded mnemonics
+  and operands, so a function that fails it builds no p-code. From its
+  entry the lifted p-code is walked through calls, returns and tail jumps, up to
+  three frames deep and both ways at every conditional branch,
   tracking for each register and stack slot a constant, one of the function's
   own parameters, the entry stack pointer plus an offset, or anything else; a
   call past the depth clobbers the caller-saved registers, and a call to a non-code

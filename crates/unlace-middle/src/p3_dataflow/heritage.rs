@@ -2109,8 +2109,14 @@ impl Heritage {
                         .characterize_as_output(&trans_addr, size),
                     Containment::ContainsJustified | Containment::ContainsUnjustified
                 );
-            let msvc_cookie_return = effecttype == effect_type::KILLEDBYCALL
-                && exact_cookie_site
+            // An exact cookie checker declares no output, so the call's return
+            // storage passes through it whether the model lists that storage as
+            // killed (x86-64 RAX) or leaves it as the model's unknown-effect
+            // output (x86-32 EAX), where the output trial below would kill it.
+            let msvc_cookie_return = matches!(
+                effecttype,
+                effect_type::KILLEDBYCALL | effect_type::UNKNOWN_EFFECT
+            ) && exact_cookie_site
                 && ((fd
                     .hooks()
                     .calleeretpreserves_exact_cookie_preserves_return_storage)(
@@ -2127,17 +2133,21 @@ impl Heritage {
                         &trans_addr,
                         size,
                     )));
-            let mut preserved = effecttype == effect_type::KILLEDBYCALL
-                && ((fd.hooks().calleepreserves_callee_preserves_range)(fd, fc, &trans_addr, size)
-                    || (fd
+            let mut preserved = msvc_cookie_return
+                || (effecttype == effect_type::KILLEDBYCALL
+                    && ((fd.hooks().calleepreserves_callee_preserves_range)(
+                        fd,
+                        fc,
+                        &trans_addr,
+                        size,
+                    ) || (fd
                         .hooks()
                         .calleeretpreserves_callee_preserves_return_storage)(
                         fd,
                         fc,
                         &trans_addr,
                         size,
-                    )
-                    || msvc_cookie_return);
+                    )));
             // A locked-void prototype has no concrete output, so its model may
             // identify an 8-byte logical return inside a 16-byte heritaged XMM
             // range. Preserve only that exact slice. The flanking bytes remain

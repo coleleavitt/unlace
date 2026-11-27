@@ -214,6 +214,42 @@ pub fn expression_contains_foldable_call(data: &Funcdata, root: VarnodeId) -> bo
     walk(data, root, root, &mut Vec::new())
 }
 
+/// Is `vn` the target of the indirect `call` and nothing else: does every reader
+/// of `vn` lead to the call's target slot, directly or through implied ops (the
+/// slot load of `(*o->vt->f)(..)`)?  A folded call's output is implied, so
+/// `ActionMarkImplied` inflates its inputs to the statement the call prints in,
+/// and the call then lies inside the cover of an operand it reads.  That call
+/// evaluates the operand before it runs, so it does not reorder it:
+/// `r3 = *o; v = (*r3)(..); return (int)v;` prints `return (int)(*o->f)(..);`,
+/// not `v1 = o->f;` ahead of the call.  A value also read past the call is
+/// still crossed by it, and so is an argument, the target included when the call
+/// also passes it (`(*v1)(5,0,k,v1,..)` keeps `v1`).
+pub fn consumes(data: &Funcdata, vn: VarnodeId, call: OpId) -> bool {
+    fn reaches(data: &Funcdata, vn: VarnodeId, call: OpId, depth: usize) -> bool {
+        let Some(value) = data.vbank().get(vn) else {
+            return false;
+        };
+        let mut readers = value.descend_iter().peekable();
+        readers.peek().is_some()
+            && depth < 16
+            && readers.all(|reader| {
+                (reader == call
+                    && data.obank().get(call).is_some_and(|op| {
+                        op.code() == OpCode::CPUI_CALLIND
+                            && op.get_in(0) == Some(vn)
+                            && (1..op.num_input()).all(|slot| op.get_in(slot) != Some(vn))
+                    }))
+                    || data
+                        .obank()
+                        .get(reader)
+                        .and_then(|op| op.get_out())
+                        .filter(|&out| data.vbank().get(out).is_some_and(|v| v.is_implied()))
+                        .is_some_and(|out| reaches(data, out, call, depth + 1))
+            })
+    }
+    reaches(data, vn, call, 0)
+}
+
 /// Does `op` read a varnode defined by a `CPUI_INDIRECT` attached to `call`
 /// (its input 1 iop-encodes `call`)?  Such a read observes the call's indirect
 /// effect, so the call expression must not be sunk past it (GH-181).  Marker

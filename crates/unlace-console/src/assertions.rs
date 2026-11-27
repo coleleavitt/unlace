@@ -1013,9 +1013,19 @@ pub(crate) fn lock_prototype_on_symbol(
     // signature back from (`ArchContext::query_callee_proto`), so the declared
     // convention has to be baked in here: the storage the caller sees for each
     // argument is assigned when this `FuncProto` is built.  One that names none
-    // follows the image's float convention.
+    // takes the convention the loader bound the function to, as the function's
+    // own decompile does, and otherwise follows the image's float convention.
+    let bound = {
+        let sym = arch.symboltab.symbol(sid);
+        sym.mapentry.first().and_then(|&eref| {
+            let addr = arch.symboltab.entry(sym.scope, eref).get_addr();
+            let key = (addr.get_space()?.get_index(), addr.get_offset());
+            arch.loader_proto_models.get(&key).cloned()
+        })
+    };
     let model = model
         .cloned()
+        .or(bound)
         .or_else(|| unlace_decomp::typedcallabi::undeclared_model_for(arch, pieces));
     let tc = match model {
         Some(m) => arch.types_impl().get_type_code_proto_model(pieces, m),

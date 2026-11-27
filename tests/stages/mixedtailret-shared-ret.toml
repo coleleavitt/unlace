@@ -1,0 +1,55 @@
+# (unlace) `mixedtailret` on two own returns that share one `ret`.
+#
+# coreutils 9.11 ls, gcc -O2 x86-64, `strcmp_df_name` (0xb2a0): the
+# DIRFIRST_CHECK comparator returns -1 when only `a` is a directory, `1 -
+# is_dir(a)` when that difference is nonzero, and otherwise tail-calls
+# `strcmp(a->name, b->name)`. gcc gives `mov $-1,%eax` and the `sub %edx,%eax;
+# jne` the one `ret`, so the RETURN's block is a join of the constant path and
+# the tested-difference path. With the option on, each path into the join is
+# read on its own: the constant is returned, the difference decides the branch
+# that leads to the tail call, and the function returns strcmp's int instead
+# of an `unsigned long` that prints `return 0xffffffff;`. The bytes are ls's,
+# with the `jmp strcmp@plt` rel32 resolved to the strcmp symbol at 0x100100.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'f' },
+    { space = 'ram', offset = '0x100100', name = 'strcmp' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'f30f1efa8b97a80000008b8ea800000083fa090f94c083fa030f94c209d083f903742d83f90974288b96ac00000081e200f0000081fa00400000741484c07440b8ffffffffc3662e0f1f84000000000084c07521b8010000008b97ac00000081e200f0000081fa004000000f94c20fb6d229d075d0488b36488b3fe98000000031c0ebd5'
+
+[script]
+commands = [
+    'parse line extern int4 strcmp(char *, char *);',
+    'lo fu f',
+    'option mixedtailret on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'mixedtailret: f returns int, not unsigned long'
+count = 1
+literal = 'int4 f('
+
+[[match]]
+name = 'mixedtailret: the constant path returns -1'
+count = 1
+literal = 'return -1;'
+
+[[match]]
+name = 'mixedtailret: the tested difference is returned'
+count = 1
+regex = 'return v[0-9]+;'
+
+[[match]]
+name = 'mixedtailret: no zero-extended 0xffffffff is returned'
+count = 0
+literal = '0xffffffff'

@@ -101,4 +101,4 @@ regex = 'input <= -1|0 <= input'
 [[match]]
 name = 'ARM GUARD RANGE #5: the genuine indirect call remains'
 count = 2
-regex = 'return \(\*v[0-9]+\)\(input\) \+ 1;'
+regex = 'return \(\*target->invoke\)\(input\) \+ 1;'

@@ -722,6 +722,25 @@ impl ActionMultiCse {
         vn
     }
 
+    /// (unlace) Do the outputs of `op1` and `op2` name different storage, one of
+    /// them a global?  The global's join then carries the global's own value
+    /// past the block, and replacing its reads with another variable's join
+    /// makes `Merge` copy that variable into the global where the binary
+    /// stores nothing (`gi = v2;` after both arms of a branch stored it).
+    fn distinct_globals(data: &Funcdata, op1: OpId, op2: OpId) -> bool {
+        let out = |op: OpId| {
+            data.obank()
+                .get(op)
+                .and_then(|o| o.get_out())
+                .and_then(|vn| data.vbank().get(vn))
+        };
+        let (Some(a), Some(b)) = (out(op1), out(op2)) else {
+            return false;
+        };
+        (a.is_persist() || b.is_persist())
+            && (a.get_addr() != b.get_addr() || a.get_size() != b.get_size())
+    }
+
     /// C++ `ActionMultiCse::findMatch`: an earlier MULTIEQUAL
     /// in `bl`, before `target`, that reads `input` and whose every input matches
     /// the `target`'s input in the same slot.
@@ -739,7 +758,7 @@ impl ActionMultiCse {
             let reads_input = (0..numinput).any(|slot| {
                 multicse_input(data, op, slot).is_some_and(|vn| Self::skip_copy(data, vn) == input)
             });
-            if !reads_input {
+            if !reads_input || Self::distinct_globals(data, op, target) {
                 continue;
             }
             let mut buf1 = [input; 2];

@@ -742,7 +742,11 @@ impl FuncdataSpacebaseExt for Funcdata {
         // net-negative).  Cloned out the alias list + alias_block_level so the
         // `&mut ScopeLocal` borrow does not alias the `&self` arch read.
         if aliasyes {
-            let alias: Vec<uintb> = state.get_alias().to_vec();
+            let mut alias: Vec<uintb> = state.get_alias().to_vec();
+            if self.is_jumptable_recovery_on() {
+                alias.extend_from_slice(crate::jtpartialalias::escapes(self));
+                alias.sort_unstable();
+            }
             let abl = self.get_arch().alias_block_level;
             if let Some(lm) = self.get_scope_local_mut() {
                 lm.mark_unaliased(&alias, abl);

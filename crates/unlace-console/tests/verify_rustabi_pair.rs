@@ -139,6 +139,8 @@ fn the_consumer_reads_the_payload_out_of_the_call() {
 /// writes the second register (`movq %rdi,%rax; addq $7,%rax; ret`). Since the
 /// two are indistinguishable at the call site, the veto has to come from the
 /// callee's body, and the reader must render identically with the option on.
+/// The RDX it reads is its own incoming RDX, which crosses the call untouched
+/// (calleeiparead), so the call returns RAX alone.
 #[test]
 fn a_callee_proven_not_to_write_the_payload_is_not_paired() {
     let off = decompile("rust_clobber_pair_x86_64", "pair_shaped_reader", &[]);
@@ -154,8 +156,8 @@ fn a_callee_proven_not_to_write_the_payload_is_not_paired() {
         "a callee the probe proves never writes the payload register must not be paired",
     );
     assert!(
-        on.contains("scalar_callee();"),
-        "the call must keep no output; got:\n{on}",
+        on.contains("scalar_callee() & 1"),
+        "the call must return RAX alone; got:\n{on}",
     );
 }
 

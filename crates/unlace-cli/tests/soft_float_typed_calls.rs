@@ -494,7 +494,10 @@ fn variadic_prototype_with_float_or_pair_storage_keeps_the_recovered_call() {
         ],
     );
     let w2 = function(&text, "w2");
-    assert!(w2.contains("(double)(*v1)(k,k + 1,0,0x3fe00000)"), "{w2}");
+    assert!(
+        w2.contains("(double)(*o->vr)(k,k + 1,0,0x3fe00000)"),
+        "{w2}"
+    );
     assert!(
         !w2.contains("CONCAT44"),
         "read the result from unset r0/r1: {w2}"
@@ -563,13 +566,13 @@ fn return_the_riscv_convention_extends_is_forced_as_declared() {
         ],
     );
     let r1 = function(&text, "r1");
-    assert!(r1.contains("return (*v1)(k);"), "{r1}");
+    assert!(r1.contains("return (*o->fi)(k);"), "{r1}");
     assert!(
         !r1.contains("(unsigned int)"),
         "zero-extended the signed int: {r1}"
     );
     let r6 = function(&text, "r6");
-    assert!(r6.contains("p[(*v1)(k)]"), "{r6}");
+    assert!(r6.contains("p[(*o->fi)(k)]"), "{r6}");
     assert!(
         !r6.contains("(unsigned int)"),
         "zero-extended the signed index: {r6}"
@@ -588,7 +591,7 @@ fn return_narrower_than_an_unextended_register_keeps_the_recovered_call() {
         ],
     );
     let c3 = function(&text, "c3");
-    assert!(c3.contains("(*v1)(k) * 3"), "{c3}");
+    assert!(c3.contains("(*o->sc)(k) * 3"), "{c3}");
     assert!(!c3.contains("// v0"), "read unset bits of v0: {c3}");
 }
 
@@ -637,20 +640,20 @@ fn apple_arm64_return_narrower_than_32_bits_keeps_the_recovered_call() {
         ],
     );
     let c1 = function(&text, "_c1");
-    assert!(c1.contains("(*v1)(k) * 3"), "{c1}");
+    assert!(c1.contains("(*o->sc)(k) * 3"), "{c1}");
     assert!(
         !c1.contains("(unsigned char)"),
         "zero-extended the signed char: {c1}"
     );
     let c6 = function(&text, "_c6");
-    assert!(c6.contains("p[(int)(*v1)(k)]"), "{c6}");
+    assert!(c6.contains("p[(int)(*o->sc)(k)]"), "{c6}");
     assert!(
         !c6.contains("(unsigned char)"),
         "zero-extended the signed index: {c6}"
     );
     let e1 = function(&text, "_e1");
     assert!(
-        e1.contains("p[(*v1)(k,2.5)]"),
+        e1.contains("p[(*o->si)(k,2.5)]"),
         "an int return keeps the declared call: {e1}"
     );
     let c1: Vec<u8> = apple_arm64_c1()
@@ -677,7 +680,7 @@ fn apple_arm64_return_narrower_than_32_bits_keeps_the_recovered_call() {
     );
     let c1 = function(&text, "c1");
     assert!(
-        c1.contains("(*v1)(k) * 3"),
+        c1.contains("(*o->sc)(k) * 3"),
         "a raw image states no platform: {c1}"
     );
     assert!(
@@ -815,21 +818,39 @@ fn soft_float_arm_lays_dwarf_prototypes_out_in_core_registers() {
 /// `static float sq(float x) { return x * x + 1.0f; }` (noinline) and its
 /// caller `float g(float y) { return sq(y) * 2.0f; }`, clang -O2 for armv7
 /// with `-mfloat-abi=softfp`: the image states the base convention and VFPv3
-/// hardware, and clang passes the static function's float in `s0`.
+/// hardware, and clang passes the static function's float in `s0`.  `sq` is
+/// a local symbol, as a `static` function is.
 fn arm_softfp_static() -> Vec<u8> {
-    let g = vec![
+    let g: [u32; 6] = [
         0xe92d4800, 0xee000a10, 0xeb000002, 0xee300a00, 0xee100a10, 0xe8bd8800,
     ];
-    let sq = vec![0xeeb71a00, 0xee001a00, 0xeeb00a41, 0xe12fff1e];
-    image(
-        Architecture::Arm,
-        Endianness::Little,
-        &[("g", g), ("sq", sq)],
-        Some((
-            b".ARM.attributes",
-            attributes(b"aeabi", &[6, 10, 10, 3], Endianness::Little),
-        )),
-    )
+    let sq: [u32; 4] = [0xeeb71a00, 0xee001a00, 0xeeb00a41, 0xe12fff1e];
+    let mut object = Object::new(BinaryFormat::Elf, Architecture::Arm, Endianness::Little);
+    let text = object.add_section(Vec::new(), b".text".to_vec(), SectionKind::Text);
+    let code: Vec<u8> = g.iter().chain(&sq).flat_map(|w| w.to_le_bytes()).collect();
+    object.append_section_data(text, &code, 4);
+    for (name, value, size, scope) in [
+        ("g", 0, 24, SymbolScope::Linkage),
+        ("sq", 24, 16, SymbolScope::Compilation),
+    ] {
+        object.add_symbol(Symbol {
+            name: name.as_bytes().to_vec(),
+            value,
+            size,
+            kind: SymbolKind::Text,
+            scope,
+            weak: false,
+            section: SymbolSection::Section(text),
+            flags: SymbolFlags::None,
+        });
+    }
+    let attrs = object.add_section(Vec::new(), b".ARM.attributes".to_vec(), SectionKind::Other);
+    object.append_section_data(
+        attrs,
+        &attributes(b"aeabi", &[6, 10, 10, 3], Endianness::Little),
+        1,
+    );
+    object.write().unwrap()
 }
 
 #[test]

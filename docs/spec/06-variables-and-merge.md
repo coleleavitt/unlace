@@ -538,14 +538,18 @@ marking (below), three passes fuse variables to reduce clutter:
   after upstream's own trims of a MULTIEQUAL, which inputs are values of their
   own, and gives each upstream's `trimOpInput` COPY at the end of its
   predecessor. An input qualifies when the join variable is not address-tied,
-  persistent or an input and a non-marker op reads it; its predecessor is not
-  dominated by the join block (a back edge keeps its induction value in the
-  loop variable); it is written by an op that is not a COPY, MULTIEQUAL or
+  persistent or an input and a non-marker op reads it; the join is not a loop
+  variable, which means its block is no loop head (a block that dominates one
+  of its predecessors) and no COPY or MULTIEQUAL output of it reaches a
+  MULTIEQUAL in a loop head, so neither an induction update nor the value a
+  loop starts from is split from the loop variable; it is written by an op that is not a COPY, MULTIEQUAL or
   INDIRECT and does not read the join value; and an op other than the
   MULTIEQUAL, not a marker, reads it; and it is not loop-carried: no COPY or
-  MULTIEQUAL output of it reaches a MULTIEQUAL along a back edge
-  (`phiarm.rs (loop_carried)`), so the value a loop counter holds at its exit
-  stays the loop variable instead of a second one. The pair (arm value, join output) is
+  MULTIEQUAL output of it reaches a MULTIEQUAL in a loop head
+  (`phiarm.rs (loop_carried)`, `phiarm.rs (loop_head)`), so the value a loop
+  counter holds at its exit, and the value a loop starts from (a value computed
+  after one loop that enters the next on its entry edge, gcc's `zero_pad` shape
+  in openssh), stay the loop variable instead of a second one. The pair (arm value, join output) is
   recorded, and `phiarm.rs (keeps_apart)`, asked by `Merge::merge` and
   `Merge::merge_test`, refuses any later merge that would join the two again,
   so a later forced merge trims instead and `ActionMergeCopy` does not undo the
@@ -3317,6 +3321,27 @@ call, one load, one store, in exactly that order. `foldcallretphi` asks both
 questions in full over the whole distance, for its own folds, because those are
 the ones it released; the `foldcallretphi` entry below has that half. Provenance:
 `docs/features/gh657/`.
+
+A folded call's operands are inflated with its output's cover, as
+`ActionMarkImplied` inflates the inputs of every implied value, so the call lies
+inside the cover of a value it reads. The load-crosses-call arm of
+`checkImpliedCover` does not count an indirect call whose target is that value
+and nothing else reads it, directly or through implied ops such as a vtable
+slot load (`crates/unlace-bandb-base/src/p6_variables/callretfold.rs
+(consumes)`): the call evaluates its target before it runs, so the target
+prints inside the folded call. `blx r3` on `r3 = o->f` prints
+`return (int)(*o->f)(2.5,k + 1);`, a vtable call `(*a0->vptr->scaled)(a0,a1)`,
+a jump table `(*(code *)(*(int4 *)(sel * 4UL + 0x100040) + 0x100040L))()`,
+where each had a `code *` temporary assigned on the line before. A value also
+read past the call, or passed as an argument, is still crossed by it and keeps
+its statement. Inlining the target extends the cover of the target's own
+operands too, so the merge rules could give one of them a statement instead.
+The target therefore keeps its statement when `Merge::inflateTest` refuses to
+stretch a leaf operand of its expression over the target's variable
+(`coreaction_cleanup.rs (target_operands_inflate)`): on x86-16 `pickfar`
+(`tests/stages/segmentize.toml`) the table index `a0 * 2` shares `bx` with
+`a0`, so `v1 = (code *)*(unsigned short *)(a0 * 2 + 0x42);` stays ahead of
+`return (*v1)();` rather than `a0 * 2` gaining a statement of its own.
 
 The second span also keeps ordinary calls ahead of separate printed statements
 that read their own INDIRECT effects. A phi-edge COPY can snapshot an updated

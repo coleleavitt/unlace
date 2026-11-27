@@ -195,6 +195,9 @@ fn visit_homes(
     let mut pending: Vec<_> = (0..high.num_instances())
         .map(|i| high.get_instance(i))
         .collect();
+    let own_global = pending
+        .iter()
+        .any(|&id| fd.vbank().get(id).is_some_and(|v| v.is_persist()));
     let mut visited = crate::fasthash::FxHashSet::default();
     while let Some(id) = pending.pop() {
         if !visited.insert(id) {
@@ -225,15 +228,19 @@ fn visit_homes(
             visit(&address, varnode.get_size());
         }
         for source in fd.unlace_storage_sources(id) {
-            visit(&source.address, source.size);
+            if own_global || !global_memory(fd, &source.address) {
+                visit(&source.address, source.size);
+            }
         }
         if let Some(op) = varnode.get_def().and_then(|op| fd.obank().get(op)) {
             if matches!(op.code(), OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL) {
                 for i in 0..op.num_input() {
                     if let Some(input) = op.get_in(i).filter(|&input| {
-                        fd.vbank()
-                            .get(input)
-                            .is_some_and(|v| !v.is_constant() && v.get_size() == varnode.get_size())
+                        fd.vbank().get(input).is_some_and(|v| {
+                            !v.is_constant()
+                                && v.get_size() == varnode.get_size()
+                                && (!v.is_persist() || v.get_high() == Some(own))
+                        })
                     }) {
                         pending.push(input);
                     }
@@ -242,6 +249,19 @@ fn visit_homes(
         }
     }
     Some(fallback)
+}
+
+/// Is `address` global memory, in the default data or code space?  A
+/// global a value was loaded from or stored to is a variable of its own, never
+/// a home of a local holding that value.
+fn global_memory(fd: &Funcdata, address: &Address) -> bool {
+    let Some(space) = address.get_space() else {
+        return false;
+    };
+    let manage = fd.get_arch().manage();
+    let is = |s: Option<&Rc<AddrSpace>>| s.is_some_and(|s| s.get_index() == space.get_index());
+    space.get_type() == spacetype::IPTR_PROCESSOR
+        && (is(manage.get_default_data_space()) || is(manage.get_default_code_space()))
 }
 
 /// The stack homes of `high` among those [`high_homes`] lists: each signed

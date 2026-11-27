@@ -212,12 +212,12 @@ literal = '*(int8 *)(v1 + 8) = *(int8 *)(v1 + 8) + a0;'
 [[match]]
 name = "swiftcall off: the throwing call's error path folds away"
 count = 1
-literal = 'v3 = (**(code **)(*a0 + 0x88))();'
+literal = 'v2 = (**(code **)(*a0 + 0x88))();'
 
 [[match]]
 name = 'swiftcall off: the virtual call drops the self it is passed'
 count = 1
-literal = 'v2 = (**(code **)(*a0 + 0x80))(a2,2);'
+literal = 'v1 = (**(code **)(*a0 + 0x80))(a2,2);'
 
 [[match]]
 name = 'swiftcall off: a final method calls another without its self'
@@ -247,12 +247,12 @@ literal = 'requirement#1(callfix.Account **self,int8 a1)'
 [[match]]
 name = 'swiftcall on: the virtual call passes the self it set'
 count = 1
-literal = 'v2 = (**(code **)(*a0 + 0x80))(a0,a2,2);'
+literal = 'v1 = (**(code **)(*a0 + 0x80))(a0,a2,2);'
 
 [[match]]
 name = 'swiftcall on: the throwing virtual call passes self'
 count = 1
-literal = 'v3 = (**(code **)(*a0 + 0x88))(a0);'
+literal = 'v2 = (**(code **)(*a0 + 0x88))(a0);'
 
 [[match]]
 name = 'swiftcall on, symbols: a free function is declared from its name'
@@ -262,22 +262,22 @@ literal = 'callfix.run(_:_:_:)(callfix.Account *a0,callfix.Counter *a1,int8 a2)'
 [[match]]
 name = 'swiftcall on, symbols: the virtual call on a declared class goes through its isa'
 count = 1
-literal = 'v2 = (*((code **)a0->isa)[0x10])(a0,a2,2);'
+literal = 'v1 = (*((code **)a0->isa)[0x10])(a0,a2,2);'
 
 [[match]]
 name = 'swiftcall on: the error path survives'
 count = 2
-literal = 'swift_release(v5);'
+literal = 'swift_release(v4);'
 
 [[match]]
 name = "swiftcall on: the throwing call's error is read as a call result"
 count = 2
-literal = 'v5 = swift_error();'
+literal = 'v4 = swift_error();'
 
 [[match]]
 name = 'swiftcall on, symbols: the throwing function hands its error back'
 count = 1
-literal = 'swift_throw(v7);'
+literal = 'swift_throw(v6);'
 
 [[match]]
 name = "swiftcall on, symbols: the mutating struct method takes the struct's self by address"

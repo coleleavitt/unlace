@@ -446,7 +446,7 @@ const MIN_BODY_INSTRUCTIONS: u32 = 2;
 /// the `ghdec-*` fixtures stub every callee outside the chunk under test) writes
 /// neither, and reading it as a promise about `RAX` deletes the call results the
 /// rest of the function is built on.
-fn body_is_a_body(
+pub(crate) fn body_is_a_body(
     data: &Funcdata,
     fc: &FuncCallSpecs,
     w: &crate::rustabi::CalleeReturnWrites,

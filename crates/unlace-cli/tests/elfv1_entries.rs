@@ -626,6 +626,8 @@ fn short_circuit_plt_calls() -> Vec<u8> {
     words.iter().flat_map(|w| w.to_be_bytes()).collect()
 }
 
+/// Structuring decides the `&&` here: `nestedand off` keeps the printer from folding the nested
+/// `if`s the forced TOC store leaves, so `on` shows the store's cost to the condition block.
 #[test]
 fn elfv1_calls_keep_their_short_circuit_condition() {
     for (code, address) in [
@@ -638,7 +640,8 @@ fn elfv1_calls_keep_their_short_circuit_condition() {
             let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
             command
                 .env("UNLACE_SPECS", common::repo_root().join("specs"))
-                .args(["decompile", path.to_str().unwrap(), address, "--addr"]);
+                .args(["decompile", path.to_str().unwrap(), address, "--addr"])
+                .args(["--option", "nestedand", "off"]);
             if let Some(value) = option {
                 command.args(["--option", "callmechanisms", value]);
             }

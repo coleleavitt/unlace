@@ -542,6 +542,48 @@ warnstyle banner` restores upstream Ghidra's full
 `/* WARNING: ... */` lines, exercised by
 `tests/stages/cnorm-warnstyle.toml`.
 
+**Warning level (P9/`warning-style`, `option warnlevel`).** Which warnings
+print at all is a separate choice from how they look, and it applies to both
+styles. A warning is either a caveat, telling the reader something the C does
+not show, or narration of a rewrite made for readability, after which the C
+means the same as before. The default `all` writes every warning, as upstream
+does. Under `caveats`,
+`printc.rs (PrintC::emit_comment_group, emit_comment_func_header)` asks
+`warnlevel.rs (elided)` about each WARNING comment before collecting or printing
+it, and leaves three kinds out.
+
+- Narration, matched on the warning's kind (`functionwarnings.rs
+  (Warning::kind)`): `branch-flip`, `tail-call`, `return-dupe`,
+  `crossjump-dupe`, and the P8 header counts `early-return`, `switch-return`,
+  `ite-dedupe`, `ternary` and `else-flattened`.
+- A `no-return` on a call whose callee is no-return by name. The callee is
+  the call spec recorded at the warning's address, and its name is matched
+  against the `ElfFunctionsThatDoNotReturn` list `noreturn_known` reads
+  (`noreturn_externmatch.rs (is_known_noreturn_name)`), so `exit`, `abort` and
+  `__assert_fail` lose the comment while a discovered `sub_1cc60` keeps it.
+- A `jump-as-call` whose call goes to one fixed target: a named callee, a
+  direct `CALL`, a constant, an unwritten global (persist) slot, or a `LOAD`
+  from a constant address. This is the `jmp *slot` of a PLT stub, which no jump
+  table can hide behind; a jump through a computed target, which may be a
+  switch whose cases went missing, keeps the comment.
+
+A header warning is matched only as narration: a function-wide `no-return`
+says the function itself never returns, which is not the call at its entry.
+An elided comment is marked emitted and recorded nowhere, so the `--json`
+`warnings` list and `warning_kinds` (which record what the render wrote) leave
+it out. It also stops counting as a comment that forces braces under
+`braceelide`. On a stripped `/usr/bin/ls` project export `caveats` takes the
+warning comments from 709 to 37: 307 `branch-flip`, 127 `tail-call`, 69
+`return-dupe`, 12 `early-return`, 9 `ternary` and 2 `crossjump-dupe` go,
+as do 41 of 76 `no-return` (`abort`, `__assert_fail`, `exit`, `_exit`) and
+105 of 106 `jump-as-call` (every PLT stub). The default stays `all` because
+most of that is information, not repetition: only the 41 `no-return`
+comments repeat what the call already says, while a `branch-flip` or
+`tail-call` says where the C's shape differs from the machine code and a
+`jump-as-call` says where a call is a jump. `caveats` suits an export an
+agent or a reader scans for meaning, where those notes are noise; the
+agent skill's export command sets it.
+
 ## 9.1 Casts
 
 An equal-width `CAST` involving a complete struct or union transfers its object
@@ -2609,6 +2651,61 @@ the condition is the strict compare or `!=` of the pair, the operand of a negati
 the first input's boolean. A term in a named variable, a float compare and a single
 product (`a * zext(c)` with no complement) keep the arithmetic.
 
+(unlace `strcmpfold`, default off) A compare against a short constant string that
+the compiler inlined prints as the call it came from
+(`crates/unlace-emit/src/p9_emit/strcmpfold.rs`, `printc/strcmpprint.rs`). When only
+equality is asked and the buffer is known to hold the bytes, gcc's
+`handle_builtin_string_cmp` (`tree-ssa-strlen.cc`) turns `strcmp` and `strncmp` into
+`__builtin_memcmp_eq` over `min(n, strlen + 1)` bytes, and LLVM's `SimplifyLibCalls`
+turns them into `memcmp` over the same count. With a constant count gcc's
+`compare_by_pieces` (`expr.cc`) loads the widest pieces first and branches to one fail
+label after each, letting the last piece overlap the one before on x86; LLVM's
+`ExpandMemCmp` xors each load with its constant and ors the results into one compare
+with zero (two loads to a block on x86-64, all of them on AArch64, whose backend makes
+the test a `ccmp` chain). `strncmp(buf, "SH ", 3) == 0` on a `char buf[64]` printed as
+`(*(unsigned short *)v2 == 0x4853) && (v2[2] == ' ')`, and `strncmp(buf, "PING", 4) == 0`
+as `*(unsigned int *)v2 == 0x474e4950`.
+
+Under C output the tests are looked for in three places: an `INT_EQUAL`, `INT_NOTEQUAL`,
+`BOOL_AND` or `BOOL_OR` at the top of `op_push_ir_inner`; a structured condition block
+(`emit_block_condition`) whose leaves, joined all by `&&` or all by `||`, are basic
+blocks ending in a `CBRANCH`, each after the first printing nothing before its test;
+and a `&&` or `||` of the C syntax tree (`nestedand`, `orexit`, `boolreturn`) over such
+blocks. A test is walked through implied Varnodes only: `BOOL_AND` when every byte must
+hold, `BOOL_OR` when one must not, `BOOL_NEGATE` swapping the two, and at the bottom an
+`INT_EQUAL` or `INT_NOTEQUAL` of a term with a constant. A term is a read of a named
+variable or a `LOAD`, narrowed by `SUBPIECE` or widened by `INT_ZEXT` (whose high bytes
+the constant must leave zero), or, against zero, an `INT_OR` of such reads, each possibly
+`INT_XOR`ed with or `INT_SUB`tracting a constant. A branch counts with the sense it
+prints, its condition negated when the branch prints flipped. A `LOAD`'s address is walked through implied `CAST`, `COPY`,
+constant `PTRADD` and `PTRSUB` and `INT_ADD` of a constant to the pointer it steps from.
+Each read contributes the bytes it must hold, placed by the read's offset inside its
+variable or from its pointer and ordered by the space's endianness.
+
+The bytes fold only as one inlined string compare: every read is of the same variable,
+an array of one-byte elements (`char`, a one-byte integer or `undefined1`: the type each
+read's high carries need not be the declared one), or through the same pointer (one
+variable, or one Varnode when the pointer is an expression) whose type points to bytes,
+to `void` or to an array of bytes, or is an integer used as an address; together they
+cover one run with no gap, inside the array when it is one; where reads overlap they hold the same byte; at least one read is wider
+than a byte, so a test of single bytes is left as written; and every byte is printable
+ASCII, tab, newline or carriage return, except that the last may be NUL. A run whose
+only NUL is its last byte prints `strcmp(base, "text") == 0` without the NUL (gcc and
+LLVM compare `strcmp`'s terminator, and `strncmp`'s when the bound reaches it); any
+other run prints `strncmp(base, "text", n) == 0`, which holds for exactly the same bytes
+as `memcmp` because the text has no NUL. A `||` chain or a negated test prints `!= 0`,
+and a pending negation of the compare (`negatetoken`) swaps the relation. The base is
+the variable's name, or `&name[k]` when the run starts at byte `k`, or the pointer,
+`p + k` when the run starts `k` bytes past it. A part of a chain
+that folds where the whole does not still prints as its own call, which compares the
+same bytes. These keep their compares: a run across two variables (the frame layout
+splits a buffer nothing indexes into one variable per compare), a read through a
+pointer to a struct (a parameter whose reads recovered one, `a0->field_0x0`), an ordered result (gcc
+subtracts byte by byte when the bound is at most 3, `inline_string_cmp`; LLVM
+compares byte-swapped words), the tests after the first in gcc's 0/1 value form, whose
+condition assigns the result between them (`(v2 != 0x4b4f) || (v1 = 0, v3[2])`, of which
+only the first test folds), and 16-byte vector compares.
+
 (unlace `cstringconst`, default on) A pointer-wide constant inside a string-literal
 section prints as the literal there, whatever type it reaches the printer with
 (`crates/unlace-emit/src/p9_emit/cstringconst.rs`). `pushConstant`
@@ -4436,9 +4533,12 @@ lines is exactly the set removed from under the labels. Finally the
 README gains a second **layout** and an in-progress render
 (`crates/unlace-console/src/project.rs (render_readme,
 ReadmeLayout, render_readme_streaming)`), the first describing the
-streamed `.c`/`.asm` and the two extra files, the second adding a banner
-and a status table while the export runs; the `Standard` layout is
-byte-identical to what the single renderer emitted before it was split.
+streamed `.c`/`.asm`, the feed form of `index.jsonl` and `.streaming`, the second adding a banner
+and a status table while the export runs. The `Standard` layout lists the
+address-ordered `index.jsonl` that every non-stream CLI export writes
+(`crates/unlace-cli/src/project_stream.rs (address_index)`). `Document`, the
+layout the wasm `project` command renders, is the same without that entry,
+because that one-document export carries no index.
 A third layout, `Progress`, is only ever rendered while a run is going: a
 `--progress` export writes the `Standard` artifacts at the end, so
 its running README inventories those, adds the feed form of `index.jsonl` and

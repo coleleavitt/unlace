@@ -514,15 +514,27 @@ fn streaming_readme_renders_pending_facts_then_the_streamed_layout() {
     let counts = ReadmeCounts::of(&results);
     let streamed = render_readme(&facts, Some(counts), ReadmeLayout::Streamed);
     let standard = render_readme(&facts, Some(counts), ReadmeLayout::Standard);
+    let document = render_readme(&facts, Some(counts), ReadmeLayout::Document);
     assert!(!streamed.contains("still streaming"));
     assert!(!streamed.contains("## Streaming status"));
     assert!(streamed.contains("`index.jsonl`"));
-    assert!(!standard.contains("`index.jsonl`"));
+    assert!(standard.contains("`index.jsonl`"));
+    assert!(
+        !document.contains("`index.jsonl`"),
+        "a one-document export carries no index:\n{document}"
+    );
     assert!(streamed.contains("; --- variables ---"));
     assert_eq!(
         standard,
-        build_readme(&fauxware(), "/tmp/fauxware", "fauxware", &prog, &results),
-        "the Standard layout is what build_readme has always written"
+        build_readme(
+            &fauxware(),
+            "/tmp/fauxware",
+            "fauxware",
+            &prog,
+            &results,
+            ReadmeLayout::Standard
+        ),
+        "build_readme renders the layout it is given"
     );
 }
 

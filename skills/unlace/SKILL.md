@@ -17,7 +17,7 @@ byte offsets. These examples focus on CTF reversing.
 Default to exporting the entire binary to disk:
 
 ```bash
-unlace decompile-project ./challenge --stream --jobs auto -o ./challenge.unlace
+unlace decompile-project ./challenge --stream --jobs auto --option warnlevel caveats -o ./challenge.unlace
 ```
 
 After initial loading, `--stream` makes completed functions readable while the export
@@ -57,16 +57,16 @@ collections (named in the document's `omitted`), keeping it near the size of the
 
 | Artifact | How to use it |
 |---|---|
-| `index.jsonl` | Search this streaming index first: `name`, `addr`, `size`, `error`, and the C block's byte span, `c_offset`/`c_len`. |
+| `index.jsonl` | Search this index first: `name`, `addr`, `size`, `error`, and the C block's byte span, `c_offset`/`c_len`. Every export writes it, in address order at the end or, under `--stream`, as each function finishes. |
 | `<name>.c` | Function bodies under `// Function: <name> @ <addr>` headers. |
 | `<name>.h` | Prototypes and recompile prelude; recovered type definitions arrive at finalization. |
 | `<name>.asm` | Disassembly and data bytes; often much larger than the C. Search by symbol or address. |
 | `README.md` | Image details, progress, and success/failure counts. |
 | `.streaming` | Live status and operational failures while exporting. |
 
-Read only newline-terminated index records: each announces a complete C block. Defer
-an unfinished last record until the next read. Streamed C follows completion order,
-so locate functions by the index rather than position.
+While `.streaming` exists, read only newline-terminated index records: each announces a
+complete C block. Defer an unfinished last record until the next read. Streamed C
+follows completion order, so locate functions by the index rather than position.
 
 Check per-function errors even after a successful exit or removal of `.streaming`.
 Retry relevant failures individually; adjust `--max-fn-seconds` for budget overruns.
@@ -113,7 +113,12 @@ unlace xrefs ./challenge --from main --json
 ```
 
 Treat generated C as an estimate. Verify answer-critical branches, widths, signedness,
-and indirect calls against assembly or observed execution. Use `unlace disassemble` for
+and indirect calls against assembly or observed execution. End-of-line comments such as
+`// no-return` and `// jump-as-call` flag what the C does not show. `--option warnlevel
+caveats`, as in the export above, drops the notes on readability rewrites
+(`// branch-flip`, `// tail-call`) and the ones a call already states
+(`exit(1); // no-return`); leave it out when you need to see where a branch was
+flipped or a jump printed as a call. Use `unlace disassemble` for
 targeted instructions and `unlace read` for encoded data and lookup-table bytes.
 `unlace map ./challenge check --line 12` prints the addresses of the instructions line 12
 of `check`'s C came from, and `--addr 0x401020` the text that instruction printed and the

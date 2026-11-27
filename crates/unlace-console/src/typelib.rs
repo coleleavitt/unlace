@@ -318,6 +318,14 @@ impl<'l, 'a> Reader<'l, 'a> {
         matches!(self.types.find_by_name(name), Ok(Some(_)))
     }
 
+    /// Intern the library type `name` and the types it names.
+    fn intern(&mut self, name: &str) -> bool {
+        match self.lib.types.get_key_value(name) {
+            Some((&name, _)) => self.define(name, 0),
+            None => false,
+        }
+    }
+
     /// A named record of a known width whose members are not.
     fn shell(&self, name: &str, union: bool, size: int4, align: int4) -> bool {
         let Ok(shell) = self.types.unlace_declare_record(name, union) else {
@@ -797,6 +805,16 @@ pub fn seed(
         }
     }
     drop(declared);
+    if arch
+        .unlace_options
+        .get::<unlace_decomp::sockfamily::SockFamily>()
+        .0
+        && matches!(arch.types().find_by_name("sockaddr"), Ok(Some(_)))
+    {
+        for record in unlace_decomp::sockfamily::FAMILY_RECORDS {
+            readers.iter_mut().any(|r| r.intern(record));
+        }
+    }
     let replaced: BTreeSet<&str> = read
         .iter()
         .filter(|(name, pieces)| pieces.is_some() && replaceable(name))

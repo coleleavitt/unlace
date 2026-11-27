@@ -30,10 +30,12 @@
 //!   references, with raw bytes.
 //! * `README.md`  — binary metadata (size, arch, entry point, sections,
 //!   function counts) and the artifact/labeling conventions.
+//! * `index.jsonl` — one line per function in the `.c`'s address order, with
+//!   the byte span of its block (`c_offset`/`c_len`).
 //!
 //! `--stream` writes the same folder INCREMENTALLY — the artifacts appear
-//! before the run finishes, entry-point-first, with an `index.jsonl` per-function
-//! feed and a `.streaming` status file — at the cost of a decompile-ordered
+//! before the run finishes, entry-point-first, with `index.jsonl` as a
+//! per-function feed and a `.streaming` status file — at the cost of a decompile-ordered
 //! `.c` and an `.asm` whose variable comments move to their own section
 //! ([`crate::project_stream`]).  `--progress` keeps the feed and the status file
 //! but runs this module's export unchanged, so the artifacts are the non-stream
@@ -51,12 +53,12 @@
 //! decompile-project core (`unlace_console::project` — also reused by the
 //! `unlace_wasm` front-end); this module keeps the CLI wrapper + orchestration.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use unlace_console::engine::ConsoleProgram;
 use unlace_console::project::{
-    BatchOutcome, FuncResult, build_asm, build_c, build_header, build_readme, collect_dat_addrs,
-    decompile_export_targets_watched,
+    BatchOutcome, FuncResult, ReadmeLayout, build_asm, build_c, build_header, build_readme,
+    collect_dat_addrs, decompile_export_targets_watched,
 };
 use unlace_decomp::decompile_drive::{print_c_recompile_prelude, print_c_types};
 
@@ -199,6 +201,8 @@ fn usage() {
          \x20 <name>.asm  labeled disassembly (function labels, stack-var comments,\n\
          \x20             dat_<hex> data labels with raw bytes)\n\
          \x20 README.md   binary metadata (size, arch, entry, sections, counts)\n\
+         \x20 index.jsonl one line per function: name, addr, size, error and the\n\
+         \x20             c_offset/c_len span of its .c block, in address order\n\
          Unfiltered fast exports default to 10 seconds per function; other runs\n\
          default to 120. --max-fn-seconds overrides that policy (0 disables).\n\
          --max-fn-memory MiB stops a function once the process decompiling it\n\
@@ -222,8 +226,8 @@ fn usage() {
          finished function and .streaming reports progress until the export\n\
          completes. The .c is then in decompile order. Not available with --assert.\n\
          --progress keeps the live .streaming and index.jsonl feed but writes\n\
-         .c/.h/.asm/README at the end, byte-identical to the export without it (so\n\
-         reproducible under --jobs N), and index.jsonl in address order.\n\
+         .c/.h/.asm/README and the address-ordered index.jsonl at the end,\n\
+         byte-identical to the export without it (so reproducible under --jobs N).\n\
          Individual function failures are recorded in the artifacts. A mixed run\n\
          exits 0; a selected set that produced no body exits 1 only after all\n\
          artifacts are complete. A rejected --assert exits 1 the same way under\n\
@@ -241,14 +245,8 @@ pub(crate) trait ExportWatch: PoolWatch {
     fn decompiling(&self, prog: &ConsoleProgram, total: usize) -> Result<(), String>;
     /// The artifacts are about to be built and written.
     fn finalizing(&self);
-    /// The four artifacts are written; `results` are in the `.c`'s order.  Returns
-    /// any further files it wrote, for the completion summary.
-    fn written(
-        &self,
-        out_dir: &Path,
-        file_name: &str,
-        results: &[FuncResult],
-    ) -> Result<Vec<(String, usize)>, String>;
+    /// Every artifact and the index are written; the `.c` is `c_bytes` long.
+    fn written(&self, c_bytes: u64);
 }
 
 /// The whole flow: load once → decompile every target (with prototypes) →
@@ -461,6 +459,7 @@ pub(crate) fn decompile_project(
         &file_name,
         &prog,
         &results,
+        ReadmeLayout::Standard,
     );
 
     std::fs::create_dir_all(&out_dir)
@@ -476,8 +475,15 @@ pub(crate) fn decompile_project(
         std::fs::write(&path, text).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
         sizes.push((base, text.len()));
     }
+    // Atomic: under `--progress` the address-ordered index replaces the live feed.
+    let index = crate::project_stream::address_index(&file_name, &results);
+    crate::project_stream::write_atomic(
+        &out_dir.join(crate::project_stream::INDEX_FILE),
+        index.as_bytes(),
+    )?;
+    sizes.push((crate::project_stream::INDEX_FILE.to_string(), index.len()));
     if let Some(watch) = watch {
-        sizes.extend(watch.written(&out_dir, &file_name, &results)?);
+        watch.written(c_file.len() as u64);
     }
 
     let ok = results.iter().filter(|r| r.error.is_none()).count();

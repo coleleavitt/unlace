@@ -1721,6 +1721,25 @@ tier = "core"
 symptoms = "full-line WARNING banner comments clutter the output|warning text wanted inline at the end of the statement it describes|terse warning slugs unwanted; full upstream warning text needed|warning style needs to match upstream ghidra for diffing"
 
 [[settable]]
+option = "warnlevel"
+values = "caveats|all"
+default = "all"
+destructive = false
+phase = "P9"
+subphase = "warning-style"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-warnlevel"
+summary = "Choose which analysis warnings print. all (the default) prints every warning. caveats prints only the warnings that tell the reader something the C does not show, and leaves out three kinds. The first is narration of a readability rewrite after which the C means the same: branch-flip, tail-call, return-dupe, crossjump-dupe, and the P8 header counts early-return, switch-return, ite-dedupe, ternary and else-flattened. The second is a no-return on a call to a function that is no-return by name: exit, abort, __assert_fail and the rest of the ElfFunctionsThatDoNotReturn list noreturn_known reads. The third is a jump-as-call whose target is fixed: a named or direct callee, a constant, a global slot, or a load from a constant address, as in a PLT stub's jmp *slot. No jump table can hide behind such a jump. A no-return on any other callee, a jump-as-call through a computed target and every other warning still print. The choice applies to both warnstyle forms, and a warning left out is not listed in the --json warnings either. Printing only."
+use_when = "all by default, so every rewrite the printer made is marked: where a branch was flipped (branchflip), where a jump prints as a call (tailcalljump, a PLT stub), and every no-return call. Set caveats for a project export an agent or a reader will scan: on stripped /usr/bin/ls it cuts the export's warning comments from 709 to 37, keeping the 35 no-return calls to unnamed functions, the one jump-as-call through a parameter and one flow warning, and the C with its comments stripped is unchanged. Under caveats a flipped if/else, a tail call and a PLT stub no longer say so."
+example = "option warnlevel all"
+source_decompiler = "unlace"
+inspiration = "external user report: a project export wrote 89 branch-flip / jump-as-call / no-return annotations, not errors but noise"
+change_kind = "presentation-default"
+tier = "core"
+symptoms = "warning comments clutter a project export with branch-flip or tail-call notes|a // no-return comment after a call to exit or abort|every PLT stub carries a // jump-as-call comment|a branch-flip or tail-call comment wanted to check a rewrite|the --json warnings list misses rewrite warnings"
+
+[[settable]]
 option = "bitidioms"
 values = "on|off"
 default = "on"
@@ -2758,6 +2777,25 @@ tier = "transform"
 symptoms = "a min or max prints as a1 * (unsigned int)(a1 < a0) + a0 * (unsigned int)(a1 >= a0)|a select prints as a sum of two products with (unsigned int) casts of complementary compares|tricore sel or sat prints as multiplications by booleans"
 
 [[settable]]
+option = "strcmpfold"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "condition-form"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-strcmpfold"
+summary = "C output only: print a compare against a short constant string that the compiler inlined as reads of a char array compared with immediates as the call it came from: `(*(unsigned short *)v2 == 0x4853) && (v2[2] == ' ')` prints `strncmp(v2, \"SH \", 3) == 0`. gcc and clang turn an equality-only `strcmp`/`strncmp`/`memcmp` against a constant into a compare of `min(n, strlen + 1)` bytes when the buffer is known to hold them; gcc emits the widest pieces first, one branch each to a fail label, the last overlapping on x86 (`compare_by_pieces`), and LLVM xors each load with its constant and ors them into one test (`ExpandMemCmp`). The fold accepts one expression (a compare, a `&&` of `==` or `||` of `!=`, an `INT_OR` of `INT_XOR`/`INT_SUB` terms against zero) or one structured `&&`/`||` condition whose leaves print only their test, when every read is of one array of one-byte elements (char, a one-byte integer or undefined1) or through one pointer to bytes or void, the reads cover one run with no gap, overlapping reads agree, one read is wider than a byte, and every byte is printable but a final NUL. A run ending in its only NUL prints `strcmp(base, \"text\") == 0`; any other prints `strncmp(base, \"text\", n)`. Reads of separate variables, single bytes, ordered results, struct fields and non-byte objects keep their compares (`crates/unlace-emit/src/p9_emit/strcmpfold.rs`)."
+use_when = "Off by default. Turn on when reading command and protocol parsers built with gcc or clang at -O2, where `strncmp(buf, \"PING\", 4) == 0` reads as `*(unsigned int *)v2 == 0x474e4950`. The fold is exact (the compare holds exactly when the call returns 0), but the source may have been `memcmp` or a hand-written byte test; leave it off to see the compares the code makes. Measured on: 0/675 datatest assertions move, and the stage corpus moves only indexstride #3/#4, which pin the unfolded compares; the C of every function of /usr/bin/nc and /usr/bin/ping is unchanged. Speed over those functions (decomp_dbg, 7 off/on pairs, user instructions) was inside the noise of identical runs (medians +6.3% and -2.2% against identical-run spreads of 15.5% and 8.1%), which does not show the 5% budget holds, so it stays off."
+example = "option strcmpfold on"
+source_decompiler = "unlace"
+inspiration = "External feedback on a stripped static x86-64 IRC client (notes/netstruct-gaps.md, gcc's inline strncmp); gcc builtins.cc expand_builtin_memcmp / expr.cc compare_by_pieces / tree-ssa-strlen.cc handle_builtin_string_cmp and LLVM SimplifyLibCalls / ExpandMemCmp define the shapes"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = "a buffer compare prints as (*(unsigned short *)v2 == 0x4853) && (v2[2] == ' ') where the source called strncmp|*(unsigned int *)buf == 0x474e4950 where the source compared with \"PING\"|a char array is tested against hexadecimal constants whose bytes are printable text"
+
+[[settable]]
 option = "msvcstrappend"
 values = "on|off"
 default = "off"
@@ -3702,6 +3740,44 @@ inspiration = "decbench type_match census (ty17): DWARF `char[8192]`/`char[256]`
 change_kind = "type-inference"
 tier = "transform"
 symptoms = "a local char buffer is declared 8 bytes longer than the length passed to fgets/snprintf/read with it, e.g. char v3 [8200] beside fgets(v3,0x2000,fp)|a stack array's size is a multiple of 16 plus 8 and it ends where the stack-protector canary slot starts|a buffer passed to __snprintf_chk(buf, n, 1, 0x100, ...) is declared longer than the 0x100 object size the call carries"
+
+[[settable]]
+option = "indexstride"
+values = "on|off"
+default = "on"
+destructive = false
+phase = "P6"
+subphase = "stack-frame-layout"
+strength = "HARD"
+rewind = "P6"
+issue = "netstruct"
+summary = "Declare an indexed stack array with the element its index steps by when a wider integer access lies inside the elements the index is known to reach. `RangeHint::preferred` (varmap.cc:126-157) throws the indexed open range out against a fixed range at the same start, so the widest fixed read decides the element: gcc's inline `strncmp(buf,\"SH \",3)` and `strncmp(buf,\"PING\",4)` read the buffer as one 2-byte and one 4-byte compare, and beside `buf[n] = 0` the `char buf[1024]` was declared `int v2 [258]` with the store printed `((char *)v2)[v1] = 0`. With the option on the wider unlocked integer hints inside the index's proven reach (starting on an element boundary, a multiple of the element wide) are dropped before the merge, so the array keeps the element and those reads print as casts (`*(int *)v2 == 0x474e4950`). Locked types, shared-storage views, pointer, float and aggregate accesses, and accesses past the proven reach keep upstream's merge."
+use_when = "On by default (0/675 datatest assertions move; speed: retired user instructions over every function of /usr/bin/nc (103) and /usr/bin/ping (185), off/on alternating, median -0.4% and -2.0%, inside the noise of identical runs). The tell it fixes is a stack buffer that the code indexes byte by byte (`((char *)v2)[v1] = 0`, a NUL terminator after `recv`/`read`) declared `int v2 [258]` because an inlined `strncmp`/`memcmp` reads its first bytes as one wider word. Flip off to see upstream's merge, where the widest fixed read at the start decides the element: both declarations describe the same bytes, and a program that really walks an `int` array byte by byte reads better that way."
+example = "option indexstride on"
+source_decompiler = "unlace"
+inspiration = "External feedback on a stripped static x86-64 IRC client: a 1024-byte receive buffer checked with `strncmp(buf,\"SH \",3)` came out as a wider-element array; reproduced by tests/stages/fixtures/netstruct (gcc 15 -O2 -static)"
+change_kind = "type-inference"
+tier = "transform"
+symptoms = "a char buffer is declared int v2 [258] beside ((char *)v2)[v1] = 0|an indexed byte store into a stack array prints with a (char *) cast|a receive buffer compared with an inlined strncmp is declared as a short or int array"
+
+[[settable]]
+option = "sockfamily"
+values = "on|off"
+default = "on"
+destructive = false
+phase = "P6"
+subphase = "stack-frame-layout"
+strength = "HARD"
+rewind = "P6"
+issue = "netstruct"
+summary = "Declare a frame object that reaches a `const struct sockaddr *` parameter (`connect`, `bind`, `sendto`) as its family's address record when the function writes its family slot only with the constant `AF_INET` (2) or `AF_UNIX` (1): `sockaddr_in` or `sockaddr_un` instead of the generic `sockaddr` the prototype names. Typed from the call, the port and address stores land in `char sa_data[14]` and print a byte at a time (`v4.sa_data[0] = (char)v1; v4.sa_data[1] = SUB21(v1,1);`, the address as four shifted bytes); as `sockaddr_in` they are `v4.sin_port` and `v4.sin_addr`. The record is the target type library's own (`typelib` interns `sockaddr_in` and `sockaddr_un` with `sockaddr` while the option is on) and must start with a 2-byte family, so a BSD layout with `sin_len` first is left alone; `AF_INET6` is left alone because its value differs across platforms."
+use_when = "On by default (0/675 datatest assertions move; speed: retired user instructions over every function of /usr/bin/nc (103) and /usr/bin/ping (185), off/on alternating, median -0.4% and -2.0%, inside the noise of identical runs). The tell it fixes is a socket address local declared `sockaddr` whose port or IPv4 address is written into `sa_data` byte by byte (`v4.sa_data[2] = (char)v3; v4.sa_data[3] = (char)(v3 >> 8);`) or through casts (`*(unsigned int *)&v4.sa_data[2] = a2;`). Flip off to declare the object by the parameter it reaches, which is right for a program that really declares `struct sockaddr` and fills `sa_data` itself. A value stored whole into `sin_addr` takes `struct in_addr` from the field, so a parameter it comes from can print as `in_addr a2`."
+example = "option sockfamily on"
+source_decompiler = "unlace"
+inspiration = "External feedback on a stripped static x86-64 IRC client: sockaddr fields came out as individual bytes; reproduced by tests/stages/fixtures/netstruct (connect_to, send_syn)"
+change_kind = "type-inference"
+tier = "transform"
+symptoms = "a port is stored as v4.sa_data[0] = (char)v1 and v4.sa_data[1] = SUB21(v1,1)|a sockaddr local's IPv4 address is stored as four shifted bytes into sa_data|*(unsigned int *)&v4.sa_data[2] = a2; beside v4.sa_family = 2"
 
 [[settable]]
 option = "castobject"

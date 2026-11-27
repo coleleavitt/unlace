@@ -47,6 +47,13 @@ commands = [
     'load function sub_1380',
     'decompile',
     'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/netstruct/netstruct-gcc-O2',
+    'option pkthdr on',
+    'read symbols',
+    'load function sub_402b00',
+    'decompile',
+    'print C',
 ]
 
 [[match]]
@@ -93,3 +100,23 @@ literal = 'icmphdr v2;'
 name = 'PKTHDR #9: on, the ICMP type is named'
 count = 1
 literal = 'v2.type = 8;'
+
+[[match]]
+name = 'PKTHDR #10: on, send_syn names the IPv4 version and IHL bitfields'
+count = 1
+literal = 'v3.version = 4;'
+
+[[match]]
+name = 'PKTHDR #11: on, send_syn names the IHL bitfield'
+count = 1
+literal = 'v3.ihl = 5;'
+
+[[match]]
+name = 'PKTHDR #12: on, send_syn names the TOS and the total length of the first word'
+count = 1
+literal = 'v3.tos = 0x10;'
+
+[[match]]
+name = 'PKTHDR #13: on, the total length of the first word is named'
+count = 1
+literal = 'v3.tot_len = 0x2800;'

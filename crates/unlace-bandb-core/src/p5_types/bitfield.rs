@@ -73,7 +73,7 @@
 use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
-use unlace_base::address::{leastsigbit_set, mostsigbit_set};
+use unlace_base::address::{Address, leastsigbit_set, mostsigbit_set};
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
@@ -581,22 +581,44 @@ impl Rule for RuleBitFieldOut {
             Some(v) => v,
             None => return 0,
         };
-        let dt = data.vn_type_def_facing(outvn);
-        if !dt.has_bitfields() {
+        let Some((dt, off)) = bitfield_container(data, outvn) else {
             return 0;
-        }
-        let big_endian = bitfield_big_endian(data);
-        let mut transform = match insert::BitFieldInsertTransform::new(data, op, &dt, 0, big_endian)
-        {
-            Some(t) => t,
-            None => return 0,
         };
+        let big_endian = bitfield_big_endian(data);
+        let mut transform =
+            match insert::BitFieldInsertTransform::new(data, op, &dt, off, big_endian) {
+                Some(t) => t,
+                None => return 0,
+            };
         if !transform.do_trace(data) {
             return 0;
         }
         transform.apply(data);
         1
     }
+}
+
+/// The bitfield-bearing type a written varnode belongs to, and its offset in it.
+/// A struct split at its constant fields (`SplitDatatype`) reaches the rule as a
+/// piece typed as its bytes, so the stack symbol that contains the piece names
+/// the bitfields; otherwise the varnode's own type.
+fn bitfield_container(data: &Funcdata, vn: VarnodeId) -> Option<(Rc<Datatype>, int4)> {
+    let v = data.vbank().get(vn)?;
+    let containing = data.get_scope_local().and_then(|sl| {
+        sl.query_container_for_link_matching(
+            v.get_addr(),
+            v.get_size(),
+            &Address::new_invalid(),
+            |sym| sym.dtype.as_ref().is_some_and(|t| t.has_bitfields()),
+        )
+    });
+    if let Some(info) = containing {
+        if let (Some(ty), true) = (info.sym_type, info.sym_off >= 0) {
+            return Some((ty, info.sym_off));
+        }
+    }
+    let own = data.vn_type_def_facing(vn);
+    own.has_bitfields().then_some((own, 0))
 }
 
 /// Collapse bitfield pulls starting with a `CPUI_LOAD` (C++ `RuleBitFieldLoad`,

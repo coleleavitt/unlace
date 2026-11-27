@@ -4716,10 +4716,12 @@ impl SplitDatatype {
         if out_category == 2 && in_category == 2 {
             return Ok(false);
         }
-        // (unlace) Bitfields are no components to split along: the bitfield rules
-        // (`RuleBitFieldOut`, `RuleBitFieldStore`) name them from the whole write.
-        if holds_bitfields(in_base, 0, in_base.get_size())
-            || holds_bitfields(out_base, 0, out_base.get_size())
+        // (unlace) A non-constant copy is not split along bitfields: the bitfield
+        // rules name it from the whole write. A constant is split: its bitfield
+        // byte stays one piece, which `RuleBitFieldOut` names from the struct.
+        if !in_constant
+            && (holds_bitfields(in_base, 0, in_base.get_size())
+                || holds_bitfields(out_base, 0, out_base.get_size()))
         {
             return Ok(false);
         }

@@ -117,13 +117,30 @@ Three things were missing, in the order they would have to land:
    v12 = 0x1000000;
    v14 = 0xd0160250;
    ```
-2. The types. The built-in `linux-x86_64.ktl` defines `iphdr`, `tcphdr`,
-   `udphdr` and `icmphdr`, but leaves the bitfield bytes (`ihl:4 version:4`,
-   tcphdr's `doff` and flags) as holes, and is served only to dynamic images.
-3. The recognition. No prototype says a buffer is a packet (`sendto` takes
-   `const void *`). A heuristic option could type a frame object that reaches
-   a call, whose first byte is a constant 0x45-0x4f and whose byte 9 is 1, 6
-   or 17, as `struct { struct iphdr ip; struct tcphdr|udphdr|icmphdr l4; }`.
+2. Fixed by the libc types: `libctypes` now defines `iphdr`, `tcphdr`, `udphdr`
+   and `icmphdr` with their bitfields (`ihl:4 version:4`, tcphdr's `doff` and
+   flags, measured with gcc 15.3 against glibc 2.43); `icmphdr`'s `un` union is
+   still a hole.
+3. Fixed by the `pkthdr` option (P6, default off; spec 06, "A raw socket's
+   packet buffer by its headers"; stage test `tests/stages/pkthdr.toml`). A frame
+   object whose first byte is a constant 0x45, or that a `sendto` on a `SOCK_RAW`
+   socket reads, is typed as its IPv4 header and the layer-4 header its protocol
+   byte names. A constant written into a bitfield struct is split at its field
+   boundaries (unconditional), so the words print by field:
+
+   ```c
+   iphdr v3;
+   tcphdr v7;
+   v3.version = 4;
+   v3.ihl = 5;
+   v3.tos = 0x10;
+   v3.tot_len = 0x2800;
+   v3.ttl = 0x40;
+   v3.protocol = 6;
+   v7.doff = 5;
+   v7.syn = 1;
+   v7.window = 0xd016;
+   ```
 
 At -O0 (`gcc -O0 -static -s netstruct.c`, not committed: no assertion needs
 it) the packet is zeroed by a call and filled a byte at a time, so it

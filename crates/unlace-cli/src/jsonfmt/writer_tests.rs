@@ -1,5 +1,9 @@
 use super::*;
 
+fn dumps_indent2_sorted(v: &Json) -> String {
+    writer::render(v, Format::Sorted)
+}
+
 const RENDERERS: [fn(&Json) -> String; 3] = [dumps_compact, dumps_indent2, dumps_indent2_sorted];
 
 #[test]

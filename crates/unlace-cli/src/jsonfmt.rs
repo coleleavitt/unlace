@@ -49,13 +49,6 @@ pub fn write_indent2_streamed(
     writer::write_streamed(out, head, key, items, tail)
 }
 
-/// As [`dumps_indent2`] but with `sort_keys=True` (object keys emitted in
-/// ascending byte order) — matches `unlace/run_tests.py`'s
-/// `json.dumps(..., indent=2, sort_keys=True)`.
-pub fn dumps_indent2_sorted(v: &Json) -> String {
-    writer::render(v, Format::Sorted)
-}
-
 /// Render `v` on ONE line, with no spaces — the `index.jsonl` / `.streaming`
 /// form, where a record has to be a single line a reader can consume as it
 /// lands.  String escaping is the same `ensure_ascii` rendering the pretty

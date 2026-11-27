@@ -59,7 +59,7 @@
 use std::rc::Rc;
 use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uint4};
-use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
+use unlace_decomp::dtype::{Datatype, TypeBitField, TypeFactory, TypeField, type_metatype};
 
 use super::{Layout, named_aggregate};
 
@@ -93,6 +93,10 @@ pub(super) enum FTy {
     Arr(&'static FTy, int4),
     /// The named aggregate, BY VALUE (`stat::st_atim`).
     Named(&'static str),
+    /// A bitfield of the declared type: `.2` bits, `.1` bits above the least
+    /// significant bit of the byte at the row's offset. Every bitfield here lies
+    /// inside one byte (`iphdr::ihl`, `tcphdr::syn`).
+    Bits(&'static FTy, int4, int4),
 }
 
 /// One field of a published layout: its byte offset inside the aggregate, its
@@ -226,18 +230,83 @@ const DIRENT_FIELDS: &[GlibcField] = &[
     f(0x13, "d_name", FTy::Arr(&FTy::SChar, 256)),
 ];
 
+/// `struct iphdr`, `sizeof` 20 — `netinet/ip.h`: the IPv4 header (RFC 791),
+/// the same bytes under every C library and on every byte order (glibc swaps the
+/// declaration order of `ihl` and `version` on a big-endian target so that each
+/// keeps its nibble). The `__u8`/`unsigned int` bitfields are measured, not
+/// declared: `ihl` is byte 0's low nibble, `version` its high one.
+const IPHDR_FIELDS: &[GlibcField] = &[
+    f(0x00, "ihl", FTy::Bits(&FTy::UInt, 0, 4)),
+    f(0x00, "version", FTy::Bits(&FTy::UInt, 4, 4)),
+    f(0x01, "tos", FTy::UChar),
+    f(0x02, "tot_len", FTy::UShort),
+    f(0x04, "id", FTy::UShort),
+    f(0x06, "frag_off", FTy::UShort),
+    f(0x08, "ttl", FTy::UChar),
+    f(0x09, "protocol", FTy::UChar),
+    f(0x0a, "check", FTy::UShort),
+    f(0x0c, "saddr", FTy::UInt),
+    f(0x10, "daddr", FTy::UInt),
+];
+
+/// `struct tcphdr`, `sizeof` 20 — `netinet/tcp.h`: the TCP header (RFC 793)
+/// under glibc's Linux-style member names (the BSD `th_*` view is the other arm
+/// of the same union). `res1`/`doff` are byte 12's nibbles and the six flags and
+/// `res2` are byte 13, least significant bit first.
+const TCPHDR_FIELDS: &[GlibcField] = &[
+    f(0x00, "source", FTy::UShort),
+    f(0x02, "dest", FTy::UShort),
+    f(0x04, "seq", FTy::UInt),
+    f(0x08, "ack_seq", FTy::UInt),
+    f(0x0c, "res1", FTy::Bits(&FTy::UShort, 0, 4)),
+    f(0x0c, "doff", FTy::Bits(&FTy::UShort, 4, 4)),
+    f(0x0d, "fin", FTy::Bits(&FTy::UShort, 0, 1)),
+    f(0x0d, "syn", FTy::Bits(&FTy::UShort, 1, 1)),
+    f(0x0d, "rst", FTy::Bits(&FTy::UShort, 2, 1)),
+    f(0x0d, "psh", FTy::Bits(&FTy::UShort, 3, 1)),
+    f(0x0d, "ack", FTy::Bits(&FTy::UShort, 4, 1)),
+    f(0x0d, "urg", FTy::Bits(&FTy::UShort, 5, 1)),
+    f(0x0d, "res2", FTy::Bits(&FTy::UShort, 6, 2)),
+    f(0x0e, "window", FTy::UShort),
+    f(0x10, "check", FTy::UShort),
+    f(0x12, "urg_ptr", FTy::UShort),
+];
+
+/// `struct udphdr`, `sizeof` 8 — `netinet/udp.h` (RFC 768), the Linux-style arm
+/// of its union.
+const UDPHDR_FIELDS: &[GlibcField] = &[
+    f(0x00, "source", FTy::UShort),
+    f(0x02, "dest", FTy::UShort),
+    f(0x04, "len", FTy::UShort),
+    f(0x06, "check", FTy::UShort),
+];
+
+/// `struct icmphdr`, `sizeof` 8 — `netinet/ip_icmp.h` (RFC 792). Bytes 4..8 are
+/// `un`, a union of the echo `id`/`sequence` pair, the redirect `gateway` and
+/// the `frag` MTU; this table builds no unions, so they stay a hole and print in
+/// the offset form.
+const ICMPHDR_FIELDS: &[GlibcField] = &[
+    f(0x00, "type", FTy::UChar),
+    f(0x01, "code", FTy::UChar),
+    f(0x02, "checksum", FTy::UShort),
+];
+
 /// Every published layout, keyed by the bare name `super::NAMED_AGGREGATES`
 /// interns the aggregate under.
 pub(super) const GLIBC_LAYOUTS: &[(&str, &[GlibcField])] = &[
     ("FILE", FILE_FIELDS),
     ("dirent", DIRENT_FIELDS),
     ("group", GROUP_FIELDS),
+    ("icmphdr", ICMPHDR_FIELDS),
+    ("iphdr", IPHDR_FIELDS),
     ("option", OPTION_FIELDS),
     ("passwd", PASSWD_FIELDS),
     ("stat", STAT_FIELDS),
+    ("tcphdr", TCPHDR_FIELDS),
     ("timespec", TIMESPEC_FIELDS),
     ("timeval", TIMEVAL_FIELDS),
     ("tm", TM_FIELDS),
+    ("udphdr", UDPHDR_FIELDS),
 ];
 
 /// The published layout of `name`, or `None` for an aggregate that stays an
@@ -285,6 +354,7 @@ fn field_type(ty: &FTy, types: &dyn TypeFactory, word_size: uint4) -> UnlaceResu
         // else nests), so this recursion has no cycle to fall into; the unit
         // test `glibc_layouts_nest_at_most_one_level` is what keeps it that way.
         FTy::Named(n) => named_aggregate(n, types, word_size, Layout::Glibc),
+        FTy::Bits(declared, _, _) => field_type(declared, types, word_size),
     }
 }
 
@@ -297,8 +367,35 @@ pub(super) fn build_fields(
 ) -> UnlaceResult<Vec<TypeField>> {
     let mut out = Vec::with_capacity(fields.len());
     for field in fields {
+        if matches!(field.ty, FTy::Bits(..)) {
+            continue;
+        }
         let ty = field_type(&field.ty, types, word_size)?;
         out.push(TypeField::new(field.off, field.off, field.name, ty));
+    }
+    Ok(out)
+}
+
+/// The bitfield rows of a published layout as interned [`TypeBitField`]s, each
+/// in the one byte it occupies. `ident` is that byte's offset and the type the
+/// declared one, as the DWARF importer does it.
+pub(super) fn build_bitfields(
+    fields: &'static [GlibcField],
+    types: &dyn TypeFactory,
+    word_size: uint4,
+) -> UnlaceResult<Vec<TypeBitField>> {
+    let mut out = Vec::new();
+    for field in fields {
+        let FTy::Bits(declared, lsb, bits) = &field.ty else {
+            continue;
+        };
+        let ty = field_type(declared, types, word_size)?;
+        let mut bitfield =
+            TypeBitField::new(field.off, *bits, types.is_big_endian(), field.name, ty);
+        bitfield.byte_offset = field.off;
+        bitfield.byte_size = 1;
+        bitfield.least_sig_bit = *lsb;
+        out.push(bitfield);
     }
     Ok(out)
 }

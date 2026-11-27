@@ -167,8 +167,9 @@ pub(super) struct NamedAggregate {
     pub align: int4,
 }
 
-/// Every aggregate [`Ty::NamedPtr`] may name. Sorted by name; the table is
-/// searched linearly (23 rows, a handful of times per load).
+/// Every aggregate [`Ty::NamedPtr`] may name, and the four network headers
+/// [`intern_packet_headers`] mints for the frame layout. Sorted by name; the
+/// table is searched linearly (27 rows, a handful of times per load).
 pub(super) const NAMED_AGGREGATES: &[NamedAggregate] = &[
     NamedAggregate {
         name: "DIR",
@@ -193,6 +194,18 @@ pub(super) const NAMED_AGGREGATES: &[NamedAggregate] = &[
         dwarf_alias: None,
         size: 32,
         align: 8,
+    },
+    NamedAggregate {
+        name: "icmphdr",
+        dwarf_alias: None,
+        size: 8,
+        align: 4,
+    },
+    NamedAggregate {
+        name: "iphdr",
+        dwarf_alias: None,
+        size: 20,
+        align: 4,
     },
     NamedAggregate {
         name: "lconv",
@@ -273,6 +286,12 @@ pub(super) const NAMED_AGGREGATES: &[NamedAggregate] = &[
         align: 8,
     },
     NamedAggregate {
+        name: "tcphdr",
+        dwarf_alias: None,
+        size: 20,
+        align: 4,
+    },
+    NamedAggregate {
         name: "termios",
         dwarf_alias: None,
         size: 60,
@@ -295,6 +314,12 @@ pub(super) const NAMED_AGGREGATES: &[NamedAggregate] = &[
         dwarf_alias: None,
         size: 56,
         align: 8,
+    },
+    NamedAggregate {
+        name: "udphdr",
+        dwarf_alias: None,
+        size: 8,
+        align: 2,
     },
     NamedAggregate {
         name: "utmp",
@@ -389,8 +414,16 @@ pub(super) fn named_aggregate(
     if glibc_fields {
         if let Some(rows) = glibc::layout_for(name) {
             let fields = glibc::build_fields(rows, types, word_size)?;
+            let bitfields = glibc::build_bitfields(rows, types, word_size)?;
+            let extra = if bitfields.is_empty() {
+                0
+            } else {
+                flags::has_bitfields
+            };
             let shell = types.get_type_struct(name)?;
-            return types.set_fields_struct_raw(&shell, fields, Vec::new(), agg.size, agg.align, 0);
+            return types.set_fields_struct_raw(
+                &shell, fields, bitfields, agg.size, agg.align, extra,
+            );
         }
     }
     let shell = types.get_type_struct(name)?;
@@ -405,6 +438,20 @@ pub(super) fn named_aggregate(
         agg.align,
         flags::type_incomplete,
     )
+}
+
+/// (unlace `pkthdr`) Intern the IPv4, TCP, UDP and ICMP headers with their
+/// published layouts, bitfields included, for the frame layout to name a packet
+/// buffer by ([`unlace_decomp::pkthdr`]). No prototype slot points at them, so
+/// the image's own libc does not matter: they are wire formats, the same bytes
+/// under glibc and musl, and a static image has no type library to serve them.
+/// A held aggregate of the same name and width (the image's DWARF) is adopted,
+/// as [`named_aggregate`] always does.
+pub fn intern_packet_headers(types: &dyn TypeFactory, word_size: uint4) -> UnlaceResult<()> {
+    for name in unlace_decomp::pkthdr::HEADERS {
+        named_aggregate(name, types, word_size, Layout::Glibc)?;
+    }
+    Ok(())
 }
 
 /// Retargets of [`super::LIBC`] entries — matched against IMPORTED names, with

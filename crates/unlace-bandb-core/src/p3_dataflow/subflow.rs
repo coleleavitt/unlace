@@ -4512,6 +4512,20 @@ struct Component {
     offset: int4,
 }
 
+/// (unlace) Whether bitfields occupy any of the bytes `[offset, offset + size)`
+/// of `ct`, a structure or a partial one. `getSubType` and `getHoleSize` see
+/// only whole fields, so a split would cut an `iphdr`'s `ihl`/`version` byte out
+/// as a hole the bitfield rules can no longer name.
+fn holds_bitfields(ct: &Datatype, offset: int4, size: int4) -> bool {
+    if !ct.has_bitfields() {
+        return false;
+    }
+    match (ct.get_partial_base(), ct.get_partial_offset()) {
+        (Some(base), Some(base_off)) => base.has_bit_fields_in_range(base_off + offset, size),
+        _ => ct.has_bit_fields_in_range(offset, size),
+    }
+}
+
 /// Split a p-code COPY, LOAD, or STORE based on the underlying composite
 /// data-type (C++ `SplitDatatype`).
 ///
@@ -4700,6 +4714,13 @@ impl SplitDatatype {
             return Ok(false);
         }
         if out_category == 2 && in_category == 2 {
+            return Ok(false);
+        }
+        // (unlace) Bitfields are no components to split along: the bitfield rules
+        // (`RuleBitFieldOut`, `RuleBitFieldStore`) name them from the whole write.
+        if holds_bitfields(in_base, 0, in_base.get_size())
+            || holds_bitfields(out_base, 0, out_base.get_size())
+        {
             return Ok(false);
         }
         if !in_constant

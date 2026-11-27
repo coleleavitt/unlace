@@ -563,7 +563,10 @@ fn glibc_layouts_fit_their_aggregate() {
             .unwrap_or_else(|| panic!("`{name}` has a layout but no width"));
         let fields = glibc::build_fields(rows, &types, 1).expect("build the layout");
         let mut end = 0;
-        for (row, field) in rows.iter().zip(&fields) {
+        let whole = rows
+            .iter()
+            .filter(|row| !matches!(row.ty, glibc::FTy::Bits(..)));
+        for (row, field) in whole.zip(&fields) {
             assert!(
                 row.off >= end,
                 "{name}::{} at {:#x} overlaps the field before it",
@@ -586,6 +589,63 @@ fn glibc_layouts_fit_their_aggregate() {
                 "ident is the offset, as the DWARF importer does it"
             );
         }
+    }
+}
+
+/// Every bitfield lies inside its one byte, claims bits no other bitfield of
+/// that byte claims, and shares the byte with no whole field; the minted record
+/// carries each one at the offset and bits the row declares.
+#[test]
+fn glibc_bitfields_fit_their_byte() {
+    let types = factory();
+    for (name, rows) in glibc::GLIBC_LAYOUTS {
+        let fields = glibc::build_fields(rows, &types, 1).expect("build the layout");
+        let bits = glibc::build_bitfields(rows, &types, 1).expect("build the bitfields");
+        let mut claimed: std::collections::BTreeMap<int4, u8> = Default::default();
+        for row in rows.iter() {
+            let glibc::FTy::Bits(_, lsb, width) = row.ty else {
+                continue;
+            };
+            assert!(lsb + width <= 8, "{name}::{} leaves its byte", row.name);
+            let mask = (((1u16 << width) - 1) << lsb) as u8;
+            let held = claimed.entry(row.off).or_default();
+            assert_eq!(*held & mask, 0, "{name}::{} overlaps a bitfield", row.name);
+            *held |= mask;
+            assert!(
+                fields.iter().all(|f| row.off < f.offset
+                    || row.off >= f.offset + f.field_type.get_size()),
+                "{name}::{} shares its byte with a field",
+                row.name
+            );
+            let built = bits
+                .iter()
+                .find(|b| b.name == row.name)
+                .unwrap_or_else(|| panic!("{name}::{} was not built", row.name));
+            assert_eq!(
+                (built.byte_offset, built.byte_size, built.least_sig_bit, built.num_bits),
+                (row.off, 1, lsb, width),
+                "{name}::{}",
+                row.name
+            );
+        }
+    }
+}
+
+/// The headers `pkthdr` declares are minted complete, with their bitfields.
+#[test]
+fn the_packet_headers_carry_their_bitfields() {
+    let types = factory();
+    intern_packet_headers(&types, 1).expect("intern the headers");
+    for (name, width, bitfields) in [("iphdr", 20, 2), ("tcphdr", 20, 9), ("udphdr", 8, 0), ("icmphdr", 8, 0)] {
+        let record = types
+            .find_by_name(name)
+            .expect("lookup")
+            .unwrap_or_else(|| panic!("{name} was not interned"));
+        assert_eq!(record.get_size(), width, "{name}");
+        assert!(!record.is_incomplete(), "{name} is complete");
+        let mut found = Vec::new();
+        record.collect_bit_fields(0, &mut found, 0, record.get_size());
+        assert_eq!(found.len(), bitfields, "{name}'s bitfields");
     }
 }
 
@@ -1125,6 +1185,7 @@ fn a_refused_target_is_off_whatever_was_asked() {
 fn the_fit_rule_knows_every_aggregate_this_table_names() {
     let mut ours: Vec<&str> = NAMED_AGGREGATES
         .iter()
+        .filter(|a| !unlace_decomp::pkthdr::HEADERS.contains(&a.name))
         .flat_map(|a| std::iter::once(a.name).chain(a.dwarf_alias))
         .collect();
     let mut theirs = unlace_decomp::libctypes::AGGREGATE_NAMES.to_vec();

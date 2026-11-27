@@ -254,6 +254,11 @@ variable's storage to that record, as they do there, and are refused without
 per CFG out-edge), so `unlace decompile BIN FUNC --cfg-dot | dot -Tsvg` renders it. The same
 dump is the `cfg dot` console command. It is refused with `--json`.
 
+`cfg sblocks` (console only) prints the structuring hierarchy the same way: one node per
+structure node, labelled with its kind (`If`, `WhileDo`, `Ls`, ...) and, for a basic block, its
+code range; one edge per component. The hierarchy exists once the function is structured, so run
+`print C` first; before that it is a single root node.
+
 `--trace` adds, on stderr after the C, the `phase status` dump for the decompiled
 function: the pipeline variant, and the maturity its last pass reached with the facts
 settled there (`maturity: complete (settled: ssa, high-variables, flow, ...)`, see

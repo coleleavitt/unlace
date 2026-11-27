@@ -260,7 +260,8 @@ shapes in the emitted C: a `*(T *)(0LL)` literal, a load or store at an address 
 0x1000, a frame-relative `rsp`/`rbp`/`sp`/`fp`/`bp` address left as pointer arithmetic,
 a `vN` temporary declared with `// temp`, and a `return result;` whose `result` is never
 declared or assigned. They need no DWARF, so binaries without debug info still get a
-signal. Lower is better. They are regex matches: a function that really does stack-pointer
+signal: a run stores each counter summed over the whole document in the `<binary>` row.
+Lower is better. They are regex matches: a function that really does stack-pointer
 arithmetic (rare, usually inline asm) counts too.
 
 ## Adding a metric

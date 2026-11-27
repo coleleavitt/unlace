@@ -1788,6 +1788,30 @@ impl IfaceCommandAction for IfcUnlaceCfgDot {
     }
 }
 
+/// (unlace) `cfg sblocks`: the current function's structuring hierarchy as
+/// Graphviz DOT (see `unlace_decomp::cfgdot::emit_sblock_dot`). The hierarchy is
+/// built when the function is structured, so run `print C` first.
+struct IfcUnlaceCfgSblocks;
+
+impl IfaceCommandAction for IfcUnlaceCfgSblocks {
+    fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
+        let os = {
+            let dcp = dcp_mut(status)?;
+            let fd = match dcp.fd.as_ref() {
+                Some(fd) => fd,
+                None => return Err(IfaceError::execution("No function selected")),
+            };
+            let fname = fd.get_name().to_string();
+            unlace_decomp::cfgdot::emit_sblock_dot(&fname, fd.sblocks_ref())
+        };
+        status.file_out(&os);
+        Ok(())
+    }
+    fn module(&self) -> String {
+        DECOMPILE_MODULE.to_string()
+    }
+}
+
 /// Visitor for `region walk`: pushes a `walk 0x<addr>` line per leaf block.
 struct RegionWalkVisitor {
     addresses: Vec<u64>,
@@ -2264,6 +2288,7 @@ pub fn register_unlace_commands(status: &mut IfaceStatus) {
     status.register_com(Box::new(IfcUnlaceRegionBlocks), &["region", "blocks"]);
     status.register_com(Box::new(IfcUnlaceRegionWalk), &["region", "walk"]);
     status.register_com(Box::new(IfcUnlaceCfgDot), &["cfg", "dot"]);
+    status.register_com(Box::new(IfcUnlaceCfgSblocks), &["cfg", "sblocks"]);
     // (unlace) Not a C++ command: the function-boundary override the `unlace` binary
     // exposes as `--define-function`.
     status.register_com(Box::new(IfcUnlaceFunctionBounds), &["function", "bounds"]);

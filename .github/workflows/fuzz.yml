@@ -52,6 +52,17 @@ jobs:
       - name: Seed corpus, crash corpus and random sweep
         env:
           UNLACE_FUZZ_ITERS: ${{ github.event.inputs.iterations || '200000' }}
-      UNLACE_SPECS: ${{ github.workspace }}/specs
-      SLEIGHHOME: ${{ github.workspace }}/specs
-        run: cargo test -p unlace-fuzz
+          UNLACE_SPECS: ${{ github.workspace }}/specs
+          SLEIGHHOME: ${{ github.workspace }}/specs
+        run: |
+          set -o pipefail
+          cargo test -p unlace-fuzz 2>&1 | tee fuzz.log
+
+      - name: Upload the failing run's log (reproducers are printed in it)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-reproducers-${{ github.run_id }}
+          path: fuzz.log
+          if-no-files-found: ignore
+          retention-days: 30

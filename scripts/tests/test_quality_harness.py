@@ -101,6 +101,16 @@ class MetricTests(unittest.TestCase):
         self.assertEqual(card["stale_return_result"], 0.0)
         self.assertEqual(card["leaked_temp_decls"], 0.0)
 
+    def test_binary_source_free_sums_the_counters(self):
+        dirty = {"code": "int f(void)\n{\n  long v3; // temp\n  *(_QWORD *)(0LL) = 1;\n  return result;\n}\n"}
+        clean = {"code": "int g(void)\n{\n  int result;\n  result = 0;\n  return result;\n}\n"}
+        totals = metrics.binary_source_free({"functions": [dirty, clean]})
+        self.assertEqual(totals["null_deref_sites"], 1.0)
+        self.assertEqual(totals["leaked_temp_decls"], 1.0)
+        self.assertEqual(totals["stale_return_result"], 1.0)
+        self.assertEqual(totals["impossible_lvalue_sites"], 0.0)
+        self.assertEqual(metrics.binary_source_free({}), {k: 0.0 for k in metrics.SOURCE_FREE_COUNTS})
+
     def test_every_metric_has_a_direction_entry(self):
         for name, (hib, text) in metrics.METRICS.items():
             self.assertIn(hib, (True, False, None), name)

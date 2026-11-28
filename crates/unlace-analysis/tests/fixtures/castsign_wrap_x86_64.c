@@ -7,7 +7,7 @@
  * unsigned.  sign_of and sign_of32 only compare, assign and mask the value, so
  * `castsign` declares it signed; peek also indexes a string with it, which at
  * -O1 is a register local only `castsign` re-declares.  The round-trip test in
- * unlace-cli/tests/decompile_all_cli.rs compiles the functions as unlace prints
+ * unlace-cli/tests/decompile_all_cli/ compiles the functions as unlace prints
  * them with gcc and clang at -O0 and -O2, and checks that each build prints
  * what this program prints:
  *

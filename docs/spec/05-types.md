@@ -1102,7 +1102,7 @@ typed `char *`; printed as a literal it ended at its zero byte, two bytes short 
 what the compare reads. It prints as the address it is, `&dat_66e18` under
 `globalref`.
 
-The round trip in `crates/unlace-cli/tests/decompile_all_cli.rs
+The round trip in `crates/unlace-cli/tests/decompile_all_cli/
 (an_element_pointer_round_trips_through_the_printed_c)` compiles the witnesses of
 `crates/unlace-analysis/tests/fixtures/elemptr_x86_64.c` exactly as
 printed — its gcc `-O0`, clang `-O0` and gcc `-O2` builds, with the option on and
@@ -1138,7 +1138,7 @@ merged with a parameter printed as its address, never a literal (`w_pick`);
 pins the batch leaving the global and the table untyped, and
 `tests/cli/elemptr-passes-a-table-with-a-zero-byte-as-its-address.json` a caller
 passing the table to a callee's stated parameter.
-`decompile_all_cli.rs (element_pointers_under_jobs_match_the_serial_run)` pins
+`decompile_all_cli/ (element_pointers_under_jobs_match_the_serial_run)` pins
 `decompile-all` and `decompile-project` under `--jobs 4` to their `--jobs 1`
 output with `--option protoorder off`, neither typing the global that is stepped
 by bytes.
@@ -2277,7 +2277,7 @@ because of the ledger below: a reader shares a record only on exact field-type
 agreement, so a field one reader re-types moves which record another reader is
 answered with (`docs/features/fieldtype/default-on-evaluation.md`).
 `tests/stages/fieldtype.toml` pins both passes, including the index and the
-merged number as controls, and the compiled round trip in `decompile_all_cli.rs`
+merged number as controls, and the compiled round trip in `decompile_all_cli/`
 checks the printed C computes what the binary does.
 
 A function's accepted bases ask the ledger for their layouts in the order

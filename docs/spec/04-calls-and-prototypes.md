@@ -6244,7 +6244,7 @@ function computed, and the return narrows to EAX exactly as before. Over the
 castbench corpus and 98 further binaries (60,037 functions) the change moves no
 function; the shape it corrects is pinned by `tests/stages/returnpiece.toml`
 and by the compiled round trip over the `piecehi_*` fixtures in
-`unlace-cli/tests/decompile_all_cli.rs`.
+`unlace-cli/tests/decompile_all_cli/`.
 
 #### (unlace) A call's result beside a computed second register
 
@@ -8211,7 +8211,7 @@ functions, most of them by inventing arguments. Each call site gets a
   every RETURN the range anyway. gcc's `-fipa-ra` keeps `expandload_zext`'s
   result in `r8` across `call sink` and returns it, so `rsi`, `rdx` and `rcx`
   stay a chain of three and `sink` keeps its one argument
-  (`unlace-cli/tests/decompile_all_cli.rs`
+  (`unlace-cli/tests/decompile_all_cli/`
   `a_zero_extended_narrow_load_round_trips_through_the_printed_c`); it keeps
   crazyflie's `s14`/`s15` across `bl` to a `bx lr` callee and subtracts them
   after it, where the INDIRECT is a creation and the 13 untouched float

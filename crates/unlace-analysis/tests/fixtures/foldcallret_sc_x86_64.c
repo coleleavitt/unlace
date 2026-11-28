@@ -2,7 +2,7 @@
  * non-short-circuit `&`: the binary always makes the call, and C's `&&`/`||`
  * skip their right-hand operand.  `foldcallret` used to fold `tick` into the
  * right-hand operand, so the printed C only called it when `a > 5`.  The
- * round-trip test in unlace-cli/tests/decompile_all_cli.rs compiles `w1f` and
+ * round-trip test in unlace-cli/tests/decompile_all_cli/ compiles `w1f` and
  * `w4f` as unlace prints them and counts the calls.
  *
  * Built with:

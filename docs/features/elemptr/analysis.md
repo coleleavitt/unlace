@@ -338,7 +338,7 @@ it declared a wrong type without changing a value:
   `*(unsigned short *)&a0[1]`; a type-locked pointer keeps upstream's form, and
   no datatest moves.
 
-The round trip in `decompile_all_cli.rs` now also reads tables whose elements have
+The round trip in `decompile_all_cli/` now also reads tables whose elements have
 the top bit set: `unsigned short` and `unsigned int` elements returned to callers
 that widen them, one shifted, one only compared, and a byte table read at two
 signs. Two further fixtures of the same shapes, exported, compiled with gcc and

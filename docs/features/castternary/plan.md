@@ -54,7 +54,7 @@ whether or not `castimplied` is on.
   choice (`choose`), and literal typing (`literal_type`), including ILP32/LLP64.
 - `tests/stages/castternary.toml`: two passes over a base64 quantum and five
   small functions (`option iteexpr on` in both passes).
-- `unlace-cli/tests/decompile_all_cli.rs`
+- `unlace-cli/tests/decompile_all_cli/`
   `a_conditional_arm_cast_round_trips_through_the_printed_c`: the printed
   functions of `castternary_{gcc,clang}_O0_x86_64` compiled with gcc and clang at
   -O0 and -O2, option off and on, must print the binary's output.

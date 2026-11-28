@@ -1,6 +1,6 @@
 //! Tests for the big-endian join order: how the second register's value at a
 //! RETURN is classified, on a hand-built `Funcdata`. The end-to-end witnesses
-//! are the compiled round trips in `unlace-cli/tests/decompile_all_cli.rs`.
+//! are the compiled round trips in `unlace-cli/tests/decompile_all_cli/`.
 
 use super::*;
 

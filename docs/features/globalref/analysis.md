@@ -86,7 +86,7 @@ matches only itself).
 
 `&dat_<addr>` has exactly the constant's pointer type and is the constant's
 value wherever `dat_<addr>` is placed at `<addr>`. The round trip in
-`unlace-cli/tests/decompile_all_cli.rs` places every name at its address
+`unlace-cli/tests/decompile_all_cli/` places every name at its address
 (`--defsym`), maps the fixture's data where the binary keeps it, and runs the
 printed callers compiled with gcc and with clang: both arms print exactly what
 the binary prints (`210 21 27 121 1 0 4 229 1 -8608764254683430263 2`). Moving

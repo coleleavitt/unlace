@@ -5,7 +5,7 @@
  * a global.  The controls keep a callee whose unsigned result shares a
  * variable with a signed libc result, and a void callee whose caller must not
  * start reading a result.
- * The round-trip test in unlace-cli/tests/decompile_all_cli.rs compiles the
+ * The round-trip test in unlace-cli/tests/decompile_all_cli/ compiles the
  * functions as unlace prints them, with the option off and on, and checks both
  * print what this program prints:
  *

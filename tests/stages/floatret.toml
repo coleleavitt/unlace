@@ -15,7 +15,7 @@
 # alone it knows neither callee's return, a float would convert both by
 # value, so the function returns the same register as the bits it is
 # (0xff800000). decompile-all, which knows both callees return floats, types
-# it float (decompile_all_cli.rs a_nan_returned_in_s0_round_trips).
+# it float (decompile_all_cli/ a_nan_returned_in_s0_round_trips).
 #
 # floatret_x86_64 is a stripped clang -O0 PIE: sub_11c0 and sub_11d0 return
 # a global float and double in xmm0 and stay integers: one declaration of a

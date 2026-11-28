@@ -104,7 +104,7 @@ beside `castarith`, at the same seam. A separate option rather than a value of
   (`long` on LP64, `int` on ILP32, the signed pointer-width integer the `(long)` casts
   named), so every later use (a division, an arithmetic shift, a signed or unsigned
   compare, a length argument) computes the same.
-- Compiled round trips (`decompile_all_cli.rs
+- Compiled round trips (`decompile_all_cli/
   a_variable_index_and_a_byte_pointer_difference_round_trip_through_the_printed_c`,
   fixture `castindex_x86_64.c`, 25 functions, gcc -O0 / clang -O0 / gcc -O2 builds,
   option on and off; also compiled by hand with gcc 11 and clang 14 under

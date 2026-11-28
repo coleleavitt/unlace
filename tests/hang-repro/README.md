@@ -90,7 +90,7 @@ follow the same pattern (large, stripped openssh/bash binaries).
   heritage-known Varnodes (C++ `Varnode::isHeritageKnown()`, `varnode.hh:299`).
 - The per-function **watchdog** (`--max-fn-seconds`, cooperative deadline probes at
   the action/rule-pool/heritage loop boundaries) remains as a defensive bound.
-  Regression tests: `crates/unlace-cli/tests/decompile_all_cli.rs`
+  Regression tests: `crates/unlace-cli/tests/decompile_all_cli/`
   (`decompile_all_converges_on_past_pathological_function`) pins the convergence;
   `unlace-decomp`'s `repeatapply_deadline_bounds_nonconverging_action` unit test pins
   the watchdog mechanism deterministically.
@@ -110,7 +110,7 @@ about a million INDIRECT ops. That placement had no watchdog probe, so
 cut off; a 290 KB function of the same shape ran past a 10 s budget to 8 GB.
 The probe now sits in the per-range placement loop, and
 `watchdog_stops_heritage_guard_placement` in
-`crates/unlace-cli/tests/decompile_all_cli.rs` pins it.
+`crates/unlace-cli/tests/decompile_all_cli/` pins it.
 `memory_limit_stops_one_function_and_the_batch_continues` uses the same
 fixture for `--max-fn-memory`: `big` stops at the limit and `after` still
 decompiles.

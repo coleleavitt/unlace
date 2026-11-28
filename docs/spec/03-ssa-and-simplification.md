@@ -2186,7 +2186,7 @@ DWARF-typed `r` in `(r->flags & 0x81) == 0x80`. The printed C reads the
 whole declared field there, which faults only for an object shorter than its
 declared type. `narrowload.xml` pins the narrow spellings, the declared
 parameter's whole-field compare, and the narrow read through a call's result
-and a loop's phi. `decompile_all_cli.rs`'s
+and a loop's phi. `decompile_all_cli/`'s
 `a_narrow_read_round_trips_through_the_printed_c` and
 `a_narrow_read_of_a_declared_record_round_trips_through_the_printed_c` (the
 `-g` builds) run the printed functions on objects that end at a page boundary.

@@ -8,7 +8,7 @@
  * `castsign` must leave `v` unsigned in d_eq32, c_eq64, c_ne64 and c_or64 (the
  * constant meets the value after a `|`).  c_eq7 compares with a small
  * constant, whose type is `int`, and is declared signed.  The round-trip test in
- * unlace-cli/tests/decompile_all_cli.rs compiles the functions as unlace prints them
+ * unlace-cli/tests/decompile_all_cli/ compiles the functions as unlace prints them
  * with gcc and clang at -O0 and -O2, and checks that each build prints what this
  * program prints:
  *

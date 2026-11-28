@@ -87,7 +87,7 @@ Unit tests (`elemptr/tests.rs`), the two-pass stage test
 runs a batch that must leave a byte-stepped global and a first-element-named table
 untyped, one a caller passing a table with a zero byte to a typed callee), the
 compiled round trip over three builds, two arms and two compilers
-(`decompile_all_cli.rs`, `an_element_pointer_round_trips_through_the_printed_c`),
+(`decompile_all_cli/`, `an_element_pointer_round_trips_through_the_printed_c`),
 which compiles a global the header declines at the pointer its comment lists,
 reads a narrow field at a page end and compares a table with a zero byte inside
 it, and `element_pointers_under_jobs_match_the_serial_run` (`--jobs 4` against

@@ -44,7 +44,7 @@ flag before anything new.
   casts. An index the body decrements, a logically shifted value and an
   address-taken stack value stay unsigned in both passes; pass 3 locks the first
   slot with `map addr` and it keeps `uint8` and its casts.
-- `unlace-cli/tests/decompile_all_cli.rs`
+- `unlace-cli/tests/decompile_all_cli/`
   `a_signed_only_variable_round_trips_through_the_printed_c`: the wrap fixtures
   (`castsign_wrap_x86_64.c`, gcc and clang -O0, gcc -O1) with inputs at 2^63 - 1,
   2^63, 2^63 + 1 and the 32-bit edges, and the original four fixtures. The printed

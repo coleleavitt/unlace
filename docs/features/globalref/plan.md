@@ -41,7 +41,7 @@ byte-identical to main, and the type sweep is identical in every slice.
 - `tests/stages/globalref.toml`: two passes over `globalref_x86_64` (off,
   default), libc-typed witnesses so the pointer type does not depend on
   decompile order, plus a direct-access control and a numeric control.
-- `decompile_all_cli.rs::a_constant_address_named_as_a_global_round_trips_through_the_printed_c`:
+- `decompile_all_cli/printed_c_globals.rs::a_constant_address_named_as_a_global_round_trips_through_the_printed_c`:
   both arms, gcc and clang, names placed at their addresses, run against the
   binary's own output.
 - Unit tests: the range lookup and the loader classifier, the per-address type

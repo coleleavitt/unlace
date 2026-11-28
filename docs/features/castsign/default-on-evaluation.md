@@ -106,7 +106,7 @@ built.
 
 ## Value preservation
 
-`unlace-cli/tests/decompile_all_cli.rs`
+`unlace-cli/tests/decompile_all_cli/`
 `a_signed_only_variable_round_trips_through_the_printed_c` decompiles
 `castsign_wrap_{gcc,clang}_O0_x86_64` and `castsign_wrap_gcc_O1_x86_64` (new;
 `castsign_wrap_x86_64.c`) and the original `castsign_{gcc,clang}_O{0,1}_x86_64`,

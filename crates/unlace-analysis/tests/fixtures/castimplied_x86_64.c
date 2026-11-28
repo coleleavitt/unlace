@@ -3,7 +3,7 @@
  * a variable of the wider type, out through `return`, or under another
  * conversion.  The last group changes the value (a sign change, a varargs
  * argument) and must keep its cast.  The round-trip test in
- * unlace-cli/tests/decompile_all_cli.rs compiles the functions as unlace prints them,
+ * unlace-cli/tests/decompile_all_cli/ compiles the functions as unlace prints them,
  * with the option off and on, and checks both print what this program prints:
  *
  *   2 2 -1 82 251 1

@@ -2,7 +2,7 @@
 //!
 //! Which cast a function prints needs a decompile and is covered end to end by
 //! `tests/stages/unlace-castimplied.toml` (pass 1 off, pass 2 on) and by the
-//! compiled round trip in `unlace-cli/tests/decompile_all_cli.rs`
+//! compiled round trip in `unlace-cli/tests/decompile_all_cli/`
 //! (`an_implied_cast_round_trips_through_the_printed_c`).  What is pinned here
 //! is the arithmetic every removal rests on: a conversion is left out only when
 //! C's conversion to its target keeps every value of its source.

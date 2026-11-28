@@ -52,7 +52,7 @@
 #               function type the global or name the table an array, since
 #               the one declaration would rescale this byte step or make
 #               this scalar the array; one function at a time has no batch,
-#               and the compiled round trip in decompile_all_cli.rs checks
+#               and the compiled round trip in decompile_all_cli/ checks
 #               the batch.  Several functions decompiled with no batch to
 #               agree (a jobs-pool worker, a streamed export, a run that does
 #               not take the callee-first order) type no global or table
@@ -71,7 +71,7 @@
 #               the table to a callee whose parameter the option typed is
 #               the same shape across two functions, which only a batch
 #               sees; tests/cli and the compiled round trip in
-#               decompile_all_cli.rs cover it
+#               decompile_all_cli/ cover it
 #
 # Pass 1 (`option elemptr off`) reproduces the casts and pass 2 (`on`) is the
 # fix. The two controls are identical in both passes.

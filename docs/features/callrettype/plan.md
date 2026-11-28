@@ -33,7 +33,7 @@
 
 ## Evidence required (and where it is)
 
-- Value preservation: `unlace-cli/tests/decompile_all_cli.rs
+- Value preservation: `unlace-cli/tests/decompile_all_cli/
   a_call_result_typed_by_its_callee_round_trips_through_the_printed_c`
   compiles every printed fixture function with gcc and clang at -O0 and -O2,
   option off and on, and checks the program's output; the `cached` control

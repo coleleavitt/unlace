@@ -1,6 +1,6 @@
 //! Tests for the type arithmetic of `castternary`.  The printed rule is covered
 //! end to end by `tests/stages/unlace-castternary.toml` (pass 1 off, pass 2 on) and
-//! by the compiled round trip in `unlace-cli/tests/decompile_all_cli.rs`.
+//! by the compiled round trip in `unlace-cli/tests/decompile_all_cli/`.
 
 use super::*;
 

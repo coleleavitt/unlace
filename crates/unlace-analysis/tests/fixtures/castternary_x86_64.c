@@ -6,7 +6,7 @@
  * unsigned constant, a long literal, an unsigned long, and a second cast.  The
  * last group must keep its cast: the conversions of the two bare arms would give
  * the conditional another type, or the cast changes the value.  The round-trip test
- * in unlace-cli/tests/decompile_all_cli.rs compiles the functions as unlace prints
+ * in unlace-cli/tests/decompile_all_cli/ compiles the functions as unlace prints
  * them, with the option off and on, and checks both print what this program
  * prints:
  *

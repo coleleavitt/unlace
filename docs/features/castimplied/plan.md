@@ -54,7 +54,7 @@ nothing when `nocastprinting` is on. Default per `default-on-evaluation.md`.
 - `tests/stages/castimplied.toml`: two passes over gcc -O0 code for a declared
   callee, a trial callee, a varargs callee, an assignment, a return, a stacked chain
   and a sign change under a widening.
-- `unlace-cli/tests/decompile_all_cli.rs`
+- `unlace-cli/tests/decompile_all_cli/`
   `an_implied_cast_round_trips_through_the_printed_c`: the printed functions of
   `castimplied_{gcc,clang}_O0_x86_64` compiled with gcc and clang, option off and
   on, must print what the binary prints (negative chars, 0xfffffff0 unsigned ints,

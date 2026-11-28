@@ -1046,7 +1046,7 @@ COPY prints as its operand and is looked through (`castimplied.rs
 output language without implicit integer conversions (Rust). The ported
 `CastStrategyC` and its pinned decision matrix are unchanged. Pinned by
 `tests/stages/castimplied.toml`, and by a compiled round trip
-(`unlace-cli/tests/decompile_all_cli.rs`, `an_implied_cast_round_trips_through_the_printed_c`)
+(`unlace-cli/tests/decompile_all_cli/`, `an_implied_cast_round_trips_through_the_printed_c`)
 whose functions print the same values with the option off and on, under gcc and
 clang.
 
@@ -1093,7 +1093,7 @@ has the target type, else one of them (`castternary.rs (choose)`):
 keeps the sign-changing first cast and prints `c ? (unsigned long)a0 : a1`. Only
 where `int` is 4 bytes, and only for C output. Pinned by
 `tests/stages/castternary.toml` and by a compiled round trip
-(`unlace-cli/tests/decompile_all_cli.rs`,
+(`unlace-cli/tests/decompile_all_cli/`,
 `a_conditional_arm_cast_round_trips_through_the_printed_c`) over a textbook
 base64 decoder and arms of `char`, `unsigned char`, `short` and `int` against
 `int`, unsigned, `long` and negative arms, built with gcc and clang at -O0 and
@@ -1175,7 +1175,7 @@ cast's type and the operation keeps its type (`castwiden.rs
 unsigned (`-0x80000000`, whose C value is 2^31) keeps the cast, because the
 suffix would change its value. Only where `int` is 4 bytes, and only for C
 output. Pinned by `tests/stages/castwiden.toml` (three passes) and by a
-compiled round trip (`unlace-cli/tests/decompile_all_cli.rs`,
+compiled round trip (`unlace-cli/tests/decompile_all_cli/`,
 `an_implied_widening_round_trips_through_the_printed_c`) over gcc and clang
 builds at -O0 and -O2, printed with each value and compiled with gcc and clang
 at -O0 and -O2 (`-fwrapv`, so the 32-bit arithmetic unlace prints as `int` wraps as
@@ -1411,7 +1411,7 @@ it) or inside a field (`((int *)&a0->field_0x10)[1]`, the upper half of an
 8-byte field). Upstream Ghidra prints the integer round trip. Pinned by
 `tests/stages/castarith.toml` and by the compiled round trip
 `a_pointer_plus_whole_elements_round_trips_through_the_printed_c` in
-`crates/unlace-cli/tests/decompile_all_cli.rs`.
+`crates/unlace-cli/tests/decompile_all_cli/`.
 
 The rewrite only removes ops: the integer form's two casts become one or none.
 That can move one structuring decision. The tail
@@ -1494,7 +1494,7 @@ by the same `sizeof`, and the difference and its type are C's own. Upstream
 Ghidra prints the integer round trips. Pinned by `tests/stages/castindex.toml`
 and by the compiled round trip
 `a_variable_index_and_a_byte_pointer_difference_round_trip_through_the_printed_c`
-in `crates/unlace-cli/tests/decompile_all_cli.rs`; `castindex off`
+in `crates/unlace-cli/tests/decompile_all_cli/`; `castindex off`
 prints byte-for-byte what the build without it prints.
 
 **Repairs and failure mode.** Late type propagation can invalidate the pointer
@@ -3127,7 +3127,7 @@ compared signed and used as `a0[v1]` is declared `int8`; an index the body
 decrements, a logically shifted value and an address-taken stack value stay
 unsigned in both passes; pass 3 maps the first value's slot `uint8`, and the
 locked declaration keeps its casts), by a compiled round trip
-(`unlace-cli/tests/decompile_all_cli.rs`,
+(`unlace-cli/tests/decompile_all_cli/`,
 `a_signed_only_variable_round_trips_through_the_printed_c`: the printed C is
 built with gcc and clang at `-O0` and `-O2` and fed `2^63 - 1`, `2^63`,
 `2^63 + 1` and the 32-bit edges, and every build must print what the fixture
@@ -4983,7 +4983,7 @@ declaration names. A Varnode of that storage at another type, such as its value
 before a call, which nothing prints, is not a read of it at that type, because
 every walk over the Varnodes holding it agreed on the pointer.
 
-**The value is the binary's.** `crates/unlace-cli/tests/decompile_all_cli.rs
+**The value is the binary's.** `crates/unlace-cli/tests/decompile_all_cli/
 (a_constant_address_named_as_a_global_round_trips_through_the_printed_c)`
 exports a non-PIE fixture whose data has no symbols both ways, compiles each
 witness caller exactly as printed against the export's own header with gcc and

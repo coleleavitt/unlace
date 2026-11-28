@@ -70,12 +70,12 @@ Rust back-end never sees the rewrite.
   shared cast read through,
   stored/compared/subtracted sums, void in and out of the function, aggregate,
   integer sum, variable index, unsettled and settled stores, the pass gate both ways.
-- `decompile_all_cli.rs a_pointer_plus_whole_elements_round_trips_through_the_printed_c`:
+- `decompile_all_cli/ a_pointer_plus_whole_elements_round_trips_through_the_printed_c`:
   compiles every tested function of `castarith_x86_64.c` as printed (gcc -O0,
   clang -O0, gcc -O2; option on and off) and checks the program prints what the
   binary prints, including `far_idx`, whose reads 2^31 elements back must keep the
   integer form.
-- `decompile_all_cli.rs an_enum_element_keeps_the_integer_form_and_round_trips`: the
+- `decompile_all_cli/ an_enum_element_keeps_the_integer_form_and_round_trips`: the
   same over `castarith_enum_x86_64.c` (packed 1- and 2-byte enums, a plain enum, an enum
   pointer passed on; gcc -O0 and -O2 with `-g`), compiled with unlace's own enum
   typedefs, plus a spelling check of the C++ `enum class` build.

@@ -38,7 +38,7 @@ evaluation is `default-on-evaluation.md`.
 - unit: `callee_first_plan_tests` (5) in `decompile_all.rs`; value parsing and the
   mode predicates in `protoorder/tests.rs`;
 - integration: `recursive_callees_state_their_types_under_cycles`
-  (`unlace-cli/tests/decompile_all_cli.rs`) over the new fixture
+  (`unlace-cli/tests/decompile_all_cli/`) over the new fixture
   `protoorder_cycles_x86_64` (`as && ld`, symbols kept), and
   `a_redone_recursive_function_reads_no_statement_of_its_own` over
   `protoorder_cyclestruct_x86_64` (`gcc -O2 -fno-inline`), which fails without the

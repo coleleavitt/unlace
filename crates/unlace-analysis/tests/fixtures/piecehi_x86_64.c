@@ -5,7 +5,7 @@
  * of its low half to waitpid first (a pid that does not exist, so the call leaves
  * it alone), and join_hi_lo, whose high half is the first argument, is the
  * control that was always recovered right.  The round-trip test in
- * unlace-cli/tests/decompile_all_cli.rs compiles the functions as unlace prints them
+ * unlace-cli/tests/decompile_all_cli/ compiles the functions as unlace prints them
  * and checks that each build prints what this program prints:
  *
  *   1234567800000005 fedcba98ffffffff

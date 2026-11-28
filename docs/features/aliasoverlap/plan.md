@@ -33,7 +33,7 @@ a load past a store that overwrites some of its bytes.
 
 ## 2. Tests
 
-- `unlace-cli/tests/decompile_all_cli.rs`
+- `unlace-cli/tests/decompile_all_cli/`
   `a_load_is_not_printed_after_a_store_into_its_bytes`: fixture
   `unlace-analysis/tests/fixtures/aliasoverlap_x86_64` (+ `.c`, README row); checks
   statement order in six functions and compiles the printed C against the
@@ -43,7 +43,7 @@ a load past a store that overwrites some of its bytes.
   into the read, a store through a second pointer, a call, and a control with
   nothing between the read and its COPY); eight assertions, main fails #1-#3
   and #5-#7.
-- `decompile_all_cli.rs` `a_split_load_is_not_moved_past_a_store_or_a_call`:
+- `decompile_all_cli/` `a_split_load_is_not_moved_past_a_store_or_a_call`:
   fixture `splitload_x86_64` (gcc -O2 -g, DWARF), the same four shapes. It
   rewrites the printed partial writes (`v1._0_1_ = ...`) as byte stores so main's
   output compiles too, then checks each function against its source. Main: 3 of

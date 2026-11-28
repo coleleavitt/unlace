@@ -256,7 +256,7 @@ correct `int` into a wrong `long long`. A sound default needs positive
 evidence that the value is 64 bits wide (a declared, DWARF or asserted 8-byte
 return type, callers that read both registers as one value, or a 64-bit
 operation whose two halves both reach every RETURN unnarrowed).
-`unlace-cli/tests/decompile_all_cli.rs`
+`unlace-cli/tests/decompile_all_cli/`
 `bejoin_reads_an_ints_stale_low_half_as_the_long_long_it_matches` records both
 readings of `sum_hi`/`sum64` (PowerPC -O2) and `mulhi`/`uwide_mul` (MIPS gcc
 -O0).

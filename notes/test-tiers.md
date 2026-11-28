@@ -50,8 +50,8 @@ baseline (last night) and cannot gate a PR.
    - `unlace-cli::integration` `indirect_dispatch::reentered_dispatches_preserve_each_effect_and_the_callers_return`
    - `unlace-console::integration` `verify_arm_context::generated_graphs_preserve_calls_modes_and_c_across_layouts_and_reuse`
    - `unlace-console::integration` `verify_pdecode::decode_lanes_produce_the_serial_listing`
-   - `unlace-cli::decompile_all_cli` `the_memory_limit_defaults_to_the_cgroup_cap`
-   - `unlace-cli::decompile_all_cli` `jobs_names_synthesized_structs_as_the_serial_run_does`
+   - `unlace-cli::decompile_all_cli` `watchdog::the_memory_limit_defaults_to_the_cgroup_cap`
+   - `unlace-cli::decompile_all_cli` `jobs_pool::jobs_names_synthesized_structs_as_the_serial_run_does`
 4. **nightly.yml calls tests.yml whole**, so its `tests` job repeats exactly what the last push to
    main ran and adds nothing. The nightly is the natural home for the slow set above.
 

@@ -8,7 +8,7 @@
  * (castsign_wrap_x86_64.c holds the shapes it does re-declare).  The last two
  * must stay unsigned in any case: one compares the value both ways, one
  * shifts it logically.  The round-trip test in
- * unlace-cli/tests/decompile_all_cli.rs compiles the functions as unlace prints
+ * unlace-cli/tests/decompile_all_cli/ compiles the functions as unlace prints
  * them, with the option off and on, and checks both print what this program
  * prints:
  *

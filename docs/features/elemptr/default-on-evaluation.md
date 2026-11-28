@@ -20,7 +20,7 @@ the string-literal rule and globals typed only by a batch that decides them).
 | (h) castbench full | casts removed, every function with more read | 33,289 -> 32,073 (0.880x -> 0.848x IDA), 301 fewer (-1,242), 18 more (+26), all read (analysis.md section 3); round P prints all 45 files byte-identical to round O |
 
 Value preservation (analysis.md section 7): the compiled round trip in
-`decompile_all_cli.rs` and further fixtures of returned and shared tables, globals
+`decompile_all_cli/` and further fixtures of returned and shared tables, globals
 stepped by bytes, tables named by their first element and narrow fields at a page
 end print, with the option on, exactly what the binary (or, where main already
 differs, the option off) prints, compiled with gcc and clang; a global the header

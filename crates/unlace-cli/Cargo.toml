@@ -70,7 +70,7 @@ path = "tests/integration.rs"
 
 [[test]]
 name = "decompile_all_cli"
-path = "tests/decompile_all_cli.rs"
+path = "tests/decompile_all_cli/main.rs"
 
 [[test]]
 name = "catalog_cli"

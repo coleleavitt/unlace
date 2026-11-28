@@ -144,7 +144,7 @@ int)((unsigned char *)a0)[0x11]`, and rsyslogd -O0 `sub_5770a`'s `(int8)*(uint2
 `*(T *)p`. With `castarith off` the output is byte-identical to the base on all 201
 binaries below, so the new reading changes nothing there.
 
-Compiled round trips (`decompile_all_cli.rs
+Compiled round trips (`decompile_all_cli/
 a_pointer_plus_whole_elements_round_trips_through_the_printed_c`, fixture
 `castarith_x86_64.c` built with gcc -O0, clang -O0 and gcc -O2, option on and off), 24
 functions: loads and stores of 1, 2, 4 and 8 bytes signed and unsigned, float and double

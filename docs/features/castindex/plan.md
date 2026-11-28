@@ -41,7 +41,7 @@ twin, `cast_output_token`, that takes the output token instead of computing it.
   a sum used as a subscript, a scale not yet cast, a value use with and without a
   saving, byte-pointer differences of every signedness, other differences, a difference
   that saves nothing, the pass gate both ways for both rules.
-- `decompile_all_cli.rs
+- `decompile_all_cli/
   a_variable_index_and_a_byte_pointer_difference_round_trip_through_the_printed_c`:
   compiles the printed functions of `castindex_x86_64.c` (gcc -O0, clang -O0, gcc -O2;
   option on and off) and checks the program prints what the binary prints.

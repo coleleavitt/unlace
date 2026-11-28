@@ -13,7 +13,7 @@
  * operand beside a chain of the same operator, which C regroups.  The main
  * program feeds negative values, 0x80000000 .. 0xffffffff,
  * sums past 32 bits and squares past 2^32.  The round-trip test in
- * unlace-cli/tests/decompile_all_cli.rs compiles the functions as unlace prints them,
+ * unlace-cli/tests/decompile_all_cli/ compiles the functions as unlace prints them,
  * with the option off, on and literal, and checks that each build prints what
  * this program prints:
  *

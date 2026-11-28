@@ -94,7 +94,7 @@ that compiles those callers follow it. `protoorder-types-keeps-a-wide-store-whol
 its subject — the eight-byte store stays whole — and follows the base cast
 (`*(unsigned long *)((long)a0 + 0x10)`). One probe is new,
 `ptrfromuse-default-declares-a-dereferenced-parameter-void`. The two `protoorder`
-byte-pointee tests in `decompile_all_cli.rs` now run the default against
+byte-pointee tests in `decompile_all_cli/` now run the default against
 `--option ptrfromuse off` instead of against `void`.
 
 ## (d) Accuracy

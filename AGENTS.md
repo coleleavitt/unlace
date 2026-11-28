@@ -11,13 +11,11 @@ options, so **the LLM control surface is the product**. It began as a port of Gh
 decompiler (Apache-2.0, see `LICENSE`/`NOTICE`) and has its own defaults now.
 
 ## Repos and branches
-- **`coleleavitt/unlace`** (remote `origin`) is this project. PRs, issues and labels go here.
-- It is a fork of **`Noelo-Lab/kuna`** (remote `upstream`). `main` merges `upstream/main` in;
-  never rebase `main`. Anything offered to kuna comes from a clean branch cut from
-  `upstream/main`, never from `main`.
-- The old research decompiler is archived on branch `master` and tag `unlace-v1-final`. Don't
-  touch either. Its Apple support is being ported into `unlace-analysis`.
-- Upstream's name survives in `docs/history.md` and archived notes; everything live is `unlace`
+- **`coleleavitt/unlace`** (remote `origin`) is the only upstream. PRs, issues and labels go
+  here. There is no `upstream` remote; branch from and target `origin/main`.
+- The original unlace (the research decompiler) is archived on branch `master` and tag
+  `unlace-v1-final`. Don't touch either. Its Apple support is being ported into `unlace-analysis`.
+- The kuna name survives only in `docs/history.md` and archived notes; everything live is `unlace`
   (crates `unlace-*`, the `unlace` binary, `UNLACE_*` env vars, modules `unlace_<slug>.rs`).
 
 ## Layout
@@ -64,7 +62,7 @@ earlier phase checks `fd.is_settled(Fact::…)` or `debug_assert_settled!`, not 
   `decompiler/cpp/*.cc` in comments means upstream Ghidra, not a repo path. New ElementIds use
   4000+, new PcodeOp addlflags start at 0x1000.
 - **IDA/Hex-Rays material is allowed here** (since 2026-11-23): IDA-informed features, TIL,
-  FLIRT and Lumina readers, comparison output. Never send it to `Noelo-Lab/kuna`.
+  FLIRT and Lumina readers, comparison output.
 - **Git**: don't commit `target/` or `*.sla`. Never `git stash` (shared across worktrees).
   One worktree per agent (`../unlace-wt-<name>`, target `../unlace-target/<name>`); commit
   before you finish, then remove it with `tools/hooks/unlace-wt-rm <name>`. Never set
@@ -105,4 +103,4 @@ suite, so you are the nextest gate (or add the `full-ci` label).
 | `docs/ghidra-integration.md`, `docs/web-integration.md` | The front-ends. |
 | `docs/missing-ghidra-analyses.md` | Analyzer gap vs Ghidra. |
 | `docs/sleigh-from-isa-specs.md` | Generating SLEIGH from Sail specs. |
-| `docs/history.md` | The port's history (uses the upstream name, kuna). |
+| `docs/history.md` | The port's history (uses the old name, kuna). |

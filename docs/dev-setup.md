@@ -196,9 +196,8 @@ failing assertion, and on a test file that cannot be parsed or run; assertions t
 not in the baseline are listed as newly passing and do not fail. A bless rewrites the `data:`
 keys and `data_footer` and keeps the file's other keys. A baseline is a JSON object whose
 `passing` array holds strings; a record without one is an error, never an empty baseline.
-`docs/baseline.json` is re-recorded only for a sanctioned change (an upstream sync per
-`docs/history.md`, or a deliberate default flip the commit message names), never to absorb a
-regression.
+`docs/baseline.json` is re-recorded only for a sanctioned change (a deliberate default
+flip the commit message names), never to absorb a regression.
 
 `scripts/check_layers.py` (run by the unittest line) fails on a new module path (`crate::`,
 `super::`, `self::`) from a lower band to a higher one (middle < lift < structure < bandb < emit <

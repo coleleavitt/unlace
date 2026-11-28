@@ -10,7 +10,7 @@ decided by `docs/pr-bodies.md`: a line or two of what they showed, not their out
 
 ```
 python -m scripts.prepr.difflint            # against origin/main
-python -m scripts.prepr.difflint upstream/main
+python -m scripts.prepr.difflint <base-ref>
 ```
 
 Seconds. Errors fail the run:

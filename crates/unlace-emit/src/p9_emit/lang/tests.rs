@@ -2,7 +2,7 @@
 //!
 //! The load-bearing one is [`profile_matches_legacy_constants`]: it is what makes
 //! "read the C profile instead of the constant" a provably byte-identical
-//! rewrite, and therefore what lets the migration touch `printc.rs` without
+//! rewrite, and therefore what lets the migration touch `printc/` without
 //! re-pinning `docs/baseline.json`.
 
 use super::*;
@@ -40,7 +40,7 @@ fn profile_matches_legacy_constants() {
     assert_eq!(p.null_literal, "NULL");
 }
 
-/// The C forms are the ones `printc.rs` had before the plane existed; a wrong
+/// The C forms are the ones `printc/` had before the plane existed; a wrong
 /// value here would silently reroute the C path to an emitter written for
 /// another language.
 #[test]

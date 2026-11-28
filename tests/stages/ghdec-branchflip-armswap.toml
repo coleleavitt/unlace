@@ -38,7 +38,7 @@
 #
 # Stage model: S8 structure recovery (`branchflip` arm swap,
 # substrate/funcdata_block.rs block_if_flip_negated_guard) with the
-# rendering consequence in S9 emission (p9_emit/printc.rs emit_block_if
+# rendering consequence in S9 emission (p9_emit/printc/ emit_block_if
 # pending-brace ownership).  The tree is NOT corrupted by the swap - a
 # debug-only leaf-multiset assertion in block_if_flip_negated_guard now
 # polices that - the defect was entirely in the printer.

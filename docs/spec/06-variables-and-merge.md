@@ -1394,7 +1394,7 @@ have and dropped. `unlace-console/src/assertions.rs (expected_locals)` records,
 per local a batch touched, the name it must be declared under and the type the
 last `type` gave it, and `assertions.rs (check_printed)` finds each in the C the
 replay printed by the declaration the printer emitted for it
-(`p9_emit/printc.rs (declared_locals)`): the declaration of the HighVariable
+(`p9_emit/printc/ (declared_locals)`): the declaration of the HighVariable
 the replay gave the directive to (`stablenames.rs (directive_targets)`),
 else one the naming pass gave the expected name and no other directive took; a
 parameter is read from the signature. A replay records a local printed under
@@ -1422,7 +1422,7 @@ name, so a directive naming it answered `No symbol named: score_1` (and the
 shared one `More than one symbol named: dup (2)`), although the output and the
 "applied as" note offered exactly that edit. When an identifier resolves to no
 local, or to more than one, `unlace-console/src/hightarget.rs (resolve_shown)` prints the
-function with a printer of its own (`printc.rs (declarations_of)`), after
+function with a printer of its own (`printc/ (declarations_of)`), after
 giving each local the batch has renamed so far its new name, so it reads the
 names the next decompile shows, and takes the one local declared under the
 identifier: a local the batch renamed through the Symbol the earlier directive
@@ -1695,7 +1695,7 @@ register-resident DWARF local as a miss. `extract_variables` appends a fourth
 section,
 `crates/unlace-emit/src/p9_emit/reglocals.rs
 (register_locals)`: the declarations the printer emitted for the function
-(`printc.rs (DeclaredLocal)`), in declaration order, minus every declaration whose
+(`printc/ (DeclaredLocal)`), in declaration order, minus every declaration whose
 printed name a parameter or frame row already carries and every one that is
 stack storage. That is a HighVariable bound to a stack Symbol, with stack
 storage only, with only the address constants of a frame object, or with a

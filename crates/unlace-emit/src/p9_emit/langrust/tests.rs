@@ -215,7 +215,7 @@ fn absent_keywords_are_paired_with_a_forbidding_cap() {
 }
 
 /// The forms are the whole reason a second language does not need a second
-/// emitter: each names the shape `printc.rs` should reach for.
+/// emitter: each names the shape `printc/` should reach for.
 #[test]
 fn rust_forms_select_the_rust_shapes() {
     use crate::lang::*;

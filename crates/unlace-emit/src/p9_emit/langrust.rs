@@ -324,7 +324,7 @@ mod tests;
 // These are `impl PrintC` blocks rather than a separate printer: the RPN driver,
 // the op emitters, the parenthesizer, the cast plumbing and the comment sorter
 // are shared verbatim, and only the ~10 *shapes* below differ. Each is reached
-// through a `LangForms` match in `printc.rs`, so the C path is a different arm
+// through a `LangForms` match in `printc/`, so the C path is a different arm
 // and cannot be perturbed by anything written here.
 // ===========================================================================
 

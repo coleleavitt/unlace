@@ -33,8 +33,6 @@ crates/unlace-cli/src/decompile_all/callee_first.rs changed 1
 crates/unlace-cli/src/jobs/synth.rs firsts 1
 crates/unlace-emit/src/p9_emit/stackversions.rs copies 1
 crates/unlace-emit/src/p9_emit/stackversions.rs versions 1
-crates/unlace-emit/src/p9_emit/printc.rs groups 1
-crates/unlace-emit/src/p9_emit/printc.rs local_name_aliases 1
-crates/unlace-emit/src/p9_emit/printc.rs signature_param_names 1
+crates/unlace-emit/src/p9_emit/printc/decls.rs groups 1
 crates/unlace-middle/src/p0_knowledge/dex/links.rs methods 2
 crates/unlace-middle/src/substrate/rangeutil.rs read_nodes 1

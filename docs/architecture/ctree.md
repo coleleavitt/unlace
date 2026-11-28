@@ -71,7 +71,7 @@ Sources: [hexrays.hpp reference](https://cpp.docs.hex-rays.com/hexrays_8hpp.html
 The decompile root ends with the block tree in `Funcdata::sblocks` (§0.10 level `structured`, then
 `casts`, then `complete`). Printing runs after it, on an immutable `&Funcdata`:
 
-- `PrintC::doc_function` → `emit_function_body` (`crates/unlace-emit/src/p9_emit/printc.rs`) computes
+- `PrintC::doc_function` → `emit_function_body` (`crates/unlace-emit/src/p9_emit/printc/`) computes
   per-function print plans, then walks the block tree from `sblocks.root`.
 - `emit_block` dispatches on `BlockType` (Ghidra's virtual `FlowBlock::emit`): `emit_block_copy`
   / `emit_block_basic` (a leaf: label line, then `emit_basic_block_ops`), `emit_block_ls`,
@@ -162,7 +162,7 @@ pub enum ExprKind {
 ```
 
 - **Expressions stay where they are.** Ghidra's expression printer (reverse Polish over ops, implied
-  varnodes, the cast and language planes, 17k lines of `printc.rs`) is the most Ghidra-faithful part
+  varnodes, the cast and language planes, 17k lines of `printc/`) is the most Ghidra-faithful part
   of the output and the part the datatests pin hardest. The tree does not re-express it: an
   expression leaf names its root op (`Op`) or condition block (`Branch`), and the printer prints it
   with the code it uses today. Only the few expression shapes the statement rewrites create (`!`,

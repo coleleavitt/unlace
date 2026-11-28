@@ -3,7 +3,7 @@
 //! `Architecture` holds its output-language printer as a [`PrintHandle`]: the core reads the
 //! output language and the printer's name, resets its context and forwards the print options
 //! through it, without naming the concrete C printer, which lives in the emit band
-//! (`p9_emit/printc.rs` implements this trait for `PrintC` and lends the concrete type through
+//! (`p9_emit/printc/` implements this trait for `PrintC` and lends the concrete type through
 //! `printc::ArchPrintExt`). A fresh printer comes from the `printer_new` and `printer_default`
 //! pass hooks.
 

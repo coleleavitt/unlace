@@ -6,12 +6,12 @@
 //! `PrintLanguage` (the RPN driver and the mod/scope stacks) → `PrintC` →
 //! `PrintJava : public PrintC` — selected through a `PrintLanguageCapability`
 //! registry. The port flattened all of it into one concrete `PrintC`
-//! (`p9_emit/printc.rs`). This module re-erects the seam, in the shape unlace
+//! (`p9_emit/printc/`). This module re-erects the seam, in the shape unlace
 //! actually needs; `PrintJava` returns as [`OutLang::Java`].
 //!
 //! # The shape, and why it is not a trait object over the whole printer
 //!
-//! `PrintC` (`p9_emit/printc.rs`) is **parameterized**, not subclassed: it
+//! `PrintC` (`p9_emit/printc/`) is **parameterized**, not subclassed: it
 //! carries one [`OutLang`] field and every language-varying site reads a
 //! `&'static` policy object instead of a `keywords::`/`tokens::` constant. The
 //! RPN driver, `op_push_ir`, `push_vn`, `emit_atom`, `parentheses_top`, the

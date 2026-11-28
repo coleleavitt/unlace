@@ -848,7 +848,7 @@ Four front-ends drive one engine assembly:
   ghidra-mode also prints a `Unlace v…` plate comment (the release
   `UNLACE_VERSION` bake, `unlace_banner_text`) at the top of every function —
   cache-only, HEADER-typed, rendered by the printer's plate arm
-  (`crates/unlace-emit/src/p9_emit/printc.rs
+  (`crates/unlace-emit/src/p9_emit/printc/
   (emit_comment_func_header)`), which also renders the host's PLATE comments;
   the standalone pipeline never inserts HEADER comments, so that arm is inert
   there.  `flushNative` clears it all in the upstream order
@@ -1899,7 +1899,7 @@ from when rendering starts, as the deadline the probes read
 extraction (`crates/unlace-console/src/project.rs (decompile_pulled)`)
 and the console's `print C`. The printer probes before each statement of a
 basic block and every 256 Varnodes of its local declarations
-(`crates/unlace-emit/src/p9_emit/printc.rs
+(`crates/unlace-emit/src/p9_emit/printc/
 (PrintC::emit_basic_block_ops, PrintC::emit_local_var_decls)`) and stops
 printing once it has passed; the batch probes again after the C text and
 after the variable extraction. A render past the budget never reaches the
@@ -3416,7 +3416,7 @@ it iterates a `BTreeMap`/`BTreeSet` or an `FxHashMap` (fixed hasher), or sorts w
 before using it. `scripts/check_determinism.py` lints for new unordered iterations and decompiles
 a fixed corpus twice and under two `--jobs` counts (docs/dev-setup.md, "Determinism"). Four places
 were made ordered when the lint landed: `PrintC` combines the source comments of locals that
-read through one declaration in high-variable order (`crates/unlace-emit/src/p9_emit/printc.rs`);
+read through one declaration in high-variable order (`crates/unlace-emit/src/p9_emit/printc/`);
 `castobject` visits the frame offsets it narrows in offset order, since each one rewrites the
 frame hints the next one checks (`crates/unlace-bandb-base/src/p6_variables/castobject.rs`);
 the wide-join evidence takes an earlier view's entries in key order, so its shared cache fills the

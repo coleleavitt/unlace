@@ -33,7 +33,7 @@
 # Stage model: S8 structure recovery, loop-shape sub-stage
 # (CollapseStructure::rule_block_while_do overflow decision in
 # s8_structure/blockaction.rs; duplicated helper in region_structurer.rs;
-# rendering consequence in s9_emit/printc.rs emit_block_while_do).
+# rendering consequence in s9_emit/printc/ emit_block_while_do).
 #
 # No option: this is a porting-divergence CORRECTNESS fix (invalid C is
 # never desired) restoring the upstream virtual dispatch, on by default.

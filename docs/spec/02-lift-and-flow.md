@@ -2087,7 +2087,7 @@ named: `int3pad.rs (pad_run_length)` counts the `0xcc` bytes at the address
 one loader read at a time (the loader fills a full word and refuses a short one
 at a section end, which is where a pad tends to sit) and
 `FlowInfo::setup_callind_specs` buffers the warning the P9 slug table renders as
-`// int3-pad xN` (chapter 09, `printc.rs (warning_slug)`). The count is dropped rather
+`// int3-pad xN` (chapter 09, `printc/ (warning_slug)`). The count is dropped rather
 than guessed when the read fails or the encoding is the two-byte `INT 0x03`
 rather than `0xcc`. Under `option int3pad halt` the call spec is additionally
 marked no-return and the artificial halt is planted, so the pad renders as a
@@ -2177,7 +2177,7 @@ built-ins (`userop.rs`, `BUILTIN_KERNEL_WARN` / `BUILTIN_KERNEL_BUG`, registered
 with the string built-ins): `__WARN(file,line)` — the kernel's own spelling of
 the macro, the file a pointer constant the type inference marks `char *`
 (`coreaction_infertypes.rs (input_type_local_with)`) so it prints as the literal,
-the line an `int` the printer writes in decimal (`printc.rs (op_callother_ir)`);
+the line an `int` the printer writes in decimal (`printc/ (op_callother_ir)`);
 both absent on a table built without
 `CONFIG_DEBUG_BUGVERBOSE`, where the statement prints bare — or `BUG()`. The
 BRANCHIND is destroyed. After a `__WARN` the instruction falls through, exactly
@@ -3736,7 +3736,7 @@ Labels carry a signedness the install records from the compare tree before any
 type is inferred, and over a one- or two-byte selector a label with the sign bit
 set names different values signed and unsigned once C promotes the selector
 (`case 0x81:` never matches a `char`). The printer
-(`crates/unlace-emit/src/p9_emit/printc.rs (lowered_switch_label_form)`)
+(`crates/unlace-emit/src/p9_emit/printc/ (lowered_switch_label_form)`)
 prints such labels with the signedness of the selector's declared type when it is
 an integer of the switch size, and otherwise casts the selector to the recorded
 signedness (`switch((unsigned char)a0)`). Measured
@@ -6735,7 +6735,7 @@ on one P-core) `off` takes 102.87 G instructions, `catch` 103.35 G (+0.5%) and
 `on` 128.95 G (+25%). The aggressive preset uses `catch`.
 
 **try/catch in the C output**
-(`crates/unlace-emit/src/p9_emit/printc.rs (emit_eh_try,
+(`crates/unlace-emit/src/p9_emit/printc/ (emit_eh_try,
 is_eh_if, eh_pad_start)`). An `if` whose condition is the `eh_unwinding()`
 CBRANCH prints as `try { <condition-block statements> } catch (..) { <pad> }`:
 
@@ -6761,7 +6761,7 @@ CBRANCH prints as `try { <condition-block statements> } catch (..) { <pad> }`:
   call-site record of the edge's call names, and the handler is the branch
   whose first block is the edge's own successor: the CBRANCH's true out-edge,
   or its false out-edge when the condition is `eh_unwinding()` negated
-  (`printc.rs (eh_if_arms)`).
+  (`printc/ (eh_if_arms)`).
 
 The header lists the pad's caught types in handler order, joined by ` | `:
 `catch (std::runtime_error | ...)`, with `...` for a catch-all or a type no

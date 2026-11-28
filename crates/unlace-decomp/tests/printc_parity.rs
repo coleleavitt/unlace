@@ -14,7 +14,7 @@
 //! The W10 measurement (recorded as LOSS-130) discovered the dominant parity
 //! blocker is **NOT** in the printer.  The PrintC RPN body *engine* (push_op /
 //! push_atom / op_binary / op_unary / emit_op / emit_atom / parentheses) is now
-//! ported and unit-tested byte-faithfully (see `printc.rs` tests).  But the
+//! ported and unit-tested byte-faithfully (see `printc/` tests).  But the
 //! merged tree's **decompilation passes** (heritage / simplification / merge /
 //! type + proto recovery / block structuring) are seam stubs: after the
 //! universalAction pipeline runs, the IR reaching the printer is *raw lifted

@@ -442,7 +442,7 @@ pub fn printed_shape(data: &Funcdata, ops: &[OpId]) -> Option<PrintedShape> {
     }
     for (idx, &op) in ops.iter().enumerate() {
         let o = data.obank().get(op)?;
-        // printc.rs emit_basic_block_ops: `if o.not_printed() { continue; }`
+        // printc/ emit_basic_block_ops: `if o.not_printed() { continue; }`
         // (`not_printed` already covers every SSA marker: MULTIEQUAL / INDIRECT).
         if o.not_printed() || o.is_marker() {
             continue;
@@ -462,7 +462,7 @@ pub fn printed_shape(data: &Funcdata, ops: &[OpId]) -> Option<PrintedShape> {
             // CALLOTHER-flavoured flow break) cannot render as an expression.
             return None;
         }
-        // printc.rs emit_basic_block_ops: ops whose out varnode is implied are
+        // printc/ emit_basic_block_ops: ops whose out varnode is implied are
         // inlined into their consumer and never printed as a statement.  This skip
         // is *why* MAX_PREFIX_ROOT_CALLS counts statement roots only.
         if let Some(outvn) = o.get_out() {

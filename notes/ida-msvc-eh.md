@@ -107,7 +107,7 @@ Helper vocabulary (strings in eh34, each with its own description):
 ## 4. Plan for unlace
 
 unlace already has the hard half: the exceptional-edge helpers (`eh_unwinding`, `eh_exception`,
-`eh_selector`), the `try`/`catch` printer (`crates/unlace-emit/src/p9_emit/printc.rs` `emit_eh_try`),
+`eh_selector`), the `try`/`catch` printer (`crates/unlace-emit/src/p9_emit/printc/` `emit_eh_try`),
 and `.pdata` reading for function starts (`analyzers/entry/pdatainterior.rs`,
 `pereloccode.rs`). What it lacks is the MSVC decoder and funclet handling. Proposed as one option,
 `msvceh on | catch | off` (mirrors `itaniumeh`; no row exists today), in four PRs, smallest first:

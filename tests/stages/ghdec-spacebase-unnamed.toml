@@ -28,7 +28,7 @@
 # Neither PTRSUB (an internal p-code operator) nor ESP (a raw machine
 # register) is declared anywhere in the function; the body is not C.
 #
-# Stage model: P9 emission, leaf naming sub-stage (printc.rs
+# Stage model: P9 emission, leaf naming sub-stage (printc/
 # push_spacebase_unnamed_ir / unlace_unnamed_location_name, the C++
 # PrintC::pushUnnamedLocation leaf the SPACEBASE arm was declining to use).
 #

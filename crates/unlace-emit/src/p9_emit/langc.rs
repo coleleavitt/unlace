@@ -4,7 +4,7 @@
 //! [`CSpeller`] carries the declarator algorithm transcribed from
 //! `PrintC::pushTypeStart` / `pushTypeEnd` (printc.cc:265/314) plus
 //! `buildTypeStack` (printc.cc:143), together with the unlace `realtypes`/`ctypes`
-//! relabelling (DIV-5/DIV-6). The bodies are moved verbatim out of `printc.rs`,
+//! relabelling (DIV-5/DIV-6). The bodies are moved verbatim out of `printc/`,
 //! which now keeps only thin dispatchers so its existing free-function callers
 //! and their tests are unchanged.
 

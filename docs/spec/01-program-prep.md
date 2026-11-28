@@ -9034,7 +9034,7 @@ both
   `NSLog(CFSTR("Reachability Flag Status: …"))` is what was written. The printer
   reads an entry's seeded string through a `char` element whatever the
   reference's type (`cfstring_char` in
-  `crates/unlace-emit/src/p9_emit/printc.rs`), at both the constant
+  `crates/unlace-emit/src/p9_emit/printc/`), at both the constant
   arm and the global-symbol arm, so the entry's own type is free to say what the
   value is: the commit declares `struct __CFString` at the entry size and a
   pointer to it named `CFStringRef`

@@ -285,7 +285,7 @@ exit.
 **The shared width budget.** Every admitted sibling first has to fit the
 policy level's **printed-width budget**: `condfold.rs (printed_shape)`
 walks the block's live op list with the *same* skip rules the printer applies
-(`p9_emit/printc.rs (PrintC::emit_basic_block_ops)`: not-printed ops, SSA
+(`p9_emit/printc/ (PrintC::emit_basic_block_ops)`: not-printed ops, SSA
 markers, ops whose output varnode is implied, and the bare `CPUI_BRANCH`) and
 counts what is left, the terminal `CPUI_CBRANCH` included because it renders as
 the chain's last element. That count must not exceed five at `on` or nine at
@@ -326,7 +326,7 @@ expressed in it.
 Rule B additionally admits a **nested `BlockCondition`** as the sibling, which
 Rule A never does, and that is what lets a guard *cascade* fold: `newbury::main`
 folds its second and third guards first and then takes the resulting Condition
-as the sibling of the first. `printc.rs (PrintC::emit_block_condition)` emits
+as the sibling of the first. `printc/ (PrintC::emit_block_condition)` emits
 *both* sub-blocks of a nested Condition under `comma_separate`, so every leaf
 must itself be Rule-B admissible (the recursion in `blockaction.rs
 (CollapseStructure::is_shape_foldable)`), and the fold site enforces two
@@ -366,7 +366,7 @@ the terminal `CBRANCH` included, so the listing is exactly as long as the width
 the same walk reports and a measurement can be reconciled element by element.
 
 Two guards live at the gate rather than in either predicate. The pre-existing
-`!is_interior_goto_target` decline is never relaxed, because `printc.rs
+`!is_interior_goto_target` decline is never relaxed, because `printc/
 (PrintC::emit_block_copy)` emits the label statement *first* and a labelled
 sibling would print `label_x:` inside an expression. And a node produced by a
 relaxed fold is force-marked complex, because `BlockCondition::isComplex`
@@ -404,7 +404,7 @@ direction.
 
 Nothing moves. `substrate/block.rs (BlockGraph::new_block_condition)`
 re-parents two existing structuring nodes; no p-code op is moved, reordered,
-cloned, or deleted, and the absorbed statements are printed by `printc.rs
+cloned, or deleted, and the absorbed statements are printed by `printc/
 (PrintC::emit_block_condition)` inside the right operand under the existing
 `comma_separate` modifier. Soundness rests on a precondition `rule_block_or`
 already enforces and this option never weakens: the sibling is single-in, so
@@ -631,7 +631,7 @@ target, and each `BlockSwitch` case arm whose edge stayed unstructured.
 Upstream marks a `BlockGoto`'s target only when `gotoPrints()` holds — the
 target is not the block flow reaches next — because upstream's
 `PrintC::emitBlockGoto` suppresses the goto under the same test. unlace's
-printer (`crates/unlace-emit/src/p9_emit/printc.rs
+printer (`crates/unlace-emit/src/p9_emit/printc/
 (PrintC::emit_block_goto)`) emits the trailing goto for every target it has,
 so the mark here is deliberately wider than upstream's: gating it left the
 printed `goto label_X;` unlabelled whenever its target happened to be the
@@ -642,7 +642,7 @@ because dropping a statement is a structuring decision, not a label fix.
 top-level component: an irreducible knot, a multi-entry loop, or a switch whose
 arms could not be folded leaves the root `sblocks` graph holding several
 siblings, and the printer emits them in list order
-(`crates/unlace-emit/src/p9_emit/printc.rs`, a plain walk of the
+(`crates/unlace-emit/src/p9_emit/printc/`, a plain walk of the
 component list). Collapse order is not print order — the collapse appends each
 new composite at the end of the parent's list, so the component that happens to
 collapse last lands last no matter where its code lives in the function. The
@@ -1188,7 +1188,7 @@ compiles to — a 3-component `BlockIf` with no goto, whose condition leaf's
 only printed op is the `CBRANCH` and whose two arms are each a single `COPY`
 to the same storage. *Transform:* **print-only** — set the `unlace_iteregion`
 addl-flag on the matched CBRANCH; the S9 printer
-(`crates/unlace-emit/src/p9_emit/printc.rs`, via
+(`crates/unlace-emit/src/p9_emit/printc/`, via
 `iteregion.rs (match_ite_assignment)`) re-derives the match and emits
 `v = ( c ) ? A : B;` in place of the `if/else` — the ternary emit is the one
 genuinely new piece (upstream printc has no ternary operator). No p-code is
@@ -1395,7 +1395,7 @@ goto. Flipped on by DIV-10.
 
 `crates/unlace-structure/src/p8_structure/gotonext.rs
 (goto_rewrites)`, read by the C printer
-(`crates/unlace-emit/src/p9_emit/printc.rs (PrintC::emit_function_body)`).
+(`crates/unlace-emit/src/p9_emit/printc/ (PrintC::emit_function_body)`).
 Upstream prints a `BlockGoto`'s jump only when `BlockGoto::gotoPrints`
 holds: the jump's target is not the block that `nextFlowAfter` says runs
 next. unlace's printer printed every such jump, so a switch case falling into
@@ -1442,7 +1442,7 @@ both the printing of every jump and the recorded chains.
 
 `crates/unlace-structure/src/p8_structure/switchmerge.rs
 (switch_plans)`, read by the C printer
-(`crates/unlace-emit/src/p9_emit/printc.rs (PrintC::emit_block_switch_c)`)
+(`crates/unlace-emit/src/p9_emit/printc/ (PrintC::emit_block_switch_c)`)
 and by the goto census. A compiler lowers a sparse source `switch` into a
 search tree of jump tables on one selector: a table's range guard sends the
 values it does not cover to the next table, and the table's holes go to the

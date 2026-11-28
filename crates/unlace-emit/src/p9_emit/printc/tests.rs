@@ -1,5 +1,5 @@
 //! Tests for the `PrintC` c-language token data and the self-contained
-//! constant/type formatters (`printc.rs`).
+//! constant/type formatters (`printc/`).
 //!
 //! These exercise the part of `PrintC` that is faithfully ported now and is
 //! print-fidelity-critical: the operator-token precedence/associativity table
@@ -1790,7 +1790,7 @@ fn format_integer_negative_unsigned_sized() {
 /// `0xfffffe00` with a forced `dec` format renders `-512`, and the forced
 /// `oct`/`bin` formats negate likewise (printc.cc:1381-1391).  This pins the
 /// generic `resolve_integer_format`/`format_integer_token` free functions (NOT the
-/// reserved `printc.rs` render dispatch — see the B3 stub in PROGRESS.md); generic
+/// reserved `printc/` render dispatch — see the B3 stub in PROGRESS.md); generic
 /// over the value/format, no convert-specific constants baked in.
 #[test]
 fn resolve_integer_signed_equate_negates_under_forced_format() {
@@ -2210,7 +2210,7 @@ fn doc_function_renders_a_real_prototype() {
 
 // ---------------------------------------------------------------------------
 // The PrintLanguage RPN driver (push_op / push_atom / op_binary / op_unary /
-// emit_op / emit_atom / parentheses), realized in printc.rs.  These drive the
+// emit_op / emit_atom / parentheses), realized in printc/.  These drive the
 // real `EmitNoMarkup` back-end and assert byte-faithful token emission against
 // the C++ `emitOp`/`emitAtom`/`parentheses` logic (printlanguage.cc:129-580),
 // independent of the stubbed IR.

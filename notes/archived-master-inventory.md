@@ -61,7 +61,7 @@ Master's `Cmd` enum is at `crates/unlace-cli/src/args.rs:29-414`, dispatched in 
 | A5 | CFG DOT output | `crates/unlace-output/src/cfg_dot.rs` (13,445 B), `emit_cfg_dot` re-exported at `crates/unlace-output/src/lib.rs:25` | No DOT or graphviz output found in main's CLI, emit, decomp or middle crates | M | Watch list. Confirm master calls it before porting |
 | A6 | C++ STL and class output | `crates/unlace-output/src/cpp_stl.rs` (22,370 B), `cpp_class.rs` (6,187 B) | Partial: `crates/unlace-emit/src/p9_emit/cppshortnames.rs` only | M | Watch list |
 | A7 | WinDbg DML output | `crates/unlace-output/src/windbg_dml.rs` (3,050 B) | No | S | Skip (niche) |
-| A8 | SEH output | `crates/unlace-output/src/seh_output.rs` (2,629 B) | Partial: a SEH mention in `crates/unlace-emit/src/p9_emit/printc.rs` | S | Unverified. Check before any decision |
+| A8 | SEH output | `crates/unlace-output/src/seh_output.rs` (2,629 B) | Partial: a SEH mention in `crates/unlace-emit/src/p9_emit/printc/` | S | Unverified. Check before any decision |
 | A9 | C printer, expression AST, post-process passes | `crates/unlace-output/src/c_printer/` (735 KB `mod.rs`), `expr_ast.rs` (75,812 B), `postprocess/` | Yes, different layout: `crates/unlace-emit/src/p9_emit/` (about 197 files) | n/a | Covered differently |
 | A10 | Instruction annotations | `crates/unlace-output/src/instruction_annotations.rs` (15,868 B) | Partial: `crates/unlace-cli/src/assertdecl.rs` and `p9_emit` annotation modules | S to M | Unverified |
 | A11 | Demangling | `crates/unlace-output/src/demangle.rs` (41,777 B) | Yes, in part: `crates/unlace-emit/src/p9_emit/lang.rs`, `langrust.rs`, `cppshortnames.rs` | n/a | Covered in part |

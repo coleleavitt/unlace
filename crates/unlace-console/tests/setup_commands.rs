@@ -256,7 +256,7 @@ fn comment_instr_records_a_comment() {
 // commit reported "passing 3/675 -> 19/675" datatests under `UNLACE_ENGINE=rust`,
 // but every one of those 19 passes is a `min="0" max="0"` NEGATIVE match that
 // the empty-body PrintC stub satisfies vacuously — the W9-emit RPN/Emit seam
-// (`printc.rs` emits `/* WARNING: body emission is the W9-emit RPN/Emit seam */`
+// (`printc/` emits `/* WARNING: body emission is the W9-emit RPN/Emit seam */`
 // as the whole function body, see LOSS-130).  None of the 19 demonstrate
 // oracle-matching C; the corresponding `min="1"` POSITIVE assertions all FAIL.
 //

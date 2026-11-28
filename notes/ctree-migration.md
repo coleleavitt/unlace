@@ -2,12 +2,12 @@
 
 Goal: one printer. Today the function body prints through a hybrid of the C syntax tree
 (`crates/unlace-ctree`, design `docs/architecture/ctree.md`) and the block printer
-(`crates/unlace-emit/src/p9_emit/printc.rs`). This note records where each structured block kind
+(`crates/unlace-emit/src/p9_emit/printc/`). This note records where each structured block kind
 prints today and the order the remaining kinds move into the tree walk.
 
 ## The tree was already built for every printed function (before the option was retired)
 
-`emit_function_body` (`printc.rs`, `tree_on`) builds the tree when any of `ctree`,
+`emit_function_body` (`printc/`, `tree_on`) builds the tree when any of `ctree`,
 `boolreturn`, `noretfirst`, `nestedand`, `retternary` or `orexit` is on, and not in flat
 printing. `boolreturn` and `nestedand` ship on, so with default options the tree is built,
 split to `statements`, rewritten, and the body prints from it. `option ctree on` changes nothing

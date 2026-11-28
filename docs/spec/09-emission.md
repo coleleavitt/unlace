@@ -242,7 +242,7 @@ conversion, and structured member extraction retains priority.
 (unlace) Under `option nanignore none`, a retained widening `FLOAT_FLOAT2FLOAT`
 whose input may be a signaling NaN and whose result reaches a conversion back
 to the source format materializes its C result in a volatile compound literal
-(`crates/unlace-emit/src/p9_emit/printc.rs (PrintC::op_float_quiet_ir)`,
+(`crates/unlace-emit/src/p9_emit/printc/ (PrintC::op_float_quiet_ir)`,
 `crates/unlace-bandb-base/src/p3_dataflow/floatquiet.rs (feeds_round_trip)`):
 `(float)(*&(volatile double){ (double)x })`. A C compiler erases a plain
 `(float)(double)x` pair even with strict rounding flags. The literal evaluates
@@ -356,7 +356,7 @@ width it takes the same bit transfer (`bitcast.rs (storage_transfer)`).
 A scalar global whose recovered type is unknown does not qualify, so a float
 stored to it keeps its value spelling. Each side's kind is the type the C prints it with: a side whose bytes
 no member names, printed by partial access as `*(T *)&storage[k]`, has that
-`T` (`printc.rs (PrintC::partial_piece_type)`), so a word moved between two
+`T` (`printc/ (PrintC::partial_piece_type)`), so a word moved between two
 such pieces stays a plain copy rather than reading the unsigned word into a
 float. A side printed through a named member path, with or without partial
 access, has the scalar type of the member or truncating cast that path ends in
@@ -407,7 +407,7 @@ int` at four bytes, or `double`/`unsigned long long` at eight); enums and
 nonmatching data organizations keep their existing handling.
 This is a storage-semantics repair without an inference option.
 
-**Floating comparison negation.** `printc.rs (PrintC::check_print_negation)`
+**Floating comparison negation.** `printc/ (PrintC::check_print_negation)`
 uses the shared opcode complement table, which excludes ordered float
 comparisons. Negating `FLOAT_LESS` or `FLOAT_LESSEQUAL`, whether through a
 branch flip or `BOOL_NEGATE`, therefore prints `!(a < b)` or `!(a <= b)`.
@@ -452,11 +452,11 @@ contexts — an if/while/for/ternary condition, or an operand of `&&`/`||`/`!`
 truthiness, so the unlace default (DIV-37) renders `if (x != 0)` as `if (x)`
 and `if (p == NULL)` as `if (!p)`. The printer threads a
 `CONDITION_CONTEXT` mod bit from the condition push sites
-(`printc.rs (PrintC::op_push_ir)` scopes it off across every
+(`printc/ (PrintC::op_push_ir)` scopes it off across every
 non-boolean-preserving operator, so a value use like `v = (x != 0)` never
-rewrites), and `printc.rs (PrintC::op_binary_ir)` consumes it — after the
+rewrites), and `printc/ (PrintC::op_binary_ir)` consumes it — after the
 negate-token flip has settled which comparison prints — by eliding the one
-eligible zero operand (`printc.rs (PrintC::truthy_other_operand)`: a plain
+eligible zero operand (`printc/ (PrintC::truthy_other_operand)`: a plain
 constant zero, directly or through one implied CAST, that is not
 float-typed, enum-typed, or equate-named). The surviving operand keeps the
 context bit, so stacked boolean comparisons collapse fully. `option
@@ -465,8 +465,8 @@ by `tests/stages/cnorm-truthycond.toml`.
 
 **Brace form (P9/`brace-form`, `option braceelide`).** A single-statement if
 body renders braceless with the statement indented on the next line (unlace
-default, DIV-38): `printc.rs (PrintC::emit_block_if)` consults
-`printc.rs (PrintC::if_body_elides)` — the body must be a plain
+default, DIV-38): `printc/ (PrintC::emit_block_if)` consults
+`printc/ (PrintC::if_body_elides)` — the body must be a plain
 single-statement `BlockCopy` leaf (exactly one op that the statement walk
 would print, no label line, no comment positioned in the block), which also
 rules out a nested `if` body so eliding can never capture a dangling else.
@@ -478,7 +478,7 @@ braced form, exercised by `tests/stages/cnorm-braceelide.toml`.
 **(unlace) Decode-failure halt statements (`decodehalt.rs`, always on).**
 A `CPUI_RETURN` the flow follower planted because the bytes would not decode
 (chapter 02) is not a return, and printing it as one asserts something about the
-program that the analysis never established. `printc.rs` renders the three
+program that the analysis never established. `printc/` renders the three
 decode-failure halt causes as upstream `PrintC::opReturn`'s pseudo-calls —
 `halt_baddata()`, `halt_unimplemented()`, `halt_missing()`
 (`decodehalt.rs (halt_call_name)`) — and the P2 warnings land beside them
@@ -495,9 +495,9 @@ unconditionally, so a void function ends `... }` / `return;` / `}` — a stateme
 the C source it was compiled from does not have, because the source simply falls
 off the end of the body. `option voidtailreturn off` restores that upstream
 rendering, and the datatest and stage scripts that pin it set the option off.
-`printc.rs (PrintC::emit_function_body)` computes at most one elidable op per
-function via `printc.rs (elidable_void_tail_return)` and
-`printc.rs (PrintC::emit_basic_block_ops)` skips exactly that op. Four conditions
+`printc/ (PrintC::emit_function_body)` computes at most one elidable op per
+function via `printc/ (elidable_void_tail_return)` and
+`printc/ (PrintC::emit_basic_block_ops)` skips exactly that op. Four conditions
 must all hold, and each has a named counterexample:
 
 - the prototype returns void — a `return <value>;` is never redundant;
@@ -513,7 +513,7 @@ must all hold, and each has a named counterexample:
   unique owner makes the elision positional rather than identity-based.
 
 A `BlockCopy` mirror is resolved through to the bblocks block it stands for
-(`printc.rs (structured_leaf_tail)`) — the normal shape of a structured
+(`printc/ (structured_leaf_tail)`) — the normal shape of a structured
 function's trailing block, and the reason the direct `sblocks_basic_tail` lookup
 is not sufficient. The motivation is measured and structural as well as
 stylistic: pyjoern merges `FUNCTION_END` into its predecessor only when that
@@ -524,14 +524,14 @@ re-materialises one — one extra node, one or two extra edges, and an
 
 **Warning style (P9/`warning-style`, `option warnstyle`).** Analysis warnings
 render as terse `// slug` end-of-line comments on the line they describe
-(unlace default `inline`, DIV-39): `printc.rs (PrintC::emit_comment_group)`
+(unlace default `inline`, DIV-39): `printc/ (PrintC::emit_comment_group)`
 maps each WARNING-type comment through the slug table
-(`printc.rs (warning_slug)` — `no-return`, `branch-flip`, `return-dupe`,
+(`printc/ (warning_slug)` — `no-return`, `branch-flip`, `return-dupe`,
 `jump-as-call`, count-suffixed slugs like the header's `early-return x3` and
 the `int3-pad x4` chapter 02 buffers for a decoded `int3`, where the count is
 the pad's length in bytes; an
 unrecognized text keeps its full body behind a `warn:` marker) and collects
-it; `printc.rs (PrintC::flush_eol_warnings)` appends the collected slugs as
+it; `printc/ (PrintC::flush_eol_warnings)` appends the collected slugs as
 one `// slug, slug` token at the owning line's last token — the statement
 semicolon, the `if (cond)` header (braced, braceless, goto, and ternary
 forms), the loop-header brace, and the function prototype for header
@@ -548,7 +548,7 @@ styles. A warning is either a caveat, telling the reader something the C does
 not show, or narration of a rewrite made for readability, after which the C
 means the same as before. The default `all` writes every warning, as upstream
 does. Under `caveats`,
-`printc.rs (PrintC::emit_comment_group, emit_comment_func_header)` asks
+`printc/ (PrintC::emit_comment_group, emit_comment_func_header)` asks
 `warnlevel.rs (elided)` about each WARNING comment before collecting or printing
 it, and leaves three kinds out.
 
@@ -983,7 +983,7 @@ integer types depends only on the value converted. With the option
 `castimplied` on (the default; `off` restores upstream's rendering), the printer
 leaves such a cast out
 (`crates/unlace-emit/src/p9_emit/castimplied.rs (ImpliedCasts::drops)`,
-asked from `printc.rs (PrintC::implied_cast_drops)` by the `CPUI_CAST` arm and
+asked from `printc/ (PrintC::implied_cast_drops)` by the `CPUI_CAST` arm and
 by both extension arms). The IR keeps every CAST op; only the token is omitted,
 and the operand is pushed bare, as a `signedness`-dropped cast's is (§9.3).
 
@@ -1064,8 +1064,8 @@ reaches the destination as a large positive value. With the option
 `castternary` on (the default; `off` keeps every arm cast), the printer asks,
 once per conditional, which arm casts to leave out
 (`crates/unlace-emit/src/p9_emit/castternary.rs (arm_drops)`,
-from `printc.rs (PrintC::conditional_arm_drops)` in `emit_block_if_ite`); the
-chosen ops are then left out wherever `printc.rs (PrintC::implied_cast_drops)`
+from `printc/ (PrintC::conditional_arm_drops)` in `emit_block_if_ite`); the
+chosen ops are then left out wherever `printc/ (PrintC::implied_cast_drops)`
 is asked about them. An arm's cast goes when it is an integer widening that
 keeps its operand's value (never a narrowing, a sign change, a conversion from
 or to `bool`, an enum, a float or a pointer), when the usual arithmetic
@@ -1082,7 +1082,7 @@ for what `castimplied` knows the type of (a declared variable, a cast that
 stays, a load through a pointer printed with its pointee type), every promotion
 its width allows for any other expression, and for a literal the type C gives
 the token the printer writes for it (`castternary.rs (literal_type)`, from
-`printc.rs (PrintC::integer_constant_token)`, which shares the formatting of
+`printc/ (PrintC::integer_constant_token)`, which shares the formatting of
 `push_vn_explicit_ir`): the base, the suffix, and the first candidate type that
 holds the magnitude, so `0xffffffff` is an `unsigned int` and an unsuffixed
 `3000000000` a `long`. The conversions must give the target for every
@@ -1111,7 +1111,7 @@ conversions give the same type and value. The IR is unchanged; the decision is
 made per arithmetic op, once, and cached for the function
 (`crates/unlace-emit/src/p9_emit/castimplied.rs (ImpliedCasts::widen_plan)`,
 computed by `crates/unlace-emit/src/p9_emit/castwiden.rs (plan)`
-and read by `printc.rs (PrintC::implied_cast_drops)`).
+and read by `printc/ (PrintC::implied_cast_drops)`).
 
 An operand of `+ - * / % & | ^` qualifies when it is an INT_SEXT or INT_ZEXT
 printed as a cast to an 8-byte integer, or a `CPUI_CAST` to one over an operand
@@ -1140,7 +1140,7 @@ operand keeps its cast, because the bare operand would make the operation signed
 or unary minus reads.
 
 Leaving a cast out must not change how C groups the text. The operand prints as
-upstream's hidden extension does (`printc.rs (PrintC::widen_drops)` pushes the
+upstream's hidden extension does (`printc/ (PrintC::widen_drops)` pushes the
 hidden-function token instead of the cast), which parenthesizes it whenever its
 operator binds no tighter than the reader's: `((long *)a0)[1] + (long)(a1 + a2)`
 prints `((long *)a0)[1] + (a1 + a2)`, never `((long *)a0)[1] + a1 + a2`, which C
@@ -1167,8 +1167,8 @@ With `literal`, the operand beside an integer literal qualifies too. The literal
 is an 8-byte constant in the IR, but C types `8` as `int`, so today the cast is
 what makes `(long)i * 8` a 64-bit product. The literal is printed with the
 suffix of its width, `L` (`LL` where `long` is 4 bytes), or `UL` as the unsigned
-value of its bits for an unsigned target (`printc.rs
-(IntegerLiteral::suffix_as_long)`, asked through `printc.rs
+value of its bits for an unsigned target (`printc/
+(IntegerLiteral::suffix_as_long)`, asked through `printc/
 (PrintC::widen_suffix)`), and the cast goes when the suffixed literal has the
 cast's type and the operation keeps its type (`castwiden.rs
 (literal_suffix)`): `a0 * 0xcL + 7`, `a0 / 3UL`. A negated literal C types as
@@ -1192,7 +1192,7 @@ prints a direct call: a call of `memcpy` (leading underscores ignored) with
 three arguments, an unused result and a constant size, whose destination and
 source varnodes are both typed as pointers to one and the same struct or union
 type (`Rc` identity) of exactly that size, prints as an assignment instead
-(`printc.rs (push_struct_assign)`). Each side is pushed as the load through its
+(`printc/ (push_struct_assign)`). Each side is pushed as the load through its
 pointer would be, so the address of a variable prints as the variable
 (`v1 = *a0;`), and the right side is pushed first, as `opStore` does. Only the
 text changes; the call stays in the IR. This is Hex-Rays' structure-copy
@@ -1213,13 +1213,13 @@ integer types depends only on the value converted and the type converted to
 narrowing cast), the printer leaves such a cast out
 (`crates/unlace-emit/src/p9_emit/castnarrow.rs (drops)`, asked
 from `castimplied.rs (ImpliedCasts::drops)` and so from
-`printc.rs (PrintC::implied_cast_drops)`, which the `CPUI_CAST` arm and now the
-cast arm of `printc.rs (PrintC::op_subpiece_ir)` consult with the op that reads
+`printc/ (PrintC::implied_cast_drops)`, which the `CPUI_CAST` arm and now the
+cast arm of `printc/ (PrintC::op_subpiece_ir)` consult with the op that reads
 the value). The IR is unchanged. Three printed forms are candidates: a low
 SUBPIECE printed as a cast, a `CPUI_CAST` between integer types, and the
 `(T)name` the partial-symbol printer writes when an access reads the low piece
 of a wider variable (`castnarrow.rs (drops_partial)`, from
-`printc.rs (PrintC::partial_cast_drops)` in `push_partial_symbol_ir`, only when
+`printc/ (PrintC::partial_cast_drops)` in `push_partial_symbol_ir`, only when
 the cast covers the bare name).
 
 The cast goes when two things hold. First, the value lands whole in a
@@ -1346,7 +1346,7 @@ offset is a negative index.
 The base is cast to `T *` by a new implied `CPUI_CAST` inserted before the op,
 with two exceptions. A variable whose own type is its read-facing type and whose
 printed declaration (a parameter's prototype type or a local's declared type,
-`crates/unlace-emit/src/p9_emit/printc.rs (declared_variable_type)`,
+`crates/unlace-emit/src/p9_emit/printc/ (declared_variable_type)`,
 the lookup the switch printer uses) points at `T` or at an integer of `T`'s width
 is used bare (`castarith.rs (declared_as)`), so the declaration a reader
 sees scales the index the same way; a float element never counts, because
@@ -1545,16 +1545,16 @@ Upstream Ghidra prints the ABI pointer everywhere (parameter `T *v`, argument
 ## 9.2 PrintC
 
 **Three layers.** The C back-end is a stack of three components in this
-folder: the token emitter `crates/unlace-emit/src/p9_emit/printc.rs
+folder: the token emitter `crates/unlace-emit/src/p9_emit/printc/
 (PrintC)` (the `c-language` capability, the registered default), the RPN
 expression driver it embeds (the `PrintLanguage` machinery — its pure data
 model and decision function live in
 `crates/unlace-emit/src/p9_emit/printlanguage.rs`, the driving
-methods in `printc.rs`), and the low-level emitters in
+methods in `printc/`), and the low-level emitters in
 `crates/unlace-emit/src/p9_emit/prettyprint.rs`: a line-breaking
 `EmitPrettyPrint` wrapping either the plain-text `EmitNoMarkup` (the
 byte-exact datatest path) or the XML `EmitMarkup` (the Ghidra-client path).
-The whole-document entry is `printc.rs (PrintC::doc_function_full)`, driven by
+The whole-document entry is `printc/ (PrintC::doc_function_full)`, driven by
 `crates/unlace-decomp/src/infra/decompile_drive.rs` after analysis
 completes.
 
@@ -1563,7 +1563,7 @@ the printer mutably while it reads the rest of the architecture, so every render
 runs inside `crates/unlace-middle/src/infra/architecture.rs
 (Architecture::with_print)`, which lends the printer out and moves it back. It
 moves back on every exit, a panic included: the printer is first cleared of the
-partial document by `printc.rs (PrintC::clear)` (the emitter's indent and paren
+partial document by `printc/ (PrintC::clear)` (the emitter's indent and paren
 levels and pending brace, the RPN stacks, the pushed mods and scopes, the scoped
 `Funcdata` pointer, unflushed end-of-line warnings, the declared locals and
 pointer-argument record, and a markup back-end, which returns to plain text),
@@ -1590,25 +1590,25 @@ cannot override an existing link. Otherwise the input can be declared again
 under a suffixed local name and its entry checks read an uninitialized object.
 HighVariables without a recorded link retain the storage-based fallback.
 
-**The document walk.** `printc.rs (PrintC::emit_function_document)` emits, in
+**The document walk.** `printc/ (PrintC::emit_function_document)` emits, in
 order: the function's header warning comments (§9.4), the prototype (return
 type from the recovered proto, else `void`; parameters with their declared or
 default names; `, ...` for varargs), the open brace, one declaration line per
 named local (§9.3), and then the body — a recursive walk of the structured
-block tree S8 produced, `printc.rs (PrintC::emit_block_graph)` dispatching each
+block tree S8 produced, `printc/ (PrintC::emit_block_graph)` dispatching each
 node by block type: basic/copy blocks emit their statement list; condition
 nodes glue two clauses with `&&`/`||` inside parens; if-nodes print
 `if (cond)` with a *pending-brace* mechanism so an else-clause consisting of a
 single if collapses to `else if` — unless a goto label or comment forces the
 brace; while-do nodes render `while (cond)`, or a `for (init; cond; iter)`
 header when the loop carries the recovered initialize/iterate statements
-(`printc.rs (PrintC::emit_for_loop)`); do-while and infinite loops, switches
-with their case labels (`printc.rs (PrintC::emit_block_switch)`), goto blocks,
+(`printc/ (PrintC::emit_for_loop)`); do-while and infinite loops, switches
+with their case labels (`printc/ (PrintC::emit_block_switch)`), goto blocks,
 and — when the S8 `iteregion` pass marked an assignment diamond — the ternary
-render `dest = cond ? a : b` (`printc.rs (PrintC::emit_block_if_ite)`), or —
+render `dest = cond ? a : b` (`printc/ (PrintC::emit_block_if_ite)`), or —
 when the S8 `iteboolean` pass marked a short-circuit `0`/`1` select — the
 boolean-assignment render `dest = ( cond );` / `dest = !( cond );`
-(`printc.rs (PrintC::emit_block_if_bool)`; checked first, so the more specific
+(`printc/ (PrintC::emit_block_if_bool)`; checked first, so the more specific
 form wins when both marks are present). Both re-derive their S8 match from the
 addl-flag on the condition's `CBRANCH` and emit the condition through the same
 `ONLY_BRANCH` renderer the `if (...)` header uses, so the condition's
@@ -1639,7 +1639,7 @@ positive high-bit labels cannot match a signed byte or short after C integer
 promotion. Synthetic lowered switches retain their recorded label signedness
 and the existing `loweredswitchexact` selector-type and cast reconciliation.
 The Rust back-end's `match` arms take their value, width and signedness from
-the same decision (`printc.rs (switch_case_label)`), so a `match` on an `i16`
+the same decision (`printc/ (switch_case_label)`), so a `match` on an `i16`
 selector emits `-0xd =>` where it once printed `0xfff3 =>`, a pattern rustc
 rejects as out of range for `i16`, and a sign-extended `i16` selector no
 longer carries the widened `0xfffffff3`.
@@ -1785,7 +1785,7 @@ The emitter keeps a record of whether a label was the last thing printed
 state so both the plain-text and the markup leaf see it): the case, default and
 goto label writers set it, and starting a statement or opening a brace clears
 it, while a comment does not. The last arm of a switch that still ends on a
-label gets `break;` (`printc.rs (PrintC::emit_block_switch_c)`), which leaves the
+label gets `break;` (`printc/ (PrintC::emit_block_switch_c)`), which leaves the
 switch exactly as falling off its end does. Any other closing brace reached
 with the record set, including a loop body's and the function's own, first
 prints the null statement `;` on its own line. A label followed by another
@@ -1799,7 +1799,7 @@ pinned by `tests/stages/labelstmt-arm.toml` and
 
 **Pending-brace ownership.** The `else if` collapse is a *lazy* brace. An
 if-node that is itself the else-clause of its parent registers a brace with the
-emitter (`printc.rs (PrintC::emit_block_if)`); the brace opens only if
+emitter (`printc/ (PrintC::emit_block_if)`); the brace opens only if
 something forces a line break before that clause prints its own `if (` header —
 a statement in the clause's condition block, a goto label, or a comment. If
 nothing does, the frame cancels its own registration and the header prints on
@@ -1816,14 +1816,14 @@ real clause's `if` header on a fresh line at the parent's indent, so that
 clause's body executes on the then-path too. It is reachable whenever a
 statement-carrying clause lands in the else slot — in practice after a
 §8.1 `branchflip` arm swap. A debug-build assertion in
-`printc.rs (PrintC::emit_block_if)` requires every registered brace to be
+`printc/ (PrintC::emit_block_if)` requires every registered brace to be
 resolved by its own frame, either fired or self-cancelled; the shape is pinned
 end-to-end by `tests/stages/ghdec-branchflip-armswap.toml`.
 
 **The declined-structure shell.** If the structured tree is *absent* (S8
 produced no `sblocks`), the printer does not emit a flat op listing: it keeps
 the brace-matched prototype shell and plants a single comment in the body
-(`printc.rs (PrintC::emit_function_document)`). The failure mode is
+(`printc/ (PrintC::emit_function_document)`). The failure mode is
 deliberately loud and syntactically valid, so batch consumers (`unlace
 decompile-all --json`) get a parseable function with an explicit tombstone
 rather than pseudo-C garbage. The comment distinguishes the two ways a
@@ -1838,23 +1838,23 @@ nothing, and the tombstone is `/* WARNING: structured blocks unavailable
 `*/` neutralized, so it can never break out of the comment.
 
 **Expressions: the push/pop opcode walk.** A statement is one op tree:
-`printc.rs (PrintC::emit_statement)` opens a statement group, and `printc.rs
+`printc/ (PrintC::emit_statement)` opens a statement group, and `printc/
 (PrintC::emit_expression_ir)` pushes an assignment token plus the output's
 symbol if the root op has one, then recurses via the per-opcode push dispatch
-`printc.rs (PrintC::op_push_ir)` (the `PrintC::op*` overrides; the
-opcode→token mapping is the data table `printc.rs (op_emit_kind)`). Each
-operand is fetched by `printc.rs (PrintC::push_vn_ir)` with the simple rule of
+`printc/ (PrintC::op_push_ir)` (the `PrintC::op*` overrides; the
+opcode→token mapping is the data table `printc/ (op_emit_kind)`). Each
+operand is fetched by `printc/ (PrintC::push_vn_ir)` with the simple rule of
 the whole emitter: an **implied** Varnode expands in place — its defining op
 is pushed recursively (threading the reading op down so the ZEXT/SEXT arms can
 ask §9.1's is-the-extension-implied question); an **explicit** Varnode becomes
-a leaf token (`printc.rs (PrintC::push_vn_explicit_ir)`) — a constant
+a leaf token (`printc/ (PrintC::push_vn_explicit_ir)`) — a constant
 (dispatched by read-facing metatype to the float, enum-flag decomposition,
 character, string-pointer (§9.4), or integer formatter, the last honoring
 per-symbol display formats, the `U`/`L`/`LL` suffix flags from §9.1, and
 signedness from the type), or a named variable, including the partial-cover
 walk that renders `name.field`, `name[index]`, a `(int4)name` truncation cast,
 or the artificial `name._8_4_` member when a Varnode covers only part of its
-mapped symbol (`printc.rs (PrintC::push_partial_symbol_ir)`).
+mapped symbol (`printc/ (PrintC::push_partial_symbol_ir)`).
 
 A single-field struct covering the whole access consults the operation's
 cached type resolution before descending into that field. A resolution to the
@@ -1878,7 +1878,7 @@ keeps upstream's escape, which is that type's value. An extension
 whose input is a one-element array read whole (`unsigned char b[1]` loaded as
 one byte) asks the cast question of the element, so it prints `(int)b[0]`
 where it printed the functional `ZEXT14(b[0])`
-(`printc.rs (sext_zext_facing_types)`).
+(`printc/ (sext_zext_facing_types)`).
 
 **Which symbols enter the partial walk.** Upstream routes *every* partial cover
 of a mapped Symbol through that walk — the walk itself decides, per type, what
@@ -1988,9 +1988,9 @@ variants and an unchanged named-struct control.
 **Partial accesses as C (unlace `partialaccess`, default `on`).** Everywhere
 else the walk ends on the artificial member, which is Ghidra's notation and not
 C: `v1._4_2_ == 2`. `option partialaccess off` keeps that notation, and the
-datatest scripts that pin it set the option off. With the option on, `printc.rs (PrintC::push_partial_walk)` takes the
+datatest scripts that pin it set the option off. With the option on, `printc/ (PrintC::push_partial_walk)` takes the
 trailing `._<off>_<size>_` entry off the member stack and prints what it
-describes (`printc.rs (PrintC::push_piece_open)`, `partialaccess.rs
+describes (`printc/ (PrintC::push_piece_open)`, `partialaccess.rs
 (Piece::plan)`). An access of a width C has a scalar for is the pointer access
 it is: `((T *)&v1)[k]` when the offset is a multiple of the access width, with
 `k` the offset divided by the width; `*(T *)&v1` at offset 0; `*(T *)((char
@@ -2016,7 +2016,7 @@ to this rendering: the variable keeps the declaration it had.
 
 A store into the low half of a variable that heritage wrote as a new value of
 the whole variable, `v = PIECE(SUBPIECE(v_old, k), x)` with `v_old` and `v` one
-variable, prints as that store (`printc.rs (PrintC::emit_half_store)`,
+variable, prints as that store (`printc/ (PrintC::emit_half_store)`,
 `halfstore.rs (plan)`): `*(unsigned int *)&v12 = v3;` instead of
 `v12 = CONCAT44(((unsigned int *)&v12)[1],v3);`, IDA's `LODWORD(v12) = v3;`.
 The SUBPIECE must be implied, take exactly the bytes above `x`, and read a value
@@ -2024,7 +2024,7 @@ of the PIECE's width; `x` must be a scalar width and the space little-endian.
 
 C has no scalar of 3, 5, 6, 7 or 9 to 15 bytes, and no form may compile to a
 different meaning, so those widths are handled by what the statement does.
-`printc.rs (PrintC::emit_wide_copy)` prints a plain `COPY` into such bytes, or
+`printc/ (PrintC::emit_wide_copy)` prints a plain `COPY` into such bytes, or
 into 16 bytes, as `memset` when the source is a constant whose bytes are all
 equal and as `memcpy` when it is another such piece or a variable, with the
 exact byte count (`memset(&v2,0,0x10);`, `memcpy((char *)&v1 + 0x10,(char
@@ -2057,7 +2057,7 @@ intrinsic's value. Nothing else changes.
 
 **Leaves with no Symbol.** Not every leaf has one. When no mapped symbol covers
 the storage the leaf falls through to the upstream `pushUnnamedLocation`
-naming, `printc.rs (unlace_unnamed_location_name)`: the register name covering
+naming, `printc/ (unlace_unnamed_location_name)`: the register name covering
 `(address, size)` if the translator has one, else the angr-style `dat_<addr>`
 for a data space (§9.3), else the capitalized `Space<hex>` form —
 `Stack00000008`, `Unique00001a80`. These name the *storage*, not a variable,
@@ -2105,7 +2105,7 @@ member's own address would otherwise make one value appear under unrelated,
 undeclared names such as `RAX` and `Unique10000064`. This spelling change does
 not synthesize the definition that may be absent after the merge.
 
-The same leaf serves the **spacebase** arm of `printc.rs
+The same leaf serves the **spacebase** arm of `printc/
 (PrintC::op_ptrsub_ir)`. A `PTRSUB(sp, off)` is a reference into the stack (or
 global) frame; P6 binds a Symbol to the offset constant whenever the recovered
 frame layout has one, and the arm then renders `&local_10` / `&myval.b`
@@ -2114,8 +2114,8 @@ spacebase could not be tracked to a constant, so every reference stays relative
 to the *entry* stack pointer and the offsets land outside the mapped frame,
 which is what an `alloca`/`_chkstk` stack probe does — the reference still
 names real storage, and it renders `&Stack00000008` through the same
-unnamed-location leaf (`printc.rs (PrintC::push_spacebase_unnamed_ir)`, whose
-address comes from `printc.rs (spacebase_unnamed_address)`, the C++
+unnamed-location leaf (`printc/ (PrintC::push_spacebase_unnamed_ir)`, whose
+address comes from `printc/ (spacebase_unnamed_address)`, the C++
 `TypeSpacebase::getAddress`). What that arm must not do is fall back to the
 *functional* render `PTRSUB(ESP, 8)`, unlace's behavior before this leaf existed:
 `PTRSUB` is an internal p-code operator and `ESP` a raw machine register, and
@@ -2136,7 +2136,7 @@ area even when recompilation creates a different local frame. It introduces
 neither a local object nor a parameter and preserves an explicit `void`
 prototype. Functions using this expression receive `__attribute__((noinline))`
 in both their definition and exported prototype: inlining would change which
-call frame the builtin names. `printc.rs (PrintC::caller_stack_function)` finds
+call frame the builtin names. `printc/ (PrintC::caller_stack_function)` finds
 these address uses; direct storage loads/stores do not acquire this attribute.
 Named parameters and locals retain their symbol expressions. Return-address
 offsets below eight, negative local offsets, other compiler specs, calling
@@ -2157,10 +2157,10 @@ back into a loop over `unsigned int *` is such a variable: `ActionSetCasts`
 inserted `PTRSUB(dat_263f0, #0)` against the variable's `struct_N *`, and the
 member feeding it reads `unsigned int *`, whose pointee is no structure, so the
 op fell to the functional render and printed `v4 = PTRSUB(dat_263f0,0);`.
-`printc.rs (ptrsub_resolves)` asks whether the member's own type can name a
+`printc/ (ptrsub_resolves)` asks whether the member's own type can name a
 member at all (a pointer to a structure, union, array or spacebase, or a
 relative pointer), and only when it cannot does the arm take the variable's
-type instead (`printc.rs (high_pointer_type)`: a mapped symbol's type, else
+type instead (`printc/ (high_pointer_type)`: a mapped symbol's type, else
 the merged variable's type representative), which prints
 `v4 = &dat_263f0->field_0x0;`. Every output this changes was the functional
 render before; on `main` one `tar` O0 function printed it
@@ -2178,7 +2178,7 @@ representations. Matching types, implied expressions, relative pointers and
 explicit `nocasts` retain their ordinary rendering.
 
 A bitfield read or written through a LOAD or STORE chooses member (`.`) or
-pointer (`->`) syntax in `printc.rs (check_bit_field_member)`. As upstream
+pointer (`->`) syntax in `printc/ (check_bit_field_member)`. As upstream
 does, a bitfield at a nonzero byte offset skips the PTRSUB that reaches its
 storage before looking for a member access underneath. A PTRSUB whose offset
 falls strictly inside the bitfield's container is skipped as well: it reaches
@@ -2187,8 +2187,8 @@ of bitfields, so a two-byte load of `wide` at offset 1 prints `p->wide` rather
 than `p.wide`.
 
 **Precedence without an AST.** Operators and leaves are not buffered into a
-tree; they stream through a reverse-polish stack. `printc.rs (PrintC::push_op)`
-pushes an operator's static token — the singleton table `printc.rs (tokens)`
+tree; they stream through a reverse-polish stack. `printc/ (PrintC::push_op)`
+pushes an operator's static token — the singleton table `printc/ (tokens)`
 carries each C operator's precedence, associativity, arity stage, spacing, and
 its negated complement — and *at push time* decides parenthesization by the
 pure predicate `printlanguage.rs (parentheses)`: compare the enclosing token's
@@ -2203,8 +2203,8 @@ parentheses on either side and a chain of them flattens to `a * b * c`. IEEE-754
 arithmetic is not associative: `a * (b * c)` rounds at different points than
 `(a * b) * c` and can differ in the last bit, so flattening a float chain emits C
 that computes a different value than the p-code it came from. `CPUI_FLOAT_MULT`
-and `CPUI_FLOAT_ADD` therefore push their own tokens, `printc.rs
-(tokens::FLOAT_MULTIPLY)` and `printc.rs (tokens::FLOAT_PLUS)`, spelled and
+and `CPUI_FLOAT_ADD` therefore push their own tokens, `printc/
+(tokens::FLOAT_MULTIPLY)` and `printc/ (tokens::FLOAT_PLUS)`, spelled and
 ranked exactly like the integer pair but carrying `left_to_right_only` instead of
 `associative`. That flag is the third answer `printlanguage.rs (parentheses)` can
 give a same-token operand: `associative` leaves both operands bare, a plain
@@ -2218,7 +2218,7 @@ right-grouped one -- where before they printed identically
 (`tests/stages/floatgrouping.toml`). Float subtraction and division already
 reached the right answer through the non-associative integer tokens they share.
 
-`printc.rs (PrintC::push_atom)` emits a leaf and then unwinds every operator whose
+`printc/ (PrintC::push_atom)` emits a leaf and then unwinds every operator whose
 operand count is now satisfied (`emit_op` prints each operator's text at the
 right visit stage — between operands for binary tokens, at open/close for
 surrounds). Contextual rendering flows through a modifier word saved and
@@ -2231,21 +2231,21 @@ comparison token to its complement instead of printing `!`.
 unlace prints them straight to the plain emitter, one statement per line,
 where upstream always breaks lines at 100 columns. `option maxlinewidth N`
 (20 to 10000) selects upstream's line breaking for plain text:
-`printc.rs (PrintC::set_max_line_size)` puts `EmitPrettyPrint` in front of the
-plain emitter, and `printc.rs (PrintC::set_markup)` keeps it when it restores
+`printc/ (PrintC::set_max_line_size)` puts `EmitPrettyPrint` in front of the
+plain emitter, and `printc/ (PrintC::set_markup)` keeps it when it restores
 plain text after a markup render. The markup back-end is never wrapped, and
 only C output is: Go ends a statement at a line break, and Rust and Go print
-unbroken (`printc.rs (PrintC::set_name)` re-selects the emitter when the
+unbroken (`printc/ (PrintC::set_name)` re-selects the emitter when the
 language changes). Only the console's `print C` (and so plain `unlace decompile` text) is
 broken: the batch render behind `--json`, `decompile-all` and the browser front-end
 returns records that address its code line by line (warning lines, line
 mappings, the call-argument positions later casts are written at), so
 `crates/unlace-console/src/project.rs (decompile_pulled)` prints each
-of its functions unbroken (`printc.rs (PrintC::suspend_line_size)`). A label
+of its functions unbroken (`printc/ (PrintC::suspend_line_size)`). A label
 line fires a pending `else` brace before the label, as it does without the
 pretty-printer (`prettyprint.rs (EmitPrettyPrint::try_tag_line_indent)`). The
 line size also bounds `option commentindent`: an indent of N or more is refused
-(`printc.rs (PrintC::set_line_comment_indent)`), as upstream does
+(`printc/ (PrintC::set_line_comment_indent)`), as upstream does
 (`tests/stages/maxlinewidth.toml`). The datatest corpus passes unchanged
 with `maxlinewidth` set to 100 or 200. When selected, line breaks
 are chosen by `prettyprint.rs (EmitPrettyPrint)`, an Oppen-style streaming
@@ -2262,7 +2262,7 @@ working space (`prettyprint.rs (EmitPrettyPrint::overflow)`), and inside a
 comment every forced break re-emits the comment fill prefix. Defaults: no
 line limit (`option maxlinewidth`), indent step 2 (`option indentincrement`),
 comment indent 20; brace placement per construct via the four `braceformat`
-fields of `printc.rs (PrintCOptions)`: if/loop/switch braces sit on the same
+fields of `printc/ (PrintCOptions)`: if/loop/switch braces sit on the same
 line as their construct, and a function's brace sits directly under its
 prototype (unlace DIV-34 — upstream's `skip_line` default leaves a blank line
 between the prototype and `{`; `option braceformat function skip` restores
@@ -2273,7 +2273,7 @@ it, exercised by `tests/stages/cnorm-protogap.toml`).
 the function's `<ast>` encoding writes as `<seqnum uniq>`) and a Varnode
 reference (`getCreateIndex`, the `<addr ref>` id). On the plain-text path no
 reference is even computed — output is byte-identical to a markup-less build —
-but under `EmitMarkup` (selected by `printc.rs (PrintC::set_markup)`, the
+but under `EmitMarkup` (selected by `printc/ (PrintC::set_markup)`, the
 ghidra-mode front-end) `<variable>` elements carry `varref`/`opref` (declarations add `symref`) and `<op>` elements carry `opref`; plain `<syntax>` elements carry only color/content that resolve against the AST by
 construction, which is how the Ghidra client maps a clicked token back to
 p-code, and how statement groups map to addresses.
@@ -2295,9 +2295,9 @@ encoding makes for the Ghidra client. Anything printed in the constant colour
 (a `tag_variable` literal or a plain `print`) and case labels are `value`
 tokens. Declaration context rides along: tokens inside the return type, the
 prototype, and a local declaration are marked, and a comment or label keeps the
-space and offset it is attached to. `printc.rs (PrintC::doc_function_tokens)` runs the same
+space and offset it is attached to. `printc/ (PrintC::doc_function_tokens)` runs the same
 `emit_function_document` sequence with capture on. `option indentincrement`
-lives on the emitter leaf, so `printc.rs (PrintC::set_markup)` carries it into
+lives on the emitter leaf, so `printc/ (PrintC::set_markup)` carries it into
 the leaf it swaps in: without that, the markup leaf would indent by the default
 2 (shifting every column) and the plain printer restored after it would print
 every later function of the batch at 2 as well.
@@ -2395,7 +2395,7 @@ when the variable covers only part of its mapped symbol (a 4-byte field of
 an 8-byte global), its read form is a cast (`(int)origin`) and not an
 lvalue, so the left side renders from the statement's output in the store
 form a plain assignment uses (`*(int *)&origin += 1`,
-`printc.rs (inplace_target)`); comma contexts — for-loop headers and condition-block side effects — keep
+`printc/ (inplace_target)`); comma contexts — for-loop headers and condition-block side effects — keep
 the spelled-out upstream form, so `for (...; i = i + 1)` is unchanged;
 `option inplaceops off` restores everything, exercised by
 `tests/stages/cnorm-compoundassign.toml`), and
@@ -2413,7 +2413,7 @@ compilable C, and a store cast down to `*(void *)` loses its width
 entirely). `void` is therefore only the **fallback** under a pointer, for
 the residual sizes with no natural single C type (0, 3, 5, 6, 7, …); as a
 scalar those sizes keep `undefined<N>` (DIV-48,
-`printc.rs (realtype_unknown_base)`, exercised by
+`printc/ (realtype_unknown_base)`, exercised by
 `tests/stages/ghdec-realtypes-pointee.toml`). A genuine `TYPE_VOID` pointee
 is not a residual unknown and never enters the relabel, so the opaque
 `void *` of `free`/`malloc`/`memcpy` is unaffected. Per-symbol format assertions
@@ -2426,7 +2426,7 @@ assertion plane).
 
 Signed integer constants are normalized to their declared byte width before
 choosing their sign, magnitude, and numeric base
-(`crates/unlace-emit/src/p9_emit/printc.rs (resolve_integer_format)`).
+(`crates/unlace-emit/src/p9_emit/printc/ (resolve_integer_format)`).
 A four-byte `0xfffffffffffffffc` carrier therefore prints as `-4`, just like
 `0xfffffffc`; upper carrier bits also cannot turn a positive narrow value
 negative. Forced numeric radices retain this width interpretation. Character
@@ -2522,7 +2522,7 @@ Under the angr scheme: locals and decompiler temporaries are `v1`, `v2`, … —
 HighVariable, exactly one counter); parameters with no recovered name are
 `a0`, `a1`, … by signature slot; global data reads `dat_<addr>` (lowercase
 bare hex), unnamed callees `sub_<addr>`, goto targets `label_<addr>`
-(`printc.rs (PrintC::block_label_name)`, from the target block's entry
+(`printc/ (PrintC::block_label_name)`, from the target block's entry
 address so goto and label always agree). Two printed labels can start at
 the same address: `ActionReturnSplit` clones a shared return block once per
 goto edge, each clone keeping the original's address cover, and a clone
@@ -2530,7 +2530,7 @@ spliced into its predecessor still starts at the return block's address.
 When two such copies are both goto targets, each would print
 `label_<addr>:`, a duplicate label (a C compile error) that leaves every
 goto to either copy ambiguous. Before the body prints,
-`crates/unlace-emit/src/p9_emit/printc.rs (PrintC::assign_label_names)`
+`crates/unlace-emit/src/p9_emit/printc/ (PrintC::assign_label_names)`
 walks the structured tree in child order over the leaves that print a
 label; the first leaf with a given name keeps it and the n-th takes
 `label_<addr>_<n>` (`LAB_%08x_<n>` in ghidra mode). A goto resolves its
@@ -2551,7 +2551,7 @@ The loader already names that slot for the import and paints it `externref`, whi
 is how `ActionDeindirect` turns a *call* through it into a direct call to the
 import. A *data* read is not a call, so it printed as a dereference of the
 anonymous slot, `*dat_<slot>`. With the option on, `PrintC::op_load_ir`
-(`crates/unlace-emit/src/p9_emit/printc.rs (import_slot_name)`) renders
+(`crates/unlace-emit/src/p9_emit/printc/ (import_slot_name)`) renders
 a LOAD whose pointer is such a slot as the import itself — `*slot` where the slot
 holds `&imported_counter` is `imported_counter` — resolving it exactly as
 `ActionDeindirect` resolves a call through the same slot (`query_function` on the
@@ -2572,7 +2572,7 @@ The slot's own value, used without a dereference, is the import's address: Swift
 passes a witness table, type metadata or a conformance descriptor to the runtime
 this way (`swift_getWitnessTable(conformance, type, args)`), and Objective-C a class
 object as a message receiver. With the option on, `PrintC::push_vn_explicit`
-(`crates/unlace-emit/src/p9_emit/printc.rs (import_slot_address)`)
+(`crates/unlace-emit/src/p9_emit/printc/ (import_slot_address)`)
 renders a read of a Mach-O import slot whose import is a data object (the slots
 `machodataslots` classifies from the import's mangling, chapter
 [01](01-program-prep.md)) as `&<import>` instead of `dat_<slot>`, named by the same
@@ -2618,7 +2618,7 @@ prints as `vget[q]_lane_<t>(v, n)`. At `all`, the flow walk also runs `fuse_neon
   becomes one built-in (`vaddq_s32`; integer lanes print signed);
 - a run of lane COPYs of one scalar covering a register becomes `vdup[q]_n_s<bits>`.
 
-(unlace `evmstorage`, default off) An EVM `sload`/`sstore` user op prints as a storage access, `storage[0x..]` for a constant slot, `mapping(..)` when a `keccak256` user op computes the slot (a def-chain walk of at most six ops), `storage(..)` for any other computed slot, and an `sstore` as an assignment (`crates/unlace-emit/src/p9_emit/evmstorage.rs`, `printc.rs` `op_evm_storage_ir`). The hash test is a heuristic and is printed-only.
+(unlace `evmstorage`, default off) An EVM `sload`/`sstore` user op prints as a storage access, `storage[0x..]` for a constant slot, `mapping(..)` when a `keccak256` user op computes the slot (a def-chain walk of at most six ops), `storage(..)` for any other computed slot, and an `sstore` as an assignment (`crates/unlace-emit/src/p9_emit/evmstorage.rs`, `printc/` `op_evm_storage_ir`). The hash test is a heuristic and is printed-only.
 
 (unlace `wideconst`, default on) A constant wider than 64 bits that the lifter built from
 pieces prints as one hexadecimal literal (`crates/unlace-emit/src/p9_emit/wideconst.rs`).
@@ -2756,8 +2756,8 @@ the angr default; the resolver `Architecture::unlace_name_style` /
 `ArchContext::unlace_name_style` gives it precedence at exactly the
 ADDRESS-DERIVED fallback sites — an unresolved callee prints `FUN_%08x`
 (`crates/unlace-middle/src/p4_calls/fspec.rs (fspec_printed_name)`),
-an unnamed global `DAT_%08x` (`printc.rs (unlace_global_data_name)`), a goto
-target `LAB_%08x` (`printc.rs (PrintC::block_label_name)`), the renderers in
+an unnamed global `DAT_%08x` (`printc/ (unlace_global_data_name)`), a goto
+target `LAB_%08x` (`printc/ (PrintC::block_label_name)`), the renderers in
 `crates/unlace-middle/src/p0_knowledge/database.rs
 (ghidra_function_name, ghidra_global_data_name, ghidra_label_name)` — because
 the Java side's dynamic-name heuristics key on those spellings
@@ -2846,7 +2846,7 @@ a mapped local can be a transient the symbol never described. A whole mapped
 local whose Symbol is type-locked (a DWARF or `--assert type` declaration) with
 a boolean, integer, float or pointer type as wide as the declaration
 representative, and that is not a parameter, declares that Symbol type instead
-(`crates/unlace-emit/src/p9_emit/printc.rs
+(`crates/unlace-emit/src/p9_emit/printc/
 (locked_scalar_local_type)`), whatever this option says: merging can leave the
 representative at a weaker type, such as `void *` for a gcc `-O0` DWARF
 function-pointer local, which makes the indirect call through it invalid C.
@@ -3118,7 +3118,7 @@ what the C computes. Re-declaring the left side of an assignment would lose a
 widening `castimplied` dropped because the spellings matched, so that rule also
 accepts a re-signed declaration of the cast's width (§9.1). The option acts on C
 output only. Rust has no implicit integer conversions, so `let mut v1: i64;` would
-not accept the `u64` that `strlen` returns (`printc.rs (emit_function_document)`
+not accept the `u64` that `strlen` returns (`printc/ (emit_function_document)`
 passes it only when the language's `integer_promotion` capability is set, the gate
 `castimplied` uses). With the option off the output is byte-identical to
 `signedness` alone. Pinned by
@@ -3205,12 +3205,12 @@ instead of re-declaring the parameter's identifier.
 declaration belongs to a same-named sibling (the whole symbol, the storage local
 a `&symbol` reference points at, the group's owner) is answered from the
 function's named highs grouped by name once per declaration walk, each group in
-the high bank's own order (`printc.rs (SameNamed)`). Each test walks only its
+the high bank's own order (`printc/ (SameNamed)`). Each test walks only its
 name's group instead of every high of the function, and finds the same first
 sibling it found before. With the other GH-1034 fixes in, serde-hkx's 174 KB
 deserializer drops from 238 s to 152 s, nearly all of it in these walks.
 
-**(unlace) renumberlocals — Hex-Rays-style synthetic local numbering.** The naming pass gives an unnamed local the default spelling `v<N>` (`p6_variables/varmap.rs (pick_default_number)`), numbered in the order the naming pass met it, so a function can read `v3, v7, v12`. With `renumberlocals on` (default off; a readability choice, so it ships behind an option), `printc.rs (PrintC::emit_local_var_decls)` renumbers those spellings before the sign plan and the collapses run: every declared synthetic name, taken in collection order, becomes `v1`, `v2`, ... in turn (`p9_emit/renumberlocals.rs (renumber_synthetic_locals)`). A spelling in the function's occupied set (parameters, call names) or a global the function references is skipped, and names that are not `v<digits>` are unchanged. Each renamed high is recorded in the local name overrides, so body references follow its declaration. The order is the collection order of the declarations, an approximation of first appearance; the Hex-Rays rules for the sole returned local (`result`) and for argument-register carriers are not implemented.
+**(unlace) renumberlocals — Hex-Rays-style synthetic local numbering.** The naming pass gives an unnamed local the default spelling `v<N>` (`p6_variables/varmap.rs (pick_default_number)`), numbered in the order the naming pass met it, so a function can read `v3, v7, v12`. With `renumberlocals on` (default off; a readability choice, so it ships behind an option), `printc/ (PrintC::emit_local_var_decls)` renumbers those spellings before the sign plan and the collapses run: every declared synthetic name, taken in collection order, becomes `v1`, `v2`, ... in turn (`p9_emit/renumberlocals.rs (renumber_synthetic_locals)`). A spelling in the function's occupied set (parameters, call names) or a global the function references is skipped, and names that are not `v<digits>` are unchanged. Each renamed high is recorded in the local name overrides, so body references follow its declaration. The order is the collection order of the declarations, an approximation of first appearance; the Hex-Rays rules for the sole returned local (`result`) and for argument-register carriers are not implemented.
 
 **(angr) dedupvardecls — collapsing duplicate declarations.** unlace's
 declaration emitter walks HighVariables, not the upstream symbol table (which
@@ -3219,7 +3219,7 @@ stack slot — all bound to the same name by the shared-storage naming — would
 each emit a textually identical declaration line (x86_64/cvs `main` declared
 one slot 166×). Composite symbols (arrays/structs/unions) are always collapsed
 to one declaration per mapped symbol by an unconditional identity check in
-`printc.rs (PrintC::emit_local_var_decls)`; the scalar analogue is the option
+`printc/ (PrintC::emit_local_var_decls)`; the scalar analogue is the option
 `dedupvardecls` (default on since DIV-7; row `source_decompiler = "angr"` —
 angr's variable recovery yields one variable per storage location, declared
 once), which collapses in two steps.
@@ -3285,14 +3285,14 @@ A suffix must reach every high that prints the renamed object, not only the one
 that kept the declaration line. So each high the walk declares through another
 records that other high as its owner, and before suffixing, every owner chain is
 followed to the declaration that finally survived
-(`printc.rs (PrintC::settle_local_name_aliases)`); body references then read that
-declaration's spelling (`printc.rs (PrintC::emitted_high_name)`). The owners are:
+(`printc/ (PrintC::settle_local_name_aliases)`); body references then read that
+declaration's spelling (`printc/ (PrintC::emitted_high_name)`). The owners are:
 the survivor of every collapse above; for a struct piece (a by-value struct
 argument rebuilt from registers has no declaration per field), the root in its
 VariableGroup; for a scalar partial view, the high in its VariableGroup that
-covers the whole Symbol at full width (`printc.rs (owner_in_group)`); and for an
+covers the whole Symbol at full width (`printc/ (owner_in_group)`); and for an
 `&symbol` reference, the storage high bound to the local Symbol it points at
-(`printc.rs (reference_owner)`). An owner is never a global's high, and a
+(`printc/ (reference_owner)`). An owner is never a global's high, and a
 reference with no local Symbol, which is a reference to a global, has no owner,
 so a global's accesses keep the global's name even when a local of the same
 name is suffixed. A piece, a partial view and a reference each point at a high
@@ -3322,7 +3322,7 @@ caller order determines which declaration is retained.
 Partial covers of a mapped scalar are suppressed only when another
 HighVariable with the same name actually represents the whole storage: its
 first member is non-constant, starts at symbol offset zero, and has the symbol's
-full width (`printc.rs (high_name_has_scalar_whole_sibling)`). A constant
+full width (`printc/ (high_name_has_scalar_whole_sibling)`). A constant
 `PTRSUB` offset bound to `&local` also carries the symbol's name and full width,
 but its declaration is filtered as an address reference; treating that constant
 as the whole sibling would suppress every real partial and leave `local` used
@@ -3409,7 +3409,7 @@ in the global scope (writable data may have changed since load — refuse to
 print a literal), then ask the string manager for decoded bytes and emit the
 escaped, quoted literal — with an `L` prefix for wide characters and, when the
 literal was clipped, the terminator `..." /* TRUNCATED STRING LITERAL */`
-(`printc.rs (PrintC::push_ptr_char_constant_ir, PrintC::print_character_constant)`).
+(`printc/ (PrintC::push_ptr_char_constant_ir, PrintC::print_character_constant)`).
 On any refusal the constant falls back to the ordinary integer render, so a
 wrong guess costs readability, never correctness. The manager itself —
 `crates/unlace-middle/src/p0_knowledge/stringmanage.rs
@@ -3426,12 +3426,12 @@ marshalled with the result; legacy entries without it are not cache hits
 (`stringmanage.rs (StringManagerUnicode::get_string_data)`). Rendering escapes per codepoint:
 `printlanguage.rs (unicode_needs_escape)` classifies control characters,
 separators, bidi markers, surrogates and private-use ranges as escape-worthy,
-and `printc.rs (print_unicode)` emits the named C escapes then falls to `print_char_hex_escape`, which emits only `\x` (zero-padded to 2/4/8 hex digits by codepoint magnitude). Internal strings
+and `printc/ (print_unicode)` emits the named C escapes then falls to `print_char_hex_escape`, which emits only `\x` (zero-padded to 2/4/8 hex digits by codepoint magnitude). Internal strings
 (not in the loadimage) can be registered under a constant-space hash address
 and resolve through the same cache.
-Inside a double-quoted string literal, `printc.rs (print_unicode_in_string)` writes a single quote unescaped; char literals still escape it as `\'` (`print_unicode`).
+Inside a double-quoted string literal, `printc/ (print_unicode_in_string)` writes a single quote unescaped; char literals still escape it as `\'` (`print_unicode`).
 
-**Bounded literals** (unlace, `printc.rs (bounded_char_array)`). A Rust or Go
+**Bounded literals** (unlace, `printc/ (bounded_char_array)`). A Rust or Go
 literal committed as a length-bounded `char[N]` (chapter 01's `fatstrrecords`
 and `strcodelen`) has no NUL, and the next literal follows it directly. Read to
 a NUL, it would print glued to its neighbours. So when the address is the start
@@ -3565,14 +3565,14 @@ flushed by the decompile drive into the Architecture-wide comment database
 `crates/unlace-middle/src/infra/architecture.rs (CommentDatabase)`
 with byte-exact de-duplication (same function, address, and text ⇒ dropped),
 so re-decompilation never doubles a warning. At print time
-`printc.rs (PrintC::setup_comments)` loads the function's comments into the
+`printc/ (PrintC::setup_comments)` loads the function's comments into the
 sorter `crates/unlace-middle/src/substrate/comment.rs (CommentSorter)`,
 which bins each comment by the basic block containing its address and orders
 it against the block's ops; the body emitters then interleave them — each
-statement flushes the comments sorted before it (`printc.rs
+statement flushes the comments sorted before it (`printc/
 (PrintC::emit_comment_group)`), and a construct that folds several blocks onto
 one line (an `if` header) pre-flushes its whole subtree so no comment can land
-mid-expression (`printc.rs (PrintC::emit_comment_block_tree)`), forcing the
+mid-expression (`printc/ (PrintC::emit_comment_block_tree)`), forcing the
 pending `else if` brace when it does. Which categories display is a
 `PrintContext` default (`printlanguage.rs
 (PrintContext::reset_defaults_internal)`): header + warning-header types
@@ -3589,7 +3589,7 @@ With `option nonnullparam on` the printer adds a `/* non-null: <p> is dereferenc
 **(unlace) arraynotation** — the second GH-558 decision (its registry row
 records `ghidra-upstream` because the upstream *issue*, not upstream code,
 motivated it; the implementation is unlace-original). A scaled pointer-add
-(`PTRADD`) has three renders, decided at `printc.rs (PrintC::op_ptradd_ir)`:
+(`PTRADD`) has three renders, decided at `printc/ (PrintC::op_ptradd_ir)`:
 inside a load/store context (the `print_load_value`/`print_store_value`
 modifier is set, i.e. the pointer is being dereferenced) it is always the
 subscript `base[index]` — that is upstream behavior and not optional; a
@@ -3597,7 +3597,7 @@ subscript `base[index]` — that is upstream behavior and not optional; a
 is upstream `base + index`, and unlace's `option arraynotation` (default **on**,
 DIV-2 lineage; option struct in
 `crates/unlace-emit/src/p9_emit/arraynotation.rs
-(OptionArrayNotation)`, the flag on `printc.rs (PrintCOptions)`) renders it
+(OptionArrayNotation)`, the flag on `printc/ (PrintCOptions)`) renders it
 `&base[index]` instead, keeping the element-typed reading — implemented as
 two ordinary RPN tokens (address-of wrapping a subscript), so the surrounding
 expression parenthesizes through the normal §9.2 precedence predicate. The
@@ -3611,7 +3611,7 @@ presentation.
 
 **(unlace) containerof** — the container idiom (default **off**, C output only;
 `crates/unlace-emit/src/p9_emit/containerof.rs (PrintC::push_container_of)`,
-tried first in `printc.rs (PrintC::op_type_cast_ir_with)`). A CAST to `S *` whose
+tried first in `printc/ (PrintC::op_type_cast_ir_with)`). A CAST to `S *` whose
 operand is printed inline and is made of constant steps from a pointer `p`
 (`PTRADD` with a constant index, `PTRSUB`, `INT_ADD` of a constant, `INT_SUB`,
 `CAST`, `COPY`; at most nine) is the container idiom when the steps sum to `-K`,
@@ -3632,7 +3632,7 @@ back-end through a `PrintLanguageCapability` registry over a three-level hierarc
 that into one concrete `PrintC`. unlace re-erects the seam by **parameterizing** the
 single emitter rather than growing a second one: `PrintC` carries one `out_lang`
 field, and every language-varying site reads a `&'static` policy object through
-`printc.rs (PrintC::lang)` instead of naming a `keywords::`/`tokens::` constant.
+`printc/ (PrintC::lang)` instead of naming a `keywords::`/`tokens::` constant.
 The RPN driver, the op emitters, `parentheses`, the cast plumbing, the comment
 sorter and the markup back-end are shared verbatim — there is no duplicated
 emitter, which is what keeps one implementation of "emit an `if`" as languages are
@@ -3644,7 +3644,7 @@ Three artifacts make up the plane, all in
 - **`lang.rs`** — `OutLang` (the selector), `LangProfile` (the surface
   vocabulary: the keyword and punctuation spellings the emitters use, plus the
   `OpToken`s whose *spelling* varies; the ~40 arithmetic/comparison/shift tokens
-  are identical in every language unlace targets and stay in `printc.rs (tokens)`),
+  are identical in every language unlace targets and stay in `printc/ (tokens)`),
   and `LangCaps` — **what the emitter is allowed to produce**. `LangCaps` is what
   lets a language that cannot express a construct never be handed one, instead of
   the operator being asked to flip the unlace rendering defaults that would produce
@@ -3682,7 +3682,7 @@ Three artifacts make up the plane, all in
 - **`langc.rs`** — `CSpeller`, the c-language policy object. It carries the
   declarator algorithm transcribed from `pushTypeStart`/`pushTypeEnd`/
   `buildTypeStack` and the `realtypes`/`ctypes` relabelling (DIV-5/DIV-6), moved
-  verbatim out of `printc.rs`, which keeps thin dispatchers.
+  verbatim out of `printc/`, which keeps thin dispatchers.
 
   C declarator modifiers are consumed outermost-to-base around the identifier.
   A pointer prefixes the declarator; a later array postfix groups the complete
@@ -3714,7 +3714,7 @@ plane is a byte-identical rewrite and `docs/baseline.json` is never re-pinned.
 
 **(unlace) Language flavours.** A *flavour* is an output-language profile read from a TOML
 file (`p9_emit/langflavour.rs`): the file names one of the four languages as its `base` and
-overrides parts of that language's `LangProfile`. `printc.rs (PrintC::set_flavour)` selects
+overrides parts of that language's `LangProfile`. `printc/ (PrintC::set_flavour)` selects
 the base language as `option setlanguage` does and then makes `PrintC::lang` return the
 flavour's profile; `PrintC::set_name` drops it, so selecting a language by name always
 renders the built-in one. `out_lang` stays the base, so the type speller, the statement
@@ -3750,7 +3750,7 @@ outside comments and constants. A key that leaves one behind is not offered for 
   `break`, `for`, `case` and `default` as text.
 - **Operators.** An `OpToken` is a static compared by identity (`printlanguage.rs
   (parentheses)`), so a flavour does not replace tokens. It carries a spelling per token,
-  and every place that writes a token's opening text asks `printc.rs (PrintC::op_spelling)`:
+  and every place that writes a token's opening text asks `printc/ (PrintC::op_spelling)`:
   the RPN emitter, and the statement emitters that write `!`, `&&`, `||` or `=` themselves.
   Precedence, associativity, spacing and parenthesization stay the token's. A key covers the
   C token and the token the base language's `map_token` puts in its place; where the base
@@ -3803,7 +3803,7 @@ same structured block tree render through a different profile. Three files carry
 it: `p9_emit/langrust.rs` (the profile, the capability record, the three
 `OpToken`s whose spelling or precedence differs, and the emitters for the shapes
 that are not C's), `p9_emit/rusttypes.rs` (the speller), and the
-`LangForms` matches in `printc.rs` that choose between them.
+`LangForms` matches in `printc/` that choose between them.
 
 What differs, and why each is a language fact rather than a preference:
 
@@ -3899,7 +3899,7 @@ What differs, and why each is a language fact rather than a preference:
   retain priority. Unresolved or indirect calls, different layouts, narrowed
   or shared results, and absent DWARF keep the ordinary condition rendering.
 - **Named reference Option condition.** The independent
-  `p9_emit/rustoption_niche.rs` path corrects the null test of a named
+  `p9_emit/printc/rustoption_niche.rs` path corrects the null test of a named
   AMD64 Rust `core::option::Option<&u64>` input. The imported `VariantLayout`
   must describe an eight-byte union, an eight-byte discriminator at offset
   zero, a fieldless `None` selected by zero, and the default `Some` containing
@@ -3935,7 +3935,7 @@ What differs, and why each is a language fact rather than a preference:
   would emit `NULL` (Rust spells it `core::ptr::null_mut()`). `condfold`'s comma
   operand has no Rust form either and is refused the same way.
 - **Constructed null expressions** use `printlanguage.rs (TagType)`'s
-  `LiteralToken`. `printc.rs (PrintC::emit_atom)` emits that final Rust spelling
+  `LiteralToken`. `printc/ (PrintC::emit_atom)` emits that final Rust spelling
   through the same variable-markup path, preserving the operation and varnode
   associations while keeping the parentheses in `core::ptr::null_mut()`.
   Recovered variable names, including enum constants, still pass through the
@@ -3989,10 +3989,10 @@ per-function JSON record carries `warnings`, taken from the engine's warning
 store rather than read back out of `code`. `p9_emit/functionwarnings.rs`
 holds one record per warning a render wrote: the address the engine indexed
 it at, its stored text, and the line of the render holding its comment. The printer records one wherever it writes a
-warning: `printc.rs (PrintC::emit_comment_func_header)` for a `warningheader`
-comment, at the function's entry; `printc.rs (PrintC::emit_comment_group)` for a
+warning: `printc/ (PrintC::emit_comment_func_header)` for a `warningheader`
+comment, at the function's entry; `printc/ (PrintC::emit_comment_group)` for a
 comment whose type is exactly `WARNING`, the type `Funcdata::warning` stamps, at
-the instruction it was indexed at; `printc.rs (PrintC::flush_eol_warnings)`,
+the instruction it was indexed at; `printc/ (PrintC::flush_eol_warnings)`,
 which gives every warning collected under `warnstyle inline` the line it
 appends them to, so the warnings joined into one `// a, b` comment keep an
 address each; and the shell a body without structured blocks prints
@@ -4002,7 +4002,7 @@ a record, whatever it spells: an `--assert comment` (its type carries the user
 bit), a declaration's storage comment, a DWARF line, the original name a Rust or
 Go render keeps above the prototype. Only a plain render records; a markup pass
 over the same function keeps the plain render's records, and
-`printc.rs (PrintC::take_warnings)` rebases their lines onto the trimmed `code`
+`printc/ (PrintC::take_warnings)` rebases their lines onto the trimmed `code`
 as `take_pointer_arguments` does. The edits made after printing (the cookie
 return rewrite, pointer-argument casts, the `--jobs` structure renames) keep
 every line where it was, so each record's `line` holds its comment. The
@@ -4011,7 +4011,7 @@ store, and each address is mapped to the target's address units as
 `line_mappings` is. `kind` is the kind of an engine stem the slugs leave whole
 (`STEMS`: decode failures, flow truncation, out-of-bounds and unmapped flow,
 unrecovered jump tables, declined structuring), else the slug
-`printc.rs (warning_slug)` gives the text, less its ` xN` count, so a slug added
+`printc/ (warning_slug)` gives the text, less its ` xN` count, so a slug added
 there is a kind at once; else a unlace warning's producer tag, else `other`.
 `message` is the stored text less its `WARNING: ` marker. Both warning styles
 give the same records but for `line`. The verdict does not move here either;
@@ -4405,7 +4405,7 @@ by the pipeline always makes the export fail. These checks include declarations
 for callees outside the selected bodies and unresolved local directives; accepted
 directives keep their final applied outcomes.
 
-**Type definitions — the `docTypeDefinitions` port.** `printc.rs
+**Type definitions — the `docTypeDefinitions` port.** `printc/
 (PrintC::doc_type_definitions)` is the previously-unported C++
 `PrintC::docTypeDefinitions` surface — the console `print C types` command
 (`crates/unlace-console/src/ifacedecomp.rs (IfcPrintCTypes)`) was a
@@ -4416,7 +4416,7 @@ consuming `crates/unlace-middle/src/substrate/dtype.rs
 (TypeFactoryImpl::dependent_order)` (chapter [05](05-types.md) §5.1) so every
 definition precedes its uses. Core types, unnamed types, and the internal
 `Partial*` slices are skipped; what renders is typedefs, structs, unions, and
-enums (`printc.rs (render_type_definitions)`; the per-type body renderers —
+enums (`printc/ (render_type_definitions)`; the per-type body renderers —
 `compose_type_body`, `compose_enum_body`, `compose_typedef_line` — are pure
 functions for unit-testability, and emission is direct string building, since
 no emitter markup exists for type definitions). The structures `structsynth`
@@ -4442,7 +4442,7 @@ compiles":
   suppressed since their byte coverage overlaps the gap computation); unions
   carry no padding.
 
-A non-C identifier is rewritten by `printc.rs (sanitize_type_name)` (annotated
+A non-C identifier is rewritten by `printc/ (sanitize_type_name)` (annotated
 `/* renamed from "…" */`). A C keyword (C23 with `<stdbool.h>`: `register`,
 `bool`, `typeof`, `alignof`, …) is not one either and gains a `_` suffix: zig's
 compiler_rt DWARF names a struct member `register`, and C99 code may name one
@@ -4476,9 +4476,9 @@ such a type with the one name they share, so the exported `.c` keeps the clash
 the header sheds.
 
 **The prototype — one token stream, two documents.** The prototype segment of
-§9.2's document walk was extracted verbatim into `printc.rs
+§9.2's document walk was extracted verbatim into `printc/
 (PrintC::emit_prototype_declaration)` — pure code motion, byte-identical
-inside `emit_function_document` — so `printc.rs (PrintC::doc_prototype)` can
+inside `emit_function_document` — so `printc/ (PrintC::doc_prototype)` can
 drive the IDENTICAL token sequence standalone: the same
 `set_output_stream()` → emit → `output_str()` capture harness as
 `doc_function_full`, plus a trailing `;`, minus the header warning comments.
@@ -4675,9 +4675,9 @@ name the C never prints at all. The cost of the choice is the opposite error: a
 type carried by a Varnode that contributes no token can be defined above a
 function that never names it.
 
-**One renderer, two surfaces.** `printc.rs
+**One renderer, two surfaces.** `printc/
 (PrintC::emit_type_definition_preamble)` hands the subset to the same
-`printc.rs (render_type_definitions)` §9.7 builds the export's `.h` type block
+`printc/ (render_type_definitions)` §9.7 builds the export's `.h` type block
 with, so a preamble line and a header line for one type are the same line: the
 forward-declaration block first, then bodies, an incomplete struct printing as
 `typedef struct FILE FILE; /* opaque */`, a padding gap as `undefined1
@@ -4740,7 +4740,7 @@ JSON consumer has no way to resolve.
 ## 9.9 Constant addresses named as globals (`globalref`)
 
 A pointer-typed constant that no global Symbol covers has exactly one spelling
-in the pointer arm of `printc.rs (PrintC::push_vn_explicit_ir)`: the forced-hex
+in the pointer arm of `printc/ (PrintC::push_vn_explicit_ir)`: the forced-hex
 integer behind a typecast, `sub_e4ca((struct_2 *)0x2b080)`. Upstream reaches a
 name only through `coreaction_render.rs (ActionConstantPtr)`, which links a
 constant to a Symbol that already exists, and a stripped image has none for most
@@ -4762,7 +4762,7 @@ not because it was suppressed, and its value is the address it replaces
 wherever `dat_<addr>` is placed at `<addr>`. The decision is
 `crates/unlace-emit/src/p9_emit/globalref.rs (Plan::decide)`,
 consulted at the top of the pointer arm after the string probe (§9.4) and
-before the NULL token and the cast; `printc.rs (PrintC::push_global_ref_ir)`
+before the NULL token and the cast; `printc/ (PrintC::push_global_ref_ir)`
 emits the `&` and the name, bound to the constant Varnode for markup.
 
 **Where a global can be.** The object loader classifies its sections once
@@ -4817,7 +4817,7 @@ directly (`Plan::direct_type_at`), or as the unknown byte.
 **The declaration.** `decompile_drive.rs (extract_global_objects)` reads back
 off the printer, after `print_c`, every address the function named and every
 piece of unnamed program data it read or wrote directly, each with the C
-declaration the structure-member declarator builds for it (`printc.rs
+declaration the structure-member declarator builds for it (`printc/
 (declaration_text)`), its size, and whether it stood for `void`, was a direct
 access, or is a record or union. They travel as `FuncResult::globals`, which
 the `--jobs` wire carries like the type records, and
@@ -4878,7 +4878,7 @@ widened or masked (a multiply or left shift by a constant, a sign or zero
 extension, an AND with a constant below 0x10000 such as the `index & 0x3c` a
 compiler folds `((index >> 2) & 0xf) * 4` into, a sum of those, through CASTs
 and COPYs that are not from a pointer),
-`printc.rs (op_named_pointer_add_ir)` relocates
+`printc/ (op_named_pointer_add_ir)` relocates
 the constant through `namedglobals.rs (object_address)` and keeps the
 addition at pointer width, `(float *)((unsigned long long)((unsigned char
 *)&arena + 0x40) + index * 4LL)`, so the byte offset is not scaled again and
@@ -4951,7 +4951,7 @@ rewriting keep the existing rendering.
 **An indexed table is an array (`elemptr`).** With `elemptr` on (05-types
 §5.2), a constant address that is the base of a `PTRADD` indexed by a computed
 value is an array's first element, and `plan` records it (`Plan::indexed`). The
-name then prints without the `&` (`printc.rs (PrintC::push_global_ref_ir)` asks
+name then prints without the `&` (`printc/ (PrintC::push_global_ref_ir)` asks
 `Plan::is_array`): `dat_4020` already has exactly the constant's pointer type in
 C, so `dat_4020[v1]` is the same address and the same element as
 `*(unsigned char *)(v1 + 0x4020)`. `extract_global_objects` declares it `T
@@ -5127,7 +5127,7 @@ unchanged prefix. P9 also accepts the equivalent zero-offset truncation of a
 right shift by the number of replaced bits, which cast insertion can introduce.
 The implementation is
 `crates/unlace-emit/src/p9_emit/partialconcat.rs` and the
-`PrintC::op_partial_concat_ir` renderer in `printc.rs`. Both masks matter: the
+`PrintC::op_partial_concat_ir` renderer in `printc/`. Both masks matter: the
 upper one removes replaced bits, and the lower one truncates arithmetic that C
 promotes before evaluating. Casts to the unsigned result width keep the operation
 on bit patterns, including when an operand has a signed type. The IR, signatures,
@@ -5233,13 +5233,13 @@ linkage identifier. The change is local to the rendered function.
 A statement LOAD rendered through a byte-copy helper copies directly into the
 printed destination member’s scalar type when its width matches the access.
 The helper must preserve the representation instead of numerically converting
-an integer temporary into a float member (`printc.rs (op_load_ir)`).
+an integer temporary into a float member (`printc/ (op_load_ir)`).
 An `iteregion` assignment diamond whose arm is such a LOAD, with the destination
 member and the helper's type disagreeing on float-ness, keeps its `if`/`else`
 form so each arm stays a statement LOAD copying into the member's type
-(`printc.rs (converts_storage_load)`); a `?:` arm would convert numerically.
+(`printc/ (converts_storage_load)`); a `?:` arm would convert numerically.
 A STORE helper likewise initializes its compound literal with the rendered
-source member’s same-width scalar type (`printc.rs (op_store_ir)`), preserving
+source member’s same-width scalar type (`printc/ (op_store_ir)`), preserving
 its bytes when propagated IR types disagree.
 
 A same-width integer representation assigned to a declared pointer member needs
@@ -5256,7 +5256,7 @@ from its Symbol's scalar type (`pointerstorecast.rs (target)`).
 ## (unlace) Intel intrinsic names for AVX user-ops — `option avxintrinsics`, default on
 
 **`crates/unlace-middle/src/substrate/avxintrin.rs (intrinsic)`,
-called from `printc.rs (op_callother_ir)`.** The x86 SLEIGH spec lifts most
+called from `printc/ (op_callother_ir)`.** The x86 SLEIGH spec lifts most
 AVX2, FMA and AVX-512 instructions to opaque user-ops named after the mnemonic
 and its extension: `vpaddd_avx2`, `vfmadd132ps_fma`, `vaddps_avx512f`. When a
 `CALLOTHER` prints in functional form, its name is looked up: a user-op whose
@@ -6070,7 +6070,7 @@ mappings verify these address computations do not load the array contents.
 
 ### Rust complete array initialization
 
-`p9_emit/rustarrayinit.rs` renders consecutive scalar COPY writes covering
+`p9_emit/printc/rustarrayinit.rs` renders consecutive scalar COPY writes covering
 every element of a recovered integer array, in increasing index order, as one
 whole-array assignment. This initializes a previously uninitialized Rust local
 without zero-filling or manufacturing values. The existing COPY value renderer
@@ -6124,7 +6124,7 @@ original measurement is retained and the correction ships as an explicit opt-in.
 run after the final structure): an in-place pointer step `p = p + c` (an
 `INT_ADD` of a constant `c`, or a `PTRADD` of one element of `c` bytes, whose
 output and first input are the same variable) prints nothing, and the LOAD or
-STORE before it prints its pointer as `p++` (`printc.rs (PrintC::push_post_increment)`,
+STORE before it prints its pointer as `p++` (`printc/ (PrintC::push_post_increment)`,
 token `POST_INCREMENT`, a postfix like the call parentheses), when the stepped
 value is read by exactly that LOAD or STORE besides the step, the access is
 `c` bytes and `p` points to `c`-byte elements (so `p++` steps the same bytes),
@@ -6142,7 +6142,7 @@ underscores, any x86 `@n` suffix) that passes both arguments as a `throw`.
 With both arguments the constant 0 it prints `throw` (a rethrow). With both
 non-zero it prints `throw` followed by the object the first argument points
 to, read the way a load through that pointer is printed
-(`printc.rs (push_msvc_throw)`): an address-of-variable argument prints as the
+(`printc/ (push_msvc_throw)`): an address-of-variable argument prints as the
 variable (`throw v1`), anything else as `*p`. The `throw` token is a unary
 prefix with the precedence of an assignment. Any other call shape prints as a
 call. The thrown type is not printed here; it stays on the `ThrowInfo<T>` label
@@ -6154,7 +6154,7 @@ Under `itaniumeh` (default on, see the option row in `phases.toml`) a direct
 C-output call of `__cxa_throw` (leading underscores and any `@plt` suffix) with
 its three arguments (object, `typeinfo`, destructor) prints as `throw *p`,
 where `p` is the object the first argument points to, read the way a load
-through that pointer is printed (`printc.rs (push_throw_call)`). A call of
+through that pointer is printed (`printc/ (push_throw_call)`). A call of
 `__cxa_rethrow` with no argument prints as a bare `throw`. The module is
 `crates/unlace-emit/src/p9_emit/itaniumthrow.rs` and reuses the `msvceh`
 throw token and argument printing. The allocate and construct calls that

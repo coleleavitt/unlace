@@ -13,7 +13,7 @@
 # came from.
 #
 # Stage model: P9 emit, the operator-token table and the parentheses()
-# binary case (printc.rs, printlanguage.rs).
+# binary case (printc/, printlanguage.rs).
 #
 # This is a unlace DEFAULT-FLIP, like GH-2786: emitting an expression that
 # re-reads as a different computation is an unambiguous bug, so the fix is

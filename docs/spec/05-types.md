@@ -1250,7 +1250,7 @@ reaches the printer.
   identifier, and not compilable C, which is the class `subright` (§3.2) exists
   to keep out of the output. The option supplies the missing arm
   (`boolbyte.rs (truncation_form)`, consulted by
-  `printc.rs (subpiece_cast_form)`), so a truncation into a `bool` prints as a
+  `printc/ (subpiece_cast_form)`), so a truncation into a `bool` prints as a
   cast. Which cast depends on the operand, not the destination. A C conversion
   to `bool` tests every bit of its operand while the truncation keeps only the
   low byte, and a `bool` can reach a truncated byte whose source has other bits

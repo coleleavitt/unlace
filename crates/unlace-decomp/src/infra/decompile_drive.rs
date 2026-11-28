@@ -3591,7 +3591,7 @@ pub fn print_c_recompile_prelude(arch: &Architecture) -> String {
     }
 
     // The fixed Ghidra/unlace `undefined` family (the anonymous-unknown
-    // rendering `undefined<N>`, printc.rs `declarator_parts`).
+    // rendering `undefined<N>`, printc/ `declarator_parts`).
     out.push_str("\n/* the Ghidra/unlace `undefined` family */\n");
     out.push_str("typedef unsigned char undefined;\n");
     out.push_str("typedef unsigned char undefined1;\n");

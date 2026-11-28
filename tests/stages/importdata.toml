@@ -9,7 +9,7 @@
 # a large third-party iOS app.
 #
 # Stage / sub-stage: P9 naming-policy, `PrintC::op_load`
-# (`unlace-decomp/src/p9_emit/printc.rs`, `import_slot_name`), resolved as
+# (`unlace-emit/src/p9_emit/printc/`, `import_slot_name`), resolved as
 # ActionDeindirect resolves a call through the same slot.
 #
 # P0 assertion: `option importdata on|off` (default on). It is read when C is

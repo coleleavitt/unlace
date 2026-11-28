@@ -2,7 +2,7 @@
 //!
 //! Upstream `PrintJava` is `PrintC` with a handful of overrides; unlace's printer
 //! is parameterized rather than subclassed, so the overrides become a profile,
-//! a type speller and a few `OutLang::Java` arms in `printc.rs`:
+//! a type speller and a few `OutLang::Java` arms in `printc/`:
 //!
 //! - `>>>` for a logical right shift (`TypeOp::selectJavaOperators`), `null`,
 //!   and Java's string escapes (`PrintJava::printUnicode`);
@@ -12,7 +12,7 @@
 //!   `pushTypeStart`);
 //! - member access through an object reference is `.`, `instanceof` is a binary
 //!   operator, and a call's `this` argument is the object the method is selected
-//!   from (`opCpoolRefOp`, `opCallind`), handled in `printc.rs`.
+//!   from (`opCpoolRefOp`, `opCallind`), handled in `printc/`.
 //!
 //! The capability record turns off what Java cannot express: comma expressions,
 //! integer-as-condition tests, and the `U`/`L` literal suffixes.

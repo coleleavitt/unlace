@@ -84,7 +84,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // typelocked `char[N]` data symbol (`s_<addr>`)
         // at each detected `.rodata` string. ENABLED by default since the printer
         // change (the readonly-char-array literal route in
-        // `p9_emit/printc.rs::op_ptrsub_ir`): a pointer to a readonly char-printable
+        // `printc::op_ptrsub_ir`): a pointer to a readonly char-printable
         // array symbol now renders as the string LITERAL (Ghidra behavior), so the
         // data symbol and the literal coexist instead of the symbol name shadowing
         // it. See docs/history/analysis-port-log.md (the strings/printer increment).

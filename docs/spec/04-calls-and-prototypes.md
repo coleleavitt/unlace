@@ -11128,7 +11128,7 @@ call's output, `double` for an SSE read (type inference gives that output
 `double`), and `int` or `long` by size for an untyped integer read; a
 `va_list` that is an array prints `*ap`. That `ap` has no HighVariable, so
 the local declarations end with `va_list ap;` whenever the body prints it
-(`printc.rs (prints_local_va_list)`), unless a local already has the name, and
+(`printc/ (prints_local_va_list)`), unless a local already has the name, and
 the `decompile-project` prelude includes `<stdarg.h>` for `va_list`,
 `va_start` and `va_arg`. Before, no such body compiled
 (`tests/stages/valist-declared.toml`, tools/semantic `varargs.vsum`).

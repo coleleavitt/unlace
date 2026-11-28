@@ -3419,7 +3419,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
         // port, so an input read of read-only global RAM reaches here with
         // `persist == false`.  The faithful proxy for "this is a global, route to
         // `dat_`" is the same predicate `PrintC::pushUnnamedLocation` uses to emit
-        // the `dat_<addr>` token (`printc.rs::unlace_global_naming`): a **global data
+        // the `dat_<addr>` token (`printc::unlace_global_naming`): a **global data
         // space** (`IPTR_PROCESSOR`) address with **no register name**.  Registers
         // live in the same processor space but carry a register name, so they are
         // excluded and still get `vN`; uniques (`IPTR_INTERNAL`) and stack

@@ -460,17 +460,17 @@ impl BooleanMatch {
                         .get_in(1)
                         .expect("evaluate: null in");
                     let mut pair1 = Self::evaluate(o1in0, o2in0, depth - 1, vbank, obank);
-                    let pair2;
-                    if pair1 == uncorrelated {
+                    
+                    let pair2 = if pair1 == uncorrelated {
                         // Try other possible pairing (commutative op)
                         pair1 = Self::evaluate(o1in0, o2in1, depth - 1, vbank, obank);
                         if pair1 == uncorrelated {
                             return uncorrelated;
                         }
-                        pair2 = Self::evaluate(o1in1, o2in0, depth - 1, vbank, obank);
+                        Self::evaluate(o1in1, o2in0, depth - 1, vbank, obank)
                     } else {
-                        pair2 = Self::evaluate(o1in1, o2in1, depth - 1, vbank, obank);
-                    }
+                        Self::evaluate(o1in1, o2in1, depth - 1, vbank, obank)
+                    };
                     if pair2 == uncorrelated {
                         return uncorrelated;
                     }
@@ -780,8 +780,8 @@ impl TermOrder {
                             let subin0 = subop_ref.get_in(0).expect("collect: null in");
                             let addop =
                                 fd.vbank().get(subin0).expect("collect: stale vn").get_def();
-                            if let Some(addop) = addop {
-                                if obank.get(addop).expect("collect: stale op").code()
+                            if let Some(addop) = addop
+                                && obank.get(addop).expect("collect: stale op").code()
                                     == OpCode::CPUI_INT_ADD
                                 {
                                     let addout = obank
@@ -795,7 +795,6 @@ impl TermOrder {
                                         continue;
                                     }
                                 }
-                            }
                         }
                     }
                     self.terms.push(AdditiveEdge::new(curop, i, multop, obank));

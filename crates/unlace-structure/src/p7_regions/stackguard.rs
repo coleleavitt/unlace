@@ -413,11 +413,10 @@ pub fn collect_value_slots(inits: &[OpId], data: &Funcdata, slots: &mut Vec<(Add
     let mut set: BTreeSet<VarnodeId> = BTreeSet::new();
     let mut work: Vec<VarnodeId> = Vec::new();
     for &op in inits {
-        if let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) {
-            if set.insert(out) {
+        if let Some(out) = data.obank().get(op).and_then(|o| o.get_out())
+            && set.insert(out) {
                 work.push(out);
             }
-        }
     }
     while let Some(vn) = work.pop() {
         let readers: Vec<OpId> = match data.vbank().get(vn) {

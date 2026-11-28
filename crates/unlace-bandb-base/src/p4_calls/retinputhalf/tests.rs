@@ -327,7 +327,7 @@ fn a_self_or_and_an_add_of_zero_are_moves() {
 #[test]
 fn the_record_is_per_register() {
     let mut fd = build_reg_fd();
-    let ret = ret_op(&mut fd);
+    let _ret = ret_op(&mut fd);
     let (r0a, r1a) = (reg(&fd, R0), reg(&fd, R1));
     fd.unlace_set_moved_back_returns(vec![(r1a.clone(), 4)]);
     assert!(is_moved_back(&fd, &r1a, 4));

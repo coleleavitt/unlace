@@ -108,12 +108,12 @@ fn out_of_file_edits(bytes: &[u8]) -> (Vec<(usize, u64, bool)>, Vec<String>) {
     let mut clamped = Vec::new();
     for (cmd, at) in commands(bytes) {
         if cmd == LC_SYMTAB {
-            let entry = if is_64(&bytes) { 16 } else { 12 };
+            let entry = if is_64(bytes) { 16 } else { 12 };
             let (Some(symoff), Some(nsyms), Some(stroff), Some(strsize)) = (
-                u32_at(&bytes, at + 8),
-                u32_at(&bytes, at + 12),
-                u32_at(&bytes, at + 16),
-                u32_at(&bytes, at + 20),
+                u32_at(bytes, at + 8),
+                u32_at(bytes, at + 12),
+                u32_at(bytes, at + 16),
+                u32_at(bytes, at + 20),
             ) else {
                 continue;
             };
@@ -137,9 +137,9 @@ fn out_of_file_edits(bytes: &[u8]) -> (Vec<(usize, u64, bool)>, Vec<String>) {
         };
         let word = |off: usize| {
             if wide {
-                u64_at(&bytes, at + off)
+                u64_at(bytes, at + off)
             } else {
-                u32_at(&bytes, at + off).map(u64::from)
+                u32_at(bytes, at + off).map(u64::from)
             }
         };
         let (fileoff_at, filesize_at, nsects_at, sect0, sect_size) = if wide {
@@ -150,7 +150,7 @@ fn out_of_file_edits(bytes: &[u8]) -> (Vec<(usize, u64, bool)>, Vec<String>) {
         let (Some(fileoff), Some(filesize), Some(nsects)) = (
             word(fileoff_at),
             word(filesize_at),
-            u32_at(&bytes, at + nsects_at),
+            u32_at(bytes, at + nsects_at),
         ) else {
             continue;
         };
@@ -167,14 +167,14 @@ fn out_of_file_edits(bytes: &[u8]) -> (Vec<(usize, u64, bool)>, Vec<String>) {
             let s = at + sect0 + i * sect_size;
             let (size_at, offset_at, flags_at) = if wide { (40, 48, 64) } else { (36, 40, 56) };
             let size = if wide {
-                u64_at(&bytes, s + size_at)
+                u64_at(bytes, s + size_at)
             } else {
-                u32_at(&bytes, s + size_at).map(u64::from)
+                u32_at(bytes, s + size_at).map(u64::from)
             };
             let (Some(size), Some(offset), Some(flags)) = (
                 size,
-                u32_at(&bytes, s + offset_at),
-                u32_at(&bytes, s + flags_at),
+                u32_at(bytes, s + offset_at),
+                u32_at(bytes, s + flags_at),
             ) else {
                 break;
             };

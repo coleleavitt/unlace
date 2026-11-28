@@ -659,11 +659,10 @@ fn evidence_walk(
     }
     // The declared members' own definitions vote but cannot veto.
     for &vn in &work {
-        if let Some(def) = fd.vbank().get(vn).and_then(|v| v.get_def()) {
-            if let Some(o) = fd.obank().get(def) {
+        if let Some(def) = fd.vbank().get(vn).and_then(|v| v.get_def())
+            && let Some(o) = fd.obank().get(def) {
                 verdict = verdict.join(def_evidence(o.code()));
             }
-        }
     }
     while let Some(vn) = work.pop() {
         if !seen.insert(vn) {
@@ -769,14 +768,13 @@ fn evidence_walk(
             // into whatever expression its (implied) result lands in: `v + 1 < 0`
             // is one printed expression, and the comparison's signedness follows
             // `v`'s declaration.
-            if carries {
-                if let Some(out) = o.get_out() {
+            if carries
+                && let Some(out) = o.get_out() {
                     let implied = fd.vbank().get(out).map(|v| v.is_implied()).unwrap_or(false);
                     if implied {
                         work.push(out);
                     }
                 }
-            }
         }
     }
     verdict

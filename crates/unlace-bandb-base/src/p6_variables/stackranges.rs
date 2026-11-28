@@ -55,8 +55,8 @@ impl FrameAddress {
             self.first = self.first.checked_add(shift)?;
             self.last = self.last.checked_add(shift)?;
         } else {
-            if vn.get_size() == self.pointer_size {
-                if let Some(def) = vn
+            if vn.get_size() == self.pointer_size
+                && let Some(def) = vn
                     .get_def()
                     .and_then(|id| fd.obank().get(id).map(|op| (id, op)))
                 {
@@ -103,7 +103,6 @@ impl FrameAddress {
                         _ => (),
                     }
                 }
-            }
             let mask = i64::try_from(vn.get_nz_mask()).ok()?;
             if mask as u64 & (1u64 << (8 * vn.get_size() - 1)) != 0
                 && vn.get_type().get_metatype() != crate::dtype::type_metatype::TYPE_UINT

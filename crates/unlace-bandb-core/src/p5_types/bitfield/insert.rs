@@ -1341,14 +1341,14 @@ impl BitFieldInsertTransform {
             return Rc::clone(parent);
         }
         let arch = Rc::clone(data.get_arch());
-        if let Some(types) = arch.types() {
-            if let Ok(t) = types.get_type_partial_struct(
+        if let Some(types) = arch.types()
+            && let Ok(t) = types.get_type_partial_struct(
                 Rc::clone(parent),
                 self.base.initial_offset,
                 self.base.container_size,
-            ) {
-                return t;
-            }
+            )
+        {
+            return t;
         }
         Rc::clone(parent)
     }
@@ -1384,12 +1384,11 @@ impl BitFieldInsertTransform {
         let mut current_store = Some(self.final_write_op);
         let mut load_model: Option<OpId> = None;
         let mut load_type: Option<Rc<Datatype>> = None;
-        if self.original_value.is_none() {
-            self.original_value = Some(data.new_constant(self.base.container_size, 0));
-        } else {
-            let ov = self.original_value.unwrap();
+        if let Some(ov) = self.original_value {
             load_model = data.vbank().get(ov).unwrap().get_def();
             load_type = Some(data.vn_type_def_facing(ov));
+        } else {
+            self.original_value = Some(data.new_constant(self.base.container_size, 0));
         }
         for rec in records {
             if current_store.is_none() {
@@ -1440,17 +1439,16 @@ impl BitFieldInsertTransform {
             current_store = None;
         }
         data.destroy_varnode_recursive(dead_point).ok();
-        if let Some(lm) = load_model {
-            if data
+        if let Some(lm) = load_model
+            && data
                 .obank()
                 .get(lm)
                 .map(|o| o.code())
                 .unwrap_or(OpCode::CPUI_COPY)
                 == OpCode::CPUI_LOAD
-                && self.fold_load(data, lm)
-            {
-                self.fold_ptrsub(data, lm);
-            }
+            && self.fold_load(data, lm)
+        {
+            self.fold_ptrsub(data, lm);
         }
     }
 

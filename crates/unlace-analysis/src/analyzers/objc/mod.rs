@@ -513,14 +513,13 @@ impl ObjcMetadataPass {
                 .encoding_for_class(owner, &m.selector)
                 .map(str::to_string)
                 .or_else(|| m.types.clone());
-            if let Some(enc) = enc.as_deref() {
-                if let Some(pieces) = encoding::decode_method(&label, enc, tctx, None) {
+            if let Some(enc) = enc.as_deref()
+                && let Some(pieces) = encoding::decode_method(&label, enc, tctx, None) {
                     out.prototypes.push(pieces);
                     if let Some(st) = self_type {
                         out.objc_self_types.push((label.clone(), Rc::clone(st)));
                     }
                 }
-            }
 
             // A Data symbol on the selector string itself, so the selector text is
             // named in the listing (`sel_greet_` etc.). Best-effort: only when the

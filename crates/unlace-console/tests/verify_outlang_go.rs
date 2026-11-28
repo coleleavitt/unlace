@@ -215,7 +215,7 @@ fn go_scalar_functions_compile_and_preserve_effects() {
         );
         let directory = scratch();
         let file = &directory.join("recovered.go");
-        std::fs::write(&file, source).unwrap();
+        std::fs::write(file, source).unwrap();
         run(Command::new("go").arg("run").arg(file));
     }
     let code = decompile(
@@ -291,7 +291,7 @@ fn native_go_uses_the_same_output_plane() {
     let binary = &directory.join("native");
     run(Command::new("go")
         .args(["build", "-trimpath", "-buildvcs=false", "-o"])
-        .arg(&binary)
+        .arg(binary)
         .arg(fixture("output.go")));
     let names = [
         "main.add",
@@ -309,7 +309,7 @@ fn native_go_uses_the_same_output_plane() {
         "main.extend",
         "main.number",
     ];
-    let bodies = decompile(&binary, &names, &["option outlang go"]);
+    let bodies = decompile(binary, &names, &["option outlang go"]);
     assert!(bodies[0].contains("func add(") && bodies[0].contains("int64"));
     parse(&directory, &bodies);
     let source = format!(
@@ -323,11 +323,11 @@ fn native_go_uses_the_same_output_plane() {
         .join("\n")
     );
     let file = &directory.join("recovered.go");
-    std::fs::write(&file, source).unwrap();
+    std::fs::write(file, source).unwrap();
     run(Command::new("go").arg("run").arg(file));
 
     for body in decompile(
-        &binary,
+        binary,
         &[
             "runtime.(*pallocData).findScavengeCandidate",
             "runtime.(*pallocBits).findSmallN",
@@ -362,7 +362,7 @@ fn native_go_uses_the_same_output_plane() {
             .map(|(name, declaration)| format!("map prototype {name} {declaration};")),
     );
     let options = options.iter().map(String::as_str).collect::<Vec<_>>();
-    let bodies = decompile(&binary, &names, &options);
+    let bodies = decompile(binary, &names, &options);
     let check = r#"
 func main() {
   xs := [4]int32{1,2,3,4}
@@ -375,7 +375,7 @@ func main() {
 }
 "#;
     std::fs::write(
-        &file,
+        file,
         format!(
             "package main\nimport \"unsafe\"\n{}\n{check}",
             bodies.join("\n")

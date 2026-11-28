@@ -313,8 +313,8 @@ impl Rule for RulePtraddUndo {
         let basevn = in_vn(data, op, 0);
         // Resolve union/relptr in-flow.
         let dt = Some(data.vn_type_read_facing(basevn, op));
-        if let Some(dt) = dt {
-            if dt.get_metatype() == type_metatype::TYPE_PTR {
+        if let Some(dt) = dt
+            && dt.get_metatype() == type_metatype::TYPE_PTR {
                 // Still a pointer; check the element size and zero index.
                 let word_size = dt.get_word_size().unwrap_or(1);
                 let ptrto_align = dt.get_ptr_to().map(|p| p.get_align_size()).unwrap_or(-1);
@@ -334,7 +334,6 @@ impl Rule for RulePtraddUndo {
                     }
                 }
             }
-        }
         data.op_undo_ptradd(op, false);
         1
     }
@@ -600,13 +599,10 @@ impl RulePtrsubUndo {
         // resolve the sub-type when that holds.
         let sub = if ptr_to_metatype == type_metatype::TYPE_SPACEBASE {
             let newoff = unlace_base::space::AddrSpace::address_to_byte_int(val, word_size);
-            match data.spacebase_get_sub_type(&ptr_to, newoff) {
-                Some((sub_type, residual)) => Some(ThumbSubTypeFact {
+            data.spacebase_get_sub_type(&ptr_to, newoff).map(|(sub_type, residual)| ThumbSubTypeFact {
                     metatype: sub_type.get_metatype(),
                     residual_offset: residual,
-                }),
-                None => None,
-            }
+                })
         } else {
             None
         };
@@ -779,8 +775,7 @@ impl Rule for RuleAddUnsigned {
             .vbank()
             .get(constvn)
             .and_then(|v| v.unlace_symbol_entry())
-        {
-            if let Some(local) = data.get_scope_local() {
+            && let Some(local) = data.get_scope_local() {
                 let s = local.database().symbol(sym);
                 if s.get_category() == crate::database::symbol_category::EQUATE
                     && s.is_name_locked()
@@ -788,7 +783,6 @@ impl Rule for RuleAddUnsigned {
                     return 0;
                 }
             }
-        }
         let negated_val = val.wrapping_neg() & mask;
         if dt.is_enum_type()
             && !dt.has_named_value(negated_val)
@@ -1232,11 +1226,10 @@ impl Rule for RuleExtensionPush {
         if (addcount + ptrcount) <= 1 {
             return 0;
         }
-        if addcount > 0 {
-            if data.lone_descend(invn).is_some() {
+        if addcount > 0
+            && data.lone_descend(invn).is_some() {
                 return 0;
             }
-        }
         // RulePushPtr::duplicateNeed(op, data);  -- STUB(W5-sibling/W6): the
         // extension-duplication helper lives in RulePushPtr (a different batch) and
         // We validated the full guard chain with real API; the commit is the stub.
@@ -1348,8 +1341,8 @@ impl RulePieceStructure {
                 sub_offset = off2;
                 sub_type = next;
             }
-            if let Some(st) = &sub_type {
-                if st.get_size() == vnsize && sub_offset == 0 {
+            if let Some(st) = &sub_type
+                && st.get_size() == vnsize && sub_offset == 0 {
                     // Concrete sub-type matches the Varnode exactly.
                     if !st.is_piece_structured() {
                         // and the concrete sub-type is not structured itself:
@@ -1357,7 +1350,6 @@ impl RulePieceStructure {
                         return Ok((None, 0));
                     }
                 }
-            }
             return Ok((Some(ct), base_offset));
         }
         Ok((Some(ct), 0))
@@ -1397,14 +1389,13 @@ impl RulePieceStructure {
             cur = sub;
         }
         let zerovn = data.new_constant(sz, 0);
-        if let Some(c) = &cur {
-            if c.get_size() == sz {
+        if let Some(c) = &cur
+            && c.get_size() == sz {
                 data.vbank_mut()
                     .get_mut(zerovn)
                     .expect("convertZextToPiece: stale zerovn")
                     .update_type(std::rc::Rc::clone(c));
             }
-        }
         data.op_set_opcode_code(zext, OpCode::CPUI_PIECE);
         data.op_insert_input(zext, zerovn, 0)?;
         // invn's union resolution transfer (inheritUnionField) — no unions in the
@@ -2445,10 +2436,9 @@ impl RuleDivOpt {
             if !is_written(data, in_vn_cur) {
                 return None;
             }
-        } else if let Some(v) = is_constant_extended(data, in_vn(data, cur_op, 1)) {
-            y = v;
         } else {
-            return None; // There MUST be a constant (STUB(W3): isConstantExtended)
+            let v = is_constant_extended(data, in_vn(data, cur_op, 1))?;
+            y = v;
         }
 
         let res_vn;

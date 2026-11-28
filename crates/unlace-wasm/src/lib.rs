@@ -350,7 +350,7 @@ pub fn run_request(req: &Request) -> Result<String, String> {
         Cmd::Uses { addr, len } => {
             let bytes = unlace_analysis::loader::elf_shdr::read_image(binary)
                 .map_err(|e| format!("could not read {binary}: {e}"))?;
-            let raw = unlace_analysis::loadimage_object::parse_object(&*bytes)
+            let raw = unlace_analysis::loadimage_object::parse_object(&bytes)
                 .map_err(|e| format!("could not parse {binary}: {e}"))?;
             let view = unlace_analysis::loader::relocrebase::rebased_view(&raw, &bytes);
             let (file, _) = unlace_analysis::loader::relocrebase::select(raw, &bytes, &view);
@@ -370,7 +370,7 @@ pub fn run_request(req: &Request) -> Result<String, String> {
                 .ok_or_else(|| "no function selected".to_string())?;
             let bytes = unlace_analysis::loader::elf_shdr::read_image(binary)
                 .map_err(|e| format!("could not read {binary}: {e}"))?;
-            let file = unlace_analysis::loadimage_object::parse_object(&*bytes)
+            let file = unlace_analysis::loadimage_object::parse_object(&bytes)
                 .map_err(|e| format!("could not parse {binary}: {e}"))?;
             Ok(inspect::xrefs_json(
                 binary,
@@ -383,7 +383,7 @@ pub fn run_request(req: &Request) -> Result<String, String> {
         Cmd::Strings => {
             let bytes = unlace_analysis::loader::elf_shdr::read_image(binary)
                 .map_err(|e| format!("could not read {binary}: {e}"))?;
-            let raw = unlace_analysis::loadimage_object::parse_object(&*bytes)
+            let raw = unlace_analysis::loadimage_object::parse_object(&bytes)
                 .map_err(|e| format!("could not parse {binary}: {e}"))?;
             let view = unlace_analysis::loader::relocrebase::rebased_view(&raw, &bytes);
             let (file, scanned) = unlace_analysis::loader::relocrebase::select(raw, &bytes, &view);
@@ -589,7 +589,7 @@ fn resolve_language(
     let Ok(bytes) = unlace_analysis::loader::elf_shdr::read_image(binary) else {
         return Ok(None);
     };
-    let Ok(file) = unlace_analysis::loadimage_object::parse_object(&*bytes) else {
+    let Ok(file) = unlace_analysis::loadimage_object::parse_object(&bytes) else {
         return Ok(None);
     };
     Ok(
@@ -632,7 +632,7 @@ fn load_program(
         .iter()
         .filter(|(option, _)| *option == "macho-arm64e")
         .map(|(_, value)| *value)
-        .last()
+        .next_back()
     {
         options.macho_arm64e = unlace_decomp::options::parse_env_toggle(value, true);
     }
@@ -677,7 +677,7 @@ fn load_program(
         unlace_analysis::loader::elf_shdr::read_image(binary)
             .ok()
             .and_then(|bytes| {
-                unlace_analysis::loadimage_object::parse_object(&*bytes)
+                unlace_analysis::loadimage_object::parse_object(&bytes)
                     .ok()
                     .map(|file| file.architecture() != object::Architecture::X86_64)
             })

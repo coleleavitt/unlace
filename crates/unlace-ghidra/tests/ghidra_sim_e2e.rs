@@ -38,6 +38,7 @@
 //! workspace suite to keep `cargo nextest run --workspace --exclude unlace-wasm --profile ci` lean, and run explicitly (release)
 //! by the CI gates job and `cargo test --release -p unlace-ghidra -- --include-ignored`.
 
+#[allow(clippy::duplicate_mod)]
 #[path = "ghidra_sim/mod.rs"]
 mod ghidra_sim;
 
@@ -977,10 +978,10 @@ fn ghidra_sim_faillog_paramid_shape() {
 /// (`uint8` → 8; Java derives entry sizes from the type, so the harness does
 /// too).
 fn sim_symbol_size(s: &ghidra_sim::SimSymbol) -> Option<i64> {
-    if let Some(sz) = s.type_size {
-        if sz > 0 {
-            return Some(sz);
-        }
+    if let Some(sz) = s.type_size
+        && sz > 0
+    {
+        return Some(sz);
     }
     let name = s.type_name.as_deref()?;
     let digits: String = name

@@ -234,7 +234,7 @@ fn flag_words(data: &[u8], len: u64) -> Result<Vec<u32>> {
         .filter(|n| *n <= data.len())
         .ok_or_else(|| crate::Error::Format("an ID1 range runs past its section".into()))?;
     Ok(data[..bytes]
-        .chunks_exact(4)
+        .as_chunks::<4>().0.iter()
         .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
         .collect())
 }

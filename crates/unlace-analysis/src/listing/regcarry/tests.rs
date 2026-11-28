@@ -698,12 +698,10 @@ fn the_word_a_slot_holds_is_not_a_value() {
     );
 }
 
+type PageRows = (Vec<(u64, u64)>, Vec<(u64, u64, XrefKind)>);
+
 /// The `adrp` pages a straight-line run supersedes, and the rows it files.
-fn pages(
-    m: &Machine,
-    insns: &[Vec<FullOp>],
-    targets: &[u64],
-) -> (Vec<(u64, u64)>, Vec<(u64, u64, XrefKind)>) {
+fn pages(m: &Machine, insns: &[Vec<FullOp>], targets: &[u64]) -> PageRows {
     let mut t = Tracker::default();
     for &at in targets {
         t.enter(at);

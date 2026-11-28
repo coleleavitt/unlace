@@ -228,7 +228,8 @@ fn indexed_wide_loads_mark_their_base() {
 
 #[test]
 fn computed_indexes_mark_a_table() {
-    let tables = |insns: Vec<Vec<(OpCode, Option<(Operand, u32)>, Vec<Operand>)>>| {
+    type TestInsn = (OpCode, Option<(Operand, u32)>, Vec<Operand>);
+    let tables = |insns: Vec<Vec<TestInsn>>| {
         let mut uses = TableUses::default();
         for insn in insns {
             let steps: Vec<Step> = insn

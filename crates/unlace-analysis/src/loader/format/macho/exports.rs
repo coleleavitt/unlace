@@ -78,10 +78,10 @@ pub fn parse_export_trie(trie: &[u8]) -> Vec<TrieExport> {
             continue;
         };
         let children = p.saturating_add(terminal as usize);
-        if terminal > 0 {
-            if let Some(export) = terminal_info(trie, p, &prefix) {
-                out.push(export);
-            }
+        if terminal > 0
+            && let Some(export) = terminal_info(trie, p, &prefix)
+        {
+            out.push(export);
         }
         let mut p = children;
         let Some(&count) = trie.get(p) else { continue };

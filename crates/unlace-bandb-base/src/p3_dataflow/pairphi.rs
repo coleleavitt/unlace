@@ -103,26 +103,23 @@ fn whole(
         (Some(_), None) | (None, Some(_)) => return None,
         (None, None) => {}
     }
-    if let Some(o) = def(data, rh).and_then(|d| data.obank().get(d)) {
-        if o.code() == OpCode::CPUI_INT_SRIGHT
+    if let Some(o) = def(data, rh).and_then(|d| data.obank().get(d))
+        && o.code() == OpCode::CPUI_INT_SRIGHT
             && same_lo(o.get_in(0))
             && o.get_in(1).and_then(|c| constant(data, c)) == Some(31)
         {
             return Some(Whole::Sext(lo));
         }
-    }
     // x86 `cdq` lifts as `EDX = SUBPIECE(SEXT(EAX), 4)`.
-    if let Some((w, 4)) = subpiece(data, rh) {
-        if let Some(o) = def(data, w).and_then(|d| data.obank().get(d)) {
-            if same_lo(o.get_in(0)) {
+    if let Some((w, 4)) = subpiece(data, rh)
+        && let Some(o) = def(data, w).and_then(|d| data.obank().get(d))
+            && same_lo(o.get_in(0)) {
                 match o.code() {
                     OpCode::CPUI_INT_SEXT => return Some(Whole::Sext(lo)),
                     OpCode::CPUI_INT_ZEXT => return Some(Whole::Zext(lo)),
                     _ => {}
                 }
             }
-        }
-    }
     match (subpiece(data, rh), subpiece(data, rl)) {
         (Some((wh, 4)), Some((wl, 0))) if wh == wl => Some(Whole::Vn(wh)),
         _ => None,

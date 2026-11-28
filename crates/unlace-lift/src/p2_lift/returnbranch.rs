@@ -221,6 +221,7 @@ pub fn names_isa_mode_switch(name: &[u8]) -> bool {
 /// Is `first` the start of the function, give or take decoded instructions
 /// that emitted no p-code at all? Such an instruction cannot have changed
 /// anything, so the prefix beginning after it is still the entry prefix.
+#[allow(clippy::mutable_key_type)]
 fn entry_prefix_starts_at(
     data: &Funcdata,
     visited: &crate::flow::VisitedMap,
@@ -251,6 +252,7 @@ fn transfers_control(code: OpCode) -> bool {
 /// start placed on such a delay slot would otherwise turn its real return into
 /// a jump to address zero.
 #[doc(hidden)]
+#[allow(clippy::mutable_key_type)]
 pub fn computed_target(
     data: &Funcdata,
     target: OpId,

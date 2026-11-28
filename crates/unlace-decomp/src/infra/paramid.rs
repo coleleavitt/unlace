@@ -508,12 +508,11 @@ impl ParamIDAnalysis {
                         Some(o) => o,
                         None => continue,
                     };
-                    if o.num_input() == 2 {
-                        if let Some(ovn) = o.get_in(1) {
+                    if o.num_input() == 2
+                        && let Some(ovn) = o.get_in(1) {
                             pm.calculate_rank(fd, true, ovn, Some(rtn_op));
                             break;
                         }
-                    }
                 }
                 analysis.output_param_measures.push(pm);
             }

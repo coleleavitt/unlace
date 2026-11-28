@@ -187,10 +187,6 @@ fn cmd_build(argv: &[String]) -> i32 {
 /// Keep the first record for each (full hash, specific hash, name), in input order.
 fn dedup_records(all: &mut Vec<FidRecord>) {
     let keep: Vec<_> = {
-        #[expect(
-            clippy::disallowed_types,
-            reason = "Membership only; the retain mask preserves input order."
-        )]
         let mut seen = std::collections::HashSet::new();
         all.iter()
             .map(|r| seen.insert((r.full_hash, r.specific_hash, r.name.as_str())))

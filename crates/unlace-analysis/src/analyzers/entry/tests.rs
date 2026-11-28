@@ -659,7 +659,7 @@ fn immediate_main_guards() {
 
     // mov rdi,0x401020 followed only by nops — no call, so no idiom.
     let mut w = vec![0x48, 0xc7, 0xc7, 0x20, 0x10, 0x40, 0x00];
-    w.extend(std::iter::repeat(0x90).take(32));
+    w.extend(std::iter::repeat_n(0x90, 32));
     assert_eq!(x86_64_immediate_main_target(&file, &w), None);
 
     // The same load with the indirect `call [rip+d32]` after it.

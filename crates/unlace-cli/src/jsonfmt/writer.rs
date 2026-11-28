@@ -7,6 +7,7 @@ use std::fmt::{self, Write as _};
 pub(super) enum Format {
     Compact,
     Pretty,
+    #[cfg_attr(not(test), allow(dead_code))]
     Sorted,
 }
 

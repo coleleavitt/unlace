@@ -1281,268 +1281,267 @@ pub fn run_listing_consumers_replaying_observed(
             .unlace_options
             .get::<unlace_decomp::analysisgates::ArmFrames>()
             .inventory
+        && let Some(code_space) = arch.manage().get_default_code_space()
     {
-        if let Some(code_space) = arch.manage().get_default_code_space() {
-            let memo = std::rc::Rc::new(crate::listing::decodememo::DecodeMemo::new(
+        let memo = std::rc::Rc::new(crate::listing::decodememo::DecodeMemo::new(
+            listing.exec_ranges(),
+        ));
+        let mut frame_cache = match frames_replay {
+            Some(_) => None,
+            None => Some(crate::aif::raw_arm_frames(
+                &file,
+                &listing,
+                arch,
+                translate,
+                std::rc::Rc::clone(code_space),
                 listing.exec_ranges(),
-            ));
-            let mut frame_cache = match frames_replay {
-                Some(_) => None,
-                None => Some(crate::aif::raw_arm_frames(
-                    &file,
-                    &listing,
-                    arch,
-                    translate,
-                    std::rc::Rc::clone(code_space),
-                    listing.exec_ranges(),
-                    false,
-                    Some(&memo),
-                )),
-            };
-            frames_recovered = frames_replay.map_or_else(
-                || {
-                    frame_cache
-                        .as_ref()
-                        .is_some_and(|cache| !cache.roots.is_empty())
-                },
-                |replay| replay.recovered,
-            );
-            if frames_recovered {
-                let independent_seeds = seeds.clone();
-                let original = listing;
-                let build =
-                    |frames: &std::collections::BTreeSet<u64>,
-                     pointers: Option<&Vec<u64>>,
-                     aif: Option<&crate::aif::entrychecks::CheckedAif>,
-                     memo: Option<&crate::listing::decodememo::DecodeMemo>| {
-                        let mut seeds: Vec<u64> = independent_seeds
+                false,
+                Some(&memo),
+            )),
+        };
+        frames_recovered = frames_replay.map_or_else(
+            || {
+                frame_cache
+                    .as_ref()
+                    .is_some_and(|cache| !cache.roots.is_empty())
+            },
+            |replay| replay.recovered,
+        );
+        if frames_recovered {
+            let independent_seeds = seeds.clone();
+            let original = listing;
+            let build =
+                |frames: &std::collections::BTreeSet<u64>,
+                 pointers: Option<&Vec<u64>>,
+                 aif: Option<&crate::aif::entrychecks::CheckedAif>,
+                 memo: Option<&crate::listing::decodememo::DecodeMemo>| {
+                    let mut seeds: Vec<u64> = independent_seeds
+                        .iter()
+                        .copied()
+                        .chain(frames.iter().copied())
+                        .chain(pointers.into_iter().flatten().copied())
+                        .chain(
+                            aif.iter()
+                                .flat_map(|checked| checked.entries.iter().copied()),
+                        )
+                        .collect();
+                    seeds.sort_unstable();
+                    seeds.dedup();
+                    let mut modes = crate::listing::framemode::FrameModes::preserving(
+                        &frames
                             .iter()
                             .copied()
-                            .chain(frames.iter().copied())
-                            .chain(pointers.into_iter().flatten().copied())
                             .chain(
                                 aif.iter()
                                     .flat_map(|checked| checked.entries.iter().copied()),
                             )
-                            .collect();
-                        seeds.sort_unstable();
-                        seeds.dedup();
-                        let mut modes = crate::listing::framemode::FrameModes::preserving(
-                            &frames
-                                .iter()
-                                .copied()
-                                .chain(
-                                    aif.iter()
-                                        .flat_map(|checked| checked.entries.iter().copied()),
-                                )
-                                .collect::<Vec<_>>(),
-                            &original,
-                        );
-                        if arch.input_arm_isa_override {
-                            modes.retain_decoded_modes();
-                        }
-                        let listing = crate::listing::Listing::build_tracking_frames_without_image(
+                            .collect::<Vec<_>>(),
+                        &original,
+                    );
+                    if arch.input_arm_isa_override {
+                        modes.retain_decoded_modes();
+                    }
+                    let listing = crate::listing::Listing::build_tracking_frames_without_image(
+                        &file,
+                        arch,
+                        translate,
+                        &seeds,
+                        &funcsym_seeds,
+                        &seed_names,
+                        detail,
+                        plan,
+                        Some(&mut modes),
+                        memo,
+                    );
+                    (seeds, listing, modes)
+                };
+            if let Some(replay) = frames_replay {
+                let frames = replay.frames.iter().copied().collect();
+                frame_pointers = Some(replay.pointers.clone());
+                frame_aif = replay
+                    .aif
+                    .as_ref()
+                    .map(crate::aif::framereplay::AifReplay::checked);
+                let frame_context = translate.context_scope();
+                let modes;
+                (seeds, listing, modes) =
+                    build(&frames, frame_pointers.as_ref(), frame_aif.as_ref(), None);
+                retained_entries.clone_from(&replay.retained);
+                inventory_context_paints = modes.decoded_paints();
+                if let Some(context) = frame_context {
+                    context.commit();
+                }
+            } else {
+                let frame_cache = frame_cache.as_mut().unwrap();
+                let prior = crate::aif::frameretain::prior_inventory(
+                    &file,
+                    &original,
+                    &seeds,
+                    |seeds| {
+                        crate::listing::Listing::build_with_meta_planned_without_image(
                             &file,
                             arch,
                             translate,
-                            &seeds,
+                            seeds,
                             &funcsym_seeds,
                             &seed_names,
                             detail,
                             plan,
-                            Some(&mut modes),
-                            memo,
-                        );
-                        (seeds, listing, modes)
-                    };
-                if let Some(replay) = frames_replay {
-                    let frames = replay.frames.iter().copied().collect();
-                    frame_pointers = Some(replay.pointers.clone());
-                    frame_aif = replay
-                        .aif
-                        .as_ref()
-                        .map(crate::aif::framereplay::AifReplay::checked);
+                        )
+                    },
+                    arch,
+                    translate,
+                    code_space,
+                    bracket(original.exec_ranges()),
+                    &memo,
+                );
+                let mut frames: std::collections::BTreeSet<u64> =
+                    frame_cache.roots.iter().copied().collect();
+                prior.restore(&mut frames, frame_cache);
+                let mut rejected = std::collections::BTreeSet::new();
+                loop {
                     let frame_context = translate.context_scope();
                     let modes;
-                    (seeds, listing, modes) =
-                        build(&frames, frame_pointers.as_ref(), frame_aif.as_ref(), None);
-                    retained_entries.clone_from(&replay.retained);
-                    inventory_context_paints = modes.decoded_paints();
-                    if let Some(context) = frame_context {
-                        context.commit();
-                    }
-                } else {
-                    let frame_cache = frame_cache.as_mut().unwrap();
-                    let prior = crate::aif::frameretain::prior_inventory(
-                        &file,
+                    (seeds, listing, modes) = build(
+                        &frames,
+                        frame_pointers.as_ref(),
+                        frame_aif.as_ref(),
+                        Some(&memo),
+                    );
+                    let mut replacements = crate::aif::arm_frame_prefixes(
+                        frame_cache,
                         &original,
-                        &seeds,
-                        |seeds| {
-                            crate::listing::Listing::build_with_meta_planned_without_image(
-                                &file,
-                                arch,
-                                translate,
-                                seeds,
-                                &funcsym_seeds,
-                                &seed_names,
-                                detail,
-                                plan,
-                            )
-                        },
+                        &listing,
+                        &frames,
+                        &[],
+                        frame_context.as_ref(),
                         arch,
                         translate,
-                        code_space,
-                        bracket(original.exec_ranges()),
-                        &memo,
+                        std::rc::Rc::clone(code_space),
                     );
-                    let mut frames: std::collections::BTreeSet<u64> =
-                        frame_cache.roots.iter().copied().collect();
-                    prior.restore(&mut frames, frame_cache);
-                    let mut rejected = std::collections::BTreeSet::new();
-                    loop {
-                        let frame_context = translate.context_scope();
-                        let modes;
-                        (seeds, listing, modes) = build(
-                            &frames,
-                            frame_pointers.as_ref(),
-                            frame_aif.as_ref(),
-                            Some(&memo),
+                    replacements
+                        .retain(|&root, &mut prefix| !prior.shields(root, prefix, frame_cache));
+                    let stale = if replacements.is_empty() {
+                        let mut stale = modes.stale().clone();
+                        stale.extend(crate::aif::frameflow::entered(&listing, &frames));
+                        stale
+                    } else {
+                        std::collections::BTreeSet::new()
+                    };
+                    if !replacements.is_empty() || !stale.is_empty() {
+                        rejected.extend(stale);
+                        frames.retain(|root| {
+                            !replacements.contains_key(root) && !rejected.contains(root)
+                        });
+                        frames.extend(
+                            replacements
+                                .into_values()
+                                .filter(|root| !rejected.contains(root)),
                         );
-                        let mut replacements = crate::aif::arm_frame_prefixes(
-                            frame_cache,
-                            &original,
+                        frame_aif = None;
+                        frame_pointers = None;
+                        continue;
+                    }
+                    if frame_pointers.is_none() {
+                        let probe = translate.context_scope();
+                        let found = crate::aif::code_pointer_table_seeds(
+                            &file,
                             &listing,
-                            &frames,
-                            &[],
-                            frame_context.as_ref(),
-                            arch,
                             translate,
                             std::rc::Rc::clone(code_space),
+                            listing.exec_ranges(),
                         );
-                        replacements
-                            .retain(|&root, &mut prefix| !prior.shields(root, prefix, frame_cache));
-                        let stale = if replacements.is_empty() {
-                            let mut stale = modes.stale().clone();
-                            stale.extend(crate::aif::frameflow::entered(&listing, &frames));
-                            stale
-                        } else {
-                            std::collections::BTreeSet::new()
-                        };
-                        if !replacements.is_empty() || !stale.is_empty() {
-                            rejected.extend(stale);
-                            frames.retain(|root| {
-                                !replacements.contains_key(root) && !rejected.contains(root)
-                            });
-                            frames.extend(
-                                replacements
-                                    .into_values()
-                                    .filter(|root| !rejected.contains(root)),
-                            );
-                            frame_aif = None;
-                            frame_pointers = None;
+                        drop(probe);
+                        let added = !found.is_empty();
+                        frame_pointers = Some(found);
+                        if added {
                             continue;
                         }
-                        if frame_pointers.is_none() {
-                            let probe = translate.context_scope();
-                            let found = crate::aif::code_pointer_table_seeds(
+                    }
+                    if arch
+                        .unlace_options
+                        .get::<unlace_decomp::aif::AifMode>()
+                        .enabled()
+                        && frame_aif.is_none()
+                    {
+                        let probe = translate.context_scope();
+                        if let Some(scope) = &probe {
+                            let _ = scope.protect_variable(b"TMode");
+                        }
+                        let pointers = if arch
+                            .unlace_options
+                            .get::<unlace_decomp::analysisgates::Ptrentry>()
+                            .0
+                        {
+                            crate::aif::ptrentry::pointer_entry_seeds(
                                 &file,
                                 &listing,
                                 translate,
                                 std::rc::Rc::clone(code_space),
                                 listing.exec_ranges(),
-                            );
-                            drop(probe);
-                            let added = !found.is_empty();
-                            frame_pointers = Some(found);
-                            if added {
-                                continue;
-                            }
-                        }
-                        if arch
-                            .unlace_options
-                            .get::<unlace_decomp::aif::AifMode>()
-                            .enabled()
-                            && frame_aif.is_none()
-                        {
-                            let probe = translate.context_scope();
-                            if let Some(scope) = &probe {
-                                let _ = scope.protect_variable(b"TMode");
-                            }
-                            let pointers = if arch
-                                .unlace_options
-                                .get::<unlace_decomp::analysisgates::Ptrentry>()
-                                .0
-                            {
-                                crate::aif::ptrentry::pointer_entry_seeds(
-                                    &file,
-                                    &listing,
-                                    translate,
-                                    std::rc::Rc::clone(code_space),
-                                    listing.exec_ranges(),
-                                )
-                            } else {
-                                Vec::new()
-                            };
-                            let mut checked = crate::aif::entrychecks::run(
-                                &listing,
-                                Some(&original),
-                                arch,
-                                translate,
-                                std::rc::Rc::clone(code_space),
-                                pointers,
-                                bracket(listing.exec_ranges()),
-                                Some(&memo),
-                            );
-                            drop(probe);
-                            checked.entries.retain(|root| !rejected.contains(root));
-                            let added = !checked.entries.is_empty();
-                            frame_aif = Some(checked);
-                            if added {
-                                continue;
-                            }
-                        }
-                        let found: std::collections::BTreeSet<u64> = frame_aif
-                            .iter()
-                            .flat_map(|checked| {
-                                checked
-                                    .entries
-                                    .iter()
-                                    .chain(&checked.pool_entries)
-                                    .chain(&checked.pointer_entries)
-                            })
-                            .copied()
-                            .collect();
-                        let refuted: std::collections::BTreeSet<u64> = frame_aif
-                            .iter()
-                            .flat_map(|checked| checked.straight_line.iter().copied())
-                            .chain(rejected.iter().copied())
-                            .collect();
-                        retained_entries = prior.retained(
-                            &found,
-                            &refuted,
+                            )
+                        } else {
+                            Vec::new()
+                        };
+                        let mut checked = crate::aif::entrychecks::run(
                             &listing,
+                            Some(&original),
+                            arch,
                             translate,
                             std::rc::Rc::clone(code_space),
+                            pointers,
+                            bracket(listing.exec_ranges()),
+                            Some(&memo),
                         );
-                        inventory_context_paints = modes.decoded_paints();
-                        if let Some(context) = frame_context {
-                            context.commit();
+                        drop(probe);
+                        checked.entries.retain(|root| !rejected.contains(root));
+                        let added = !checked.entries.is_empty();
+                        frame_aif = Some(checked);
+                        if added {
+                            continue;
                         }
-                        frame_record = Some(crate::aif::framereplay::ArmFrameReplay {
-                            recovered: true,
-                            frames: frames.iter().copied().collect(),
-                            pointers: frame_pointers.clone().unwrap_or_default(),
-                            aif: frame_aif
-                                .as_ref()
-                                .map(crate::aif::framereplay::AifReplay::of),
-                            retained: retained_entries.clone(),
-                        });
-                        break;
                     }
+                    let found: std::collections::BTreeSet<u64> = frame_aif
+                        .iter()
+                        .flat_map(|checked| {
+                            checked
+                                .entries
+                                .iter()
+                                .chain(&checked.pool_entries)
+                                .chain(&checked.pointer_entries)
+                        })
+                        .copied()
+                        .collect();
+                    let refuted: std::collections::BTreeSet<u64> = frame_aif
+                        .iter()
+                        .flat_map(|checked| checked.straight_line.iter().copied())
+                        .chain(rejected.iter().copied())
+                        .collect();
+                    retained_entries = prior.retained(
+                        &found,
+                        &refuted,
+                        &listing,
+                        translate,
+                        std::rc::Rc::clone(code_space),
+                    );
+                    inventory_context_paints = modes.decoded_paints();
+                    if let Some(context) = frame_context {
+                        context.commit();
+                    }
+                    frame_record = Some(crate::aif::framereplay::ArmFrameReplay {
+                        recovered: true,
+                        frames: frames.iter().copied().collect(),
+                        pointers: frame_pointers.clone().unwrap_or_default(),
+                        aif: frame_aif
+                            .as_ref()
+                            .map(crate::aif::framereplay::AifReplay::of),
+                        retained: retained_entries.clone(),
+                    });
+                    break;
                 }
-            } else if frames_replay.is_none() {
-                frame_record = Some(crate::aif::framereplay::ArmFrameReplay::default());
             }
+        } else if frames_replay.is_none() {
+            frame_record = Some(crate::aif::framereplay::ArmFrameReplay::default());
         }
     }
     let mut thumb_roots = std::collections::BTreeSet::new();
@@ -1556,41 +1555,40 @@ pub fn run_listing_consumers_replaying_observed(
             .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0
         && !frames_recovered
+        && let Some(code_space) = arch.manage().get_default_code_space()
     {
-        if let Some(code_space) = arch.manage().get_default_code_space() {
-            let raw = crate::aif::raw_thumb_prologue_seeds(
-                &file,
-                &listing,
-                translate,
-                std::rc::Rc::clone(code_space),
-                listing.exec_ranges(),
-            );
+        let raw = crate::aif::raw_thumb_prologue_seeds(
+            &file,
+            &listing,
+            translate,
+            std::rc::Rc::clone(code_space),
+            listing.exec_ranges(),
+        );
+        seeds.sort_unstable();
+        seeds.dedup();
+        let added: Vec<u64> = raw
+            .into_iter()
+            .filter(|root| seeds.binary_search(root).is_err())
+            .collect();
+        if !added.is_empty() {
+            thumb_roots.extend(&added);
+            seeds.extend(added);
             seeds.sort_unstable();
-            seeds.dedup();
-            let added: Vec<u64> = raw
-                .into_iter()
-                .filter(|root| seeds.binary_search(root).is_err())
-                .collect();
-            if !added.is_empty() {
-                thumb_roots.extend(&added);
-                seeds.extend(added);
-                seeds.sort_unstable();
-                let memo = thumb_memo.insert(crate::listing::decodememo::DecodeMemo::new(
-                    listing.exec_ranges(),
-                ));
-                listing = crate::listing::Listing::build_tracking_frames_without_image(
-                    &file,
-                    arch,
-                    translate,
-                    &seeds,
-                    &funcsym_seeds,
-                    &seed_names,
-                    detail,
-                    plan,
-                    None,
-                    Some(memo),
-                );
-            }
+            let memo = thumb_memo.insert(crate::listing::decodememo::DecodeMemo::new(
+                listing.exec_ranges(),
+            ));
+            listing = crate::listing::Listing::build_tracking_frames_without_image(
+                &file,
+                arch,
+                translate,
+                &seeds,
+                &funcsym_seeds,
+                &seed_names,
+                detail,
+                plan,
+                None,
+                Some(memo),
+            );
         }
     }
     // (unlace, Stage-3 ARM discovery) Code-pointer-table gap seeding — the
@@ -1618,32 +1616,31 @@ pub fn run_listing_consumers_replaying_observed(
             .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0
         && frame_pointers.is_none()
+        && let Some(code_space) = arch.manage().get_default_code_space()
     {
-        if let Some(code_space) = arch.manage().get_default_code_space() {
-            let ptr = crate::aif::code_pointer_table_seeds(
-                &file,
-                &listing,
-                translate,
-                std::rc::Rc::clone(code_space),
-                listing.exec_ranges(),
-            );
-            if !ptr.is_empty() {
-                let before = seeds.len();
-                seeds.extend(ptr);
-                seeds.sort_unstable();
-                seeds.dedup();
-                if seeds.len() != before {
-                    listing = crate::listing::Listing::build_with_meta_planned_without_image(
-                        &file,
-                        arch,
-                        translate,
-                        &seeds,
-                        &funcsym_seeds,
-                        &seed_names,
-                        detail,
-                        plan,
-                    );
-                }
+        let ptr = crate::aif::code_pointer_table_seeds(
+            &file,
+            &listing,
+            translate,
+            std::rc::Rc::clone(code_space),
+            listing.exec_ranges(),
+        );
+        if !ptr.is_empty() {
+            let before = seeds.len();
+            seeds.extend(ptr);
+            seeds.sort_unstable();
+            seeds.dedup();
+            if seeds.len() != before {
+                listing = crate::listing::Listing::build_with_meta_planned_without_image(
+                    &file,
+                    arch,
+                    translate,
+                    &seeds,
+                    &funcsym_seeds,
+                    &seed_names,
+                    detail,
+                    plan,
+                );
             }
         }
     }
@@ -1708,59 +1705,59 @@ pub fn run_listing_consumers_replaying_observed(
             .unlace_options
             .get::<unlace_decomp::analysisgates::Ptrentry>()
             .0
+        && let Some(code_space) = arch.manage().get_default_code_space()
     {
-        if let Some(code_space) = arch.manage().get_default_code_space() {
-            ptrentry_out = crate::aif::ptrentry::pointer_entry_seeds(
-                &file,
-                &listing,
-                translate,
-                std::rc::Rc::clone(code_space),
-                listing.exec_ranges(),
-            );
-        }
+        ptrentry_out = crate::aif::ptrentry::pointer_entry_seeds(
+            &file,
+            &listing,
+            translate,
+            std::rc::Rc::clone(code_space),
+            listing.exec_ranges(),
+        );
     }
     // (unlace) A pointer target that runs straight into a start only the raw
     // Thumb scan found is the routine's real entry and the start its
     // shrink-wrapped `push`: the start is withdrawn and the target walked.
-    if !thumb_roots.is_empty() && !ptrentry_out.is_empty() {
-        if let Some(code_space) = arch.manage().get_default_code_space() {
-            let uncalled: std::collections::BTreeSet<u64> = thumb_roots
-                .iter()
-                .copied()
-                .filter(|&root| {
-                    listing
-                        .refs_to(root)
-                        .iter()
-                        .all(|r| r.kind != crate::listing::RefKind::Call)
-                })
-                .collect();
-            let merged = crate::aif::ptrentry::shrinkwrap_roots(
+    if !thumb_roots.is_empty()
+        && !ptrentry_out.is_empty()
+        && let Some(code_space) = arch.manage().get_default_code_space()
+    {
+        let uncalled: std::collections::BTreeSet<u64> = thumb_roots
+            .iter()
+            .copied()
+            .filter(|&root| {
+                listing
+                    .refs_to(root)
+                    .iter()
+                    .all(|r| r.kind != crate::listing::RefKind::Call)
+            })
+            .collect();
+        let merged = crate::aif::ptrentry::shrinkwrap_roots(
+            translate,
+            std::rc::Rc::clone(code_space),
+            listing.exec_ranges(),
+            &ptrentry_out,
+            &uncalled,
+        );
+        if !merged.is_empty() {
+            let roots: std::collections::BTreeSet<u64> =
+                merged.iter().map(|&(_, root)| root).collect();
+            seeds.retain(|s| !roots.contains(s));
+            seeds.extend(merged.iter().map(|&(target, _)| target));
+            seeds.sort_unstable();
+            seeds.dedup();
+            listing = crate::listing::Listing::build_tracking_frames_without_image(
+                &file,
+                arch,
                 translate,
-                std::rc::Rc::clone(code_space),
-                listing.exec_ranges(),
-                &ptrentry_out,
-                &uncalled,
+                &seeds,
+                &funcsym_seeds,
+                &seed_names,
+                detail,
+                plan,
+                None,
+                thumb_memo.as_ref(),
             );
-            if !merged.is_empty() {
-                let roots: std::collections::BTreeSet<u64> =
-                    merged.iter().map(|&(_, root)| root).collect();
-                seeds.retain(|s| !roots.contains(s));
-                seeds.extend(merged.iter().map(|&(target, _)| target));
-                seeds.sort_unstable();
-                seeds.dedup();
-                listing = crate::listing::Listing::build_tracking_frames_without_image(
-                    &file,
-                    arch,
-                    translate,
-                    &seeds,
-                    &funcsym_seeds,
-                    &seed_names,
-                    detail,
-                    plan,
-                    None,
-                    thumb_memo.as_ref(),
-                );
-            }
         }
     }
     let mut fast_pointer_seeds = Vec::new();
@@ -1857,71 +1854,69 @@ pub fn run_listing_consumers_replaying_observed(
             .unlace_options
             .get::<unlace_decomp::aif::AifMode>()
             .enabled()
+        && let Some(code_space) = arch.manage().get_default_code_space()
     {
-        if let Some(code_space) = arch.manage().get_default_code_space() {
-            let mut aif_out = AnalysisOutput::default();
-            let checked = frame_aif.unwrap_or_else(|| {
-                crate::aif::entrychecks::run(
-                    &listing,
-                    None,
-                    arch,
-                    translate,
-                    std::rc::Rc::clone(code_space),
-                    ptrentry_out.clone(),
-                    bracket(listing.exec_ranges()),
-                    None,
-                )
+        let mut aif_out = AnalysisOutput::default();
+        let checked = frame_aif.unwrap_or_else(|| {
+            crate::aif::entrychecks::run(
+                &listing,
+                None,
+                arch,
+                translate,
+                std::rc::Rc::clone(code_space),
+                ptrentry_out.clone(),
+                bracket(listing.exec_ranges()),
+                None,
+            )
+        });
+        let bodies = crate::entry::sized_function_bodies(&file);
+        aif_out.entries = checked.entries;
+        // (unlace `aifdataveto`) IDA rolls a speculative code run back when
+        // the program reads or writes any of it as data.
+        if arch
+            .unlace_options
+            .get::<unlace_decomp::analysisgates::Aifdataveto>()
+            .0
+            && let Some(data) = arch.manage().get_default_data_space()
+        {
+            let targets =
+                crate::listing::accesswidth::data_targets(&listing, translate, code_space, data);
+            let flow_target = |e: u64| {
+                listing.refs_to(e).iter().any(|r| {
+                    matches!(
+                        r.kind,
+                        crate::listing::RefKind::Call | crate::listing::RefKind::Code
+                    )
+                })
+            };
+            let mut veto_out = AnalysisOutput::default();
+            let string_at = |e: u64| crate::aif::aifstringveto::string_at(&file, e);
+            veto_out.data_vetoed = listing
+                .functions()
+                .filter(|(_, f)| !f.from_symbol)
+                .map(|(&e, _)| e)
+                .filter(|&e| (targets.contains(&e) || string_at(e)) && !flow_target(e))
+                .collect();
+            out.push(("aifdataveto", veto_out));
+            aif_out.entries.retain(|&e| {
+                let span = listing
+                    .instruction_at(e)
+                    .map_or(1, |i| u64::from(i.len).max(1));
+                flow_target(e)
+                    || (targets.range(e..e.saturating_add(span)).next().is_none() && !string_at(e))
             });
-            let bodies = crate::entry::sized_function_bodies(&file);
-            aif_out.entries = checked.entries;
-            // (unlace `aifdataveto`) IDA rolls a speculative code run back when
-            // the program reads or writes any of it as data.
-            if arch
-                .unlace_options
-                .get::<unlace_decomp::analysisgates::Aifdataveto>()
-                .0
-            {
-                if let Some(data) = arch.manage().get_default_data_space() {
-                    let targets = crate::listing::accesswidth::data_targets(
-                        &listing, translate, code_space, data,
-                    );
-                    let flow_target = |e: u64| {
-                        listing.refs_to(e).iter().any(|r| {
-                            matches!(
-                                r.kind,
-                                crate::listing::RefKind::Call | crate::listing::RefKind::Code
-                            )
-                        })
-                    };
-                    let mut veto_out = AnalysisOutput::default();
-                    let string_at = |e: u64| crate::aif::aifstringveto::string_at(&file, e);
-                    veto_out.data_vetoed = listing
-                        .functions()
-                        .filter(|(_, f)| !f.from_symbol)
-                        .map(|(&e, _)| e)
-                        .filter(|&e| (targets.contains(&e) || string_at(e)) && !flow_target(e))
-                        .collect();
-                    out.push(("aifdataveto", veto_out));
-                    aif_out.entries.retain(|&e| {
-                        let span = listing
-                            .instruction_at(e)
-                            .map_or(1, |i| u64::from(i.len).max(1));
-                        flow_target(e)
-                            || (targets.range(e..e.saturating_add(span)).next().is_none()
-                                && !string_at(e))
-                    });
-                }
-            }
-            aif_out
-                .entries
-                .retain(|&vma| !crate::entry::inside_body(&bodies, vma));
-            if !checked.pool_entries.is_empty() {
-                let mut pool_out = AnalysisOutput::default();
-                pool_out.entries = checked.pool_entries;
-                out.push(("poolentry", pool_out));
-            }
-            out.push(("aif", aif_out));
         }
+        aif_out
+            .entries
+            .retain(|&vma| !crate::entry::inside_body(&bodies, vma));
+        if !checked.pool_entries.is_empty() {
+            let pool_out = AnalysisOutput {
+                entries: checked.pool_entries,
+                ..Default::default()
+            };
+            out.push(("poolentry", pool_out));
+        }
+        out.push(("aif", aif_out));
     }
 
     // (unlace, Listing-tier tail-call split) The recursive-descent walk has no notion of a
@@ -1943,14 +1938,16 @@ pub fn run_listing_consumers_replaying_observed(
             .get::<unlace_decomp::analysisgates::Tailcallentry>()
             .0
     {
-        let mut tce_out = AnalysisOutput::default();
-        tce_out.entries = crate::listing::tailcallentry::tail_call_entries(
-            &file,
-            &listing,
-            arch.unlace_options
-                .get::<unlace_decomp::analysisgates::Tailcallentryall>()
-                .0,
-        );
+        let tce_out = AnalysisOutput {
+            entries: crate::listing::tailcallentry::tail_call_entries(
+                &file,
+                &listing,
+                arch.unlace_options
+                    .get::<unlace_decomp::analysisgates::Tailcallentryall>()
+                    .0,
+            ),
+            ..Default::default()
+        };
         out.push(("tailcallentry", tce_out));
     }
 
@@ -1966,11 +1963,15 @@ pub fn run_listing_consumers_replaying_observed(
             .0
     {
         let model = crate::listing::funcchunks::ChunkModel::build(&listing);
-        let mut fc_out = AnalysisOutput::default();
-        fc_out.function_bodies = listing
-            .functions()
-            .filter_map(|(&e, _)| Some((e, model.chunks(e)?.iter().map(|&(s, end)| end - s).sum())))
-            .collect();
+        let fc_out = AnalysisOutput {
+            function_bodies: listing
+                .functions()
+                .filter_map(|(&e, _)| {
+                    Some((e, model.chunks(e)?.iter().map(|&(s, end)| end - s).sum()))
+                })
+                .collect(),
+            ..Default::default()
+        };
         out.push(("funcchunks", fc_out));
     }
 
@@ -1987,9 +1988,11 @@ pub fn run_listing_consumers_replaying_observed(
         && listing.has_refs()
     {
         let tables = crate::listing::calltable::scan(&file, &listing, arch, translate);
-        let mut ct_out = AnalysisOutput::default();
-        ct_out.entries = tables.entries;
-        ct_out.case_entries = tables.case_entries;
+        let ct_out = AnalysisOutput {
+            entries: tables.entries,
+            case_entries: tables.case_entries,
+            ..Default::default()
+        };
         out.push(("calltable", ct_out));
     }
 
@@ -2002,26 +2005,25 @@ pub fn run_listing_consumers_replaying_observed(
             .unlace_options
             .get::<unlace_decomp::analysisgates::Globalwidth>()
             .0
-    {
-        if let (Some(code), Some(data)) = (
+        && let (Some(code), Some(data)) = (
             arch.manage().get_default_code_space(),
             arch.manage().get_default_data_space(),
-        ) {
-            use object::read::{Object, ObjectSymbol};
-            let objects: Vec<(u64, u64)> = file
-                .symbols()
-                .chain(file.dynamic_symbols())
-                .filter(|s| {
-                    s.kind() == object::SymbolKind::Data && s.address() != 0 && s.size() > 0
-                })
-                .map(|s| (s.address(), s.size()))
-                .collect();
-            let mut gw_out = AnalysisOutput::default();
-            gw_out.global_widths = crate::listing::accesswidth::access_widths(
+        )
+    {
+        use object::read::{Object, ObjectSymbol};
+        let objects: Vec<(u64, u64)> = file
+            .symbols()
+            .chain(file.dynamic_symbols())
+            .filter(|s| s.kind() == object::SymbolKind::Data && s.address() != 0 && s.size() > 0)
+            .map(|s| (s.address(), s.size()))
+            .collect();
+        let gw_out = AnalysisOutput {
+            global_widths: crate::listing::accesswidth::access_widths(
                 &listing, translate, code, data, &objects,
-            );
-            out.push(("globalwidth", gw_out));
-        }
+            ),
+            ..Default::default()
+        };
+        out.push(("globalwidth", gw_out));
     }
 
     // (unlace `callerreads`) Where each direct call returns to, for the decompile
@@ -2032,8 +2034,10 @@ pub fn run_listing_consumers_replaying_observed(
         .0
         && listing.has_refs()
     {
-        let mut cr_out = AnalysisOutput::default();
-        cr_out.call_returns = crate::listing::callerreads::call_returns(&listing);
+        let cr_out = AnalysisOutput {
+            call_returns: crate::listing::callerreads::call_returns(&listing),
+            ..Default::default()
+        };
         out.push(("callerreads", cr_out));
     }
 
@@ -2046,20 +2050,21 @@ pub fn run_listing_consumers_replaying_observed(
         .0
         && listing.has_assembly()
         && crate::loadimage_object::is_arm32_language(&arch.archid)
+        && let Some(code_space) = arch.manage().get_default_code_space()
     {
-        if let Some(code_space) = arch.manage().get_default_code_space() {
-            let mode = crate::aif::poolentry::DecodeMode {
-                arch,
-                code_space: std::rc::Rc::clone(code_space),
-            };
-            let mut pe_out = AnalysisOutput::default();
-            pe_out.arm_pool_extents = crate::listing::poolextents::pool_extents(
+        let mode = crate::aif::poolentry::DecodeMode {
+            arch,
+            code_space: std::rc::Rc::clone(code_space),
+        };
+        let pe_out = AnalysisOutput {
+            arm_pool_extents: crate::listing::poolextents::pool_extents(
                 &listing,
                 &|at, operands| crate::aif::poolentry::literal_target(at, operands, &mode),
                 &crate::aif::poolentry::wide,
-            );
-            out.push(("poolextents", pe_out));
-        }
+            ),
+            ..Default::default()
+        };
+        out.push(("poolextents", pe_out));
     }
 
     // (unlace `thunkentry`) The targets of the walk's jump thunks join the walk's own
@@ -2090,18 +2095,22 @@ pub fn run_listing_consumers_replaying_observed(
             .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0
     {
-        let mut rd_out = AnalysisOutput::default();
-        rd_out.entries = listing
-            .functions()
-            .map(|(&vma, _)| vma)
-            .chain(thunk_targets.iter().copied())
-            .collect();
+        let mut rd_out = AnalysisOutput {
+            entries: listing
+                .functions()
+                .map(|(&vma, _)| vma)
+                .chain(thunk_targets.iter().copied())
+                .collect(),
+            ..Default::default()
+        };
         rd_out.entries.sort_unstable();
         out.push(("funcdisc_recursive", rd_out));
     }
     if !ptrentry_out.is_empty() {
-        let mut pe_out = AnalysisOutput::default();
-        pe_out.entries = ptrentry_out;
+        let pe_out = AnalysisOutput {
+            entries: ptrentry_out,
+            ..Default::default()
+        };
         out.push(("ptrentry", pe_out));
     }
     if arch
@@ -2109,14 +2118,16 @@ pub fn run_listing_consumers_replaying_observed(
         .get::<unlace_decomp::analysisgates::FastFuncdisc>()
         .0
     {
-        let mut fast_out = AnalysisOutput::default();
-        fast_out.entries = listing
-            .functions()
-            .map(|(&vma, _)| vma)
-            .chain(fast_walked)
-            .chain(fast_pointer_seeds)
-            .chain(thunk_targets)
-            .collect();
+        let mut fast_out = AnalysisOutput {
+            entries: listing
+                .functions()
+                .map(|(&vma, _)| vma)
+                .chain(fast_walked)
+                .chain(fast_pointer_seeds)
+                .chain(thunk_targets)
+                .collect(),
+            ..Default::default()
+        };
         fast_out.entries.sort_unstable();
         fast_out.entries.dedup();
         out.push(("fast_funcdisc", fast_out));
@@ -2126,18 +2137,22 @@ pub fn run_listing_consumers_replaying_observed(
     // decode-mode paint, so those still reach all other code as before.
     let mode_paints = listing.decode_mode_paints();
     if !mode_paints.is_empty() {
-        let mut mode_out = AnalysisOutput::default();
-        mode_out.context_paints = mode_paints;
+        let mode_out = AnalysisOutput {
+            context_paints: mode_paints,
+            ..Default::default()
+        };
         out.push(("flowmode", mode_out));
     }
     if !inventory_context_paints.is_empty()
         || !retained_entries.is_empty()
         || frame_record.is_some()
     {
-        let mut modes = AnalysisOutput::default();
-        modes.inventory_context_paints = inventory_context_paints;
-        modes.entries = retained_entries;
-        modes.arm_frames = frame_record;
+        let modes = AnalysisOutput {
+            inventory_context_paints,
+            entries: retained_entries,
+            arm_frames: frame_record,
+            ..Default::default()
+        };
         out.push(("armframes", modes));
     }
     if let Some(observer) = observer {
@@ -2402,10 +2417,10 @@ fn funcsym_names(file: &object::File) -> Vec<(u64, String)> {
         if addr == 0 {
             continue;
         }
-        if let Ok(name) = sym.name() {
-            if !name.is_empty() {
-                out.push((addr, name.to_string()));
-            }
+        if let Ok(name) = sym.name()
+            && !name.is_empty()
+        {
+            out.push((addr, name.to_string()));
         }
     }
     out
@@ -2472,7 +2487,7 @@ pub fn run_default_analyses(
 /// load and commits only the **enabled** passes' facts at `read symbols` (after
 /// the per-pass `--option <id> on|off` flags have been applied). The id is the
 /// pass's `id()` string, which doubles as its settable-option name (`phases.toml`
-/// + `UNLACE_OPTION_NAMES`). A parse failure yields an empty list (additive, never
+/// and `UNLACE_OPTION_NAMES`). A parse failure yields an empty list (additive, never
 /// fails). Pairs preserve pass order so the commit order is deterministic.
 pub fn run_default_analyses_per_pass(
     bytes: &[u8],

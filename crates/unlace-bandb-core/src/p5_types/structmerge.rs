@@ -294,12 +294,13 @@ pub fn merge(
 ) -> Option<(Vec<TypeField>, int4, Vec<int4>)> {
     let own: Vec<Member> = fields.iter().map(|f| Member::of_with(f, selfs)).collect();
     let mine = claims_of_fields(fields);
-    let mut best: Option<(
+    type Ranked = (
         (usize, std::cmp::Reverse<(int4, usize)>),
         Vec<TypeField>,
         int4,
         Vec<int4>,
-    )> = None;
+    );
+    let mut best: Option<Ranked> = None;
     for (rank, (ct, layout)) in candidates.iter().enumerate() {
         let Some(shared) = shared_claims(layout, want) else {
             trace(ct, want, 0, "conflict");

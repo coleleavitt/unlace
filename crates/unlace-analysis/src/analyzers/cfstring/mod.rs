@@ -185,7 +185,7 @@ fn decode_utf16(raw: &[u8], little_endian: bool) -> Option<Vec<u8>> {
         return None;
     }
     let units: Vec<u16> = raw
-        .chunks_exact(2)
+        .as_chunks::<2>().0.iter()
         .map(|c| {
             if little_endian {
                 u16::from_le_bytes([c[0], c[1]])

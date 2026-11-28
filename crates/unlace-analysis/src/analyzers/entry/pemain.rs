@@ -119,10 +119,10 @@ pub(crate) fn pe_main(file: &object::File, bytes: &[u8]) -> Option<(u64, &'stati
     {
         return None;
     }
-    if let Ok(exports) = file.exports() {
-        if exports.iter().any(|e| e.name() == name.as_bytes()) {
-            return None;
-        }
+    if let Ok(exports) = file.exports()
+        && exports.iter().any(|e| e.name() == name.as_bytes())
+    {
+        return None;
     }
     Some((vma, name))
 }

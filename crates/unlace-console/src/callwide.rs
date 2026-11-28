@@ -526,14 +526,13 @@ fn facts(prog: &ConsoleProgram, bytes: &[u8]) -> Option<Facts> {
         return None;
     }
     for section in file.sections() {
-        if let object::SectionFlags::Elf { sh_flags } = section.flags() {
-            if sh_flags & 2 != 0 && section.kind() != object::SectionKind::UninitializedData {
+        if let object::SectionFlags::Elf { sh_flags } = section.flags()
+            && sh_flags & 2 != 0 && section.kind() != object::SectionKind::UninitializedData {
                 let data = section.data().ok()?;
                 if data.len() as u64 != section.size() {
                     return None;
                 }
             }
-        }
     }
     let entries = prog.function_entries_canonical();
     if entries.is_empty() || entries.len() > MAX_ENTRIES {

@@ -381,15 +381,14 @@ impl Store {
             if self.before(data, r) {
                 return true;
             }
-            if rop.code() == OpCode::CPUI_COPY {
-                if let Some(out) = rop
+            if rop.code() == OpCode::CPUI_COPY
+                && let Some(out) = rop
                     .get_out()
                     .and_then(|o| data.vbank().get(o))
                     .filter(|o| !o.is_persist())
                 {
                     readers.extend(out.descend_iter());
                 }
-            }
         }
         false
     }
@@ -453,7 +452,7 @@ fn holds_stored_value(data: &Funcdata, g: VarnodeId) -> bool {
         return false;
     }
     def.get_in(0).is_some_and(|x| {
-        data.vbank().get(x).is_some_and(|xv| computed(xv)) && !holds_global(data, x, gv)
+        data.vbank().get(x).is_some_and(computed) && !holds_global(data, x, gv)
     })
 }
 
@@ -549,8 +548,8 @@ fn walk(data: &Funcdata, mut stack: Vec<(VarnodeId, bool)>) -> bool {
         let Some(xv) = data.vbank().get(x) else {
             continue;
         };
-        if member {
-            if let Some(def) = xv.get_def().and_then(|d| data.obank().get(d)) {
+        if member
+            && let Some(def) = xv.get_def().and_then(|d| data.obank().get(d)) {
                 let joined = match def.code() {
                     OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT => 1,
                     OpCode::CPUI_MULTIEQUAL => def.num_input(),
@@ -563,7 +562,6 @@ fn walk(data: &Funcdata, mut stack: Vec<(VarnodeId, bool)>) -> bool {
                         .map(|i| (i, true)),
                 );
             }
-        }
         for d in xv.descend_iter() {
             let Some(dop) = data.obank().get(d) else {
                 continue;

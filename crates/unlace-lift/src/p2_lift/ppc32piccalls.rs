@@ -144,14 +144,15 @@ fn pure(data: &Funcdata, op: OpId, state: &State) -> Option<Value> {
     if o.code() == OpCode::CPUI_COPY {
         return values.first().copied().flatten();
     }
-    if out.get_size() == 4 && matches!(o.code(), OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB) {
-        if let [Some(Value::Stack(s)), Some(Value::Constant(c))] = values.as_slice() {
-            return Some(Value::Stack(if o.code() == OpCode::CPUI_INT_ADD {
-                s.wrapping_add(*c as u32)
-            } else {
-                s.wrapping_sub(*c as u32)
-            }));
-        }
+    if out.get_size() == 4
+        && matches!(o.code(), OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB)
+        && let [Some(Value::Stack(s)), Some(Value::Constant(c))] = values.as_slice()
+    {
+        return Some(Value::Stack(if o.code() == OpCode::CPUI_INT_ADD {
+            s.wrapping_add(*c as u32)
+        } else {
+            s.wrapping_sub(*c as u32)
+        }));
     }
     let values: Option<Vec<_>> = values.into_iter().map(scalar).collect();
     let values = values?;
@@ -185,12 +186,14 @@ fn direct_slot(
     data.get_arch().loader_fill(&mut bytes, target).ok()?;
     let little = !target.get_space()?.is_big_endian();
     let words: Vec<_> = bytes
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|b| {
             if little {
-                u32::from_le_bytes(b.try_into().unwrap())
+                u32::from_le_bytes(*b)
             } else {
-                u32::from_be_bytes(b.try_into().unwrap())
+                u32::from_be_bytes(*b)
             }
         })
         .collect();
@@ -464,7 +467,6 @@ pub fn bind(data: &mut Funcdata, op: OpId, entry: &Address, indirect: bool) -> U
 pub const WARNING: &str = "Subroutine does not return (PPC32 PIC call)";
 
 #[doc(hidden)]
-
 pub fn clear_stale_warnings(db: &mut crate::architecture::CommentDatabase, entry: &Address) {
     db.retain_comments(|comment| {
         &comment.func_addr != entry

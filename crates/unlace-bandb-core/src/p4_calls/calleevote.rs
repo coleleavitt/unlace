@@ -723,11 +723,10 @@ pub fn decide_ledger_with(
                     }
                 }
                 _ => {
-                    if let Some(void_ptr) = pointers {
-                        if let Some(t) = crate::callerptr::pointer_vote(&sites, j, p, void_ptr) {
+                    if let Some(void_ptr) = pointers
+                        && let Some(t) = crate::callerptr::pointer_vote(&sites, j, p, void_ptr) {
                             inputs.push(t);
                         }
-                    }
                 }
             }
         }
@@ -1027,10 +1026,7 @@ fn meets_an_address_constant(data: &Funcdata, family: &[VarnodeId]) -> bool {
                 | OpCode::CPUI_INT_LESSEQUAL
                 | OpCode::CPUI_INT_SLESS
                 | OpCode::CPUI_INT_SLESSEQUAL => {
-                    if meets(false) {
-                        return true;
-                    }
-                    false
+                    meets(false)
                 }
                 OpCode::CPUI_INT_ADD => {
                     if meets(true) {
@@ -1056,11 +1052,10 @@ fn meets_an_address_constant(data: &Funcdata, family: &[VarnodeId]) -> bool {
             if !carries {
                 continue;
             }
-            if let Some(out) = o.get_out() {
-                if seen.insert(out) {
+            if let Some(out) = o.get_out()
+                && seen.insert(out) {
                     work.push(out);
                 }
-            }
         }
     }
     false
@@ -1111,7 +1106,7 @@ impl crate::optionset::UnlaceOption for CalleeVoteMode {
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
-        Ok(crate::calleevote::OptionCalleeVote.apply(value)?)
+        crate::calleevote::OptionCalleeVote.apply(value)
     }
 }
 

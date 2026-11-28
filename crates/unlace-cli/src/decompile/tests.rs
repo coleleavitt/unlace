@@ -169,9 +169,7 @@ fn deferred_fast_funcdisc_outranks_the_preset() {
         )
     };
     let last = |text: String| {
-        text.lines()
-            .filter(|l| l.starts_with("option fast_funcdisc"))
-            .last()
+        text.lines().rfind(|l| l.starts_with("option fast_funcdisc"))
             .map(str::to_owned)
     };
     assert_eq!(

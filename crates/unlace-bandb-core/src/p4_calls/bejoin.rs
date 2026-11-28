@@ -973,15 +973,14 @@ fn works_over(data: &Funcdata, high: VarnodeId, low: VarnodeId) -> bool {
                 {
                     continue;
                 }
-                if let Some(worked) = worked_operand(data, op) {
-                    if !parallel(data, op, low)
+                if let Some(worked) = worked_operand(data, op)
+                    && !parallel(data, op, low)
                         && !sources(data, worked)
                             .into_iter()
                             .any(|x| reads(data, low, x))
                     {
                         return true;
                     }
-                }
             }
         }
     }

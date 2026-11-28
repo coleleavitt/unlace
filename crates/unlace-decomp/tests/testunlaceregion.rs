@@ -57,12 +57,11 @@ impl UnlaceRegionVisitor for UnlaceTestCollector {
         self.stack.push((region.is_cyclic(), u64::MAX, Vec::new()));
     }
     fn exit_region(&mut self, _region: &UnlaceGraphRegion) {
-        if let Some((cyclic, head, mut body)) = self.stack.pop() {
-            if cyclic {
+        if let Some((cyclic, head, mut body)) = self.stack.pop()
+            && cyclic {
                 body.sort_unstable();
                 self.cyclics.push((head, body));
             }
-        }
     }
     fn visit_block(&mut self, _block: Option<BlockId>, addr: u64) {
         self.addrs.push(addr);

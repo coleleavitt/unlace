@@ -23,7 +23,6 @@ const MTLR: u32 = 0x7c08_03a6;
 const LR_MOVE_MASK: u32 = 0xfc1f_ffff;
 
 #[doc(hidden)]
-
 pub fn is_pc_capture(
     fd: &Funcdata,
     op: OpId,

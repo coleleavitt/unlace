@@ -69,7 +69,7 @@ pub fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
         }
         (
             Address::new(
-                Rc::clone(&stack),
+                Rc::clone(stack),
                 stack.wrap_offset(base.get_offset().wrapping_add(offset as u64)),
             ),
             Some(symbol),

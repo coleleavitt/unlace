@@ -756,7 +756,7 @@ impl Proof {
                     (Value::Second(x, s, o), Value::Constant(c))
                     | (Value::Constant(c), Value::Second(x, s, o))
                         if op.opcode != OpCode::CPUI_INT_SUB
-                            || matches!(op.ins.get(1).map(|v| is_constant(v)), Some(true)) =>
+                            || matches!(op.ins.get(1).map(is_constant), Some(true)) =>
                     {
                         let c = i128::from(c);
                         let (s, o) = match op.opcode {

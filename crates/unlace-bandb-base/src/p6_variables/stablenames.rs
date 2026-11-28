@@ -370,10 +370,10 @@ pub fn rename_targets(
     let mut best: BTreeMap<&String, ((usize, usize), HighVariableId)> = BTreeMap::new();
     for (high, counts) in tallies {
         for (name, count) in counts {
-            if let Some((from, _)) = renames.get_key_value(name) {
-                if best.get(from).is_none_or(|(held, _)| *count > *held) {
-                    best.insert(from, (*count, *high));
-                }
+            if let Some((from, _)) = renames.get_key_value(name)
+                && best.get(from).is_none_or(|(held, _)| *count > *held)
+            {
+                best.insert(from, (*count, *high));
             }
         }
     }
@@ -771,10 +771,10 @@ pub fn met_constants(fd: &Funcdata, instances: &[VarnodeId], size: int4) -> Vec<
         let Some(v) = fd.vbank().get(vn) else {
             continue;
         };
-        if let Some(def) = v.get_def().and_then(|op| fd.obank().get(op)) {
-            if def.code() == OpCode::CPUI_COPY {
-                out.extend(constant(def.get_in(0)));
-            }
+        if let Some(def) = v.get_def().and_then(|op| fd.obank().get(op))
+            && def.code() == OpCode::CPUI_COPY
+        {
+            out.extend(constant(def.get_in(0)));
         }
         for op in v.descend_iter() {
             let Some(o) = fd.obank().get(op) else {
@@ -854,10 +854,9 @@ pub fn directive_targets(
         for (name, count) in counts {
             if (prior.renames.contains_key(name) || prior.retypes.contains_key(name))
                 && fits(name, *high)
+                && best.get(name).is_none_or(|(held, _)| *count > *held)
             {
-                if best.get(name).is_none_or(|(held, _)| *count > *held) {
-                    best.insert(name, (*count, *high));
-                }
+                best.insert(name, (*count, *high));
             }
         }
     }
@@ -899,6 +898,7 @@ pub fn is_name_only(fd: &Funcdata, sym: crate::database::SymbolId) -> bool {
 /// as its naming pass handed it out, plus the numbers the directives applied
 /// to it since renamed. Empty when no directive touched `fd` and it kept no
 /// earlier numbering, so a plain re-decompile numbers from scratch as before.
+#[allow(clippy::mutable_key_type)]
 pub fn carry(fd: &Funcdata) -> PriorNames {
     let prior = fd.unlace_prior_names();
     let isolated = crate::isolated::carried(fd);

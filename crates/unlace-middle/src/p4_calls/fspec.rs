@@ -1751,8 +1751,8 @@ impl ParamActive {
         let i = i as usize;
         let mut newtrials: Vec<ParamTrial> = Vec::new();
         let slot = self.trial[i].get_slot();
-        for j in 0..i {
-            let mut c = self.trial[j].clone();
+        for t in &self.trial[..i] {
+            let mut c = t.clone();
             let oldslot = c.get_slot();
             if oldslot > slot {
                 c.set_slot(oldslot + 1);
@@ -1761,8 +1761,8 @@ impl ParamActive {
         }
         newtrials.push(self.trial[i].split_hi(sz));
         newtrials.push(self.trial[i].split_lo(self.trial[i].get_size() - sz));
-        for j in (i + 1)..self.trial.len() {
-            let mut c = self.trial[j].clone();
+        for t in &self.trial[(i + 1)..] {
+            let mut c = t.clone();
             let oldslot = c.get_slot();
             if oldslot > slot {
                 c.set_slot(oldslot + 1);
@@ -2461,10 +2461,11 @@ impl ParamListStandard {
 
     /// Get the stack entry index, or `None` (C++ `getStackEntry`).
     pub fn get_stack_entry(&self) -> Option<usize> {
-        if let Some(last) = self.entry.last() {
-            if !last.is_exclusion() && last.get_space().get_type() == spacetype::IPTR_SPACEBASE {
-                return Some(self.entry.len() - 1);
-            }
+        if let Some(last) = self.entry.last()
+            && !last.is_exclusion()
+            && last.get_space().get_type() == spacetype::IPTR_SPACEBASE
+        {
+            return Some(self.entry.len() - 1);
         }
         None
     }
@@ -4916,10 +4917,10 @@ impl ProtoModel {
     /// there is no match.
     pub fn lookup_effect(efflist: &[EffectRecord], addr: &Address, size: int4) -> uint4 {
         // Unique is always local to function
-        if let Some(spc) = addr.get_space() {
-            if spc.get_type() == spacetype::IPTR_INTERNAL {
-                return effect_type::UNAFFECTED;
-            }
+        if let Some(spc) = addr.get_space()
+            && spc.get_type() == spacetype::IPTR_INTERNAL
+        {
+            return effect_type::UNAFFECTED;
         }
         let cur = EffectRecord::new_unknown(addr, size);
         // upper_bound: first element strictly greater than cur by address.
@@ -6520,20 +6521,20 @@ impl FuncProto {
         // and the model has something to assign against, after which `set_pieces`
         // replaces the derived storage with the explicit one as before. With
         // no stated inputs, leave input recovery open on the rebuilt callee.
-        if pieces.outtype.is_none() {
-            if let Some(declared) = pieces.output_storage.as_ref().and_then(|p| p.type_.clone()) {
-                let mut typed = pieces.clone();
-                typed.outtype = Some(declared);
-                self.set_pieces(&typed, Some(defaultfp), typefactory, manager)?;
-                if pieces.intypes.is_empty()
-                    && pieces.innames.is_empty()
-                    && pieces.input_storage.is_empty()
-                    && pieces.first_var_arg_slot < 0
-                {
-                    self.set_input_lock(false);
-                }
-                return Ok(());
+        if pieces.outtype.is_none()
+            && let Some(declared) = pieces.output_storage.as_ref().and_then(|p| p.type_.clone())
+        {
+            let mut typed = pieces.clone();
+            typed.outtype = Some(declared);
+            self.set_pieces(&typed, Some(defaultfp), typefactory, manager)?;
+            if pieces.intypes.is_empty()
+                && pieces.innames.is_empty()
+                && pieces.input_storage.is_empty()
+                && pieces.first_var_arg_slot < 0
+            {
+                self.set_input_lock(false);
             }
+            return Ok(());
         }
         self.set_pieces(pieces, Some(defaultfp), typefactory, manager)
     }
@@ -8499,10 +8500,12 @@ impl FuncCallSpecs {
                         v.get_def(),
                     )
                 };
-                if no_descend && internal && written {
-                    if let Some(def_op) = def {
-                        data.op_destroy(def_op);
-                    }
+                if no_descend
+                    && internal
+                    && written
+                    && let Some(def_op) = def
+                {
+                    data.op_destroy(def_op);
                 }
             }
         }
@@ -8631,15 +8634,15 @@ impl FuncCallSpecs {
     ) {
         let paddr = param.get_address();
         let psize = param.get_size();
-        if let Some(out) = data.obank().get(self.op).and_then(|o| o.get_out()) {
-            if let Some(vn) = data.vbank().get(out) {
-                let vaddr = vn.get_addr();
-                let vsize = vn.get_size();
-                if paddr.justified_contain(psize, vaddr, vsize, false) >= 0
-                    || vaddr.justified_contain(vsize, &paddr, psize, false) >= 0
-                {
-                    newoutput.push(out);
-                }
+        if let Some(out) = data.obank().get(self.op).and_then(|o| o.get_out())
+            && let Some(vn) = data.vbank().get(out)
+        {
+            let vaddr = vn.get_addr();
+            let vsize = vn.get_size();
+            if paddr.justified_contain(psize, vaddr, vsize, false) >= 0
+                || vaddr.justified_contain(vsize, &paddr, psize, false) >= 0
+            {
+                newoutput.push(out);
             }
         }
         let mut indop = data.op_previous_op(self.op);
@@ -8651,22 +8654,21 @@ impl FuncCallSpecs {
             if opref.code() != OpCode::CPUI_INDIRECT {
                 break;
             }
-            if opref.is_indirect_creation() {
-                if let Some(out) = opref
+            if opref.is_indirect_creation()
+                && let Some(out) = opref
                     .get_out()
                     .and_then(|ov| data.vbank().get(ov).map(|_| ov))
+            {
+                let vn = data
+                    .vbank()
+                    .get(out)
+                    .expect("transferLockedOutputParam: stale out");
+                let vaddr = vn.get_addr();
+                let vsize = vn.get_size();
+                if paddr.justified_contain(psize, vaddr, vsize, false) >= 0
+                    || vaddr.justified_contain(vsize, &paddr, psize, false) >= 0
                 {
-                    let vn = data
-                        .vbank()
-                        .get(out)
-                        .expect("transferLockedOutputParam: stale out");
-                    let vaddr = vn.get_addr();
-                    let vsize = vn.get_size();
-                    if paddr.justified_contain(psize, vaddr, vsize, false) >= 0
-                        || vaddr.justified_contain(vsize, &paddr, psize, false) >= 0
-                    {
-                        newoutput.push(out);
-                    }
+                    newoutput.push(out);
                 }
             }
             indop = data.op_previous_op(io);

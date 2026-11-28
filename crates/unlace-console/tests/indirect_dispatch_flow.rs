@@ -137,7 +137,7 @@ fn warnings(program: &unlace_console::engine::ConsoleProgram) -> usize {
 
 fn entries(fd: &unlace_decomp::funcdata::Funcdata) -> Vec<usize> {
     (0..fd.num_jump_tables())
-        .map(|i| fd.get_jump_table(i as i32).num_entries() as usize)
+        .map(|i| fd.get_jump_table(i).num_entries() as usize)
         .collect()
 }
 

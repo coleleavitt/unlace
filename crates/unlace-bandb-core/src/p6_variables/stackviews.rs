@@ -211,15 +211,14 @@ fn backing_type(
     let mut members = views.to_vec();
     for view in views {
         for i in 0..view.datatype.num_depend() {
-            if let Some(field) = view.datatype.get_field(i) {
-                if scalar(&field.field_type) {
+            if let Some(field) = view.datatype.get_field(i)
+                && scalar(&field.field_type) {
                     insert_view(
                         &mut members,
                         view.offset + field.offset,
                         Rc::clone(&field.field_type),
                     );
                 }
-            }
         }
     }
     for id in fd.vbank().loc_space_ids(space) {
@@ -230,19 +229,15 @@ fn backing_type(
             continue;
         }
         let offset = v.get_offset().wrapping_sub(start) as i32;
-        if let Some(op) = v.get_def().and_then(|id| fd.obank().get(id)) {
-            if matches!(op.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST) {
-                if let Some(ty) = op
+        if let Some(op) = v.get_def().and_then(|id| fd.obank().get(id))
+            && matches!(op.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST)
+                && let Some(ty) = op
                     .get_in(0)
                     .and_then(|id| fd.vbank().get(id))
                     .map(|v| Rc::clone(v.get_type()))
-                {
-                    if scalar(&ty) && ty.get_size() == v.get_size() {
+                    && scalar(&ty) && ty.get_size() == v.get_size() {
                         insert_view(&mut members, offset, ty);
                     }
-                }
-            }
-        }
         if matches!(v.get_size(), 1 | 2 | 4 | 8) {
             insert_view(
                 &mut members,
@@ -403,11 +398,10 @@ pub fn gather(fd: &mut Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
                 continue;
             };
             for slot in 0..op.num_input() {
-                if op.get_in(slot) == Some(reference.base) {
-                    if let Some(view) = declared_view(fd, call, slot) {
+                if op.get_in(slot) == Some(reference.base)
+                    && let Some(view) = declared_view(fd, call, slot) {
                         insert_type(groups.entry(*offset).or_default(), view);
                     }
-                }
             }
         }
     }
@@ -422,8 +416,8 @@ pub fn gather(fd: &mut Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
         let parent = ty.get_partial_base().unwrap_or_else(|| Rc::clone(ty));
         if parent.get_name().starts_with("stack_views_") {
             for i in 0..parent.num_depend() {
-                if let Some(view) = parent.get_depend(i) {
-                    if view.get_array_base().is_none() {
+                if let Some(view) = parent.get_depend(i)
+                    && view.get_array_base().is_none() {
                         let root = v
                             .get_offset()
                             .wrapping_sub(ty.get_partial_offset().unwrap_or(0) as u64);
@@ -440,7 +434,6 @@ pub fn gather(fd: &mut Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
                             );
                         }
                     }
-                }
             }
             continue;
         }
@@ -448,11 +441,9 @@ pub fn gather(fd: &mut Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
             insert_type(groups.entry(v.get_offset()).or_default(), Rc::clone(ty));
         } else if ty.get_metatype() == type_metatype::TYPE_UNKNOWN
             && matches!(ty.get_size(), 1 | 2 | 4 | 8)
-        {
-            if let Ok(raw) = factory.get_base(ty.get_size(), type_metatype::TYPE_UINT) {
+            && let Ok(raw) = factory.get_base(ty.get_size(), type_metatype::TYPE_UINT) {
                 insert_type(groups.entry(v.get_offset()).or_default(), raw);
             }
-        }
     }
     let hints = state.hints_mut().clone();
     extents.extend(groups.into_iter().map(|(at, types)| {
@@ -745,22 +736,19 @@ pub fn access_type(
         return None;
     }
     let v = fd.vbank().get(vn)?;
-    if v.is_persist() {
-        if let Some(global) = fd.get_arch().query_container_global(
+    if v.is_persist()
+        && let Some(global) = fd.get_arch().query_container_global(
             v.get_addr(),
             v.get_size(),
             &Address::new_invalid(),
-        ) {
-            if let Some(ty) = global.symbol_type {
-                if scalar(&ty)
+        )
+            && let Some(ty) = global.symbol_type
+                && scalar(&ty)
                     && ty.get_size() == v.get_size()
                     && global.entry_addr == *v.get_addr()
                 {
                     return Some(ty);
                 }
-            }
-        }
-    }
     let high = v.get_high().and_then(|h| fd.high_bank().get(h));
     let from_high = high.and_then(|h| {
         h.unlace_symbol_type()

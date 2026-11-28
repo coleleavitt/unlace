@@ -147,10 +147,8 @@ fn unsupported_templates_locations_and_names_remain_runtime_calls() {
     assert_eq!(on.matches("panic_fmt(").count(), 1);
     assert_eq!(off.matches("panic_fmt(").count(), 2);
     assert_eq!(
-        on.lines().filter(|line| line.contains("panic_fmt(")).last(),
-        off.lines()
-            .filter(|line| line.contains("panic_fmt("))
-            .last()
+        on.lines().rfind(|line| line.contains("panic_fmt(")),
+        off.lines().rfind(|line| line.contains("panic_fmt("))
     );
 }
 

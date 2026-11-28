@@ -114,11 +114,10 @@ fn descend_of(data: &Funcdata, vn: VarnodeId) -> Vec<OpId> {
 /// `newVn->updateType(srcVn->getType())` idiom.
 fn copy_type(data: &mut Funcdata, dst_vn: VarnodeId, src_vn: VarnodeId) {
     let ty = data.vbank().get(src_vn).map(|v| Rc::clone(v.get_type()));
-    if let Some(ty) = ty {
-        if let Some(v) = data.vbank_mut().get_mut(dst_vn) {
+    if let Some(ty) = ty
+        && let Some(v) = data.vbank_mut().get_mut(dst_vn) {
             v.update_type(ty);
         }
-    }
 }
 
 // =============================================================================
@@ -439,13 +438,11 @@ fn pull_absorb_and(data: &mut Funcdata, and_op: OpId, pull_op: OpId) -> int4 {
             // dt = types->resizeInteger(vn->getType(), vn->getSize());
             let vn_ty = data.vbank().get(vn).map(|v| Rc::clone(v.get_type()));
             let arch = Rc::clone(data.get_arch());
-            if let (Some(types), Some(vn_ty)) = (arch.types(), vn_ty) {
-                if let Ok(dt) = types.resize_integer(vn_ty, vn_sz) {
-                    if let Some(v) = data.vbank_mut().get_mut(new_zero) {
+            if let (Some(types), Some(vn_ty)) = (arch.types(), vn_ty)
+                && let Ok(dt) = types.resize_integer(vn_ty, vn_sz)
+                    && let Some(v) = data.vbank_mut().get_mut(new_zero) {
                         v.update_type(dt);
                     }
-                }
-            }
             if opc == OpCode::CPUI_INT_EQUAL {
                 data.op_set_opcode_code(read_op, OpCode::CPUI_INT_SLESSEQUAL);
                 data.op_set_input(read_op, new_zero, 0).ok();
@@ -726,13 +723,11 @@ fn pull_absorb_comp_zero(data: &mut Funcdata, comp_op: OpId, pull_op: OpId) -> i
             };
             // dt = types->getBase(1, TYPE_BOOL);
             let arch = Rc::clone(data.get_arch());
-            if let Some(types) = arch.types() {
-                if let Ok(dt) = types.get_base(1, type_metatype::TYPE_BOOL) {
-                    if let Some(v) = data.vbank_mut().get_mut(new_vn) {
+            if let Some(types) = arch.types()
+                && let Ok(dt) = types.get_base(1, type_metatype::TYPE_BOOL)
+                    && let Some(v) = data.vbank_mut().get_mut(new_vn) {
                         v.update_type(dt);
                     }
-                }
-            }
             data.op_set_input(comp_op, new_vn, 0).ok();
             data.delete_varnode(vn).ok();
         }

@@ -9,7 +9,8 @@ use serde_json::ser::{Formatter, PrettyFormatter};
 use unlace_console::engine::FunctionEntry;
 
 use crate::funcdecl::Declared;
-use crate::jsonfmt::{Json, UnicodeEscape};
+use crate::jsonfmt::Json;
+use crate::jsonfmt::writer::UnicodeEscape;
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn write(

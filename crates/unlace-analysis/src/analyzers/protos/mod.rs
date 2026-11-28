@@ -749,11 +749,10 @@ fn seed_named_prototypes(
         let hit = nameladder::fallbacks(present)
             .into_iter()
             .find_map(|f| table.iter().find(|(t, _)| *t == f));
-        if let Some((_, sig)) = hit {
-            if let Ok(pieces) = build_pieces(present, sig, types, word_size, layout) {
+        if let Some((_, sig)) = hit
+            && let Ok(pieces) = build_pieces(present, sig, types, word_size, layout) {
                 out.prototypes.push(pieces);
             }
-        }
     }
 }
 
@@ -796,11 +795,10 @@ pub fn declared_libc_prototype(
     } else {
         libctypes::declared_named_prototype(name)
     };
-    if let Some(sig) = named {
-        if let Ok(pieces) = build_pieces(name, sig, types, word_size, layout) {
+    if let Some(sig) = named
+        && let Ok(pieces) = build_pieces(name, sig, types, word_size, layout) {
             return Some(pieces);
         }
-    }
     let sig = LIBC
         .iter()
         .chain(libcsigs::LIBC_EXT.iter())
@@ -836,11 +834,10 @@ fn present_function_names(file: &object::File, bytes: &[u8]) -> HashSet<String> 
         if sym.kind() != SymbolKind::Text {
             continue;
         }
-        if let Ok(n) = sym.name() {
-            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes())) {
+        if let Ok(n) = sym.name()
+            && let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes())) {
                 present.insert(n);
             }
-        }
     }
     // The resolved format symbols (PE IAT/exports, Mach-O stubs/exports). On
     // ELF this overlaps the `.dynsym` set already collected (`elf_plt` names the
@@ -866,11 +863,10 @@ fn defined_function_names(file: &object::File, bytes: &[u8]) -> HashSet<String> 
         if sym.kind() != SymbolKind::Text || sym.is_undefined() {
             continue;
         }
-        if let Ok(n) = sym.name() {
-            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes())) {
+        if let Ok(n) = sym.name()
+            && let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes())) {
                 defined.insert(n);
             }
-        }
     }
     for sym in crate::loader::format::resolve_imports(file, bytes) {
         if sym.kind != crate::loader::format::ImportSymKind::Export {
@@ -892,11 +888,10 @@ fn imported_function_names(file: &object::File, bytes: &[u8]) -> HashSet<String>
         if sym.kind() != SymbolKind::Text || !sym.is_undefined() {
             continue;
         }
-        if let Ok(n) = sym.name() {
-            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes())) {
+        if let Ok(n) = sym.name()
+            && let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(n.as_bytes())) {
                 imported.insert(n);
             }
-        }
     }
     imported.extend(
         resolved_import_addrs(file, bytes)

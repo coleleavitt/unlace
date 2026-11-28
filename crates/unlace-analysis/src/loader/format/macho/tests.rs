@@ -93,23 +93,23 @@ fn is_arm64e_detects_only_arm64e_subtype() {
     use object::macho::{CPU_SUBTYPE_ARM64_ALL, CPU_TYPE_ARM64, CPU_TYPE_X86_64};
     // arm64e — the high capability byte (CPU_SUBTYPE_PTRAUTH_ABI) set or not.
     assert!(is_arm64e(&macho64_header(
-        CPU_TYPE_ARM64 as u32,
+        CPU_TYPE_ARM64,
         CPU_SUBTYPE_ARM64E
     )));
     assert!(
         is_arm64e(&macho64_header(
-            CPU_TYPE_ARM64 as u32,
+            CPU_TYPE_ARM64,
             CPU_SUBTYPE_ARM64E | 0x8000_0000
         )),
         "the capability high byte must be masked off before comparing"
     );
     // plain arm64 — not arm64e.
     assert!(!is_arm64e(&macho64_header(
-        CPU_TYPE_ARM64 as u32,
+        CPU_TYPE_ARM64,
         CPU_SUBTYPE_ARM64_ALL
     )));
     // x86-64 — never arm64e.
-    assert!(!is_arm64e(&macho64_header(CPU_TYPE_X86_64 as u32, 3)));
+    assert!(!is_arm64e(&macho64_header(CPU_TYPE_X86_64, 3)));
     // non-Mach-O — false (no panic).
     assert!(!is_arm64e(&[0x7f, b'E', b'L', b'F']));
     assert!(!is_arm64e(&[]));
@@ -123,8 +123,8 @@ fn apple_silicon_id_gated_and_arm64e_only() {
     use object::macho::{CPU_SUBTYPE_ARM64_ALL, CPU_TYPE_ARM64};
 
     let macho = MachOFormat;
-    let arm64e = macho64_header(CPU_TYPE_ARM64 as u32, CPU_SUBTYPE_ARM64E);
-    let arm64 = macho64_header(CPU_TYPE_ARM64 as u32, CPU_SUBTYPE_ARM64_ALL);
+    let arm64e = macho64_header(CPU_TYPE_ARM64, CPU_SUBTYPE_ARM64E);
+    let arm64 = macho64_header(CPU_TYPE_ARM64, CPU_SUBTYPE_ARM64_ALL);
 
     // The env-gate toggling must be serialized: this process-global var is
     // also read by the console gate; keep the on-window tight.

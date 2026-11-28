@@ -24,7 +24,7 @@
 //! *compile* is a different and much larger project. This gate asserts it
 //! parses.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
@@ -47,7 +47,7 @@ fn grep() -> PathBuf {
 }
 
 /// Decompile `func` from `bin` under `lang`, returning the emitted document.
-fn decompile_as(bin: &PathBuf, func: &str, lang: &str) -> String {
+fn decompile_as(bin: &Path, func: &str, lang: &str) -> String {
     let root = repo_root();
     let specs = root.join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];
@@ -80,7 +80,7 @@ fn decompile_as(bin: &PathBuf, func: &str, lang: &str) -> String {
 
 /// The raw console transcript, for the arms that assert on a console message
 /// rather than on the document.
-fn console_transcript(bin: &PathBuf, func: &str, lang: &str) -> String {
+fn console_transcript(bin: &Path, func: &str, lang: &str) -> String {
     RAW.with(|r| r.set(true));
     let out = decompile_as(bin, func, lang);
     RAW.with(|r| r.set(false));
@@ -99,8 +99,8 @@ fn strip_console_chatter(out: &str) -> String {
     }
     match out.rfind("Decompilation complete") {
         Some(i) => out[i..]
-            .splitn(2, '\n')
-            .nth(1)
+            .split_once('\n')
+            .map(|x| x.1)
             .unwrap_or("")
             .trim_start_matches('\n')
             .to_string(),

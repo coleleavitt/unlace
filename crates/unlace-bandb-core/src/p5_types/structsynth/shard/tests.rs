@@ -613,7 +613,10 @@ fn a_renaming_pairs_structures_with_the_same_members() {
         renaming(&[a("struct_1", &pair)], &[a("struct_7", &wide)]),
         None
     );
-    assert_eq!(renaming(&[a("struct_1", &pair)], &[base.clone()]), None);
+    assert_eq!(
+        renaming(&[a("struct_1", &pair)], std::slice::from_ref(&base)),
+        None
+    );
     assert_eq!(renaming(&[a("struct_1", &pair)], &[None]), None);
     assert_eq!(
         renaming(&[base], &[Some(("struct_2".to_string(), None))]),

@@ -130,10 +130,7 @@ pub fn unlace_is_v850_indirect_jmp(
         _ => return false,
     };
     // exclude the PC
-    if regname == "PC" || regname == "pc" {
-        return false;
-    }
-    true
+    !(regname == "PC" || regname == "pc")
 }
 
 crate::unlace_flag!(

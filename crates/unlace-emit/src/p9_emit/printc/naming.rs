@@ -40,7 +40,7 @@ impl RealTypeCtx {
             ctypes: arch.unlace_options.get::<crate::coreoptions::CTypes>().0,
             model: crate::ctypes::CDataModel {
                 char_signed: crate::ctypes::plain_char_signed(&arch.archid, arch.image_apple),
-                ..crate::ctypes::CDataModel::from_types(&*arch.types())
+                ..crate::ctypes::CDataModel::from_types(arch.types())
             },
             c_type_definition: false,
             cpp_short_names: arch

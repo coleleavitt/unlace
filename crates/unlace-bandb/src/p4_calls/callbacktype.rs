@@ -1871,7 +1871,7 @@ impl crate::optionset::UnlaceOption for CallbackTypeMode {
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
-        Ok(crate::callbacktype::OptionCallbackType.apply(value)?)
+        crate::callbacktype::OptionCallbackType.apply(value)
     }
 }
 

@@ -110,6 +110,7 @@ fn discovered_main_decompiles_without_supplied_address() {
 ///   - `.init_array` (`DT_INIT_ARRAY` @0x3d78, 1 ptr) → 0x1240 → `_INIT_0`
 ///   - `.fini_array` (`DT_FINI_ARRAY` @0x3d80, 1 ptr) → 0x1200 → `_FINI_0`
 ///   - the single `DT_INIT` @0x1000 → `_DT_INIT`, `DT_FINI` @0x1464 → `_DT_FINI`
+///
 /// Neither 0x1240/0x1200/0x1000/0x1464 has any `.symtab` symbol here, so the name
 /// comes purely from the entry-discovery + naming overlay.
 #[test]

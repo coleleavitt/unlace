@@ -29,11 +29,10 @@ pub(super) fn imports(ctx: &AnalysisCtx<'_>) -> BTreeMap<String, Vec<u64>> {
         let object::SymbolFlags::Elf { st_info, .. } = symbol.flags() else {
             continue;
         };
-        if !symbol.is_undefined() && st_info & 0xf == object::elf::STT_GNU_IFUNC {
-            if let Ok(name) = symbol.name() {
+        if !symbol.is_undefined() && st_info & 0xf == object::elf::STT_GNU_IFUNC
+            && let Ok(name) = symbol.name() {
                 result.remove(name);
             }
-        }
     }
     result
 }

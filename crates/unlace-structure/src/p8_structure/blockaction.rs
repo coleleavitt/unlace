@@ -543,13 +543,12 @@ impl LoopBody {
         let head = loopbody[self_idx].head;
         for i in 0..body.len() {
             let curblock = body[i];
-            if Some(curblock) != head {
-                if let Some(subloop) = LoopBody::find(curblock, looporder_lookup, graph) {
+            if Some(curblock) != head
+                && let Some(subloop) = LoopBody::find(curblock, looporder_lookup, graph) {
                     // subloop is an index into loopbody (the looporder record).
                     containlist.push(subloop);
                     loopbody[subloop].depth += 1;
                 }
-            }
         }
         // See C++ comment: depth ordering means immed_container is settled here.
         let depth = loopbody[self_idx].depth;
@@ -630,11 +629,10 @@ impl LoopBody {
         let mut i = self.tails.len() as int4 - 1;
         while i >= 0 {
             // Go in reverse order, to put out less preferred back-edges first
-            if let (Some(hin), Some(hout)) = (holdin, holdout) {
-                if i == 0 {
+            if let (Some(hin), Some(hout)) = (holdin, holdout)
+                && i == 0 {
                     likely.push(FloatingEdge::new(hin, hout));
                 }
-            }
             let tail = self.tails[i as usize];
             let sizeout = graph.block(tail).size_out();
             for j in 0..sizeout {
@@ -2320,14 +2318,12 @@ impl<'a> CollapseStructure<'a> {
             return false;
         }
         // Rule A.
-        if self.graph.block(orblock).get_type() == BlockType::Copy {
-            if let Some(basic) = self.graph.block(orblock).get_copy() {
-                if self.condfold_sets.prefix.contains(&basic) {
+        if self.graph.block(orblock).get_type() == BlockType::Copy
+            && let Some(basic) = self.graph.block(orblock).get_copy()
+                && self.condfold_sets.prefix.contains(&basic) {
                     crate::condfold::trace_admit_fold("CollapseStructure", "prefix", bl, orblock);
                     return true;
                 }
-            }
-        }
         // Rule B.
         self.shape_admits(bl, orblock)
     }
@@ -2989,13 +2985,11 @@ impl<'a> CollapseStructure<'a> {
             return Ok(true);
         }
 
-        if !defaultnottoexit && self.graph.block(switchbl).get_type() == BlockType::MultiGoto {
-            if let BlockKind::MultiGoto { defaultswitch, .. } = self.graph.block(switchbl).kind() {
-                if *defaultswitch {
+        if !defaultnottoexit && self.graph.block(switchbl).get_type() == BlockType::MultiGoto
+            && let BlockKind::MultiGoto { defaultswitch, .. } = self.graph.block(switchbl).kind()
+                && *defaultswitch {
                     defaultnottoexit = true;
                 }
-            }
-        }
         if !defaultnottoexit {
             return Ok(true);
         }
@@ -4251,8 +4245,8 @@ impl Action for ActionBlockStructure {
         let nbb = data.bblocks_get_size();
         for i in 0..nbb {
             let bb = data.bblocks_get_block(i);
-            if let Some(tail) = data.bb_op_tail(bb) {
-                if let Some(op) = data.obank().get(tail) {
+            if let Some(tail) = data.bb_op_tail(bb)
+                && let Some(op) = data.obank().get(tail) {
                     let ht = op.get_halt_type();
                     if ht != 0 {
                         exitleaf_facts.halt.insert(bb, ht);
@@ -4263,7 +4257,6 @@ impl Action for ActionBlockStructure {
                         }
                     }
                 }
-            }
             if want_addr {
                 let a = crate::block::block_get_start(&data.bblocks_ref().arena, bb);
                 exitleaf_facts.addr.insert(bb, a.get_offset());
@@ -4271,13 +4264,11 @@ impl Action for ActionBlockStructure {
             if data.bb_is_complex(bb) {
                 complex_blocks.insert(bb);
             }
-            if data.bblocks_ref().block(bb).is_switch_out() {
-                if let Some(indop) = data.bb_op_tail(bb) {
-                    if let Some(jt_idx) = data.find_jump_table_index(indop) {
+            if data.bblocks_ref().block(bb).is_switch_out()
+                && let Some(indop) = data.bb_op_tail(bb)
+                    && let Some(jt_idx) = data.find_jump_table_index(indop) {
                         switch_blocks.insert(bb, jt_idx);
                     }
-                }
-            }
         }
         // Precompute the per-switch case-edge topology against the **bblocks**
         // graph (C++ `BlockSwitch::addCase` resolves `outindex`/`isdefault` on the

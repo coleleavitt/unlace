@@ -321,8 +321,8 @@ fn proven_unobserved(fd: &Funcdata, saves: &[Save], stack_space: &Rc<AddrSpace>)
                 return false;
             }
         }
-        if let Some(out) = op.get_out().and_then(|vn| fd.vbank().get(vn)) {
-            if out.get_space().get_index() == stack_space.get_index() {
+        if let Some(out) = op.get_out().and_then(|vn| fd.vbank().get(vn))
+            && out.get_space().get_index() == stack_space.get_index() {
                 let write = FrameRange {
                     start: out.get_offset(),
                     size: out.get_size(),
@@ -334,7 +334,6 @@ fn proven_unobserved(fd: &Funcdata, saves: &[Save], stack_space: &Rc<AddrSpace>)
                     return false;
                 }
             }
-        }
         for slot in 0..op.num_input() {
             let Some(input_id) = op.get_in(slot) else {
                 continue;
@@ -394,8 +393,8 @@ fn proven_unobserved(fd: &Funcdata, saves: &[Save], stack_space: &Rc<AddrSpace>)
                     _ => return false,
                 }
             }
-            if let Some(frame) = frame {
-                if overlaps_saves(stack_space, frame, saves) {
+            if let Some(frame) = frame
+                && overlaps_saves(stack_space, frame, saves) {
                     let allowed = match op.code() {
                         OpCode::CPUI_STORE if slot == 1 => {
                             save_op_matches(fd, id, frame, saves, stack_space)
@@ -414,9 +413,8 @@ fn proven_unobserved(fd: &Funcdata, saves: &[Save], stack_space: &Rc<AddrSpace>)
                         return false;
                     }
                 }
-            }
-            if let Some(input) = fd.vbank().get(input_id) {
-                if input.get_space().get_index() == stack_space.get_index()
+            if let Some(input) = fd.vbank().get(input_id)
+                && input.get_space().get_index() == stack_space.get_index()
                     && overlaps_saves(
                         stack_space,
                         FrameRange {
@@ -429,7 +427,6 @@ fn proven_unobserved(fd: &Funcdata, saves: &[Save], stack_space: &Rc<AddrSpace>)
                 {
                     return false;
                 }
-            }
         }
     }
     true

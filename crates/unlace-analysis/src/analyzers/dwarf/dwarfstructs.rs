@@ -140,11 +140,10 @@ pub(super) fn intern_aggregate(
         Ok(_) => None,
         Err(_) => return None,
     };
-    if let Some(t) = &existing {
-        if !t.is_incomplete() {
+    if let Some(t) = &existing
+        && !t.is_incomplete() {
             return Some(Rc::clone(t));
         }
-    }
 
     let shell = match existing {
         Some(t) => t,
@@ -340,7 +339,7 @@ fn collect_members(
         }
         if m.bit_size.is_some() {
             let inside = |&(start, num_bits): &(i64, int4)| {
-                end_bit.map_or(true, |end| start + i64::from(num_bits) <= end)
+                end_bit.is_none_or(|end| start + i64::from(num_bits) <= end)
             };
             let placed = bitfield_bits(m, ty.get_size(), big_endian).filter(inside);
             if let Some((start, num_bits)) = placed {

@@ -184,14 +184,14 @@ pub fn is_fat(bytes: &[u8]) -> bool {
 /// by the 32- and 64-bit fat readers via the [`FatArch`] trait so the policy is
 /// stated once.
 fn select_fat_arch<Fat: FatArch>(arches: &[Fat], pref: SlicePref) -> Option<&Fat> {
-    if let SlicePref(Some(want)) = pref {
-        if let Some(a) = arches.iter().find(|a| a.architecture() == want) {
-            return Some(a);
-        }
-        // Override names an absent arch: fall through to the default preference
-        // (a present slice still decompiles — a missing-slice override is a
-        // softer failure than no decompile).
+    if let SlicePref(Some(want)) = pref
+        && let Some(a) = arches.iter().find(|a| a.architecture() == want)
+    {
+        return Some(a);
     }
+    // Override names an absent arch: fall through to the default preference
+    // (a present slice still decompiles — a missing-slice override is a
+    // softer failure than no decompile).
     arches
         .iter()
         .find(|a| a.architecture() == Architecture::X86_64)

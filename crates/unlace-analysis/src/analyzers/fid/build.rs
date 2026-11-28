@@ -255,11 +255,10 @@ fn decode_extent(
     // terminal and has no `next` bound): cap at a large instruction count.
     let mut guard = 1 << 20;
     loop {
-        if let Some(n) = next {
-            if vma >= n {
+        if let Some(n) = next
+            && vma >= n {
                 break; // reached the next function entry (exclusive clip)
             }
-        }
         if guard == 0 {
             break;
         }

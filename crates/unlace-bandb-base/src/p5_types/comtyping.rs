@@ -404,13 +404,11 @@ fn offset_from(data: &Funcdata, vn: VarnodeId) -> (VarnodeId, u64) {
     else {
         return (vn, 0);
     };
-    if matches!(d.code(), OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB) {
-        if let (Some(base), Some(off)) = (d.get_in(0), d.get_in(1)) {
-            if let Some(c) = data.vbank().get(off).filter(|c| c.is_constant()) {
+    if matches!(d.code(), OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB)
+        && let (Some(base), Some(off)) = (d.get_in(0), d.get_in(1))
+            && let Some(c) = data.vbank().get(off).filter(|c| c.is_constant()) {
                 return (strip(data, base), c.get_offset());
             }
-        }
-    }
     (vn, 0)
 }
 

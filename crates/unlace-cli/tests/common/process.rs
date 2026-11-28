@@ -176,11 +176,11 @@ pub mod cc_cache {
         let program = command.get_program();
         program.hash(&mut h);
         // A different compiler binary at the same name (an upgrade) is a different key.
-        if let Ok(path) = which(program.as_ref()) {
-            if let Ok(meta) = std::fs::metadata(&path) {
-                meta.len().hash(&mut h);
-                meta.modified().ok().hash(&mut h);
-            }
+        if let Ok(path) = which(program.as_ref())
+            && let Ok(meta) = std::fs::metadata(&path)
+        {
+            meta.len().hash(&mut h);
+            meta.modified().ok().hash(&mut h);
         }
         for arg in command.get_args() {
             let path = Path::new(arg);

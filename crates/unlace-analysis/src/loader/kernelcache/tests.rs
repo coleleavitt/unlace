@@ -688,7 +688,6 @@ fn fileset_signed_slots_resolve_kernel_virtual_calls() {
 /// imports; the same kext carved from its collection keeps them.
 #[test]
 fn only_a_collection_kext_reads_bound_imports() {
-    use object::read::Object;
     let kext = peel(
         fixture("fileset.macho"),
         &KernelcacheChoice::Entry("Widget".into()),

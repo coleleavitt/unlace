@@ -150,8 +150,8 @@ impl PrintC {
             if self.rust_boolean_expression(fd, arch, value, op, 8) {
                 return false;
             }
-            if let Some(def) = node.get_def() {
-                if fd.obank().get(def).is_some_and(|operation| {
+            if let Some(def) = node.get_def()
+                && fd.obank().get(def).is_some_and(|operation| {
                     matches!(operation.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)
                 }) {
                     let Some(index) = fd.get_call_specs_index(def) else {
@@ -182,7 +182,6 @@ impl PrintC {
                         return false;
                     }
                 }
-            }
         }
         let context = if node.is_implied() {
             let Some(context) = crate::rustintegers::needs_integer_context(fd, value, op, 8) else {

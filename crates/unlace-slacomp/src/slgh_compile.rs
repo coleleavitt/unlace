@@ -522,7 +522,7 @@ impl SleighCompile {
                 id
             }
             Err(e) => {
-                self.report_error(&e.explain());
+                self.report_error(e.explain());
                 NO_SYMBOL
             }
         }
@@ -655,7 +655,7 @@ impl SleighCompile {
     pub fn set_endian(&mut self, end: i32) {
         self.base.set_big_endian(end == 1);
         if let Err(e) = self.predefined_symbols() {
-            self.report_error(&e.explain());
+            self.report_error(e.explain());
         }
     }
 
@@ -685,7 +685,7 @@ impl SleighCompile {
         {
             Ok(s) => s,
             Err(e) => {
-                self.report_error(&e.explain());
+                self.report_error(e.explain());
                 return;
             }
         };
@@ -694,7 +694,7 @@ impl SleighCompile {
                 let loc = self.current_location();
                 self.report_error_loc(Some(&loc), "Multiple default spaces");
             } else if let Err(e) = self.base.set_default_code_space(spc.get_index()) {
-                self.report_error(&e.explain());
+                self.report_error(e.explain());
             } else {
                 // C++ slgh_compile.cc:2731 `pcode.setDefaultSpace(spc)`.
                 self.default_space = Some(Rc::clone(&spc));
@@ -915,10 +915,10 @@ impl SleighCompile {
             if sym == NO_SYMBOL {
                 continue;
             }
-            for j in (i + 1)..symlist.len() {
-                if symlist[j] == sym {
+            for slot in symlist.iter_mut().skip(i + 1) {
+                if *slot == sym {
                     res = Some(sym);
-                    symlist[j] = NO_SYMBOL;
+                    *slot = NO_SYMBOL;
                 }
             }
         }
@@ -957,7 +957,7 @@ impl SleighCompile {
             let maxv = match patval.max_value() {
                 Ok(maxv) => maxv,
                 Err(error) => {
-                    self.report_error(&error.explain());
+                    self.report_error(error.explain());
                     continue;
                 }
             };
@@ -967,7 +967,7 @@ impl SleighCompile {
                 Ok(newsym) => {
                     let _ = self.base.symtab_mut().replace_symbol(sym, newsym);
                 }
-                Err(e) => self.report_error(&e.explain()),
+                Err(e) => self.report_error(e.explain()),
             }
         }
     }
@@ -1000,21 +1000,21 @@ impl SleighCompile {
             if v == NO_SYMBOL {
                 continue;
             }
-            if let Some(s) = self.base.symtab().find_symbol_by_id(v) {
-                if let unlace_sleigh::slghsymbol::SymbolKind::Varnode(vs) = s.kind() {
-                    let vsz = vs.get_size();
-                    if sz == 0 {
-                        sz = vsz;
-                    } else if sz != vsz {
-                        let loc = self.current_location();
-                        self.report_error_loc(
-                            Some(&loc),
-                            &format!(
-                                "Attach statement contains varnodes of different sizes -- {sz} != {vsz}"
-                            ),
-                        );
-                        break;
-                    }
+            if let Some(s) = self.base.symtab().find_symbol_by_id(v)
+                && let unlace_sleigh::slghsymbol::SymbolKind::Varnode(vs) = s.kind()
+            {
+                let vsz = vs.get_size();
+                if sz == 0 {
+                    sz = vsz;
+                } else if sz != vsz {
+                    let loc = self.current_location();
+                    self.report_error_loc(
+                        Some(&loc),
+                        &format!(
+                            "Attach statement contains varnodes of different sizes -- {sz} != {vsz}"
+                        ),
+                    );
+                    break;
                 }
             }
         }
@@ -1054,10 +1054,10 @@ impl SleighCompile {
         ct.set_lineno(lineno);
         ct.set_src_index(src_index);
         let ct_idx = self.constructor_count(table_id);
-        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(table_id) {
-            if let unlace_sleigh::slghsymbol::SymbolKind::Subtable(st) = s.kind_mut() {
-                st.add_constructor(ct);
-            }
+        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(table_id)
+            && let unlace_sleigh::slghsymbol::SymbolKind::Subtable(st) = s.kind_mut()
+        {
+            st.add_constructor(ct);
         }
         let id = self.constructor_refs.len() as u32;
         self.constructor_refs.push(ConstructorRef {
@@ -1362,10 +1362,10 @@ impl SleighCompile {
                 i += 1;
             }
         }
-        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(sym) {
-            if let unlace_sleigh::slghsymbol::SymbolKind::Varnode(v) = s.kind_mut() {
-                v.mark_as_context();
-            }
+        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(sym)
+            && let unlace_sleigh::slghsymbol::SymbolKind::Varnode(v) = s.kind_mut()
+        {
+            v.mark_as_context();
         }
         numbits
     }
@@ -1439,17 +1439,17 @@ impl SleighCompile {
             if handmap.is_empty() {
                 continue;
             }
-            if let Some(h) = self.constructor(ctor).get_templ() {
-                if let Some(tpl) = self.base.template_mut(h) {
-                    tpl.change_handle_index(&handmap);
-                }
+            if let Some(h) = self.constructor(ctor).get_templ()
+                && let Some(tpl) = self.base.template_mut(h)
+            {
+                tpl.change_handle_index(&handmap);
             }
             let nsec = self.constructor(ctor).get_num_sections();
             for s in 0..nsec {
-                if let Some(h) = self.constructor(ctor).get_named_templ(s) {
-                    if let Some(tpl) = self.base.template_mut(h) {
-                        tpl.change_handle_index(&handmap);
-                    }
+                if let Some(h) = self.constructor(ctor).get_named_templ(s)
+                    && let Some(tpl) = self.base.template_mut(h)
+                {
+                    tpl.change_handle_index(&handmap);
                 }
             }
         }
@@ -1665,7 +1665,6 @@ impl SleighCompile {
         self.base
             .symtab()
             .get_constructor(ctor)
-            .ok()
             .expect("constructor exists")
     }
 
@@ -1832,14 +1831,11 @@ fn shift_unique_op(op: &mut OpTpl) {
 
 /// C++ `SleighCompile::shiftUniqueHandle(HandleTpl *hand)` (slgh_compile.cc:3602).
 fn shift_unique_handle(hand: &mut HandleTpl) {
-    if hand.get_space().is_unique_space()
+    if (hand.get_space().is_unique_space()
         && hand.get_ptr_space().get_type() == ConstType::Real
-        && hand.get_ptr_offset().get_type() == ConstType::Real
-    {
-        let val = insert_cross_build_region(hand.get_ptr_offset().get_real());
-        hand.set_ptr_offset(val);
-    } else if hand.get_ptr_space().is_unique_space()
-        && hand.get_ptr_offset().get_type() == ConstType::Real
+        && hand.get_ptr_offset().get_type() == ConstType::Real)
+        || (hand.get_ptr_space().is_unique_space()
+            && hand.get_ptr_offset().get_type() == ConstType::Real)
     {
         let val = insert_cross_build_region(hand.get_ptr_offset().get_real());
         hand.set_ptr_offset(val);
@@ -1867,10 +1863,11 @@ fn shift_unique_construct(tpl: &mut ConstructTpl) {
 /// returning a copy of its size const.
 fn find_size(offset: &ConstTpl, ct: &ConstructTpl) -> Option<ConstTpl> {
     for op in ct.get_opvec() {
-        if let Some(vn) = op.get_out() {
-            if vn.is_local_temp() && vn.get_offset() == offset {
-                return Some(vn.get_size().clone());
-            }
+        if let Some(vn) = op.get_out()
+            && vn.is_local_temp()
+            && vn.get_offset() == offset
+        {
+            return Some(vn.get_size().clone());
         }
         for j in 0..op.num_input() {
             let vn = op.get_in(j);
@@ -2000,7 +1997,7 @@ impl SleighCompile {
                 id
             }
             Err(e) => {
-                self.report_error_loc(Some(&loc), &e.explain());
+                self.report_error_loc(Some(&loc), e.explain());
                 NO_SYMBOL
             }
         };
@@ -2076,10 +2073,10 @@ impl SleighCompile {
     /// C++ `SleighCompile::firstNamedSection(ConstructTpl *main,SectionSymbol *sym)`
     /// (slgh_compile.cc:3272).
     pub fn first_named_section(&mut self, main: u32, sym: SymbolId) -> u32 {
-        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(sym) {
-            if let Some(sec) = s.as_section_mut() {
-                sec.increment_define_count();
-            }
+        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(sym)
+            && let Some(sec) = s.as_section_mut()
+        {
+            sec.increment_define_count();
         }
         let curscope = self.base.symtab().get_current_scope();
         self.base.symtab_mut().add_scope();
@@ -2098,10 +2095,10 @@ impl SleighCompile {
     /// C++ `SleighCompile::nextNamedSection(SectionVector *vec,ConstructTpl *section,SectionSymbol *sym)`
     /// (slgh_compile.cc:3295).
     pub fn next_named_section(&mut self, vec: u32, section: u32, sym: SymbolId) -> u32 {
-        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(sym) {
-            if let Some(sec) = s.as_section_mut() {
-                sec.increment_define_count();
-            }
+        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(sym)
+            && let Some(sec) = s.as_section_mut()
+        {
+            sec.increment_define_count();
         }
         let curscope = self.base.symtab().get_current_scope();
         self.base.symtab_mut().pop_scope(); // Pop last named section scope
@@ -2148,7 +2145,7 @@ impl SleighCompile {
         let lhsvn = self.take_vntpl(lhs);
         let mut e = self.take_expr(expr);
         if let Err(err) = e.set_output(lhsvn) {
-            self.report_current_error(&err.explain());
+            self.report_current_error(err.explain());
         }
         let ops = ExprTree::to_vector(e);
         self.alloc_oplist(ops)
@@ -2220,7 +2217,7 @@ impl SleighCompile {
         let ops = match self.create_store(s, p, v) {
             Ok(ops) => ops,
             Err(err) => {
-                self.report_current_error(&err.explain());
+                self.report_current_error(err.explain());
                 Vec::new()
             }
         };
@@ -2234,7 +2231,7 @@ impl SleighCompile {
         let res = match self.create_load(s, p) {
             Ok(e) => e,
             Err(err) => {
-                self.report_current_error(&err.explain());
+                self.report_current_error(err.explain());
                 ExprTree::default()
             }
         };
@@ -2318,7 +2315,7 @@ impl SleighCompile {
         let res = match self.create_bit_range(vn, &name, off, size) {
             Ok(e) => e,
             Err(err) => {
-                self.report_current_error(&err.explain());
+                self.report_current_error(err.explain());
                 ExprTree::default()
             }
         };
@@ -2332,7 +2329,7 @@ impl SleighCompile {
         let ops = match self.assign_bit_range(vn, off, size, e) {
             Ok(ops) => ops,
             Err(err) => {
-                self.report_current_error(&err.explain());
+                self.report_current_error(err.explain());
                 Vec::new()
             }
         };
@@ -2353,7 +2350,7 @@ impl SleighCompile {
         let ops = match self.assign_bit_range(vn, off, num, e) {
             Ok(ops) => ops,
             Err(err) => {
-                self.report_current_error(&err.explain());
+                self.report_current_error(err.explain());
                 Vec::new()
             }
         };
@@ -2373,7 +2370,7 @@ impl SleighCompile {
         let ops = match self.new_output(islocal, e, name, sz) {
             Ok(ops) => ops,
             Err(err) => {
-                self.report_current_error(&err.explain());
+                self.report_current_error(err.explain());
                 Vec::new()
             }
         };
@@ -2436,10 +2433,10 @@ impl SleighCompile {
     }
     pub fn jumpdest_operandsym(&mut self, sym: SymbolId) -> u32 {
         let vn = self.symbol_varnode(sym);
-        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(sym) {
-            if let SymbolKind::Operand(op) = s.kind_mut() {
-                op.set_code_address();
-            }
+        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(sym)
+            && let SymbolKind::Operand(op) = s.kind_mut()
+        {
+            op.set_code_address();
         }
         self.alloc_vntpl(vn)
     }
@@ -2467,10 +2464,10 @@ impl SleighCompile {
             ConstTpl::new_real(ConstType::JRelative, u64::from(idx)),
             ConstTpl::new_real(ConstType::Real, 4), // sizeof(uintm) == 4
         );
-        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(label) {
-            if let Some(l) = s.as_label_mut() {
-                l.increment_ref_count();
-            }
+        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(label)
+            && let Some(l) = s.as_label_mut()
+        {
+            l.increment_ref_count();
         }
         self.alloc_vntpl(vn)
     }
@@ -2565,10 +2562,10 @@ impl SleighCompile {
             .and_then(|s| s.as_label())
             .map(|l| l.get_index())
             .unwrap_or(0);
-        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(label) {
-            if let Some(l) = s.as_label_mut() {
-                l.set_placed();
-            }
+        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(label)
+            && let Some(l) = s.as_label_mut()
+        {
+            l.set_placed();
         }
         let cs = self.get_constant_space_rc();
         let mut op = OpTpl::new(LABELBUILD);
@@ -2593,7 +2590,7 @@ impl SleighCompile {
         match self.base.symtab().get_varnode(sym) {
             Ok(v) => v,
             Err(err) => {
-                self.report_current_error(&err.explain());
+                self.report_current_error(err.explain());
                 VarnodeTpl::default()
             }
         }
@@ -2673,13 +2670,13 @@ impl SleighCompile {
         match res {
             Some(Ok(())) => {
                 // Offset is irrelevant: no pattern directly on this operand.
-                if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(sym) {
-                    if let SymbolKind::Operand(op) = s.kind_mut() {
-                        op.set_offset_irrelevant();
-                    }
+                if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(sym)
+                    && let SymbolKind::Operand(op) = s.kind_mut()
+                {
+                    op.set_offset_irrelevant();
                 }
             }
-            Some(Err(err)) => self.report_current_error(&err.explain()),
+            Some(Err(err)) => self.report_current_error(err.explain()),
             None => {}
         }
     }
@@ -2729,7 +2726,7 @@ impl SleighCompile {
             ),
         };
         if let Some(Some(Err(err))) = defres {
-            self.report_current_error(&err.explain());
+            self.report_current_error(err.explain());
         }
         Some(res)
     }
@@ -2786,7 +2783,7 @@ impl SleighCompile {
             ),
         };
         if let Some(Some(Err(err))) = defres {
-            self.report_current_error(&err.explain());
+            self.report_current_error(err.explain());
         }
     }
 
@@ -2802,7 +2799,7 @@ impl SleighCompile {
         let cop = match ContextOp::new(startbit, endbit, pexpr) {
             Ok(c) => c,
             Err(err) => {
-                self.report_current_error(&err.explain());
+                self.report_current_error(err.explain());
                 return true;
             }
         };
@@ -2827,7 +2824,7 @@ impl SleighCompile {
         let cc = match ContextCommit::new(sym, startbit, endbit, flow) {
             Ok(c) => c,
             Err(err) => {
-                self.report_current_error(&err.explain());
+                self.report_current_error(err.explain());
                 return;
             }
         };
@@ -2884,10 +2881,10 @@ impl SleighCompile {
                 },
             );
             let opid = self.add_sleigh_symbol(oper);
-            if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(macid) {
-                if let Some(m) = s.as_macro_mut() {
-                    m.add_operand(opid);
-                }
+            if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(macid)
+                && let Some(m) = s.as_macro_mut()
+            {
+                m.add_operand(opid);
             }
         }
         macid
@@ -2918,10 +2915,10 @@ impl SleighCompile {
         }
         let _ = unlace_sleigh::pcodecompile::propagate_size(&mut body); // as much as possible
         let body = Rc::new(body);
-        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(sym) {
-            if let Some(m) = s.as_macro_mut() {
-                m.set_shared_construct(Rc::clone(&body));
-            }
+        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(sym)
+            && let Some(m) = s.as_macro_mut()
+        {
+            m.set_shared_construct(Rc::clone(&body));
         }
         self.base.symtab_mut().pop_scope(); // Pop local macro variables
         self.macro_bodies.push(body);
@@ -3007,12 +3004,11 @@ impl SleighCompile {
                     .and_then(|s| s.as_macro())
                     .map(|m| m.get_operand(hand as usize))
             };
-            if let Some(pid) = parentop {
-                if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(pid) {
-                    if let SymbolKind::Operand(op) = s.kind_mut() {
-                        op.set_code_address();
-                    }
-                }
+            if let Some(pid) = parentop
+                && let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(pid)
+                && let SymbolKind::Operand(op) = s.kind_mut()
+            {
+                op.set_code_address();
             }
         }
     }
@@ -3042,10 +3038,10 @@ impl SleighCompile {
         let mut op = OpTpl::new(CROSSBUILD);
         op.add_input(addrvn);
         op.add_input(sectionid);
-        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(sym) {
-            if let Some(sec) = s.as_section_mut() {
-                sec.increment_ref_count();
-            }
+        if let Some(s) = self.base.symtab_mut().find_symbol_by_id_mut(sym)
+            && let Some(sec) = s.as_section_mut()
+        {
+            sec.increment_ref_count();
         }
         self.alloc_oplist(vec![op])
     }
@@ -3282,17 +3278,17 @@ impl SleighCompile {
     fn shift_unique_table(&mut self, table_id: SymbolId) {
         for ct_id in 0..self.constructor_count(table_id) {
             let ctor = ConstructorRef { table_id, ct_id };
-            if let Some(handle) = self.constructor(ctor).get_templ() {
-                if let Some(tpl) = self.base.template_mut(handle) {
-                    shift_unique_construct(tpl);
-                }
+            if let Some(handle) = self.constructor(ctor).get_templ()
+                && let Some(tpl) = self.base.template_mut(handle)
+            {
+                shift_unique_construct(tpl);
             }
             let sections = self.constructor(ctor).get_num_sections();
             for section in 0..sections {
-                if let Some(handle) = self.constructor(ctor).get_named_templ(section) {
-                    if let Some(tpl) = self.base.template_mut(handle) {
-                        shift_unique_construct(tpl);
-                    }
+                if let Some(handle) = self.constructor(ctor).get_named_templ(section)
+                    && let Some(tpl) = self.base.template_mut(handle)
+                {
+                    shift_unique_construct(tpl);
                 }
             }
         }
@@ -3509,8 +3505,8 @@ impl ParserActions for SleighCompile {
             SpaceQuality {
                 name: qual.name,
                 kind,
-                size: qual.size as u32,
-                wordsize: qual.wordsize as u32,
+                size: qual.size,
+                wordsize: qual.wordsize,
                 isdefault: qual.isdefault,
             },
         )

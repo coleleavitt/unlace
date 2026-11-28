@@ -693,9 +693,7 @@ pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
     }
     let mut verdicts = HashMap::new();
     for k in entries {
-        if !verdicts.contains_key(&k) {
-            verdicts.insert(k, take(arch, &mut cache, &model, &pair, k));
-        }
+        verdicts.entry(k).or_insert_with(|| take(arch, &mut cache, &model, &pair, k));
     }
     data.unlace_set_wide(WideView {
         pair,
@@ -978,11 +976,10 @@ impl<'a> Walk<'a> {
             path.lo_read = true;
         }
         let t = self.read(path, &k);
-        if let Some(&(r, _, by)) = path.regs.iter().rev().find(|(r, _, _)| overlaps(r, &k)) {
-            if r != k {
+        if let Some(&(r, _, by)) = path.regs.iter().rev().find(|(r, _, _)| overlaps(r, &k))
+            && r != k {
                 path.made_at.entry(t).or_insert(by);
             }
-        }
         t
     }
 

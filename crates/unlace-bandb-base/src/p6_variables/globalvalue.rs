@@ -130,11 +130,10 @@ fn read_sign_sensitively(ctx: &mut dyn MergeContext, value: HighVariableId) -> b
                 if !passes {
                     continue;
                 }
-                if let Some(out) = ctx.op_out(op) {
-                    if ctx.vn_is_implied(out) && ctx.vn_high(out) != Some(value) {
+                if let Some(out) = ctx.op_out(op)
+                    && ctx.vn_is_implied(out) && ctx.vn_high(out) != Some(value) {
                         stack.push(out);
                     }
-                }
             }
         }
     }

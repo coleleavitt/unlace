@@ -107,14 +107,16 @@ pub fn reach<V: Copy + Ord>(steps: &[Step<'_, V>]) -> Vec<Reach> {
     found
 }
 
+type LiveCall = (
+    Address,
+    Option<String>,
+    Option<VarnodeId>,
+    Vec<Option<VarnodeId>>,
+);
+
 /// The warnings for one function: the sink call's address and its text.
 pub fn findings(data: &Funcdata) -> Vec<(Address, String)> {
-    let mut live: Vec<(
-        Address,
-        Option<String>,
-        Option<VarnodeId>,
-        Vec<Option<VarnodeId>>,
-    )> = Vec::new();
+    let mut live: Vec<LiveCall> = Vec::new();
     for id in data.obank().iter_alive() {
         let Some(op) = data.obank().get(id) else {
             continue;

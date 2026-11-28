@@ -281,14 +281,13 @@ fn split_declarations(file: &str, text: &str) -> Vec<Chunk> {
         line = line.saturating_add(1);
         let directive = continued || raw.trim_start().starts_with('#');
         if directive {
-            if !continued {
-                if let Some((next, name)) = line_marker(raw.trim()) {
+            if !continued
+                && let Some((next, name)) = line_marker(raw.trim()) {
                     line = next.saturating_sub(1);
                     if let Some(name) = name {
                         file = name;
                     }
                 }
-            }
             continued = raw.trim_end().ends_with('\\');
             continue;
         }

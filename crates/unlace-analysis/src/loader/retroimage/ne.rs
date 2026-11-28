@@ -7,7 +7,7 @@
 //! with the selector and offset of its target, an exported entry of the module
 //! itself or of an imported module. The loader does the same under the
 //! 16-bit protected-mode language, where a far address is selector * 0x10000
-//! + offset: segment n is placed at n * 0x10000 with selector n, so a near
+//! plus offset: segment n is placed at n * 0x10000 with selector n, so a near
 //! branch stays in its segment and a far pointer reads as its address. Each
 //! import gets a one-byte RETF slot in a segment after the module's own,
 //! named after the import (MODULE_ordinal, or the imported name), and every
@@ -91,10 +91,8 @@ fn names(file: &Bytes, start: u64, end: u64) -> Vec<(u16, String)> {
         else {
             break;
         };
-        if !first {
-            if let Some(name) = symbol_name(raw) {
-                out.push((ordinal, name));
-            }
+        if !first && let Some(name) = symbol_name(raw) {
+            out.push((ordinal, name));
         }
         first = false;
         at += 3 + u64::from(len);

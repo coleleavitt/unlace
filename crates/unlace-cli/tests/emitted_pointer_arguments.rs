@@ -7,7 +7,7 @@ use object::write::{Object, Symbol, SymbolSection};
 use object::{
     Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// One function: its name, its bytes, and the offset of the `call rel32`
@@ -51,7 +51,7 @@ fn object(funcs: &[Func]) -> PathBuf {
     path
 }
 
-fn decompile(input: &PathBuf, extra: &[&str]) -> String {
+fn decompile(input: &Path, extra: &[&str]) -> String {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(["decompile-all", input.to_str().unwrap()])
         .args(extra)

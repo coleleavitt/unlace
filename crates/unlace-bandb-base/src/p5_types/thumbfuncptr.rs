@@ -118,10 +118,7 @@ pub fn unlace_preserve_thumb_funcptr(
     // implicit shift-count promotion — it is a small alignment bit-count
     // (set from `bits` in `architecture.cc:setFuncPtrAlign`), never negative
     // here (the `== 0` case returned above) nor >= 64.
-    if bextra <= 0 || bextra >= (1i64 << (funcptr_align as u32)) {
-        return false;
-    }
-    true
+    !(bextra <= 0 || bextra >= (1i64 << (funcptr_align as u32)))
 }
 
 #[cfg(test)]

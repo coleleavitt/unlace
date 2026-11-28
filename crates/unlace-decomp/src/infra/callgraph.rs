@@ -401,14 +401,14 @@ impl CallGraph {
     pub fn add_node_func(&mut self, f: &dyn CallGraphFunc, fid: FuncId) -> UnlaceResult<NodeIndex> {
         let addr = f.get_address().clone();
         let idx = self.node_slot(&addr);
-        if let Some(existing) = self.nodes[idx].fd {
-            if existing != fid {
-                let mut msg = String::from("Functions with duplicate entry points: ");
-                msg.push_str(&String::from_utf8_lossy(f.get_name()));
-                msg.push(' ');
-                msg.push_str(&String::from_utf8_lossy(self.nodes[idx].get_name()));
-                return Err(UnlaceError::lowlevel(msg));
-            }
+        if let Some(existing) = self.nodes[idx].fd
+            && existing != fid
+        {
+            let mut msg = String::from("Functions with duplicate entry points: ");
+            msg.push_str(&String::from_utf8_lossy(f.get_name()));
+            msg.push(' ');
+            msg.push_str(&String::from_utf8_lossy(self.nodes[idx].get_name()));
+            return Err(UnlaceError::lowlevel(msg));
         }
         self.nodes[idx].entryaddr = addr;
         self.nodes[idx].name = f.get_display_name().to_vec();
@@ -433,12 +433,12 @@ impl CallGraph {
         f: &dyn CallGraphFunc,
         fid: FuncId,
     ) -> UnlaceResult<()> {
-        if let Some(existing) = self.nodes[node].fd {
-            if existing != fid {
-                return Err(UnlaceError::lowlevel(
-                    "Multiple functions at one address in callgraph",
-                ));
-            }
+        if let Some(existing) = self.nodes[node].fd
+            && existing != fid
+        {
+            return Err(UnlaceError::lowlevel(
+                "Multiple functions at one address in callgraph",
+            ));
         }
         if *f.get_address() != self.nodes[node].entryaddr {
             return Err(UnlaceError::lowlevel(
@@ -629,13 +629,10 @@ impl CallGraph {
         let toi = self.nodes[node].outedge[i as usize].complement;
         let to = self.nodes[node].outedge[i as usize].to;
         self.nodes[to].inedge[toi as usize].flags |= edge_flags::CYCLE;
-        let mut onlycycle = true;
-        for j in 0..self.nodes[to].inedge.len() {
-            if (self.nodes[to].inedge[j].flags & edge_flags::CYCLE) == 0 {
-                onlycycle = false;
-                break;
-            }
-        }
+        let onlycycle = self.nodes[to]
+            .inedge
+            .iter()
+            .all(|e| (e.flags & edge_flags::CYCLE) != 0);
         if onlycycle {
             self.nodes[to].flags |= node_flags::ONLYCYCLEIN;
         }

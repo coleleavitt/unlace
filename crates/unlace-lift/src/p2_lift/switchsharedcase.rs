@@ -19,8 +19,8 @@
 //! `MULTIEQUAL` (a phi).  Because the same base phi feeds *both* the table-load
 //! address (`base + idx*4`) and the final `base + offset` add, `JumpBasic::
 //! findDeterminingVarnodes` melds the two paths down to a single common varnode
-//! (the final 8-byte `INT_ADD` result).  The normalized index (`getopt result
-//! - 0x62`, the `sub $0x62`) never enters the meld, so the out-of-band CBRANCH
+//! (the final 8-byte `INT_ADD` result).  The normalized index (`getopt
+//! result - 0x62`, the `sub $0x62`) never enters the meld, so the out-of-band CBRANCH
 //! range guard (`cmp $0x22; ja DEFAULT`, i.e. `idx <=u 0x22`) cannot bound it —
 //! `findSmallestNormal` leaves the index range unbounded, no model is built, and
 //! the branch downgrades to a call.

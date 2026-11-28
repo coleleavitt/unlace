@@ -5,8 +5,8 @@ fn levels_are_ordered_by_permissiveness_so_the_gate_can_use_a_threshold() {
     // `store_is_caller_save_spill` reads `level <= LEVEL_OFF` to opt out and
     // `level >= LEVEL_SPILL` to skip the reload requirement, so the
     // vocabulary must stay monotone in how much it admits.
-    assert!(LEVEL_OFF < LEVEL_RELOAD);
-    assert!(LEVEL_RELOAD < LEVEL_SPILL);
+    const _: () = assert!(LEVEL_OFF < LEVEL_RELOAD);
+    const _: () = assert!(LEVEL_RELOAD < LEVEL_SPILL);
 }
 
 #[test]

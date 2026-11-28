@@ -440,11 +440,10 @@ fn snapshot_unit_with_go(
             }
         }
         let parent_off = stack.last().map(|&(p, _)| p);
-        if let Some(parent_off) = parent_off {
-            if let Some(p) = map.get_mut(&parent_off) {
+        if let Some(parent_off) = parent_off
+            && let Some(p) = map.get_mut(&parent_off) {
                 p.children.push(off);
             }
-        }
         let mut snap = DieSnap::new(entry.tag(), depth);
         snap.parent = parent_off;
         // (unlace `cppproto`) The one-hop definition->declaration link. gcc/clang put
@@ -463,28 +462,23 @@ fn snapshot_unit_with_go(
             }
         }
 
-        if let Some(val) = entry.attr_value(gimli::DW_AT_name) {
-            if let Ok(s) = dwarf.attr_string(unit, val) {
-                if let Ok(s) = std::str::from_utf8(s.slice()) {
+        if let Some(val) = entry.attr_value(gimli::DW_AT_name)
+            && let Ok(s) = dwarf.attr_string(unit, val)
+                && let Ok(s) = std::str::from_utf8(s.slice()) {
                     snap.name = die_name(s, depth, escape_names);
                 }
-            }
-        }
         if let Some(gimli::AttributeValue::Flag(value)) = entry.attr_value(gimli::DW_AT_external) {
             snap.external = Some(value);
         }
-        if let Some(val) = entry.attr_value(gimli::DW_AT_linkage_name) {
-            if let Ok(s) = dwarf.attr_string(unit, val) {
-                if let Ok(s) = std::str::from_utf8(s.slice()) {
+        if let Some(val) = entry.attr_value(gimli::DW_AT_linkage_name)
+            && let Ok(s) = dwarf.attr_string(unit, val)
+                && let Ok(s) = std::str::from_utf8(s.slice()) {
                     snap.linkage_name = s.to_string();
                 }
-            }
-        }
-        if let Some(val) = entry.attr_value(gimli::DW_AT_low_pc) {
-            if let Ok(Some(a)) = dwarf.attr_address(unit, val) {
+        if let Some(val) = entry.attr_value(gimli::DW_AT_low_pc)
+            && let Ok(Some(a)) = dwarf.attr_address(unit, val) {
                 snap.low_pc = Some(a);
             }
-        }
         if let Some(o) = entry
             .attr_value(gimli::DW_AT_type)
             .and_then(|v| die_ref(unit, v))
@@ -591,7 +585,7 @@ fn snapshot_unit_with_go(
                     .and_then(|parent| parent.low_pc);
                 if let Some(expression) = dwarfbyref::location_at_entry(dwarf, unit, &loc, entry) {
                     snap.indirect_parameter = dwarfbyref::indirect_location(
-                        &gimli::AttributeValue::Exprloc(expression.clone()),
+                        &gimli::AttributeValue::Exprloc(expression),
                     );
                     snap.register_indirect_parameter = dwarfbyref::memory_argument_register(
                         &expression,
@@ -603,18 +597,17 @@ fn snapshot_unit_with_go(
             }
         }
 
-        if let Some(go) = go.as_mut() {
-            if depth == 0 || go.enabled() {
+        if let Some(go) = go.as_mut()
+            && (depth == 0 || go.enabled()) {
                 go.capture(
                     dwarf,
                     unit,
-                    &entry,
+                    entry,
                     parent_off
                         .and_then(|parent| map.get(&parent))
                         .and_then(|parent| parent.low_pc),
                 );
             }
-        }
         map.insert(off, snap);
         if entry.has_children() {
             stack.push((off, depth));
@@ -817,8 +810,8 @@ fn graft_foreign(
 /// operand after the opcode.
 fn simple_addr_location(loc: &gimli::AttributeValue<Reader<'_>>, address_size: u8) -> Option<u64> {
     let mut expr = match loc {
-        gimli::AttributeValue::Exprloc(e) => e.clone(),
-        gimli::AttributeValue::Block(b) => gimli::Expression(b.clone()),
+        gimli::AttributeValue::Exprloc(e) => *e,
+        gimli::AttributeValue::Block(b) => gimli::Expression(*b),
         _ => return None,
     };
     if !matches!(address_size, 4 | 8)
@@ -1110,13 +1103,12 @@ fn intern_aggregate(
     // are no `DW_TAG_member` children to walk). `None` here means the arm REFUSED
     // this DIE -- it fell short of one of its guards -- and the member walk
     // still gets its turn.
-    if !union {
-        if let Some(t) = dwarfvariants::intern_variant_aggregate(
+    if !union
+        && let Some(t) = dwarfvariants::intern_variant_aggregate(
             types, die, dies, alias, fallback, walk, word_size, cpp,
         ) {
             return Some(t);
         }
-    }
     dwarfstructs::intern_aggregate(
         types, die, dies, alias, fallback, walk, word_size, cpp, union,
     )
@@ -1558,17 +1550,15 @@ impl DwarfPass {
                         ctx.image_path
                             .and_then(|path| crate::loader::macho_dsym::find_dsym(ctx.file, path))
                     });
-                if let Some((path, bytes)) = companion {
-                    if let Ok(file) = object::File::parse(&*bytes) {
-                        if dwarf_section_data(&file, gimli::SectionId::DebugInfo).is_some() {
+                if let Some((path, bytes)) = companion
+                    && let Ok(file) = object::File::parse(&*bytes)
+                        && dwarf_section_data(&file, gimli::SectionId::DebugInfo).is_some() {
                             return DwarfPass.run(&AnalysisCtx {
                                 file: &file,
                                 image_path: Some(path.as_path()),
                                 ..*ctx
                             });
                         }
-                    }
-                }
             }
             return out;
         }
@@ -1769,8 +1759,8 @@ impl DwarfPass {
                             );
                             out.cpp_dwarf.prototypes.push((low_pc, pieces));
                         }
-                        if res.chased {
-                            if let Some(cfa) = cfa {
+                        if res.chased
+                            && let Some(cfa) = cfa {
                                 cppproto::collect_fbreg_locals(
                                     low_pc,
                                     snap,
@@ -1781,7 +1771,6 @@ impl DwarfPass {
                                     &mut out.cpp_dwarf.locals,
                                 );
                             }
-                        }
                     }
                     gimli::DW_TAG_variable => {
                         // A CU top-level global with a DW_OP_addr location

@@ -79,8 +79,8 @@ fn small_graphs_keep_recursive_components_and_callee_order() {
         for bits in 0usize..(1 << pairs.len()) {
             let mut edges = vec![Vec::new(); nodes];
             let mut reaches = vec![vec![false; nodes]; nodes];
-            for node in 0..nodes {
-                reaches[node][node] = true;
+            for (node, row) in reaches.iter_mut().enumerate() {
+                row[node] = true;
             }
             for (bit, &(from, to)) in pairs.iter().enumerate() {
                 if bits & (1 << bit) != 0 {

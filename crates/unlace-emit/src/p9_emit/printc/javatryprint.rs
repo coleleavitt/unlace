@@ -151,10 +151,10 @@ pub fn statement_in_range(fd: &Funcdata, table: &CatchTable, handler: u64, op: O
             let Some(v) = o.get_in(i).and_then(|v| fd.vbank().get(v)) else {
                 continue;
             };
-            if v.is_implied() {
-                if let Some(def) = v.get_def() {
-                    stack.push(def);
-                }
+            if v.is_implied()
+                && let Some(def) = v.get_def()
+            {
+                stack.push(def);
             }
         }
     }
@@ -389,11 +389,11 @@ impl PrintC {
                 .filter(|&&(u, _)| u < used_units)
                 .map(|&(_, b)| (b, None)),
         );
-        if let Some(&(last, _)) = inside.last() {
-            if self.straddles(fd, &table, last, first) {
-                inside.last_mut().expect("last").1 = Some(true);
-                after.insert(0, (last, Some(false)));
-            }
+        if let Some(&(last, _)) = inside.last()
+            && self.straddles(fd, &table, last, first)
+        {
+            inside.last_mut().expect("last").1 = Some(true);
+            after.insert(0, (last, Some(false)));
         }
         let mut consumed = shape.consumed;
         let mut loose_from: Option<usize> = None;
@@ -415,11 +415,11 @@ impl PrintC {
                 {
                     loose_from = Some(inside.len());
                 }
-                if loose_from.is_none() {
-                    if let Some(straddler) = inside.last_mut().filter(|p| p.1.is_some()) {
-                        straddler.1 = None;
-                        after.remove(0);
-                    }
+                if loose_from.is_none()
+                    && let Some(straddler) = inside.last_mut().filter(|p| p.1.is_some())
+                {
+                    straddler.1 = None;
+                    after.remove(0);
                 }
                 inside.append(&mut after);
             }
@@ -509,20 +509,6 @@ impl PrintC {
         consumed
     }
 
-    fn emit_java_try_piece(
-        &mut self,
-        fd: &Funcdata,
-        arch: &Architecture,
-        (blk, filter): Piece,
-        handler: u64,
-    ) {
-        let id = self.emit.begin_block(0);
-        self.java_push_filter(fd, blk, filter, handler);
-        self.emit_block(fd, arch, blk);
-        self.java_pop_filter(fd, blk, filter);
-        self.emit.end_block(id);
-    }
-
     /// Filters are keyed by the basic block a straddling `BlockCopy` mirrors,
     /// the block `emit_basic_block_ops` prints.
     fn java_push_filter(
@@ -541,10 +527,10 @@ impl PrintC {
     }
 
     fn java_pop_filter(&mut self, fd: &Funcdata, blk: BlockId, filter: Option<bool>) {
-        if let (Some(_), Some(bb)) = (filter, basic_of(fd, blk)) {
-            if let Some(list) = self.java_block_filters.get_mut(&bb) {
-                list.pop();
-            }
+        if let (Some(_), Some(bb)) = (filter, basic_of(fd, blk))
+            && let Some(list) = self.java_block_filters.get_mut(&bb)
+        {
+            list.pop();
         }
     }
 

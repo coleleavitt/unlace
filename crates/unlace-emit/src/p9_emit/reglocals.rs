@@ -44,15 +44,14 @@ fn frame_object(
             address.get_space().map(|s| s.get_index()) == Some(stack.get_index())
         })
     };
-    if let (Some(scope), Some(symbol)) = (fd.get_scope_local(), h.unlace_link_symbol()) {
-        if scope
+    if let (Some(scope), Some(symbol)) = (fd.get_scope_local(), h.unlace_link_symbol())
+        && scope
             .symbol_storage(symbol)
             .iter()
             .any(|(address, _)| in_stack(address))
         {
             return true;
         }
-    }
     let mut off_stack = false;
     for i in 0..h.num_instances() {
         let Some(v) = fd.vbank().get(h.get_instance(i)) else {

@@ -236,7 +236,7 @@ fn code_words(arch: &Architecture, big: bool) -> Vec<(u64, Vec<u32>)> {
                 break;
             }
             drop(l);
-            words.extend(buf.chunks_exact(4).map(|b| {
+            words.extend(buf.as_chunks::<4>().0.iter().map(|b| {
                 let b = [b[0], b[1], b[2], b[3]];
                 if big {
                     u32::from_be_bytes(b)

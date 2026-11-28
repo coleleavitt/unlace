@@ -229,14 +229,13 @@ pub fn plan(ic: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, r: OpId, dep
                 suffix: None,
             };
         }
-        if ic.widen_literal() {
-            if let Some(unsigned) = literal_suffix(p, fd, other, r, &w) {
+        if ic.widen_literal()
+            && let Some(unsigned) = literal_suffix(p, fd, other, r, &w) {
                 return Plan {
                     drop: Some(w.op),
                     suffix: Some((other, unsigned)),
                 };
             }
-        }
     }
     Plan::default()
 }

@@ -200,7 +200,7 @@ fn recovered_fixture_go_executes() {
     }
     let names = SUPPORTED;
     for image in ["uncompressed", "compressed"] {
-        let code = decompile(&fixture(image), &names, true, &[]);
+        let code = decompile(&fixture(image), names, true, &[]);
         let file = common::scratch_file("godwarfsig", "go");
         let check = r#"
 var dat_40302a int32

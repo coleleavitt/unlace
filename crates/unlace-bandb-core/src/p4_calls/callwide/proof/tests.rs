@@ -91,8 +91,8 @@ fn mode_bundle() -> (Collect, VarnodeData, VarnodeData, VarnodeData) {
         1,
         1,
     ));
-    let unique: Rc<unlace_base::space::AddrSpace> = Rc::new(UniqueSpace::new(2, 0, true)).into();
-    let constants: Rc<unlace_base::space::AddrSpace> = Rc::new(ConstantSpace::new()).into();
+    let unique: Rc<unlace_base::space::AddrSpace> = Rc::new(UniqueSpace::new(2, 0, true));
+    let constants: Rc<unlace_base::space::AddrSpace> = Rc::new(ConstantSpace::new());
     let vn = |space: &Rc<unlace_base::space::AddrSpace>, offset, size| VarnodeData {
         space: Some(space.clone()),
         offset,

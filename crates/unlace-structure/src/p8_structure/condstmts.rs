@@ -43,6 +43,7 @@ pub const MAX_REATTEMPTS: usize = 2;
 
 /// Blocks the structurers must treat as complex for the cap: the seeded block
 /// starts, plus (once implied flags exist) every block printing more than the cap.
+#[allow(clippy::mutable_key_type)]
 pub fn complex_blocks(data: &Funcdata) -> BTreeSet<BlockId> {
     let mut out = BTreeSet::new();
     let cap = data.get_arch().unlace_options.get::<CondStmts>().0;
@@ -100,10 +101,10 @@ pub fn record_hits(data: &mut Funcdata) {
             let b = g.block(bl);
             match b.get_type() {
                 BlockType::Copy => {
-                    if let Some(bb) = b.get_copy() {
-                        if is_overlong(data, bb, cap) {
-                            hits.push(data.bblocks_block_start(bb));
-                        }
+                    if let Some(bb) = b.get_copy()
+                        && is_overlong(data, bb, cap)
+                    {
+                        hits.push(data.bblocks_block_start(bb));
                     }
                 }
                 BlockType::Condition => {
@@ -120,6 +121,7 @@ pub fn record_hits(data: &mut Funcdata) {
 }
 
 /// The seed for another analysis of `fd`, or `None` when it recorded nothing new.
+#[allow(clippy::mutable_key_type)]
 pub fn next_seed(fd: &Funcdata) -> Option<BTreeSet<Address>> {
     let hits = fd.condstmts_hits();
     let seed = fd.condstmts_seed();

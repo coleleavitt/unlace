@@ -93,11 +93,10 @@ fn x86_hits(vma: u64, code: &[u8], regions: &[RoRegion], out: &mut Vec<StringFac
             let reg = ((code[i + 2] >> 3) & 7) + if rex == 0x4c { 8 } else { 0 };
             let disp = i32::from_le_bytes(code[i + 3..i + 7].try_into().expect("4 bytes"));
             let ptr = (vma + i as u64 + 7).wrapping_add(disp as i64 as u64);
-            if let Some(len_reg) = next_arg(reg) {
-                if let Some(len) = nearest_mov(code, i, 7, reg, len_reg) {
+            if let Some(len_reg) = next_arg(reg)
+                && let Some(len) = nearest_mov(code, i, 7, reg, len_reg) {
                     push(regions, ptr, u64::from(len), out);
                 }
-            }
             i += 7;
             continue;
         }
@@ -106,11 +105,9 @@ fn x86_hits(vma: u64, code: &[u8], regions: &[RoRegion], out: &mut Vec<StringFac
         {
             let width = if code[i] == 0x41 { 6 } else { 5 };
             if let Some(len_reg) = next_arg(reg).filter(|_| regions.iter().any(|r| r.contains(ptr)))
-            {
-                if let Some(len) = nearest_mov(code, i, width, reg, len_reg) {
+                && let Some(len) = nearest_mov(code, i, width, reg, len_reg) {
                     push(regions, ptr, u64::from(len), out);
                 }
-            }
             i += width;
             continue;
         }
@@ -120,8 +117,10 @@ fn x86_hits(vma: u64, code: &[u8], regions: &[RoRegion], out: &mut Vec<StringFac
 
 fn a64_hits(vma: u64, code: &[u8], regions: &[RoRegion], out: &mut Vec<StringFact>) {
     let words: Vec<u32> = code
-        .chunks_exact(4)
-        .map(|w| u32::from_le_bytes(w.try_into().expect("4 bytes")))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|w| u32::from_le_bytes(*w))
         .collect();
     for (k, &w) in words.iter().enumerate() {
         if w & 0x9f00_0000 != 0x9000_0000 {
@@ -145,7 +144,7 @@ fn a64_hits(vma: u64, code: &[u8], regions: &[RoRegion], out: &mut Vec<StringFac
         }
         let movz = |j: usize| {
             let m = *words.get(j)?;
-            (m & 0xffe0_0000 == 0x5280_0000 && m & 31 == len_reg).then(|| (m >> 5) & 0xffff)
+            (m & 0xffe0_0000 == 0x5280_0000 && m & 31 == len_reg).then_some((m >> 5) & 0xffff)
         };
         let len = (1..=8).find_map(|d| movz(k + 1 + d).or_else(|| k.checked_sub(d).and_then(movz)));
         let consumed = words.iter().skip(k + 2).take(10).any(|&m| {

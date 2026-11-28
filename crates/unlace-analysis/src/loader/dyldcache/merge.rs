@@ -199,7 +199,7 @@ impl Tables {
             layout.cmd_u32(at + 20) as u64,
         )?;
         let mut placed = Vec::with_capacity(nlists.len() / 16);
-        for n in nlists.chunks_exact(16) {
+        for n in nlists.as_chunks::<16>().0 {
             let name = pool.get(u32_at(n, 0) as usize..).unwrap_or(&[]);
             let name = &name[..name.iter().position(|&b| b == 0).unwrap_or(name.len())];
             let mut strx = 0;
@@ -255,7 +255,9 @@ impl Tables {
                 );
                 indirect.extend(
                     part.slice(off, count.saturating_mul(4))?
-                        .chunks_exact(4)
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
                         .map(|v| (k, u32_at(v, 0))),
                 );
             }

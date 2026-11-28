@@ -65,11 +65,10 @@ pub fn identity(kind: ChildKind) -> &'static str {
 /// The child half: answer a parent whose identity differs from ours.
 pub fn answer_parent(kind: ChildKind) {
     let ours = identity(kind);
-    if let Some(parent) = unlace_base::env::var_os(PARENT_ENV) {
-        if parent != ours {
+    if let Some(parent) = unlace_base::env::var_os(PARENT_ENV)
+        && parent != ours {
             eprintln!("{REPLY}{ours}");
         }
-    }
 }
 
 /// Remove every reply line from a child's stderr, returning the remaining text
@@ -127,14 +126,13 @@ pub fn report(
 ) -> String {
     static WARNED: AtomicBool = AtomicBool::new(false);
     let (rest, theirs) = take_reply(&stderr);
-    if let Some(theirs) = theirs {
-        if !WARNED.swap(true, Ordering::Relaxed) {
+    if let Some(theirs) = theirs
+        && !WARNED.swap(true, Ordering::Relaxed) {
             eprint!(
                 "{}",
                 mismatch_warning(kind, child_name, child, &theirs, pinned_by)
             );
         }
-    }
     rest
 }
 

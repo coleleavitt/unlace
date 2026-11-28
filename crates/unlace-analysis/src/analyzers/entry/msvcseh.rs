@@ -231,7 +231,7 @@ fn x64_scopes(file: &object::File, bytes: &[u8], img: &ImageBytes, out: &mut Ana
 /// like a catch funclet, its `ret`s ending the path (the exception propagates).
 fn finally_pads(
     img: &ImageBytes,
-    func: u64,
+    _func: u64,
     unwind: u64,
     scopes: &[SehScope],
     ends: &unlace_decomp::fasthash::FxHashMap<u64, u64>,
@@ -543,7 +543,7 @@ pub fn x64_scope_table(img: &ImageBytes, base: u64, data: u64) -> Option<Vec<Seh
                 handler: base + handler as u64,
             }
         } else {
-            let filter = if handler < 0x10 || handler >= 0xFFFF_FFF0 {
+            let filter = if !(0x10..0xFFFF_FFF0).contains(&handler) {
                 Filter::Constant(handler as i32)
             } else {
                 Filter::Code(base + handler as u64)

@@ -106,11 +106,11 @@ fn a_streamed_document_is_the_whole_one_rendered() {
             ),
         ])
     };
-    let head = vec![
+    let head = [
         ("binary".to_string(), Json::Str("a.out".into())),
         ("count".into(), Json::Number("3".into())),
     ];
-    let tail = vec![("assertions".to_string(), Json::Array(vec![]))];
+    let tail = [("assertions".to_string(), Json::Array(vec![]))];
     for n in [0, 1, 3, 2_000] {
         for (head, tail) in [(&head[..], &tail[..]), (&[][..], &[][..])] {
             let mut whole = head.to_vec();

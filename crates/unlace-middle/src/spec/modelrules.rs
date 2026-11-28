@@ -907,7 +907,7 @@ impl QualifierFilter {
             } => {
                 let elem_id = decoder.open_element_id(&ELEM_DATATYPE_AT)?;
                 *position = decoder.read_signed_integer_id(&ATTRIB_INDEX)? as int4; // cast: int4 member
-                *type_filter = Box::new(DatatypeFilter::decode_filter(decoder)?);
+                **type_filter = DatatypeFilter::decode_filter(decoder)?;
                 decoder.close_element(elem_id)?;
                 Ok(())
             }
@@ -1498,8 +1498,8 @@ impl AssignAction {
             if iter_type < 0 {
                 return Ok(RES_FAIL);
             }
-            let entry_idx;
-            if iter_type == 0 {
+            
+            let entry_idx = if iter_type == 0 {
                 iter_base = get_first_unused(iter_base, base_tiles, &tmp_status, entries);
                 if iter_base == base_tiles.len() {
                     if !consume_from_stack {
@@ -1507,7 +1507,7 @@ impl AssignAction {
                     }
                     break;
                 }
-                entry_idx = base_tiles[iter_base];
+                base_tiles[iter_base]
             } else {
                 iter_alt = get_first_unused(iter_alt, alt_tiles, &tmp_status, entries);
                 if iter_alt == alt_tiles.len() {
@@ -1516,8 +1516,8 @@ impl AssignAction {
                     }
                     break;
                 }
-                entry_idx = alt_tiles[iter_alt];
-            }
+                alt_tiles[iter_alt]
+            };
             let entry = &entries[entry_idx];
             let trial_size = entry.get_size();
             let grp = entry.get_group() as usize;
@@ -2619,11 +2619,10 @@ impl ModelRule {
         if !self.filter.filter(dt) {
             return Ok(RES_FAIL);
         }
-        if let Some(qual) = &self.qualifier {
-            if !qual.filter(proto, pos) {
+        if let Some(qual) = &self.qualifier
+            && !qual.filter(proto, pos) {
                 return Ok(RES_FAIL);
             }
-        }
         let mut tmp_status: Vec<int4> = status.to_vec();
         for precond in self.preconditions.iter() {
             precond.assign_address(

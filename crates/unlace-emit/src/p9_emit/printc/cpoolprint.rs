@@ -148,8 +148,8 @@ impl PrintC {
             ),
             None => Atom::with_op(keywords::KEYWORD_NEW, TagType::OpToken, hl, op_key(op)),
         };
-        if let (2, Some(vn0), Some(vn1)) = (o.num_input(), vn0, vn1) {
-            if fd.vbank().get(vn0).is_some_and(|v| !v.is_constant()) {
+        if let (2, Some(vn0), Some(vn1)) = (o.num_input(), vn0, vn1)
+            && fd.vbank().get(vn0).is_some_and(|v| !v.is_constant()) {
                 self.push_op(&tokens::NEW_OP, Some(op_key(op)));
                 self.push_atom(&keyword(SyntaxHighlight::keyword_color));
                 let name = match outvn {
@@ -176,7 +176,6 @@ impl PrintC {
                 self.push_vn_ir(fd, arch, vn1, op);
                 return;
             }
-        }
         self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
         self.push_atom(&keyword(SyntaxHighlight::keyword_color));
         if let Some(vn) = vn0 {

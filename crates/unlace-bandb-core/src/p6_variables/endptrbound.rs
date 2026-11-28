@@ -260,11 +260,10 @@ fn relabels(fd: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
         };
         for d in var.descend_iter() {
             let Some(o) = fd.obank().get(d) else { continue };
-            if is_plumbing(o.code()) && o.get_in(0) == Some(v) {
-                if let Some(next) = o.get_out() {
+            if is_plumbing(o.code()) && o.get_in(0) == Some(v)
+                && let Some(next) = o.get_out() {
                     work.push(next);
                 }
-            }
         }
     }
     out

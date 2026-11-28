@@ -182,11 +182,10 @@ fn scope_break(
             for (i, bl, gototype) in cases {
                 if gototype != 0 {
                     // A goto that goes straight to the switch exit is an (empty) break.
-                    if Some(bl) == curexit {
-                        if let Some(cbs) = bg.block_mut(this_id).switch_caseblocks_mut() {
+                    if Some(bl) == curexit
+                        && let Some(cbs) = bg.block_mut(this_id).switch_caseblocks_mut() {
                             cbs[i].gototype = block_flags::f_break_goto;
                         }
-                    }
                 } else {
                     scope_break(bg, bl, curexit, curexit);
                 }

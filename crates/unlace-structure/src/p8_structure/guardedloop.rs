@@ -194,11 +194,10 @@ impl Compare<'_> {
         if depth > 12 {
             return false;
         }
-        if let Operand::Var(cv) = c {
-            if let Some(w) = self.init_of(cv) {
+        if let Operand::Var(cv) = c
+            && let Some(w) = self.init_of(cv) {
                 return !rhs && self.same_op(g, w, depth + 1);
             }
-        }
         let (g, c) = match (g, c) {
             (Operand::Const(x, xs), Operand::Const(y, ys)) => return x == y && xs == ys,
             (Operand::Var(g), Operand::Var(c)) => (g, c),

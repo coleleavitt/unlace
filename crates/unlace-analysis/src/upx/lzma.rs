@@ -574,7 +574,7 @@ impl<'a> Decoder<'a> {
                 None => LzmaError::OutputCap { max: self.max_out },
             });
         }
-        let mut at = self
+        let start = self
             .out
             .len()
             .checked_sub(1)
@@ -583,10 +583,9 @@ impl<'a> Decoder<'a> {
                 dist,
                 have: self.out.len(),
             })?;
-        for _ in 0..len {
+        for at in start..start + len {
             let b = self.out[at];
             self.out.push(b);
-            at += 1;
         }
         Ok(())
     }

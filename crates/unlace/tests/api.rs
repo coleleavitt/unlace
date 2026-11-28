@@ -53,8 +53,8 @@ fn one_load_serves_every_function() {
         .decompile_all()
         .map(|function| function.unwrap().name)
         .collect();
-    assert!(names.contains(&"add".to_string()), "{names:?}");
-    assert!(names.contains(&"mul".to_string()), "{names:?}");
+    assert!(names.iter().any(|i| i == "add"), "{names:?}");
+    assert!(names.iter().any(|i| i == "mul"), "{names:?}");
     assert_eq!(decompiler.decompile_named("mul").unwrap().address, 0x1010);
 }
 

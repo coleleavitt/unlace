@@ -96,8 +96,8 @@ pub fn reentry_edges(
             let Some(op) = data.obank().get(id) else {
                 return edges;
             };
-            if matches!(op.code(), OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH) {
-                if let Some(to) = op
+            if matches!(op.code(), OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH)
+                && let Some(to) = op
                     .get_in(0)
                     .and_then(|v| data.vbank().get(v))
                     .and_then(|v| target(v.get_addr()))
@@ -105,15 +105,13 @@ pub fn reentry_edges(
                 {
                     edges.push((id, to));
                 }
-            }
             if !matches!(
                 op.code(),
                 OpCode::CPUI_BRANCH | OpCode::CPUI_BRANCHIND | OpCode::CPUI_RETURN
-            ) {
-                if let Some(to) = fallthru(id).filter(|&to| old(to)) {
+            )
+                && let Some(to) = fallthru(id).filter(|&to| old(to)) {
                     edges.push((id, to));
                 }
-            }
             edges
         })
         .collect()
@@ -263,11 +261,10 @@ pub fn target_encoding(data: &Funcdata, branch: OpId) -> Option<(i32, u64)> {
                 if let Some(bits) = raw_constant(data, cursor, a, &mut 64) {
                     result &= bits;
                     vn = b;
-                } else if let Some(bits) = raw_constant(data, cursor, b, &mut 64) {
+                } else {
+                    let bits = raw_constant(data, cursor, b, &mut 64)?;
                     result &= bits;
                     vn = a;
-                } else {
-                    return None;
                 }
             }
             _ => return None,
@@ -298,7 +295,7 @@ fn incoming_return(data: &Funcdata, vn: VarnodeId) -> bool {
     let address_size = data
         .get_address()
         .get_space()
-        .map_or(0, |s| s.get_addr_size()) as u32;
+        .map_or(0, |s| s.get_addr_size());
     if size != ret.size && size != address_size {
         return false;
     }

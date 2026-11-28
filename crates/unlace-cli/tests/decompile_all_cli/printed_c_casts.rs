@@ -1331,15 +1331,13 @@ fn without_variable_sources(output: &str) -> String {
             if let Some((name, source)) = content
                 .strip_prefix("  // ")
                 .and_then(|s| s.split_once(": "))
-            {
-                if parameters.contains(name) && storage(source) {
+                && parameters.contains(name) && storage(source) {
                     return None;
                 }
-            }
             if let Some(captures) = declaration.captures(content) {
                 let decl = &captures["decl"];
                 let statement = matches!(
-                    decl.trim_start().split_whitespace().next(),
+                    decl.split_whitespace().next(),
                     Some("return" | "goto" | "throw")
                 );
                 if !statement && storage(&captures["source"]) {

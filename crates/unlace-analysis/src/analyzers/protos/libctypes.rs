@@ -393,13 +393,11 @@ pub(super) fn named_aggregate(
         }
         return Ok(held);
     };
-    if let Some(alias) = agg.dwarf_alias {
-        if let Some(held) = types.find_by_name(alias)? {
-            if usable(&held) {
+    if let Some(alias) = agg.dwarf_alias
+        && let Some(held) = types.find_by_name(alias)?
+            && usable(&held) {
                 return Ok(held);
             }
-        }
-    }
     // `glibc` and a layout to install: the fields are interned FIRST, so the
     // shell is minted only once the whole layout is known and is never handed
     // out half-built (no field names this aggregate, which is what makes that
@@ -411,8 +409,8 @@ pub(super) fn named_aggregate(
         Layout::Streams => name == "FILE",
         Layout::Off | Layout::Opaque => false,
     };
-    if glibc_fields {
-        if let Some(rows) = glibc::layout_for(name) {
+    if glibc_fields
+        && let Some(rows) = glibc::layout_for(name) {
             let fields = glibc::build_fields(rows, types, word_size)?;
             let bitfields = glibc::build_bitfields(rows, types, word_size)?;
             let extra = if bitfields.is_empty() {
@@ -424,7 +422,6 @@ pub(super) fn named_aggregate(
             return types
                 .set_fields_struct_raw(&shell, fields, bitfields, agg.size, agg.align, extra);
         }
-    }
     let shell = types.get_type_struct(name)?;
     // The width is the point (a zero-size pointee survives RulePtrsubUndo and
     // prints as functional `PTRSUB(p,off)`); `type_incomplete` is passed back so

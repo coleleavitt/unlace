@@ -130,12 +130,11 @@ pub fn prepare(fd: &mut Funcdata) -> i32 {
             .copied()
             .collect();
         for id in removed {
-            if let Some(v) = fd.vbank_mut().get_mut(id) {
-                if v.is_auto_live_hold() {
+            if let Some(v) = fd.vbank_mut().get_mut(id)
+                && v.is_auto_live_hold() {
                     v.clear_auto_live_hold();
                     changed += 1;
                 }
-            }
         }
     }
     changed
@@ -259,11 +258,10 @@ fn unobserved_bytes(
             return None;
         }
     }
-    if let Some(out) = op.get_out().and_then(|id| fd.vbank().get(id)) {
-        if out.is_stack_store() && out.get_space().get_index() == space {
+    if let Some(out) = op.get_out().and_then(|id| fd.vbank().get(id))
+        && out.is_stack_store() && out.get_space().get_index() == space {
             wanted &= !byte_mask(start, size, out.get_offset(), out.get_size());
         }
-    }
     Some(wanted)
 }
 

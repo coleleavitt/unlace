@@ -273,11 +273,10 @@ impl LoadImageXml {
         let mut previous: Option<(Address, u64)> = None;
         self.chunk.retain(|key, bytes| {
             let end = key.get_offset().wadd(bytes.len() as u64).wsub(1);
-            if let Some((last, last_end)) = &previous {
-                if Rc::ptr_eq(addr_space(last), addr_space(key)) && *last_end >= end {
+            if let Some((last, last_end)) = &previous
+                && Rc::ptr_eq(addr_space(last), addr_space(key)) && *last_end >= end {
                     return false;
                 }
-            }
             previous = Some((key.clone(), end));
             true
         });
@@ -316,7 +315,7 @@ impl LoadImageXml {
             // operator[] creates the entry if absent (it can hit the
             // current chunk itself when its size is 0)
             let vec = self.chunk.entry(endaddr).or_default();
-            vec.extend(std::iter::repeat(0).take(maxsize.max(0) as usize));
+            vec.extend(std::iter::repeat_n(0, maxsize.max(0) as usize));
         }
     }
 }

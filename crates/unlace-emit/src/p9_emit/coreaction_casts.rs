@@ -885,12 +885,10 @@ fn get_input_cast_ptrsub(
         let mut curbase = curtype.get_ptr_to()?;
         if curbase.get_metatype() == type_metatype::TYPE_ARRAY
             && reqbase.get_metatype() == type_metatype::TYPE_ARRAY
-        {
-            if let (Some(cb), Some(rb)) = (curbase.get_array_base(), reqbase.get_array_base()) {
+            && let (Some(cb), Some(rb)) = (curbase.get_array_base(), reqbase.get_array_base()) {
                 curbase = cb;
                 reqbase = rb;
             }
-        }
         while let Some(td) = reqbase.get_typedef() {
             let td = Rc::clone(td);
             reqbase = td;
@@ -1097,13 +1095,11 @@ fn get_output_token_shift(data: &mut Funcdata, op: OpId) -> Rc<Datatype> {
         None => return output_type_local(data, op),
     };
     let res1 = data.vn_high_type_read_facing(in0, op);
-    if res1.get_metatype() == type_metatype::TYPE_BOOL {
-        if let Some(tlst) = data.get_arch().types_rc() {
-            if let Ok(b) = tlst.get_base(res1.get_size(), type_metatype::TYPE_INT) {
+    if res1.get_metatype() == type_metatype::TYPE_BOOL
+        && let Some(tlst) = data.get_arch().types_rc()
+            && let Ok(b) = tlst.get_base(res1.get_size(), type_metatype::TYPE_INT) {
                 return b;
             }
-        }
-    }
     res1
 }
 
@@ -1159,38 +1155,33 @@ fn get_output_token_ptrsub(data: &mut Funcdata, op: OpId) -> Rc<Datatype> {
         && ptrto
             .as_ref()
             .is_some_and(|ty| ty.get_metatype() == type_metatype::TYPE_UNION)
-    {
-        if let Some(resolution) = data.get_union_field(&ptype, op, -1) {
-            if resolution.get_field_num() >= 0 {
+        && let Some(resolution) = data.get_union_field(&ptype, op, -1)
+            && resolution.get_field_num() >= 0 {
                 return Rc::clone(resolution.get_datatype());
             }
-        }
-    }
     let is_spacebase = ptrto
         .as_ref()
         .map(|p| p.get_metatype() == type_metatype::TYPE_SPACEBASE)
         .unwrap_or(false);
     if is_spacebase {
         let r = data.spacebase_get_sub_type(&ptrto.expect("spacebase ptrto present"), offset);
-        if let Some((subtype, residual_off)) = r {
-            if residual_off == 0 {
+        if let Some((subtype, residual_off)) = r
+            && residual_off == 0 {
                 // The spacebase itself is never an array, so the
                 // getTypePointerStripArray build applies.
                 if let Ok(p) = tlst.get_type_pointer_strip_array(out_size, subtype, wordsize) {
                     return p;
                 }
             }
-        }
         // Fall through to the `xunknown1 *` fallback below (residual != 0 or the
         // strip-array build failed — the C++ getSubType-miss / non-exact branch).
     } else {
         let down = tlst.down_chain(&ptype, offset, false);
-        if let Ok((Some(rettype), residual_off, _parent, _poff)) = down {
-            if residual_off == 0 {
+        if let Ok((Some(rettype), residual_off, _parent, _poff)) = down
+            && residual_off == 0 {
                 // downChain reached the sub-type exactly; the token is that pointer.
                 return rettype;
             }
-        }
     }
     match tlst.get_base(1, type_metatype::TYPE_UNKNOWN) {
         Ok(unk) => tlst
@@ -1252,11 +1243,10 @@ fn get_output_token_subpiece(data: &mut Funcdata, op: OpId) -> Rc<Datatype> {
                 .and_then(|c| c.get_field(field_idx).map(|f| Rc::clone(&f.field_type))),
             _ => ct.get_field(field_idx).map(|f| Rc::clone(&f.field_type)),
         };
-        if let Some(field_ty) = field_ty {
-            if out_size == field_ty.get_size() {
+        if let Some(field_ty) = field_ty
+            && out_size == field_ty.get_size() {
                 return field_ty;
             }
-        }
     }
     let dt = data.vn_high_type_def_facing(out_vn);
     if dt.get_metatype() != type_metatype::TYPE_UNKNOWN {
@@ -1351,13 +1341,11 @@ fn get_output_token_load(data: &mut Funcdata, op: OpId) -> Rc<Datatype> {
         .and_then(|v| data.vbank().get(v))
         .map(|v| v.get_size())
         .unwrap_or(1);
-    if ct.get_metatype() == type_metatype::TYPE_PTR {
-        if let Some(pt) = ct.get_ptr_to() {
-            if pt.get_size() == outsize {
+    if ct.get_metatype() == type_metatype::TYPE_PTR
+        && let Some(pt) = ct.get_ptr_to()
+            && pt.get_size() == outsize {
                 return resolve_self_pointer(data, pt);
             }
-        }
-    }
     // The load produces the type matching its output (a cast will be inserted).
     let outvn = match data.obank().get(op).and_then(|o| o.get_out()) {
         Some(v) => v,
@@ -1518,11 +1506,10 @@ impl FuncdataCastExt for Funcdata {
                 // union cache for the output write edge).
                 if let Some(vn) = self.obank().get(op).and_then(|o| o.get_out()) {
                     let out_high = self.high_get_type(vn);
-                    if let Some(oh) = out_high {
-                        if oh.needs_resolution() {
+                    if let Some(oh) = out_high
+                        && oh.needs_resolution() {
                             let _ = self.resolve_in_flow(&oh, op, -1);
                         }
-                    }
                 }
                 // Do input casts first, as output may depend on input.
                 let numin = self.obank().get(op).map(|o| o.num_input()).unwrap_or(0);
@@ -1535,11 +1522,10 @@ impl FuncdataCastExt for Funcdata {
                     if let Some(outvn) = self.obank().get(op).and_then(|o| o.get_out()) {
                         self.cast_check_pointer_issues(op, outvn);
                     }
-                } else if opc == OpCode::CPUI_STORE {
-                    if let Some(vn2) = self.obank().get(op).and_then(|o| o.get_in(2)) {
+                } else if opc == OpCode::CPUI_STORE
+                    && let Some(vn2) = self.obank().get(op).and_then(|o| o.get_in(2)) {
                         self.cast_check_pointer_issues(op, vn2);
                     }
-                }
                 if self.obank().get(op).and_then(|o| o.get_out()).is_some() {
                     count += match &diff_token {
                         Some(t) => self.cast_output_token(op, &strat, Rc::clone(t)),
@@ -1698,13 +1684,11 @@ impl FuncdataCastLocalExt for Funcdata {
                 .unwrap_or(false)
             {
                 // writefacing == readfacing -> treat as if it had the field type.
-                if let Some(def) = self.vbank().get(vn).and_then(|v| v.get_def()) {
-                    if let Some(wr) = self.get_union_field(&dt, def, -1) {
-                        if wr.get_field_num() == field_num {
+                if let Some(def) = self.vbank().get(vn).and_then(|v| v.get_def())
+                    && let Some(wr) = self.get_union_field(&dt, def, -1)
+                        && wr.get_field_num() == field_num {
                             return 0; // Don't print implied fields.
                         }
-                    }
-                }
             }
             if let Some(v) = self.vbank_mut().get_mut(vn) {
                 v.set_implied_field();
@@ -1776,8 +1760,8 @@ impl FuncdataCastLocalExt for Funcdata {
                     .and_then(|v| v.get_def())
                     .and_then(|d| self.obank().get(d))
                     .and_then(|o| o.get_in(0));
-                if let Some(vnin2) = prev_in {
-                    if self
+                if let Some(vnin2) = prev_in
+                    && self
                         .vbank()
                         .get(vnin2)
                         .map(|v| Rc::ptr_eq(v.get_type(), &ct))
@@ -1786,7 +1770,6 @@ impl FuncdataCastLocalExt for Funcdata {
                         let _ = self.op_set_input(op, vnin2, slot);
                         return 1;
                     }
-                }
             }
         } else if self
             .vbank()
@@ -1809,11 +1792,10 @@ impl FuncdataCastLocalExt for Funcdata {
                 // Insert a PTRSUB(vn,#0) instead of a CAST.
                 let newop = self.cast_insert_ptrsub_zero(op, slot, Rc::clone(&ct));
                 let high = self.high_get_type(vn);
-                if let Some(h) = high {
-                    if h.needs_resolution() {
+                if let Some(h) = high
+                    && h.needs_resolution() {
                         self.inherit_union_field(&h, newop, 0, op, slot);
                     }
-                }
                 return 1;
             } else if self.cast_input_resolution(op, slot, &ct, strat) {
                 return 1;
@@ -1844,11 +1826,10 @@ impl FuncdataCastLocalExt for Funcdata {
             let _ = self.force_facing_type(Rc::clone(&ct), -1, newop, -1);
         }
         let high = self.high_get_type(vn);
-        if let Some(h) = high {
-            if h.needs_resolution() {
+        if let Some(h) = high
+            && h.needs_resolution() {
                 self.inherit_union_field(&h, newop, 0, op, slot);
             }
-        }
         if let Some(backing) = self
             .vbank()
             .get(vnin)
@@ -1998,8 +1979,8 @@ impl FuncdataCastLocalExt for Funcdata {
             } else if out_high_resolve.get_metatype() != type_metatype::TYPE_PTR {
                 let _ = self.vn_update_type(outvn, Rc::clone(&tokenct));
                 out_high_resolve = self.vn_high_type_def_facing(outvn);
-            } else if tokenct.get_metatype() == type_metatype::TYPE_PTR {
-                if let Some(outct) = out_high_resolve.get_ptr_to() {
+            } else if tokenct.get_metatype() == type_metatype::TYPE_PTR
+                && let Some(outct) = out_high_resolve.get_ptr_to() {
                     let meta = outct.get_metatype();
                     if meta != type_metatype::TYPE_ARRAY
                         && meta != type_metatype::TYPE_STRUCT
@@ -2009,7 +1990,6 @@ impl FuncdataCastLocalExt for Funcdata {
                         out_high_resolve = self.vn_high_type_def_facing(outvn);
                     }
                 }
-            }
         }
         // FLOAT_TRUNC converts to a signed integer before any destination coercion.
         force |= self
@@ -2068,8 +2048,8 @@ impl FuncdataCastLocalExt for Funcdata {
                 self.stack_write_views_mut().insert(newop, view);
             }
             _ => {
-                if storage_type.is_some() {
-                    if let Some(backing) = self
+                if storage_type.is_some()
+                    && let Some(backing) = self
                         .vbank()
                         .get(outvn)
                         .and_then(|v| v.get_high())
@@ -2079,7 +2059,6 @@ impl FuncdataCastLocalExt for Funcdata {
                     {
                         self.inherit_union_field(&backing, newop, -1, op, -1);
                     }
-                }
             }
         }
         1
@@ -2160,7 +2139,8 @@ impl FuncdataCastLocalExt for Funcdata {
                     false
                 } else {
                     let def = v.and_then(|v| v.get_def());
-                    let def_not_matching = def
+                    
+                    def
                         .and_then(|d| self.obank().get(d))
                         .map(|o| {
                             o.code() != OpCode::CPUI_PTRSUB
@@ -2169,8 +2149,7 @@ impl FuncdataCastLocalExt for Funcdata {
                                     .map(|iv| !Rc::ptr_eq(iv.get_type(), &cur_type))
                                     .unwrap_or(true)
                         })
-                        .unwrap_or(true);
-                    def_not_matching
+                        .unwrap_or(true)
                 }
             };
             if needs_ptrsub {
@@ -2306,11 +2285,10 @@ pub fn test_struct_offset0(
                 None => return false,
             };
             curt = Rc::clone(&first.field_type);
-            if reqt.get_metatype() == type_metatype::TYPE_ARRAY {
-                if let Some(b) = reqt.get_array_base() {
+            if reqt.get_metatype() == type_metatype::TYPE_ARRAY
+                && let Some(b) = reqt.get_array_base() {
                     reqt = b;
                 }
-            }
             let curt = if curt.get_metatype() == type_metatype::TYPE_ARRAY {
                 curt.get_array_base().unwrap_or(curt)
             } else {

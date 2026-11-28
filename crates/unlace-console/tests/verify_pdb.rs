@@ -13,6 +13,7 @@
 //!     what the sidecar search finds.
 //!   - `pdb_prog_mismatch.pdb` — a DIFFERENT `.pdb` (a different content-hash GUID),
 //!     for the fingerprint-gate negative tests.
+//!
 //! The build recipe + the pinned VMA/GUID are in `tests/fixtures/README.md`.
 //!
 //! ## What is proved

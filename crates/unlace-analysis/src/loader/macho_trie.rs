@@ -270,17 +270,18 @@ impl Walk<'_> {
         if !self.charge(children + 1 - at) {
             return None;
         }
-        if size != 0 && !self.name.is_empty() {
-            if let Some((kind, value)) = terminal(self.trie, at, children) {
-                match self.names.checked_sub(self.name.len()) {
-                    Some(left) => self.names = left,
-                    None => {
-                        self.work = 0;
-                        return None;
-                    }
+        if size != 0
+            && !self.name.is_empty()
+            && let Some((kind, value)) = terminal(self.trie, at, children)
+        {
+            match self.names.checked_sub(self.name.len()) {
+                Some(left) => self.names = left,
+                None => {
+                    self.work = 0;
+                    return None;
                 }
-                self.out.push((self.name.clone(), kind, value));
             }
+            self.out.push((self.name.clone(), kind, value));
         }
         Some((children + 1, self.trie[children], self.name.len()))
     }

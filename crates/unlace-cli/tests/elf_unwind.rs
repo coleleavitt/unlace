@@ -311,7 +311,7 @@ fn bcl_to_a_helper_without_a_literal_load_remains_a_call() {
                 0x7c08_02a6, // mflr r0
                 0x429f_000d, // bcl 20,31,0x1010
                 0x3863_0001, // addi r3,r3,1
-                0x4800_0000 | tail - 0x0c,
+                0x4800_0000 | (tail - 0x0c),
             ][..],
             helper,
             &[0x7c08_03a6, 0x4e80_0020], // mtlr r0; blr
@@ -361,7 +361,7 @@ fn bcl_to_a_helper_that_returns_into_the_skipped_words_remains_a_call() {
                 0x7c08_02a6, // mflr r0
                 0x429f_000d, // bcl 20,31,0x1010
                 0x3863_0001, // addi r3,r3,1
-                0x4800_0000 | tail - 0x0c,
+                0x4800_0000 | (tail - 0x0c),
             ][..],
             helper,
             &[0x7c08_03a6, 0x4e80_0020], // mtlr r0; blr

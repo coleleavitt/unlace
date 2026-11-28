@@ -390,8 +390,8 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
                     false,
                     (kind, at.clone(), j as i32, (*name).into(), shown),
                 );
-            } else if let Some(obj) = addressed_object(fd, vn).filter(|_| !filler) {
-                if let Some(name) = pointee_name(name, obj.pointer) {
+            } else if let Some(obj) = addressed_object(fd, vn).filter(|_| !filler)
+                && let Some(name) = pointee_name(name, obj.pointer) {
                     note(
                         Target::Object(obj.sym),
                         obj.high,
@@ -399,7 +399,6 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
                         (kind, at.clone(), j as i32, name.into(), shown),
                     );
                 }
-            }
         }
     }
     let mut context: BTreeMap<HighVariableId, Vec<Evidence>> = BTreeMap::new();

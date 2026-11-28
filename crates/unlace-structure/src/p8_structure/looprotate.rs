@@ -478,17 +478,12 @@ fn counting(
     if !g_sense {
         return None;
     }
-    let Some((x, n, unsigned)) = below(data, g) else {
-        return None;
-    };
-    let Some(fo) = data
+    let (x, n, unsigned) = below(data, g)?;
+    let fo = data
         .vbank()
         .get(f)
         .and_then(|v| v.get_def())
-        .and_then(|d| data.obank().get(d))
-    else {
-        return None;
-    };
+        .and_then(|d| data.obank().get(d))?;
     let continue_if_ne = match (fo.code(), f_sense) {
         (OpCode::CPUI_INT_NOTEQUAL, true) | (OpCode::CPUI_INT_EQUAL, false) => true,
         _ => return None,
@@ -746,10 +741,8 @@ fn rotate(data: &mut Funcdata, header: BlockId) -> unlace_base::error::UnlaceRes
         .get(&cond)
         .ok_or_else(|| UnlaceError::lowlevel("looprotate: cond copy"))?;
     data.op_set_input(branch, c, 1)?;
-    if flip {
-        if let Some(o) = data.obank_mut().get_mut(branch) {
-            o.set_flag(crate::op::pcodeop_flags::boolean_flip);
-        }
+    if flip && let Some(o) = data.obank_mut().get_mut(branch) {
+        o.set_flag(crate::op::pcodeop_flags::boolean_flip);
     }
     if twin.is_some() {
         data.remove_unreachable_blocks(false, true)?;

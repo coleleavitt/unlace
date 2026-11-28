@@ -36,25 +36,23 @@ pub fn single_family(fd: &Funcdata, values: &[VarnodeId]) -> bool {
             return false;
         };
         let size = value.get_size();
-        if let Some(def) = value.get_def().and_then(|op| fd.obank().get(op)) {
-            if let Some(slots) = slots(def.code(), def.num_input(), def.is_indirect_creation()) {
+        if let Some(def) = value.get_def().and_then(|op| fd.obank().get(op))
+            && let Some(slots) = slots(def.code(), def.num_input(), def.is_indirect_creation()) {
                 let Some(left) = budget.checked_sub(slots as usize) else {
                     return false;
                 };
                 budget = left;
                 for slot in 0..slots {
-                    if let Some(input) = def.get_in(slot) {
-                        if fd
+                    if let Some(input) = def.get_in(slot)
+                        && fd
                             .vbank()
                             .get(input)
                             .is_some_and(|input| !input.is_constant() && input.get_size() == size)
                         {
                             work.push(input);
                         }
-                    }
                 }
             }
-        }
         for read in value.descend_iter() {
             let Some(left) = budget.checked_sub(1) else {
                 return false;
@@ -80,15 +78,14 @@ pub fn single_family(fd: &Funcdata, values: &[VarnodeId]) -> bool {
             if !linked {
                 continue;
             }
-            if let Some(output) = op.get_out() {
-                if fd
+            if let Some(output) = op.get_out()
+                && fd
                     .vbank()
                     .get(output)
                     .is_some_and(|output| output.get_size() == size)
                 {
                     work.push(output);
                 }
-            }
         }
     }
     false

@@ -297,11 +297,10 @@ pub(super) fn register_targets(
             let Some(out) = &op.out else { continue };
             let key = key_of(out, data_space);
             invalidate(&mut vals, key);
-            if let (Some(key), Some(val)) = (key, folded) {
-                if vals.len() < MAX_TRACKED {
+            if let (Some(key), Some(val)) = (key, folded)
+                && vals.len() < MAX_TRACKED {
                     vals.push((key, val));
                 }
-            }
         }
     }
     let shape = match dispatch {
@@ -402,11 +401,10 @@ pub(super) fn register_targets(
                     max_entries.min(CALL_TABLE_MAX),
                 );
                 let stride = u64::from(pool.ptr_width());
-                if let Some(named) = reach.named.filter(|_| cases.len() > 1) {
-                    if let Some(at) = (1..cases.len()).find(|&i| named(table + i as u64 * stride)) {
+                if let Some(named) = reach.named.filter(|_| cases.len() > 1)
+                    && let Some(at) = (1..cases.len()).find(|&i| named(table + i as u64 * stride)) {
                         cases.truncate(at);
                     }
-                }
                 TableRead {
                     cases,
                     stated: None,

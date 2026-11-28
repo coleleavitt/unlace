@@ -400,7 +400,11 @@ fn stated_doubles_pass_whole_and_backfill_holes_stay_empty() {
          for (int n = 1; n < 9; n++) s = s * 31 + top(n);\nprintf(\"%ld\\n\", s); return 0; }\n",
     )
     .unwrap();
-    let cases: [(&str, &[(&str, &str, &[usize])]); 2] = [
+    type Case = (
+        &'static str,
+        &'static [(&'static str, &'static str, &'static [usize])],
+    );
+    let cases: [Case; 2] = [
         (
             "armfloatargs_words",
             &[

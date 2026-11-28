@@ -16,9 +16,12 @@ impl ImageBytes for Image {
 fn elf32_entry_seeds_sign_extend_high_addresses() {
     for little in [false, true] {
         let mut bytes = [0; 64];
-        for (raw, word) in bytes
-            .chunks_exact_mut(4)
-            .zip([0x3c1c0002u32, 0x279c8000, 0x0399e021])
+        for (raw, word) in
+            bytes
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip([0x3c1c0002u32, 0x279c8000, 0x0399e021])
         {
             raw.copy_from_slice(&if little {
                 word.to_le_bytes()

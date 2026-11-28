@@ -14,7 +14,7 @@
 //! two symbol tables and the engine installs each as a named `undefined<size>`
 //! global (DIV-76, GH-184) at the `read symbols` commit.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
@@ -38,7 +38,7 @@ fn faillog() -> PathBuf {
 
 /// Bootstrap `bin`, commit the analysis facts, run `load_cmd` + decompile, and
 /// return the captured C.
-fn decompile_bin(bin: &PathBuf, load_cmd: &str) -> String {
+fn decompile_bin(bin: &Path, load_cmd: &str) -> String {
     let root = repo_root();
     let specs = root.join("specs");
     let spec_roots = vec![specs.to_str().unwrap().to_string()];

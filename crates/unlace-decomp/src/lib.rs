@@ -66,12 +66,6 @@ pub use p0_knowledge::*;
 pub use unlace_bandb::*;
 #[doc(hidden)]
 pub use unlace_emit::*;
-#[doc(hidden)]
-pub use unlace_lift::*;
-#[doc(hidden)]
-pub use unlace_middle::*;
-#[doc(hidden)]
-pub use unlace_structure::*;
 
 /// The pass hooks the driver's own modules provide (the option dispatch and the embedder
 /// hooks); [`PASS_HOOKS`] adds every lower crate's `provide_all` and the universal action.

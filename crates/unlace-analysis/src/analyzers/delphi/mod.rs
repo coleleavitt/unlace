@@ -145,11 +145,10 @@ impl<'a> Image<'a> {
             if exec && sec.size() != 0 {
                 code.push((addr, addr.saturating_add(sec.size())));
             }
-            if let Ok(data) = sec.data() {
-                if !data.is_empty() {
+            if let Ok(data) = sec.data()
+                && !data.is_empty() {
                     sections.push((addr, data));
                 }
-            }
         }
         let ptr = if file.is_64() { 8 } else { 4 };
         Self::from_spans(sections, code, ptr)
@@ -369,11 +368,10 @@ fn scan_self_ptrs(img: &Image, lay: &Layout) -> BTreeMap<u64, String> {
     let mut out = BTreeMap::new();
     let delta = lay.self_ptr * lay.ptr;
     img.for_each_word(|slot, value| {
-        if slot.checked_add(delta) == Some(value) {
-            if let Some(name) = class_at(img, lay, value) {
+        if slot.checked_add(delta) == Some(value)
+            && let Some(name) = class_at(img, lay, value) {
                 out.insert(value, name);
             }
-        }
     });
     out
 }
@@ -472,11 +470,10 @@ fn read_classes(img: &Image, lay: &Layout, vmts: &BTreeMap<u64, String>) -> BTre
             lay.dynamic,
             lay.name,
         ] {
-            if let Some(t) = lay.field(img, vmt, slots) {
-                if t > vmt {
+            if let Some(t) = lay.field(img, vmt, slots)
+                && t > vmt {
                     bound = bound.min(t);
                 }
-            }
         }
         let mut virtuals = Vec::new();
         let mut a = vmt;
@@ -926,11 +923,10 @@ pub(crate) fn recover(img: &Image) -> AnalysisOutput {
             (lay.method, "method_table"),
             (lay.dynamic, "dynamic_table"),
         ] {
-            if let Some(t) = lay.field(img, vmt, slots) {
-                if img.read(t, 1).is_some() {
+            if let Some(t) = lay.field(img, vmt, slots)
+                && img.read(t, 1).is_some() {
                     data.entry(t).or_insert_with(|| format!("{c}::{label}"));
                 }
-            }
         }
         if let Some(t) = lay.field(img, vmt, lay.method) {
             for (code, m) in published_methods(img, t) {

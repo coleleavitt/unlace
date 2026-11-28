@@ -273,9 +273,7 @@ fn guarded_complement(data: &Funcdata, root: VarnodeId) -> Option<Complement> {
     let mut comparison = None;
     let mut equality = None;
     for vn in leaves {
-        let Some(id) = data.vbank().get(vn).and_then(|v| v.get_def()) else {
-            return None;
-        };
+        let id = data.vbank().get(vn).and_then(|v| v.get_def())?;
         let op = data.obank().get(id)?;
         match op.code() {
             OpCode::CPUI_FLOAT_NAN => guards.push(op.get_in(0).unwrap()),
@@ -288,9 +286,7 @@ fn guarded_complement(data: &Funcdata, root: VarnodeId) -> Option<Complement> {
             _ => return None,
         }
     }
-    let Some((mut code, a, b, leaf)) = comparison else {
-        return None;
-    };
+    let (mut code, a, b, leaf) = comparison?;
     let same = |x, y| {
         let (x, y) = (copied_value(data, x), copied_value(data, y));
         functional_equality(x, y, data.vbank(), data.obank()) || same_instruction_read(data, x, y)
@@ -548,7 +544,7 @@ pub fn fold_nan_consumers(data: &mut Funcdata, nan: OpId) -> bool {
             pending.push((next, depth + 1));
         }
     }
-    roots.sort_by(|x, y| y.1.cmp(&x.1));
+    roots.sort_by_key(|x| std::cmp::Reverse(x.1));
     let mut changed = false;
     let sources: Vec<VarnodeId> = std::iter::once(out)
         .chain(roots.iter().map(|(r, _)| *r))

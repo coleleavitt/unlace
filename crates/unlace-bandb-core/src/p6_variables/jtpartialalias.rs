@@ -76,11 +76,10 @@ fn gather(fd: &Funcdata, space: &Rc<AddrSpace>) -> Vec<uintb> {
                 continue;
             };
             let mut follow = |next: Option<VarnodeId>, indexed: bool| {
-                if let Some(next) = next {
-                    if seen.insert(next) {
+                if let Some(next) = next
+                    && seen.insert(next) {
                         queue.push((next, indexed));
                     }
-                }
             };
             let is_const = |slot: i32| {
                 o.get_in(slot)

@@ -709,10 +709,7 @@ fn adjust_load(data: &mut Funcdata, loadop: OpId, storeop: OpId) -> bool {
     };
     data.op_remove_input(loadop, 1);
     data.op_set_opcode_code(loadop, OpCode::CPUI_COPY);
-    if data.op_set_input(loadop, vn, 0).is_err() {
-        return false;
-    }
-    true
+    !data.op_set_input(loadop, vn, 0).is_err()
 }
 
 /// C++ `ActionStackPtrFlow::repair` (`coreaction.cc:393`): trace back from a
@@ -946,11 +943,10 @@ pub fn analyze_extra_pop(data: &mut Funcdata, stackspace: &Rc<AddrSpace>, spcbas
         .eval_fp_called()
         .or_else(|| data.get_arch().default_fp())
         .map(|m| m.get_extra_pop());
-    if let Some(ep) = myfp_extrapop {
-        if ep != EXTRAPOP_UNKNOWN {
+    if let Some(ep) = myfp_extrapop
+        && ep != EXTRAPOP_UNKNOWN {
             return 0;
         }
-    }
 
     let mut solver = StackSolver::new();
     // C++ wraps build() in try/catch and warns (`warningHeader`) on a malformed
@@ -969,8 +965,7 @@ pub fn analyze_extra_pop(data: &mut Funcdata, stackspace: &Rc<AddrSpace>, spcbas
         .unlace_options
         .get::<crate::stackexitanchor::StackExitAnchor>()
         .0
-    {
-        if let Some(var) = solver.inconsistent() {
+        && let Some(var) = solver.inconsistent() {
             let at = data
                 .vbank()
                 .get(solver.vnlist[var as usize])
@@ -981,7 +976,6 @@ pub fn analyze_extra_pop(data: &mut Funcdata, stackspace: &Rc<AddrSpace>, spcbas
                 data.warning("Stack pointer deltas disagree around this point; the first path's value was kept", &at);
             }
         }
-    }
 
     let invn = solver.vnlist[0];
     let mut changed: int4 = 0;

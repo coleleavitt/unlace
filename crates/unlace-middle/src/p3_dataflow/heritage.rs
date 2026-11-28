@@ -111,6 +111,8 @@ pub const GLOBAL_LOAD_BUDGET: usize = 4096;
 /// Varnode stack (C++ `typedef map<Address,vector<Varnode *> > VariableStack`).
 pub type VariableStack = BTreeMap<Address, Vec<crate::context::VarnodeId>>;
 
+type GlobalLoads = (int4, Vec<(crate::context::OpId, Option<(u64, u64)>)>);
+
 /// What one block pushed while it was renamed; popped when its dominator subtree is done.
 struct BlockRename {
     writelist: Vec<crate::context::VarnodeId>,
@@ -196,18 +198,18 @@ impl LocationMap {
             };
 
         // C++: advance past the stepped-back element when it does not overlap addr.
-        if let Some((ck, cv)) = &cur {
-            if addr.overlap(0, ck, cv.size) == -1 {
-                // ++iter : advance to the first key strictly greater than ck
-                cur = self
-                    .themap
-                    .range((
-                        std::ops::Bound::Excluded(ck.clone()),
-                        std::ops::Bound::Unbounded,
-                    ))
-                    .next()
-                    .map(|(k, v)| (k.clone(), *v));
-            }
+        if let Some((ck, cv)) = &cur
+            && addr.overlap(0, ck, cv.size) == -1
+        {
+            // ++iter : advance to the first key strictly greater than ck
+            cur = self
+                .themap
+                .range((
+                    std::ops::Bound::Excluded(ck.clone()),
+                    std::ops::Bound::Unbounded,
+                ))
+                .next()
+                .map(|(k, v)| (k.clone(), *v));
         }
 
         // First (possibly partial) overlap with the leading element.
@@ -270,10 +272,10 @@ impl LocationMap {
             .range(..=addr.clone())
             .next_back()
             .map(|(k, v)| (k.clone(), *v));
-        if let Some((k, v)) = prev {
-            if addr.overlap(0, &k, v.size) != -1 {
-                return Some((k, v));
-            }
+        if let Some((k, v)) = prev
+            && addr.overlap(0, &k, v.size) != -1
+        {
+            return Some((k, v));
         }
         None
     }
@@ -287,10 +289,10 @@ impl LocationMap {
             .range(..=addr.clone())
             .next_back()
             .map(|(k, v)| (k.clone(), *v));
-        if let Some((k, v)) = prev {
-            if addr.overlap(0, &k, v.size) != -1 {
-                return v.pass;
-            }
+        if let Some((k, v)) = prev
+            && addr.overlap(0, &k, v.size) != -1
+        {
+            return v.pass;
         }
         -1
     }
@@ -1004,7 +1006,7 @@ pub struct Heritage {
     global_load_guards: usize,
     /// (unlace `indexaliasguard global`) This pass's `LOAD`s from one space, keyed
     /// by the space's index.
-    global_loads: Option<(int4, Vec<(crate::context::OpId, Option<(u64, u64)>)>)>,
+    global_loads: Option<GlobalLoads>,
     /// (unlace `indexaliasguard global`) The global ranges guarded in this pass,
     /// as `(space, first byte, last byte)`.
     global_load_ranges: Vec<(Rc<AddrSpace>, u64, u64)>,
@@ -1294,11 +1296,10 @@ impl Heritage {
         self.maxdepth = maxdepth;
 
         // for i in 0..size: collect up-edges (u->v where u != idom(v))
-        for i in 0..size {
+        for (i, children) in self.domchild.iter().enumerate().take(size) {
             let x = bblocks.block(root).get_block(i as int4);
             let x_index = bblocks.block(x).get_index();
-            for j in 0..self.domchild[i].len() {
-                let v = self.domchild[i][j];
+            for &v in children {
                 let v_size_in = bblocks.block(v).size_in();
                 let v_idom = bblocks.block(v).get_immed_dom();
                 for k in 0..v_size_in {
@@ -1317,8 +1318,8 @@ impl Heritage {
         for i in (0..size).rev() {
             let mut k = 0;
             let mut l = 0;
-            for j in 0..self.domchild[i].len() {
-                let ci = bblocks.block(self.domchild[i][j]).get_index() as usize;
+            for &c in &self.domchild[i] {
+                let ci = bblocks.block(c).get_index() as usize;
                 k += a[ci];
                 l += z[ci];
             }
@@ -2059,27 +2060,24 @@ impl Heritage {
             if effecttype == effect_type::UNKNOWN_EFFECT
                 && spc.get_type() == spacetype::IPTR_SPACEBASE
                 && tryregister
-            {
-                if let Some(floor) =
+                && let Some(floor) =
                     (fd.hooks().calleeprotostack_declared_caller_frame_floor)(fc.proto())
-                {
-                    if (fd.hooks().calleeprotostack_above_callee_frame)(
-                        trans_addr.get_offset(),
+                && (fd.hooks().calleeprotostack_above_callee_frame)(
+                    trans_addr.get_offset(),
+                    size,
+                    spc.get_addr_size() as int4,
+                    floor,
+                )
+                && !self.protostack_is_aliased(fd, &spc, addr.get_offset(), size)
+                && !(self.protostack_restored_frame_alias(fd)
+                    && (fd.hooks().calleeprotostack_pointer_input_may_alias)(
+                        fd,
+                        fc,
+                        addr.get_offset(),
                         size,
-                        spc.get_addr_size() as int4,
-                        floor,
-                    ) && !self.protostack_is_aliased(fd, &spc, addr.get_offset(), size)
-                        && !(self.protostack_restored_frame_alias(fd)
-                            && (fd.hooks().calleeprotostack_pointer_input_may_alias)(
-                                fd,
-                                fc,
-                                addr.get_offset(),
-                                size,
-                            ))
-                    {
-                        effecttype = effect_type::UNAFFECTED;
-                    }
-                }
+                    ))
+            {
+                effecttype = effect_type::UNAFFECTED;
             }
             // (unlace) The cspec's `killedbycall` set is a
             // statement about the CONVENTION, not about this callee.  When a
@@ -2447,10 +2445,10 @@ impl Heritage {
                     &mut self.rename_reads,
                     &mut self.guard_iops,
                 );
-                if flag != 0 {
-                    if let Some(o) = fd.obank_mut().get_mut(indop) {
-                        o.set_additional_flag(flag);
-                    }
+                if flag != 0
+                    && let Some(o) = fd.obank_mut().get_mut(indop)
+                {
+                    o.set_additional_flag(flag);
                 }
                 if let Some(out) = fd.obank().get(indop).and_then(|o| o.get_out()) {
                     if let Some(v) = fd.vbank_mut().get_mut(out) {
@@ -2521,34 +2519,34 @@ impl Heritage {
                 trans_addr,
                 size,
             );
-            if let Some(pieces) = partition {
-                if pieces.iter().all(|piece| {
+            if let Some(pieces) = partition
+                && pieces.iter().all(|piece| {
                     (fd.hooks().armfloatreturn_call_input_allowed)(
                         fd,
                         fc,
                         &piece.get_addr(),
                         piece.size as int4,
                     )
-                }) {
-                    for piece in pieces {
-                        let piece_addr = piece.get_addr();
-                        if fc
-                            .get_active_input()
-                            .which_trial(&piece_addr, piece.size as int4)
-                            < 0
-                        {
-                            Self::truncated_input_trial(
-                                fd,
-                                fc,
-                                addr,
-                                size,
-                                &piece_addr,
-                                piece.size as int4,
-                            );
-                        }
+                })
+            {
+                for piece in pieces {
+                    let piece_addr = piece.get_addr();
+                    if fc
+                        .get_active_input()
+                        .which_trial(&piece_addr, piece.size as int4)
+                        < 0
+                    {
+                        Self::truncated_input_trial(
+                            fd,
+                            fc,
+                            addr,
+                            size,
+                            &piece_addr,
+                            piece.size as int4,
+                        );
                     }
-                    return;
                 }
+                return;
             }
             if overlap_level >= crate::p3_dataflow::calloverlap::LEVEL_IN
                 || (overlap_level == super::calloverlap::LEVEL_AUTO
@@ -3978,10 +3976,10 @@ impl Heritage {
             .expect("normalize_read_size: set input 1");
         fd.op_set_output(newop, vn)
             .expect("normalize_read_size: set output");
-        if let Some(out) = fd.obank().get(newop).and_then(|o| o.get_out()) {
-            if let Some(v) = fd.vbank_mut().get_mut(out) {
-                v.set_write_mask();
-            }
+        if let Some(out) = fd.obank().get(newop).and_then(|o| o.get_out())
+            && let Some(v) = fd.vbank_mut().get_mut(out)
+        {
+            v.set_write_mask();
         }
         fd.op_insert_before(newop, op);
         vn1
@@ -4262,7 +4260,6 @@ impl Heritage {
     }
 
     #[doc(hidden)]
-
     pub fn new_entry_input(
         &self,
         fd: &mut crate::funcdata::Funcdata,
@@ -4915,23 +4912,22 @@ impl Heritage {
                             }
                         }
                     }
-                    if self.load_reads.active() {
-                        if let Some(copy) = self.load_guard_copy(fd, &key, depth, vnnew) {
-                            vnnew = copy;
-                        }
+                    if self.load_reads.active()
+                        && let Some(copy) = self.load_guard_copy(fd, &key, depth, vnnew)
+                    {
+                        vnnew = copy;
                     }
                     fd.op_set_input(op, vnnew, slot)
                         .expect("rename_recurse: op_set_input read");
-                    if let Some(vnin) = vnin {
-                        if fd
+                    if let Some(vnin) = vnin
+                        && fd
                             .vbank()
                             .get(vnin)
                             .expect("rename_recurse: in")
                             .has_no_descend()
-                        {
-                            fd.delete_varnode(vnin)
-                                .expect("rename_recurse: delete free read");
-                        }
+                    {
+                        fd.delete_varnode(vnin)
+                            .expect("rename_recurse: delete free read");
                     }
                 }
             }
@@ -5038,16 +5034,15 @@ impl Heritage {
                 }
                 fd.op_set_input(multiop, vnnew, slot)
                     .expect("rename_recurse: op_set_input multi");
-                if let Some(vnin) = vnin {
-                    if fd
+                if let Some(vnin) = vnin
+                    && fd
                         .vbank()
                         .get(vnin)
                         .expect("rename_recurse: multi in")
                         .has_no_descend()
-                    {
-                        fd.delete_varnode(vnin)
-                            .expect("rename_recurse: delete multi free in");
-                    }
+                {
+                    fd.delete_varnode(vnin)
+                        .expect("rename_recurse: delete multi free in");
                 }
             }
         }
@@ -5055,6 +5050,7 @@ impl Heritage {
         Ok(BlockRename { writelist, guarded })
     }
 
+    #[allow(clippy::mutable_key_type)]
     fn unrename_block(
         &mut self,
         fd: &crate::funcdata::Funcdata,
@@ -5938,8 +5934,8 @@ impl Heritage {
                     &inputvars,
                 );
             let normal = memrange.size > 4 && maxw < memrange.size;
-            if byte_copy || pair_split || normal || fill_split {
-                if let Some(refiter) = self.refinement(
+            if (byte_copy || pair_split || normal || fill_split)
+                && let Some(refiter) = self.refinement(
                     fd,
                     idx,
                     &readvars,
@@ -5948,18 +5944,18 @@ impl Heritage {
                     &removevars,
                     byte_copy,
                     pair_split && !normal,
-                ) {
-                    idx = refiter;
-                    memrange = self.disjoint.get(idx).clone();
-                    self.collect(
-                        fd,
-                        &mut memrange,
-                        &mut readvars,
-                        &mut writevars,
-                        &mut inputvars,
-                        &mut removevars,
-                    );
-                }
+                )
+            {
+                idx = refiter;
+                memrange = self.disjoint.get(idx).clone();
+                self.collect(
+                    fd,
+                    &mut memrange,
+                    &mut readvars,
+                    &mut writevars,
+                    &mut inputvars,
+                    &mut removevars,
+                );
             }
             // write the (possibly clearProperty-mutated) memrange back.
             *self.disjoint.get_mut(idx) = memrange.clone();
@@ -6691,15 +6687,15 @@ impl Heritage {
         use crate::rangeutil::{ValueSetSolver, WidenerFull, WidenerNone};
 
         let mut nothing_to_do = true;
-        if let Some(g) = self.load_guard.last() {
-            if g.analysis_state == 0 {
-                nothing_to_do = false; // Check if unanalyzed
-            }
+        if let Some(g) = self.load_guard.last()
+            && g.analysis_state == 0
+        {
+            nothing_to_do = false; // Check if unanalyzed
         }
-        if let Some(g) = self.store_guard.last() {
-            if g.analysis_state == 0 {
-                nothing_to_do = false;
-            }
+        if let Some(g) = self.store_guard.last()
+            && g.analysis_state == 0
+        {
+            nothing_to_do = false;
         }
         if nothing_to_do {
             return;
@@ -6902,11 +6898,11 @@ impl Heritage {
             None => return,
         };
         // Follow any COPY chain to the earliest input.
-        loop {
-            let (is_written, def, in_addr) = match fd.vbank().get(in_vn) {
-                Some(v) => (v.is_written(), v.get_def(), v.get_addr().clone()),
-                None => break,
-            };
+        while let Some((is_written, def, in_addr)) = fd
+            .vbank()
+            .get(in_vn)
+            .map(|v| (v.is_written(), v.get_def(), v.get_addr().clone()))
+        {
             if !is_written {
                 break;
             }
@@ -6973,10 +6969,10 @@ impl Heritage {
                     if let Some(a) = addr {
                         // If we are within one of the guarded ranges, consider
                         // the output address forced.
-                        if load_ranges.in_range(&a, 1) {
-                            if let Some(v) = fd.vbank_mut().get_mut(vn) {
-                                v.set_addr_force();
-                            }
+                        if load_ranges.in_range(&a, 1)
+                            && let Some(v) = fd.vbank_mut().get_mut(vn)
+                        {
+                            v.set_addr_force();
                         }
                     }
                 }

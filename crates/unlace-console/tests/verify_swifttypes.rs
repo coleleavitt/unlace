@@ -14,13 +14,17 @@
 
 use unlace_base::address::Address;
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
-use unlace_decomp::dtype::TypeFactory;
-
 const FIXTURE: &str = "swift_types_elf";
+
+type Layout = (
+    &'static str,
+    i32,
+    &'static [(&'static str, i32, &'static str)],
+);
 
 /// `(type, size, [(field, offset, type name)])`; a pointer's type name is
 /// empty, as the factory spells it.
-const LAYOUTS: &[(&str, i32, &[(&str, i32, &str)])] = &[
+const LAYOUTS: &[Layout] = &[
     ("typefix.Point", 16, &[("x", 0, "int8"), ("y", 8, "int8")]),
     (
         "typefix.Pixel",

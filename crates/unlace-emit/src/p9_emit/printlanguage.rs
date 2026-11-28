@@ -725,10 +725,7 @@ pub fn parentheses(top: &ReversePolish, op2: &OpToken, prev_token: Option<&OpTok
             // If operators are adjacent, the operator printed first must be
             // evaluated first.  Here op2 must be evaluated first, so check if it
             // is printed first (in the first stage of binary).
-            if op2.token_type == TokenType::Postsurround && stage == 0 {
-                return false;
-            }
-            true
+            !(op2.token_type == TokenType::Postsurround && stage == 0)
         }
         TokenType::UnaryPrefix => {
             if top_token.precedence > op2.precedence {
@@ -786,8 +783,8 @@ pub fn parentheses(top: &ReversePolish, op2: &OpToken, prev_token: Option<&OpTok
         }
         TokenType::HiddenFunction => {
             // If there is an unresolved previous token.
-            if stage == 0 {
-                if let Some(prev) = prev_token {
+            if stage == 0
+                && let Some(prev) = prev_token {
                     // New token is printed next to the previous token.
                     if prev.token_type != TokenType::Binary
                         && prev.token_type != TokenType::UnaryPrefix
@@ -800,7 +797,6 @@ pub fn parentheses(top: &ReversePolish, op2: &OpToken, prev_token: Option<&OpTok
                     // If precedence is equal, make sure we don't treat two tokens
                     // as associative, i.e. we should have parentheses.
                 }
-            }
             true
         }
     }

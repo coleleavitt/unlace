@@ -1078,10 +1078,7 @@ pub fn is_collapsible(op: &PcodeOp, vbank: &VarnodeBank) -> bool {
         .get(op.output.expect("isCollapsible: null output (C++ UB)"))
         .expect("isCollapsible: stale output id");
     // int4 size, sizeof(uintb) == 8
-    if out.get_size() as i64 as u64 > 8 {
-        return false;
-    }
-    true
+    out.get_size() as i64 as u64 <= 8
 }
 
 /// Produce a CSE hash of the op (C++ `PcodeOp::getCseHash`, `op.cc:153`).

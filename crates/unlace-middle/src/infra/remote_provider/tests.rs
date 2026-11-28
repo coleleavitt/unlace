@@ -6,9 +6,8 @@ use std::rc::Rc;
 
 use unlace_base::address::{Address, ELEM_RANGELIST};
 use unlace_base::marshal::{
-    ATTRIB_CONTENT, ATTRIB_ID, ATTRIB_INDEX, ATTRIB_MODEL, ATTRIB_NAME, ATTRIB_NAMELOCK,
-    ATTRIB_READONLY, ATTRIB_SIZE, ATTRIB_TYPELOCK, ELEM_SYMBOL, ELEM_VOID, Encoder, IdRegistry,
-    PackedEncode, XmlDecode,
+    ATTRIB_CONTENT, ATTRIB_ID, ATTRIB_READONLY, ELEM_SYMBOL, Encoder, IdRegistry, PackedEncode,
+    XmlDecode,
 };
 use unlace_base::space::{AddrSpace, AddrSpaceManager, addrspace_flags, spacetype};
 
@@ -194,81 +193,6 @@ fn coretypes_xml_mirror_matches_default_build() {
         );
         assert!(b.is_core_type(), "{name}: decoded type not core");
         let _ = size;
-    }
-}
-
-// ---------------------------------------------------------------------------
-// RemoteScope behavior over a canned wire fetcher
-// ---------------------------------------------------------------------------
-
-/// A canned [`RemoteProviderFetch`]: per-query response maps keyed by offset,
-/// plus call counters (the negative-caching asserts).
-#[derive(Default)]
-struct MockFetch {
-    mapped: std::collections::BTreeMap<u64, Vec<u8>>,
-    external: std::collections::BTreeMap<u64, Vec<u8>>,
-    tracked: std::collections::BTreeMap<u64, Vec<u8>>,
-    /// Offsets whose getMappedSymbols FAILS (a wire/JavaError).
-    fail_mapped: std::collections::BTreeSet<u64>,
-    calls: std::cell::RefCell<std::collections::BTreeMap<&'static str, usize>>,
-}
-
-impl MockFetch {
-    fn bump(&self, what: &'static str) {
-        *self.calls.borrow_mut().entry(what).or_insert(0) += 1;
-    }
-    fn serve(
-        map: &std::collections::BTreeMap<u64, Vec<u8>>,
-        off: u64,
-        decoder: &mut dyn Decoder,
-    ) -> UnlaceResult<bool> {
-        match map.get(&off) {
-            Some(doc) => {
-                decoder.ingest_stream(doc)?;
-                Ok(true)
-            }
-            None => Ok(false),
-        }
-    }
-}
-
-impl RemoteProviderFetch for MockFetch {
-    fn fetch_mapped_symbols(
-        &self,
-        addr: &Address,
-        decoder: &mut dyn Decoder,
-    ) -> UnlaceResult<bool> {
-        self.bump("mapped");
-        if self.fail_mapped.contains(&addr.get_offset()) {
-            return Err(unlace_base::error::UnlaceError::lowlevel(
-                "mock wire failure",
-            ));
-        }
-        Self::serve(&self.mapped, addr.get_offset(), decoder)
-    }
-    fn fetch_namespace_path(&self, _id: u64, _decoder: &mut dyn Decoder) -> UnlaceResult<bool> {
-        self.bump("namespace");
-        Ok(false)
-    }
-    fn fetch_external_ref(&self, addr: &Address, decoder: &mut dyn Decoder) -> UnlaceResult<bool> {
-        self.bump("external");
-        Self::serve(&self.external, addr.get_offset(), decoder)
-    }
-    fn fetch_tracked_registers(
-        &self,
-        addr: &Address,
-        decoder: &mut dyn Decoder,
-    ) -> UnlaceResult<bool> {
-        self.bump("tracked");
-        Self::serve(&self.tracked, addr.get_offset(), decoder)
-    }
-    fn fetch_comments(
-        &self,
-        _fad: &Address,
-        _flags: u32,
-        _decoder: &mut dyn Decoder,
-    ) -> UnlaceResult<bool> {
-        Ok(false)
     }
 }
 

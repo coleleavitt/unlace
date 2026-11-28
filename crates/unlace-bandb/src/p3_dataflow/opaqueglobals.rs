@@ -96,11 +96,10 @@ pub fn constant_read(data: &Funcdata, vn: VarnodeId) -> Option<u64> {
     if !(1..=8).contains(&size) || !Rc::ptr_eq(v.get_space(), space) {
         return None;
     }
-    if let Some(def) = v.get_def() {
-        if !data.obank().get(def)?.is_marker() {
+    if let Some(def) = v.get_def()
+        && !data.obank().get(def)?.is_marker() {
             return None;
         }
-    }
     let Some(found) = found else {
         glb.opaque_globals_wanted.set(true);
         return None;

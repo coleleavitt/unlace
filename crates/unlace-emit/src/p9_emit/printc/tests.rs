@@ -3468,7 +3468,7 @@ mod w10_printc_cast_render {
                     .get_metatype(),
                 type_metatype::TYPE_FLOAT
             );
-            let mut arch = bare_arch();
+            let arch = bare_arch();
             assert!(crate::bitcast::truncated_float_storage(&fd, op).is_some());
             for lang in ["c", "rust"] {
                 let mut printer = PrintC::new();

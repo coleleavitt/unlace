@@ -446,15 +446,13 @@ impl PrintC {
             return false;
         }
         // Would emit_any_label_statement print a `label_xxx:` line?
-        if !fd.sblocks_ref().block(body).is_label_bump_up() {
-            if let Some(front) = fd.sblocks_ref().get_front_leaf(body) {
-                if fd.sblocks_ref().block(front).is_unstructured_target()
+        if !fd.sblocks_ref().block(body).is_label_bump_up()
+            && let Some(front) = fd.sblocks_ref().get_front_leaf(body)
+                && fd.sblocks_ref().block(front).is_unstructured_target()
                     && !self.goto_rewrites.labels.contains(&front)
                 {
                     return false;
                 }
-            }
-        }
         let Some(under) = fd.sblocks_ref().block(body).get_copy() else {
             return false;
         };
@@ -473,14 +471,13 @@ impl PrintC {
             if o.is_branch() {
                 continue;
             }
-            if let Some(out) = o.get_out() {
-                if fd.vbank().get(out).map(|v| v.is_implied()).unwrap_or(false)
+            if let Some(out) = o.get_out()
+                && fd.vbank().get(out).map(|v| v.is_implied()).unwrap_or(false)
                     && !(self.out_lang == crate::lang::OutLang::C
                         && crate::stackbytes::assignment(fd, inst).is_some())
                 {
                     continue;
                 }
-            }
             printed += 1;
             if printed > 1 {
                 return false;

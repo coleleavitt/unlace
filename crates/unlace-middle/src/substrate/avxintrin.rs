@@ -319,14 +319,13 @@ pub fn vector_type(
 fn fma(mnem: &str) -> Option<(&str, &str, &str)> {
     let rest = mnem.strip_prefix("vf")?;
     for kind in ["maddsub", "msubadd", "nmadd", "nmsub", "madd", "msub"] {
-        if let Some(r) = rest.strip_prefix(kind) {
-            if r.len() == 5
+        if let Some(r) = rest.strip_prefix(kind)
+            && r.len() == 5
                 && matches!(&r[..3], "132" | "213" | "231")
                 && matches!(&r[3..], "ps" | "pd" | "ss" | "sd")
             {
                 return Some((kind, &r[..3], &r[3..]));
             }
-        }
     }
     None
 }

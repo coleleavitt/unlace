@@ -1,5 +1,3 @@
-use egg::{Applier, Searcher};
-
 use super::*;
 
 fn l(i: usize) -> Box<Expr> {

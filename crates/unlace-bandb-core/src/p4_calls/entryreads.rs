@@ -142,11 +142,10 @@ pub fn capture(data: &mut Funcdata) {
                         } else {
                             if slot.is_some_and(|k| declared_param(data, op, k)) {
                                 passed = passed.max(here);
-                            } else if o.code() == OpCode::CPUI_CALL {
-                                if let Some(c) = callee(data, op) {
+                            } else if o.code() == OpCode::CPUI_CALL
+                                && let Some(c) = callee(data, op) {
                                     to.push(c);
                                 }
-                            }
                             false
                         }
                     }
@@ -180,13 +179,11 @@ pub fn capture(data: &mut Funcdata) {
                     let mut budget = DEMAND_BUDGET;
                     width = width.max(need(data, o, id, here, &mut Vec::new(), &mut budget));
                 }
-                if follow {
-                    if let Some(out) = o.get_out() {
-                        if !family.contains(&out) {
+                if follow
+                    && let Some(out) = o.get_out()
+                        && !family.contains(&out) {
                             family.push(out);
                         }
-                    }
-                }
             }
         }
         if width > 0 {

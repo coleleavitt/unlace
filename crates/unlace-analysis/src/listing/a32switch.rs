@@ -210,15 +210,14 @@ impl<'a> A32Tables<'a> {
                 );
             }
             let folded =
-                interworking(op, &vals, data).or_else(|| fold(op, &vals, data, &self.pool));
+                interworking(op, &vals, data).or_else(|| fold(op, &vals, data, self.pool));
             let Some(out) = &op.out else { continue };
             let key = key_of(out, data);
             invalidate(&mut vals, key);
-            if let (Some(key), Some(val)) = (key, folded) {
-                if vals.len() < MAX_TRACKED {
+            if let (Some(key), Some(val)) = (key, folded)
+                && vals.len() < MAX_TRACKED {
                     vals.push((key, val));
                 }
-            }
         }
         TableRead::default()
     }

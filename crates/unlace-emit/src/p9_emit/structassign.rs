@@ -64,15 +64,14 @@ pub fn recover(
     if o.code() != OpCode::CPUI_CALL || o.num_input() != 4 {
         return None;
     }
-    if let Some(out) = o.get_out() {
-        if fd
+    if let Some(out) = o.get_out()
+        && fd
             .vbank()
             .get(out)
             .is_some_and(|v| v.descend_iter().next().is_some())
         {
             return None;
         }
-    }
     let (dst, src, len) = (o.get_in(1)?, o.get_in(2)?, o.get_in(3)?);
     let len = fd.vbank().get(len)?;
     if !len.is_constant() {

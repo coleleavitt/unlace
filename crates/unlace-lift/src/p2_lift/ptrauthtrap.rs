@@ -191,7 +191,7 @@ fn is_pac_bit_test(data: &Funcdata, guard: BlockId) -> Option<bool> {
                 src.0
                     .get_space()
                     .is_some_and(|sp| sp.get_type() == spacetype::IPTR_INTERNAL)
-                    && writer(w, &src).is_some_and(|d| frame_load(d))
+                    && writer(w, &src).is_some_and(frame_load)
             }),
             _ => false,
         },

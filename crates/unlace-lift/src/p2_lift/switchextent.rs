@@ -609,10 +609,7 @@ pub fn table_read(fd: &Funcdata, load: OpId) -> Option<(u64, u64, VarnodeId)> {
     }
     let mut index = scaled;
     let mut stride = 1;
-    loop {
-        let Some(def) = fd.vbank().get(index)?.get_def() else {
-            break;
-        };
+    while let Some(def) = fd.vbank().get(index)?.get_def() {
         let op = fd.obank().get(def)?;
         match op.code() {
             OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => {

@@ -124,7 +124,7 @@ fn overlaps(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool {
 }
 
 fn signed(space: &AddrSpace, value: u64) -> i64 {
-    let bits = (space.get_addr_size() as u32 * 8).min(64);
+    let bits = (space.get_addr_size() * 8).min(64);
     if bits >= 64 {
         return value as i64;
     }
@@ -349,17 +349,14 @@ pub fn backed(data: &Funcdata, call_op: OpId, proto: &FuncProto) -> bool {
                 } else {
                     None
                 };
-                if let Some(slot) = slot {
-                    if walk.mark(slot, size, true) {
-                        if let Some((reg, reg_size)) = stored_register(data, op_id, value) {
-                            if proto.has_effect(&reg, reg_size)
+                if let Some(slot) = slot
+                    && walk.mark(slot, size, true)
+                        && let Some((reg, reg_size)) = stored_register(data, op_id, value)
+                            && proto.has_effect(&reg, reg_size)
                                 == crate::fspec::effect_type::UNAFFECTED
                             {
                                 walk.saves.push((slot, size, reg, reg_size));
                             }
-                        }
-                    }
-                }
                 continue;
             }
             _ => {}
@@ -391,13 +388,12 @@ pub fn backed(data: &Funcdata, call_op: OpId, proto: &FuncProto) -> bool {
             }
             continue;
         }
-        if let Some(o) = data.vbank().get(out) {
-            if o.get_space().get_type() == spacetype::IPTR_PROCESSOR && !walk.saves.is_empty() {
+        if let Some(o) = data.vbank().get(out)
+            && o.get_space().get_type() == spacetype::IPTR_PROCESSOR && !walk.saves.is_empty() {
                 let (written, wsize) = (o.get_addr().clone(), o.get_size());
                 walk.saves
                     .retain(|(_, _, reg, size)| !overlaps(&written, wsize, reg, *size));
             }
-        }
     }
     if let Some(at_entry) = entry {
         for &(slot, size, _, _) in &walk.saves {

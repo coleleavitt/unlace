@@ -260,7 +260,7 @@ struct RunEvent {
 
 impl LinearRun {
     fn contains(self, addr: u64) -> bool {
-        self.start <= addr && addr < self.end && (addr - self.start) % self.stride == 0
+        self.start <= addr && addr < self.end && (addr - self.start).is_multiple_of(self.stride)
     }
 
     fn count(self) -> usize {
@@ -347,21 +347,20 @@ impl<'a> GapDecoder<'a> {
                 )
             })
         };
-        if let Some(cached) = self.cache.get(&vma) {
-            if self.frame_instructions.is_none() || cached.as_ref().is_some_and(current) {
-                return cached.clone();
-            }
+        if let Some(cached) = self.cache.get(&vma)
+            && (self.frame_instructions.is_none() || cached.as_ref().is_some_and(current))
+        {
+            return cached.clone();
         }
         if let Some(insn) = self
             .frame_instructions
             .as_ref()
             .and_then(|insns| insns.get(&vma))
+            && current(insn)
         {
-            if current(insn) {
-                let insn = Rc::clone(insn);
-                self.cache.insert(vma, Some(Rc::clone(&insn)));
-                return Some(insn);
-            }
+            let insn = Rc::clone(insn);
+            self.cache.insert(vma, Some(Rc::clone(&insn)));
+            return Some(insn);
         }
         if let Some(insn) = self.remembered(vma) {
             self.cache.insert(vma, Some(Rc::clone(&insn)));
@@ -400,10 +399,10 @@ impl<'a> GapDecoder<'a> {
             .first_key_value()
             .is_some_and(|(&addr, _)| addr < cursor)
         {
-            if let Some((_, Some(mut retired))) = self.cache.pop_first() {
-                if Rc::get_mut(&mut retired).is_some() {
-                    self.spare = Some(retired);
-                }
+            if let Some((_, Some(mut retired))) = self.cache.pop_first()
+                && Rc::get_mut(&mut retired).is_some()
+            {
+                self.spare = Some(retired);
             }
         }
     }
@@ -731,12 +730,12 @@ fn check_valid_subroutine_with_policy(
     if let Some(run) = decoder
         .linear_run
         .filter(|run| run.strict == strict && run.contains(entry))
+        && entry >= gap_lo
+        && entry < gap_hi
     {
-        if entry >= gap_lo && entry < gap_hi {
-            let count = ((run.end.min(gap_hi) - entry) / run.stride).min(MAX_FOLLOW_INSNS as u64);
-            prefix.end = entry + count * run.stride;
-            prefix.stride = run.stride;
-        }
+        let count = ((run.end.min(gap_hi) - entry) / run.stride).min(MAX_FOLLOW_INSNS as u64);
+        prefix.end = entry + count * run.stride;
+        prefix.stride = run.stride;
     }
     while decoder
         .linear_events
@@ -942,12 +941,12 @@ fn follow_subroutine(
         if extend_linear {
             let fall = vma.checked_add(u64::from(insn.len));
             if vma == linear.end
-                && fall.is_some()
+                && let Some(fall_vma) = fall
                 && insn.fall_through == fall
                 && (linear.count() == 0 || linear.stride == u64::from(insn.len))
             {
                 linear.stride = u64::from(insn.len);
-                linear.end = fall.unwrap();
+                linear.end = fall_vma;
                 decoder.linear_run = Some(linear);
                 if event.adds_info || event.corroborated || !event.branches.is_empty() {
                     decoder.linear_events.push_back(event);
@@ -1063,7 +1062,7 @@ pub(crate) fn run_aif_after_frames(
     aifcorroborate: bool,
     aifbracket: Option<&aifbracket::BracketEvidence>,
     aifpoolslide: Option<&unlace_decomp::architecture::Architecture>,
-    mut straight_line: Option<&mut BTreeSet<u64>>,
+    straight_line: Option<&mut BTreeSet<u64>>,
     memo: Option<&Rc<crate::listing::decodememo::DecodeMemo>>,
 ) -> Vec<u64> {
     let _probe = arm_gap_probe_scope(translate);
@@ -1088,8 +1087,7 @@ pub(crate) fn run_aif_after_frames(
         None,
         None,
     );
-    if let (Some(out), Some(reached)) = (straight_line.as_deref_mut(), decoder.straight_line.take())
-    {
+    if let (Some(out), Some(reached)) = (straight_line, decoder.straight_line.take()) {
         out.extend(reached);
     }
     entries
@@ -1197,11 +1195,11 @@ fn aif_candidates(
         {
             frame_spans.next();
         }
-        if let Some(&(&start, &len)) = frame_spans.peek() {
-            if start <= gap_start {
-                cursor = listing.first_undefined_after(start.saturating_add(u64::from(len) - 1));
-                continue;
-            }
+        if let Some(&(&start, &len)) = frame_spans.peek()
+            && start <= gap_start
+        {
+            cursor = listing.first_undefined_after(start.saturating_add(u64::from(len) - 1));
+            continue;
         }
         // The extent of THIS contiguous undefined gap: from `gap_start` up to the
         // next decoded instruction start (or, if none, an open upper bound). Only
@@ -1286,13 +1284,13 @@ fn aif_candidates(
                         (None, aifnoppad::Filler::Before(at)) if body.contains(&at) => at,
                         _ => gap_start,
                     };
-                    if roots.is_none() && entry == gap_start {
-                        if let Some(prefix) =
+                    if roots.is_none()
+                        && entry == gap_start
+                        && let Some(prefix) =
                             sparcprologue::prefix(decoder, listing, &claimed, entry)
-                        {
-                            body.extend([prefix, prefix + 4]);
-                            entry = prefix;
-                        }
+                    {
+                        body.extend([prefix, prefix + 4]);
+                        entry = prefix;
                     }
                     if let Some(bodies) = &mut bodies {
                         bodies.insert(

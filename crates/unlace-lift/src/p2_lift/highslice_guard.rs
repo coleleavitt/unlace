@@ -5,7 +5,6 @@ use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
 #[doc(hidden)]
-
 pub fn matches(fd: &Funcdata, first: OpId, second: OpId) -> bool {
     proof(fd, first, second).is_some()
 }

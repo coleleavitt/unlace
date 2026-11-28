@@ -17,7 +17,6 @@ use std::sync::Arc;
 use unlace_base::address::Address;
 use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
-use unlace_base::types::Wrap;
 
 use crate::loadimage::{IMAGE_WINDOW_BYTES, ImageBytes, LoadImage};
 

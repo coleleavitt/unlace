@@ -159,6 +159,7 @@ impl Action for ActionRepString {
 /// What the element store writes: a copied element (the source pointer's phi
 /// output and its entering value), a fill byte, constant or not, or a fill
 /// element whose bytes differ.
+#[allow(clippy::enum_variant_names)]
 enum Element {
     Copy {
         src_out: VarnodeId,

@@ -229,8 +229,7 @@ pub(super) fn analyze(
     let mut scramble = 0u8;
     let mut copier_pos = position2;
     if matches!(intro, Intro::V112 | Intro::V114 | Intro::V150) && position2 + 200 <= EP_LEN as i64
-    {
-        if let Some(d) = descrambler(ep, position2) {
+        && let Some(d) = descrambler(ep, position2) {
             scramble = match ep[d.op as usize] {
                 0x33 => 1,
                 0x03 => 2,
@@ -247,7 +246,6 @@ pub(super) fn analyze(
                 descramble(ep, scramble, count, last, key)?;
             }
         }
-    }
 
     let mut decompr_pos = 0;
     let (mut copier_byte17, mut copier_byte23) = (0, 0);

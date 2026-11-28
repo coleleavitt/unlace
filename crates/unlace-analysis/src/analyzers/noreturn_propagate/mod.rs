@@ -266,7 +266,7 @@ impl<'a> ListingInstructionBody<'a> {
     }
 
     fn contains(&self, vma: u64) -> bool {
-        vma >= self.entry && self.next.map_or(true, |next| vma < next)
+        vma >= self.entry && self.next.is_none_or(|next| vma < next)
     }
 }
 
@@ -296,7 +296,7 @@ impl<'a> InstructionBody for ListingInstructionBody<'a> {
 }
 
 #[cfg(test)]
-impl<'a> InstructionBody for BTreeMap<u64, &'a Insn> {
+impl InstructionBody for BTreeMap<u64, &Insn> {
     fn instruction_at(&self, vma: u64) -> Option<&Insn> {
         self.get(&vma).copied()
     }
@@ -338,19 +338,17 @@ impl ErrorRecognizer {
         let is_error_name = |n: &str| n == "error" || n == "error_at_line";
         // Dynamic imports (PLT stubs): the common dynamically-linked case.
         for p in imports {
-            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(&p.name)) {
-                if is_error_name(n.trim_start_matches('_')) {
+            if let Ok(n) = String::from_utf8(crate::loader::elf_plt::strip_version(&p.name))
+                && is_error_name(n.trim_start_matches('_')) {
                     error_addrs.insert(p.addr);
                 }
-            }
         }
         // Named functions in the Listing (a defined/statically-linked `error`).
         for (&entry, f) in listing.functions() {
-            if let Some(n) = f.name.as_deref() {
-                if is_error_name(n.trim_start_matches('_')) {
+            if let Some(n) = f.name.as_deref()
+                && is_error_name(n.trim_start_matches('_')) {
                     error_addrs.insert(entry);
                 }
-            }
         }
         ErrorRecognizer {
             error_addrs,
@@ -641,7 +639,7 @@ fn reaches_only_noreturn_walk<B: InstructionBody + ?Sized>(
     slot_calls: &BTreeSet<u64>,
     error_recog: &ErrorRecognizer,
 ) -> bool {
-    let in_body = |vma: u64| vma >= entry && next.map_or(true, |n| vma < n);
+    let in_body = |vma: u64| vma >= entry && next.is_none_or(|n| vma < n);
     if body.instruction_at(entry).is_none() {
         return false;
     }
@@ -755,15 +753,14 @@ fn reaches_only_noreturn_walk<B: InstructionBody + ?Sized>(
                     }
                 }
                 // A conditional jump also falls through.
-                if insn.flow.has_fallthrough {
-                    if let Some(ft) = insn.fall_through {
+                if insn.flow.has_fallthrough
+                    && let Some(ft) = insn.fall_through {
                         match classify(ft) {
                             Succ::Follow(v) => todo.push(v),
                             Succ::NoReturn => hit_noreturn = true,
                             Succ::Escape => return false,
                         }
                     }
-                }
             }
             continue;
         }

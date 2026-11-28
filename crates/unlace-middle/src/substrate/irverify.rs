@@ -376,12 +376,11 @@ fn dominators(
                     Some(cur) => intersect(pred, cur, &rpo, &idom),
                 });
             }
-            if let Some(ni) = new_idom {
-                if idom.get(&bl) != Some(&ni) {
+            if let Some(ni) = new_idom
+                && idom.get(&bl) != Some(&ni) {
                     idom.insert(bl, ni);
                     changed = true;
                 }
-            }
         }
     }
     (rpo, idom)

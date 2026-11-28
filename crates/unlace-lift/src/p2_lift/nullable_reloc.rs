@@ -106,8 +106,8 @@ pub fn materialize(data: &mut Funcdata, address: &Address, step: i32, ops: &[OpI
                 if matches!(
                     op.code(),
                     OpCode::CPUI_CALL | OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH
-                ) {
-                    if let Some(vn) = op.get_in(0).filter(|&vn| {
+                )
+                    && let Some(vn) = op.get_in(0).filter(|&vn| {
                         data.vbank()
                             .get(vn)
                             .is_some_and(|v| v.get_addr().get_offset() == record.symbol)
@@ -118,7 +118,6 @@ pub fn materialize(data: &mut Funcdata, address: &Address, step: i32, ops: &[OpI
                             .set_synthetic_literal(false);
                         found = true;
                     }
-                }
             }
             if !found {
                 data.warning(
@@ -299,8 +298,8 @@ pub fn materialize(data: &mut Funcdata, address: &Address, step: i32, ops: &[OpI
                 ) {
                     continue;
                 }
-                if let Some(out) = op.get_out() {
-                    if let Some(types) = data.get_arch().types_rc() {
+                if let Some(out) = op.get_out()
+                    && let Some(types) = data.get_arch().types_rc() {
                         let size = data.vbank().get(out).unwrap().get_size();
                         if let Ok(ty) = types.get_base(size, crate::dtype::type_metatype::TYPE_UINT)
                         {
@@ -310,7 +309,6 @@ pub fn materialize(data: &mut Funcdata, address: &Address, step: i32, ops: &[OpI
                                 .update_type_locked(ty, true, true);
                         }
                     }
-                }
             }
         }
     }
@@ -331,8 +329,8 @@ fn emit(
     data.op_set_all_input(op, inputs)
         .expect("symbolic expression");
     let out = data.new_unique_out(size, op).expect("symbolic output");
-    if code != OpCode::CPUI_LOAD {
-        if let Some(types) = data.get_arch().types_rc() {
+    if code != OpCode::CPUI_LOAD
+        && let Some(types) = data.get_arch().types_rc() {
             let meta = crate::dtype::type_metatype::TYPE_UINT;
             if let Ok(ty) = types.get_base(size, meta) {
                 data.vbank_mut()
@@ -341,7 +339,6 @@ fn emit(
                     .update_type_locked(ty, true, true);
             }
         }
-    }
     data.obank_mut().insert_before_dead(op, before);
     out
 }

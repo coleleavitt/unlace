@@ -21,6 +21,7 @@ use crate::funcdata::Funcdata;
 
 /// The storage and width of each isolated Symbol of `fd` that is a parameter
 /// or holds its storage for the whole function, with the ones `fd` was itself given.
+#[allow(clippy::mutable_key_type)]
 pub fn carried(fd: &Funcdata) -> BTreeSet<(Address, int4)> {
     let mut out = fd.unlace_prior_names().isolated.clone();
     let Some(lm) = fd.get_scope_local().filter(|lm| lm.has_isolated_symbols()) else {
@@ -42,6 +43,7 @@ pub fn carried(fd: &Funcdata) -> BTreeSet<(Address, int4)> {
 
 /// Is `high` a variable the previous decompile isolated ([`carried`]): does
 /// it hold the function input or the address-tied storage of one?
+#[allow(clippy::mutable_key_type)]
 pub fn holds(fd: &Funcdata, high: HighVariableId) -> bool {
     let isolated = &fd.unlace_prior_names().isolated;
     if isolated.is_empty() {

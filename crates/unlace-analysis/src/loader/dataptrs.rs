@@ -767,7 +767,7 @@ fn pe_relocated<Pe: ImageNtHeaders>(file: &object::File, pe: &PeFile<'_, Pe>) ->
             ));
             break;
         }
-        for entry in data[at + 8..at + size].chunks_exact(2) {
+        for entry in data[at + 8..at + size].as_chunks::<2>().0 {
             let entry = u16::from_le_bytes([entry[0], entry[1]]);
             let width: u8 = match entry >> 12 {
                 IMAGE_REL_BASED_DIR64 => 8,

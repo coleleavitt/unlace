@@ -395,11 +395,10 @@ pub fn render_type_definitions(
     // (drives the `/* opaque */` annotation on forward-only names).
     let mut complete_names: HashSet<String> = HashSet::new();
     for ct in deporder {
-        if is_composite(ct) && ct.get_typedef().is_none() && !ct.is_incomplete() {
-            if let Some(name) = c_type_definition_name(ct) {
+        if is_composite(ct) && ct.get_typedef().is_none() && !ct.is_incomplete()
+            && let Some(name) = c_type_definition_name(ct) {
                 complete_names.insert(name.into_owned());
             }
-        }
     }
 
     let mut out = String::new();

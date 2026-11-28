@@ -31,14 +31,13 @@ pub(super) fn lowered_switch_label_form(
     if !(0..jt.num_entries()).any(|i| jt.get_label_by_index(i) & sign_bit != 0) {
         return None;
     }
-    if let Some(ct) = switch_variable_type(fd, arch, op) {
-        if ct.get_size() == sz && matches!(ct.get_metatype(), TYPE_INT | TYPE_UINT) {
+    if let Some(ct) = switch_variable_type(fd, arch, op)
+        && ct.get_size() == sz && matches!(ct.get_metatype(), TYPE_INT | TYPE_UINT) {
             return Some((
                 printed_integer_signedness(&ct, signed_text_byte) == Some(true),
                 None,
             ));
         }
-    }
     let signed = jt.unlace_has_signed_labels();
     let cast = arch
         .types()
@@ -186,11 +185,10 @@ pub fn declared_variable_type(
             _ => continue,
         };
         for p in 0..proto.num_params() {
-            if let Some(param) = proto.get_param(p) {
-                if param.get_address() == *m.get_addr() && param.get_size() == m.get_size() {
+            if let Some(param) = proto.get_param(p)
+                && param.get_address() == *m.get_addr() && param.get_size() == m.get_size() {
                     return param.get_type().cloned();
                 }
-            }
         }
     }
     if let Some(locked) = locked_scalar_local_type(fd, hid) {

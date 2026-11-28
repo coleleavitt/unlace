@@ -779,14 +779,12 @@ impl HighVariable {
         }
         let meta = type_.get_metatype();
         if meta == type_metatype::TYPE_PARTIALUNION || meta == type_metatype::TYPE_PARTIALSTRUCT {
-            if self.symbol.is_some() && self.symbol_offset != -1 {
-                if let Some(submeta) = symbol_submeta {
-                    if submeta == type_metatype::TYPE_STRUCT || submeta == type_metatype::TYPE_UNION
+            if self.symbol.is_some() && self.symbol_offset != -1
+                && let Some(submeta) = symbol_submeta
+                    && (submeta == type_metatype::TYPE_STRUCT || submeta == type_metatype::TYPE_UNION)
                     {
                         return; // Don't strip the partial union
                     }
-                }
-            }
         } else if type_.is_enum_type() {
             // Only preserve partial enum on a constant
             if self.inst.len() == 1
@@ -1544,18 +1542,16 @@ impl HighVariableBank {
             None => return,
             Some(p) => (p.high, p.intersection.clone()),
         };
-        if let Some(h) = self.highs.get(&high) {
-            if (h.highflags & high_flags::intersectdirty) != 0 {
+        if let Some(h) = self.highs.get(&high)
+            && (h.highflags & high_flags::intersectdirty) != 0 {
                 return; // intersection list dirty, covers recomputed anyway
             }
-        }
         for inter in intersection {
             let ih = self.pieces.get(&inter).map(|p| p.high);
-            if let Some(ih) = ih {
-                if let Some(h) = self.highs.get_mut(&ih) {
+            if let Some(ih) = ih
+                && let Some(h) = self.highs.get_mut(&ih) {
                     h.highflags |= high_flags::extendcoverdirty;
                 }
-            }
         }
         if let Some(h) = self.highs.get_mut(&high) {
             h.highflags |= high_flags::extendcoverdirty;
@@ -1575,11 +1571,10 @@ impl HighVariableBank {
         };
         for pid in members {
             let high = self.pieces.get(&pid).map(|p| p.high);
-            if let Some(high) = high {
-                if let Some(h) = self.highs.get_mut(&high) {
+            if let Some(high) = high
+                && let Some(h) = self.highs.get_mut(&high) {
                     h.highflags |= high_flags::intersectdirty | high_flags::extendcoverdirty;
                 }
-            }
         }
     }
 
@@ -1608,11 +1603,10 @@ impl HighVariableBank {
             None => return,
             Some(p) => (p.high, p.group_offset, p.size, p.group),
         };
-        if let Some(h) = self.highs.get(&high) {
-            if (h.highflags & high_flags::intersectdirty) == 0 {
+        if let Some(h) = self.highs.get(&high)
+            && (h.highflags & high_flags::intersectdirty) == 0 {
                 return;
             }
-        }
         let end_offset = group_offset + size;
         let members: Vec<(VariablePieceId, int4, int4)> = match self.groups.get(&group) {
             None => return,
@@ -1652,11 +1646,10 @@ impl HighVariableBank {
             None => return,
             Some(p) => (p.high, p.intersection.clone()),
         };
-        if let Some(h) = self.highs.get(&high) {
-            if (h.highflags & (high_flags::coverdirty | high_flags::extendcoverdirty)) == 0 {
+        if let Some(h) = self.highs.get(&high)
+            && (h.highflags & (high_flags::coverdirty | high_flags::extendcoverdirty)) == 0 {
                 return;
             }
-        }
         if let Some(h) = self.highs.get_mut(&high) {
             h.update_internal_cover(ctx);
         }
@@ -1871,11 +1864,10 @@ impl HighVariableBank {
             None => return,
             Some(h) => h.remove(vn, vn_has_symbol_entry, ctx),
         };
-        if is_piece {
-            if let Some(p) = self.highs.get(&id).and_then(|h| h.piece) {
+        if is_piece
+            && let Some(p) = self.highs.get(&id).and_then(|h| h.piece) {
                 self.mark_extend_cover_dirty(p);
             }
-        }
     }
 
     /// Return \b true if the given HighVariable has no member Varnodes left
@@ -1988,13 +1980,12 @@ impl HighVariableBank {
                 (h2.highflags & high_flags::symboldirty) != 0,
             )
         };
-        if tv2_symbol.is_some() && !tv2_symdirty {
-            if let Some(h1) = self.highs.get_mut(&id1) {
+        if tv2_symbol.is_some() && !tv2_symdirty
+            && let Some(h1) = self.highs.get_mut(&id1) {
                 h1.symbol = tv2_symbol;
                 h1.symbol_offset = tv2_symboloffset;
                 h1.highflags &= !high_flags::symboldirty;
             }
-        }
 
         let num1 = self.highs.get(&id1).unwrap().num_merge_classes;
         let inst2: Vec<VarnodeId> = self.highs.get(&id2).unwrap().inst.clone();

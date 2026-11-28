@@ -59,13 +59,12 @@ pub fn parse_function_spec(spec: &str) -> Result<FunctionSpec, String> {
                 format!("--define-function {spec:?}: {end:?} is not a hex address")
             })?),
         };
-    if let Some(end) = end {
-        if end <= start {
+    if let Some(end) = end
+        && end <= start {
             return Err(format!(
                 "--define-function {spec:?}: end {end:#x} must be above start {start:#x}"
             ));
         }
-    }
     Ok(FunctionSpec {
         start,
         end,

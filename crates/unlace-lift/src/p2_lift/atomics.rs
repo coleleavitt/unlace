@@ -238,11 +238,10 @@ impl Eval<'_> {
     }
 
     fn build(&self, code: OpCode, size: i32, mut args: Vec<Expr>) -> Expr {
-        if size <= 8 {
-            if let Some(v) = fold(code, &args) {
+        if size <= 8
+            && let Some(v) = fold(code, &args) {
                 return Expr::Const(v & mask(size), size);
             }
-        }
         match code {
             OpCode::CPUI_COPY => args.swap_remove(0),
             OpCode::CPUI_INT_ADD
@@ -650,11 +649,10 @@ fn pair_halves(e: &Expr, width: i32) -> Option<(Storage, Storage)> {
         _ => None,
     };
     for (h, l) in [(&args[0], &args[1]), (&args[1], &args[0])] {
-        if let (Some(hi), Some(lo)) = (shifted(h), zext(l)) {
-            if !hi.overlaps(lo) {
+        if let (Some(hi), Some(lo)) = (shifted(h), zext(l))
+            && !hi.overlaps(lo) {
                 return Some((hi, lo));
             }
-        }
     }
     None
 }
@@ -1003,13 +1001,12 @@ pub fn rewrite(fd: &mut Funcdata, ops: &[OpId]) -> Option<OpId> {
     if !plan.operands.iter().all(|e| buildable(&state, e, new_ops)) {
         return None;
     }
-    if let (Access::Direct(_), Some(_)) = (access, plan.accumulator) {
-        if fd.obank().get(ops[store])?.code() != OpCode::CPUI_COPY
-            || plan.reads.values().any(|r| *r == Read::After)
+    if let (Access::Direct(_), Some(_)) = (access, plan.accumulator)
+        && (fd.obank().get(ops[store])?.code() != OpCode::CPUI_COPY
+            || plan.reads.values().any(|r| *r == Read::After))
         {
             return None;
         }
-    }
     apply(
         fd,
         ops,
@@ -1539,8 +1536,8 @@ fn value_type(data: &Funcdata, op: OpId, size: int4) -> Option<Rc<Datatype>> {
         .vbank()
         .get(data.obank().get(op)?.get_in(1)?)?
         .get_type();
-    if pointer.get_metatype() == type_metatype::TYPE_PTR {
-        if let Some(pointee) = pointer.get_ptr_to() {
+    if pointer.get_metatype() == type_metatype::TYPE_PTR
+        && let Some(pointee) = pointer.get_ptr_to() {
             let integer = matches!(
                 pointee.get_metatype(),
                 type_metatype::TYPE_INT | type_metatype::TYPE_UINT
@@ -1549,7 +1546,6 @@ fn value_type(data: &Funcdata, op: OpId, size: int4) -> Option<Rc<Datatype>> {
                 return Some(pointee);
             }
         }
-    }
     data.get_arch().types()?.get_base(size, meta).ok()
 }
 
@@ -2161,11 +2157,10 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
             i if i == pass_at => Some(monitored),
             _ => None,
         };
-        if let Some(vn) = through {
-            if eval.read(&path.state, vn)? != *address.as_ref()? {
+        if let Some(vn) = through
+            && eval.read(&path.state, vn)? != *address.as_ref()? {
                 return None;
             }
-        }
         let op = eval.op(index)?;
         trace!("llsc: loop at {:?} op {} {:?}", p, index, op.code());
         match op.code() {
@@ -2332,11 +2327,10 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         if !dead_after(data, exit, &suspects(&path.state)) {
             return None;
         }
-        if let (Some(x), Some(state)) = (h_exit, h_state.as_ref()) {
-            if !dead_after(data, x, &suspects(state)) {
+        if let (Some(x), Some(state)) = (h_exit, h_state.as_ref())
+            && !dead_after(data, x, &suspects(state)) {
                 return None;
             }
-        }
     }
     let markers: Vec<OpId> = (0..ops.len())
         .filter(|&i| callother(i).is_some_and(|id| userops.ordering.contains(&id)))

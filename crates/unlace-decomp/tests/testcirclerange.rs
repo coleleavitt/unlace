@@ -257,9 +257,8 @@ impl CircleRangeTest {
         let mut dedup: Vec<uintb> = Vec::new();
         let mut lastel = self.elements[0];
         dedup.push(lastel);
-        for i in 1..self.elements.len() {
+        for &curel in &self.elements[1..] {
             // Deduplicate the values
-            let curel = self.elements[i];
             if curel == lastel {
                 continue;
             }

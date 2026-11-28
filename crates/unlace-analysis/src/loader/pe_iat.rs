@@ -147,10 +147,10 @@ fn c_runtime_names<Pe: ImageNtHeaders>(pe: &PeFile<Pe>) -> Vec<String> {
             continue;
         };
         while let Ok(Some(thunk)) = thunks.next::<Pe>() {
-            if let Ok(object::read::pe::Import::Name(_, n)) = it.import::<Pe>(thunk) {
-                if let Ok(name) = std::str::from_utf8(n) {
-                    names.push(name.to_string());
-                }
+            if let Ok(object::read::pe::Import::Name(_, n)) = it.import::<Pe>(thunk)
+                && let Ok(name) = std::str::from_utf8(n)
+            {
+                names.push(name.to_string());
             }
         }
     }
@@ -312,11 +312,8 @@ fn walk_import_table<Pe: ImageNtHeaders>(
             Err(_) => continue,
         };
         let mut i = 0u64;
-        loop {
-            let thunk = match names.next::<Pe>() {
-                Ok(Some(t)) => t,
-                _ => break, // end of this descriptor's thunk list (or a read error)
-            };
+        // Stops at the end of this descriptor's thunk list (or a read error).
+        while let Ok(Some(thunk)) = names.next::<Pe>() {
             let slot_va = image_base
                 .wrapping_add(iat_rva)
                 .wrapping_add(i.wrapping_mul(ptr));
@@ -556,10 +553,10 @@ fn decode_ff25(
             if let Some(name) = slot_to_name.get(&slot) {
                 // The thunk entry is the `FF` byte (the `call` target).  MinGW
                 // veneers have no CET `endbr` prefix, so no back-up is needed.
-                if let Some(tails) = rex_tails.as_deref_mut() {
-                    if super::rexthunk::is_rex_tail(vma, data, i, slot_to_name) {
-                        tails.insert(insn_addr);
-                    }
+                if let Some(tails) = rex_tails.as_deref_mut()
+                    && super::rexthunk::is_rex_tail(vma, data, i, slot_to_name)
+                {
+                    tails.insert(insn_addr);
                 }
                 out.push(ImportSym {
                     addr: insn_addr,

@@ -150,16 +150,14 @@ impl Origins<'_> {
                 if op.code() == OpCode::CPUI_INDIRECT && self.affector(id) == Some(point) {
                     continue;
                 }
-                if let Some(out) = op.get_out().and_then(|out| self.fd.vbank().get(out)) {
-                    if out.get_space().get_index() == self.space.get_index() {
-                        if let Some(offset) = self.contains(out.get_offset(), out.get_size(), byte)
+                if let Some(out) = op.get_out().and_then(|out| self.fd.vbank().get(out))
+                    && out.get_space().get_index() == self.space.get_index()
+                        && let Some(offset) = self.contains(out.get_offset(), out.get_size(), byte)
                         {
                             result.extend(self.value(op.get_out()?, offset)?);
                             found = true;
                             break;
                         }
-                    }
-                }
                 if self.effect(id, byte)? {
                     result.insert(ByteSource::Effect(SourcePoint::op(self.fd, id)?));
                 }

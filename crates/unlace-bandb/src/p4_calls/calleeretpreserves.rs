@@ -464,11 +464,10 @@ pub(crate) fn body_is_a_body(
                 .map(|sp| (sp.get_index(), p.offset, p.size as u64))
         });
     w.written_ranges().iter().any(|&(idx, off, sz)| {
-        if let Some((sidx, soff, ssz)) = stack_pointer {
-            if idx == sidx && off < soff + ssz && soff < off + sz as u64 {
+        if let Some((sidx, soff, ssz)) = stack_pointer
+            && idx == sidx && off < soff + ssz && soff < off + sz as u64 {
                 return false;
             }
-        }
         if w.is_return_target(idx, off, sz) {
             return false;
         }

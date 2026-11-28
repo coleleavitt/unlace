@@ -79,15 +79,15 @@ fn notes_name_the_hidden_pads() {
     let file = object::File::parse(bytes.as_slice()).unwrap();
     let notes: Vec<String> = eh_notes(&file).into_iter().map(|n| n.text).collect();
     assert!(
-        notes.contains(
-            &"eh: 1 call site unwinds to C++ landing pads (catch int); not shown".to_string()
-        ),
+        notes
+            .iter()
+            .any(|i| i == "eh: 1 call site unwinds to C++ landing pads (catch int); not shown"),
         "{notes:?}"
     );
     assert!(
-        notes.contains(
-            &"eh: 3 call sites unwind to C++ landing pads (3 cleanup); not shown".to_string()
-        ),
+        notes
+            .iter()
+            .any(|i| i == "eh: 3 call sites unwind to C++ landing pads (3 cleanup); not shown"),
         "{notes:?}"
     );
 }

@@ -259,13 +259,11 @@ fn block_sets_up(data: &Funcdata, from: OpId, reg: &Address) -> bool {
             | OpCode::CPUI_RETURN => return false,
             _ => {}
         }
-        if let Some(outid) = op.get_out() {
-            if let Some(out) = data.vbank().get(outid) {
-                if overlaps(out.get_addr(), out.get_size(), reg, REGISTER_SIZE) {
+        if let Some(outid) = op.get_out()
+            && let Some(out) = data.vbank().get(outid)
+                && overlaps(out.get_addr(), out.get_size(), reg, REGISTER_SIZE) {
                     return true;
                 }
-            }
-        }
         cur = prev;
     }
     false

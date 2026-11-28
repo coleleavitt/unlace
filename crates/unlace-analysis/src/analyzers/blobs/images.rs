@@ -199,7 +199,7 @@ pub(super) fn ico(d: &[u8], work: &mut Work) -> Option<usize> {
     }
     let mut end = 6 + 16 * count;
     let mut images: Vec<(usize, usize, usize, usize)> = Vec::new();
-    for entry in d.get(6..end)?.chunks_exact(16) {
+    for entry in d.get(6..end)?.as_chunks::<16>().0 {
         if entry[3] != 0
             || le16(entry, 4)? > 1
             || !matches!(le16(entry, 6)?, 0 | 1 | 4 | 8 | 16 | 24 | 32)

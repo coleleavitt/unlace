@@ -417,12 +417,11 @@ pub fn emit_settable_json(out: &mut String, st: &UnlaceSettable, live: Option<&s
     out.push(']');
     out.push_str(", \"default\": ");
     json_string(out, st.shipped);
-    if let Some(live) = live {
-        if !live.is_empty() {
+    if let Some(live) = live
+        && !live.is_empty() {
             out.push_str(", \"current\": ");
             json_string(out, live);
         }
-    }
     out.push_str(", \"destructive_as_default\": ");
     out.push_str(if st.destructive { "true" } else { "false" });
     out.push_str(", \"phase\": ");

@@ -17,8 +17,8 @@ pub(crate) fn is_mips(arch: object::Architecture) -> bool {
 /// The whole 32-bit instruction words at the start of `bytes`, in the image's
 /// byte order.
 pub(crate) fn words(bytes: &[u8], little: bool) -> impl Iterator<Item = u32> + '_ {
-    bytes.chunks_exact(4).map(move |raw| {
-        let raw = raw.try_into().unwrap();
+    bytes.as_chunks::<4>().0.iter().map(move |raw| {
+        let raw = *raw;
         if little {
             u32::from_le_bytes(raw)
         } else {

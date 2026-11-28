@@ -313,11 +313,10 @@ impl FuncdataUnionExt for Funcdata {
             None => return Ok(false),
         };
         let slot = crate::dynamic::DynamicHash::get_slot_from_hash(hash);
-        if let Some(res) = self.get_union_resolution(&sym_type, op, slot) {
-            if res.get_field_num() == field_number {
+        if let Some(res) = self.get_union_resolution(&sym_type, op, slot)
+            && res.get_field_num() == field_number {
                 return Ok(false);
             }
-        }
         let vn = if slot < 0 {
             self.obank().get(op).and_then(|o| o.get_out())
         } else {
@@ -350,15 +349,14 @@ impl FuncdataUnionExt for Funcdata {
                         unres_type = dt;
                     }
                 }
-                type_metatype::TYPE_PARTIALUNION => {
+                type_metatype::TYPE_PARTIALUNION
                     if dt
                         .get_partial_base()
                         .map(|p| Rc::ptr_eq(&p, &sym_type))
                         .unwrap_or(false)
-                    {
+                    => {
                         unres_type = dt;
                     }
-                }
                 _ => {}
             }
         }

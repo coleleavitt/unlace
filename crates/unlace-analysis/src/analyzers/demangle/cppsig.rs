@@ -39,6 +39,7 @@
 //!   3. a **cv- or ref-qualified** member (`_ZNK…`, demangled with a trailing
 //!      `const` / `volatile` / `&` / `&&`) — a qualifier that can only ever
 //!      attach to an implicit object parameter.
+//!
 //!   Plus the converse certainty: an **unqualified** name (`_Z3fooi` → `foo(int)`,
 //!   no `::` at all) can have no implicit object parameter, so its declared
 //!   parameters apply at position 0. Everything else is SKIPPED.
@@ -598,10 +599,10 @@ fn signature_parens(dem: &str) -> Option<(&str, &str, &str)> {
             }
             b')' => {
                 depth -= 1;
-                if depth == 0 {
-                    if let Some(s) = starts.pop() {
-                        last = Some((s, i));
-                    }
+                if depth == 0
+                    && let Some(s) = starts.pop()
+                {
+                    last = Some((s, i));
                 }
             }
             _ => {}

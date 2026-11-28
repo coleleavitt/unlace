@@ -151,7 +151,7 @@ fn loop_rewrite_reports_a_change_and_preserves_per_iteration_dataflow() {
     assert_eq!(fd.bblocks_ref().block(body).get_out(0), exit);
     let operations = fd.bb_ops(body);
     assert_eq!(operations.len(), 10);
-    for iteration in operations.chunks_exact(5) {
+    for iteration in operations.as_chunks::<5>().0 {
         let load = fd.obank().get(iteration[0]).unwrap();
         let store = fd.obank().get(iteration[1]).unwrap();
         assert_eq!(load.code(), OpCode::CPUI_LOAD);

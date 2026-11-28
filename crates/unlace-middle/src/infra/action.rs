@@ -1688,11 +1688,9 @@ fn touch_neighbourhood(set: &mut crate::fasthash::FxHashSet<OpId>, data: &Funcda
                     .get_in(slot)
                     .and_then(|v| data.vbank().get(v))
                     .and_then(|v| v.get_def())
-                {
-                    if set.insert(d) {
+                    && set.insert(d) {
                         next.push(d);
                     }
-                }
             }
             if let Some(v) = o.get_out().and_then(|v| data.vbank().get(v)) {
                 for d in v.descend_iter() {
@@ -1829,7 +1827,7 @@ impl Action for ActionPool {
                     || data
                         .obank()
                         .get(op)
-                        .map_or(true, |o| o.get_time() > newer_than || o.is_dead());
+                        .is_none_or(|o| o.get_time() > newer_than || o.is_dead());
                 if !keep {
                     self.advance_op_state(data, op);
                     self.rule_index = 0;

@@ -103,15 +103,13 @@ impl PrintC {
             .has_store()
             .then(|| call.proto().get_output_type())
             .flatten()
-        {
-            if proto_type.get_metatype() != type_metatype::TYPE_VOID
+            && proto_type.get_metatype() != type_metatype::TYPE_VOID
                 && (!integer(proto_type)
                     || declarator_parts(proto_type, self.rt_ctx.clone())
                         != declarator_parts(source_type, self.rt_ctx.clone()))
             {
                 return None;
             }
-        }
         let target = if self.out_lang == OutLang::Rust {
             self.rust_integer_output_type(fd, arch, output)
         } else if node.is_implied() {

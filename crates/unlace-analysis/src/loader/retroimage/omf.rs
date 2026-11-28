@@ -586,10 +586,8 @@ fn read(filename: &str, bytes: &[u8]) -> UnlaceResult<Parsed> {
                 }
             }
             COMDAT => comdats += 1,
-            COMENT => {
-                if contents.get(1..3) == Some(&[0xa0, 0x01]) {
-                    impdefs += 1;
-                }
+            COMENT if contents.get(1..3) == Some(&[0xa0, 0x01]) => {
+                impdefs += 1;
             }
             _ => {}
         }
@@ -917,14 +915,13 @@ pub fn parse(filename: &str, bytes: &[u8]) -> UnlaceResult<RetroImage> {
         })
         .ok_or_else(|| bad("no code segment"))?;
     let mut tracked = Vec::new();
-    if !wide {
-        if let Some(index) = parsed
+    if !wide
+        && let Some(index) = parsed
             .groups
             .iter()
             .position(|group| group.name.eq_ignore_ascii_case("DGROUP"))
-        {
-            tracked.push(("DS", group_base(index) / 16));
-        }
+    {
+        tracked.push(("DS", group_base(index) / 16));
     }
     if parsed.modules > 1 {
         notes.push(format!("{} modules laid out as one image", parsed.modules));

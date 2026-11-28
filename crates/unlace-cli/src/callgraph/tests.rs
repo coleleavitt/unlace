@@ -147,7 +147,7 @@ fn only_an_aligned_word_equal_to_an_entry_stores_it() {
 #[test]
 fn every_function_of_a_relocatable_object_is_open() {
     let bytes = fixture("calleevote_ops_x86_64.o");
-    let file = unlace_analysis::loadimage_object::parse_object(&*bytes).expect("an ELF object");
+    let file = unlace_analysis::loadimage_object::parse_object(&bytes).expect("an ELF object");
     let entries = [0x400000, 0x400010, 0x400020, 0x400040, 0x400060];
     assert_eq!(
         open_function_entries(&file, &bytes, &entries).len(),
@@ -161,7 +161,7 @@ fn every_function_of_a_relocatable_object_is_open() {
 #[test]
 fn every_function_off_x86_64_is_open() {
     let bytes = fixture("calleevote_callback_mipsel");
-    let file = unlace_analysis::loadimage_object::parse_object(&*bytes).expect("an ELF image");
+    let file = unlace_analysis::loadimage_object::parse_object(&bytes).expect("an ELF image");
     let entries = [0x400110, 0x40011c, 0x400144, 0x400168, 0x40018c];
     assert_eq!(
         open_function_entries(&file, &bytes, &entries).len(),
@@ -175,7 +175,7 @@ fn every_function_off_x86_64_is_open() {
 #[test]
 fn a_table_in_code_loaded_at_zero_stores_its_entries() {
     let bytes = fixture("calleevote_zero_x86_64");
-    let file = unlace_analysis::loadimage_object::parse_object(&*bytes).expect("an ELF image");
+    let file = unlace_analysis::loadimage_object::parse_object(&bytes).expect("an ELF image");
     let entries = [0x10, 0x20, 0x30, 0x60, 0x80];
     let open = open_function_entries(&file, &bytes, &entries);
     assert_eq!(open.into_iter().collect::<Vec<_>>(), vec![0x10, 0x20]);

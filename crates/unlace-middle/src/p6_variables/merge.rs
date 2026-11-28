@@ -775,20 +775,16 @@ impl Merge {
 
         // Isolate the use of illegal inputs: no speculative merges with them
         // unless the illegal input is only used indirectly.
-        if ctx.high_is_input(high_out) {
-            if let Some(vn) = ctx.bank_input_varnode(high_out) {
-                if ctx.vn_is_illegal_input(vn) && !ctx.vn_is_indirect_only(vn) {
+        if ctx.high_is_input(high_out)
+            && let Some(vn) = ctx.bank_input_varnode(high_out)
+                && ctx.vn_is_illegal_input(vn) && !ctx.vn_is_indirect_only(vn) {
                     return false;
                 }
-            }
-        }
-        if ctx.high_is_input(high_in) {
-            if let Some(vn) = ctx.bank_input_varnode(high_in) {
-                if ctx.vn_is_illegal_input(vn) && !ctx.vn_is_indirect_only(vn) {
+        if ctx.high_is_input(high_in)
+            && let Some(vn) = ctx.bank_input_varnode(high_in)
+                && ctx.vn_is_illegal_input(vn) && !ctx.vn_is_indirect_only(vn) {
                     return false;
                 }
-            }
-        }
         if ctx.bank_symbol_isolated(high_in) {
             return false;
         }
@@ -1315,7 +1311,7 @@ impl Merge {
     pub fn budget(&mut self) -> UnlaceResult<()> {
         if !self.spent {
             self.probes = self.probes.wrapping_add(1);
-            self.spent = self.probes % BUDGET_STRIDE == 0
+            self.spent = self.probes.is_multiple_of(BUDGET_STRIDE)
                 && crate::budget::deadline_passed_in("variable merging");
         }
         if self.spent {
@@ -2355,11 +2351,10 @@ impl Merge {
                                 Some(_) => continue,
                             },
                             Some(def2) => {
-                                if let Some(def1) = ctx.vn_def(vn) {
-                                    if ctx.op_order(def2) < ctx.op_order(def1) {
+                                if let Some(def1) = ctx.vn_def(vn)
+                                    && ctx.op_order(def2) < ctx.op_order(def1) {
                                         continue;
                                     }
-                                }
                             }
                         }
                     } else if boundtype == 3 {

@@ -97,6 +97,12 @@ pub struct RuleConstSpaceLoad {
     group: String,
 }
 
+impl Default for RuleConstSpaceLoad {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RuleConstSpaceLoad {
     /// Build the rule in the default `analysis` group.
     pub fn new() -> RuleConstSpaceLoad {

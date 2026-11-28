@@ -1793,6 +1793,7 @@ impl Decoder for PackedDecode<'_> {
         }
         self.close_element_skipping(id)?;
         let end = self.end_pos;
+        #[allow(clippy::needless_range_loop)]
         for seq in start.seq..=end.seq {
             let chunk = &self.in_stream[seq];
             let from = if seq == start.seq { start.current } else { 0 };

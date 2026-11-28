@@ -603,20 +603,20 @@ fn decode_typeinfos(
 /// whose whole base array resolves means the vmi form; otherwise the two-word form.
 fn sniff_flavor(img: &ImageBytes, rk: &RefKind, addr: u64, accepted: &HashSet<u64>) -> Flavor {
     let ptr = rk.ptr_size() as u64;
-    if let Some(base) = read_ptr(img, rk, addr + 2 * ptr) {
-        if accepted.contains(&base) {
-            return Flavor::SiClass;
-        }
+    if let Some(base) = read_ptr(img, rk, addr + 2 * ptr)
+        && accepted.contains(&base)
+    {
+        return Flavor::SiClass;
     }
-    if let Some(count) = read_u32(img, rk, addr + 2 * ptr + 4) {
-        if (1..=MAX_BASES).contains(&count) {
-            let all_resolve = (0..count as u64).all(|i| {
-                read_ptr(img, rk, addr + 2 * ptr + 8 + i * 2 * ptr)
-                    .is_some_and(|b| accepted.contains(&b))
-            });
-            if all_resolve {
-                return Flavor::VmiClass;
-            }
+    if let Some(count) = read_u32(img, rk, addr + 2 * ptr + 4)
+        && (1..=MAX_BASES).contains(&count)
+    {
+        let all_resolve = (0..count as u64).all(|i| {
+            read_ptr(img, rk, addr + 2 * ptr + 8 + i * 2 * ptr)
+                .is_some_and(|b| accepted.contains(&b))
+        });
+        if all_resolve {
+            return Flavor::VmiClass;
         }
     }
     Flavor::Class
@@ -690,7 +690,8 @@ fn resolve_virtual_bases(
     typeinfos: &mut [TypeInfo],
     subs: &[SubVtable],
 ) {
-    let shape: HashMap<u64, (Vec<(u64, i64)>, Vec<(u64, i64)>)> = typeinfos
+    type BaseShape = (Vec<(u64, i64)>, Vec<(u64, i64)>);
+    let shape: HashMap<u64, BaseShape> = typeinfos
         .iter()
         .map(|t| (t.addr, (t.bases.clone(), t.virtual_bases.clone())))
         .collect();
@@ -735,6 +736,7 @@ fn resolve_virtual_bases(
 /// A single scan rather than one [`ImageBytes::find_ptrs`] per class: the per-class
 /// form is `O(classes × image)`, which on a real C++ library with hundreds of
 /// polymorphic classes is the difference between milliseconds and seconds.
+#[cfg(test)]
 fn recover_subvtables(
     img: &ImageBytes,
     rk: &RefKind,
@@ -745,7 +747,7 @@ fn recover_subvtables(
     recover_vtables(img, rk, text, relocated, typeinfos).0
 }
 
-/// [`recover_subvtables`], plus `(typeinfo, vptr)` of every primary vtable that
+/// `recover_subvtables`, plus `(typeinfo, vptr)` of every primary vtable that
 /// walks to no slot because its first two are null ([`null_dtor_pair`]).
 fn recover_vtables(
     img: &ImageBytes,
@@ -779,7 +781,7 @@ fn recover_vtables(
         let offset_to_top = sign_extend(raw_top, rk);
         // The ABI's exact constraint: offset-to-top is 0 for the primary sub-vtable
         // and NEGATIVE for a secondary — never positive, never image-sized.
-        if offset_to_top > 0 || offset_to_top < -MAX_SUBOBJECT_OFFSET {
+        if !(-MAX_SUBOBJECT_OFFSET..=0).contains(&offset_to_top) {
             continue;
         }
         let first_slot = ti_slot + ptr;

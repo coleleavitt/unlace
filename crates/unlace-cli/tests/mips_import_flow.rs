@@ -63,7 +63,7 @@ fn run(image: &Value, options: &[&str]) -> Value {
     doc
 }
 
-fn body<'a>(doc: &'a Value, address: u64) -> &'a str {
+fn body(doc: &Value, address: u64) -> &str {
     let f = doc["functions"]
         .as_array()
         .unwrap()

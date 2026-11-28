@@ -216,7 +216,7 @@ impl<'a> PoolImage<'a> {
     /// a read-only section.
     pub(super) fn word_at(&self, vma: u64) -> Option<u64> {
         let ptr = u64::from(self.ptr);
-        if vma % ptr != 0 {
+        if !vma.is_multiple_of(ptr) {
             return None;
         }
         let b = self.bytes_at(vma, self.ptr)?;

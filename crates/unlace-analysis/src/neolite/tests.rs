@@ -59,7 +59,7 @@ fn the_fixture_unpacks_to_its_original_sections() {
     let text = &secs.iter().find(|(n, _, _)| n == ".text").unwrap().2;
     assert_eq!(text.len(), 0x1000);
     assert!(
-        text.chunks_exact(16).all(|c| c == SNIPPET),
+        text.as_chunks::<16>().0.iter().all(|c| *c == SNIPPET),
         "every 16-byte row of .text decodes back to the snippet"
     );
 

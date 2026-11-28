@@ -260,8 +260,8 @@ fn raw_stores(data: &Funcdata, block: crate::context::BlockId, seed: &Defs) -> V
         let Some(op) = data.obank().get(id) else {
             continue;
         };
-        if op.code() == OpCode::CPUI_STORE {
-            if let (Some(ptr), Some(value)) = (op.get_in(1), op.get_in(2)) {
+        if op.code() == OpCode::CPUI_STORE
+            && let (Some(ptr), Some(value)) = (op.get_in(1), op.get_in(2)) {
                 let v = defs.value(data, value);
                 out.push(RawStore {
                     op: id,
@@ -281,7 +281,6 @@ fn raw_stores(data: &Funcdata, block: crate::context::BlockId, seed: &Defs) -> V
                     },
                 });
             }
-        }
         defs.record(data, id);
     }
     out

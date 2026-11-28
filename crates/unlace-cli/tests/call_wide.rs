@@ -1071,7 +1071,8 @@ fn patched_mips(case: Case, name: &str, edits: &[(&str, u64, u32, u32)]) -> Path
 
 #[test]
 fn altered_forwarding_and_return_paths_refuse_for_the_same_producer() {
-    let mutations: &[(&str, &[(&str, u64, u32, u32)])] = &[
+    type Mutation = (&'static str, &'static [(&'static str, u64, u32, u32)]);
+    let mutations: &[Mutation] = &[
         (
             "swapped",
             &[

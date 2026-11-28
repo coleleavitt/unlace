@@ -109,11 +109,10 @@ impl<'a> ImageBytes<'a> {
             if addr == 0 {
                 continue;
             }
-            if let Ok(data) = sec.data() {
-                if !data.is_empty() {
+            if let Ok(data) = sec.data()
+                && !data.is_empty() {
                     sections.push((addr, data));
                 }
-            }
         }
         sections.sort_by_key(|&(a, _)| a);
         ImageBytes { sections }
@@ -129,11 +128,10 @@ impl<'a> ImageBytes<'a> {
                 continue;
             }
             let off = (vma - base) as usize;
-            if let Some(end) = off.checked_add(len) {
-                if end <= data.len() {
+            if let Some(end) = off.checked_add(len)
+                && end <= data.len() {
                     return Some(&data[off..end]);
                 }
-            }
         }
         None
     }
@@ -462,7 +460,7 @@ fn decode_functions(img: &ImageBytes, h: &PcHeader) -> Vec<GoFunc> {
 fn pcvalue_span(img: &ImageBytes, vma: u64, quantum: u8) -> Option<u64> {
     let mut pos = vma;
     let mut pc = 0u64;
-    let mut uvarint = |pos: &mut u64| -> Option<u64> {
+    let uvarint = |pos: &mut u64| -> Option<u64> {
         let mut v = 0u64;
         for shift in (0..64).step_by(7) {
             let b = img.read(*pos, 1)?[0];
@@ -514,27 +512,24 @@ pub(crate) fn locate_header(file: &object::File, img: &ImageBytes) -> Option<u64
     ] {
         if let Some(sec) = file.section_by_name(name) {
             let vma = sec.address();
-            if let Some(hdr) = img.read(vma, 8) {
-                if probe_header(hdr).is_some() {
+            if let Some(hdr) = img.read(vma, 8)
+                && probe_header(hdr).is_some() {
                     return Some(vma);
                 }
-            }
         }
     }
 
     // (2) The `runtime.pclntab` symbol (the header is at its address). Some
     // binaries carry it even without a `.gopclntab` section.
     for sym in file.symbols().chain(file.dynamic_symbols()) {
-        if let Ok(n) = sym.name() {
-            if n == "runtime.pclntab" {
+        if let Ok(n) = sym.name()
+            && n == "runtime.pclntab" {
                 let vma = sym.address();
-                if let Some(hdr) = img.read(vma, 8) {
-                    if probe_header(hdr).is_some() {
+                if let Some(hdr) = img.read(vma, 8)
+                    && probe_header(hdr).is_some() {
                         return Some(vma);
                     }
-                }
             }
-        }
     }
 
     // (3) Scan the read-only data sections for the header magic + valid prefix
@@ -722,7 +717,7 @@ fn recover_go_header(file: &object::File, img: &ImageBytes) -> Option<(PcHeader,
     // falling back to the lowest code section when no moduledata is found.
     if h.ver.is_118plus() && h.text_start == 0 {
         h.text_start =
-            moduledata_text(file, &img, &h, header_vma).unwrap_or_else(|| text_section_start(file));
+            moduledata_text(file, img, &h, header_vma).unwrap_or_else(|| text_section_start(file));
     }
     Some((h, header_vma))
 }
@@ -960,13 +955,12 @@ impl AnalysisPass for GoPclntabPass {
             && ctx.file.format() == object::BinaryFormat::Elf
         {
             let mut receive = funcs.iter().filter(|f| f.name == "runtime.chanrecv2");
-            if let Some(first) = receive.next() {
-                if receive.next().is_none()
+            if let Some(first) = receive.next()
+                && receive.next().is_none()
                     && funcs.iter().filter(|f| f.addr == first.addr).count() == 1
                 {
                     out.go_chanrecv2 = Some(first.addr);
                 }
-            }
         }
         let addrs: Vec<u64> = funcs.iter().map(|f| f.addr).collect();
         for (i, f) in funcs.into_iter().enumerate() {

@@ -199,10 +199,10 @@ fn a32_reach(
     let mut queue: Vec<u64> = Vec::new();
     let mut at = addr & !3;
     while at < end {
-        if !pool.contains(&at) {
-            if let Some(to) = word(at).and_then(|insn| target(at, insn)) {
-                queue.push(to);
-            }
+        if !pool.contains(&at)
+            && let Some(to) = word(at).and_then(|insn| target(at, insn))
+        {
+            queue.push(to);
         }
         walked.insert(at);
         at += 4;

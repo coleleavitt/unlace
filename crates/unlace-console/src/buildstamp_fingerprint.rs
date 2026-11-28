@@ -108,11 +108,10 @@ fn workspace_dependencies(path: &Path) -> io::Result<BTreeMap<String, String>> {
                     *package = Some(toml_string(value)?.ok_or_else(|| {
                         invalid_data("workspace dependency package must be a string")
                     })?);
-                } else if key == "path" {
-                    if package.is_none() {
+                } else if key == "path"
+                    && package.is_none() {
                         *package = package_at_path(manifest_dir, value)?;
                     }
-                }
             }
             continue;
         }
@@ -169,11 +168,10 @@ fn manifest_dependencies(
                         toml_string(value)?
                             .ok_or_else(|| invalid_data("dependency package must be a string"))?,
                     );
-                } else if key == "path" {
-                    if package.is_none() {
+                } else if key == "path"
+                    && package.is_none() {
                         *package = package_at_path(manifest_dir, value)?;
                     }
-                }
             }
             continue;
         }
@@ -207,11 +205,10 @@ fn insert_dependency(
     package: Option<String>,
     workspace_dependencies: &BTreeMap<String, String>,
 ) {
-    if let Some(package) = package.or_else(|| workspace_dependencies.get(alias).cloned()) {
-        if package.starts_with("unlace-") {
+    if let Some(package) = package.or_else(|| workspace_dependencies.get(alias).cloned())
+        && package.starts_with("unlace-") {
             result.insert(package);
         }
-    }
 }
 
 fn dependency_section(header: &str) -> bool {

@@ -115,11 +115,10 @@ fn main() -> ExitCode {
     // SLEIGHHOME is the load-bearing spec-root the Python harness sets even
     // without -usesleighenv; honor it (unlace/run_tests.py sets it indirectly via
     // -sleighpath, but allow either).
-    if let Ok(home) = std::env::var("SLEIGHHOME") {
-        if !home.is_empty() && !spec_roots.contains(&home) {
+    if let Ok(home) = std::env::var("SLEIGHHOME")
+        && !home.is_empty() && !spec_roots.contains(&home) {
             spec_roots.push(home);
         }
-    }
 
     if let Some(pass) = worker {
         worker_main(&spec_roots, pass);
@@ -192,11 +191,10 @@ fn gather_data_tests(dirname: &str, test_names: &[String]) -> Vec<String> {
             if matches!(
                 path.extension().and_then(|e| e.to_str()),
                 Some("xml" | "toml")
-            ) {
-                if let Some(s) = path.to_str() {
+            )
+                && let Some(s) = path.to_str() {
                     all_xml.push(s.to_string());
                 }
-            }
         }
     }
     all_xml.sort();

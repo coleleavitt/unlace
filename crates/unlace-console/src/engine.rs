@@ -437,12 +437,12 @@ impl FixedRefs {
                 op.opcode,
                 OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_CALL
             );
-            if flow {
-                if let Some(vn) = op.ins.first() {
-                    if !is_constant(vn) && vn.offset != fall_through {
-                        flow_targets.push(vn.offset);
-                    }
-                }
+            if flow
+                && let Some(vn) = op.ins.first()
+                && !is_constant(vn)
+                && vn.offset != fall_through
+            {
+                flow_targets.push(vn.offset);
             }
             for (i, vn) in op.ins.iter().enumerate() {
                 let target_slot = i == 0
@@ -806,7 +806,7 @@ fn code_offset_in_target_units(value: u64, word_size: u64) -> u64 {
 }
 
 fn code_end_in_target_units(value: u64, word_size: u64) -> u64 {
-    value / word_size + u64::from(value % word_size != 0)
+    value / word_size + u64::from(!value.is_multiple_of(word_size))
 }
 
 impl ConsoleProgram {
@@ -1051,10 +1051,10 @@ impl ConsoleProgram {
     /// whole list per lookup made applying A assertions O(A x symbols).
     fn function_entries_shared(&self) -> Rc<Vec<FunctionEntry>> {
         let key = (self.symbols.revision, self.declared_revision);
-        if let Some((symbols, declared, entries)) = self.canonical_entries.borrow().as_ref() {
-            if (*symbols, *declared) == key {
-                return Rc::clone(entries);
-            }
+        if let Some((symbols, declared, entries)) = self.canonical_entries.borrow().as_ref()
+            && (*symbols, *declared) == key
+        {
+            return Rc::clone(entries);
         }
         let mut entries = self.build_function_entries_canonical();
         self.append_anonymous_entries(&mut entries);
@@ -1428,10 +1428,10 @@ impl ConsoleProgram {
         // must still resolve. Idempotent, so the bounded spelling resolves as
         // well, and a no-op for every real name.
         let want = &*unlace_decomp::symbolnamebound::bound_scope_path(want, "::");
-        if self.symbols.lookup(want).is_none() {
-            if let Some(addr) = self.anonymous_address(want) {
-                return Some(self.entry_at_or_named(addr.get_offset()));
-            }
+        if self.symbols.lookup(want).is_none()
+            && let Some(addr) = self.anonymous_address(want)
+        {
+            return Some(self.entry_at_or_named(addr.get_offset()));
         }
         let matches = self.entries_named(want);
         // On a miss, the (unlace, RE-need `string-owner-function-name`) placeholder
@@ -1476,10 +1476,10 @@ impl ConsoleProgram {
     /// The canonical entries with their name index, rebuilt with them.
     fn entry_names(&self) -> (Rc<Vec<FunctionEntry>>, Rc<EntryNames>) {
         let entries = self.function_entries_shared();
-        if let Some((indexed, names)) = self.entry_names.borrow().as_ref() {
-            if Rc::ptr_eq(indexed, &entries) {
-                return (entries, Rc::clone(names));
-            }
+        if let Some((indexed, names)) = self.entry_names.borrow().as_ref()
+            && Rc::ptr_eq(indexed, &entries)
+        {
+            return (entries, Rc::clone(names));
         }
         let names = Rc::new(EntryNames::new(&entries, &self.loader_aliases));
         *self.entry_names.borrow_mut() = Some((Rc::clone(&entries), Rc::clone(&names)));
@@ -1596,10 +1596,10 @@ impl ConsoleProgram {
                 // binary's ORIGINAL name must still resolve. Idempotent, so the
                 // bounded spelling resolves as well.
                 let want = &*unlace_decomp::symbolnamebound::bound_scope_path(want, "::");
-                if self.symbols.lookup(want).is_none() {
-                    if let Some(addr) = self.anonymous_address(want) {
-                        return Ok(self.entry_at_or_named(addr.get_offset()));
-                    }
+                if self.symbols.lookup(want).is_none()
+                    && let Some(addr) = self.anonymous_address(want)
+                {
+                    return Ok(self.entry_at_or_named(addr.get_offset()));
                 }
                 let mut candidates = self.entries_named(want);
                 if candidates.is_empty() {
@@ -1676,10 +1676,10 @@ impl ConsoleProgram {
 
                 // A genuine undefined symbol is intentionally unmapped but may
                 // still be selected explicitly for its external declaration.
-                if let Some(entry) = self.find_entry_at(vma) {
-                    if entry.provenance == EntryProvenance::UndefinedExternal {
-                        return Ok(entry);
-                    }
+                if let Some(entry) = self.find_entry_at(vma)
+                    && entry.provenance == EntryProvenance::UndefinedExternal
+                {
+                    return Ok(entry);
                 }
                 Err(EntryLookupError::Unmapped {
                     selector: selector.display(),
@@ -1742,10 +1742,10 @@ impl ConsoleProgram {
                 }
             }));
         }
-        if let Some(entry) = known {
-            if entry.provenance == EntryProvenance::UndefinedExternal {
-                return Ok(entry);
-            }
+        if let Some(entry) = known
+            && entry.provenance == EntryProvenance::UndefinedExternal
+        {
+            return Ok(entry);
         }
         Err(EntryLookupError::Unmapped {
             selector,
@@ -2705,14 +2705,14 @@ impl ConsoleProgram {
         let _load = self.arch().load_scope();
         self.callwide_changed();
         self.anonymous_symbols.take();
-        if let Some(prior) = self.anonymous_address(name) {
-            if sole || prior == addr {
-                let index = self
-                    .anonymous_entries
-                    .binary_search_by_key(&prior.get_offset(), |entry| entry.0)
-                    .unwrap();
-                self.anonymous_entries.remove(index);
-            }
+        if let Some(prior) = self.anonymous_address(name)
+            && (sole || prior == addr)
+        {
+            let index = self
+                .anonymous_entries
+                .binary_search_by_key(&prior.get_offset(), |entry| entry.0)
+                .unwrap();
+            self.anonymous_entries.remove(index);
         }
         // (unlace `symbolnamebound`) Same bound as the loader stream above, so an
         // analysis-discovered or hand-mapped name agrees with the scope path the
@@ -3273,27 +3273,25 @@ impl ConsoleProgram {
             .unlace_options
             .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0
-        {
-            if let Some(set) =
+            && let Some(set) =
                 unlace_analysis::entry::patterns::for_language(self.arch().get_description())
-            {
-                for &(lo, hi) in &exec {
-                    let Ok(size) = usize::try_from(hi - lo) else {
-                        continue;
-                    };
-                    if let Some(bytes) = self.read_bytes(lo, size) {
-                        let weak_ok = set.only_weak();
-                        seeds.extend(
-                            set.scan_hits(lo, &bytes)
-                                .into_iter()
-                                .filter(|h| weak_ok || !h.weak)
-                                .map(|h| h.vma),
-                        );
-                    }
+        {
+            for &(lo, hi) in &exec {
+                let Ok(size) = usize::try_from(hi - lo) else {
+                    continue;
+                };
+                if let Some(bytes) = self.read_bytes(lo, size) {
+                    let weak_ok = set.only_weak();
+                    seeds.extend(
+                        set.scan_hits(lo, &bytes)
+                            .into_iter()
+                            .filter(|h| weak_ok || !h.weak)
+                            .map(|h| h.vma),
+                    );
                 }
-                seeds.sort_unstable();
-                seeds.dedup();
             }
+            seeds.sort_unstable();
+            seeds.dedup();
         }
         let mut known: BTreeSet<u64> = self
             .pending_synthetic_entries
@@ -3453,8 +3451,10 @@ impl ConsoleProgram {
                         None => db.set_variable(paint.var.as_bytes(), &begin, paint.value),
                     })?;
                 }
-                let mut output = unlace_analysis::pass::AnalysisOutput::default();
-                output.context_paints = flow.paints;
+                let output = unlace_analysis::pass::AnalysisOutput {
+                    context_paints: flow.paints,
+                    ..Default::default()
+                };
                 self.pending_analysis.push(("entrythumbflow", output));
             }
         }
@@ -3745,9 +3745,10 @@ impl ConsoleProgram {
                                         .unwrap_or("Rust signature profile is unavailable"),
                                 )
                             })?;
-                            let mut names = unlace_analysis::pass::AnalysisOutput::default();
-                            names.fid_names =
-                                profile.agreed_names().map_err(UnlaceError::lowlevel)?;
+                            let mut names = unlace_analysis::pass::AnalysisOutput {
+                                fid_names: profile.agreed_names().map_err(UnlaceError::lowlevel)?,
+                                ..Default::default()
+                            };
                             names.sanitize_names(
                                 unlace_decomp::symbolnamechars::symbolnamechars_mode(),
                             );
@@ -5021,15 +5022,13 @@ fn build_engine_and_init(
     // parameter lists (the C++ `parseCompilerConfig` reads the cspec here).
     // A read failure is non-fatal: the architecture falls back to the name-only
     // default model (proto recovery simply won't fire).
-    if !specs.compilerfile.is_empty() {
-        if let Ok(cspec) = db.read_spec(&specs.compilerfile) {
-            sleigh
-                .base_mut()
-                .ok_or_else(|| {
-                    UnlaceError::lowlevel("no Architecture base after build_translator")
-                })?
-                .set_cspec_xml(cspec.into_owned());
-        }
+    if !specs.compilerfile.is_empty()
+        && let Ok(cspec) = db.read_spec(&specs.compilerfile)
+    {
+        sleigh
+            .base_mut()
+            .ok_or_else(|| UnlaceError::lowlevel("no Architecture base after build_translator"))?
+            .set_cspec_xml(cspec.into_owned());
     }
 
     // Hand the resolved processor-spec (`.pspec`) XML to the architecture so
@@ -5038,15 +5037,13 @@ fn build_engine_and_init(
     // reads the pspec here).  This is what selects the SLEIGH disassembly mode:
     // without it x86-64 lifts as 16-bit real mode.  A read failure is non-fatal
     // (the engine keeps the zero-default context).
-    if !specs.processorfile.is_empty() {
-        if let Ok(pspec) = db.read_spec(&specs.processorfile) {
-            sleigh
-                .base_mut()
-                .ok_or_else(|| {
-                    UnlaceError::lowlevel("no Architecture base after build_translator")
-                })?
-                .set_pspec_xml(pspec.into_owned());
-        }
+    if !specs.processorfile.is_empty()
+        && let Ok(pspec) = db.read_spec(&specs.processorfile)
+    {
+        sleigh
+            .base_mut()
+            .ok_or_else(|| UnlaceError::lowlevel("no Architecture base after build_translator"))?
+            .set_pspec_xml(pspec.into_owned());
     }
 
     // (unlace) The `.ldefs` languages a FID database may be built for, kept with the
@@ -5338,8 +5335,10 @@ fn input_isa_stash(
     if paints.is_empty() {
         return Vec::new();
     }
-    let mut explicit = unlace_analysis::pass::AnalysisOutput::default();
-    explicit.context_paints = paints;
+    let explicit = unlace_analysis::pass::AnalysisOutput {
+        context_paints: paints,
+        ..Default::default()
+    };
     vec![("input_isa", explicit)]
 }
 
@@ -5353,8 +5352,10 @@ fn object_import_slot_stash(
     slots: &[(u64, u64)],
 ) -> Option<(&'static str, unlace_analysis::pass::AnalysisOutput)> {
     (relocatable && !slots.is_empty()).then(|| {
-        let mut output = unlace_analysis::pass::AnalysisOutput::default();
-        output.externref = slots.to_vec();
+        let output = unlace_analysis::pass::AnalysisOutput {
+            externref: slots.to_vec(),
+            ..Default::default()
+        };
         ("peimportcall", output)
     })
 }
@@ -5859,9 +5860,11 @@ pub(crate) fn bootstrap_wasm_bytes(
         .map(|function| Address::new(Rc::clone(&code_space), function.addr))
         .collect();
     let loader_data_objects = image.globals.clone();
-    let mut facts = unlace_analysis::pass::AnalysisOutput::default();
-    facts.prototypes_at = image.prototypes(sleigh.base().unwrap());
-    facts.typed_data = image.table_types(sleigh.base().unwrap());
+    let facts = unlace_analysis::pass::AnalysisOutput {
+        prototypes_at: image.prototypes(sleigh.base().unwrap()),
+        typed_data: image.table_types(sleigh.base().unwrap()),
+        ..Default::default()
+    };
     let image_metadata = ProgramImageMetadata {
         entry: image.entry,
         sections: loader.section_metadata(),
@@ -6679,7 +6682,7 @@ pub(crate) fn bootstrap_object(
     // `entrythumbflow` walk, exactly as a TE with that shape does.
     let arch_id = sleigh.arch_id().to_string();
     let parsed = is_arm32_language(&arch_id)
-        .then(|| unlace_analysis::loadimage_object::parse_object(&*bytes).ok())
+        .then(|| unlace_analysis::loadimage_object::parse_object(&bytes).ok())
         .flatten();
     let mips_linkage = loader
         .mips_linkage()
@@ -6753,18 +6756,18 @@ pub(crate) fn bootstrap_object(
     // (unlace `arm64evcall`) A kernelcache entry's signed slots lost their signing
     // context when the collection was fixed up; its virtual calls are resolved
     // against the whole collection's slots instead.
-    if let Some(signed) = &signed {
-        if let Ok(file) = unlace_analysis::loadimage_object::parse_object(&bytes) {
-            let vcall_sites = unlace_analysis::rtti::arm64evcall::resolve_signed(&file, signed);
-            pending_analysis.retain(|(id, _)| *id != "arm64evcall");
-            pending_analysis.push((
-                "arm64evcall",
-                unlace_analysis::pass::AnalysisOutput {
-                    vcall_sites,
-                    ..Default::default()
-                },
-            ));
-        }
+    if let Some(signed) = &signed
+        && let Ok(file) = unlace_analysis::loadimage_object::parse_object(&bytes)
+    {
+        let vcall_sites = unlace_analysis::rtti::arm64evcall::resolve_signed(&file, signed);
+        pending_analysis.retain(|(id, _)| *id != "arm64evcall");
+        pending_analysis.push((
+            "arm64evcall",
+            unlace_analysis::pass::AnalysisOutput {
+                vcall_sites,
+                ..Default::default()
+            },
+        ));
     }
     let mut nullable = std::collections::BTreeMap::<u64, Vec<_>>::new();
     for record in loader.nullable_relocations() {
@@ -7065,19 +7068,19 @@ pub(crate) fn bootstrap_object(
     prog.import_slots = crate::importslots::ImportSlots::new(import_slots);
     prog.function_address_aliases = function_address_aliases.into_iter().collect();
     prog.symbol_underscore_prefix = symbol_underscore_prefix;
-    if let Ok(loc) = prog.arch().get_register_varnode(b"r2") {
-        if loc.size == 8 {
-            for (entry, val) in elfv1_tocs {
-                let begin = Address::new(Rc::clone(&code_space), entry);
-                prog.arch_mut()
-                    .loader_entry_tracks
-                    .entry(begin)
-                    .or_default()
-                    .push(unlace_sleigh::globalcontext::TrackedContext {
-                        loc: loc.clone(),
-                        val,
-                    });
-            }
+    if let Ok(loc) = prog.arch().get_register_varnode(b"r2")
+        && loc.size == 8
+    {
+        for (entry, val) in elfv1_tocs {
+            let begin = Address::new(Rc::clone(&code_space), entry);
+            prog.arch_mut()
+                .loader_entry_tracks
+                .entry(begin)
+                .or_default()
+                .push(unlace_sleigh::globalcontext::TrackedContext {
+                    loc: loc.clone(),
+                    val,
+                });
         }
     }
     prog.elf_functions = elf_functions;
@@ -7184,8 +7187,11 @@ fn commit_input_hints(
     code_space: &Rc<AddrSpace>,
     facts: &[unlace_analysis::pass::InputHintFact],
 ) {
-    let mut hints: std::collections::BTreeMap<Address, Vec<unlace_decomp::inputhints::InputHint>> =
-        std::collections::BTreeMap::new();
+    #[allow(clippy::mutable_key_type)]
+    let mut hints: std::collections::BTreeMap<
+        Address,
+        Vec<unlace_decomp::inputhints::InputHint>,
+    > = std::collections::BTreeMap::new();
     for fact in facts {
         let Ok(loc) = prog.arch().get_register_varnode(fact.reg.as_bytes()) else {
             continue;
@@ -8790,30 +8796,29 @@ fn commit_analysis_output(
     };
     // (unlace `objcrettype`/`objcresolve`) The ObjC class table the engine types
     // and resolves message sends with; it rides the `objc` gate like the labels.
-    if let Some(mut table) = out.objc_classes {
-        if prog
+    if let Some(mut table) = out.objc_classes
+        && prog
             .arch()
             .unlace_options
             .get::<unlace_decomp::analysisgates::Objc>()
             .0
-        {
-            let data_slots: std::collections::HashSet<u64> =
-                out.data_import_slots.iter().copied().collect();
-            table.class_slot_at.extend(
-                out.import_slot_names
-                    .iter()
-                    .filter(|(slot, _)| data_slots.contains(slot))
-                    .filter_map(|(slot, name)| {
-                        Some((
-                            *slot,
-                            name.trim_start_matches('_')
-                                .strip_prefix("OBJC_CLASS_$_")?
-                                .to_string(),
-                        ))
-                    }),
-            );
-            prog.arch_mut().unlace_states.set(Rc::new(table));
-        }
+    {
+        let data_slots: std::collections::HashSet<u64> =
+            out.data_import_slots.iter().copied().collect();
+        table.class_slot_at.extend(
+            out.import_slot_names
+                .iter()
+                .filter(|(slot, _)| data_slots.contains(slot))
+                .filter_map(|(slot, name)| {
+                    Some((
+                        *slot,
+                        name.trim_start_matches('_')
+                            .strip_prefix("OBJC_CLASS_$_")?
+                            .to_string(),
+                    ))
+                }),
+        );
+        prog.arch_mut().unlace_states.set(Rc::new(table));
     }
     // (unlace `xnutables`) The kalloc_type views' structs the engine types a
     // typed allocation's result with.
@@ -8834,10 +8839,10 @@ fn commit_analysis_output(
             )));
     }
     for mut pieces in out.prototypes {
-        if let Some(st) = self_types.get(&pieces.name) {
-            if let Some(first) = pieces.intypes.first_mut() {
-                *first = Rc::clone(st);
-            }
+        if let Some(st) = self_types.get(&pieces.name)
+            && let Some(first) = pieces.intypes.first_mut()
+        {
+            *first = Rc::clone(st);
         }
         let name = pieces.name.clone();
         prog.arch_mut()
@@ -9248,53 +9253,51 @@ fn commit_analysis_output(
             Some((self_reg, error_reg, async_reg)),
             (Some(plain), Some(throws), Some(asynccall), Some(asynccall_throws)),
         ) = (out.swift_types.regs, models)
-        {
-            if let (Some(self_reg), Some(error_reg), Some(async_reg)) =
+            && let (Some(self_reg), Some(error_reg), Some(async_reg)) =
                 (reg(self_reg), reg(error_reg), reg(async_reg))
-            {
-                let maybe_self = out
+        {
+            let maybe_self = out
+                .swift_types
+                .models
+                .iter()
+                .filter(|f| f.maybe_self)
+                .map(|f| (code_space.get_index(), f.func_addr))
+                .collect();
+            let no_self = out
+                .swift_types
+                .no_self
+                .iter()
+                .map(|&f| (code_space.get_index(), f))
+                .collect();
+            let swift_abi = Rc::new(unlace_decomp::swiftcall::SwiftAbi {
+                self_reg,
+                error_reg,
+                async_reg,
+                async_names: out
                     .swift_types
-                    .models
+                    .async_imports
                     .iter()
-                    .filter(|f| f.maybe_self)
-                    .map(|f| (code_space.get_index(), f.func_addr))
-                    .collect();
-                let no_self = out
-                    .swift_types
-                    .no_self
-                    .iter()
-                    .map(|&f| (code_space.get_index(), f))
-                    .collect();
-                let swift_abi = Rc::new(unlace_decomp::swiftcall::SwiftAbi {
-                    self_reg,
-                    error_reg,
-                    async_reg,
-                    async_names: out
-                        .swift_types
-                        .async_imports
-                        .iter()
-                        .flat_map(|(n, throws)| {
-                            let bare = n.strip_prefix('_').filter(|b| b.starts_with('$'));
-                            std::iter::once((n.clone(), *throws))
-                                .chain(bare.map(|b| (b.to_string(), *throws)))
-                        })
-                        .collect(),
-                    async_context: prog
-                        .arch()
-                        .types()
-                        .find_by_name("swift.AsyncContext")
-                        .ok()
-                        .flatten()
-                        .and_then(|t| prog.arch().types().get_type_pointer(8, t, 1).ok()),
-                    throws,
-                    plain,
-                    asynccall,
-                    asynccall_throws,
-                    maybe_self,
-                    no_self,
-                });
-                prog.arch_mut().unlace_states.set(swift_abi);
-            }
+                    .flat_map(|(n, throws)| {
+                        let bare = n.strip_prefix('_').filter(|b| b.starts_with('$'));
+                        std::iter::once((n.clone(), *throws))
+                            .chain(bare.map(|b| (b.to_string(), *throws)))
+                    })
+                    .collect(),
+                async_context: prog
+                    .arch()
+                    .types()
+                    .find_by_name("swift.AsyncContext")
+                    .ok()
+                    .flatten()
+                    .and_then(|t| prog.arch().types().get_type_pointer(8, t, 1).ok()),
+                throws,
+                plain,
+                asynccall,
+                asynccall_throws,
+                maybe_self,
+                no_self,
+            });
+            prog.arch_mut().unlace_states.set(swift_abi);
         }
     }
 
@@ -9578,11 +9581,11 @@ const MACHO_BE64: [u8; 4] = [0xfe, 0xed, 0xfa, 0xcf]; // 0xfeedfacf, big-endian
 const MACHO_BE32: [u8; 4] = [0xfe, 0xed, 0xfa, 0xce]; // 0xfeedface, big-endian
 const MACHO_FAT: [u8; 4] = [0xca, 0xfe, 0xba, 0xbe]; // FAT_MAGIC (big-endian on disk)
 
-/// The COFF `IMAGE_FILE_MACHINE_*` values that begin a bare COFF object — the
-/// leading little-endian `u16` of a relocatable `.obj`/`.o` (no `MZ`/`PE` header).
-/// Limited to the machines unlace ships a `.sla` for (mirrors the design's
-/// "COFF machine-type prefix" set); an unknown machine simply isn't claimed as a
-/// COFF object and falls through to the XML branch (or `object`'s own reject).
+// The COFF `IMAGE_FILE_MACHINE_*` values that begin a bare COFF object — the
+// leading little-endian `u16` of a relocatable `.obj`/`.o` (no `MZ`/`PE` header).
+// Limited to the machines unlace ships a `.sla` for (mirrors the design's
+// "COFF machine-type prefix" set); an unknown machine simply isn't claimed as a
+// COFF object and falls through to the XML branch (or `object`'s own reject).
 
 /// Does `bytes` look like an object-format binary the [`ObjectLoadImage`] loader
 /// can drive (design §1.4)? This admits **all** the supported object formats
@@ -9731,8 +9734,7 @@ pub(crate) fn classify_file(path: &str) -> UnlaceResult<FileInput> {
     if !bytes
         .iter()
         .copied()
-        .skip_while(u8::is_ascii_whitespace)
-        .next()
+        .find(|byte| !byte.is_ascii_whitespace())
         .is_some_and(|byte| byte == b'<')
     {
         return Err(UnlaceError::lowlevel(RAW_IMAGE_INPUT_HINT));

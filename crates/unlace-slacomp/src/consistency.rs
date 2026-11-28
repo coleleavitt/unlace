@@ -160,12 +160,11 @@ impl UniqueState {
         }
         let mut result: Vec<u64> = Vec::new();
         let mut cursor = offset;
-        if let Some(lk) = self.lesser_key(offset) {
-            if Self::end_of(&self.recs[&lk]) > offset {
+        if let Some(lk) = self.lesser_key(offset)
+            && Self::end_of(&self.recs[&lk]) > offset {
                 cursor = Self::end_of(&self.recs[&lk]);
                 result.push(lk);
             }
-        }
         let end = offset + size as u64;
         // Walk lower_bound(offset).. while key < end.
         let keys: Vec<u64> = self.recs.range(offset..end).map(|(k, _)| *k).collect();
@@ -263,14 +262,12 @@ impl SleighCompile {
                     *ctstate.last_mut().unwrap() = oper + 1;
                     if let Some(subsym) =
                         self.operand_defining_subtable(cur, ctind as u32, oper as u32)
-                    {
-                        if !cc.sizemap.contains_key(&subsym) {
-                            cc.sizemap.insert(subsym, -1);
+                        && let std::collections::btree_map::Entry::Vacant(e) = cc.sizemap.entry(subsym) {
+                            e.insert(-1);
                             path.push(subsym);
                             state.push(0);
                             ctstate.push(0);
                         }
-                    }
                 }
             }
         }
@@ -1079,11 +1076,10 @@ impl SleighCompile {
                     } else {
                         self.constructor_named_templ_handle(sym, ctidx, k)
                     };
-                    if let Some(h) = h {
-                        if !self.check_section_truncations(sym, ctidx, h, isbig, cc) {
+                    if let Some(h) = h
+                        && !self.check_section_truncations(sym, ctidx, h, isbig, cc) {
                             testresult = false;
                         }
-                    }
                 }
             }
         }
@@ -1480,11 +1476,10 @@ impl SleighCompile {
             None => return false,
         };
         let op = &t.get_opvec()[opidx];
-        if let Some(out) = op.get_out() {
-            if is_temp_too_big(out) {
+        if let Some(out) = op.get_out()
+            && is_temp_too_big(out) {
                 return true;
             }
-        }
         for i in 0..op.num_input() {
             if is_temp_too_big(op.get_in(i)) {
                 return true;

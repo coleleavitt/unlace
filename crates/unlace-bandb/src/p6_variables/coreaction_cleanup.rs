@@ -587,11 +587,10 @@ fn mark_output_storage_addr_tied(data: &mut Funcdata) {
                         // the marker is loop-carried.
                         return true;
                     }
-                    if let Some(nxt) = data.obank().get(d).and_then(|o| o.get_out()) {
-                        if !visited.contains(&nxt) {
+                    if let Some(nxt) = data.obank().get(d).and_then(|o| o.get_out())
+                        && !visited.contains(&nxt) {
                             stack.push(nxt);
                         }
-                    }
                 }
             }
             false
@@ -792,8 +791,8 @@ fn base_explicit(data: &Funcdata, vn: crate::context::VarnodeId, mut maxref: int
     // give it a `vN` with a `float8 vN;` decl.  Previously stubbed (the comment
     // claimed `numInstances == 1` by construction); the S6 merge now produces
     // genuine multi-instance highs, so the check is live.
-    if let Some(high) = v.get_high() {
-        if data
+    if let Some(high) = v.get_high()
+        && data
             .high_bank()
             .get(high)
             .map(|h| h.num_instances() > 1)
@@ -801,7 +800,6 @@ fn base_explicit(data: &Funcdata, vn: crate::context::VarnodeId, mut maxref: int
         {
             return -1;
         }
-    }
     if v.is_addr_tied() {
         // addrtied: needs to be explicit (pointers may reference it), with two
         // exceptions (lone ZEXT into a wider addrtied, lone PIECE non-root).
@@ -855,9 +853,9 @@ fn base_explicit(data: &Funcdata, vn: crate::context::VarnodeId, mut maxref: int
     // def->code()==PIECE && in0 isProtoPartial -> explicit.
     {
         let dop = data.obank().get(def).unwrap();
-        if dop.code() == OpCode::CPUI_PIECE {
-            if let Some(in0) = dop.get_in(0) {
-                if data
+        if dop.code() == OpCode::CPUI_PIECE
+            && let Some(in0) = dop.get_in(0)
+                && data
                     .vbank()
                     .get(in0)
                     .map(|x| x.is_proto_partial())
@@ -865,8 +863,6 @@ fn base_explicit(data: &Funcdata, vn: crate::context::VarnodeId, mut maxref: int
                 {
                     return -1;
                 }
-            }
-        }
     }
     if v.has_no_descend() {
         return -1; // Must have at least one descendant
@@ -885,14 +881,13 @@ fn base_explicit(data: &Funcdata, vn: crate::context::VarnodeId, mut maxref: int
             }
         }
         // PTRSUB of a spacebase const/input -> always implicit: lift the maxref.
-        if dcode == OpCode::CPUI_PTRSUB {
-            if let Some(basevn) = data.obank().get(def).unwrap().get_in(0) {
+        if dcode == OpCode::CPUI_PTRSUB
+            && let Some(basevn) = data.obank().get(def).unwrap().get_in(0) {
                 let bv = data.vbank().get(basevn).expect("baseExplicit: ptrsub base");
                 if bv.is_spacebase() && (bv.is_constant() || bv.is_input()) {
                     maxref = 1_000_000;
                 }
             }
-        }
     }
     let mut desccount = 0;
     for op in v.descend_iter() {
@@ -981,11 +976,10 @@ fn process_multiplier(data: &mut Funcdata, vn: crate::context::VarnodeId, max: i
         let isaterm = v.is_explicit() || !v.is_written();
         if isaterm || (top.slotback <= top.slot) {
             // Trimming condition.
-            if isaterm {
-                if !v.is_spacebase() {
+            if isaterm
+                && !v.is_spacebase() {
                     finalcount += 1; // Don't count space base
                 }
-            }
             if finalcount > max {
                 let m = data
                     .vbank_mut()
@@ -1778,11 +1772,10 @@ fn check_implied_cover(
                         w2: load_size.max(1) as i128,
                         scale: 1,
                     };
-                    if let (Some(sp), Some(lp)) = (store_ptr, load_ptr) {
-                        if is_possible_alias(data, sp, lp, span, 2) {
+                    if let (Some(sp), Some(lp)) = (store_ptr, load_ptr)
+                        && is_possible_alias(data, sp, lp, span, 2) {
                             return false;
                         }
-                    }
                 }
             }
         }
@@ -2715,16 +2708,13 @@ fn build_func_param_name_recmap(
                 Some(v) => (v.is_implied(), v.is_written()),
                 None => continue,
             };
-            if is_implied && is_written {
-                if let Some(def) = data.vbank().get(vn).and_then(|v| v.get_def()) {
-                    if data.obank().get(def).map(|o| o.code()) == Some(OpCode::CPUI_CAST) {
-                        if let Some(inner) = data.obank().get(def).and_then(|o| o.get_in(0)) {
+            if is_implied && is_written
+                && let Some(def) = data.vbank().get(vn).and_then(|v| v.get_def())
+                    && data.obank().get(def).map(|o| o.code()) == Some(OpCode::CPUI_CAST)
+                        && let Some(inner) = data.obank().get(def).and_then(|o| o.get_in(0)) {
                             vn = inner;
                             ct = None; // less preferred name (cast)
                         }
-                    }
-                }
-            }
             let high = match data.vbank().get(vn).and_then(|v| v.get_high()) {
                 Some(h) => h,
                 None => continue,
@@ -2747,15 +2737,14 @@ fn build_func_param_name_recmap(
                         Some(t) => t,
                         None => continue,
                     };
-                    if let Some(oldtype) = existing.ct.as_ref() {
-                        if oldtype
+                    if let Some(oldtype) = existing.ct.as_ref()
+                        && oldtype
                             .type_order(newt)
                             .map(|ord| ord <= 0)
                             .unwrap_or(false)
                         {
                             continue; // oldtype is more specified
                         }
-                    }
                     recmap.insert(
                         high,
                         OpRecommend {
@@ -2913,7 +2902,7 @@ fn recommended_name_for(
         } else if rec.useaddr == param_usepoint {
             v_input
         } else {
-            def_addrs.iter().any(|a| *a == rec.useaddr)
+            def_addrs.contains(&rec.useaddr)
         };
         if hit {
             return Some(rec.name.clone());
@@ -2940,9 +2929,9 @@ fn func_param_name_for_high(
     if recmap.is_empty() {
         return None;
     }
-    let (is_free, is_input) = match data.vbank().get(name_rep) {
-        Some(v) => (v.is_free(), v.is_input()),
-        None => return None,
+    let (is_free, is_input) = {
+        let v = data.vbank().get(name_rep)?;
+        (v.is_free(), v.is_input())
     };
     if is_free || is_input {
         return None;
@@ -3191,13 +3180,12 @@ fn name_local_highs_angr(data: &mut Funcdata) {
         // invalid-usepoint query.
         let usepoint = data.vn_use_point(name_rep.unwrap());
         let container = data.get_scope_local().and_then(|lm| {
-            if !v_input {
-                if let Some(backing) =
+            if !v_input
+                && let Some(backing) =
                     crate::stackparamviews::backing_for_address(data, &v_addr, v_size)
                 {
                     return Some(backing);
                 }
-            }
             let info = lm.query_container_for_link(&v_addr, &usepoint)?;
             if crate::stackviews::enabled(data)
                 && info.category == crate::database::symbol_category::FUNCTION_PARAMETER
@@ -3300,8 +3288,8 @@ fn name_local_highs_angr(data: &mut Funcdata) {
                     .iter_loc_size_addr(info.entry_size, &info.entry_addr)
                 {
                     let other_high = data.vbank().get(other).and_then(|v| v.get_high());
-                    if let Some(oh) = other_high {
-                        if oh != high {
+                    if let Some(oh) = other_high
+                        && oh != high {
                             // C++ `Merge::mergeAddrTied` (merge.cc:636-643) calls
                             // `vn2->getHigh()->groupWith(off, vn1->getHigh())` for the
                             // partial-field members of one symbol-mapped address: a tied
@@ -3322,7 +3310,6 @@ fn name_local_highs_angr(data: &mut Funcdata) {
                             found = true;
                             break;
                         }
-                    }
                 }
                 found
             };
@@ -3558,11 +3545,10 @@ fn name_local_highs_angr(data: &mut Funcdata) {
     }
 
     for (high, rep_ty, number) in renamed_parts {
-        if crate::stablenames::orphaned(data, number) {
-            if let Some(lm) = data.get_scope_local_mut() {
+        if crate::stablenames::orphaned(data, number)
+            && let Some(lm) = data.get_scope_local_mut() {
                 lm.release_prior_number(number);
             }
-        }
         let name = with_prior_numbers(data, high, |data| {
             unlace_default_local_name(data, rep_ty.as_deref(), &mut base)
         });
@@ -3610,18 +3596,16 @@ fn retype_whole_variable(
         Vec::new()
     };
     for vn in instances.into_iter().chain(literals.iter().copied()) {
-        if let Some(v) = data.vbank_mut().get_mut(vn) {
-            if v.get_size() == ct.get_size() {
+        if let Some(v) = data.vbank_mut().get_mut(vn)
+            && v.get_size() == ct.get_size() {
                 v.update_type_locked(ct.clone(), true, true);
             }
-        }
     }
     for vn in literals {
-        if let Some(constant) = data.vbank().get(vn).and_then(|v| v.get_high()) {
-            if let Some(h) = data.high_bank_mut().get_mut(constant) {
+        if let Some(constant) = data.vbank().get(vn).and_then(|v| v.get_high())
+            && let Some(h) = data.high_bank_mut().get_mut(constant) {
                 h.type_dirty();
             }
-        }
     }
     if let Some(h) = data.high_bank_mut().get_mut(high) {
         h.type_dirty();

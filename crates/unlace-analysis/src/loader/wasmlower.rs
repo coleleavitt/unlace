@@ -116,6 +116,11 @@ impl Lowered {
         self.items.iter().map(Item::len).sum()
     }
 
+    /// Whether the encoded body takes no bytes.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Append the encoded body, placed at address `base`, to `out`.
     pub fn encode(&self, base: u32, resolve: impl Fn(Fix) -> u32, out: &mut Vec<u8>) {
         let mut offsets = Vec::with_capacity(self.items.len() + 1);
@@ -700,8 +705,12 @@ impl Lowerer<'_> {
             0x44 => drop(read(self.reader.fixed_u64())?),
             0xfc => match read(self.reader.u32())? {
                 0..=7 => {}
-                10 => drop(read(self.reader.take(2))?),
-                11 => drop(read(self.reader.take(1))?),
+                10 => {
+                    read(self.reader.take(2))?;
+                }
+                11 => {
+                    read(self.reader.take(1))?;
+                }
                 sub => return unsupported(format!("instruction 0xfc {sub}")),
             },
             _ => return unsupported(format!("instruction 0x{op:02x}")),

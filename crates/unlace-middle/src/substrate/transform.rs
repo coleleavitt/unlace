@@ -709,10 +709,7 @@ impl TransformManager {
             return false; // Logical value not aligned
         }
         let v = fd.vbank().get(vn).expect("preserve_address: stale vn");
-        if v.get_space().get_type() == spacetype::IPTR_INTERNAL {
-            return false;
-        }
-        true
+        v.get_space().get_type() != spacetype::IPTR_INTERNAL
     }
 
     /// (unlace) The preexisting Varnodes the manager holds pieces for.
@@ -1541,12 +1538,10 @@ impl TransformManager {
     /// Remove old preexisting PcodeOps that are now obsolete (C++
     /// `TransformManager::removeOld`, transform.cc:713).
     fn remove_old(&mut self, fd: &mut Funcdata) {
-        for i in 0..self.new_ops.len() {
-            let special = self.new_ops[i].special;
+        for nop in &self.new_ops {
+            let special = nop.special;
             if (special & top_special::op_replacement) != 0 {
-                let op = self.new_ops[i]
-                    .op
-                    .expect("remove_old: op_replacement op is null");
+                let op = nop.op.expect("remove_old: op_replacement op is null");
                 if !fd.obank().get(op).expect("remove_old: stale op").is_dead() {
                     fd.op_destroy(op);
                 }

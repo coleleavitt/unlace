@@ -452,14 +452,15 @@ fn memory(
                     .spills
                     .iter()
                     .filter_map(|(&(at, width), &value)| {
-                        if width == stack.size && crate::calleehomes::is_home_slot(at, width) {
-                            if let Value::Pointer(root, _) = value {
-                                return Some(DeferredFrameEscape {
-                                    offset: at,
-                                    size: width,
-                                    root,
-                                });
-                            }
+                        if width == stack.size
+                            && crate::calleehomes::is_home_slot(at, width)
+                            && let Value::Pointer(root, _) = value
+                        {
+                            return Some(DeferredFrameEscape {
+                                offset: at,
+                                size: width,
+                                root,
+                            });
                         }
                         None
                     })
@@ -606,9 +607,7 @@ fn walk(
                     }
                 }
                 _ => {
-                    let Some(out) = op.out.as_ref() else {
-                        return None;
-                    };
+                    let out = op.out.as_ref()?;
                     let space = out.space.as_ref()?;
                     if space.get_index() != register && space.get_type() != spacetype::IPTR_INTERNAL
                     {
@@ -933,9 +932,9 @@ fn for_call<'a>(
         if !return_address
             .space
             .as_ref()
-            .is_some_and(|s| Rc::ptr_eq(s, &space))
+            .is_some_and(|s| Rc::ptr_eq(s, space))
             || return_address.offset != 0
-            || return_address.size != space.get_addr_size() as u32
+            || return_address.size != space.get_addr_size()
         {
             return None;
         }
@@ -1107,8 +1106,7 @@ fn unobserved_inner(
         }
     }
     if !allow_home_discharge || !summary.deferred_frame_escapes.is_empty() {
-        let pointer_size =
-            u32::try_from(fd.get_scope_local()?.get_space_id().get_addr_size()).ok()?;
+        let pointer_size = fd.get_scope_local()?.get_space_id().get_addr_size();
         for &root in &summary.lossy_pointer_roots {
             if root == Origin::Frame {
                 return None;
@@ -1134,8 +1132,7 @@ fn unobserved_inner(
     }
     let mut caller_home_scan_cache = BTreeMap::new();
     for deferred in &summary.deferred_frame_escapes {
-        let pointer_size =
-            u32::try_from(fd.get_scope_local()?.get_space_id().get_addr_size()).ok()?;
+        let pointer_size = fd.get_scope_local()?.get_space_id().get_addr_size();
         let constant_actual = argument(fd, call, deferred.root)
             .and_then(|input| fd.vbank().get(input))
             .is_some_and(|input| input.is_constant());
@@ -1199,10 +1196,8 @@ fn unobserved_inner(
         };
         for state in &summary.returns {
             for (&storage, &value) in &state.values {
-                if storage.overlaps(key) {
-                    if matches!(value, Value::Pointer(..) | Value::FrameFlag) {
-                        return None;
-                    }
+                if storage.overlaps(key) && matches!(value, Value::Pointer(..) | Value::FrameFlag) {
+                    return None;
                 }
             }
         }

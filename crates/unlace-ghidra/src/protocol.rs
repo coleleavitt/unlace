@@ -368,7 +368,7 @@ pub fn pass_java_exception<W: Write>(s: &mut W, tp: &str, msg: &str) -> WireResu
 pub fn nibble_condense(pairs: &[u8]) -> Vec<u8> {
     debug_assert!(pairs.len().is_multiple_of(2));
     let mut out = Vec::with_capacity(pairs.len() / 2);
-    for chunk in pairs.chunks_exact(2) {
+    for chunk in pairs.as_chunks::<2>().0 {
         out.push((chunk[0].wrapping_sub(b'A') << 4) | (chunk[1].wrapping_sub(b'A') & 0xF));
     }
     out

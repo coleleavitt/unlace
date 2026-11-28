@@ -92,10 +92,6 @@ impl DeclIdentity {
 /// Used by `emit_local_var_decls` only when the registered option `DedupVarDecls` is set.
 #[derive(Debug, Default)]
 pub struct DeclDedup {
-    #[expect(
-        clippy::disallowed_types,
-        reason = "Only keyed lookup is observed; caller order determines declarations"
-    )]
     seen: std::collections::HashMap<(DeclIdentity, DeclSignature), HighVariableId>,
 }
 
@@ -105,10 +101,6 @@ pub struct DeclDedup {
 /// carry the next suffix to try when another declaration requests that name.
 #[derive(Debug, Default)]
 pub struct DeclNameUniquifier {
-    #[expect(
-        clippy::disallowed_types,
-        reason = "Hash iteration cannot affect naming; assignment follows caller order"
-    )]
     names: std::collections::HashMap<String, NameState>,
 }
 

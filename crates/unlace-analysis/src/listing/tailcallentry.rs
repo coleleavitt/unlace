@@ -158,7 +158,7 @@ fn probe(listing: &Listing, entries: &[u64], target: u64, srcs: &[u64]) -> Resul
     }
     if listing
         .instruction_at(target)
-        .is_some_and(|i| restores_frame(i))
+        .is_some_and(restores_frame)
     {
         return Err(Guard::EpilogueStart);
     }

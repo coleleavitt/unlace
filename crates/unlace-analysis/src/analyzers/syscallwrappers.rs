@@ -678,12 +678,11 @@ impl Walker<'_, '_> {
                 Next::Op
             }
             OpCode::CPUI_STORE => {
-                if let (Some(at), Some(value)) = (ins.get(1), ins.get(2)) {
-                    if let Val::Stack(d) = self.read(path, at) {
+                if let (Some(at), Some(value)) = (ins.get(1), ins.get(2))
+                    && let Val::Stack(d) = self.read(path, at) {
                         let v = self.read(path, value);
                         path.write_stack(d, value.size, v);
                     }
-                }
                 Next::Op
             }
             _ => {

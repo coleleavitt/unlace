@@ -52,11 +52,10 @@ pub fn guarded_block(data: &Funcdata, vn: VarnodeId, reads: &[OpId]) -> Option<B
         if op.is_call() || matches!(op.code(), OpCode::CPUI_STORE | OpCode::CPUI_CALLOTHER) {
             return None;
         }
-        if let Some(out) = op.get_out().and_then(|v| data.vbank().get(v)) {
-            if value.characterize_overlap(out) != 0 {
+        if let Some(out) = op.get_out().and_then(|v| data.vbank().get(v))
+            && value.characterize_overlap(out) != 0 {
                 return None;
             }
-        }
     }
     if !after_call {
         return None;

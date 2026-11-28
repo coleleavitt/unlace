@@ -26,12 +26,12 @@ impl UnlaceRegionVisitor for Collector {
         self.stack.push((cyclic, u64::MAX, Vec::new()));
     }
     fn exit_region(&mut self, _region: &UnlaceGraphRegion) {
-        if let Some((cyclic, head, body)) = self.stack.pop() {
-            if cyclic {
-                let mut sorted = body.clone();
-                sorted.sort_unstable();
-                self.cyclics.push((head, sorted));
-            }
+        if let Some((cyclic, head, body)) = self.stack.pop()
+            && cyclic
+        {
+            let mut sorted = body.clone();
+            sorted.sort_unstable();
+            self.cyclics.push((head, sorted));
         }
     }
     fn visit_block(&mut self, _block: Option<crate::context::BlockId>, addr: uintb) {
@@ -95,8 +95,8 @@ fn regionid_diamond0() {
     ri.walk_blocks(&mut col).unwrap();
     assert_eq!(col.addrs.len(), 6);
     let got = sorted(&col.addrs);
-    for i in 0..6 {
-        assert_eq!(got[i], (i + 1) as uintb);
+    for (i, &a) in got.iter().enumerate() {
+        assert_eq!(a, (i + 1) as uintb);
     }
     assert_eq!(col.cyclics.len(), 0);
 }
@@ -128,8 +128,8 @@ fn regionid_diamond1() {
     ri.walk_blocks(&mut col).unwrap();
     assert_eq!(col.addrs.len(), 8);
     let got = sorted(&col.addrs);
-    for i in 0..8 {
-        assert_eq!(got[i], (i + 1) as uintb);
+    for (i, &a) in got.iter().enumerate() {
+        assert_eq!(a, (i + 1) as uintb);
     }
 }
 
@@ -171,8 +171,8 @@ fn regionid_loop() {
     // Whole-tree walk covers every block exactly once.
     assert_eq!(col.addrs.len(), 4);
     let got = sorted(&col.addrs);
-    for i in 0..4 {
-        assert_eq!(got[i], (i + 1) as uintb);
+    for (i, &a) in got.iter().enumerate() {
+        assert_eq!(a, (i + 1) as uintb);
     }
 }
 

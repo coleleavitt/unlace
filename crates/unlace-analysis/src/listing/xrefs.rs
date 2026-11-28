@@ -1145,11 +1145,9 @@ fn descend(
         .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch.input_arm_isa_override
-    {
-        if let Some(context) = &mut walk_context {
+        && let Some(context) = &mut walk_context {
             context.seed_inventory_modes(seed_set.iter().copied(), &arch.arm_inventory_modes);
         }
-    }
     let mut frame_context = None;
     let mut frame_modes: Option<super::framemode::FrameModes> = None;
     let mut frame_reconciled = false;
@@ -1902,8 +1900,7 @@ fn descend(
                 && c.flow.is_computed
                 && c.flow.is_jump
                 && !c.flow.is_call
-            {
-                if let Some(p) = pool.as_ref() {
+                && let Some(p) = pool.as_ref() {
                     let a32 = a32_tables.as_ref().map_or_else(
                         switchtable::TableRead::default,
                         |tables| {
@@ -1977,14 +1974,13 @@ fn descend(
                             &reach,
                             thumb_tables.as_ref(),
                         );
-                        if let (Some(gap), Some(branch)) = (read.gap, branch) {
-                            if read.cases.is_empty() && read.stated.is_none() {
+                        if let (Some(gap), Some(branch)) = (read.gap, branch)
+                            && read.cases.is_empty() && read.stated.is_none() {
                                 waiting
                                     .entry(gap)
                                     .or_default()
                                     .push((vma, mode, branch.clone()));
                             }
-                        }
                         (cases, stated) = (read.cases, read.stated);
                         unbounded = read.unbounded;
                         if read.slot {
@@ -2044,7 +2040,6 @@ fn descend(
                         }
                     }
                 }
-            }
             // (unlace `calltable`) An indexed call through a table of function
             // pointers calls every entry of the table.
             if arch
@@ -2775,11 +2770,10 @@ fn branch_cases(
     };
     // (unlace) `thumbswitch`: a Thumb `tbb`/`tbh` reads offsets, not addresses.
     // See [`super::thumbswitch`].
-    if read.cases.is_empty() && read.stated.is_none() {
-        if let Some(tables) = thumb_tables {
+    if read.cases.is_empty() && read.stated.is_none()
+        && let Some(tables) = thumb_tables {
             (read.cases, read.stated) = tables.targets(translate, code_space, exec, &decoded, vma);
         }
-    }
     read
 }
 
@@ -2909,11 +2903,10 @@ fn data_refs(
             && in_range(mapped, vn.offset)
     };
     for op in ops {
-        if let Some(vn) = &op.out {
-            if in_data_space(vn) {
+        if let Some(vn) = &op.out
+            && in_data_space(vn) {
                 out.push((vn.offset, XrefKind::Write));
             }
-        }
         if linked && is_return_address_sum(op, fall_through) {
             continue;
         }

@@ -46,7 +46,7 @@ use crate::listing::{Insn, Listing};
 /// The hasher itself rejects extents below
 /// [`SHORT_HASH_CODE_UNIT_LENGTH`](crate::fid::hash::SHORT_HASH_CODE_UNIT_LENGTH);
 /// this generator returns whatever the clip contains (possibly empty).
-pub fn calculate_extent<'a>(listing: &'a Listing, entry: u64) -> Vec<&'a Insn> {
+pub fn calculate_extent(listing: &Listing, entry: u64) -> Vec<&Insn> {
     // The exclusive upper bound: the next function entry strictly after `entry`
     // (`mod.rs::next_function_after`). `None` ⇒ the clip runs to the end of the
     // instruction map.

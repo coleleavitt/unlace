@@ -237,10 +237,7 @@ pub fn run_files_parallel(
             s.spawn(move || {
                 let result = dir.join(format!("worker-{slot}.run"));
                 let mut worker = spawn(exe, spec_roots, pass).ok();
-                loop {
-                    let Some(&i) = order.get(next.fetch_add(1, Ordering::Relaxed)) else {
-                        break;
-                    };
+                while let Some(&i) = order.get(next.fetch_add(1, Ordering::Relaxed)) {
                     let file = &files[i];
                     let started = std::time::Instant::now();
                     let mut run = match worker.as_mut() {

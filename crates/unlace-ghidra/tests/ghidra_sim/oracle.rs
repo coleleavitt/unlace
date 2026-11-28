@@ -497,24 +497,23 @@ impl SimOracle {
     fn answer_mapped_symbols(&mut self, dec: &mut PackedDecode) -> Vec<u8> {
         let addr = Address::decode(dec).expect("getMappedSymbols <addr>");
         let offset = addr.get_offset();
-        if self.prog.is_import_slot(offset) {
-            if let Some(name) = self.code_label(offset) {
-                return resp_string(&self.extern_ref_doc(&addr, &name));
-            }
+        if self.prog.is_import_slot(offset)
+            && let Some(name) = self.code_label(offset)
+        {
+            return resp_string(&self.extern_ref_doc(&addr, &name));
         }
         if let Some((start, (name, char_size, len))) = self
             .string_symbols
             .range(..=offset)
             .next_back()
             .map(|(s, v)| (*s, v.clone()))
+            && offset < start.wrapping_add(len as u64)
         {
-            if offset < start.wrapping_add(len as u64) {
-                let sym_addr = Address::new(
-                    Rc::clone(addr.get_space().expect("ram address has a space")),
-                    start,
-                );
-                return resp_string(&self.string_doc(&sym_addr, &name, char_size, len));
-            }
+            let sym_addr = Address::new(
+                Rc::clone(addr.get_space().expect("ram address has a space")),
+                start,
+            );
+            return resp_string(&self.string_doc(&sym_addr, &name, char_size, len));
         }
         if let Some(name) = self.code_label(offset) {
             let noreturn = self
@@ -538,14 +537,13 @@ impl SimOracle {
             .range(..=offset)
             .next_back()
             .map(|(s, v)| (*s, v.clone()))
+            && offset < start.wrapping_add(size as u64)
         {
-            if offset < start.wrapping_add(size as u64) {
-                let sym_addr = Address::new(
-                    Rc::clone(addr.get_space().expect("ram address has a space")),
-                    start,
-                );
-                return resp_string(&self.symbol_doc(&sym_addr, &name, size as i32));
-            }
+            let sym_addr = Address::new(
+                Rc::clone(addr.get_space().expect("ram address has a space")),
+                start,
+            );
+            return resp_string(&self.symbol_doc(&sym_addr, &name, size as i32));
         }
         resp_string(&self.hole_doc(&addr))
     }

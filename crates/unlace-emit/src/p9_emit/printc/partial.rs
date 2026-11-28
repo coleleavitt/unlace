@@ -347,8 +347,8 @@ impl PrintC {
             return false;
         }
 
-        if self.out_lang == crate::lang::OutLang::Go && finalcast.is_none() && sz_in > 0 {
-            if let (Some(PartialEntry::Unnamed(offset, size)), Some(container)) =
+        if self.out_lang == crate::lang::OutLang::Go && finalcast.is_none() && sz_in > 0
+            && let (Some(PartialEntry::Unnamed(offset, size)), Some(container)) =
                 (stack.last(), unnamed_in.as_deref())
             {
                 let offset = *offset;
@@ -378,7 +378,6 @@ impl PrintC {
                     return true;
                 }
             }
-        }
 
         let piece = match stack.last() {
             Some(PartialEntry::Unnamed(o, s))

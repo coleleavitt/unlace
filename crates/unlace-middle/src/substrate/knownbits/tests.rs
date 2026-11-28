@@ -1,5 +1,11 @@
 use super::KnownBits;
 
+type BitOp = (
+    &'static str,
+    fn(KnownBits, KnownBits) -> KnownBits,
+    fn(u64, u64) -> u64,
+);
+
 /// Decode a base-3 code over `width` bits: digit 0 = known 0, 1 = known 1, 2 = unknown.
 fn decode(mut code: u64, width: u32) -> KnownBits {
     let mut k = KnownBits::unknown();
@@ -24,11 +30,7 @@ fn members(k: KnownBits, width: u32) -> Vec<u64> {
 #[test]
 fn bitwise_transfers_are_sound_and_optimal() {
     const W: u32 = 4;
-    let ops: [(
-        &str,
-        fn(KnownBits, KnownBits) -> KnownBits,
-        fn(u64, u64) -> u64,
-    ); 3] = [
+    let ops: [BitOp; 3] = [
         ("and", KnownBits::and, |x, y| x & y),
         ("or", KnownBits::or, |x, y| x | y),
         ("xor", KnownBits::xor, |x, y| x ^ y),

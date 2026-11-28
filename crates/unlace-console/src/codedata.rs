@@ -264,12 +264,12 @@ impl DisassemblyEngine {
                 res.flags |= code_unit_flags::FALLTHRU;
             }
         }
-        for i in 0..self.jumpaddr.len() {
-            if self.jumpaddr[i] == lastaddr {
+        for jump in &self.jumpaddr {
+            if *jump == lastaddr {
                 res.flags |= code_unit_flags::FALLTHRU;
-            } else if self.jumpaddr[i] != *addr {
+            } else if *jump != *addr {
                 res.flags |= code_unit_flags::JUMP;
-                res.jumpaddress = self.jumpaddr[i].clone();
+                res.jumpaddress = jump.clone();
             }
         }
     }
@@ -311,11 +311,9 @@ impl PcodeEmit for DisassemblyEngine {
                     self.targethit = vars[0].offset;
                 }
             }
-            OpCode::CPUI_LOAD => {
-                if self.targetoffsets.contains(&vars[1].offset) {
-                    self.hitsaddress = true;
-                    self.targethit = vars[1].offset;
-                }
+            OpCode::CPUI_LOAD if self.targetoffsets.contains(&vars[1].offset) => {
+                self.hitsaddress = true;
+                self.targethit = vars[1].offset;
             }
             _ => {}
         }
@@ -1022,29 +1020,28 @@ impl CodeDataAnalysis {
                 .range(addr.clone()..)
                 .next()
                 .map(|(k, _)| k.clone());
-            if let Some(ckey) = &citer {
-                if *ckey == addr {
-                    // Not off cut.
-                    let cu_flags = self.codeunit.get(ckey).unwrap().flags;
-                    if (cu_flags
-                        & (code_unit_flags::HIT_BY_FALLTHRU | code_unit_flags::HIT_BY_CALL))
-                        == (code_unit_flags::HIT_BY_FALLTHRU | code_unit_flags::HIT_BY_CALL)
+            if let Some(ckey) = &citer
+                && *ckey == addr
+            {
+                // Not off cut.
+                let cu_flags = self.codeunit.get(ckey).unwrap().flags;
+                if (cu_flags & (code_unit_flags::HIT_BY_FALLTHRU | code_unit_flags::HIT_BY_CALL))
+                    == (code_unit_flags::HIT_BY_FALLTHRU | code_unit_flags::HIT_BY_CALL)
+                {
+                    // Somebody falls through into the call.
+                    if let Some(prev) = self
+                        .codeunit
+                        .range(..ckey.clone())
+                        .next_back()
+                        .map(|(k, _)| k.clone())
                     {
-                        // Somebody falls through into the call.
-                        if let Some(prev) = self
-                            .codeunit
-                            .range(..ckey.clone())
-                            .next_back()
-                            .map(|(k, _)| k.clone())
-                        {
-                            self.check_errant_start(&prev);
-                        }
-                        // (--begin() is UB in C++; unreachable here — the call
-                        // unit was hit by fallthru, so a predecessor exists.)
+                        self.check_errant_start(&prev);
                     }
-                    iter_key = self.next_tofrom(&curlink);
-                    continue;
+                    // (--begin() is UB in C++; unreachable here — the call
+                    // unit was hit by fallthru, so a predecessor exists.)
                 }
+                iter_key = self.next_tofrom(&curlink);
+                continue;
             }
             let prevkey = self
                 .codeunit

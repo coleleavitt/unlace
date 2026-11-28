@@ -237,10 +237,7 @@ fn bound_scope_path_capped<'a>(fullname: &'a str, delim: &str, cap: usize) -> Co
     let mut count = 0usize;
     let mut worst_len = 0usize;
     let mut mark = 0usize;
-    loop {
-        let Some(rel) = fullname[mark..].find(delim) else {
-            break;
-        };
+    while let Some(rel) = fullname[mark..].find(delim) {
         let end = mark + rel;
         count += 1;
         worst_len = worst_len.max(end - mark);
@@ -254,10 +251,7 @@ fn bound_scope_path_capped<'a>(fullname: &'a str, delim: &str, cap: usize) -> Co
     // Pass 2: materialize the component ranges (a bounded name never gets here).
     let mut ranges: Vec<std::ops::Range<usize>> = Vec::with_capacity(count);
     let mut mark = 0usize;
-    loop {
-        let Some(rel) = fullname[mark..].find(delim) else {
-            break;
-        };
+    while let Some(rel) = fullname[mark..].find(delim) {
         let end = mark + rel;
         ranges.push(mark..end);
         mark = end + delim.len();
@@ -280,7 +274,7 @@ fn bound_scope_path_capped<'a>(fullname: &'a str, delim: &str, cap: usize) -> Co
             src: from..basename_at,
             text: Cow::Owned(fold_component(
                 &fullname[ranges[verbatim].clone()],
-                fullname[from..basename_at].as_bytes(),
+                &fullname.as_bytes()[from..basename_at],
             )),
         });
     }

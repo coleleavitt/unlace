@@ -28,6 +28,11 @@ use crate::architecture::Architecture;
 use crate::funcdata::Funcdata;
 use crate::printc::ArchPrintExt;
 
+#[cfg(test)]
+type TestDecl<'a> = (&'a str, Option<&'a str>, bool);
+#[cfg(test)]
+type TestSlot<'a> = ((i64, i64), &'a [TestDecl<'a>]);
+
 /// Is `dt` a one-byte integer or `bool`?  Such a declaration says no more than
 /// `undefined1` does: the type system's byte types are its default for any
 /// byte it computes with (`char`), and the program may hold the same byte as
@@ -137,7 +142,7 @@ impl DeclaredSlots {
     /// declarations' names, spellings and pointer-or-float flags.
     #[cfg(test)]
     #[doc(hidden)]
-    pub fn for_test(entries: &[((i64, i64), &[(&str, Option<&str>, bool)])]) -> Self {
+    pub fn for_test(entries: &[TestSlot<'_>]) -> Self {
         let slots = entries
             .iter()
             .map(|(home, decls)| {

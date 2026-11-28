@@ -74,11 +74,10 @@ pub fn record(data: &mut Funcdata, sb_addr: &Address) {
                     let blk = graph.block(block);
                     for k in 0..blk.size_in() {
                         let pred = blk.get_in(k);
-                        if seen.insert(pred) {
-                            if let Some(&(_, tail)) = last.get(&pred) {
+                        if seen.insert(pred)
+                            && let Some(&(_, tail)) = last.get(&pred) {
                                 todo.push((Some(tail), pred, delta));
                             }
-                        }
                     }
                     break;
                 };

@@ -192,20 +192,18 @@ fn window(
     }
     .saturating_sub(BEFORE);
     start = (start.max(lo) & !0xf).max(lo);
-    if let Some(i) = all.iter().find(|i| i.address < start && start < i.end()) {
-        if last.saturating_sub(i.address) <= DATA_MAX {
+    if let Some(i) = all.iter().find(|i| i.address < start && start < i.end())
+        && last.saturating_sub(i.address) <= DATA_MAX {
             start = i.address.max(lo);
         }
-    }
     let mut end = last
         .max(start.saturating_add(SPAN))
         .min(start.saturating_add(DATA_MAX))
         .min(hi);
-    if let Some(i) = all.iter().find(|i| i.address < end && end < i.end()) {
-        if i.end().saturating_sub(start) <= DATA_MAX {
+    if let Some(i) = all.iter().find(|i| i.address < end && end < i.end())
+        && i.end().saturating_sub(start) <= DATA_MAX {
             end = i.end().min(hi);
         }
-    }
     (start, end.max(start))
 }
 

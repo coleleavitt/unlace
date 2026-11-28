@@ -774,12 +774,11 @@ impl TypeModifier {
                     if !decl.is_valid_inner() {
                         return false;
                     }
-                    if decl.mods.is_empty() {
-                        if let Some(ct) = &decl.basetype {
-                            if ct.get_metatype() == type_metatype::TYPE_VOID {
-                                return false; // Extra void type
-                            }
-                        }
+                    if decl.mods.is_empty()
+                        && let Some(ct) = &decl.basetype
+                        && ct.get_metatype() == type_metatype::TYPE_VOID
+                    {
+                        return false; // Extra void type
                     }
                 }
                 true
@@ -848,12 +847,11 @@ impl TypeModifier {
 fn function_modifier_new(mut paramlist: Vec<TypeDeclarator>, dtdtdt: bool) -> TypeModifier {
     if paramlist.len() == 1 {
         let decl = &paramlist[0];
-        if decl.mods.is_empty() {
-            if let Some(ct) = &decl.basetype {
-                if ct.get_metatype() == type_metatype::TYPE_VOID {
-                    paramlist.clear();
-                }
-            }
+        if decl.mods.is_empty()
+            && let Some(ct) = &decl.basetype
+            && ct.get_metatype() == type_metatype::TYPE_VOID
+        {
+            paramlist.clear();
         }
     }
     TypeModifier::Function {
@@ -1656,11 +1654,11 @@ impl<'a> CParse<'a> {
         mut declist: Vec<Option<TypeDeclarator>>,
     ) -> TypeDeclarator {
         let mut dotdotdot = false;
-        if let Some(last) = declist.last() {
-            if last.is_none() {
-                dotdotdot = true;
-                declist.pop();
-            }
+        if let Some(last) = declist.last()
+            && last.is_none()
+        {
+            dotdotdot = true;
+            declist.pop();
         }
         let params: Vec<TypeDeclarator> = declist.into_iter().map(|o| o.unwrap()).collect();
         dec.mods.push(function_modifier_new(params, dotdotdot));
@@ -1820,10 +1818,10 @@ impl<'a> CParse<'a> {
             kws.push(*kw);
             self.next()?;
         }
-        if kws.len() == 1 {
-            if let Ok(Some(tp)) = self.factory.find_by_name(kws[0].name()) {
-                return Ok(tp);
-            }
+        if kws.len() == 1
+            && let Ok(Some(tp)) = self.factory.find_by_name(kws[0].name())
+        {
+            return Ok(tp);
         }
         match self.resolve_scalar(&kws)? {
             Some(tp) => Ok(tp),
@@ -2216,11 +2214,8 @@ impl<'a> CParse<'a> {
 
     fn declarator_model(&mut self) -> UnlaceResult<String> {
         let mut model = String::new();
-        loop {
-            let nm = match self.peek()? {
-                PToken::FunctionSpecifier(s) => s.clone(),
-                _ => break,
-            };
+        while let PToken::FunctionSpecifier(s) = self.peek()? {
+            let nm = s.clone();
             if self.keywords.contains_key(&nm) {
                 break;
             }
@@ -2730,13 +2725,13 @@ impl<'a> CParse<'a> {
         underlying: Option<Rc<Datatype>>,
     ) -> UnlaceResult<Rc<Datatype>> {
         let vallist = enumlayout::enum_constants(&vecenum);
-        if let Some(tp) = &underlying {
-            if let Some(name) = enumlayout::enumerator_out_of_range(tp, &vecenum, &vallist) {
-                self.set_error(&format!(
-                    "Enumerator {name} does not fit the underlying type"
-                ));
-                return Err(UnlaceError::parse(self.lasterror.clone()));
-            }
+        if let Some(tp) = &underlying
+            && let Some(name) = enumlayout::enumerator_out_of_range(tp, &vecenum, &vallist)
+        {
+            self.set_error(&format!(
+                "Enumerator {name} does not fit the underlying type"
+            ));
+            return Err(UnlaceError::parse(self.lasterror.clone()));
         }
         // An interned (incomplete) enum stub (C++ getTypeEnum).
         let res = match self.enum_layout(underlying.as_ref(), &vallist) {

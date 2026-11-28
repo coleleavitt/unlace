@@ -205,13 +205,8 @@ fn declared_locals(code: &str) -> Vec<String> {
         }
         let ident = name.split_whitespace().last().unwrap_or("");
         let ident = ident.split('[').next().unwrap_or("");
-        if last.is_empty()
-            && ident.starts_with('v')
-            && ident[1..].chars().all(|c| c.is_ascii_digit())
-        {
-            out.push(ident.to_string());
-        } else if ident.starts_with('v')
-            && ident.len() > 1
+        if ident.starts_with('v')
+            && (last.is_empty() || ident.len() > 1)
             && ident[1..].chars().all(|c| c.is_ascii_digit())
         {
             out.push(ident.to_string());

@@ -106,13 +106,11 @@ impl Ditted {
         let mut i = 0usize;
         while i < chars.len() {
             let c1 = chars[i];
-            if mode == -2 {
-                if c1 != '\n' {
-                    i += 1;
-                    continue;
-                }
-                // fallthrough to whitespace handling resets mode
+            if mode == -2 && c1 != '\n' {
+                i += 1;
+                continue;
             }
+            // fallthrough to whitespace handling resets mode
             if c1.is_whitespace() {
                 mode = -1;
                 i += 1;
@@ -200,6 +198,10 @@ impl Ditted {
     /// Length in bytes.
     pub fn len(&self) -> usize {
         self.bits.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.bits.is_empty()
     }
 
     /// `(val & dits[k]) == bits[k]` for every byte; `false` if `window` is shorter
@@ -313,7 +315,7 @@ impl FuncStartPatterns {
                 continue;
             }
             let vma = sec_addr + off as u64;
-            if vma % self.align != 0 || !self.first[data[off] as usize] {
+            if !vma.is_multiple_of(self.align) || !self.first[data[off] as usize] {
                 continue;
             }
             let here = &data[off..];
@@ -478,16 +480,12 @@ fn post_has_funcstart(body: &str) -> bool {
         return false;
     };
     let tag = &tag_tail[..end];
-    if tag.contains("after=")
+    !(tag.contains("after=")
         || tag.contains("validcode")
         || tag.contains("thunk")
         || tag.contains("label")
         || tag.contains("section")
-        || tag.contains("noreturn")
-    {
-        return false;
-    }
-    true
+        || tag.contains("noreturn"))
 }
 
 /// Parse one bare `<pattern>` block: if it has an unconditional `<funcstart/>`

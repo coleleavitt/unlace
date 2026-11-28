@@ -212,25 +212,19 @@ impl<'a> ScoreUnionFields<'a> {
                     Some(m) => m,
                     None => return false,
                 };
-                if mo.code() == OpCode::CPUI_INT_MULT {
-                    if let Some(vn2) = mo.get_in(1) {
-                        if let Some(v2) = self.data.vbank().get(vn2) {
-                            if v2.is_constant() && v2.get_offset() >= base_size as uintb {
+                if mo.code() == OpCode::CPUI_INT_MULT
+                    && let Some(vn2) = mo.get_in(1)
+                        && let Some(v2) = self.data.vbank().get(vn2)
+                            && v2.is_constant() && v2.get_offset() >= base_size as uintb {
                                 return true;
                             }
-                        }
-                    }
-                }
             }
-        } else if o.code() == OpCode::CPUI_PTRADD {
-            if let Some(vn) = o.get_in(2) {
-                if let Some(v) = self.data.vbank().get(vn) {
-                    if v.get_offset() >= base_size as uintb {
+        } else if o.code() == OpCode::CPUI_PTRADD
+            && let Some(vn) = o.get_in(2)
+                && let Some(v) = self.data.vbank().get(vn)
+                    && v.get_offset() >= base_size as uintb {
                         return true;
                     }
-                }
-            }
-        }
         false
     }
 
@@ -524,11 +518,10 @@ impl<'a> ScoreUnionFields<'a> {
                                 self.typegrp,
                             )?;
                             score = dr.score;
-                            if let Some(ptrto) = dr.res_type {
-                                if !last_level {
+                            if let Some(ptrto) = dr.res_type
+                                && !last_level {
                                     self.new_trials(op, 2, ptrto, trial.score_index, 0);
                                 }
-                            }
                         }
                     } else if trial.inslot == 2 {
                         if meta == type_metatype::TYPE_CODE {
@@ -620,13 +613,11 @@ impl<'a> ScoreUnionFields<'a> {
             }
         }
         self.scores[trial.score_index as usize] += score;
-        if let Some(rt) = res_type {
-            if !last_level {
-                if let Some(outvn) = self.data.obank().get(op).and_then(|o| o.get_out()) {
+        if let Some(rt) = res_type
+            && !last_level
+                && let Some(outvn) = self.data.obank().get(op).and_then(|o| o.get_out()) {
                     self.new_trials_down(outvn, rt, trial.score_index, max_length);
                 }
-            }
-        }
         Ok(())
     }
 
@@ -695,8 +686,8 @@ impl<'a> ScoreUnionFields<'a> {
                         let mut el_size: int4 = 1;
                         if vref.map(|v| v.is_written()).unwrap_or(false) {
                             let mult_op = vref.and_then(|v| v.get_def());
-                            if let Some(mo) = mult_op {
-                                if self
+                            if let Some(mo) = mult_op
+                                && self
                                     .data
                                     .obank()
                                     .get(mo)
@@ -706,15 +697,12 @@ impl<'a> ScoreUnionFields<'a> {
                                 {
                                     let mult_vn =
                                         self.data.obank().get(mo).and_then(|o| o.get_in(1));
-                                    if let Some(mvn) = mult_vn {
-                                        if let Some(mv) = self.data.vbank().get(mvn) {
-                                            if mv.is_constant() {
+                                    if let Some(mvn) = mult_vn
+                                        && let Some(mv) = self.data.vbank().get(mvn)
+                                            && mv.is_constant() {
                                                 el_size = mv.get_offset() as int4;
                                             }
-                                        }
-                                    }
                                 }
-                            }
                         }
                         let align = trial
                             .fit_type
@@ -928,11 +916,10 @@ impl<'a> ScoreUnionFields<'a> {
             }
         }
         self.scores[trial.score_index as usize] += score;
-        if let Some(rt) = res_type {
-            if !last_level {
+        if let Some(rt) = res_type
+            && !last_level {
                 self.new_trials(def, newslot, rt, trial.score_index, max_length);
             }
-        }
         Ok(())
     }
 
@@ -943,9 +930,9 @@ impl<'a> ScoreUnionFields<'a> {
             let mut score = 5;
             if trial.max_length == 0 {
                 let in1 = self.data.obank().get(def).and_then(|o| o.get_in(1));
-                if let Some(in1vn) = in1 {
-                    if let Some(v) = self.data.vbank().get(in1vn) {
-                        if v.is_constant() {
+                if let Some(in1vn) = in1
+                    && let Some(v) = self.data.vbank().get(in1vn)
+                        && v.is_constant() {
                             let align = trial
                                 .fit_type
                                 .get_ptr_to()
@@ -955,8 +942,6 @@ impl<'a> ScoreUnionFields<'a> {
                                 score += 1;
                             }
                         }
-                    }
-                }
             }
             score
         } else if meta == TYPE_INT || meta == TYPE_UINT {

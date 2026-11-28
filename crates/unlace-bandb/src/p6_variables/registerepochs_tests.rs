@@ -92,9 +92,8 @@ fn small_repeated_phi_inputs_remain_connected() {
     let mut f = Fixture::new();
     let first = f.seed(7);
     let second = f.seed(9);
-    let inputs: Vec<_> = std::iter::repeat(second)
-        .take(16)
-        .chain(std::iter::repeat(first).take(16))
+    let inputs: Vec<_> = std::iter::repeat_n(second, 16)
+        .chain(std::iter::repeat_n(first, 16))
         .collect();
     let joined = f.op(OpCode::CPUI_MULTIEQUAL, &inputs, 8);
     assert!(single_family(&f.fd, &[first, second, joined]));
@@ -106,9 +105,8 @@ fn repeated_phi_readers_cannot_hide_quadratic_operand_scans() {
     let mut f = Fixture::new();
     let first = f.seed(7);
     let second = f.seed(9);
-    let inputs: Vec<_> = std::iter::repeat(second)
-        .take(256)
-        .chain(std::iter::repeat(first).take(256))
+    let inputs: Vec<_> = std::iter::repeat_n(second, 256)
+        .chain(std::iter::repeat_n(first, 256))
         .collect();
     f.op(OpCode::CPUI_MULTIEQUAL, &inputs, 8);
     assert!(!single_family(&f.fd, &[first, second]));

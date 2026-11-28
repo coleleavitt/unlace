@@ -151,7 +151,7 @@ impl<'a> GotImage<'a> {
 
     /// The pointer-sized, pointer-aligned slot word at `vma`.
     fn word_at(&self, vma: u64) -> Option<u64> {
-        if !self.contains(vma) || vma % u64::from(self.ptr) != 0 {
+        if !self.contains(vma) || !vma.is_multiple_of(u64::from(self.ptr)) {
             return None;
         }
         let off = usize::try_from(vma - self.lo).ok()?;
@@ -421,8 +421,8 @@ impl PicPool {
                 outs.push((f, deps));
             }
         }
-        if let Some(p) = fresh.filter(|p| img.deref && is_pointer(p.word, img)) {
-            if !calls || survives_calls(&p, img.preserved) {
+        if let Some(p) = fresh.filter(|p| img.deref && is_pointer(p.word, img))
+            && (!calls || survives_calls(&p, img.preserved)) {
                 outs.retain(|(o, _)| !(o.base && overlaps(&o.p, &p)));
                 outs.push((
                     Fact {
@@ -432,7 +432,6 @@ impl PicPool {
                     0,
                 ));
             }
-        }
         if !leaves_the_run(ops) {
             let loaded = fresh.filter(|p| !calls || survives_calls(p, img.preserved));
             let carry = ins
@@ -491,14 +490,13 @@ impl PicPool {
                 .or_default()
                 .extend(outs.iter().filter(|(f, _)| !f.base).map(|(f, _)| *f));
         }
-        if fall.is_none() {
-            if skip.iter().any(|(f, _)| !f.base) {
+        if fall.is_none()
+            && skip.iter().any(|(f, _)| !f.base) {
                 self.at
                     .entry(next)
                     .or_default()
                     .extend(skip.iter().filter(|(f, _)| !f.base).map(|(f, _)| *f));
             }
-        }
         let based: Vec<Pending> = outs
             .iter()
             .filter(|(f, _)| f.base)
@@ -783,16 +781,16 @@ fn evaluate(vma: u64, ops: &[FullOp], ins: &[Fact], img: &Image) -> Eval {
 
     for op in ops {
         let mut slot_word = None;
-        if op.opcode == OpCode::CPUI_LOAD {
-            if let (Some(g), Some(addr)) = (
+        if op.opcode == OpCode::CPUI_LOAD
+            && let (Some(g), Some(addr)) = (
                 got,
                 op.ins.get(1).and_then(|vn| value_of(vn, vma, &vals, data)),
             ) {
                 let slot = addr.v & mask(op.ins[1].size);
                 if addr.got && addr.seed && !addr.pc && g.contains(slot) {
                     found.push((slot, XrefKind::Read, addr.deps, addr.origin, 0));
-                    if let Some(word) = g.word_at(slot) {
-                        if looks_like_address(word) && in_range(mapped, word) {
+                    if let Some(word) = g.word_at(slot)
+                        && looks_like_address(word) && in_range(mapped, word) {
                             found.push((word, XrefKind::Data, addr.deps, addr.origin, 0));
                             if img.deref
                                 && word & 1 == 0
@@ -801,12 +799,10 @@ fn evaluate(vma: u64, ops: &[FullOp], ins: &[Fact], img: &Image) -> Eval {
                                 slot_word = Some(Known::ptr(word, addr.deps));
                             }
                         }
-                    }
                 }
             }
-        }
-        if img.deref && matches!(op.opcode, OpCode::CPUI_LOAD | OpCode::CPUI_STORE) {
-            if let Some(addr) = op.ins.get(1).and_then(|vn| value_of(vn, vma, &vals, data)) {
+        if img.deref && matches!(op.opcode, OpCode::CPUI_LOAD | OpCode::CPUI_STORE)
+            && let Some(addr) = op.ins.get(1).and_then(|vn| value_of(vn, vma, &vals, data)) {
                 let to = addr.v & mask(op.ins[1].size);
                 if addr.pointer() && in_range(mapped, to) {
                     let kind = if op.opcode == OpCode::CPUI_LOAD {
@@ -817,7 +813,6 @@ fn evaluate(vma: u64, ops: &[FullOp], ins: &[Fact], img: &Image) -> Eval {
                     found.push((to, kind, addr.pdeps, 0, addr.via));
                 }
             }
-        }
         let folded = slot_word.or_else(|| fold(op, vma, &vals, data));
         let Some(out) = &op.out else { continue };
         let key = key_of(out, data);

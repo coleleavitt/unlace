@@ -135,11 +135,10 @@ pub(crate) fn locate(
         let size = sec.size();
         let mut at = base.next_multiple_of(ptr_size);
         while at + ptr_size <= base + size {
-            if word(img, at) == Some(header_vma) {
-                if let Some(md) = rows.iter().find_map(|l| read(img, at, l, ptr_size, word)) {
+            if word(img, at) == Some(header_vma)
+                && let Some(md) = rows.iter().find_map(|l| read(img, at, l, ptr_size, word)) {
                     return Some(md);
                 }
-            }
             at += ptr_size;
         }
     }

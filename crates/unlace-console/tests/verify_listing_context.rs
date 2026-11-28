@@ -201,7 +201,7 @@ fn arm_thumb_seed_decodes_in_thumb_mode_in_listing() {
         "expected several Thumb instructions in `compute`, got {}",
         body.len()
     );
-    for &(&a, ref insn) in &body {
+    for &(&a, insn) in &body {
         assert!(
             insn.len == 2 || insn.len == 4,
             "every Thumb instruction is 2 or 4 bytes; insn at {a:#x} has len {}",

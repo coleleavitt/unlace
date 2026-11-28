@@ -734,9 +734,7 @@ fn match_reduction(data: &Funcdata, h: BlockId) -> Option<(BlockId, int4)> {
             };
             for d in data.descend_snapshot(out) {
                 let reader = op(data, d);
-                let Some(parent) = reader.get_parent() else {
-                    return None;
-                };
+                let parent = reader.get_parent()?;
                 if arm.contains(&parent) {
                     continue;
                 }

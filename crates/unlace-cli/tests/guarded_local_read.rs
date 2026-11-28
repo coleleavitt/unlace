@@ -5,7 +5,7 @@ use std::process::Command;
 fn check_guarded_stack_read(target: &str, code: &str, qualifier: &str, preloaded: bool) {
     let image = common::scratch_file("guarded-local-read", "bin");
     let mut bytes = vec![0u8; 0x301];
-    for (i, pair) in code.as_bytes().chunks_exact(2).enumerate() {
+    for (i, pair) in code.as_bytes().as_chunks::<2>().0.iter().enumerate() {
         bytes[i] = u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap();
     }
     if target.starts_with("sparc") {

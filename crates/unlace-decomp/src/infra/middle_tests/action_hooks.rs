@@ -842,17 +842,17 @@ fn filtered_clone_selects_group_members() {
     // A keeps: leaf_alpha (alpha), rule_beta (beta), leaf_beta (beta inside the
     // inner group).  The inner group survives because leaf_beta does; rule_gamma
     // and leaf_alpha-only-in-other-group are filtered.
-    assert!(names_a.contains(&"leaf_alpha".to_string()));
+    assert!(names_a.iter().any(|i| i == "leaf_alpha"));
     assert!(names_a.iter().any(|n| n.starts_with("rule_beta")));
-    assert!(names_a.contains(&"leaf_beta".to_string()));
+    assert!(names_a.iter().any(|i| i == "leaf_beta"));
     assert!(!names_a.iter().any(|n| n.starts_with("rule_gamma")));
 
     // B keeps only rule_gamma; the inner group (only beta member) wholly drops,
     // and leaf_alpha drops.
     assert!(names_b.iter().any(|n| n.starts_with("rule_gamma")));
-    assert!(!names_b.contains(&"leaf_alpha".to_string()));
+    assert!(!names_b.iter().any(|i| i == "leaf_alpha"));
     assert!(!names_b.iter().any(|n| n.starts_with("rule_beta")));
-    assert!(!names_b.contains(&"leaf_beta".to_string()));
+    assert!(!names_b.iter().any(|i| i == "leaf_beta"));
 }
 
 #[test]
@@ -874,15 +874,15 @@ fn database_derives_distinct_roots_from_one_universal() {
     let names_ab = run_and_collect(root_ab, &log);
     let names_g = run_and_collect(root_g, &log);
 
-    assert!(names_ab.contains(&"leaf_alpha".to_string()));
+    assert!(names_ab.iter().any(|i| i == "leaf_alpha"));
     assert!(names_ab.iter().any(|n| n.starts_with("rule_beta")));
-    assert!(names_ab.contains(&"leaf_beta".to_string()));
+    assert!(names_ab.iter().any(|i| i == "leaf_beta"));
     assert!(!names_ab.iter().any(|n| n.starts_with("rule_gamma")));
 
     assert!(names_g.iter().any(|n| n.starts_with("rule_gamma")));
-    assert!(!names_g.contains(&"leaf_alpha".to_string()));
+    assert!(!names_g.iter().any(|i| i == "leaf_alpha"));
     assert!(!names_g.iter().any(|n| n.starts_with("rule_beta")));
-    assert!(!names_g.contains(&"leaf_beta".to_string()));
+    assert!(!names_g.iter().any(|i| i == "leaf_beta"));
 }
 
 #[test]

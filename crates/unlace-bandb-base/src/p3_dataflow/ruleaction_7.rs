@@ -1532,17 +1532,17 @@ impl Rule for RuleSignMod2nOpt2 {
             return 0;
         }
         let adj_op = vn_def(data, adj_vn).expect("signmod2nopt2: adjVn written");
-        let base: Option<VarnodeId>;
-        if op_code(data, adj_op) == OpCode::CPUI_INT_ADD {
+
+        let base: Option<VarnodeId> = if op_code(data, adj_op) == OpCode::CPUI_INT_ADD {
             if npow != 2 {
                 return 0; // Special mod 2 form
             }
-            base = RuleSignMod2nOpt2::check_sign_ext_form(data, adj_op);
+            RuleSignMod2nOpt2::check_sign_ext_form(data, adj_op)
         } else if op_code(data, adj_op) == OpCode::CPUI_MULTIEQUAL {
-            base = RuleSignMod2nOpt2::check_multiequal_form(data, adj_op, npow);
+            RuleSignMod2nOpt2::check_multiequal_form(data, adj_op, npow)
         } else {
             return 0;
-        }
+        };
         let base = match base {
             Some(b) => b,
             None => return 0,
@@ -1780,19 +1780,18 @@ impl RulePtrFlow {
             | OpCode::CPUI_INT_ADD
             | OpCode::CPUI_INDIRECT
             | OpCode::CPUI_PTRSUB
-            | OpCode::CPUI_PTRADD => {
+            | OpCode::CPUI_PTRADD
                 if !data
                     .obank()
                     .get(op)
                     .expect("trialSetPtrFlow: op")
-                    .is_ptr_flow()
-                {
-                    data.obank_mut()
-                        .get_mut(op)
-                        .expect("trialSetPtrFlow: op")
-                        .set_ptr_flow();
-                    return true;
-                }
+                    .is_ptr_flow() =>
+            {
+                data.obank_mut()
+                    .get_mut(op)
+                    .expect("trialSetPtrFlow: op")
+                    .set_ptr_flow();
+                return true;
             }
             _ => {}
         }
@@ -2191,7 +2190,7 @@ impl RuleConditionalMove {
         data: &mut Funcdata,
         vn: VarnodeId,
         insertop: OpId,
-        ops: &mut Vec<OpId>,
+        ops: &mut [OpId],
     ) -> VarnodeId {
         if !ops.is_empty() {
             // by seqnum order
@@ -2733,24 +2732,24 @@ fn ignorenan_test_for_comparison(
         }
         let out_branch = data.bblocks_ref().block(parent).get_out(out_dir);
         let last_op = data.bblocks_ref().struct_last_op(out_branch);
-        if let Some(last_op) = last_op {
-            if op_code(data, last_op) == OpCode::CPUI_CBRANCH {
-                let other_branch = data.bblocks_ref().block(parent).get_out(1 - out_dir);
-                let ob0 = data.bblocks_ref().block(out_branch).get_out(0);
-                let ob1 = data.bblocks_ref().block(out_branch).get_out(1);
-                if ob0 == other_branch || ob1 == other_branch {
-                    let cmpvn = op_in(data, last_op, 1).expect("ignorenan: lastop in1");
-                    if ignorenan_check_back_for_compare(data, float_var, cmpvn) {
-                        let cval = if match_code == OpCode::CPUI_BOOL_OR {
-                            0
-                        } else {
-                            1
-                        };
-                        let c = data.new_constant(1, cval);
-                        data.op_set_input(op, c, 1)
-                            .expect("ignorenan: cbranch const");
-                        *count += 1;
-                    }
+        if let Some(last_op) = last_op
+            && op_code(data, last_op) == OpCode::CPUI_CBRANCH
+        {
+            let other_branch = data.bblocks_ref().block(parent).get_out(1 - out_dir);
+            let ob0 = data.bblocks_ref().block(out_branch).get_out(0);
+            let ob1 = data.bblocks_ref().block(out_branch).get_out(1);
+            if ob0 == other_branch || ob1 == other_branch {
+                let cmpvn = op_in(data, last_op, 1).expect("ignorenan: lastop in1");
+                if ignorenan_check_back_for_compare(data, float_var, cmpvn) {
+                    let cval = if match_code == OpCode::CPUI_BOOL_OR {
+                        0
+                    } else {
+                        1
+                    };
+                    let c = data.new_constant(1, cval);
+                    data.op_set_input(op, c, 1)
+                        .expect("ignorenan: cbranch const");
+                    *count += 1;
                 }
             }
         }

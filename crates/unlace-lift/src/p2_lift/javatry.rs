@@ -134,18 +134,18 @@ impl JavaTryPlan {
 /// Can the Dalvik instruction with opcode `op` throw? Moves, constants,
 /// branches, compares and arithmetic other than integer division cannot.
 pub fn can_throw(op: u8) -> bool {
-    match op {
-        0x00..=0x1b => false,
-        0x28..=0x3d => false,
-        0x7b..=0x92
-        | 0x95..=0x9d
-        | 0xa0..=0xb2
-        | 0xb5..=0xbd
-        | 0xc0..=0xd2
-        | 0xd5..=0xda
-        | 0xdd..=0xe2 => false,
-        _ => true,
-    }
+    !matches!(
+        op,
+        0x00..=0x1b
+            | 0x28..=0x3d
+            | 0x7b..=0x92
+            | 0x95..=0x9d
+            | 0xa0..=0xb2
+            | 0xb5..=0xbd
+            | 0xc0..=0xd2
+            | 0xd5..=0xda
+            | 0xdd..=0xe2
+    )
 }
 
 fn callother(data: &mut Funcdata, at: &Address, id: u32, args: &[u64]) -> UnlaceResult<OpId> {
@@ -224,15 +224,15 @@ pub fn before_instruction(
         let test = edge(data, curaddr, BUILTIN_JAVA_TRY, handler)?;
         first.get_or_insert(test);
     }
-    if let Some(block) = plan.block_at(off) {
-        if can_throw(opcode) {
-            let mut done: Vec<u64> = Vec::new();
-            for &(_, handler) in &block.handlers {
-                let skip = block.start == off && dispatched.contains(&handler);
-                if !skip && !done.contains(&handler) {
-                    edge(data, curaddr, BUILTIN_JAVA_THROWS, handler)?;
-                    done.push(handler);
-                }
+    if let Some(block) = plan.block_at(off)
+        && can_throw(opcode)
+    {
+        let mut done: Vec<u64> = Vec::new();
+        for &(_, handler) in &block.handlers {
+            let skip = block.start == off && dispatched.contains(&handler);
+            if !skip && !done.contains(&handler) {
+                edge(data, curaddr, BUILTIN_JAVA_THROWS, handler)?;
+                done.push(handler);
             }
         }
     }
@@ -290,12 +290,14 @@ pub fn dispatch_handler(data: &Funcdata, op: OpId) -> Option<u64> {
     data.vbank().get(o.get_in(1)?).map(|v| v.get_offset())
 }
 
+type HandlerClauses = BTreeMap<u64, (Vec<(u64, u64)>, Vec<Option<u32>>)>;
+
 /// The catch clauses of one function, for the printer.
 #[derive(Clone, Debug)]
 pub struct CatchTable {
     /// Handler -> the ranges whose clauses name it, and the types it catches
     /// (`None` for the catch-all).
-    handlers: BTreeMap<u64, (Vec<(u64, u64)>, Vec<Option<u32>>)>,
+    handlers: HandlerClauses,
     model: std::rc::Rc<DexModel>,
 }
 
@@ -308,7 +310,7 @@ impl CatchTable {
             .dex
             .as_ref()
             .filter(|_| arch.unlace_options.get::<crate::coreoptions::JavaTry>().0)?;
-        let mut handlers: BTreeMap<u64, (Vec<(u64, u64)>, Vec<Option<u32>>)> = BTreeMap::new();
+        let mut handlers: HandlerClauses = BTreeMap::new();
         for block in canonical_blocks(model, data.get_address().get_offset()) {
             for &(type_idx, handler) in &block.handlers {
                 let entry = handlers.entry(handler).or_default();

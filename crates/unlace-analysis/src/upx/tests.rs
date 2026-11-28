@@ -414,15 +414,15 @@ fn unpacks_the_pe_witness_to_a_usable_pe() {
     assert_eq!(imports.len(), 79);
     assert_eq!(imports[0], "KERNEL32.DLL!DebugBreak");
     assert!(
-        imports.contains(&"COMCTL32.dll!InitCommonControlsEx".to_string()),
+        imports.iter().any(|i| i == "COMCTL32.dll!InitCommonControlsEx"),
         "{imports:?}"
     );
     assert!(
-        imports.contains(&"USER32.dll!DialogBoxParamA".to_string()),
+        imports.iter().any(|i| i == "USER32.dll!DialogBoxParamA"),
         "{imports:?}"
     );
     assert!(
-        imports.contains(&"KERNEL32.DLL!GetVersion".to_string()),
+        imports.iter().any(|i| i == "KERNEL32.DLL!GetVersion"),
         "{imports:?}"
     );
 

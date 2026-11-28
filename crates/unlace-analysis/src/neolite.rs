@@ -735,12 +735,11 @@ impl Pe {
         }
 
         let imports = self.find_import_directory(&bodies);
-        if let Some((rva, size)) = imports {
-            if self.num_data_dirs > 1 {
+        if let Some((rva, size)) = imports
+            && self.num_data_dirs > 1 {
                 wr32(&mut out, self.opt_at + 96 + 8, rva);
                 wr32(&mut out, self.opt_at + 96 + 12, size);
             }
-        }
 
         Ok(Unpacked {
             bytes: out,

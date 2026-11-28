@@ -334,14 +334,12 @@ struct Run {
 /// extending the last run when both are whole blocks and adjacent.
 #[inline(always)]
 fn push_block(out: &mut Vec<Run>, bl: int4, cb: CoverBlock) {
-    if cb.is_full() {
-        if let Some(last) = out.last_mut() {
-            if last.cb.is_full() && last.hi.checked_add(1) == Some(bl) {
+    if cb.is_full()
+        && let Some(last) = out.last_mut()
+            && last.cb.is_full() && last.hi.checked_add(1) == Some(bl) {
                 last.hi = bl;
                 return;
             }
-        }
-    }
     out.push(Run { lo: bl, hi: bl, cb });
 }
 

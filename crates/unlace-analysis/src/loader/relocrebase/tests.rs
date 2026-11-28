@@ -103,8 +103,10 @@ fn big_endian_et_rel_is_rebased_in_its_own_byte_order() {
             .data()
             .unwrap();
         let words: Vec<u32> = addrs[8..]
-            .chunks_exact(4)
-            .map(|w| u32::from_be_bytes(w.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|w| u32::from_be_bytes(*w))
             .collect();
         assert!(
             words.contains(&(RELOC_BASE as u32)),

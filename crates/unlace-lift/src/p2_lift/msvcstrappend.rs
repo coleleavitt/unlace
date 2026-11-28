@@ -1013,9 +1013,7 @@ fn prove_fast_path(
             if addr != a || heap_ptr.is_some_and(|p| p != *pid) {
                 return None;
             }
-            let Some(before) = ver.checked_sub(base_ver).map(|b| b as usize) else {
-                return None;
-            };
+            let before = ver.checked_sub(base_ver).map(|b| b as usize)?;
             if before > 1 || before > idx || st.stores[..before].iter().any(|b| b.addr != size_slot)
             {
                 return None;

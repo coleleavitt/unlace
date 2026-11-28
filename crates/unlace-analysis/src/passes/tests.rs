@@ -359,7 +359,8 @@ fn peimportcall_pass_is_pe_coff_macho_elf_gated() {
                 "{c:?}/{fmt:?} must carry peimportcall"
             );
         }
-        for fmt in [object::BinaryFormat::Wasm] {
+        {
+            let fmt = object::BinaryFormat::Wasm;
             assert!(
                 !ids(&passes_for(c, fmt)).contains(&"peimportcall"),
                 "{c:?}/{fmt:?} must not carry peimportcall"

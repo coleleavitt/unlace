@@ -153,17 +153,16 @@ pub(super) fn recover_from(
             if bcd.p_type_descriptor == col.p_type_descriptor {
                 continue;
             }
-            if !classes.contains_key(&bcd.p_type_descriptor) {
+            if let std::collections::btree_map::Entry::Vacant(e) =
+                classes.entry(bcd.p_type_descriptor)
+            {
                 let Some(base_name) = class_name(img, rk, bcd.p_type_descriptor) else {
                     continue;
                 };
-                classes.insert(
-                    bcd.p_type_descriptor,
-                    Class {
-                        name: base_name,
-                        ..Class::default()
-                    },
-                );
+                e.insert(Class {
+                    name: base_name,
+                    ..Class::default()
+                });
             }
             bases.push(Base {
                 td: bcd.p_type_descriptor,

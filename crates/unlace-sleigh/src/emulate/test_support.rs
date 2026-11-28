@@ -123,13 +123,11 @@ impl TestTranslator {
 
 impl RegisterLookup for TestTranslator {
     fn get_register(&self, nm: &str) -> UnlaceResult<VarnodeStorage> {
-        if let Some(num) = nm.strip_prefix('r') {
-            if let Ok(index) = num.parse::<u64>() {
-                if index < 8 {
+        if let Some(num) = nm.strip_prefix('r')
+            && let Ok(index) = num.parse::<u64>()
+                && index < 8 {
                     return Ok(self.reg_storage(index));
                 }
-            }
-        }
         Err(UnlaceError::sleigh(format!("Unknown register name: {nm}")))
     }
 

@@ -358,7 +358,7 @@ impl TeLoadImage {
                     return Err(Self::invalid(filename, "section file ranges overlap"));
                 }
                 file_ranges.push((file_offset, file_end));
-                section_file_range = Some((file_offset, initialized_size as u64));
+                section_file_range = Some((file_offset, initialized_size));
                 bytes[file_offset as usize..file_offset as usize + initialized_size as usize]
                     .to_vec()
             };
@@ -453,7 +453,7 @@ impl TeLoadImage {
                 data: bytes[..header_file_size as usize].to_vec(),
                 flags: section_flags::DATA | section_flags::READONLY,
                 kind: SectionKind::ReadOnlyData,
-                file_range: Some((0, header_file_size as u64)),
+                file_range: Some((0, header_file_size)),
             },
         );
 
@@ -634,7 +634,7 @@ impl LoadImage for TeLoadImage {
             let gap = self
                 .sections
                 .iter()
-                .filter_map(|section| (section.vma > cursor).then(|| section.vma - cursor))
+                .filter(|&section| section.vma > cursor).map(|section| section.vma - cursor)
                 .min()
                 .unwrap_or((ptr.len() - written) as u64)
                 .min((ptr.len() - written) as u64) as usize;
@@ -740,14 +740,13 @@ fn validate_target(filename: &str, target: &str, bits: u8) -> UnlaceResult<()> {
             &format!("target {target:?} is {endian}-endian but TE is LE-endian"),
         ));
     }
-    if let Some(target_bits) = fields.next().and_then(|value| value.parse::<u8>().ok()) {
-        if target_bits != bits {
+    if let Some(target_bits) = fields.next().and_then(|value| value.parse::<u8>().ok())
+        && target_bits != bits {
             return Err(TeLoadImage::invalid(
                 filename,
                 &format!("target {target:?} is {target_bits}-bit but the TE machine is {bits}-bit"),
             ));
         }
-    }
     Ok(())
 }
 

@@ -952,7 +952,7 @@ pub fn with_sibling_loads(data: &Funcdata, family: &[VarnodeId]) -> Vec<VarnodeI
         if through_the_frame(data, o) {
             continue;
         }
-        let Some((base, off)) = o.get_in(1).and_then(&place) else {
+        let Some((base, off)) = o.get_in(1).and_then(place) else {
             continue;
         };
         let Some(bnode) = data.vbank().get(base) else {
@@ -1687,11 +1687,10 @@ fn carries_an_integer(data: &Funcdata, vn: VarnodeId) -> bool {
 /// the parameter is type-locked, else the type a callee stated for it.
 fn reader_class(data: &Funcdata, call: OpId, slot: int4) -> Option<Class> {
     let fc = data.get_call_specs(data.get_call_specs_index(call)?);
-    if let Some(param) = fc.proto().get_param(slot - 1) {
-        if param.is_type_locked() {
+    if let Some(param) = fc.proto().get_param(slot - 1)
+        && param.is_type_locked() {
             return param.get_type().and_then(|t| class_of(t));
         }
-    }
     stated_argument_type(data, fc, slot).and_then(|t| class_of(t))
 }
 
@@ -2589,7 +2588,7 @@ impl crate::optionset::UnlaceOption for ProtoOrderMode {
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
-        Ok(crate::protoorder::OptionProtoOrder.apply(value)?)
+        crate::protoorder::OptionProtoOrder.apply(value)
     }
 }
 

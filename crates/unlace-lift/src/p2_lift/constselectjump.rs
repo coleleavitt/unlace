@@ -299,7 +299,6 @@ impl JumpModelConstSelect {
     }
 
     #[doc(hidden)]
-
     pub fn from_flow_targets(dests: Vec<u64>, stub: Option<u64>) -> Self {
         Self {
             dests,

@@ -47,15 +47,15 @@ fn hex(bytes: &[u8]) -> String {
 /// search order, each with the check it must pass.
 pub fn candidates(file: &object::File, image: &Path) -> Vec<(PathBuf, Check)> {
     let mut out = Vec::new();
-    if let Ok(Some(id)) = file.build_id() {
-        if id.len() >= 2 {
-            for dir in debug_dirs() {
-                let path = dir
-                    .join(".build-id")
-                    .join(hex(&id[..1]))
-                    .join(format!("{}.debug", hex(&id[1..])));
-                out.push((path, Check::BuildId(id.to_vec())));
-            }
+    if let Ok(Some(id)) = file.build_id()
+        && id.len() >= 2
+    {
+        for dir in debug_dirs() {
+            let path = dir
+                .join(".build-id")
+                .join(hex(&id[..1]))
+                .join(format!("{}.debug", hex(&id[1..])));
+            out.push((path, Check::BuildId(id.to_vec())));
         }
     }
     if let Ok(Some((name, crc))) = file.gnu_debuglink() {

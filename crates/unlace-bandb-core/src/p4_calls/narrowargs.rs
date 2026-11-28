@@ -120,10 +120,7 @@ fn narrowable(data: &Funcdata, vn: VarnodeId, w: int4) -> bool {
                     false
                 }
                 OpCode::CPUI_INT_MULT => {
-                    if constant(data, other).is_some_and(|c| c != 0 && c.trailing_zeros() >= 8) {
-                        return false;
-                    }
-                    true
+                    !constant(data, other).is_some_and(|c| c != 0 && c.trailing_zeros() >= 8)
                 }
                 OpCode::CPUI_INT_AND => {
                     if shifts_by(data, o.get_out()) {
@@ -143,11 +140,10 @@ fn narrowable(data: &Funcdata, vn: VarnodeId, w: int4) -> bool {
                 | OpCode::CPUI_INT_2COMP => true,
                 _ => false,
             };
-            if follow {
-                if let Some(out) = o.get_out().filter(|out| !family.contains(out)) {
+            if follow
+                && let Some(out) = o.get_out().filter(|out| !family.contains(out)) {
                     family.push(out);
                 }
-            }
         }
     }
     true

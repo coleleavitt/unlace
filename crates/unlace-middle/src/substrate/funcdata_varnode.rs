@@ -246,14 +246,14 @@ impl Funcdata {
                         .get_mut(vn)
                         .expect("calc_nz_mask: stale in")
                         .set_nz_mask(nz);
-                } else if let Some(def) = def {
-                    if !self.obank().get(def).map(|o| o.is_mark()).unwrap_or(true) {
-                        opstack.push((def, 0));
-                        self.obank_mut()
-                            .get_mut(def)
-                            .expect("calc_nz_mask: stale def")
-                            .set_mark();
-                    }
+                } else if let Some(def) = def
+                    && !self.obank().get(def).map(|o| o.is_mark()).unwrap_or(true)
+                {
+                    opstack.push((def, 0));
+                    self.obank_mut()
+                        .get_mut(def)
+                        .expect("calc_nz_mask: stale def")
+                        .set_mark();
                 }
             }
         }
@@ -884,12 +884,12 @@ impl Funcdata {
             if let Some(v) = self.vbank_mut().get_mut(vn) {
                 v.set_unaffected();
             }
-        } else if effecttype == effect_type::RETURN_ADDRESS {
-            if let Some(v) = self.vbank_mut().get_mut(vn) {
-                // Should be unaffected over the course of the function.
-                v.set_unaffected();
-                v.set_return_address();
-            }
+        } else if effecttype == effect_type::RETURN_ADDRESS
+            && let Some(v) = self.vbank_mut().get_mut(vn)
+        {
+            // Should be unaffected over the course of the function.
+            v.set_unaffected();
+            v.set_return_address();
         }
     }
 
@@ -1037,10 +1037,10 @@ impl Funcdata {
         let readers: Vec<OpId> = self.descend_snapshot(vn);
         for op in readers {
             let slot = self.obank().get(op).map(|o| o.get_slot(vn)).unwrap_or(-1);
-            if slot >= 0 {
-                if let Some(o) = self.obank_mut().get_mut(op) {
-                    o.clear_input(slot);
-                }
+            if slot >= 0
+                && let Some(o) = self.obank_mut().get_mut(op)
+            {
+                o.clear_input(slot);
             }
         }
         let def = self.vbank().get(vn).and_then(|v| v.get_def());
@@ -1312,9 +1312,9 @@ impl Funcdata {
         // type for the same spacebase input (`op_ptrsub_ir` line in0 = get_type),
         // which after the W10 spacebase-input typing IS the pointer-to-spacebase;
         // use the same source so the action and the render agree.
-        let (ptype, in0_size) = match self.vbank().get(in0) {
-            Some(v) => (Rc::clone(v.get_type()), v.get_size()),
-            None => return None,
+        let (ptype, in0_size) = {
+            let v = self.vbank().get(in0)?;
+            (Rc::clone(v.get_type()), v.get_size())
         };
         if ptype.get_metatype() != type_metatype::TYPE_PTR {
             return None;
@@ -1743,17 +1743,17 @@ impl Funcdata {
             ));
         }
         // Compute contiguity by endianness.
-        let is_contiguous: bool;
+
         let addr: Address;
-        if lo_addr.is_big_endian() {
+        let is_contiguous: bool = if lo_addr.is_big_endian() {
             addr = hi_addr.clone();
             let otheraddr = &hi_addr + hi_size as i64;
-            is_contiguous = otheraddr == lo_addr;
+            otheraddr == lo_addr
         } else {
             addr = lo_addr.clone();
             let otheraddr = &lo_addr + lo_size as i64;
-            is_contiguous = otheraddr == hi_addr;
-        }
+            otheraddr == hi_addr
+        };
         if !is_contiguous {
             return Err(UnlaceError::lowlevel(
                 "Input varnodes being combined are not contiguous",
@@ -1868,7 +1868,7 @@ impl Funcdata {
                 .get(id)
                 .expect("adjust_input_varnodes: stale input");
             let vaddr = v.get_addr();
-            if vaddr.get_space().map_or(true, |s| !Rc::ptr_eq(s, &space)) {
+            if vaddr.get_space().is_none_or(|s| !Rc::ptr_eq(s, &space)) {
                 continue;
             }
             let voff = vaddr.get_offset();
@@ -1886,6 +1886,7 @@ impl Funcdata {
         let bb = self.bblocks_get_block(0);
         let fdaddr = self.get_address().clone();
         // Pull each intersecting input out as a SUBPIECE placeholder of the whole.
+        #[allow(clippy::needless_range_loop)]
         for i in 0..inlist.len() {
             let vn = inlist[i];
             let (is_input, vsize, vaddr) = {
@@ -2459,10 +2460,10 @@ impl Funcdata {
                             .map(|o| o.get_seq_num().get_order());
                         let op_order = self.obank().get(op).map(|o| o.get_seq_num().get_order());
                         // opmatch has dibs, don't reject.
-                        if let (Some(mo), Some(oo)) = (match_order, op_order) {
-                            if mo < oo {
-                                return true;
-                            }
+                        if let (Some(mo), Some(oo)) = (match_order, op_order)
+                            && mo < oo
+                        {
+                            return true;
                         }
                         // else: use earlier than match — might still reject (fall through)
                     } else {
@@ -2598,11 +2599,9 @@ impl Funcdata {
                     None => continue,
                 };
                 let code = o.code();
-                if op == opmatch {
-                    if o.get_in(trial.get_slot()) == Some(vn) {
-                        reached_match = true;
-                        continue;
-                    }
+                if op == opmatch && o.get_in(trial.get_slot()) == Some(vn) {
+                    reached_match = true;
+                    continue;
                 }
                 let mut cur_flags = base_flags;
                 // (unlace) `exclusivecallret` — see [`crate::p4_calls::exclusivecallret`].
@@ -3097,18 +3096,18 @@ impl Funcdata {
                     .and_then(|v| self.vbank().get(v))
                     .map(|v| v.is_incidental_copy())
                     .unwrap_or(false);
-                if space_internal || incidental || in0_incid {
-                    if let Some(in0) = in0 {
-                        return self.ancestor_op_use_in(
-                            memo,
-                            maxlevel - 1,
-                            in0,
-                            op,
-                            trial,
-                            offset,
-                            main_flags,
-                        );
-                    }
+                if (space_internal || incidental || in0_incid)
+                    && let Some(in0) = in0
+                {
+                    return self.ancestor_op_use_in(
+                        memo,
+                        maxlevel - 1,
+                        in0,
+                        op,
+                        trial,
+                        offset,
+                        main_flags,
+                    );
                 }
                 Ancestry::of(self.only_op_use(invn, op, trial, main_flags))
             }
@@ -3149,25 +3148,25 @@ impl Funcdata {
                     .and_then(|v| self.vbank().get(v))
                     .map(|v| v.get_offset())
                     .unwrap_or(0) as int4;
-                if new_off == 0 {
-                    if let Some(in0) = in0 {
-                        let in0_written = self
+                if new_off == 0
+                    && let Some(in0) = in0
+                {
+                    let in0_written = self
+                        .vbank()
+                        .get(in0)
+                        .map(|v| v.is_written())
+                        .unwrap_or(false);
+                    if in0_written {
+                        let remcode = self
                             .vbank()
                             .get(in0)
-                            .map(|v| v.is_written())
-                            .unwrap_or(false);
-                        if in0_written {
-                            let remcode = self
-                                .vbank()
-                                .get(in0)
-                                .and_then(|v| v.get_def())
-                                .and_then(|d| self.obank().get(d))
-                                .map(|o| o.code());
-                            if remcode == Some(OpCode::CPUI_INT_REM)
-                                || remcode == Some(OpCode::CPUI_INT_SREM)
-                            {
-                                trial.set_rem_formed();
-                            }
+                            .and_then(|v| v.get_def())
+                            .and_then(|d| self.obank().get(d))
+                            .map(|o| o.code());
+                        if remcode == Some(OpCode::CPUI_INT_REM)
+                            || remcode == Some(OpCode::CPUI_INT_SREM)
+                        {
+                            trial.set_rem_formed();
                         }
                     }
                 }
@@ -3194,18 +3193,18 @@ impl Funcdata {
                         }
                     })
                     .unwrap_or(false);
-                if space_internal || incidental || in0_incid || overlap_match {
-                    if let Some(in0) = in0 {
-                        return self.ancestor_free_step(
-                            memo,
-                            maxlevel,
-                            in0,
-                            op,
-                            trial,
-                            offset + new_off,
-                            main_flags,
-                        );
-                    }
+                if (space_internal || incidental || in0_incid || overlap_match)
+                    && let Some(in0) = in0
+                {
+                    return self.ancestor_free_step(
+                        memo,
+                        maxlevel,
+                        in0,
+                        op,
+                        trial,
+                        offset + new_off,
+                        main_flags,
+                    );
                 }
                 Ancestry::of(self.only_op_use(invn, op, trial, main_flags))
             }
@@ -3580,10 +3579,7 @@ impl AncestorRealistic {
         }
         let solid = blref.get_in(state.get_solid_slot());
         let solidref = fd.bblocks_ref().block(solid);
-        if solidref.size_out() != 1 {
-            return false;
-        }
-        true
+        solidref.size_out() == 1
     }
 
     /// C++ `AncestorRealistic::enterNode` — traverse into a new Varnode.
@@ -3830,15 +3826,14 @@ impl AncestorRealistic {
                         return AncestorCmd::PopFail;
                     }
                     let curdef = fd.vbank().get(curvn).and_then(|v| v.get_def());
-                    if let Some(d) = curdef {
-                        if fd
+                    if let Some(d) = curdef
+                        && fd
                             .obank()
                             .get(d)
                             .map(|o| o.is_store_unmapped())
                             .unwrap_or(false)
-                        {
-                            return AncestorCmd::PopFail;
-                        }
+                    {
+                        return AncestorCmd::PopFail;
                     }
                     let op2 = match curdef {
                         Some(d) => d,

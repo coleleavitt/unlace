@@ -616,7 +616,7 @@ pub(crate) fn runtime_functions(pe: &PeFile64, bytes: &[u8], base: u64) -> Vec<(
         return Vec::new();
     };
     let mut v = Vec::new();
-    for rec in data.chunks_exact(12) {
+    for rec in data.as_chunks::<12>().0 {
         let begin = u32::from_le_bytes([rec[0], rec[1], rec[2], rec[3]]) as u64;
         let end = u32::from_le_bytes([rec[4], rec[5], rec[6], rec[7]]) as u64;
         let unwind = u32::from_le_bytes([rec[8], rec[9], rec[10], rec[11]]) as u64;

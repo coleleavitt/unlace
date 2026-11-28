@@ -170,7 +170,7 @@ fn table_read(data: &Funcdata, op: OpId, vn: VarnodeId) -> Option<u64> {
                 .descend_iter()
                 .filter_map(|r| data.obank().get(r))
                 .filter(|r| r.code() == OpCode::CPUI_LOAD && r.get_in(1) == Some(out))
-                .filter_map(|r| width(r))
+                .filter_map(width)
                 .max()
                 .map(|w| off + w)
         }

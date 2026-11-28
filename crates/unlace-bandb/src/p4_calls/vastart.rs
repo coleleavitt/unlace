@@ -172,14 +172,12 @@ fn find(data: &Funcdata) -> Option<VaStart> {
         // once the fields are heritaged their writes can survive only as the INDIRECTs a
         // later call carries, while the values stay where va_start computed them.
         let here = |o: OpId| {
-            let Some(v) = written(data, o) else {
-                return None;
-            };
+            let v = written(data, o)?;
             let defined = def_block(data, v) == Some(block);
             (defined || data.obank().get(o).and_then(|p| p.get_parent()) == Some(block))
                 .then_some((o, v, defined))
         };
-        let Some((_, overflow, ov_def)) = at(x.wrapping_add(8), 8).find_map(|o| here(o)) else {
+        let Some((_, overflow, ov_def)) = at(x.wrapping_add(8), 8).find_map(&here) else {
             continue;
         };
         let Some((save, spacebase, save_area, address_op, sv_def)) = at(x.wrapping_add(16), 8)
@@ -442,10 +440,11 @@ fn rewrite(data: &mut Funcdata, m: &VaStart) -> unlace_base::error::UnlaceResult
             })
             .collect();
         for vn in spills {
-            if let Some(v) = data.vbank_mut().get_mut(vn) {
-                if v.is_addr_tied() && v.is_addr_force() {
-                    v.clear_addr_force();
-                }
+            if let Some(v) = data.vbank_mut().get_mut(vn)
+                && v.is_addr_tied()
+                && v.is_addr_force()
+            {
+                v.clear_addr_force();
             }
         }
         data.scope_local_mark_not_mapped(&stack, m.save_area, m.save_len as int4, false);

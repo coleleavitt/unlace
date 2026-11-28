@@ -92,6 +92,7 @@ pub fn elf_for(
 }
 
 /// A synthetic THUMB COFF object, including a string for the inspection path.
+#[allow(dead_code)]
 pub fn thumb_coff() -> Vec<u8> {
     let mut obj = Object::new(BinaryFormat::Coff, Architecture::Arm, Endianness::Little);
     let text = obj.add_section(Vec::new(), b".text".to_vec(), SectionKind::Text);

@@ -1512,7 +1512,7 @@ fn an_extended_prefix_recomputes_the_bodys_pc_relative_references() {
                 xrefs::build_measured(&file, prog.arch(), prog.arch().translate(), &[0x1000]);
             let refs: Vec<_> = index
                 .refs_to(0x1780)
-                .into_iter()
+                .iter()
                 .filter(|r| r.kind == XrefKind::Data)
                 .collect();
             assert_eq!(refs.len(), 1, "{endian}: {refs:?}");
@@ -1620,7 +1620,7 @@ fn recovered_interworking_preserves_interior_focus_modes() {
                 );
                 let calls: Vec<_> = index
                     .refs_to(0x1300)
-                    .into_iter()
+                    .iter()
                     .filter(|r| r.kind == XrefKind::Call)
                     .map(|r| (r.from, index.function_containing(r.from)))
                     .collect();

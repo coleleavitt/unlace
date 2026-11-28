@@ -146,8 +146,8 @@ fn frame_before(data: &Funcdata, call: OpId, regs: &Registers) -> Option<u64> {
             | OpCode::CPUI_RETURN => return None,
             _ => {}
         }
-        if let Some(out) = op.get_out().and_then(|v| data.vbank().get(v)) {
-            if overlaps(out.get_addr(), out.get_size(), &regs.rax, 8) {
+        if let Some(out) = op.get_out().and_then(|v| data.vbank().get(v))
+            && overlaps(out.get_addr(), out.get_size(), &regs.rax, 8) {
                 if op.code() != OpCode::CPUI_COPY
                     || op.num_input() != 1
                     || !reg_is(data, op.get_out(), &regs.rax)
@@ -156,7 +156,6 @@ fn frame_before(data: &Funcdata, call: OpId, regs: &Registers) -> Option<u64> {
                 }
                 return constant(data, op.get_in(0)).filter(|v| *v <= MAX_FRAME);
             }
-        }
     }
     None
 }

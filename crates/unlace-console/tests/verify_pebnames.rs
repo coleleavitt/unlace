@@ -51,7 +51,7 @@ fn pe_image(bits: u32, subsystem: u16, code: &[u8]) -> Vec<u8> {
     const FA: u32 = 0x200;
     const TEXT: u32 = 0x1000;
     let mut text = code.to_vec();
-    text.resize(((code.len() as u32 + FA - 1) / FA * FA) as usize, 0xcc);
+    text.resize(((code.len() as u32).div_ceil(FA) * FA) as usize, 0xcc);
     let mut b = vec![0u8; 0x40];
     b[0..2].copy_from_slice(b"MZ");
     b[0x3c..0x40].copy_from_slice(&0x40u32.to_le_bytes());

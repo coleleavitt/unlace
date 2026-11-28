@@ -86,7 +86,7 @@ pub(crate) fn is_hole_start(listing: &Listing, vma: u64) -> bool {
 /// (E) Whether the gap cursor may probe `vma` at all: a 4-byte-aligned address, or
 /// the first byte of its hole.
 pub(crate) fn probe_allowed(listing: &Listing, vma: u64) -> bool {
-    vma % SLIDE_ALIGN == 0 || is_hole_start(listing, vma)
+    vma.is_multiple_of(SLIDE_ALIGN) || is_hole_start(listing, vma)
 }
 
 /// (E) The address the gap cursor advances to after rejecting `gap_start`: the next

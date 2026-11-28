@@ -37,11 +37,10 @@ pub fn writer_symbols(symbols: &[(u64, Option<String>)]) -> BTreeMap<u64, Writer
         })
         .collect();
     for (address, name) in symbols {
-        if let Some(method) = entries.get_mut(address) {
-            if *method != classify(name.as_deref()) {
+        if let Some(method) = entries.get_mut(address)
+            && *method != classify(name.as_deref()) {
                 *method = None;
             }
-        }
     }
     entries
         .into_iter()
@@ -131,8 +130,10 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     }
     let bytes = vtable_bytes(fd, arch, table)?;
     let words: Vec<_> = bytes
-        .chunks_exact(8)
-        .map(|word| u64::from_le_bytes(word.try_into().unwrap()))
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .map(|word| u64::from_le_bytes(*word))
         .collect();
     if words[1] != 24 || words[2] != 8 {
         return None;

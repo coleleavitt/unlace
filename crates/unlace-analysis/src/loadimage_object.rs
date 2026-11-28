@@ -794,14 +794,13 @@ impl ObjectLoadImage {
         let fmt = crate::loader::format::detect(&file)?;
 
         let target = target.and_then(explicit_language_target);
-        if emit_diagnostics {
-            if let Some(note) = target.and_then(|t| target_endian_note(&file, t)) {
+        if emit_diagnostics
+            && let Some(note) = target.and_then(|t| target_endian_note(&file, t)) {
                 unlace_base::notes::say_once(
                     filename,
                     &format!("[unlace target] {filename}: {note}"),
                 );
             }
-        }
         let effective_arch = effective_architecture(&file, bytes);
         let archtype =
             language_id_for(&file, fmt.as_ref(), bytes, filename, effective_arch, target)?;
@@ -1555,10 +1554,10 @@ impl ObjectLoadImage {
 
         Ok(ObjectLoadImage {
             filename: filename.to_string(),
-            arm_vfp_args: crate::loader::armfloatabi::vfp_args(&file),
-            float_arg_registers: crate::loader::floatabi::float_arg_registers(&file),
-            float_hardware: crate::loader::armfloatabi::fp_hardware(&file),
-            callee_extends_returns: crate::loader::returnext::callee_extends_returns(&file),
+            arm_vfp_args: crate::loader::armfloatabi::vfp_args(file),
+            float_arg_registers: crate::loader::floatabi::float_arg_registers(file),
+            float_hardware: crate::loader::armfloatabi::fp_hardware(file),
+            callee_extends_returns: crate::loader::returnext::callee_extends_returns(file),
             archtype,
             fallback_archtype,
             bytes: Arc::new(SegmentBytes { segments }),
@@ -1604,7 +1603,7 @@ impl ObjectLoadImage {
             nullable_relocations,
             function_address_aliases,
             plt_local: Vec::new(),
-            mips_linkage: crate::loader::mipsstubs::class_linkage(&file),
+            mips_linkage: crate::loader::mipsstubs::class_linkage(file),
             elfv1,
             elf_functions: ElfFunctionProvenance::default(),
             spaceid: None,

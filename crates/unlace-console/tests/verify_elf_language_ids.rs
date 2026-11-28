@@ -84,7 +84,7 @@ fn every_elf_language_id_resolves_in_the_database() {
 
 /// Multi-format-loader PR-2 gate: every SLEIGH language id the **PE / Mach-O /
 /// COFF** loaders produce (`PeFormat`/`MachOFormat`/`CoffFormat::compiler_model`
-/// + `compose_language_id`) must resolve in the SLEIGH database — **or** its
+/// plus `compose_language_id`) must resolve in the SLEIGH database — **or** its
 /// §2.2 default-model fallback must, since the engine retries with the fallback
 /// before erroring. This proves the per-format compiler-model tokens
 /// (`windows` / `gcc` / `default`) are real, vendored ids and that no format ever
@@ -106,7 +106,8 @@ fn every_object_format_language_id_resolves_in_the_database() {
         sleigh.resolve_architecture(db, id).is_ok() && sleigh.language_index() >= 0
     };
 
-    let suites: &[(&str, Vec<(String, Option<String>)>, &[&str])] = &[
+    type Suite<'a> = (&'a str, Vec<(String, Option<String>)>, &'a [&'a str]);
+    let suites: &[Suite] = &[
         (
             "PE",
             unlace_analysis::loadimage_object::pe_language_ids(),

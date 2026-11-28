@@ -78,11 +78,10 @@ pub fn main(args: Vec<String>) -> ExitCode {
 
     // SLEIGHHOME is the load-bearing spec-root mechanism the Python tooling sets
     // (unlace/decompile.py); honor it like consolemain.cc honors getenv("SLEIGHHOME").
-    if let Ok(home) = std::env::var("SLEIGHHOME") {
-        if !home.is_empty() && !spec_roots.contains(&home) {
+    if let Ok(home) = std::env::var("SLEIGHHOME")
+        && !home.is_empty() && !spec_roots.contains(&home) {
             spec_roots.push(home);
         }
-    }
 
     if spec_roots.is_empty() {
         eprintln!("Could not discover root of Ghidra installation");
@@ -110,11 +109,10 @@ pub fn main(args: Vec<String>) -> ExitCode {
 
     // Hand the spec roots to the shared decompile data so `load file` can resolve
     // the architecture (C++ keeps these in SleighArchitecture::specpaths globals).
-    if let Some(data) = status.get_data_mut(DECOMPILE_MODULE) {
-        if let Some(dcp) = data.as_any_mut().downcast_mut::<IfaceDecompData>() {
+    if let Some(data) = status.get_data_mut(DECOMPILE_MODULE)
+        && let Some(dcp) = data.as_any_mut().downcast_mut::<IfaceDecompData>() {
             dcp.spec_roots = spec_roots;
         }
-    }
 
     // --- the command loop (mainloop, ifacedecomp.cc:3653) -----------------
     // Driven here (not the library `mainloop`) so optr drains to stdout and an

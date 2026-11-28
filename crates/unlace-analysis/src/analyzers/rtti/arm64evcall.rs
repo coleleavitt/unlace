@@ -369,7 +369,9 @@ pub fn call_sites(base: u64, code: &[u8]) -> Vec<(u64, u8, Slot)> {
 /// pointer was loaded from, when an `adrp` addresses it.
 pub fn call_sites_with_objects(base: u64, code: &[u8]) -> Vec<(u64, u8, Slot, Option<u64>)> {
     let words: Vec<u32> = code
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
         .collect();
     let mut out = Vec::new();

@@ -461,7 +461,9 @@ impl DyldCache {
             .ok_or("indirect-symbol table lies outside __LINKEDIT")?;
         Ok(self
             .read_va(va, count * 4)?
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|c| u32_at(c, 0))
             .collect())
     }

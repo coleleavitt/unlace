@@ -69,10 +69,10 @@ fn throw_info_chains_are_found_and_named() {
     assert_eq!(tis[1].addr, RDATA + 0x190);
     assert_eq!(tis[1].thrown_type(), "int const");
     let names: Vec<String> = label_symbols(&tis).into_iter().map(|s| s.name).collect();
-    assert!(names.contains(&"ThrowInfo<std::runtime_error>".to_string()));
-    assert!(names.contains(&"ThrowInfo<int const>".to_string()));
-    assert!(names.contains(&"CatchableType<std::exception>".to_string()));
-    assert!(names.contains(&"CatchableTypeArray<int>".to_string()));
+    assert!(names.iter().any(|i| i == "ThrowInfo<std::runtime_error>"));
+    assert!(names.iter().any(|i| i == "ThrowInfo<int const>"));
+    assert!(names.iter().any(|i| i == "CatchableType<std::exception>"));
+    assert!(names.iter().any(|i| i == "CatchableTypeArray<int>"));
 }
 
 /// A `CatchableType`'s copy function is its class's copy constructor and

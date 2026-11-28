@@ -52,7 +52,7 @@
 //! **On** — `sub_800014a` is replaced by `sub_800014c`, and `sub_800015e` survives
 //! untouched because nothing replaces it.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{
@@ -324,7 +324,7 @@ fn frame_variant(pointer: bool) -> PathBuf {
 }
 
 fn checked_frame_program(
-    path: &PathBuf,
+    path: &Path,
     aif: bool,
     pool: bool,
     pointers: bool,

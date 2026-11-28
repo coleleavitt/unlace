@@ -63,7 +63,7 @@ fn verified_home_gap(fd: &Funcdata, call: &FuncCallSpecs) -> Option<Rc<AddrSpace
     let return_space = return_address.space.as_ref()?;
     let return_offset = signed(return_address.offset, stack.get_addr_size())?;
     if !Rc::ptr_eq(return_space, &stack)
-        || return_address.size != stack.get_addr_size() as u32
+        || return_address.size != stack.get_addr_size()
         || return_offset.checked_add(i64::from(return_address.size))? != HOME_START
     {
         return None;
@@ -108,7 +108,7 @@ pub fn caller_home_cell(
         return None;
     }
     let (start, size) = callee_frame_cell(fd, call, offset, size)?;
-    let start = signed(start, stack.get_addr_size() as u32)?;
+    let start = signed(start, stack.get_addr_size())?;
     let end = start.checked_add(i64::from(size))?;
     if start >= 0 || end > 0 {
         return None;
@@ -126,7 +126,7 @@ pub fn callee_frame_cell(
     size: u32,
 ) -> Option<(u64, i32)> {
     let stack = stack_space(fd)?;
-    let addr_size = u32::try_from(stack.get_addr_size()).ok()?;
+    let addr_size = stack.get_addr_size();
     let bits = addr_size.checked_mul(8)?;
     if !(1..=64).contains(&bits)
         || size == 0
@@ -290,12 +290,10 @@ pub fn caller_home_unobserved(fd: &Funcdata, current_call: OpId, start: u64, siz
         return false;
     }
 
-    let mut scanned_ops = 0;
-    for (_, id) in fd.obank().iter_all() {
+    for (scanned_ops, (_, id)) in fd.obank().iter_all().enumerate() {
         if scanned_ops == MAX_CALLER_SCAN_OPS {
             return false;
         }
-        scanned_ops += 1;
         let Some(op) = fd.obank().get(id) else {
             return false;
         };
@@ -352,7 +350,7 @@ pub fn caller_home_unobserved(fd: &Funcdata, current_call: OpId, start: u64, siz
                     }
                     if access_space
                         .as_ref()
-                        .map_or(true, |space| !Rc::ptr_eq(space, &stack))
+                        .is_none_or(|space| !Rc::ptr_eq(space, &stack))
                     {
                         return false;
                     }
@@ -363,7 +361,7 @@ pub fn caller_home_unobserved(fd: &Funcdata, current_call: OpId, start: u64, siz
             if derived
                 && access_space
                     .as_ref()
-                    .map_or(true, |space| !Rc::ptr_eq(space, &stack))
+                    .is_none_or(|space| !Rc::ptr_eq(space, &stack))
             {
                 return false;
             }
@@ -377,10 +375,7 @@ pub fn caller_home_unobserved(fd: &Funcdata, current_call: OpId, start: u64, siz
             if !derived {
                 continue;
             }
-            let possible_home = match frame_value_overlaps(fd, input, start_signed, size) {
-                Some(overlaps) => overlaps,
-                None => true,
-            };
+            let possible_home = frame_value_overlaps(fd, input, start_signed, size).unwrap_or(true);
             match op.code() {
                 OpCode::CPUI_CALL => {}
                 OpCode::CPUI_LOAD if slot == 1 && possible_home => return false,

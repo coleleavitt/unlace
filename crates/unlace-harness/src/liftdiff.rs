@@ -345,19 +345,17 @@ fn goto_targets(body: &str) -> Option<Vec<i64>> {
     let mut out = Vec::new();
     // First token is the (true) target short-header.
     let mut it = rest.split_whitespace();
-    if let Some(t0) = it.next() {
-        if let Some(s) = parse_short_header(t0) {
+    if let Some(t0) = it.next()
+        && let Some(s) = parse_short_header(t0) {
             out.push(s);
         }
-    }
     // A CBRANCH has `.. else Block_F:0x..` — find the token after `else`.
     if let Some(pos) = rest.find(" else ") {
         let after = &rest[pos + " else ".len()..];
-        if let Some(t1) = after.split_whitespace().next() {
-            if let Some(s) = parse_short_header(t1) {
+        if let Some(t1) = after.split_whitespace().next()
+            && let Some(s) = parse_short_header(t1) {
                 out.push(s);
             }
-        }
     }
     if out.is_empty() { None } else { Some(out) }
 }
@@ -373,11 +371,10 @@ pub fn parse_cpp_b2(text: &str, excluded_tracked: &mut usize) -> Result<StructMo
     // Consume the top-level graph header line: a bare integer (the index, no range
     // since the top graph has an invalid start/stop).
     // (Be tolerant: only consume if it parses as a bare integer.)
-    if let Some(first) = lines.peek() {
-        if first.trim().parse::<i64>().is_ok() {
+    if let Some(first) = lines.peek()
+        && first.trim().parse::<i64>().is_ok() {
             lines.next();
         }
-    }
 
     struct PendingBlock {
         index: i64,
@@ -425,8 +422,8 @@ pub fn parse_cpp_b2(text: &str, excluded_tracked: &mut usize) -> Result<StructMo
             continue;
         }
         // An implied-goto line: `<addr>:   \t[ goto Block_N:0x.. ]`.
-        if let Some(b) = cur.as_mut() {
-            if let Some(open) = line.find("[ goto ") {
+        if let Some(b) = cur.as_mut()
+            && let Some(open) = line.find("[ goto ") {
                 let inner = &line[open + 2..]; // `goto Block_N:0x.. ]`
                 let inner = inner.trim_end_matches(']').trim();
                 if let Some(t) = goto_targets(inner) {
@@ -434,7 +431,6 @@ pub fn parse_cpp_b2(text: &str, excluded_tracked: &mut usize) -> Result<StructMo
                 }
                 continue;
             }
-        }
         // An op line: `<addr>:<time>\t<body>`  (a literal TAB separates the
         // seqnum from the body).
         if let Some(tab) = line.find('\t') {

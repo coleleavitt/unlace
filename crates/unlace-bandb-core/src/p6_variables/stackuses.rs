@@ -221,10 +221,8 @@ pub fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
         let width = fd.vbank().get(input).unwrap().get_size();
         if let Some(value) =
             crate::stackobjectasserts::backing_view(fd, id, width, &info, member, &ty, factory)
-        {
-            if fd.op_set_input(id, value, slot).is_ok() {
+            && fd.op_set_input(id, value, slot).is_ok() {
                 fd.stack_object_bound_uses_mut().insert((point, slot));
             }
-        }
     }
 }

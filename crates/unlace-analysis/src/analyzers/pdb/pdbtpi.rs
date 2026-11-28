@@ -277,11 +277,10 @@ impl<'t, 'f> TpiMapper<'t, 'f> {
         };
         if forward {
             let key = unique.unwrap_or(name);
-            if let Some(&def) = self.definitions.get(key.as_bytes()) {
-                if def != index {
+            if let Some(&def) = self.definitions.get(key.as_bytes())
+                && def != index {
                     return self.map(def);
                 }
-            }
         }
         let mut text = Self::type_name(name, index, if union { "union" } else { "struct" });
         let existing = match self.types.find_by_name(&text) {
@@ -297,11 +296,10 @@ impl<'t, 'f> TpiMapper<'t, 'f> {
             Ok(None) => None,
             Err(_) => return None,
         };
-        if let Some(t) = &existing {
-            if !t.is_incomplete() {
+        if let Some(t) = &existing
+            && !t.is_incomplete() {
                 return Some(Rc::clone(t));
             }
-        }
         let shell = match existing {
             Some(t) => t,
             None => {
@@ -463,11 +461,10 @@ impl<'t, 'f> TpiMapper<'t, 'f> {
     ) -> Option<Rc<Datatype>> {
         if e.properties.forward_reference() {
             let key = e.unique_name.unwrap_or(e.name);
-            if let Some(&def) = self.definitions.get(key.as_bytes()) {
-                if def != index {
+            if let Some(&def) = self.definitions.get(key.as_bytes())
+                && def != index {
                     return self.map(def);
                 }
-            }
         }
         let under = self.map(e.underlying_type)?;
         let size = under.get_size();

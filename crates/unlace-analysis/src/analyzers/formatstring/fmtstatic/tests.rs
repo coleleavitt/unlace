@@ -11,7 +11,7 @@ fn truncate_masks_to_the_output_width() {
 
 #[test]
 fn sign_extend_widens_the_top_bit() {
-    assert_eq!(sign_extend(0x80, 8), u64::MAX & !0x7f);
+    assert_eq!(sign_extend(0x80, 8), !0x7f);
     assert_eq!(sign_extend(0x7f, 8), 0x7f);
     assert_eq!(sign_extend(0xffff_ffff, 32), u64::MAX);
     assert_eq!(sign_extend(1, 0), 1);

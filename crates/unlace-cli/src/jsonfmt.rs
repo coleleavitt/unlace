@@ -4,10 +4,9 @@
 mod parser;
 
 #[path = "jsonfmt/writer.rs"]
-mod writer;
+pub(crate) mod writer;
 
 use writer::Format;
-pub(crate) use writer::UnicodeEscape;
 
 #[cfg(test)]
 #[path = "jsonfmt/writer_tests.rs"]
@@ -52,6 +51,7 @@ pub fn write_indent2_streamed(
 /// As [`dumps_indent2`] but with `sort_keys=True` (object keys emitted in
 /// ascending byte order) — matches `unlace/run_tests.py`'s
 /// `json.dumps(..., indent=2, sort_keys=True)`.
+#[cfg(test)]
 pub fn dumps_indent2_sorted(v: &Json) -> String {
     writer::render(v, Format::Sorted)
 }

@@ -90,13 +90,12 @@ pub fn apply(
     if original.len() > 1 || given.len() > 1 {
         return Err(format!("More than one stack object named: {target}"));
     }
-    if let (Some((_, object)), Some(other)) = (original.first(), given.first()) {
-        if object.name != other.selector
+    if let (Some((_, object)), Some(other)) = (original.first(), given.first())
+        && object.name != other.selector
             && !(datatype.is_none() && objects.iter().any(|object| object.name == newname))
         {
             return Err(format!("Ambiguous stack object name: {target}"));
         }
-    }
     let selected = original.first().map(|(index, _)| *index).or_else(|| {
         given.first().and_then(|assertion| {
             objects
@@ -108,8 +107,8 @@ pub fn apply(
         return Ok(false);
     };
     let object = &objects[index];
-    if let Some(ty) = &datatype {
-        if ty.is_incomplete() || ty.get_size() != object.size {
+    if let Some(ty) = &datatype
+        && (ty.is_incomplete() || ty.get_size() != object.size) {
             return Err(format!(
                 "Stack object {} occupies {} bytes; the asserted type occupies {}",
                 object.name,
@@ -117,7 +116,6 @@ pub fn apply(
                 ty.get_size()
             ));
         }
-    }
     if !newname.is_empty() {
         let mut chars = newname.chars();
         if !chars
@@ -244,8 +242,7 @@ fn selected_view(fd: &Funcdata, call: OpId, use_: &UseAnchor, assertion: &Object
                 .get_in(0)
                 .and_then(|input| fd.vbank().get(input))
                 .map(|v| v.get_type())
-            {
-                if fd
+                && fd
                     .get_union_field(ty, id, -1)
                     .and_then(|resolution| {
                         ty.get_ptr_to()?
@@ -256,7 +253,6 @@ fn selected_view(fd: &Funcdata, call: OpId, use_: &UseAnchor, assertion: &Object
                 {
                     return true;
                 }
-            }
         } else if !matches!(op.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST) {
             return false;
         }

@@ -52,7 +52,7 @@ pub(crate) fn x64_frame_registers(bytes: &[u8]) -> BTreeMap<u64, (u16, i64)> {
     let Ok(table) = dir.data(bytes, &sections) else {
         return out;
     };
-    for record in table.chunks_exact(12) {
+    for record in table.as_chunks::<12>().0 {
         let begin = read_u32(record, 0).unwrap_or(0);
         let unwind = read_u32(record, 8).unwrap_or(0);
         if begin == 0 || unwind == 0 {

@@ -128,18 +128,15 @@ pub fn loads_from(
     if let Some(st) = manage
         .get_stack_space()
         .and_then(|s| s.get_spacebase(0).ok())
-    {
-        if let Some(space) = st.space {
+        && let Some(space) = st.space {
             bases.push((space, st.offset));
         }
-    }
     if let Some(lookup) = manage.register_lookup() {
         for name in ["FS_OFFSET", "GS_OFFSET"] {
-            if let Some(st) = lookup.probe_register(name) {
-                if let Some(space) = st.space.clone() {
+            if let Some(st) = lookup.probe_register(name)
+                && let Some(space) = st.space.clone() {
                     bases.push((space, st.offset));
                 }
-            }
         }
     }
     let mut loads = Vec::new();

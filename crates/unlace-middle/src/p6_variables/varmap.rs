@@ -185,10 +185,7 @@ impl RangeHint {
         } else {
             end = end.wadd(self.size as intb);
         }
-        if b.sstart > end {
-            return false;
-        }
-        true
+        b.sstart <= end
     }
 
     /// Can the given intersecting RangeHint coexist with `this` at their given
@@ -241,13 +238,8 @@ impl RangeHint {
         }
         // For structures, unions, and arrays, test if b looks like a partial/combined data-type
         let meta = b.type_.get_metatype();
-        if meta == type_metatype::TYPE_UNKNOWN
-            || meta == type_metatype::TYPE_INT
-            || meta == type_metatype::TYPE_UINT
-        {
-            return Ok(true);
-        }
-        Ok(false)
+        Ok(meta == type_metatype::TYPE_UNKNOWN
+            || meta == type_metatype::TYPE_INT || meta == type_metatype::TYPE_UINT)
     }
 
     /// Return `true` if `this` or the given range contains the other (C++
@@ -261,10 +253,7 @@ impl RangeHint {
         }
         let b_end = b.sstart.wadd(b.size as intb).wsub(1);
         let a_end = self.sstart.wadd(self.size as intb).wsub(1);
-        if b_end <= a_end {
-            return true;
-        }
-        false
+        b_end <= a_end
     }
 
     /// Return `true` if `this` range's data-type is preferred over the other
@@ -618,14 +607,13 @@ fn component_aligns(
     }
     if ct.get_metatype() == type_metatype::TYPE_UNION {
         for i in 0..ct.num_depend() {
-            if let Some(member) = ct.get_depend(i) {
-                if offset >= 0
+            if let Some(member) = ct.get_depend(i)
+                && offset >= 0
                     && offset.wadd(align_size as int8) <= member.get_size() as int8
                     && component_aligns(&member, offset, align_size, true)?
                 {
                     return Ok(true);
                 }
-            }
         }
         return Ok(false);
     }
@@ -1992,14 +1980,13 @@ impl ScopeLocal {
                     cur.size = next.sstart.wrapping_sub(cur.sstart) as int4;
                 }
                 if self.adjust_fit(&mut cur) {
-                    if open {
-                        if let Some(size) = (crate::architecture::default_pass_hooks()
+                    if open
+                        && let Some(size) = (crate::architecture::default_pass_hooks()
                             .arraysize_fit)(
                             &cur, cur_end, cur.size as intb, state
                         ) {
                             cur.size = size;
                         }
-                    }
                     self.create_entry(&cur, types)?;
                 }
                 cur = next;
@@ -2943,18 +2930,15 @@ impl ScopeLocal {
                     let entry_addr_off = entry.get_addr().get_offset();
                     let entry_size = entry.get_size();
                     let struct_off = addr.get_offset().wrapping_sub(entry_addr_off) as int8;
-                    if let Some(st) = &symbol_type {
-                        if let Ok((distance, _dummy, esz)) =
+                    if let Some(st) = &symbol_type
+                        && let Ok((distance, _dummy, esz)) =
                             st.nearest_arrayed_component_forward(struct_off, max)
-                        {
-                            if distance >= 0 {
+                            && distance >= 0 {
                                 if distance > max {
                                     return (-1, off, 0);
                                 }
                                 return (distance, struct_off, esz);
                             }
-                        }
-                    }
                     let sz = AddrSpace::byte_to_address_int(entry_size as i64, word_size);
                     next_addr = entry.get_addr() + sz;
                 }
@@ -2982,8 +2966,8 @@ impl ScopeLocal {
         let symbol_type2 = self.db.symbol(sym2).dtype.clone();
         let entry2_addr_off = entry2.get_addr().get_offset();
         let newoff = addr.get_offset().wrapping_sub(entry2_addr_off) as int8;
-        if let Some(st2) = &symbol_type2 {
-            if let Ok((distance, _dummy, esz)) = st2.nearest_arrayed_component_forward(0, max) {
+        if let Some(st2) = &symbol_type2
+            && let Ok((distance, _dummy, esz)) = st2.nearest_arrayed_component_forward(0, max) {
                 el_size = esz;
                 if distance >= 0 {
                     let distance = distance - newoff;
@@ -2993,7 +2977,6 @@ impl ScopeLocal {
                     return (distance, newoff, el_size);
                 }
             }
-        }
         let _ = el_size;
         (-1, off, 0)
     }
@@ -3306,26 +3289,23 @@ impl MapState {
                 self.add_range(start, Some(Rc::clone(&parent)), 0, RangeType::Open, -1);
             } else if pmeta == type_metatype::TYPE_ARRAY {
                 // Elements of an array moved here.
-                if let Some(base) = parent.get_array_base() {
-                    if base.get_metatype() != type_metatype::TYPE_UNKNOWN {
+                if let Some(base) = parent.get_array_base()
+                    && base.get_metatype() != type_metatype::TYPE_UNKNOWN {
                         self.add_range(start, Some(base), 0, RangeType::Open, -1);
                     }
-                }
             }
             // If the Varnode is a constant COPY, generate a fixed reference too.
-            if flags != 0 {
-                if let Ok(unk) = types.get_base(ct.get_size(), type_metatype::TYPE_UNKNOWN) {
+            if flags != 0
+                && let Ok(unk) = types.get_base(ct.get_size(), type_metatype::TYPE_UNKNOWN) {
                     self.add_range(start, Some(unk), flags, RangeType::Fixed, -1);
                 }
-            }
         } else if meta == type_metatype::TYPE_PARTIALUNION {
             // TypePartialUnion: getOffset(); getParentUnion() is the container.
             let offset = ct.get_partial_offset().unwrap_or(0);
-            if offset == 0 {
-                if let Some(parent_union) = ct.get_partial_base() {
+            if offset == 0
+                && let Some(parent_union) = ct.get_partial_base() {
                     self.add_range(start, Some(parent_union), 0, RangeType::Open, -1);
                 }
-            }
         } else {
             self.add_range(start, Some(ct), flags, RangeType::Fixed, -1);
         }

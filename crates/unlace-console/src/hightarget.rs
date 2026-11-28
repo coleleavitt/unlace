@@ -574,12 +574,11 @@ pub fn apply_local(
     if let (Some(size), Some(ct)) = (bound_size, retype.as_ref()) {
         check_width(size, ct)?;
     }
-    if let (None, Some(ct)) = (bound_size, retype.as_ref()) {
-        if let Some((addr, widths)) = stack_storage(fd, sym) {
+    if let (None, Some(ct)) = (bound_size, retype.as_ref())
+        && let Some((addr, widths)) = stack_storage(fd, sym) {
             check_stack_width(&addr, &widths, ct)?;
             check_stack_retype_overlap(fd, sym, &addr, ct.get_size())?;
         }
-    }
     let retype_given = retype.is_some();
     let parameter = crate::paramasserts::prepare(fd, sym, retype.as_ref())?;
     // A parameter's storage is model-derived; locking its name or type locks the

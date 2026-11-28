@@ -711,10 +711,10 @@ impl BitFieldPullTransform {
                 self.apply_record(data, rec, &mut state);
             }
         }
-        if let Some(load) = self.load_op {
-            if self.fold_load(data, load) {
-                self.fold_ptrsub(data, load);
-            }
+        if let Some(load) = self.load_op
+            && self.fold_load(data, load)
+        {
+            self.fold_ptrsub(data, load);
         }
     }
 
@@ -726,14 +726,14 @@ impl BitFieldPullTransform {
             return Rc::clone(parent);
         }
         let arch = Rc::clone(data.get_arch());
-        if let Some(types) = arch.types() {
-            if let Ok(t) = types.get_type_partial_struct(
+        if let Some(types) = arch.types()
+            && let Ok(t) = types.get_type_partial_struct(
                 Rc::clone(parent),
                 self.base.initial_offset,
                 self.base.container_size,
-            ) {
-                return t;
-            }
+            )
+        {
+            return t;
         }
         Rc::clone(parent)
     }
@@ -754,13 +754,7 @@ impl BitFieldPullTransform {
             return;
         }
         let mod_op: OpId;
-        if rec.read_op.is_none() {
-            // null readOp -> readVn contains a complete pull.
-            let read_vn = rec.read_vn.unwrap();
-            mod_op = data.vbank().get(read_vn).unwrap().get_def().unwrap();
-            data.op_unset_output(mod_op);
-        } else {
-            let read_op = rec.read_op.unwrap();
+        if let Some(read_op) = rec.read_op {
             let read_vn = rec.read_vn.unwrap();
             if read_vn != self.root {
                 mod_op = data.vbank().get(read_vn).unwrap().get_def().unwrap();
@@ -772,23 +766,28 @@ impl BitFieldPullTransform {
             let new_vn = data.new_unique(sz, None);
             rec.read_vn = Some(new_vn);
             data.op_set_input(read_op, new_vn, slot).ok();
+        } else {
+            // null readOp -> readVn contains a complete pull.
+            let read_vn = rec.read_vn.unwrap();
+            mod_op = data.vbank().get(read_vn).unwrap().get_def().unwrap();
+            data.op_unset_output(mod_op);
         }
         let mut in_vn = self.root;
-        if let Some(load) = self.load_op {
-            if state.count > 0 {
-                let load_addr = data.obank().get(load).unwrap().get_addr().clone();
-                let new_load = data.new_op(2, load_addr);
-                data.op_set_opcode_code(new_load, OpCode::CPUI_LOAD);
-                let lin0 = data.obank().get(load).unwrap().get_in(0).unwrap();
-                let lin1 = data.obank().get(load).unwrap().get_in(1).unwrap();
-                data.op_set_input(new_load, lin0, 0).ok();
-                data.op_set_input(new_load, lin1, 1).ok();
-                in_vn = data
-                    .new_unique_out(self.base.container_size, new_load)
-                    .unwrap();
-                data.op_insert_after(new_load, load);
-                data.op_mark_non_printing_pub(new_load);
-            }
+        if let Some(load) = self.load_op
+            && state.count > 0
+        {
+            let load_addr = data.obank().get(load).unwrap().get_addr().clone();
+            let new_load = data.new_op(2, load_addr);
+            data.op_set_opcode_code(new_load, OpCode::CPUI_LOAD);
+            let lin0 = data.obank().get(load).unwrap().get_in(0).unwrap();
+            let lin1 = data.obank().get(load).unwrap().get_in(1).unwrap();
+            data.op_set_input(new_load, lin0, 0).ok();
+            data.op_set_input(new_load, lin1, 1).ok();
+            in_vn = data
+                .new_unique_out(self.base.container_size, new_load)
+                .unwrap();
+            data.op_insert_after(new_load, load);
+            data.op_mark_non_printing_pub(new_load);
         }
         data.vbank_mut()
             .get_mut(in_vn)
@@ -849,14 +848,13 @@ impl BitFieldPullTransform {
         let pull_out_size = data.vbank().get(pull_out).unwrap().get_size();
         if pull_out_meta == type_metatype::TYPE_UNKNOWN {
             let arch = Rc::clone(data.get_arch());
-            if let Some(types) = arch.types() {
-                if let Ok(dt) =
+            if let Some(types) = arch.types()
+                && let Ok(dt) =
                     types.resize_integer(Rc::clone(rec.dt.as_ref().unwrap()), pull_out_size)
-                {
-                    data.vbank_mut()
-                        .get_mut(pull_out)
-                        .map(|v| v.update_type(dt));
-                }
+            {
+                data.vbank_mut()
+                    .get_mut(pull_out)
+                    .map(|v| v.update_type(dt));
             }
         } else if rec.dt.as_ref().unwrap().get_metatype() == type_metatype::TYPE_BOOL
             && pull_out_size == 1
@@ -1014,14 +1012,14 @@ impl BitFieldPullTransform {
             .unwrap()
             .update_type(Rc::clone(&state.partial_type));
         let arch = Rc::clone(data.get_arch());
-        if let Some(types) = arch.types() {
-            if let Ok(dt) = types.resize_integer(Rc::clone(field), size) {
-                data.vbank_mut()
-                    .get_mut(output)
-                    .unwrap()
-                    .update_type(Rc::clone(&dt));
-                self.retype_compared_constants(data, output, &dt);
-            }
+        if let Some(types) = arch.types()
+            && let Ok(dt) = types.resize_integer(Rc::clone(field), size)
+        {
+            data.vbank_mut()
+                .get_mut(output)
+                .unwrap()
+                .update_type(Rc::clone(&dt));
+            self.retype_compared_constants(data, output, &dt);
         }
         if let Some(definition) = definition {
             data.op_insert_after(pull, definition);
@@ -1090,7 +1088,7 @@ impl BitFieldPullTransform {
             let vn = data.obank().get(first_read_op).unwrap().get_in(0).unwrap();
             let mut cur_combine = first_read_op;
             data.op_set_opcode_code(cur_combine, combine_code);
-            for i in 0..num {
+            for (i, rec) in self.pull_list.iter_mut().enumerate().take(num) {
                 let cc_addr = data.obank().get(cur_combine).unwrap().get_addr().clone();
                 let op = data.new_op(2, cc_addr);
                 data.op_set_opcode_code(op, opc);
@@ -1111,13 +1109,13 @@ impl BitFieldPullTransform {
                 } else {
                     data.op_set_input(cur_combine, bool_vn, 1).ok();
                 }
-                self.pull_list[i].read_op = Some(op);
+                rec.read_op = Some(op);
             }
         }
         // Adjust compare value for each record and convert to normal.
-        for i in 0..num {
+        for rec in self.pull_list.iter_mut().take(num) {
             let (read_op, read_vn, dt, mask, left_shift, num_bits) = {
-                let r = &self.pull_list[i];
+                let r = &*rec;
                 (
                     r.read_op.unwrap(),
                     r.read_vn.unwrap(),
@@ -1135,14 +1133,14 @@ impl BitFieldPullTransform {
             }
             let cvn = data.new_constant(read_size, val);
             let arch = Rc::clone(data.get_arch());
-            if let Some(types) = arch.types() {
-                if let Ok(ndt) = types.resize_integer(Rc::clone(&dt), read_size) {
-                    data.vbank_mut().get_mut(cvn).map(|v| v.update_type(ndt));
-                }
+            if let Some(types) = arch.types()
+                && let Ok(ndt) = types.resize_integer(Rc::clone(&dt), read_size)
+            {
+                data.vbank_mut().get_mut(cvn).map(|v| v.update_type(ndt));
             }
             data.op_set_input(read_op, cvn, 1).ok();
-            self.pull_list[i].kind = PullKind::Normal;
-            self.pull_list[i].left_shift = 0;
+            rec.kind = PullKind::Normal;
+            rec.left_shift = 0;
         }
     }
 

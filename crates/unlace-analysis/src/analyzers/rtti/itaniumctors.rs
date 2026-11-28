@@ -214,10 +214,11 @@ fn destructor_slots(walker: &Walker, classes: &[ClassVtables]) -> (Vec<SymFact>,
         let slots = &cls.primary_slots;
         let mut shaped: Vec<(usize, u64)> = Vec::new();
         for (i, slot) in slots.iter().enumerate() {
-            if let Some(f) = *slot {
-                if !shaped.iter().any(|s| s.1 == f) && walk(f).0 == Some(c) {
-                    shaped.push((i, f));
-                }
+            if let Some(f) = *slot
+                && !shaped.iter().any(|s| s.1 == f)
+                && walk(f).0 == Some(c)
+            {
+                shaped.push((i, f));
             }
         }
         // Whether the slot after `i` calls `f`, and whether it only traps.
@@ -258,14 +259,14 @@ fn destructor_slots(walker: &Walker, classes: &[ClassVtables]) -> (Vec<SymFact>,
             });
             // The deleting destructor follows the complete one, and at `-O0` it
             // calls it rather than storing the vptr itself.
-            if next(i, f).0 {
-                if let Some(Some(n)) = slots.get(i + 1) {
-                    out.push(SymFact {
-                        addr: *n,
-                        name: name.clone(),
-                        kind: SymKind::Function,
-                    });
-                }
+            if next(i, f).0
+                && let Some(Some(n)) = slots.get(i + 1)
+            {
+                out.push(SymFact {
+                    addr: *n,
+                    name: name.clone(),
+                    kind: SymKind::Function,
+                });
             }
         }
     }
@@ -468,10 +469,10 @@ fn candidate_functions(listing: &Listing, vptrs: impl Iterator<Item = u64>) -> V
     }
     let mut out: Vec<u64> = Vec::new();
     for (&addr, insn) in listing.instructions() {
-        if hex_literals(&insn.operands).any(|x| wanted.contains(&x)) {
-            if let Some(f) = listing.function_containing(addr) {
-                out.push(earliest_entry(listing, f.entry));
-            }
+        if hex_literals(&insn.operands).any(|x| wanted.contains(&x))
+            && let Some(f) = listing.function_containing(addr)
+        {
+            out.push(earliest_entry(listing, f.entry));
         }
     }
     out
@@ -918,17 +919,17 @@ impl<'a> Walker<'a> {
                 }
             }
             Some(at @ (Val::This(o) | Val::Spilled(o))) => {
-                if let Some(Val::Const(v)) = stored {
-                    if owner_of.contains_key(&v) {
-                        found.push(Store {
-                            vptr: v,
-                            off: o,
-                            spilled: matches!(at, Val::Spilled(_)),
-                            after_call,
-                            after_branch,
-                            after_build,
-                        });
-                    }
+                if let Some(Val::Const(v)) = stored
+                    && owner_of.contains_key(&v)
+                {
+                    found.push(Store {
+                        vptr: v,
+                        off: o,
+                        spilled: matches!(at, Val::Spilled(_)),
+                        after_call,
+                        after_branch,
+                        after_build,
+                    });
                 }
             }
             _ => {}

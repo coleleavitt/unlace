@@ -293,13 +293,12 @@ pub fn is_argument_push(data: &Funcdata, slot: VarnodeId) -> bool {
         stored = true;
         // The saved value of a callee-saved register is the register's own
         // input Varnode; nothing else the caller pushes can be.
-        if let Some(v) = o.get_in(2).and_then(|v| data.vbank().get(v)) {
-            if v.is_input()
+        if let Some(v) = o.get_in(2).and_then(|v| data.vbank().get(v))
+            && v.is_input()
                 && v.get_space().get_type() == unlace_base::space::spacetype::IPTR_PROCESSOR
             {
                 return false;
             }
-        }
     }
     stored
 }

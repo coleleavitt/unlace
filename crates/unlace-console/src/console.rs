@@ -2026,13 +2026,12 @@ impl IfaceCommandAction for IfcUnlaceFunctionBounds {
                 "Unexpected token {tok:?} (expected 'as')"
             )));
         };
-        if let Some(end) = end {
-            if end <= start {
+        if let Some(end) = end
+            && end <= start {
                 return Err(IfaceError::parse(format!(
                     "function bounds: end {end:#x} must be above start {start:#x}"
                 )));
             }
-        }
         let display_start = start;
         let dcp = dcp_mut(status)?;
         let prog = dcp

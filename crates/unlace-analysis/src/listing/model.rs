@@ -25,6 +25,7 @@ use unlace_num::pcoderaw::VarnodeData;
 /// pool keeps repeated spellings from owning a separate allocation for every
 /// instruction. The allocation strategy stays private to the Listing model.
 #[derive(Clone, PartialEq, Eq)]
+#[derive(Default)]
 pub struct Mnemonic(Option<Arc<str>>);
 
 impl Mnemonic {
@@ -43,11 +44,6 @@ impl Mnemonic {
     }
 }
 
-impl Default for Mnemonic {
-    fn default() -> Self {
-        Self(None)
-    }
-}
 
 impl Deref for Mnemonic {
     type Target = str;

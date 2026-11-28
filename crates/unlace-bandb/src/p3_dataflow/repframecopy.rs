@@ -827,13 +827,12 @@ fn rep_move(fd: &Funcdata, sp: VarnodeId, head: BlockId) -> Option<RepMove> {
                     .is_some_and(|b| !b.is_special()) => {}
             _ => return None,
         }
-        if let Some(out) = op.get_out().and_then(|v| fd.vbank().get(v)) {
-            if out.get_addr().overlap(0, &sp_addr, sp_size) >= 0
-                || sp_addr.overlap(0, out.get_addr(), out.get_size()) >= 0
+        if let Some(out) = op.get_out().and_then(|v| fd.vbank().get(v))
+            && (out.get_addr().overlap(0, &sp_addr, sp_size) >= 0
+                || sp_addr.overlap(0, out.get_addr(), out.get_size()) >= 0)
             {
                 return None;
             }
-        }
     }
     let (&[load], &[store]) = (loads.as_slice(), stores.as_slice()) else {
         return None;
@@ -1072,7 +1071,7 @@ fn expand_with(fd: &mut Funcdata, returned: bool) -> i32 {
     if fd
         .vbank()
         .get(sp)
-        .map_or(true, |v| v.get_size() != STACK_POINTER_BYTES)
+        .is_none_or(|v| v.get_size() != STACK_POINTER_BYTES)
     {
         return 0;
     }

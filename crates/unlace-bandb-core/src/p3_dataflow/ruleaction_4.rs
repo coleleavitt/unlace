@@ -223,11 +223,10 @@ impl RuleLoadVarnode {
             }
             return None;
         }
-        if let Some(retspace) = RuleLoadVarnode::correct_spacebase(data, vn2, spc) {
-            if is_constant(data, vn1) {
+        if let Some(retspace) = RuleLoadVarnode::correct_spacebase(data, vn2, spc)
+            && is_constant(data, vn1) {
                 return Some((retspace, offset_of(data, vn1)));
             }
-        }
         None
     }
 
@@ -353,8 +352,8 @@ impl Rule for RuleLoadVarnode {
             if let Some(v) = data.vbank_mut().get_mut(refvn) {
                 v.clear_spacebase_placeholder();
             }
-            if let Some(place_op) = data.lone_descend(refvn) {
-                if let Some(fc_idx) = data.get_call_specs_index(place_op) {
+            if let Some(place_op) = data.lone_descend(refvn)
+                && let Some(fc_idx) = data.get_call_specs_index(place_op) {
                     // The C++ mutates `fc` (a `FuncCallSpecs *`) while passing
                     // `&data`; lift the call-spec out with take/restore so the
                     // `&mut FuncCallSpecs` and `&mut Funcdata` borrows don't alias.
@@ -362,7 +361,6 @@ impl Rule for RuleLoadVarnode {
                     let _ = qlst[fc_idx as usize].resolve_spacebase_relative(data, refvn);
                     data.restore_call_specs(qlst);
                 }
-            }
         }
         1
     }
@@ -815,13 +813,12 @@ impl Rule for RuleSubCommute {
         if offset == 0 {
             // Look for overlap with RuleSubZext
             let nextop = data.lone_descend(outvn);
-            if let Some(nextop) = nextop {
-                if code(data, nextop) == OpCode::CPUI_INT_ZEXT
+            if let Some(nextop) = nextop
+                && code(data, nextop) == OpCode::CPUI_INT_ZEXT
                     && size_of(data, out_vn(data, nextop)) == insize
                 {
                     return 0;
                 }
-            }
         }
 
         if let Some(plan) = byte_cancellation {

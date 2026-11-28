@@ -66,6 +66,7 @@ pub struct PendingCallFixup {
 /// constant).  The `aliascheck` is the deferred-gather local alias checker
 /// (`AliasChecker::gather(..., defer=true)`), supplied by the caller, and
 /// `held` the (unlace `calleeargs`) bound guard's index for this pass.
+#[allow(clippy::blocks_in_conditions)]
 pub fn check_input_trial_use(
     idx: int4,
     data: &mut Funcdata,
@@ -798,26 +799,24 @@ fn collect_output_trial_varnodes(
             .get(io)
             .map(|o| o.is_indirect_creation())
             .unwrap_or(false);
-        if is_creation {
-            if let Some(vn) = data.obank().get(io).and_then(|o| o.get_out()) {
-                let (vaddr, vsize) = {
-                    let v = data.vbank().get(vn);
-                    match v {
-                        Some(v) => (v.get_addr().clone(), v.get_size()),
-                        None => {
-                            indop = data.op_previous_op(io);
-                            continue;
-                        }
+        if is_creation && let Some(vn) = data.obank().get(io).and_then(|o| o.get_out()) {
+            let (vaddr, vsize) = {
+                let v = data.vbank().get(vn);
+                match v {
+                    Some(v) => (v.get_addr().clone(), v.get_size()),
+                    None => {
+                        indop = data.op_previous_op(io);
+                        continue;
                     }
-                };
-                let index = fc.get_active_output().which_trial(&vaddr, vsize);
-                if index >= 0 {
-                    trialvn[index as usize] = Some(vn);
-                    // the exact varnode may have changed, reset the trial address
-                    fc.get_active_output()
-                        .get_trial_mut(index)
-                        .set_address(vaddr, vsize);
                 }
+            };
+            let index = fc.get_active_output().which_trial(&vaddr, vsize);
+            if index >= 0 {
+                trialvn[index as usize] = Some(vn);
+                // the exact varnode may have changed, reset the trial address
+                fc.get_active_output()
+                    .get_trial_mut(index)
+                    .set_address(vaddr, vsize);
             }
         }
         indop = data.op_previous_op(io);

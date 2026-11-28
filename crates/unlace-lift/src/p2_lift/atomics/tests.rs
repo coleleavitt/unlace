@@ -243,7 +243,7 @@ fn spelled_swaps_compare_exchange_and_negates_subtraction() {
     });
     let (id, ops) = spelled(
         BUILTIN_ATOMIC_FETCH_SUB,
-        &[x.clone()],
+        std::slice::from_ref(&x),
         1,
         true,
         None,
@@ -265,7 +265,7 @@ fn c11_spelling_adds_the_order_unless_sequentially_consistent() {
     let v = Expr::Const(1, 8);
     let (id, ops) = spelled(
         BUILTIN_ATOMIC_FETCH_ADD,
-        &[v.clone()],
+        std::slice::from_ref(&v),
         8,
         false,
         Some(0),
@@ -279,7 +279,7 @@ fn c11_spelling_adds_the_order_unless_sequentially_consistent() {
     assert_eq!(ops, vec![v.clone(), Expr::Const(0, 4)]);
     let (id, ops) = spelled(
         BUILTIN_ATOMIC_EXCHANGE,
-        &[v.clone()],
+        std::slice::from_ref(&v),
         8,
         false,
         Some(crate::userop::MEMORY_ORDER_SEQ_CST),

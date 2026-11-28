@@ -7,11 +7,10 @@
 /// (`_TtC6Toyota3Foo` → `Toyota.Foo`) when the name is in the demangler's
 /// coverage, else the runtime spelling as is.
 pub fn display_class_name(runtime_name: &str) -> String {
-    if is_swift_runtime_name(runtime_name) {
-        if let Some(d) = crate::demangle::swift::demangle_swift_name(runtime_name) {
+    if is_swift_runtime_name(runtime_name)
+        && let Some(d) = crate::demangle::swift::demangle_swift_name(runtime_name) {
             return d;
         }
-    }
     runtime_name.to_string()
 }
 

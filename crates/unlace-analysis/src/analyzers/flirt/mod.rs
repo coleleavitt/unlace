@@ -122,8 +122,8 @@ pub fn load_sigs_for(file: &object::File) -> Vec<Signature> {
             Some((family, sig))
         })
         .collect();
-    if let Some(r) = &runtime {
-        if !loaded.is_empty() && !loaded.iter().any(|(family, _)| *family) {
+    if let Some(r) = &runtime
+        && !loaded.is_empty() && !loaded.iter().any(|(family, _)| *family) {
             eprintln!(
                 "flirt: the image was built by {} {}; no signature file named by {} is its C runtime",
                 r.compiler.name(),
@@ -131,7 +131,6 @@ pub fn load_sigs_for(file: &object::File) -> Vec<Signature> {
                 FLIRT_SIGS_ENV
             );
         }
-    }
     loaded.sort_by_key(|(family, _)| !*family);
     loaded.into_iter().map(|(_, sig)| sig).collect()
 }
@@ -419,11 +418,10 @@ fn match_all_inner(
                 continue;
             }
             let new_name = !known.values().any(|k| k == &name);
-            if let Some(report) = report.as_deref_mut() {
-                if new_name || known.get(&ea) == Some(&name) {
+            if let Some(report) = report.as_deref_mut()
+                && (new_name || known.get(&ea) == Some(&name)) {
                     report.insert(ea, name.clone());
                 }
-            }
             if new_name {
                 known.insert(ea, name.clone());
                 named.insert(ea, name);
@@ -696,11 +694,10 @@ fn bare_name(name: &str) -> &str {
         .find_map(|p| s.strip_prefix(p))
         .unwrap_or(s);
     let body = s.strip_prefix('@').unwrap_or(s);
-    if let Some((base, n)) = body.rsplit_once('@') {
-        if !base.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) {
+    if let Some((base, n)) = body.rsplit_once('@')
+        && !base.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) {
             s = base;
         }
-    }
     s.trim_start_matches('_')
 }
 

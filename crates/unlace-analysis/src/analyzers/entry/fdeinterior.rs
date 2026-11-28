@@ -253,12 +253,11 @@ fn scan_fde_bodies_sized(file: &object::File, ptr_size: usize) -> Vec<(u64, u64)
                         ptr_size,
                         le,
                     );
-                    if let (Some(begin), Some(range)) = (pc_begin, pc_range) {
-                        if range > 0 {
-                            if let Some(end) = begin.checked_add(range) {
-                                out.push((begin, end));
-                            }
-                        }
+                    if let (Some(begin), Some(range)) = (pc_begin, pc_range)
+                        && range > 0
+                        && let Some(end) = begin.checked_add(range)
+                    {
+                        out.push((begin, end));
                     }
                 }
             }

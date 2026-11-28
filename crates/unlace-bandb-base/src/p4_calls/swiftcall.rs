@@ -194,13 +194,12 @@ fn zeroes(data: &Funcdata, id: OpId, depth: u32) -> bool {
                     .get(prev)
                     .and_then(|o| o.get_out())
                     .and_then(|o| data.vbank().get(o));
-                if let Some(out) = written {
-                    if overlaps(out.get_addr(), out.get_size(), &addr, size) {
+                if let Some(out) = written
+                    && overlaps(out.get_addr(), out.get_size(), &addr, size) {
                         return out.get_addr() == &addr
                             && out.get_size() == size
                             && zeroes(data, prev, 1);
                     }
-                }
                 cur = data.op_previous_op(prev);
             }
             false
@@ -235,11 +234,10 @@ fn zeroed_before(data: &Funcdata, call: OpId, reg: &Address, size: int4) -> bool
         ) {
             return false;
         }
-        if let Some(out) = op.get_out().and_then(|o| data.vbank().get(o)) {
-            if overlaps(out.get_addr(), out.get_size(), reg, size) {
+        if let Some(out) = op.get_out().and_then(|o| data.vbank().get(o))
+            && overlaps(out.get_addr(), out.get_size(), reg, size) {
                 return out.get_addr() == reg && out.get_size() == size && zeroes(data, id, 0);
             }
-        }
         cur = data.op_previous_op(id);
     }
     false
@@ -364,11 +362,10 @@ fn tested_after(data: &Funcdata, call: OpId, reg: &Address, size: int4) -> bool 
                 _ => return false,
             }
         } else {
-            if let Some(slot) = &slot {
-                if op.code() == OpCode::CPUI_STORE {
+            if let Some(slot) = &slot
+                && op.code() == OpCode::CPUI_STORE {
                     slots.retain(|s| s != slot);
                 }
-            }
             if let Some((addr, width)) = &out {
                 tracked.retain(|(a, w)| !overlaps(addr, *width, a, *w));
                 slots.retain(|(a, w, _)| !overlaps(addr, *width, a, *w));
@@ -647,8 +644,8 @@ pub fn defining_op(
     for _ in 0..MAX_SCAN {
         let id = cur?;
         let prev = data.obank().get(id)?;
-        if let Some(out) = prev.get_out().and_then(|o| data.vbank().get(o)) {
-            if overlaps(out.get_addr(), out.get_size(), &addr, size) {
+        if let Some(out) = prev.get_out().and_then(|o| data.vbank().get(o))
+            && overlaps(out.get_addr(), out.get_size(), &addr, size) {
                 if !through.contains(&prev.code()) {
                     return Some(id);
                 }
@@ -657,7 +654,6 @@ pub fn defining_op(
                     .find(|v| !v.is_constant())?;
                 (addr, size) = (src.get_addr().clone(), src.get_size());
             }
-        }
         cur = data.op_previous_op(id);
     }
     None
@@ -1127,8 +1123,8 @@ pub fn derive_model(
             _ => out.add_child(Rc::clone(child)),
         }
     }
-    if let Some(err) = error_reg {
-        if !proto
+    if let Some(err) = error_reg
+        && !proto
             .get_children()
             .iter()
             .any(|c| c.get_name() == "killedbycall")
@@ -1138,7 +1134,6 @@ pub fn derive_model(
             list.add_child(register(err));
             out.add_child(Rc::new(list));
         }
-    }
     out
 }
 

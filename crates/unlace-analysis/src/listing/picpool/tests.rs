@@ -497,7 +497,7 @@ fn slot_load(s: &Spaces) -> Vec<FullOp> {
         op(
             OpCode::CPUI_LOAD,
             Some(vn(&s.reg, R2, 4)),
-            vec![vn(&s.konst, ram_id(&s), 8), vn(&s.uniq, 0x2f00, 4)],
+            vec![vn(&s.konst, ram_id(s), 8), vn(&s.uniq, 0x2f00, 4)],
         ),
     ]
 }

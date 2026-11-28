@@ -80,11 +80,6 @@ impl<'a> Cur<'a> {
         Ok(out)
     }
 
-    fn u16(&mut self) -> Res<u16> {
-        let b = self.bytes(2)?;
-        Ok(u16::from_le_bytes([b[0], b[1]]))
-    }
-
     fn u32(&mut self) -> Res<u32> {
         let b = self.bytes(4)?;
         Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
@@ -539,7 +534,7 @@ impl TypeReader<'_, '_> {
     fn function(&mut self, c: &mut Cur, _btmt: u8, depth: usize) -> Res<Kind> {
         let cc = read_cc(c)?;
         let ret = self.read(c, depth + 1)?;
-        let special = matches!(cc, 0xd | 0xe | 0xf);
+        let special = matches!(cc, 0xd..=0xf);
         if special {
             return err("explicit argument locations");
         }

@@ -106,11 +106,10 @@ fn skip(raw: &str) -> bool {
 
     // Ignore versioned symbols (`foo@GLIBC_2.2.5`), generally duplicated at the
     // same address. `indexOf("@") > 0`: an '@' must be present and not leading.
-    if let Some(p) = raw.find('@') {
-        if p > 0 {
+    if let Some(p) = raw.find('@')
+        && p > 0 {
             return true;
         }
-    }
 
     // Not a mangled symbol, but the demangler will try anyway — don't let it.
     if raw.starts_with("___") {
@@ -119,13 +118,11 @@ fn skip(raw: &str) -> bool {
 
     // The known GNU start patterns (the `demangleOnlyKnownPatterns()` branch).
     // `_GLOBAL_<...>_Z<...>` (a static (de)init thunk wrapping a mangled name).
-    if raw.starts_with(GLOBAL_PREFIX) {
-        if let Some(idx) = raw.find("_Z") {
-            if idx > 0 {
+    if raw.starts_with(GLOBAL_PREFIX)
+        && let Some(idx) = raw.find("_Z")
+            && idx > 0 {
                 return false;
             }
-        }
-    }
     if raw.starts_with("_Z") {
         return false;
     }
@@ -204,30 +201,26 @@ pub fn demangle_raw(raw: &str) -> Option<String> {
     // `DemangleFlags::COMPLETE` gives the full `public: void __cdecl Bar::foo(void)`
     // form (the MSVC analog of the c++filt-like Itanium output).
     if raw.starts_with('?') {
-        if let Ok(d) = msvc_demangler::demangle(raw, msvc_demangler::DemangleFlags::COMPLETE) {
-            if !d.is_empty() && d != raw {
+        if let Ok(d) = msvc_demangler::demangle(raw, msvc_demangler::DemangleFlags::COMPLETE)
+            && !d.is_empty() && d != raw {
                 return Some(d);
             }
-        }
         return None;
     }
 
     // Rust first when the symbol says it is Rust (see the fn docs: a legacy Rust
     // symbol is a well-formed Itanium name, so Itanium does not decline it).
-    if crate::sourcelang::is_rust_mangled(raw) {
-        if let Some(d) = demangle_rust(raw) {
+    if crate::sourcelang::is_rust_mangled(raw)
+        && let Some(d) = demangle_rust(raw) {
             return Some(d);
         }
-    }
 
     // Itanium C++.
-    if let Ok(sym) = cpp_demangle::Symbol::new(raw) {
-        if let Ok(d) = sym.demangle() {
-            if !d.is_empty() && d != raw {
+    if let Ok(sym) = cpp_demangle::Symbol::new(raw)
+        && let Ok(d) = sym.demangle()
+            && !d.is_empty() && d != raw {
                 return Some(d);
             }
-        }
-    }
 
     // Then Rust for anything the marker test missed.
     demangle_rust(raw)
@@ -360,12 +353,12 @@ pub fn normalize_rust_name(name: &str) -> String {
     }
     // Any empty component left behind (a group that resolved to nothing in the
     // middle of a path) would be an empty scope.
-    let joined = cur
+    
+    cur
         .split("::")
         .filter(|c| !c.trim().is_empty())
         .collect::<Vec<_>>()
-        .join("::");
-    joined
+        .join("::")
 }
 
 /// Demangle `raw` to the **qualified name only** (signature + template/bracket
@@ -424,8 +417,8 @@ pub fn demangle_name(raw: &str) -> Option<String> {
     // for `::`), which is a wrong answer rather than a missing one, and which
     // `strip_bracket_groups` then cannot see because there are no real brackets
     // to strip. See `demangle_raw`'s docs for the worked example.
-    if crate::sourcelang::is_rust_mangled(raw) {
-        if let Ok(d) = rustc_demangle::try_demangle(raw) {
+    if crate::sourcelang::is_rust_mangled(raw)
+        && let Ok(d) = rustc_demangle::try_demangle(raw) {
             // `normalize_rust_name`, not `strip_bracket_groups`: a trait-impl
             // qualifier has to KEEP one of its two paths, and deleting the group
             // would leave a leading `::` the symbol table rejects.
@@ -434,7 +427,6 @@ pub fn demangle_name(raw: &str) -> Option<String> {
                 return Some(reduced);
             }
         }
-    }
 
     // Itanium C++, name-only options.
     if let Ok(sym) = cpp_demangle::Symbol::new(raw) {
@@ -692,8 +684,8 @@ fn strip_bracket_groups(s: &str) -> String {
     let mut depth: i32 = 0;
     let mut i = 0usize;
     while i < s.len() {
-        if depth == 0 && ends_with_operator_head(&out) {
-            if let Some(spelling) = BRACKET_OPERATORS.iter().find(|sp| s[i..].starts_with(**sp)) {
+        if depth == 0 && ends_with_operator_head(&out)
+            && let Some(spelling) = BRACKET_OPERATORS.iter().find(|sp| s[i..].starts_with(**sp)) {
                 let rest = &s[i + spelling.len()..];
                 let opens_template = rest
                     .chars()
@@ -705,7 +697,6 @@ fn strip_bracket_groups(s: &str) -> String {
                     continue;
                 }
             }
-        }
         // cast: `i` indexes a char boundary by construction (the operator
         // spellings are ASCII and the fallback advances by one whole char).
         let c = s[i..].chars().next().expect("i is a char boundary");

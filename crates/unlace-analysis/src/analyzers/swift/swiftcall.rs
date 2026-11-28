@@ -356,11 +356,10 @@ impl Binder<'_, '_> {
                     (false, true) => SWIFTCALL_THROWS,
                     (false, false) => SWIFTCALL,
                 };
-                if declare && !is_async(entity) {
-                    if let Some(d) = self.declared(entity, SelfIs::Instance, false, None) {
+                if declare && !is_async(entity)
+                    && let Some(d) = self.declared(entity, SelfIs::Instance, false, None) {
                         self.declared.insert(*addr, (d, model));
                     }
-                }
                 continue;
             }
             let Some((owner, is, throws)) = member(entity) else {
@@ -394,11 +393,10 @@ impl Binder<'_, '_> {
                 ty.clone(),
                 value_type && is == SelfIs::Instance,
             );
-            if declare && !partial && !is_async(entity) {
-                if let Some(d) = self.declared(entity, is, value_type, ty) {
+            if declare && !partial && !is_async(entity)
+                && let Some(d) = self.declared(entity, is, value_type, ty) {
                     self.declared.insert(*addr, (d, model));
                 }
-            }
         }
     }
 
@@ -1091,11 +1089,10 @@ pub fn runtime_callers(
     let mut callers: BTreeMap<u64, bool> = BTreeMap::new();
     let mut credit = |site: u64, throws: bool| {
         let below = starts.partition_point(|&s| s <= site);
-        if let Some(&f) = below.checked_sub(1).and_then(|i| starts.get(i)) {
-            if !runtime.contains_key(&f) {
+        if let Some(&f) = below.checked_sub(1).and_then(|i| starts.get(i))
+            && !runtime.contains_key(&f) {
                 *callers.entry(f).or_insert(false) |= throws;
             }
-        }
     };
     for (base, data) in &code {
         if arm64 {

@@ -120,7 +120,7 @@ fn select_unit(
     let mut cursor = unit.entries();
     let root = cursor.next_dfs().ok()??;
     let mut extras = UnitExtras::metadata_only();
-    extras.capture(dwarf, unit, &root, None);
+    extras.capture(dwarf, unit, root, None);
     if !extras.go {
         return None;
     }
@@ -327,11 +327,9 @@ fn named_snapshot(
     if let Some(name) = entry
         .attr_value(gimli::DW_AT_name)
         .and_then(|value| dwarf.attr_string(unit, value).ok())
-    {
-        if let Ok(name) = std::str::from_utf8(name.slice()) {
+        && let Ok(name) = std::str::from_utf8(name.slice()) {
             die.name = name.to_owned();
         }
-    }
     die
 }
 

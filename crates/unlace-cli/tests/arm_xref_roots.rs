@@ -2,7 +2,7 @@
 use crate::common;
 
 use serde_json::Value;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn fixture(tag: &str, isa: &str, endian: &str, symbols: bool) -> PathBuf {
@@ -32,7 +32,7 @@ fn fixture_variant(tag: &str, isa: &str, endian: &str, symbols: bool, options: &
 }
 
 fn query(
-    path: &PathBuf,
+    path: &Path,
     direction: &str,
     target: &str,
     isa: &str,
@@ -48,7 +48,7 @@ fn query(
 }
 
 fn query_language(
-    path: &PathBuf,
+    path: &Path,
     direction: &str,
     target: &str,
     isa: &str,

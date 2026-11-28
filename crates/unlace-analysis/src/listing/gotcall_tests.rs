@@ -318,7 +318,7 @@ fn call_target_requires_latest_whole_copy_in_the_same_instruction() {
         Some((0x3000, 0x1000))
     );
     assert_eq!(
-        proof.target(&[call.clone()], &ram),
+        proof.target(std::slice::from_ref(&call), &ram),
         None,
         "register carried from another instruction"
     );

@@ -403,11 +403,10 @@ pub fn needs_backing(fd: &Funcdata, start: u64, size: i32) -> bool {
             OpCode::CPUI_STORE
             | OpCode::CPUI_LOAD
             | OpCode::CPUI_RETURN
-            | OpCode::CPUI_CALLOTHER => {
-                if (1..op.num_input()).any(|slot| op.get_in(slot).is_some_and(aliases)) {
+            | OpCode::CPUI_CALLOTHER
+                if (1..op.num_input()).any(|slot| op.get_in(slot).is_some_and(aliases)) => {
                     return true;
                 }
-            }
             _ => {}
         }
     }
@@ -510,14 +509,13 @@ fn closed_reuse(fd: &Funcdata, object: &StackObject) -> bool {
             OpCode::CPUI_STORE
             | OpCode::CPUI_LOAD
             | OpCode::CPUI_RETURN
-            | OpCode::CPUI_CALLOTHER => {
+            | OpCode::CPUI_CALLOTHER
                 if (1..op.num_input()).any(|slot| {
                     op.get_in(slot)
                         .is_some_and(|input| aliases(fd, input, object))
-                }) {
+                }) => {
                     return false;
                 }
-            }
             _ => {}
         }
     }
@@ -575,8 +573,7 @@ pub fn separates_parameter(fd: &Funcdata, first: HighVariableId, second: HighVar
                 }
                 if let Some(backing) =
                     backing_for_address(fd, parameter.get_addr(), parameter.get_size())
-                {
-                    if (0..local.num_instances()).any(|i| {
+                    && (0..local.num_instances()).any(|i| {
                         fd.vbank().get(local.get_instance(i)).is_some_and(|value| {
                             backing_for_address(fd, value.get_addr(), value.get_size())
                                 .is_some_and(|entry| entry.symbol == backing.symbol)
@@ -584,7 +581,6 @@ pub fn separates_parameter(fd: &Funcdata, first: HighVariableId, second: HighVar
                     }) {
                         return true;
                     }
-                }
                 (0..local.num_instances()).any(|i| {
                     let Some(value) = fd.vbank().get(local.get_instance(i)) else {
                         return false;

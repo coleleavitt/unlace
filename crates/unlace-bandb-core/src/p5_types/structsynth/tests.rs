@@ -158,12 +158,16 @@ fn a_stored_constant_reads_as_text_only_when_its_bytes_are_characters() {
 /// that is not text, keeps it a record candidate. Zero is neither.
 #[test]
 fn only_a_base_whose_every_access_is_text_is_a_string_buffer() {
-    let mut buf = Evidence::default();
-    buf.text_store = true;
+    let buf = Evidence {
+        text_store: true,
+        ..Default::default()
+    };
     assert!(buf.text_store && !buf.other_access);
-    let mut rec = Evidence::default();
-    rec.text_store = true;
-    rec.other_access = true;
+    let rec = Evidence {
+        text_store: true,
+        other_access: true,
+        ..Default::default()
+    };
     let mut merged = Evidence::default();
     merged.absorb(&buf);
     assert!(merged.text_store && !merged.other_access);

@@ -185,7 +185,7 @@ impl ConditionalExecution {
             if !spc.is_heritaged() {
                 continue;
             }
-            if fd.num_heritage_passes(&spc).is_ok_and(|n| n > 0) {
+            if fd.num_heritage_passes(spc).is_ok_and(|n| n > 0) {
                 self.heritageyes[index as usize] = true;
             }
         }
@@ -208,16 +208,11 @@ impl ConditionalExecution {
             None => return false,
         };
         self.cbranch = Some(cbranch);
-        if fd
+        fd
             .obank()
             .get(cbranch)
             .expect("testIBlock: stale cbranch")
-            .code()
-            != OpCode::CPUI_CBRANCH
-        {
-            return false;
-        }
-        true
+            .code() == OpCode::CPUI_CBRANCH
     }
 
     /// Find \b initblock, based on \b iblock (C++
@@ -937,10 +932,7 @@ impl ConditionalExecution {
     /// \return \b true if (some) configuration is recognized and can be modified
     pub fn trial(&mut self, ib: BlockId, fd: &Funcdata) -> bool {
         self.iblock = Some(ib);
-        if !self.verify(fd) {
-            return false;
-        }
-        true
+        self.verify(fd)
     }
 
     /// Eliminate the unnecessary path join at \b iblock (C++
@@ -1228,17 +1220,17 @@ impl MultiPredicate {
             .block(base_block)
             .get_in(1 - self.zero_slot);
         let zb_sizeout = fd.bblocks_ref().block(zero_block).size_out();
-        let cond_block;
-        if zb_sizeout == 1 {
+        
+        let cond_block = if zb_sizeout == 1 {
             if fd.bblocks_ref().block(zero_block).size_in() != 1 {
                 return false;
             }
-            cond_block = fd.bblocks_ref().block(zero_block).get_in(0);
+            fd.bblocks_ref().block(zero_block).get_in(0)
         } else if zb_sizeout == 2 {
-            cond_block = zero_block;
+            zero_block
         } else {
             return false;
-        }
+        };
         self.cond_block = Some(cond_block);
         if fd.bblocks_ref().block(cond_block).size_out() != 2 {
             return false;
@@ -1263,16 +1255,11 @@ impl MultiPredicate {
             None => return false,
         };
         self.cbranch = Some(cbranch);
-        if fd
+        fd
             .obank()
             .get(cbranch)
             .expect("discoverCbranch: stale cbranch")
-            .code()
-            != OpCode::CPUI_CBRANCH
-        {
-            return false;
-        }
-        true
+            .code() == OpCode::CPUI_CBRANCH
     }
 
     /// Does the \b condBlock \b true outgoing edge flow to the block that sets

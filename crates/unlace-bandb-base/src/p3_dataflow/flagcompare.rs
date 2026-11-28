@@ -34,6 +34,12 @@ pub struct RuleBoolSignLess {
     group: String,
 }
 
+impl Default for RuleBoolSignLess {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RuleBoolSignLess {
     /// Default group `"analysis"`.
     pub fn new() -> RuleBoolSignLess {
@@ -141,6 +147,12 @@ impl Rule for RuleBoolSignLess {
 pub struct RuleSborrowGe {
     /// Rule group (C++ `Rule::basegroup`).
     group: String,
+}
+
+impl Default for RuleSborrowGe {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RuleSborrowGe {

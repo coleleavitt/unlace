@@ -23,13 +23,6 @@ macro_rules! unlace_options {
         impl UnlaceOptionDispatch for Architecture {
             /// Validate and apply a named unlace option to its live configuration.
             fn dispatch_unlace_option(&mut $this, name: &str, $value: &str) -> UnlaceResult<String> {
-                macro_rules! on_off {
-                    ($field:ident, $label:literal) => {{
-                        let val = on_or_off($value)?;
-                        $this.$field = val;
-                        Ok(format!(concat!($label, " turned {}"), if val { "on" } else { "off" }))
-                    }};
-                }
                 macro_rules! registered {
                     ($option:ty) => {{
                         let (val, msg) =

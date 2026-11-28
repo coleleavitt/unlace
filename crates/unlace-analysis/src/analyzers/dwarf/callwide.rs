@@ -48,11 +48,10 @@ fn names(entries: &[(u64, String, Vec<String>)]) -> Option<Names<'_>> {
             {
                 return None;
             }
-            if let Some((previous, _)) = result.insert(alias.as_str(), (*address, name.as_str())) {
-                if previous != *address {
+            if let Some((previous, _)) = result.insert(alias.as_str(), (*address, name.as_str()))
+                && previous != *address {
                     return None;
                 }
-            }
         }
     }
     Some(result)
@@ -253,11 +252,10 @@ fn prewalk(
             if !seen_entries.insert(address) {
                 return None;
             }
-            if let Some(value) = entry.attr_value(gimli::DW_AT_low_pc) {
-                if dwarf.attr_address(&unit, value).ok()?? != address {
+            if let Some(value) = entry.attr_value(gimli::DW_AT_low_pc)
+                && dwarf.attr_address(&unit, value).ok()?? != address {
                     return None;
                 }
-            }
             plan.selected.push(Selected {
                 offset: entry.offset().0,
                 entry: address,

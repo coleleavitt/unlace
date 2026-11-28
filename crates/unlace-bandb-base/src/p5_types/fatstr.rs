@@ -53,7 +53,6 @@ use unlace_base::types::int4;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::OpId;
-use crate::dtype::TypeFactory;
 use crate::funcdata::Funcdata;
 use crate::varnode::varnode_flags;
 

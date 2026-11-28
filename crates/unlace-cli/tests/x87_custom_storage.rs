@@ -6,9 +6,7 @@ use std::process::Command;
 
 /// Assemble Windows fixtures with Clang so no Windows linker is required.
 fn build_image(source: &Path) -> Option<PathBuf> {
-    if process::optional_output(Command::new("clang").arg("--version")).is_none() {
-        return None;
-    }
+    process::optional_output(Command::new("clang").arg("--version"))?;
     let object = source.with_extension("obj");
     let output = Command::new("clang")
         .args(["--target=i686-pc-windows-gnu", "-c"])

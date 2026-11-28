@@ -1,6 +1,7 @@
 //! Tests for the `.sla` cache.
 
 use super::*;
+use unlace_sleigh::slaformat::RAW_SLA_HEADER;
 
 fn repo_specs() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../specs/Ghidra/Processors")

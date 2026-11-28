@@ -29,11 +29,10 @@ impl PrintC {
             } else {
                 sblocks_basic_tail(fd, bb)
             };
-            if let Some(inst) = last {
-                if fd.obank().get(inst).map(|o| o.is_branch()).unwrap_or(false) {
+            if let Some(inst) = last
+                && fd.obank().get(inst).map(|o| o.is_branch()).unwrap_or(false) {
                     self.emit_expression_ir(fd, arch, inst);
                 }
-            }
             return;
         }
         let mut separator = false;
@@ -82,14 +81,13 @@ impl PrintC {
                 }
             }
             // Skip ops whose output is an implied varnode (inlined elsewhere).
-            if let Some(out) = o.get_out() {
-                if fd.vbank().get(out).map(|v| v.is_implied()).unwrap_or(false)
+            if let Some(out) = o.get_out()
+                && fd.vbank().get(out).map(|v| v.is_implied()).unwrap_or(false)
                     && !(self.out_lang == crate::lang::OutLang::C
                         && crate::stackbytes::assignment(fd, inst).is_some())
                 {
                     continue;
                 }
-            }
             if separator {
                 if self.context.is_set(modifiers::COMMA_SEPARATE) {
                     self.emit
@@ -278,9 +276,9 @@ impl PrintC {
         // not the unnegatable type minimum), render `x -= c` with the negated
         // magnitude instead.  The dataflow canonicalizes `sub x, c` into
         // INT_ADD(x, -c), so this restores the source's subtraction form.
-        if opc == OpCode::CPUI_INT_ADD {
-            if let Some(v) = fd.vbank().get(in1) {
-                if v.is_constant() && fd.vn_high_display_format(in1) == 0 {
+        if opc == OpCode::CPUI_INT_ADD
+            && let Some(v) = fd.vbank().get(in1)
+                && v.is_constant() && fd.vn_high_display_format(in1) == 0 {
                     let ct = fd.vn_type_read_facing(in1, op);
                     let sz = v.get_size();
                     let mask = calc_mask(sz);
@@ -300,8 +298,6 @@ impl PrintC {
                         return true;
                     }
                 }
-            }
-        }
         self.push_op(tok, Some(op_key(op)));
         let (lhs, lhs_op) = self.inplace_target(fd, (in0, op), (out, stmt));
         self.push_vn_explicit_ir(fd, arch, lhs, lhs_op);

@@ -302,11 +302,10 @@ pub trait CastStrategy {
             if ctx.vn_is_explicit(outvn) {
                 return false;
             }
-            if let Some(lone) = ctx.vn_lone_descend(outvn) {
-                if !ctx.op_inherits_sign(lone) {
+            if let Some(lone) = ctx.vn_lone_descend(outvn)
+                && !ctx.op_inherits_sign(lone) {
                     return false;
                 }
-            }
         }
 
         ctx.vn_set_unsigned_print(vn);
@@ -837,8 +836,8 @@ impl CastStrategy for CastStrategyC {
                     }
                 }
             }
-            type_metatype::TYPE_CODE => {
-                if curbase.get_metatype() == type_metatype::TYPE_CODE {
+            type_metatype::TYPE_CODE
+                if curbase.get_metatype() == type_metatype::TYPE_CODE => {
                     // Don't cast between function pointer and generic code pointer
                     if code_prototype_is_null(&reqbase) {
                         return None;
@@ -847,7 +846,6 @@ impl CastStrategy for CastStrategyC {
                         return None;
                     }
                 }
-            }
             _ => {}
         }
 
@@ -947,10 +945,7 @@ impl CastStrategy for CastStrategyC {
         let metain = intype.get_metatype();
         // Casting to larger storage always extends based on signedness of the input data-type
         // So the input must be SIGNED in order to treat SEXT as a cast
-        if metain != type_metatype::TYPE_INT && metain != type_metatype::TYPE_BOOL {
-            return false;
-        }
-        true
+        !(metain != type_metatype::TYPE_INT && metain != type_metatype::TYPE_BOOL)
     }
 
     // C++ CastStrategyC::isZextCast (cast.cc:457-469).
@@ -965,10 +960,7 @@ impl CastStrategy for CastStrategyC {
         let metain = intype.get_metatype();
         // Casting to larger storage always extends based on signedness of the input data-type
         // So the input must be UNSIGNED in order to treat ZEXT as a cast
-        if metain != type_metatype::TYPE_UINT && metain != type_metatype::TYPE_BOOL {
-            return false;
-        }
-        true
+        !(metain != type_metatype::TYPE_UINT && metain != type_metatype::TYPE_BOOL)
     }
 }
 
@@ -1150,8 +1142,8 @@ fn java_cast_standard(
                 }
             }
         }
-        type_metatype::TYPE_CODE => {
-            if curbase.get_metatype() == type_metatype::TYPE_CODE {
+        type_metatype::TYPE_CODE
+            if curbase.get_metatype() == type_metatype::TYPE_CODE => {
                 // Don't cast between function pointer and generic code pointer
                 if code_prototype_is_null(reqbase) {
                     return None;
@@ -1160,7 +1152,6 @@ fn java_cast_standard(
                     return None;
                 }
             }
-        }
         _ => {}
     }
 

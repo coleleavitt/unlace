@@ -213,6 +213,7 @@ pub fn capture(data: &mut Funcdata) {
         effects.push(last);
     }
     let (reachable, input) = states(&preds, &effects);
+    #[allow(clippy::mutable_key_type)]
     let mut returns = std::collections::BTreeMap::<Address, bool>::new();
     for (i, &block) in blocks.iter().enumerate() {
         if !reachable[i] {
@@ -225,13 +226,14 @@ pub fn capture(data: &mut Funcdata) {
                 Effect::Unknown => empty = false,
                 Effect::Preserve => {}
             }
-            if let Some(op) = data.obank().get(id) {
-                if op.code() == OpCode::CPUI_RETURN && op.get_halt_type() == 0 {
-                    returns
-                        .entry(op.get_addr().clone())
-                        .and_modify(|all| *all &= empty)
-                        .or_insert(empty);
-                }
+            if let Some(op) = data.obank().get(id)
+                && op.code() == OpCode::CPUI_RETURN
+                && op.get_halt_type() == 0
+            {
+                returns
+                    .entry(op.get_addr().clone())
+                    .and_modify(|all| *all &= empty)
+                    .or_insert(empty);
             }
         }
     }

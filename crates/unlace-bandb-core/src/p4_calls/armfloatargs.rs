@@ -364,7 +364,7 @@ fn plan_stated_inputs(
     };
     let widens = |parts: &[Option<VarnodeId>]| {
         let parts: Option<Vec<VarnodeId>> = parts.iter().copied().collect();
-        parts.map_or(true, |parts| widens_entry(data, &parts, call.get_op()))
+        parts.is_none_or(|parts| widens_entry(data, &parts, call.get_op()))
     };
     let words = |addr: &Address, size: i32| -> Option<WordJoin> {
         if trials.iter().any(|(_, a, s, _, _)| a == addr && *s == size) {
@@ -504,10 +504,7 @@ fn plan_stated_inputs(
             {
                 partial = true
             }
-            None => match entry_of(addr, *size) {
-                Some(e) => missing.push((addr.clone(), *size, e)),
-                None => {}
-            },
+            None => if let Some(e) = entry_of(addr, *size) { missing.push((addr.clone(), *size, e)); },
         }
     }
     Some(StatedPlan {
@@ -540,7 +537,7 @@ fn reads_unstated(
             .iter()
             .any(|(a, s, _)| a.justified_contain(*s, w, 4, false) >= 0)
     };
-    singles.chunks_exact(2).any(|pair| {
+    singles.as_chunks::<2>().0.iter().any(|pair| {
         let (lo, hi) = (&pair[0], &pair[1]);
         dead.proves_read(hi, 4) && !stated(hi) && !dead.proves_read(lo, 4) && !stated(lo)
     })
@@ -1216,15 +1213,14 @@ pub fn prepare_inputs(data: &mut Funcdata) {
                 }
             }
         }
-        if let Some(vn) = input {
-            if let Some(ty) = data
+        if let Some(vn) = input
+            && let Some(ty) = data
                 .get_arch()
                 .types()
                 .and_then(|t| t.get_base(size, type_metatype::TYPE_FLOAT).ok())
             {
                 data.vn_update_type(vn, ty);
             }
-        }
     }
 }
 

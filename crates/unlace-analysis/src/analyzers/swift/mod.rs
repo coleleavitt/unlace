@@ -336,11 +336,10 @@ fn elf_relative_relocs(file: &object::File) -> HashMap<u64, u64> {
     };
     let mut out = HashMap::new();
     for (addr, reloc) in file.dynamic_relocations().into_iter().flatten() {
-        if let object::RelocationFlags::Elf { r_type } = reloc.flags() {
-            if r_type == relative && !reloc.has_implicit_addend() {
+        if let object::RelocationFlags::Elf { r_type } = reloc.flags()
+            && r_type == relative && !reloc.has_implicit_addend() {
                 out.insert(addr, reloc.addend() as u64);
             }
-        }
     }
     out
 }
@@ -600,7 +599,7 @@ impl Namer<'_> {
             Owner::Imported(s) => s.as_str(),
         };
         if !self.is_code(addr)
-            || addr % self.insn_align != 0
+            || !addr.is_multiple_of(self.insn_align)
             || crate::analyzers::entry::inside_body(&self.bodies, addr)
             || name.as_deref().is_some_and(|n| !self.spend(n))
             || !self.spend(owner_bytes)
@@ -772,9 +771,9 @@ impl Namer<'_> {
             };
             // A local, non-resilient conformance's witness table is a plain
             // pointer table: the descriptor, then one word per requirement.
-            if c.witnesses.is_empty() && c.flags & (1 << 17) == 0 {
-                if let (Some(w), Target::Direct(p)) = (c.witness_table, c.protocol) {
-                    if let Some(proto_ctx) = self.md.contexts.get(&p) {
+            if c.witnesses.is_empty() && c.flags & (1 << 17) == 0
+                && let (Some(w), Target::Direct(p)) = (c.witness_table, c.protocol)
+                    && let Some(proto_ctx) = self.md.contexts.get(&p) {
                         for (k, (req, _)) in proto_ctx.requirements.iter().enumerate() {
                             let flags = self.md.requirement_flags.get(req).copied().unwrap_or(0xff);
                             let kind = flags & 0xf;
@@ -791,8 +790,6 @@ impl Namer<'_> {
                             }
                         }
                     }
-                }
-            }
             for (k, (req, impl_addr)) in c.witnesses.iter().enumerate() {
                 let Some(f) = impl_addr else { continue };
                 if !self.is_code(*f) {

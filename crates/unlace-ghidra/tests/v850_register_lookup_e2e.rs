@@ -8,6 +8,7 @@
 //! SLEIGH and panics. A successful `getRegisterName` callback proves the same
 //! path now stays behind the engine-neutral translator interface.
 
+#[allow(clippy::duplicate_mod)]
 #[path = "ghidra_sim/mod.rs"]
 mod ghidra_sim;
 

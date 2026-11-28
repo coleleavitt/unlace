@@ -315,14 +315,13 @@ impl Planner<'_> {
                 n => (skip + 1 == n && !wrapped).then(|| list[skip]),
             };
             let leaves_alike = graph.block(case.block).size_out() == 0 || case.isexit;
-            if let Some(last) = last.filter(|&l| leaves_alike && !has_hidden_exit(self.fd, l)) {
-                if let Some(next) = self.mergeable(host, last, listed) {
+            if let Some(last) = last.filter(|&l| leaves_alike && !has_hidden_exit(self.fd, l))
+                && let Some(next) = self.mergeable(host, last, listed) {
                     *listed = next;
                     self.hosts.insert(last, host);
                     self.splice(host, last, out, listed);
                     continue;
                 }
-            }
             out.push(PlannedCase { skip, ..arm });
         }
     }
@@ -520,11 +519,10 @@ fn fold_default(
         }
         out.push(e);
     }
-    if let Some(c) = code_arm.filter(|_| default_dropped) {
-        if let Some(e) = out.iter_mut().find(|e| **e == arms[c]) {
+    if let Some(c) = code_arm.filter(|_| default_dropped)
+        && let Some(e) = out.iter_mut().find(|e| **e == arms[c]) {
             e.as_default = true;
         }
-    }
     out
 }
 
@@ -666,7 +664,7 @@ fn fold_guards(
             },
         );
         let rest_empty = list.len() <= e.skip + 1;
-        if rest_empty && d + 2 == arms.len() && arm_list(graph, case.block).1 == false {
+        if rest_empty && d + 2 == arms.len() && !arm_list(graph, case.block).1 {
             arms.pop();
             return arms;
         }

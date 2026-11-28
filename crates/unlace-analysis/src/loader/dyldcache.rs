@@ -81,12 +81,11 @@ pub fn read_selected_image(path: &Path) -> Option<Result<Vec<u8>, String>> {
     }
     let selected = unlace_decomp::dyldcache::selected_image();
     let key = ImageKey::of(path, &selected);
-    if let (Some(key), Ok(last)) = (&key, LAST_IMAGE.lock()) {
-        if let Some((k, bytes)) = last.as_ref() {
-            if k == key {
-                return Some(Ok(bytes.clone()));
-            }
-        }
+    if let (Some(key), Ok(last)) = (&key, LAST_IMAGE.lock())
+        && let Some((k, bytes)) = last.as_ref()
+        && k == key
+    {
+        return Some(Ok(bytes.clone()));
     }
     let image = DyldCache::open(path)
         .and_then(|cache| cache.extract_merged(&cache.select_all(selected.as_deref())?));
@@ -362,23 +361,22 @@ fn read_mappings(file: &CacheFile, index: usize, h: &Header) -> Result<Vec<Mappi
     if let (Some(off), Some(count)) = (
         h.u32(HDR_MAPPING_WITH_SLIDE),
         h.u32(HDR_MAPPING_WITH_SLIDE + 4),
-    ) {
-        if count > 0 {
-            let table = file.read_at(off as u64, count as usize * 56)?;
-            for r in table.chunks_exact(56) {
-                out.push(Mapping {
-                    address: u64_at(r, 0),
-                    size: u64_at(r, 8),
-                    file_offset: u64_at(r, 16),
-                    file: index,
-                    slide_offset: u64_at(r, 24),
-                    slide_size: u64_at(r, 32),
-                    flags: u64_at(r, 40),
-                    init_prot: u32_at(r, 52),
-                });
-            }
-            return Ok(out);
+    ) && count > 0
+    {
+        let table = file.read_at(off as u64, count as usize * 56)?;
+        for r in table.as_chunks::<56>().0 {
+            out.push(Mapping {
+                address: u64_at(r, 0),
+                size: u64_at(r, 8),
+                file_offset: u64_at(r, 16),
+                file: index,
+                slide_offset: u64_at(r, 24),
+                slide_size: u64_at(r, 32),
+                flags: u64_at(r, 40),
+                init_prot: u32_at(r, 52),
+            });
         }
+        return Ok(out);
     }
     let off = h.u32(HDR_MAPPING_OFFSET).unwrap_or(0);
     let count = h.u32(HDR_MAPPING_OFFSET + 4).unwrap_or(0);
@@ -387,7 +385,7 @@ fn read_mappings(file: &CacheFile, index: usize, h: &Header) -> Result<Vec<Mappi
         h.u64(HDR_SLIDE_INFO_OLD).unwrap_or(0),
         h.u64(HDR_SLIDE_INFO_OLD + 8).unwrap_or(0),
     );
-    for (i, r) in table.chunks_exact(32).enumerate() {
+    for (i, r) in table.as_chunks::<32>().0.iter().enumerate() {
         let (slide_offset, slide_size) = if i == 1 {
             (old_slide_offset, old_slide_size)
         } else {
@@ -628,7 +626,9 @@ impl DyldCache {
         };
         let table = main.read_at(off as u64, count as usize * 32)?;
         let rows: Vec<(u64, u64)> = table
-            .chunks_exact(32)
+            .as_chunks::<32>()
+            .0
+            .iter()
             .map(|r| (u64_at(r, 0), u32_at(r, 24) as u64))
             .collect();
         let extended = Cell::new(0u64);

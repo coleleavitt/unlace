@@ -208,11 +208,10 @@ fn format_callees(
     for (name, addr) in inp.imports {
         if let Some(dir) = va_list_family(name) {
             va_list.insert(*addr, dir);
-        } else if !declared(name) {
-            if let Some(dir) = named_family(name) {
+        } else if !declared(name)
+            && let Some(dir) = named_family(name) {
                 callees.insert(*addr, (name.clone(), dir));
             }
-        }
     }
     let import_addrs: HashSet<u64> = inp.imports.iter().map(|(_, a)| *a).collect();
     let locals: Vec<(u64, String)> = inp

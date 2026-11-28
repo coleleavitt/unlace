@@ -19,7 +19,7 @@ fn a_macho_const_section_in_text_is_unflagged() {
         start: 0x1000003fc,
         end: 0x100000414,
     };
-    assert_eq!(unflagged_sections(&file), [section.clone()]);
+    assert_eq!(unflagged_sections(&file), std::slice::from_ref(&section));
     assert_eq!(
         placement(&file, 0x1000003d8),
         Placement::Code {

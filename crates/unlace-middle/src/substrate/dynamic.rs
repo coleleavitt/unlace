@@ -574,15 +574,13 @@ impl DynamicHash {
     /// the op directly attached to `root`, and packs the 64-bit hash.
     fn piece_together_hash(&mut self, root: VarnodeId, method: uint4, data: &mut Funcdata) {
         // Clear our marks
-        for i in 0..self.markvn.len() {
-            let vn = self.markvn[i];
+        for &vn in &self.markvn {
             data.vbank_mut()
                 .get_mut(vn)
                 .expect("pieceTogether: clear vn")
                 .clear_mark();
         }
-        for i in 0..self.markop.len() {
-            let op = self.markop[i];
+        for &op in &self.markop {
             data.obank_mut()
                 .get_mut(op)
                 .expect("pieceTogether: clear op")
@@ -609,8 +607,8 @@ impl DynamicHash {
             }
         }
 
-        for i in 0..self.opedge.len() {
-            reg = self.opedge[i].hash(reg, data);
+        for e in &self.opedge {
+            reg = e.hash(reg, data);
         }
 
         // Build the final 64-bit hash.  Find op directly attached to -root- (not
@@ -724,8 +722,6 @@ impl DynamicHash {
     /// (16) for unlace's own analysis, upstream's 8 on the wire path.
     pub fn unique_hash(&mut self, root: VarnodeId, maxduplicates: uint4, data: &mut Funcdata) {
         let mut champion: Vec<VarnodeId> = Vec::new();
-        let mut tmphash: uint8 = 0;
-        let mut tmpaddr: Address = Address::default();
         let mut champhash: uint8 = 0;
         let mut champaddr: Address = Address::default();
 
@@ -736,8 +732,8 @@ impl DynamicHash {
             if self.hash == 0 {
                 break; // Can't get a good hash at this depth; keep any earlier champion
             }
-            tmphash = self.hash;
-            tmpaddr = self.addrresult.clone();
+            let tmphash = self.hash;
+            let tmpaddr = self.addrresult.clone();
             let mut vnlist: Vec<VarnodeId> = Vec::new();
             let mut vnlist2: Vec<VarnodeId> = Vec::new();
             Self::gather_first_level_vars(&mut vnlist, data, &tmpaddr, tmphash);
@@ -797,8 +793,6 @@ impl DynamicHash {
         data: &mut Funcdata,
     ) {
         let mut champion: Vec<OpId> = Vec::new();
-        let mut tmphash: uint8 = 0;
-        let mut tmpaddr: Address = Address::default();
         let mut champhash: uint8 = 0;
         let mut champaddr: Address = Address::default();
         // (unlace) GH-8467: see unique_hash above -- same wider budget, passed in.
@@ -827,8 +821,8 @@ impl DynamicHash {
             if self.hash == 0 {
                 break; // Can't get a good hash at this depth; keep any earlier champion
             }
-            tmphash = self.hash;
-            tmpaddr = self.addrresult.clone();
+            let tmphash = self.hash;
+            let tmpaddr = self.addrresult.clone();
             let mut oplist2: Vec<OpId> = Vec::new();
             for tmpop in oplist.iter().copied() {
                 if slot
@@ -1036,14 +1030,13 @@ impl DynamicHash {
                 if let Some(mut vn) = vn {
                     if isnotattached {
                         // If original varnode was not attached to (this) op
-                        if let Some(ld) = data.lone_descend(vn) {
-                            if transcode(data.obank().get(ld).expect("gatherFirst: ld").code()) == 0
-                            {
-                                // Check for skipped op
-                                match data.obank().get(ld).expect("gatherFirst: ld out").get_out() {
-                                    None => continue,
-                                    Some(o) => vn = o,
-                                }
+                        if let Some(ld) = data.lone_descend(vn)
+                            && transcode(data.obank().get(ld).expect("gatherFirst: ld").code()) == 0
+                        {
+                            // Check for skipped op
+                            match data.obank().get(ld).expect("gatherFirst: ld out").get_out() {
+                                None => continue,
+                                Some(o) => vn = o,
                             }
                         }
                     }
@@ -1056,17 +1049,16 @@ impl DynamicHash {
                     .expect("gatherFirst: op")
                     .get_in(slot)
                     .expect("gatherFirst: getIn");
-                if isnotattached {
-                    if let Some(def) = data.vbank().get(vn).expect("gatherFirst: vn").get_def() {
-                        if transcode(data.obank().get(def).expect("gatherFirst: def").code()) == 0 {
-                            vn = data
-                                .obank()
-                                .get(def)
-                                .expect("gatherFirst: def in")
-                                .get_in(0)
-                                .expect("gatherFirst: def getIn(0)");
-                        }
-                    }
+                if isnotattached
+                    && let Some(def) = data.vbank().get(vn).expect("gatherFirst: vn").get_def()
+                    && transcode(data.obank().get(def).expect("gatherFirst: def").code()) == 0
+                {
+                    vn = data
+                        .obank()
+                        .get(def)
+                        .expect("gatherFirst: def in")
+                        .get_in(0)
+                        .expect("gatherFirst: def getIn(0)");
                 }
                 varlist.push(vn);
             }

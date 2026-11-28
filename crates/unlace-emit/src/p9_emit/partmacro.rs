@@ -23,7 +23,7 @@ use unlace_num::opcodes::OpCode;
 pub fn macro_name(src_size: i32, offset: u64, width: i32) -> Option<String> {
     let width_u = u64::try_from(width).ok()?;
     let src_u = u64::try_from(src_size).ok()?;
-    if !matches!(width, 1 | 2 | 4) || offset % width_u != 0 || offset.checked_add(width_u)? > src_u
+    if !matches!(width, 1 | 2 | 4) || !offset.is_multiple_of(width_u) || offset.checked_add(width_u)? > src_u
     {
         return None;
     }

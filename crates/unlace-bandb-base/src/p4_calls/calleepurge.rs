@@ -844,7 +844,7 @@ fn kind(v: &VarnodeData) -> Option<spacetype> {
 }
 
 fn konst(v: &VarnodeData) -> Option<i64> {
-    (kind(v) == Some(spacetype::IPTR_CONSTANT)).then(|| v.offset as u32 as i32 as i64)
+    (kind(v) == Some(spacetype::IPTR_CONSTANT)).then_some(v.offset as u32 as i32 as i64)
 }
 
 /// The call an instruction ends in.
@@ -961,20 +961,18 @@ fn msvc_saved_sp(
     let saves_sp = size == 4 && sp.is_some() && value.and_then(Val::as_exact) == sp;
     if saves_sp && !slot.is_some_and(|o| o < 0) {
         trace(|| format!("msvc: esp {sp:?} stored to {at:?}, not a frame slot"));
-    } else if saves_sp {
-        if let (Some(o), Some(v)) = (slot, value.and_then(Val::as_exact)) {
+    } else if saves_sp
+        && let (Some(o), Some(v)) = (slot, value.and_then(Val::as_exact)) {
             trace(|| format!("msvc: saved esp {v:#x} in slot {o:#x}"));
             state.3 = Some((o, v));
             return;
         }
-    }
-    if let (Some((o, _)), Some(w)) = (state.3, slot) {
-        if w < o + 4 && o < w + size as i64 {
+    if let (Some((o, _)), Some(w)) = (state.3, slot)
+        && w < o + 4 && o < w + size as i64 {
             trace(|| format!("msvc: saved esp slot {o:#x} overwritten"));
             state.3 = None;
             return;
         }
-    }
     let unlinks = ins.get(1).is_some_and(|a| from_fs(a, regs, fs_temps))
         && !matches!(value, Some(Val::Stack { .. }));
     if unlinks {
@@ -985,13 +983,11 @@ fn msvc_saved_sp(
             )
         });
     }
-    if let (true, Some((_, saved))) = (unlinks, state.3) {
-        if let Some(Val::Stack { lo, hi, own: false }) = state.0[SP] {
-            if lo <= saved && saved <= hi && lo != hi {
+    if let (true, Some((_, saved))) = (unlinks, state.3)
+        && let Some(Val::Stack { lo, hi, own: false }) = state.0[SP]
+            && lo <= saved && saved <= hi && lo != hi {
                 state.0[SP] = Some(Val::exact(saved));
             }
-        }
-    }
 }
 
 /// (`calleeargsmsvc`) Record the slot a push of a callee-saved register that
@@ -1023,12 +1019,11 @@ fn note_saved_register(
     let Some(i) = CALLEE_SAVED.iter().position(|&c| c == r) else {
         return;
     };
-    if let Some(o) = at.and_then(Val::as_exact).filter(|&o| o < 0 && size == 4) {
-        if state.5 & saved_bit(r) != 0 && state.4[i].is_none() {
+    if let Some(o) = at.and_then(Val::as_exact).filter(|&o| o < 0 && size == 4)
+        && state.5 & saved_bit(r) != 0 && state.4[i].is_none() {
             trace(|| format!("msvc: {} saved in slot {o:#x}", GPRS[r]));
             state.4[i] = Some(o);
         }
-    }
 }
 
 /// (`calleeargsmsvc`) The slot a pop restores a callee-saved register from:
@@ -1194,19 +1189,17 @@ pub fn step_with(
                 }
             }
             OpCode::CPUI_LOAD => {
-                if let (Some(o), Some(a)) = (out.as_ref(), ins.get(1)) {
-                    if unique(o) && kind(a) == Some(spacetype::IPTR_CONSTANT) {
+                if let (Some(o), Some(a)) = (out.as_ref(), ins.get(1))
+                    && unique(o) && kind(a) == Some(spacetype::IPTR_CONSTANT) {
                         loaded_from.push((o.offset, a.offset));
                     }
-                }
                 let size = out.as_ref().map_or(4, |o| o.size);
                 let mut at = vals.get(1).copied().flatten();
-                if regs.fs.is_some() {
-                    if let Some(slot) = restore_slot(&s.state, regs, out.as_ref(), at) {
+                if regs.fs.is_some()
+                    && let Some(slot) = restore_slot(&s.state, regs, out.as_ref(), at) {
                         s.state.0[SP] = Some(Val::exact(slot));
                         at = Some(Val::exact(slot));
                     }
-                }
                 touch(at, size, &mut s.arg_end, &mut s.unplaced);
                 s.unplaced |= lost_at(1);
                 out_lost = track && s.state.2 & slots_in(at, size) != 0;

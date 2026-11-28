@@ -1291,11 +1291,10 @@ impl<'a> Parser<'a> {
 
     fn pop_assoc_type_name(&mut self) -> Option<NodeRef> {
         let proto = self.pop_kind(Kind::Type);
-        if let Some(p) = &proto {
-            if !is_protocol_type(p) {
+        if let Some(p) = &proto
+            && !is_protocol_type(p) {
                 return None;
             }
-        }
         let id = self.pop_kind(Kind::Identifier)?;
         let mut children = vec![id];
         children.extend(proto);
@@ -1980,11 +1979,10 @@ impl<'a> Parser<'a> {
                     }
                     let name = self.pop_kind(Kind::Identifier)?;
                     let mut text = name.get_text().to_string();
-                    if pk == CP_STRING {
-                        if let Some(t) = text.strip_prefix('_') {
+                    if pk == CP_STRING
+                        && let Some(t) = text.strip_prefix('_') {
                             text = t.to_string();
                         }
-                    }
                     extra.push(Node::text(
                         Kind::FunctionSignatureSpecializationParamPayload,
                         text,

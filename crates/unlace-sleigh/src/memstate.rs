@@ -798,11 +798,10 @@ impl MemoryBank for MemoryPageOverlay {
             // (C++ leaves a full-page write's new page uninitialized; it is
             // entirely overwritten below.  Zero-filled here.)
             let mut pageptr = vec![0u8; pagesize as usize];
-            if size != pagesize {
-                if let Some(underlie) = &self.underlie {
+            if size != pagesize
+                && let Some(underlie) = &self.underlie {
                     underlie.borrow().get_page(addr, &mut pageptr, 0)?;
                 }
-            }
             self.page.insert(addr, pageptr);
         }
 

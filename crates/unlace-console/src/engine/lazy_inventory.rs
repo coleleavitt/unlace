@@ -90,9 +90,8 @@ impl ConsoleProgram {
         }
         for &(vma, _) in &self.anonymous_entries {
             let vma = self.thumb_normalized(vma);
-            match entries.binary_search_by_key(&vma, |entry| entry.addr.get_offset()) {
-                Ok(i) => self.merge_anonymous_name(&mut entries[i], vma),
-                Err(_) => {}
+            if let Ok(i) = entries.binary_search_by_key(&vma, |entry| entry.addr.get_offset()) {
+                self.merge_anonymous_name(&mut entries[i], vma);
             }
         }
         let named: std::collections::HashSet<u64> = entries

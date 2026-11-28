@@ -288,7 +288,7 @@ fn a32_tables_are_read_with_condition_skips() {
     let tables: Vec<_> = idx
         .switch_tables()
         .iter()
-        .map(|t| (t.dispatch, t.cases.clone()))
+        .map(|t| (t.dispatch, t.cases))
         .collect();
     assert_eq!(tables.len(), 1, "{tables:?}");
     assert_eq!(tables[0].0, 0x10084);

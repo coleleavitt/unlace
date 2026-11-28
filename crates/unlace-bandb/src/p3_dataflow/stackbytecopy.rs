@@ -159,7 +159,7 @@ fn trip_count(fd: &Funcdata, block: BlockId) -> Option<usize> {
                     .op_behavior(op.code())
                     .is_some_and(|behavior| !behavior.is_special()) =>
             {
-                ()
+                
             }
             _ => return None,
         }
@@ -350,7 +350,7 @@ impl Action for ActionStackByteCopy {
         &mut self.base
     }
     fn clone_filtered(&self, groups: &ActionGroupList) -> Option<Box<dyn Action>> {
-        groups.contains(self.get_group()).then(|| Self::boxed())
+        groups.contains(self.get_group()).then(Self::boxed)
     }
     fn apply(&mut self, fd: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !fd.stack_store_guard()

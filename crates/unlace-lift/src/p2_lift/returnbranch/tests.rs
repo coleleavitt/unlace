@@ -152,6 +152,7 @@ fn known_subregister_reads_match_the_written_bytes_without_crossing_storage() {
 
 /// A `visited` map in which each `(address, size)` is an instruction that
 /// emitted no p-code, as a MIPS `nop` does.
+#[allow(clippy::mutable_key_type)]
 fn without_pcode(fd: &Funcdata, run: &[(u64, i32)]) -> crate::flow::VisitedMap {
     let ram = fd.get_address().get_space().unwrap().clone();
     run.iter()
@@ -170,6 +171,7 @@ fn without_pcode(fd: &Funcdata, run: &[(u64, i32)]) -> crate::flow::VisitedMap {
 /// The whole run before the first operation emitted no p-code, so the
 /// prefix that follows it is still the entry prefix.
 #[test]
+#[allow(clippy::mutable_key_type)]
 fn instructions_emitting_no_pcode_may_precede_the_entry_prefix() {
     for leading in [&[(0x1000, 4)][..], &[(0x1000, 4), (0x1004, 4)][..]] {
         let first = leading.last().unwrap().0 + 4;
@@ -202,6 +204,7 @@ fn instructions_emitting_no_pcode_may_precede_the_entry_prefix() {
 /// does not reach the first operation, and an operation before the entry
 /// all leave the prefix unproven.
 #[test]
+#[allow(clippy::mutable_key_type)]
 fn a_gap_before_the_entry_prefix_is_not_assumed_empty() {
     let mut fd = function();
     emit(

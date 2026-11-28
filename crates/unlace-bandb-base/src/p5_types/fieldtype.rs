@@ -134,7 +134,7 @@ fn declared_as(data: &Funcdata, v: VarnodeId, t: &Datatype) -> bool {
             .filter(|&s| o.get_in(s) == Some(v))
             .any(|s| {
                 fc.proto().get_param(s - 1).is_some_and(|p| {
-                    p.is_type_locked() && p.get_type().is_some_and(|pt| same(&pt, t))
+                    p.is_type_locked() && p.get_type().is_some_and(|pt| same(pt, t))
                 })
             })
     })
@@ -258,10 +258,10 @@ fn copies(data: &Funcdata, v: VarnodeId) -> Vec<VarnodeId> {
             let Some(o) = data.obank().get(r) else {
                 continue;
             };
-            if matches!(o.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST) {
-                if let Some(out) = o.get_out().filter(|out| !all.contains(out)) {
-                    all.push(out);
-                }
+            if matches!(o.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST)
+                && let Some(out) = o.get_out().filter(|out| !all.contains(out))
+            {
+                all.push(out);
             }
         }
         i += 1;
@@ -656,17 +656,15 @@ fn uses(data: &Funcdata, v: VarnodeId) -> String {
     tags.join(",")
 }
 
+type TraceField<'a> = (
+    &'a TypeField,
+    int4,
+    &'a [(Option<Rc<Datatype>>, Option<VarnodeId>)],
+);
+
 /// Print one [`trace_on`] line per field of the record synthesized over `base`.
 #[doc(hidden)]
-pub fn trace(
-    data: &Funcdata,
-    base: VarnodeId,
-    fields: &[(
-        &TypeField,
-        int4,
-        &[(Option<Rc<Datatype>>, Option<VarnodeId>)],
-    )],
-) {
+pub fn trace(data: &Funcdata, base: VarnodeId, fields: &[TraceField<'_>]) {
     let fa = data.get_address().get_offset();
     for (f, width, accesses) in fields {
         let acc: Vec<String> = accesses

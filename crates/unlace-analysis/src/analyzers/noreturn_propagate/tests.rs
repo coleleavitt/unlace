@@ -59,7 +59,7 @@ fn reach_walk_follows_conditional_jump_fallthrough_to_ret() {
         ..Default::default()
     };
     // entry → cjump[→ 0x100 terminal] (fall-through) → RET
-    let insns = vec![
+    let insns = [
         mk_insn(0x0, Some(0x2), straight, vec![]),
         mk_insn(0x2, Some(0x4), cjump, vec![0x100]),
         mk_insn(0x4, Some(0x6), straight, vec![]),
@@ -86,7 +86,7 @@ fn reach_walk_follows_conditional_jump_fallthrough_to_ret() {
         is_jump: true,
         ..Default::default()
     };
-    let only = vec![mk_insn(0x0, None, ujump, vec![0x100])];
+    let only = [mk_insn(0x0, None, ujump, vec![0x100])];
     let body2: BTreeMap<u64, &crate::listing::model::Insn> =
         only.iter().map(|i| (i.addr, i)).collect();
     assert!(
@@ -129,9 +129,11 @@ fn parse_imm_reads_hex_and_decimal() {
 
 /// Build a minimal straight-line `Insn` (fields the recognizer reads).
 fn insn(mnemonic: &str, operands: &str, is_call: bool, is_jump: bool) -> Insn {
-    let mut flow = crate::listing::model::FlowType::default();
-    flow.is_call = is_call;
-    flow.is_jump = is_jump;
+    let flow = crate::listing::model::FlowType {
+        is_call,
+        is_jump,
+        ..Default::default()
+    };
     Insn {
         addr: 0,
         len: 1,
@@ -167,28 +169,25 @@ fn arg0_nonzero_const_rejects_zero_and_nonconst_and_intervening_call() {
     let call = insn("CALL", "0x4de0", true, false);
     // XOR EDI,EDI → 0 (error() returns).
     let z = insn("XOR", "EDI,EDI", false, false);
-    assert!(!arg0_is_nonzero_const(&vec![(0, &z), (1, &call)], 1));
+    assert!(!arg0_is_nonzero_const(&[(0, &z), (1, &call)], 1));
     // MOV EDI,0x0 → 0.
     let m0 = insn("MOV", "EDI,0x0", false, false);
-    assert!(!arg0_is_nonzero_const(&vec![(0, &m0), (1, &call)], 1));
+    assert!(!arg0_is_nonzero_const(&[(0, &m0), (1, &call)], 1));
     // MOV EDI,EAX → not a literal (unprovable) → conservative reject.
     let mr = insn("MOV", "EDI,EAX", false, false);
-    assert!(!arg0_is_nonzero_const(&vec![(0, &mr), (1, &call)], 1));
+    assert!(!arg0_is_nonzero_const(&[(0, &mr), (1, &call)], 1));
     // MOV EDI,0x2 then an intervening CALL clobbers edi → reject.
     let m2 = insn("MOV", "EDI,0x2", false, false);
     let clobber = insn("CALL", "0x1234", true, false);
     assert!(!arg0_is_nonzero_const(
-        &vec![(0, &m2), (1, &clobber), (2, &call)],
+        &[(0, &m2), (1, &clobber), (2, &call)],
         2
     ));
     // A branch between the def and the call breaks dominance → reject.
     let br = insn("JMP", "0x9", false, true);
-    assert!(!arg0_is_nonzero_const(
-        &vec![(0, &m2), (1, &br), (2, &call)],
-        2
-    ));
+    assert!(!arg0_is_nonzero_const(&[(0, &m2), (1, &br), (2, &call)], 2));
     // No writer at all → reject.
-    assert!(!arg0_is_nonzero_const(&vec![(0, &call)], 0));
+    assert!(!arg0_is_nonzero_const(&[(0, &call)], 0));
 }
 
 #[test]
@@ -283,13 +282,15 @@ fn rinsn(
     is_indirect: bool,
     has_fallthrough: bool,
 ) -> Insn {
-    let mut flow = crate::listing::model::FlowType::default();
-    flow.is_call = is_call;
-    flow.is_jump = is_jump;
-    flow.is_terminal = is_terminal;
-    flow.is_computed = is_computed;
-    flow.is_indirect = is_indirect;
-    flow.has_fallthrough = has_fallthrough;
+    let flow = crate::listing::model::FlowType {
+        is_call,
+        is_jump,
+        is_terminal,
+        is_computed,
+        is_indirect,
+        has_fallthrough,
+        ..Default::default()
+    };
     Insn {
         addr,
         len: 1,

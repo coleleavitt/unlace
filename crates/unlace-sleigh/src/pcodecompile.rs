@@ -278,8 +278,8 @@ fn force_size_propagate(
     ops: &mut [OpTpl],
 ) -> UnlaceResult<()> {
     for op in ops.iter_mut() {
-        if let Some(vn) = op.get_out_mut() {
-            if vn.is_local_temp() && *vn.get_offset() == *vt_offset {
+        if let Some(vn) = op.get_out_mut()
+            && vn.is_local_temp() && *vn.get_offset() == *vt_offset {
                 if size.get_type() == ConstType::Real
                     && vn.get_size().get_type() == ConstType::Real
                     && vn.get_size().get_real() != 0
@@ -289,7 +289,6 @@ fn force_size_propagate(
                 }
                 vn.set_size(size.clone());
             }
-        }
         for j in 0..op.num_input() {
             let vn = op.get_in_mut(j);
             if vn.is_local_temp() && *vn.get_offset() == *vt_offset {
@@ -363,13 +362,11 @@ pub fn match_size(j: i32, op_index: usize, inputonly: bool, ops: &mut [OpTpl]) -
     let matched: Option<ConstTpl> = {
         let op = &ops[op_index];
         let mut found: Option<&VarnodeTpl> = None;
-        if !inputonly {
-            if let Some(out) = op.get_out() {
-                if !out.is_zero_size() {
+        if !inputonly
+            && let Some(out) = op.get_out()
+                && !out.is_zero_size() {
                     found = Some(out);
                 }
-            }
-        }
         let inputsize = op.num_input();
         for i in 0..inputsize {
             if found.is_some() {

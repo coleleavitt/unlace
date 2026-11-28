@@ -179,8 +179,7 @@ impl PrintC {
                 .unlace_options
                 .get::<crate::rustfmt::RustFmtMode>()
                 .writers()
-        {
-            if let Some(plan) = super::super::rustfmtio::recover(fd, arch, op) {
+            && let Some(plan) = super::super::rustfmtio::recover(fd, arch, op) {
                 let result = if plan.signed_result {
                     &super::super::rustfmtio::WITH_SIGNED_RESULT
                 } else {
@@ -201,14 +200,12 @@ impl PrintC {
                 );
                 return;
             }
-        }
         if self.out_lang == crate::lang::OutLang::Rust
             && arch
                 .unlace_options
                 .get::<crate::rustfmt::RustFmtMode>()
                 .writers()
-        {
-            if let Some(plan) = super::super::rustfmtwrite::recover(fd, arch, op) {
+            && let Some(plan) = super::super::rustfmtwrite::recover(fd, arch, op) {
                 if plan.result_type.is_some() {
                     self.push_op(self.lang().tok_typecast, Some(op_key(op)));
                 }
@@ -249,36 +246,30 @@ impl PrintC {
                 }
                 return;
             }
-        }
         if self.out_lang == crate::lang::OutLang::Rust
             && arch
                 .unlace_options
                 .get::<crate::rustfmt::RustFmtMode>()
                 .recovers()
-        {
-            if let Some(plan) = super::super::rustfmtpieces::recover(fd, arch, op) {
+            && let Some(plan) = super::super::rustfmtpieces::recover(fd, arch, op) {
                 self.push_rust_format_plan(fd, arch, op, plan);
                 return;
             }
-        }
         if self.out_lang == crate::lang::OutLang::Rust
             && arch
                 .unlace_options
                 .get::<crate::rustfmt::RustFmtMode>()
                 .recovers()
-        {
-            if let Some(plan) = super::super::rustfmtpanic::recover(fd, arch, op) {
+            && let Some(plan) = super::super::rustfmtpanic::recover(fd, arch, op) {
                 self.push_rust_format_plan(fd, arch, op, plan);
                 return;
             }
-        }
         if self.out_lang == crate::lang::OutLang::Rust
             && arch
                 .unlace_options
                 .get::<crate::rustfmt::RustFmtMode>()
                 .recovers()
-        {
-            if let Some(plan) = super::super::rustfmtresult::recover(fd, arch, op) {
+            && let Some(plan) = super::super::rustfmtresult::recover(fd, arch, op) {
                 self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
                 self.push_atom(&Atom::with_op(
                     "std::ptr::write",
@@ -307,25 +298,21 @@ impl PrintC {
                 self.push_rust_format_plan(fd, arch, op, plan.format);
                 return;
             }
-        }
         if self.out_lang == crate::lang::OutLang::Rust
             && arch
                 .unlace_options
                 .get::<crate::rustfmt::RustFmtMode>()
                 .recovers()
-        {
-            if let Some(plan) = super::super::rustfmtargs::recover(fd, arch, op) {
+            && let Some(plan) = super::super::rustfmtargs::recover(fd, arch, op) {
                 self.push_rust_format_plan(fd, arch, op, plan);
                 return;
             }
-        }
         if self.out_lang == crate::lang::OutLang::Rust
             && arch
                 .unlace_options
                 .get::<crate::rustfmt::RustFmtMode>()
                 .recovers()
-        {
-            if let Some((name, literal)) = super::super::rustfmtliteral::recover(fd, arch, op) {
+            && let Some((name, literal)) = super::super::rustfmtliteral::recover(fd, arch, op) {
                 self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
                 self.push_atom(&Atom::with_op(
                     name,
@@ -340,13 +327,11 @@ impl PrintC {
                 ));
                 return;
             }
-        }
-        if self.out_lang == crate::lang::OutLang::C {
-            if let Some(plan) = super::super::oslog::recover(fd, arch, op) {
+        if self.out_lang == crate::lang::OutLang::C
+            && let Some(plan) = super::super::oslog::recover(fd, arch, op) {
                 self.push_oslog_call(fd, arch, op, plan);
                 return;
             }
-        }
         if self.out_lang == crate::lang::OutLang::C
             && arch
                 .unlace_options
@@ -741,8 +726,8 @@ impl PrintC {
             inputs.len()
         };
         for (index, &vn) in inputs.iter().take(shown).enumerate() {
-            if index == 0 {
-                if let Some(header) = &plan.dso {
+            if index == 0
+                && let Some(header) = &plan.dso {
                     self.push_atom(&Atom::syntax(
                         format!("&{header}"),
                         TagType::Syntax,
@@ -750,7 +735,6 @@ impl PrintC {
                     ));
                     continue;
                 }
-            }
             self.push_call_argument_ir(fd, arch, vn, op, index as i32 + 1, proto);
         }
         for item in plan.items.unwrap_or_default() {
@@ -787,19 +771,16 @@ impl PrintC {
             }
             return;
         }
-        if self.out_lang == crate::lang::OutLang::Rust && !self.options.nocasts {
-            if let Some(target) = proto
+        if self.out_lang == crate::lang::OutLang::Rust && !self.options.nocasts
+            && let Some(target) = proto
                 .filter(|p| p.has_store())
                 .and_then(|p| p.get_param(slot - 1))
                 .and_then(|p| p.get_type())
-            {
-                if self.push_rust_array_pointer(fd, arch, vn, op, target)
-                    || self.push_rust_integer_as(fd, arch, vn, op, target)
+                && (self.push_rust_array_pointer(fd, arch, vn, op, target)
+                    || self.push_rust_integer_as(fd, arch, vn, op, target))
                 {
                     return;
                 }
-            }
-        }
         if self.out_lang != crate::lang::OutLang::C
             || !crate::indirectargs::is_indirect_value(
                 proto,

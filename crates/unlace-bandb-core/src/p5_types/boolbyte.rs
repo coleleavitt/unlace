@@ -154,11 +154,10 @@ pub fn truth_value_type(
     // the annotated call or store wrote the storage.  An input has no def and
     // always carries the full 0xff mask, so for a parameter the use shape below
     // is the whole of the evidence.
-    if v.is_written() {
-        if v.get_nz_mask() > 1 || !def_is_truth_valued(data, vn, 0) {
+    if v.is_written()
+        && (v.get_nz_mask() > 1 || !def_is_truth_valued(data, vn, 0)) {
             return None;
         }
-    }
     if !walk_is_truth_valued(data, vn) {
         return None;
     }

@@ -110,10 +110,11 @@ impl AddrTaken {
             };
             if is_indirect_jmp(bytes) {
                 dispatches.push(at);
-            } else if let Some(target) = materialized(at, bytes) {
-                if target != at.wrapping_add(u64::from(insn.len)) && listing.is_undefined(target) {
-                    out.entry(target).or_default().push(at);
-                }
+            } else if let Some(target) = materialized(at, bytes)
+                && target != at.wrapping_add(u64::from(insn.len))
+                && listing.is_undefined(target)
+            {
+                out.entry(target).or_default().push(at);
             }
         }
         (out, dispatches)

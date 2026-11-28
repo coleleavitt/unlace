@@ -526,7 +526,7 @@ pub fn crosses_skipped(
             && offset < hi
             && lo < offset.saturating_add(size as u64)
             && (partial || {
-                let addr = Address::new(std::rc::Rc::clone(&space), offset);
+                let addr = Address::new(std::rc::Rc::clone(space), offset);
                 if v.is_written() {
                     v.get_size() < size
                         && v.get_def()
@@ -611,8 +611,8 @@ fn walk(fd: &Funcdata, op: OpId, addr: &Address, size: int4, back: bool) -> bool
 }
 
 fn push(fd: &Funcdata, op: OpId, kind: u8, events: &mut Vec<Event>) {
-    if let Some(o) = fd.obank().get(op) {
-        if let Some(bl) = o.get_parent() {
+    if let Some(o) = fd.obank().get(op)
+        && let Some(bl) = o.get_parent() {
             events.push((
                 fd.bblocks_ref().block(bl).get_index() as usize,
                 o.get_seq_num().get_order(),
@@ -620,7 +620,6 @@ fn push(fd: &Funcdata, op: OpId, kind: u8, events: &mut Vec<Event>) {
                 op,
             ));
         }
-    }
 }
 
 fn num_blocks(fd: &Funcdata) -> usize {

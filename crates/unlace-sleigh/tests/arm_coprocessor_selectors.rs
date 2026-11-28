@@ -175,14 +175,13 @@ fn generic_transfers_use_encoded_selectors_and_live_cpu_registers() {
                                 let mut copies = HashMap::new();
                                 let mut calls = 0;
                                 for (code, out, ins) in &ops.0 {
-                                    if *code == OpCode::CPUI_COPY {
-                                        if let Some(out) = out {
+                                    if *code == OpCode::CPUI_COPY
+                                        && let Some(out) = out {
                                             copies.remove(&key(out));
                                             if let Some(value) = constant(&ins[0], &copies) {
                                                 copies.insert(key(out), value);
                                             }
                                         }
-                                    }
                                     if *code != OpCode::CPUI_CALLOTHER {
                                         continue;
                                     }

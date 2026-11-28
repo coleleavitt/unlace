@@ -187,10 +187,10 @@ pub(crate) fn name_matches(name: &str, exact: &[String], wildcard: &[String]) ->
     let (base, ns) = base_and_namespace(name);
     // Namespace guard: skip class methods. Global (no namespace) is allowed; the
     // sole allowed non-global namespace is exactly `std`.
-    if let Some(ns) = ns {
-        if ns != "std" {
-            return false;
-        }
+    if let Some(ns) = ns
+        && ns != "std"
+    {
+        return false;
     }
     let stripped = strip_leading_underscores(base);
     if stripped.is_empty() {

@@ -309,11 +309,9 @@ fn walk_block(data: &Funcdata, block: BlockId, st: &mut State, sp: Key, out: &mu
         };
         if op.code() == OpCode::CPUI_COPY
             && space_type(data, k.0) == Some(unlace_base::space::spacetype::IPTR_INTERNAL)
-        {
-            if let Some(src) = op.get_in(0).and_then(|v| key(data, v)) {
+            && let Some(src) = op.get_in(0).and_then(|v| key(data, v)) {
                 alias.insert(k, alias.get(&src).copied().unwrap_or(src));
             }
-        }
         st.write(k, val);
     }
 }

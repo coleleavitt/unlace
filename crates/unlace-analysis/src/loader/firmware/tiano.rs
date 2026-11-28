@@ -118,8 +118,8 @@ impl Sd<'_> {
         }
         let mut avail = num_char as u16;
         let mask = 1u16 << (15 - table_bits);
-        for ch in 0..num_char {
-            let len = bit_len[ch] as usize;
+        for (ch, &bl) in bit_len[..num_char].iter().enumerate() {
+            let len = bl as usize;
             if len == 0 || len >= 17 {
                 continue;
             }

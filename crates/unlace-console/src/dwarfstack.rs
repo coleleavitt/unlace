@@ -219,17 +219,14 @@ pub(crate) fn coalesce(
         if group.len() == 1 {
             result.extend(group);
         } else {
-            match backing(factory, function, &group) {
-                Ok(mut shared) => {
-                    let stem = shared.0.clone();
-                    let mut variant = 0;
-                    while !names.insert(shared.0.clone()) {
-                        variant += 1;
-                        shared.0 = format!("{stem}_{variant}");
-                    }
-                    result.push(shared);
+            if let Ok(mut shared) = backing(factory, function, &group) {
+                let stem = shared.0.clone();
+                let mut variant = 0;
+                while !names.insert(shared.0.clone()) {
+                    variant += 1;
+                    shared.0 = format!("{stem}_{variant}");
                 }
-                _ => {}
+                result.push(shared);
             }
         }
         first = next;

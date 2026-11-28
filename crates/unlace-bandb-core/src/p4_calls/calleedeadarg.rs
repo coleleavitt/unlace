@@ -566,7 +566,7 @@ impl CalleeEntryDead {
             && self
                 .skipped
                 .as_deref()
-                .map_or(true, |s| s.takes_none(idx, off, end))
+                .is_none_or(|s| s.takes_none(idx, off, end))
     }
 
     /// Does every path this walk covered, and every path past a conditional
@@ -588,7 +588,7 @@ impl CalleeEntryDead {
             && self
                 .skipped
                 .as_deref()
-                .map_or(true, |s| s.leaves_untouched(idx, off, end))
+                .is_none_or(|s| s.leaves_untouched(idx, off, end))
     }
 
     /// Drop the spare capacity the walk left, since the run keeps the summary
@@ -1107,13 +1107,11 @@ impl unlace_sleigh::translate::PcodeEmit for EntryEmit {
         outvar: Option<&VarnodeData>,
         vars: &[VarnodeData],
     ) {
-        if matches!(opc, OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH) {
-            if let Some(sp) = vars.first().and_then(|v| v.space.as_ref()) {
-                if sp.get_type() == spacetype::IPTR_CONSTANT {
+        if matches!(opc, OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH)
+            && let Some(sp) = vars.first().and_then(|v| v.space.as_ref())
+                && sp.get_type() == spacetype::IPTR_CONSTANT {
                     self.internal_flow = true;
                 }
-            }
-        }
         self.ops.push(RawOp {
             opc,
             out: outvar.cloned(),
@@ -1446,12 +1444,11 @@ fn walk<T: unlace_sleigh::translate::Translate + ?Sized>(
         // A revisit whose incoming written set is a SUPERSET of one already
         // processed adds nothing: the earlier, more conservative pass recorded
         // at least every read-before-write this one would.
-        if let Some(prev) = visited.get(&key) {
-            if prev.is_subset(&frame.written) {
+        if let Some(prev) = visited.get(&key)
+            && prev.is_subset(&frame.written) {
                 frame.pushed.flush(res);
                 continue;
             }
-        }
         visited.insert(key, frame.written.clone());
         if budget == 0 || res.cuts.len() > MAX_CUTS || frame.written.len() > MAX_WRITTEN_BYTES {
             res.complete = false;
@@ -1801,10 +1798,10 @@ fn step_instruction(
             _ => {}
         }
         // Writes, credited only for an instruction with no internal branching.
-        if !emit.internal_flow {
-            if let Some(o) = &op.out {
-                if let Some(sp) = o.space.as_ref() {
-                    if sp.get_index() == res.reg_idx {
+        if !emit.internal_flow
+            && let Some(o) = &op.out
+                && let Some(sp) = o.space.as_ref()
+                    && sp.get_index() == res.reg_idx {
                         let idx = res.reg_idx;
                         for b in o.offset..o.offset + o.size as u64 {
                             if cur.insert((idx, b)) && !targets.is_empty() {
@@ -1816,9 +1813,6 @@ fn step_instruction(
                             return None;
                         }
                     }
-                }
-            }
-        }
     }
     let mut next: Vec<Frame> = targets
         .into_iter()
@@ -1988,11 +1982,9 @@ pub fn seed_callee_entry_dead(arch: &mut crate::architecture::Architecture, data
                 .get::<crate::protoorder::CalleeTypes>()
                 .get(&key)
                 .is_some_and(|s| !s.inputs.is_empty())
-        {
-            if let Some(t) = reads_through_calls(arch, &e, reg_idx, &mut through_memo) {
+            && let Some(t) = reads_through_calls(arch, &e, reg_idx, &mut through_memo) {
                 data.unlace_set_callee_entry_through(&e, t);
             }
-        }
         // `argclobber` also needs what this callee can FORWARD, which is a walk
         // over the bodies it calls in turn and so cannot be answered at the
         // seam either.

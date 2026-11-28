@@ -79,21 +79,19 @@ pub fn cast(
     if c_int(data, strat, vn, op)? != (false, size) {
         return None;
     }
-    if let Some(other) = other {
-        if c_int(data, strat, other, op).is_some_and(|(unsigned, width)| unsigned && width >= size)
+    if let Some(other) = other
+        && c_int(data, strat, other, op).is_some_and(|(unsigned, width)| unsigned && width >= size)
         {
             return None;
         }
-    }
-    if let Some(c) = suffixable_literal(data, vn) {
-        if let Some(cv) = data.vbank_mut().get_mut(c) {
+    if let Some(c) = suffixable_literal(data, vn)
+        && let Some(cv) = data.vbank_mut().get_mut(c) {
             cv.set_unsigned_print();
             if size > 4 {
                 cv.set_long_print();
             }
             return None;
         }
-    }
     data.get_arch()
         .types_rc()?
         .get_base(size, type_metatype::TYPE_UINT)

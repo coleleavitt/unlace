@@ -624,11 +624,10 @@ impl UnlaceRegionIdentifier {
             let mut edges: Vec<(UnlaceNodeId, UnlaceNodeId)> = Vec::new();
             g.all_edges(&mut edges);
             for (src, dst) in edges {
-                if let Some(en) = entry_node {
-                    if dst == en {
+                if let Some(en) = entry_node
+                    && dst == en {
                         continue; // The entry node must never be merged INTO (RI l.253)
                     }
-                }
                 if g.size_out(src)? == 1
                     && g.size_in(dst)? == 1
                     && src != dst
@@ -1213,7 +1212,7 @@ impl UnlaceRegionIdentifier {
             // C++ `sort(keyed)`: lexicographic by (postorder index, pointer).
             // The pointer tiebreaker is unobservable (postorder indices are
             // unique); sort by index, stable on insertion order for safety.
-            keyed.sort_by(|a, b| a.0.cmp(&b.0));
+            keyed.sort_by_key(|a| a.0);
             normal_exit = Some(keyed[0].1);
             for k in keyed.iter().skip(1) {
                 abnormal_exits.insert(self.pool.key(k.1));
@@ -2095,16 +2094,14 @@ impl UnlaceRegionIdentifier {
                         for &m in node.get_chain() {
                             children_blocks.push(self.pool.get(m).get_addr());
                         }
-                    } else if node.is_region() {
-                        if let Some(sub) = node.get_region() {
-                            if !seen_regions.contains(&sub) {
+                    } else if node.is_region()
+                        && let Some(sub) = node.get_region()
+                            && !seen_regions.contains(&sub) {
                                 children_regions.push(sub);
                                 let sub_head = self.region_pool[sub.0 as usize].head.unwrap();
                                 children_blocks.push(self.pool.get(sub_head).get_addr());
                                 seen_regions.insert(sub);
                             }
-                        }
-                    }
                     // k_dummy: skip (never appears in region graphs).
                 }
                 if !children_blocks.is_empty() {

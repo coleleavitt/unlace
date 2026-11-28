@@ -345,17 +345,15 @@ impl FuncdataCallTransportLocalExt for Funcdata {
             let Some(definition) = value.get_def().and_then(|op| self.obank().get(op)) else {
                 continue;
             };
-            if definition.code() == OpCode::CPUI_COPY {
-                if let Some(input) = definition.get_in(0) {
-                    if self
+            if definition.code() == OpCode::CPUI_COPY
+                && let Some(input) = definition.get_in(0)
+                    && self
                         .vbank()
                         .get(input)
                         .is_some_and(|v| v.get_size() == value.get_size())
                     {
                         pending.push(input);
                     }
-                }
-            }
         }
         false
     }

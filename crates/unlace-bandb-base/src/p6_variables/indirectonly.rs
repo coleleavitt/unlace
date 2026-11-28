@@ -9,10 +9,6 @@
 //! source. Destination-side merges can be sound, but this pass does not
 //! distinguish those cases. See `docs/features/indirectonly/counterexample.md`.
 
-#[expect(
-    clippy::disallowed_types,
-    reason = "Membership only; the Vec worklist determines traversal order."
-)]
 use std::collections::HashSet;
 
 use unlace_base::error::UnlaceResult;
@@ -31,10 +27,6 @@ use crate::varnode::varnode_flags;
 /// INDIRECT op.
 pub fn check_indirect_use(data: &Funcdata, vn: VarnodeId) -> bool {
     let mut vlist: Vec<VarnodeId> = vec![vn];
-    #[expect(
-        clippy::disallowed_types,
-        reason = "Only insert is used; set iteration cannot affect output."
-    )]
     let mut mark: HashSet<VarnodeId> = HashSet::new();
     mark.insert(vn);
 
@@ -55,17 +47,17 @@ pub fn check_indirect_use(data: &Funcdata, vn: VarnodeId) -> bool {
                 if indirect_store {
                     // INDIRECT from a STORE is not a negative result but
                     // continue to follow data-flow.
-                    if let Some(out) = outvn {
-                        if mark.insert(out) {
-                            vlist.push(out);
-                        }
+                    if let Some(out) = outvn
+                        && mark.insert(out)
+                    {
+                        vlist.push(out);
                     }
                 }
             } else if opc == OpCode::CPUI_MULTIEQUAL {
-                if let Some(out) = outvn {
-                    if mark.insert(out) {
-                        vlist.push(out);
-                    }
+                if let Some(out) = outvn
+                    && mark.insert(out)
+                {
+                    vlist.push(out);
                 }
             } else {
                 result = false;

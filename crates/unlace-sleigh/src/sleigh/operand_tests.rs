@@ -343,7 +343,6 @@ fn borrowed_builder_cursor_uses_target_tree_and_cross_addresses() {
     assert_eq!(builder.cur.breadcrumb[0], 0);
     walker.pop_operand().unwrap();
     assert_eq!(walker.get_constructor().unwrap().ct_id, 0);
-    drop(walker);
 
     builder.cur.point = Some(1);
     builder.cur.depth = 1;

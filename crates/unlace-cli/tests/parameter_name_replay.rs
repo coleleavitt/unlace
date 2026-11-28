@@ -6,7 +6,7 @@ use object::write::{Object, Symbol, SymbolSection};
 use object::{
     Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const ADD: &[u8] = &[0x8d, 0x46, 0x01, 0xc3];
@@ -51,7 +51,7 @@ fn image_with_callee(bytes: &[u8], callee: Option<usize>) -> PathBuf {
 }
 
 fn run(
-    image: &PathBuf,
+    image: &Path,
     prototype: &str,
     assertions: &[&str],
     json: bool,
@@ -86,7 +86,7 @@ fn run(
     common::run_unlace(&args)
 }
 
-fn decompile(image: &PathBuf, prototype: &str, assertions: &[&str]) -> String {
+fn decompile(image: &Path, prototype: &str, assertions: &[&str]) -> String {
     let mut code = None;
     for (json, batch) in [(false, false), (true, false), (true, true)] {
         let (stdout, stderr, status) = run(image, prototype, assertions, json, batch);
@@ -109,11 +109,11 @@ fn decompile(image: &PathBuf, prototype: &str, assertions: &[&str]) -> String {
     code.unwrap()
 }
 
-fn semantic_oracle(image: &PathBuf, emitted: &[String], msabi: bool) {
+fn semantic_oracle(image: &Path, emitted: &[String], msabi: bool) {
     semantic_oracle_with_callee(image, emitted, msabi, "");
 }
 
-fn semantic_oracle_with_callee(image: &PathBuf, emitted: &[String], msabi: bool, support: &str) {
+fn semantic_oracle_with_callee(image: &Path, emitted: &[String], msabi: bool, support: &str) {
     semantic_oracle_with_parameter(
         image,
         emitted,
@@ -125,7 +125,7 @@ fn semantic_oracle_with_callee(image: &PathBuf, emitted: &[String], msabi: bool,
 }
 
 fn semantic_oracle_with_parameter(
-    image: &PathBuf,
+    image: &Path,
     emitted: &[String],
     msabi: bool,
     support: &str,

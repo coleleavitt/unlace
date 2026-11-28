@@ -182,10 +182,10 @@ impl CallbackSink for CallbackEvidence {
         let rank = callback_rank(target);
         self.refs.insert(target, source);
         self.ranks.insert((rank, target));
-        if self.refs.len() > super::callbackentry::MAX_CALLBACK_EVIDENCE {
-            if let Some(worst) = self.ranks.pop_last() {
-                self.refs.remove(&worst.1);
-            }
+        if self.refs.len() > super::callbackentry::MAX_CALLBACK_EVIDENCE
+            && let Some(worst) = self.ranks.pop_last()
+        {
+            self.refs.remove(&worst.1);
         }
     }
 }
@@ -494,6 +494,7 @@ impl Successors for Worklists<'_> {
 /// edge per successor, a fall-through included, so on a large program this is
 /// the same order of magnitude as the instruction model itself; `false` leaves
 /// both maps empty for a caller that reads neither.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn walk(
     translate: &dyn Translate,
     arch: &Architecture,
@@ -583,10 +584,7 @@ pub(super) fn extend_x86(
     }
     let mut called = Vec::new();
     let mut checked_at = state.insns.len();
-    loop {
-        let Some(at) = pending.pop().or_else(|| called.pop()) else {
-            break;
-        };
+    while let Some(at) = pending.pop().or_else(|| called.pop()) {
         let mut work = Worklists {
             insns: pending,
             funcs: &mut called,

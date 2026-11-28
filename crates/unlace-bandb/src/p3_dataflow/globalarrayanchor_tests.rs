@@ -22,7 +22,6 @@ use module_scope::*;
 use crate::action::Rule;
 use crate::context::{ArchContext, GlobalEntry, GlobalQuery};
 use crate::dtype::{Datatype, TypeFactory, TypeFactoryImpl};
-use crate::globalarrayanchor::*;
 use crate::ruleaction_3::RuleCollapseConstants;
 use std::rc::Rc;
 use unlace_base::address::RangeList;

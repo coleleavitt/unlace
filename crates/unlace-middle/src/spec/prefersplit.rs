@@ -455,10 +455,7 @@ impl PreferSplitManager {
         } else {
             inst.splitoffset
         };
-        if vn_get_size(data, invn) != losize {
-            return false;
-        }
-        true
+        vn_get_size(data, invn) == losize
     }
 
     /// C++ `splitZext`.

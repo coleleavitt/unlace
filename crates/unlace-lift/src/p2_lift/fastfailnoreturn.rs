@@ -164,11 +164,10 @@ where
                 .and_then(|v| userop_name(v.get_offset() as u32))
                 .map(|n| n == SWI_USEROP)
                 .unwrap_or(false);
-            if let Some(vector) = vector {
-                if feeds_call && is_swi {
+            if let Some(vector) = vector
+                && feeds_call && is_swi {
                     return Some(vector);
                 }
-            }
         }
         if curref.is_instruction_start() || pos == 0 {
             return None;

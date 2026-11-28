@@ -375,16 +375,14 @@ impl UnlaceRegionGraph {
 
     /// Remove edge if present (C++ `removeEdge`).
     pub fn remove_edge(&mut self, a: UnlaceNodeId, b: UnlaceNodeId) {
-        if let Some(adj) = self.node_mut(a) {
-            if let Some(pos) = adj.succs.iter().position(|&x| x == b) {
+        if let Some(adj) = self.node_mut(a)
+            && let Some(pos) = adj.succs.iter().position(|&x| x == b) {
                 adj.succs.remove(pos);
             }
-        }
-        if let Some(adj) = self.node_mut(b) {
-            if let Some(pos) = adj.preds.iter().position(|&x| x == a) {
+        if let Some(adj) = self.node_mut(b)
+            && let Some(pos) = adj.preds.iter().position(|&x| x == a) {
                 adj.preds.remove(pos);
             }
-        }
     }
 
     /// In-degree (C++ `sizeIn`).
@@ -426,7 +424,7 @@ impl UnlaceRegionGraph {
         n: UnlaceNodeId,
     ) -> UnlaceResult<Vec<UnlaceNodeId>> {
         let mut res = self.get_succs(n)?.to_vec();
-        res.sort_by(|&a, &b| pool.key(a).cmp(&pool.key(b)));
+        res.sort_by_key(|&a| pool.key(a));
         Ok(res)
     }
 
@@ -439,7 +437,7 @@ impl UnlaceRegionGraph {
     ) -> UnlaceResult<()> {
         res.clear();
         res.extend_from_slice(self.get_succs(n)?);
-        res.sort_by(|&a, &b| pool.key(a).cmp(&pool.key(b)));
+        res.sort_by_key(|&a| pool.key(a));
         Ok(())
     }
 
@@ -1080,7 +1078,7 @@ fn unlace_append_scc(
             // Pick the successor with the lowest total pairwise distance; on a
             // distance tie the LAST one (in addr order) wins, matching angr's
             // dict-inversion {v: k} semantics.
-            scc_succs.sort_by(|&a, &b| pool.key(a).cmp(&pool.key(b)));
+            scc_succs.sort_by_key(|&a| pool.key(a));
             // Overwrites on collision = last wins (C++ map<int4,...>).
             let mut dist_to_node: BTreeMap<int4, UnlaceNodeId> = BTreeMap::new();
             for &j in scc_succs.iter() {
@@ -1562,7 +1560,7 @@ impl UnlaceIncrementalDominators {
     /// re-sort by the pool key for deterministic iteration).
     fn doms_in_order(&self, pool: &UnlaceNodePool) -> Vec<UnlaceNodeId> {
         let mut v: Vec<UnlaceNodeId> = self.doms.keys().copied().collect();
-        v.sort_by(|&a, &b| pool.key(a).cmp(&pool.key(b)));
+        v.sort_by_key(|&a| pool.key(a));
         v
     }
 

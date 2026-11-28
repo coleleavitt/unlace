@@ -75,7 +75,7 @@ fn the_sweep_spares_a_live_owner() {
     File::create(dead.join(OWNER_LOCK)).unwrap();
     std::fs::create_dir_all(&unrelated).unwrap();
 
-    sweep_stale_scratch(&temp);
+    sweep_stale_scratch(temp);
 
     assert!(
         mine.is_dir(),

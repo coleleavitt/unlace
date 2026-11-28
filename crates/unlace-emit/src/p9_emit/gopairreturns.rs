@@ -224,9 +224,7 @@ impl PrintC {
         arch: &Architecture,
         op: OpId,
     ) -> Option<usize> {
-        let Some(fields) = call_fields(&self.rt_ctx, fd, op) else {
-            return None;
-        };
+        let fields = call_fields(&self.rt_ctx, fd, op)?;
         let projection = call_projection(fd, arch, op);
         if projection.is_some() {
             self.push_op(&tokens::OBJECT_MEMBER, Some(op_key(op)));

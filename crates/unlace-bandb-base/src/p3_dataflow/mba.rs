@@ -288,7 +288,7 @@ fn minimal_exprs(n: usize) -> Vec<Expr> {
         };
         for (ta, oa, a) in &known {
             offer(!ta & full, oa + 1, &|| Expr::Not(Box::new(a.clone())));
-            for (tb, ob, b) in known.iter().filter(|(_, ob, _)| oa + ob + 1 <= 9) {
+            for (tb, ob, b) in known.iter().filter(|(_, ob, _)| oa + ob < 9) {
                 let pair = || (Box::new(a.clone()), Box::new(b.clone()));
                 offer(ta & tb, oa + ob + 1, &|| {
                     let (x, y) = pair();
@@ -515,12 +515,13 @@ fn bi_decompositions(tt: u64, vars: &[usize], memo: &mut Memo) -> Vec<Expr> {
             .filter(|&j| bmask & (1 << j) != 0)
             .map(|j| vars[j])
             .collect();
-        let forms: [(
+        type Form = (
             fn(u64, u64) -> u64,
             u128,
             u128,
             fn(Box<Expr>, Box<Expr>) -> Expr,
-        ); 3] = [
+        );
+        let forms: [Form; 3] = [
             (|x, y| x | y, a_all, b_all, Expr::Or),
             (|x, y| x & y, a_any, b_any, Expr::And),
             (|x, y| x ^ y, a_x, b_x, Expr::Xor),

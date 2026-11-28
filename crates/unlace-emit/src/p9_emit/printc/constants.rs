@@ -370,8 +370,8 @@ impl PrintC {
     pub(super) fn push_float_ir(&mut self, arch: &Architecture, val: uintb, sz: int4, op: OpId) {
         use unlace_num::float::floatclass;
         let force_scinote = self.context.is_set(modifiers::FORCE_SCINOTE);
-        if self.out_lang == crate::lang::OutLang::Go && matches!(sz, 4 | 8) {
-            if let Some(format) = arch.translate().get_float_format(sz) {
+        if self.out_lang == crate::lang::OutLang::Go && matches!(sz, 4 | 8)
+            && let Some(format) = arch.translate().get_float_format(sz) {
                 let (_, class) = format.get_host_float(val);
                 if matches!(class, floatclass::infinity | floatclass::nan)
                     || val == (1u64 << (sz * 8 - 1))
@@ -385,7 +385,6 @@ impl PrintC {
                     return;
                 }
             }
-        }
         let tok = match arch.translate().get_float_format(sz) {
             None => format_float_token(FloatClass::Unknown, false, "", force_scinote),
             Some(format) => {
@@ -483,11 +482,10 @@ impl PrintC {
         // its NUL; an index that can reach past them -- or that nothing bounds --
         // reads bytes the literal does not have. A parser table whose bytes happen
         // to escape as text ends at its first zero byte, and the table does not.
-        if let Some(bound) = indexed {
-            if bound.is_none_or(|b| b > chars_emitted as uintb) {
+        if let Some(bound) = indexed
+            && bound.is_none_or(|b| b > chars_emitted as uintb) {
                 return false;
             }
-        }
         // (unlace emptystrconst) A zero-character literal names no byte of the
         // image, so it is strictly less informative than the address it would
         // displace -- unless the bytes there really are string data, which is
@@ -611,8 +609,8 @@ impl PrintC {
         let bigend = arch.translate().is_big_endian();
         let mut i: int4 = 0;
         let mut count = buffer.len() as int4;
-        if cut_at_bounded && char_type.get_size() == 1 {
-            if let Some(cut) = (1..buffer.len()).find(|&k| {
+        if cut_at_bounded && char_type.get_size() == 1
+            && let Some(cut) = (1..buffer.len()).find(|&k| {
                 addr.get_space().is_some_and(|spc| {
                     bounded_char_array(
                         arch,
@@ -625,7 +623,6 @@ impl PrintC {
                 count = cut as int4;
                 is_trunc = false;
             }
-        }
         while i < count {
             let mut skip: int4 = 1;
             let codepoint =

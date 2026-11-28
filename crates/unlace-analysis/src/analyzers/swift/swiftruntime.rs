@@ -741,11 +741,10 @@ impl Types<'_> {
     }
 
     fn pair(&self, name: &str, fields: [(&str, Rc<Datatype>); 2]) -> Option<Rc<Datatype>> {
-        if let Some(t) = self.tf.find_by_name(name).ok().flatten() {
-            if t.get_size() > 0 {
+        if let Some(t) = self.tf.find_by_name(name).ok().flatten()
+            && t.get_size() > 0 {
                 return Some(t);
             }
-        }
         let shell = self.tf.get_type_struct(name).ok()?;
         let fields = fields
             .into_iter()
@@ -770,11 +769,10 @@ impl Types<'_> {
 
     fn os_version(&self) -> Option<Rc<Datatype>> {
         let name = "swift.NSOperatingSystemVersion";
-        if let Some(t) = self.tf.find_by_name(name).ok().flatten() {
-            if t.get_size() > 0 {
+        if let Some(t) = self.tf.find_by_name(name).ok().flatten()
+            && t.get_size() > 0 {
                 return Some(t);
             }
-        }
         let word = self.tf.get_base(8, type_metatype::TYPE_INT).ok()?;
         let shell = self.tf.get_type_struct(name).ok()?;
         let fields = ["majorVersion", "minorVersion", "patchVersion"]

@@ -210,11 +210,10 @@ pub(super) fn merge(
                     segs.push(seg);
                 }
                 LC_UNIXTHREAD | LC_UUID | LC_BUILD_VERSION | LC_SOURCE_VERSION
-                    if all[i].filetype == MH_EXECUTE || !has_kernel =>
+                    if (all[i].filetype == MH_EXECUTE || !has_kernel)
+                        && !extra.iter().any(|e| rd_u32(e, 0) == Some(cmd)) =>
                 {
-                    if !extra.iter().any(|e| rd_u32(e, 0) == Some(cmd)) {
-                        extra.push(raw);
-                    }
+                    extra.push(raw);
                 }
                 _ => {}
             }
@@ -239,8 +238,7 @@ pub(super) fn merge(
             }
         }
         let tags = [(&syms.local, 0u32), (&syms.extdef, 1), (&syms.undef, 2)];
-        for k in 0..syms.indirect.len() {
-            let raw = syms.indirect[k];
+        for &raw in &syms.indirect {
             if raw & (INDIRECT_SYMBOL_LOCAL | INDIRECT_SYMBOL_ABS) != 0 {
                 indirect.push(Err(raw));
                 continue;

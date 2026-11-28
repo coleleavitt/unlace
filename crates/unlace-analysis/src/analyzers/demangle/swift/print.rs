@@ -527,14 +527,13 @@ impl Printer {
         let mut extra_name = extra_name;
         let mut extra_index = extra_index;
         let private = entity.child_of_kind(Kind::PrivateDeclName).cloned();
-        if !has_name && overwrite_name.is_empty() && entity.kind == Kind::Constructor {
-            if let Some(p) = &private {
+        if !has_name && overwrite_name.is_empty() && entity.kind == Kind::Constructor
+            && let Some(p) = &private {
                 self.print(p, false);
                 if !extra_name.is_empty() {
                     self.s(".");
                 }
             }
-        }
         if has_name || !overwrite_name.is_empty() {
             if !extra_name.is_empty() && multi_word {
                 self.s(extra_name);
@@ -597,8 +596,8 @@ impl Printer {
                 self.print_entity_type(&entity, &inner, generic_list.as_ref());
             }
         }
-        if !as_prefix_context {
-            if let Some(pc) = postfix_context.take() {
+        if !as_prefix_context
+            && let Some(pc) = postfix_context.take() {
                 if matches!(
                     entity.kind,
                     Kind::DefaultArgumentInitializer
@@ -613,7 +612,6 @@ impl Printer {
                 }
                 self.print(&pc, false);
             }
-        }
         postfix_context
     }
 
@@ -2526,13 +2524,12 @@ impl Printer {
                 self.print_child(n, 0);
                 self.s(" to ");
                 self.print_child(n, 1);
-                if let Some(list) = n.child(2) {
-                    if !list.is_empty() {
+                if let Some(list) = n.child(2)
+                    && !list.is_empty() {
                         self.s(" with conditional requirements: ");
                         let list = list.clone();
                         self.print(&list, false);
                     }
-                }
                 None
             }
             PackProtocolConformance => {
@@ -2707,12 +2704,11 @@ impl Printer {
     fn print_outlined(&mut self, n: &Node, prefix: &str) -> Option<NodeRef> {
         self.s(prefix);
         self.print_child(n, 0);
-        if matches!(n.kind, Kind::OutlinedCopy | Kind::OutlinedConsume) {
-            if let Some(sig) = n.child(1) {
+        if matches!(n.kind, Kind::OutlinedCopy | Kind::OutlinedConsume)
+            && let Some(sig) = n.child(1) {
                 let sig = sig.clone();
                 self.print(&sig, false);
             }
-        }
         None
     }
 }

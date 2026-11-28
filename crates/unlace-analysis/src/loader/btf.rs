@@ -332,7 +332,7 @@ fn parse_type(sec: &[u8], at: usize, id: u32) -> Result<(BtfType, usize), BtfErr
             let data = records(sec, next, vlen, MEMBER_LEN, id)?;
             next += data.len();
             let mut members = Vec::with_capacity(vlen);
-            for m in data.chunks_exact(MEMBER_LEN) {
+            for m in data.as_chunks::<MEMBER_LEN>().0 {
                 let off = read_u32(m, 8).ok_or(trunc)?;
                 let (bit_offset, bitfield_size) = if kind_flag {
                     (off & 0xff_ffff, off >> 24)
@@ -362,7 +362,7 @@ fn parse_type(sec: &[u8], at: usize, id: u32) -> Result<(BtfType, usize), BtfErr
             let data = records(sec, next, vlen, ENUM_LEN, id)?;
             next += data.len();
             let mut values = Vec::with_capacity(vlen);
-            for e in data.chunks_exact(ENUM_LEN) {
+            for e in data.as_chunks::<ENUM_LEN>().0 {
                 values.push(BtfEnumValue {
                     name_off: read_u32(e, 0).ok_or(trunc)?,
                     value: read_u32(e, 4).ok_or(trunc)? as i32 as i64,
@@ -394,7 +394,7 @@ fn parse_type(sec: &[u8], at: usize, id: u32) -> Result<(BtfType, usize), BtfErr
             let data = records(sec, next, vlen, PARAM_LEN, id)?;
             next += data.len();
             let mut params = Vec::with_capacity(vlen);
-            for p in data.chunks_exact(PARAM_LEN) {
+            for p in data.as_chunks::<PARAM_LEN>().0 {
                 params.push(BtfParam {
                     name_off: read_u32(p, 0).ok_or(trunc)?,
                     ty: read_u32(p, 4).ok_or(trunc)?,
@@ -417,7 +417,7 @@ fn parse_type(sec: &[u8], at: usize, id: u32) -> Result<(BtfType, usize), BtfErr
             let data = records(sec, next, vlen, VAR_SECINFO_LEN, id)?;
             next += data.len();
             let mut vars = Vec::with_capacity(vlen);
-            for v in data.chunks_exact(VAR_SECINFO_LEN) {
+            for v in data.as_chunks::<VAR_SECINFO_LEN>().0 {
                 vars.push(BtfVarSecinfo {
                     ty: read_u32(v, 0).ok_or(trunc)?,
                     offset: read_u32(v, 4).ok_or(trunc)?,
@@ -445,7 +445,7 @@ fn parse_type(sec: &[u8], at: usize, id: u32) -> Result<(BtfType, usize), BtfErr
             let data = records(sec, next, vlen, ENUM64_LEN, id)?;
             next += data.len();
             let mut values = Vec::with_capacity(vlen);
-            for e in data.chunks_exact(ENUM64_LEN) {
+            for e in data.as_chunks::<ENUM64_LEN>().0 {
                 let lo = read_u32(e, 4).ok_or(trunc)? as u64;
                 let hi = read_u32(e, 8).ok_or(trunc)? as u64;
                 values.push(BtfEnumValue {

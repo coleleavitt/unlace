@@ -36,7 +36,7 @@ fn apu_requirements(bytes: &[u8], little: bool) -> Option<bool> {
         if desc.len() % 4 != 0 {
             return None;
         }
-        for entry in desc.chunks_exact(4) {
+        for entry in desc.as_chunks::<4>().0 {
             let apu = word(entry, little)?;
             if apu & 0xffff != 1 {
                 return None;

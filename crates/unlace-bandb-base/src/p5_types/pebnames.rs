@@ -488,6 +488,7 @@ pub fn teb_pointer_type(types: &dyn TypeFactory, layout: &Layout) -> Option<Rc<D
 /// instruction's `LOAD` or `STORE`. Raw p-code is not yet SSA, so an address
 /// derived from the register is tracked by storage within each instruction that
 /// reads it, through any non-`LOAD` op that consumes it.
+#[allow(clippy::mutable_key_type)]
 fn segment_use(data: &Funcdata, reg: &Address, size: int4) -> (bool, bool) {
     let end = reg + size as i64;
     let mut insns = std::collections::BTreeSet::new();
@@ -587,10 +588,10 @@ impl Action for ActionPebNames {
             read && !stored_through
         };
         if !wanted {
-            if let Some((sym, true)) = mapped {
-                if let Some(lm) = data.get_scope_local_mut() {
-                    lm.remove_symbol(sym);
-                }
+            if let Some((sym, true)) = mapped
+                && let Some(lm) = data.get_scope_local_mut()
+            {
+                lm.remove_symbol(sym);
             }
             return 0;
         }

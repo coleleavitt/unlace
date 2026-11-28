@@ -18,5 +18,5 @@ fn threshold_is_the_upstream_literal() {
     assert_eq!(UNCORROBORATED_THRESHOLD, 50);
     // And it is strictly above the first gate's threshold, which is the whole
     // point: the two tests are not the same test. At 4 this guard is inert.
-    assert!(UNCORROBORATED_THRESHOLD > super::super::FINGERPRINT_THRESHOLD);
+    const _: () = assert!(UNCORROBORATED_THRESHOLD > super::super::FINGERPRINT_THRESHOLD);
 }

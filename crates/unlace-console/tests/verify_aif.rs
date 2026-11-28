@@ -34,8 +34,8 @@
 //! (`push rbp; mov rsp,rbp; mov edi,-0x14(rbp); ...`) is byte-for-byte the SAME
 //! mnemonic shape as `h0..h23`, so it matches a function-start fingerprint shared by
 //! >= 4 discovered functions; and it disassembles into a valid subroutine (a clean
-//! `ret`, 11 instructions). It is emitted as a discovered `entries` fact →
-//! registered as `sub_13ae`.
+//! > `ret`, 11 instructions). It is emitted as a discovered `entries` fact →
+//! > registered as `sub_13ae`.
 //!
 //! The assertions (the before/after):
 //!  - **flags ON** (`--option listing on --option aif on`): the gap-walk runs over

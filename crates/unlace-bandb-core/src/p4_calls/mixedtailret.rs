@@ -289,8 +289,8 @@ fn write_of(data: &Funcdata, op: OpId, addr: &Address, size: int4) -> Write {
 /// `x0 = 0xffffffff`).
 fn value_width(data: &Funcdata, op: OpId) -> Option<int4> {
     let o = data.obank().get(op)?;
-    if o.code() == OpCode::CPUI_COPY {
-        if let Some(c) = o
+    if o.code() == OpCode::CPUI_COPY
+        && let Some(c) = o
             .get_in(0)
             .and_then(|v| data.vbank().get(v))
             .filter(|v| v.is_constant())
@@ -302,7 +302,6 @@ fn value_width(data: &Funcdata, op: OpId) -> Option<int4> {
                 .unwrap_or(8);
             return Some(need.min(o.get_out().and_then(|v| data.vbank().get(v))?.get_size()));
         }
-    }
     let vn = match o.code() {
         OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT => o.get_in(0)?,
         _ => o.get_out()?,
@@ -874,11 +873,10 @@ fn writer_before(data: &Funcdata, at: OpId, addr: &Address, size: int4) -> Optio
     let mut cur = data.op_previous_op(at);
     while let Some(op) = cur {
         let o = data.obank().get(op)?;
-        if let Some(v) = o.get_out().and_then(|v| data.vbank().get(v)) {
-            if overlaps(v.get_addr(), v.get_size(), addr, size) {
+        if let Some(v) = o.get_out().and_then(|v| data.vbank().get(v))
+            && overlaps(v.get_addr(), v.get_size(), addr, size) {
                 return Some((op, v.get_addr() == addr && v.get_size() == size));
             }
-        }
         cur = data.op_previous_op(op);
     }
     None
@@ -928,8 +926,8 @@ fn condition_feeders(data: &Funcdata, bl: BlockId) -> Vec<OpId> {
     let mut cur = data.op_previous_op(tail);
     while let Some(op) = cur {
         let Some(o) = data.obank().get(op) else { break };
-        if let Some(out) = o.get_out().and_then(storage) {
-            if let Some(k) = wanted.iter().position(|w| *w == out) {
+        if let Some(out) = o.get_out().and_then(storage)
+            && let Some(k) = wanted.iter().position(|w| *w == out) {
                 wanted.swap_remove(k);
                 feeders.push(op);
                 wanted.extend(
@@ -938,7 +936,6 @@ fn condition_feeders(data: &Funcdata, bl: BlockId) -> Vec<OpId> {
                         .filter_map(storage),
                 );
             }
-        }
         cur = data.op_previous_op(op);
     }
     feeders

@@ -17,8 +17,8 @@ fn step(image: &MzImage, vma: u64) -> Option<Step> {
         0x8e => (2, 1 << (8 + ((b[1] >> 3) & 7)), false, true, vec![]),
         0x8b | 0x8c => (
             2,
-            gpr((b[1] >> 3) & 7) * u16::from(b[0] == 0x8b)
-                | gpr(b[1] & 7) * u16::from(b[0] == 0x8c),
+            (gpr((b[1] >> 3) & 7) * u16::from(b[0] == 0x8b))
+                | (gpr(b[1] & 7) * u16::from(b[0] == 0x8c)),
             false,
             true,
             vec![],

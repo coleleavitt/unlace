@@ -58,7 +58,7 @@ pub fn te_as_pe(te: &[u8]) -> Option<Vec<u8>> {
 
     let mut sections = table.to_vec();
     let mut image_end: u64 = 0;
-    for record in sections.chunks_exact_mut(SECTION_HEADER) {
+    for record in sections.as_chunks_mut::<SECTION_HEADER>().0 {
         let field = |r: &[u8], off: usize| u32::from_le_bytes(r[off..off + 4].try_into().unwrap());
         let virtual_size = field(record, 8);
         let virtual_address = field(record, 12);

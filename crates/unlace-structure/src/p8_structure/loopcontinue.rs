@@ -105,8 +105,8 @@ pub fn recover_continues(
             BlockType::If => graph.block(id).get_if_goto_target(),
             _ => None,
         };
-        if let (Some(head), Some(target)) = (head, target) {
-            if graph.get_front_leaf(target) == Some(head) {
+        if let (Some(head), Some(target)) = (head, target)
+            && graph.get_front_leaf(target) == Some(head) {
                 match graph.block_mut(id).kind_mut() {
                     BlockKind::Goto { gototype, .. } | BlockKind::If { gototype, .. } => {
                         *gototype = block_flags::f_continue_goto;
@@ -114,7 +114,6 @@ pub fn recover_continues(
                     _ => {}
                 }
             }
-        }
         for i in 0..graph.block(id).get_size() {
             stack.push((graph.block(id).get_block(i), head));
         }

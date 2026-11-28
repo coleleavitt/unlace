@@ -437,9 +437,10 @@ impl CircleRange {
         if self.isempty {
             return 0;
         }
-        let val;
+        
+        
         if self.left < self.right {
-            val = (self.right - self.left) / (self.step as uintb);
+            (self.right - self.left) / (self.step as uintb)
         } else {
             // C++ (rangeutil.cc:264): `(mask - (left-right) + step) / step` over
             // uintb. For a full range (left==right, 8-byte mask) `mask + step`
@@ -458,9 +459,8 @@ impl CircleRange {
                     v += 1;
                 }
             }
-            val = v;
+            v
         }
-        val
     }
 
     /// Get maximum information content of range (C++ `getMaxInfo`,
@@ -1247,8 +1247,8 @@ impl CircleRange {
                     return false;
                 }
             }
-            OpCode::CPUI_INT_SRIGHT => {
-                if self.step == 1 {
+            OpCode::CPUI_INT_SRIGHT
+                if self.step == 1 => {
                     let mut rightb = calc_mask(in_size);
                     // C++ (rangeutil.cc:975): `rightb >> (val + 1)`. `val` is a
                     // uintb; `val+1` may wrap and the x86 shift masks the count
@@ -1279,10 +1279,7 @@ impl CircleRange {
                             self.isempty = true;
                         }
                     }
-                } else {
-                    return false;
                 }
-            }
             _ => return false,
         }
         true
@@ -2667,12 +2664,11 @@ impl ValueSetSolver {
                         .map(|o| o.is_indirect_store())
                         .unwrap_or(false);
                     if indirect_as_copy || ind_store {
-                        if let Some(in_vn) = fd.obank().get(op).and_then(|o| o.get_in(0)) {
-                            if !self.value_set_map.contains_key(&in_vn) {
+                        if let Some(in_vn) = fd.obank().get(op).and_then(|o| o.get_in(0))
+                            && !self.value_set_map.contains_key(&in_vn) {
                                 self.new_value_set(fd, in_vn, 0);
                                 worklist.push(in_vn);
                             }
-                        }
                     } else {
                         let idx = self.value_set_map[&vn];
                         self.value_nodes[idx].set_full(vn_size);
@@ -2900,14 +2896,12 @@ impl ValueSetSolver {
         let true_is_restricted = bb.restricted_by_conditional(true_block, split_point);
         let false_is_restricted = bb.restricted_by_conditional(false_block, split_point);
 
-        if fd.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false) {
-            if let Some(&vidx) = self.value_set_map.get(&vn) {
-                if self.value_nodes[vidx].op_code == OpCode::CPUI_MULTIEQUAL {
+        if fd.vbank().get(vn).map(|v| v.is_written()).unwrap_or(false)
+            && let Some(&vidx) = self.value_set_map.get(&vn)
+                && self.value_nodes[vidx].op_code == OpCode::CPUI_MULTIEQUAL {
                     // Leave landmark for widening.
                     self.value_nodes[vidx].add_landmark(type_code, range.clone());
                 }
-            }
-        }
         let descend: Vec<OpId> = fd
             .vbank()
             .get(vn)
@@ -3192,13 +3186,12 @@ impl ValueSetSolver {
                     crate::block::BlockKind::Basic(bd) => bd.op_tail,
                     _ => None,
                 };
-                if let Some(lo) = last_op {
-                    if fd.obank().get(lo).map(|o| o.code()) == Some(OpCode::CPUI_CBRANCH) {
+                if let Some(lo) = last_op
+                    && fd.obank().get(lo).map(|o| o.code()) == Some(OpCode::CPUI_CBRANCH) {
                         final_marks.insert(split_point);
                         // Try to generate constraints from this splitPoint.
                         self.constraints_from_cbranch(fd, lo, read_marked);
                     }
-                }
             }
         }
     }
@@ -3623,8 +3616,8 @@ impl ValueSetSolver {
             if self.num_iterations > self.max_iterations {
                 break; // Quit if max iterations exceeded
             }
-            if let Some(ph) = self.part_head[cur] {
-                if Some(ph) != cur_component {
+            if let Some(ph) = self.part_head[cur]
+                && Some(ph) != cur_component {
                     component_stack.push(ph);
                     cur_component = Some(ph);
                     self.record_storage[ph].is_dirty = false;
@@ -3634,7 +3627,6 @@ impl ValueSetSolver {
                             widener.determine_iteration_reset(&self.value_nodes[start]);
                     }
                 }
-            }
             if let Some(comp) = cur_component {
                 if self.iterate_node(fd, cur, widener) {
                     self.record_storage[comp].is_dirty = true;
@@ -3680,14 +3672,13 @@ impl ValueSetSolver {
         for rop in read_ops {
             let slot = self.read_nodes[&rop].slot;
             let in_vn = fd.obank().get(rop).and_then(|o| o.get_in(slot));
-            if let Some(vn) = in_vn {
-                if let Some(&idx) = self.value_set_map.get(&vn) {
+            if let Some(vn) = in_vn
+                && let Some(&idx) = self.value_set_map.get(&vn) {
                     let node = self.value_nodes[idx].clone();
                     if let Some(read) = self.read_nodes.get_mut(&rop) {
                         read.compute_from(&node);
                     }
                 }
-            }
         }
     }
 }
@@ -3724,13 +3715,11 @@ impl ValueSetGraph for IrValueSetGraph<'_> {
             None => return out,
         };
         for op in descend {
-            if let Some(o) = self.fd.obank().get(op) {
-                if let Some(out_vn) = o.get_out() {
-                    if let Some(&idx) = self.map.get(&out_vn) {
+            if let Some(o) = self.fd.obank().get(op)
+                && let Some(out_vn) = o.get_out()
+                    && let Some(&idx) = self.map.get(&out_vn) {
                         out.push(idx);
                     }
-                }
-            }
         }
         out
     }

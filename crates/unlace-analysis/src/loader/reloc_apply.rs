@@ -1739,7 +1739,7 @@ fn aarch64_movw(
     if insn & 0x1f80_0000 != 0x1280_0000 {
         return Err(RelocationFailure::InvalidEncoding);
     }
-    let implicit = ((((insn >> 5) & 0xffff) as i128) << shift) as i128;
+    let implicit = (((insn >> 5) & 0xffff) as i128) << shift;
     let value = symbol as i128 + explicit_plus_implicit(reloc, implicit);
     if checked && (value < 0 || (shift < 48 && value >= 1i128 << (shift + 16))) {
         return Err(RelocationFailure::OutOfRange);

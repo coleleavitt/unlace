@@ -74,7 +74,7 @@ pub fn loclist_frame_offset<'a>(
     ) {
         return None;
     }
-    let mut list = dwarf.attr_locations(unit, location.clone()).ok()??;
+    let mut list = dwarf.attr_locations(unit, *location).ok()??;
     let mut found = None;
     for _ in 0..4096 {
         let Some(entry) = list.next().ok()? else {
@@ -163,7 +163,7 @@ pub(super) fn register_location<'a>(
         gimli::AttributeValue::Block(b) => return single_register(b.slice()).map(|r| (r, None)),
         _ => {}
     }
-    let mut list = dwarf.attr_locations(unit, location.clone()).ok()??;
+    let mut list = dwarf.attr_locations(unit, *location).ok()??;
     let mut best: Option<(u64, u16, u64)> = None;
     for _ in 0..4096 {
         let Some(entry) = list.next().ok()? else {

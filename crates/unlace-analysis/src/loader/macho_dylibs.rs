@@ -113,10 +113,10 @@ pub fn dependencies(bytes: &[u8]) -> MachODependencies {
                     compat_version,
                 });
             }
-        } else if cmd == LC_RPATH {
-            if let Some(path) = string_at(body, little) {
-                out.rpaths.push(path);
-            }
+        } else if cmd == LC_RPATH
+            && let Some(path) = string_at(body, little)
+        {
+            out.rpaths.push(path);
         }
         at = next;
     }

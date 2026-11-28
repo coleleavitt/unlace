@@ -873,9 +873,7 @@ fn note_uses(data: &Funcdata, base: VarnodeId, e: &mut Evidence) {
             | OpCode::CPUI_INT_SUB
             | OpCode::CPUI_PTRADD
             | OpCode::CPUI_PTRSUB => {
-                let other = if op.code() == OpCode::CPUI_PTRADD {
-                    op.get_in(1)
-                } else if op.get_in(0) == Some(base) {
+                let other = if op.code() == OpCode::CPUI_PTRADD || op.get_in(0) == Some(base) {
                     op.get_in(1)
                 } else {
                     op.get_in(0)
@@ -1192,7 +1190,7 @@ fn synthesize(data: &mut Funcdata) -> bool {
         .get::<crate::structsynth::StructSynthMode>()
         .locals()
     {
-        asks.sort_by(|a, b| b.1.cmp(&a.1));
+        asks.sort_by_key(|a| std::cmp::Reverse(a.1));
     }
 
     let mut installs: Vec<(VarnodeId, Rc<Datatype>)> = Vec::new();
@@ -1637,10 +1635,7 @@ fn accepts_record(
         .types()
         .map(|t| t.get_size_of_pointer())
         .unwrap_or(8);
-    if is_array_shaped(&e.slots, ptr_size) {
-        return false;
-    }
-    true
+    !is_array_shaped(&e.slots, ptr_size)
 }
 
 /// (unlace `calleevote fields`) Is this one field, read at a constant offset other
@@ -1857,7 +1852,7 @@ impl crate::optionset::UnlaceOption for StructSynthMode {
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
-        Ok(crate::structsynth::OptionStructSynth.apply(value)?)
+        crate::structsynth::OptionStructSynth.apply(value)
     }
 }
 

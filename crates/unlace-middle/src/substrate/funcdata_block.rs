@@ -179,11 +179,10 @@ impl Funcdata {
             let last_op = self
                 .sblocks_ref()
                 .struct_last_op_with(Some(self.bblocks_ref()), bl);
-            if let Some(op) = last_op {
-                if self.obank().get(op).map(|o| o.code()) == Some(OpCode::CPUI_RETURN) {
+            if let Some(op) = last_op
+                && self.obank().get(op).map(|o| o.code()) == Some(OpCode::CPUI_RETURN) {
                     ret_terminated.insert(bl);
                 }
-            }
         }
         self.sblocks_mut().order_blocks(sroot, &ret_terminated);
     }
@@ -669,11 +668,10 @@ impl Funcdata {
         if self.sblocks_ref().block(wd).get_initialize_op().is_none() {
             // Last chance initializer (loopDef->getParent(), slot).
             let loop_def = self.sblocks_ref().block(wd).get_loop_def();
-            if let Some(ld) = loop_def {
-                if let Some(ld_parent) = self.obank().get(ld).and_then(|o| o.get_parent()) {
+            if let Some(ld) = loop_def
+                && let Some(ld_parent) = self.obank().get(ld).and_then(|o| o.get_parent()) {
                     self.find_initializer(wd, ld_parent, slot);
                 }
-            }
         }
         if self.sblocks_ref().block(wd).get_initialize_op().is_some() {
             let new_init = self.while_test_terminal(wd, 1 - slot);
@@ -1035,8 +1033,8 @@ impl Funcdata {
             }
         }
         // Don't remove single-out indirect jumps (BRANCHIND last op).
-        if let Some(lastop) = self.bb_op_tail(bb) {
-            if self
+        if let Some(lastop) = self.bb_op_tail(bb)
+            && self
                 .obank()
                 .get(lastop)
                 .expect("bb_is_do_nothing: stale op")
@@ -1045,7 +1043,6 @@ impl Funcdata {
             {
                 return false;
             }
-        }
         self.bb_has_only_markers(bb)
     }
 
@@ -1314,11 +1311,10 @@ impl Funcdata {
     /// \param num is the index of the outgoing edge to remove
     pub fn branch_remove_internal(&mut self, bb: BlockId, num: int4) -> UnlaceResult<()> {
         // No decision left.
-        if self.bblocks_ref().block(bb).size_out() == 2 {
-            if let Some(lastop) = self.bb_op_tail(bb) {
+        if self.bblocks_ref().block(bb).size_out() == 2
+            && let Some(lastop) = self.bb_op_tail(bb) {
                 self.op_destroy(lastop);
             }
-        }
         let bbout = self.bblocks_ref().block(bb).get_out(num);
         let blocknum = self.bblocks_ref().block(bbout).get_in_index(bb);
         // Sever (one) connection.
@@ -1497,8 +1493,8 @@ impl Funcdata {
                             .get(origvn)
                             .expect("pushMultiequals")
                             .is_addr_tied();
-                        if origvn_addr_tied {
-                            if let Some(oo) = out_of_op {
+                        if origvn_addr_tied
+                            && let Some(oo) = out_of_op {
                                 let same_addr =
                                     self.vbank().get(oo).expect("pushMultiequals").get_addr()
                                         == self
@@ -1510,7 +1506,6 @@ impl Funcdata {
                                     neednewunique = true;
                                 }
                             }
-                        }
                         continue;
                     }
                 }
@@ -1699,19 +1694,16 @@ impl Funcdata {
     pub fn block_remove_internal(&mut self, bb: BlockId, unreachable: bool) -> UnlaceResult<()> {
         // BRANCHIND last op -> drop its jump table: the ops below are destroyed,
         // so a surviving table would point at a dead BRANCHIND.
-        if let Some(op) = self.bb_op_tail(bb) {
-            if self
+        if let Some(op) = self.bb_op_tail(bb)
+            && self
                 .obank()
                 .get(op)
                 .expect("blockRemoveInternal: stale op")
                 .code()
                 == OpCode::CPUI_BRANCHIND
-            {
-                if let Some(idx) = self.find_jump_table_index(op) {
+                && let Some(idx) = self.find_jump_table_index(op) {
                     self.remove_jump_table(idx);
                 }
-            }
-        }
         if !unreachable {
             self.push_multiequals(bb)?; // Make sure data flow is preserved
 
@@ -2277,11 +2269,10 @@ impl Funcdata {
             if self.bblocks_ref().block(bl).get_type() != crate::block::BlockType::Basic {
                 continue;
             }
-            if let Some(tail) = self.bb_op_tail(bl) {
-                if self.obank().get(tail).map(|o| o.get_addr()) == Some(addr) {
+            if let Some(tail) = self.bb_op_tail(bl)
+                && self.obank().get(tail).map(|o| o.get_addr()) == Some(addr) {
                     return Some(bl);
                 }
-            }
         }
         None
     }
@@ -2460,12 +2451,11 @@ impl Funcdata {
         // BRANCHIND we add next.  op_destroy_recursive drops the comparison and any
         // transparent peel ops that become dead, but stops at live Varnodes (so the
         // recovered switch variable's def survives).
-        if let Some(cmp) = head_cmp {
-            if self.obank().get(cmp).is_some() {
+        if let Some(cmp) = head_cmp
+            && self.obank().get(cmp).is_some() {
                 let mut scratch: Vec<OpId> = Vec::new();
                 self.op_destroy_recursive(cmp, &mut scratch);
             }
-        }
 
         // Build the BRANCHIND at the head's branch address over the recovered
         // switch variable (falling back to a fresh free read of `var_addr` if the
@@ -2726,11 +2716,10 @@ impl Funcdata {
             };
             // Reverse scan: the closest-preceding def reaches `op`.
             for &bop in ops[..upper].iter().rev() {
-                if let Some(out) = self.obank().get(bop).and_then(|o| o.get_out()) {
-                    if matches(self, out) {
+                if let Some(out) = self.obank().get(bop).and_then(|o| o.get_out())
+                    && matches(self, out) {
                         return Some(out);
                     }
-                }
             }
             // Move to the immediate dominator and scan its whole block.
             match self.bblocks_ref().block(block).get_immed_dom() {
@@ -3017,11 +3006,10 @@ impl Funcdata {
         // `funcp.getModel()` (e.g. `getMaxOutputDelay`) before that action runs, so
         // the default model must be attached at construction time exactly as the C++
         // ctor does.
-        if !partial.get_func_proto().has_model() {
-            if let Some(defaultfp) = partial.get_arch().default_fp().cloned() {
+        if !partial.get_func_proto().has_model()
+            && let Some(defaultfp) = partial.get_arch().default_fp().cloned() {
                 partial.get_func_proto_mut().set_model(Some(defaultfp));
             }
-        }
         // The ctor's `localmap->resetLocalWindow()` follows `setScope`, so the
         // partial's local scope covers the model's stack window. Without it no
         // stack location is in scope, every one is marked unmapped-unaliased, and
@@ -3583,9 +3571,9 @@ impl Funcdata {
             match self.sblocks_ref().block(r).get_type() {
                 BlockType::Copy => return self.sblocks_ref().block(r).get_copy(),
                 BlockType::Basic => return Some(r), // single-arena fallback
-                _ => match self.sblocks_ref().sub_block(r, 0) {
-                    Some(s) => r = s,
-                    None => return None,
+                _ => {
+                    let s = self.sblocks_ref().sub_block(r, 0)?;
+                    r = s
                 },
             }
         }
@@ -3987,11 +3975,10 @@ impl Funcdata {
         let n = d.num_input();
         let mut edges = Vec::new();
         for i in 0..n {
-            if let Some(iv) = d.get_in(i) {
-                if self.returndup_value_is_const(iv) {
+            if let Some(iv) = d.get_in(i)
+                && self.returndup_value_is_const(iv) {
                     edges.push(i);
                 }
-            }
         }
         edges
     }
@@ -4191,8 +4178,8 @@ impl Funcdata {
         // Remove any jump op at the end of -bl- (C++ funcdata_block.cc:941).
         // `op_destroy` is now available (used by condexe.execute), so the
         // W3-op boundary is closed.
-        if let Some(jumpop) = self.bb_op_tail(bl) {
-            if self
+        if let Some(jumpop) = self.bb_op_tail(bl)
+            && self
                 .obank()
                 .get(jumpop)
                 .expect("spliceBlockBasic")
@@ -4200,7 +4187,6 @@ impl Funcdata {
             {
                 self.op_destroy(jumpop);
             }
-        }
 
         if !self.bb_empty_op(outbl) {
             // Check for MULTIEQUALs at the head of -outbl-.
@@ -4847,11 +4833,10 @@ impl Funcdata {
         {
             return;
         }
-        if let Some(li) = last_indirect {
-            if let Some(o) = self.obank_mut().get_mut(li) {
+        if let Some(li) = last_indirect
+            && let Some(o) = self.obank_mut().get_mut(li) {
                 o.set_no_indirect_collapse();
             }
-        }
     }
 
     /// C++ `ActionRestructureVarnode::protectSwitchPaths` (`coreaction.cc:2320`):

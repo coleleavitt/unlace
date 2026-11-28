@@ -398,11 +398,10 @@ pub fn seed_char(data: &mut Funcdata, bytes: &[VarnodeId]) {
             .get_scope_local()
             .and_then(|lm| lm.build_localtype_seed_at(&addr, size, &usepoint, tlst))
             .is_some();
-        if !locked {
-            if let Some(v) = data.vbank_mut().get_mut(vn) {
+        if !locked
+            && let Some(v) = data.vbank_mut().get_mut(vn) {
                 v.set_temp_type(Rc::clone(&c));
             }
-        }
     }
 }
 
@@ -490,11 +489,10 @@ pub fn splits_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
         None => return false,
     };
     for r in v.descend_iter() {
-        if let Some(o) = data.obank().get(r) {
-            if web(o, o.get_slot(vn)) && stayed(o.get_out()) {
+        if let Some(o) = data.obank().get(r)
+            && web(o, o.get_slot(vn)) && stayed(o.get_out()) {
                 return true;
             }
-        }
     }
     if let Some(o) = v.get_def().and_then(|d| data.obank().get(d)) {
         let n = if matches!(o.code(), OpCode::CPUI_MULTIEQUAL) {

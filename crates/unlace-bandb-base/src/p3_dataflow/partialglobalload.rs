@@ -59,11 +59,10 @@ pub fn apply(fd: &mut Funcdata, guards: Vec<Guard>) {
                 .and_then(|v| v.get_def())
                 .and_then(|d| fd.obank().get(d))
                 .is_some_and(|d| !d.is_marker() && !d.is_return_copy());
-            if real {
-                if let Some(v) = fd.vbank_mut().get_mut(vn) {
+            if real
+                && let Some(v) = fd.vbank_mut().get_mut(vn) {
                     v.set_addr_force();
                 }
-            }
         }
     }
 }

@@ -7,13 +7,13 @@ fn program(language: &str) -> ConsoleProgram {
     let fixture = root.join(format!(
         "crates/unlace-analysis/tests/fixtures/dwarf_namespaces_{language}_x86_64"
     ));
-    let mut program = bootstrap_from_object(
+    
+    bootstrap_from_object(
         fixture.to_str().unwrap(),
         "",
         &[root.join("specs").display().to_string()],
     )
-    .unwrap();
-    program
+    .unwrap()
 }
 
 fn symbols(program: &ConsoleProgram, offset: u64, expected: &str, global: bool) {

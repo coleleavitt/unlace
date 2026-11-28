@@ -222,13 +222,11 @@ fn recover_with(file: &object::File, img: &MachoImage, names: HashMap<u64, Strin
 
     let mut votes: BTreeMap<u64, usize> = BTreeMap::new();
     for ev in traces.iter().flatten() {
-        if let Event::Call(c) = ev {
-            if let [Some(_), Some(name), _, Some(size)] = c.args {
-                if (1..=0x10_0000).contains(&size) && class_name(img, name).is_some() {
+        if let Event::Call(c) = ev
+            && let [Some(_), Some(name), _, Some(size)] = c.args
+                && (1..=0x10_0000).contains(&size) && class_name(img, name).is_some() {
                     *votes.entry(c.target).or_default() += 1;
                 }
-            }
-        }
     }
     let Some((&ctor, _)) = votes
         .iter()
@@ -371,12 +369,11 @@ impl Recovered {
                         .or_insert_with(|| a64::returned_constant(img, f, GET_META_CLASS_LIMIT));
                     meta.and_then(|m| by_meta.get(&m).map(|&i| (i, f)))
                 });
-                if let Some((i, getter)) = owner {
-                    if self.classes[i].vtable.is_none() {
+                if let Some((i, getter)) = owner
+                    && self.classes[i].vtable.is_none() {
                         self.getters.insert(getter, self.classes[i].name.clone());
                         self.classes[i].vtable = Some((slot0, slots));
                     }
-                }
             }
         }
     }

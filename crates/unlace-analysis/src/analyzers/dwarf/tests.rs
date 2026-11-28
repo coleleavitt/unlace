@@ -373,11 +373,10 @@ fn defined_subprograms(path: &str) -> Vec<(String, u64)> {
         let unit = dwarf.unit(header).expect("unit");
         let dies = snapshot_unit(&dwarf, &unit);
         for snap in dies.values() {
-            if snap.tag == gimli::DW_TAG_subprogram && !snap.declaration && !snap.name.is_empty() {
-                if let Some(low_pc) = snap.low_pc {
+            if snap.tag == gimli::DW_TAG_subprogram && !snap.declaration && !snap.name.is_empty()
+                && let Some(low_pc) = snap.low_pc {
                     found.push((snap.name.clone(), low_pc));
                 }
-            }
         }
     }
     found
@@ -529,11 +528,10 @@ fn cet_pie_fbreg_locals_and_cfa_offsets() {
                     if matches!(
                         c.tag,
                         gimli::DW_TAG_variable | gimli::DW_TAG_formal_parameter
-                    ) {
-                        if let Some(fb) = c.fbreg_location {
+                    )
+                        && let Some(fb) = c.fbreg_location {
                             found.push((c.name.clone(), fb, cfa.wrapping_add(fb)));
                         }
-                    }
                 }
             }
         }

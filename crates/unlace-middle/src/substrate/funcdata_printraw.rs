@@ -149,11 +149,10 @@ fn print_raw_implied_goto(
         return Ok(());
     }
     let ops = fd.bb_ops(bl);
-    if let Some(&last) = ops.last() {
-        if fd.obank().get(last).map(|o| o.is_branch()).unwrap_or(false) {
+    if let Some(&last) = ops.last()
+        && fd.obank().get(last).map(|o| o.is_branch()).unwrap_or(false) {
             return Ok(());
         }
-    }
     // The block's stop address.
     let stop = crate::block::block_get_stop(&fd.bblocks_ref().arena, bl);
     let _ = stop.print_raw(s);
@@ -251,13 +250,12 @@ fn render_varnode(
     if (flags & varnode_flags::input) != 0 {
         s.push_str("(i)");
     }
-    if is_written {
-        if let Some(d) = def {
+    if is_written
+        && let Some(d) = def {
             s.push('(');
             render_seqnum(s, fd, d)?;
             s.push(')');
         }
-    }
     if (flags & (varnode_flags::insert | varnode_flags::constant)) == 0 {
         s.push_str("(free)");
     }

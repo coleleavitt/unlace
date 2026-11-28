@@ -64,7 +64,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     let descriptors = read_constant(fd, arch, table, pieces * 16)?;
     let mut literals = Vec::with_capacity(pieces);
     let mut total = 0usize;
-    for descriptor in descriptors.chunks_exact(16) {
+    for descriptor in descriptors.as_chunks::<16>().0 {
         let pointer = u64::from_le_bytes(descriptor[..8].try_into().ok()?);
         let length = usize::try_from(u64::from_le_bytes(descriptor[8..].try_into().ok()?)).ok()?;
         total = total.checked_add(length)?;

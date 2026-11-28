@@ -1860,7 +1860,7 @@ fn signature_declaration(code: &str, name: &str) -> Option<String> {
         if text.contains(&pointer) {
             return Some(text.replacen(&pointer, "(*)", 1));
         }
-        let end = text.find(|c: char| c == '[').unwrap_or(text.len());
+        let end = text.find('[').unwrap_or(text.len());
         let (head, tail) = text.split_at(end);
         let head = head.trim_end();
         let before = head.strip_suffix(name)?;

@@ -161,7 +161,7 @@ fn arg_info_offset(
 }
 
 fn void_input_bytes(info: &[u8], args: u32) -> Option<u32> {
-    if args == 0 || args > MAX_ARGUMENTS * WORD_BYTES || args % WORD_BYTES != 0 {
+    if args == 0 || args > MAX_ARGUMENTS * WORD_BYTES || !args.is_multiple_of(WORD_BYTES) {
         return None;
     }
     // ArgInfo describes inputs only. Reject padding, aggregate and truncation markers
@@ -172,9 +172,11 @@ fn void_input_bytes(info: &[u8], args: u32) -> Option<u32> {
         return None;
     }
     pairs
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .enumerate()
-        .all(|(i, pair)| pair == [(i as u8) * WORD_BYTES as u8, WORD_BYTES as u8])
+        .all(|(i, pair)| *pair == [(i as u8) * WORD_BYTES as u8, WORD_BYTES as u8])
         .then_some(args)
 }
 

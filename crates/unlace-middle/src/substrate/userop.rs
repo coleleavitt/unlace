@@ -1616,22 +1616,20 @@ impl UserOpManage {
             return Err(UnlaceError::lowlevel("UserOp not assigned an index"));
         }
 
-        if let Some(&other_id) = self.useropmap.get(op.get_name()) {
-            if let Some(Some(other)) = self.useroplist.get(other_id as usize) {
-                if other.get_index() != ind {
+        if let Some(&other_id) = self.useropmap.get(op.get_name())
+            && let Some(Some(other)) = self.useroplist.get(other_id as usize)
+                && other.get_index() != ind {
                     return Err(UnlaceError::lowlevel(format!(
                         "Conflicting indices for userop name {}",
                         String::from_utf8_lossy(op.get_name())
                     )));
                 }
-            }
-        }
 
         while (self.useroplist.len() as int4) <= ind {
             self.useroplist.push(None);
         }
-        if let Some(existing) = &self.useroplist[ind as usize] {
-            if existing.get_name() != op.get_name() {
+        if let Some(existing) = &self.useroplist[ind as usize]
+            && existing.get_name() != op.get_name() {
                 return Err(UnlaceError::lowlevel(format!(
                     "User op {} has same index as {}",
                     String::from_utf8_lossy(op.get_name()),
@@ -1640,7 +1638,6 @@ impl UserOpManage {
             }
             // We assume this registration customizes an existing userop; the
             // old spec is replaced below (C++ `delete useroplist[ind]`).
-        }
         let name = op.get_name().to_vec();
         // Record segment ops in the per-space table (C++ dynamic_cast path).
         let segment_space_index = op

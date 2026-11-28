@@ -187,11 +187,10 @@ impl Ctx {
 /// base is unaffected.
 fn got_base(file: &object::File) -> Option<u64> {
     for name in [".got.plt", ".got"] {
-        if let Some(sec) = file.section_by_name(name) {
-            if sec.address() != 0 {
+        if let Some(sec) = file.section_by_name(name)
+            && sec.address() != 0 {
                 return Some(sec.address());
             }
-        }
     }
     None
 }
@@ -561,11 +560,10 @@ fn holder_of(m: &Machine, ctx: &Ctx, want: u64) -> Option<VarnodeData> {
         if k.0 != reg_index {
             continue;
         }
-        if let Val::Const { v: got, pc: true } = v {
-            if *got == want && (best.is_none() || Some(k) < best) {
+        if let Val::Const { v: got, pc: true } = v
+            && *got == want && (best.is_none() || Some(k) < best) {
                 best = Some(k);
             }
-        }
     }
     let (_, offset, size) = best?;
     Some(VarnodeData {
@@ -606,15 +604,14 @@ fn establish(
         // callee names; the call's own p-code cannot say which one.
         let mut delivered = None;
         for op in &insn.ops {
-            if op.opcode == OpCode::CPUI_CALL {
-                if let Some(t) = op.ins.first().map(|vn| vn.offset) {
+            if op.opcode == OpCode::CPUI_CALL
+                && let Some(t) = op.ins.first().map(|vn| vn.offset) {
                     let reg = thunks
                         .entry(t)
                         .or_insert_with(|| pc_thunk_reg(translate, code_space, ctx, t))
                         .clone();
                     delivered = reg;
                 }
-            }
         }
         for op in &insn.ops {
             m.apply(op, ctx, fall);
@@ -714,9 +711,7 @@ pub(super) fn scope(
     base: &PicBase,
     body: &[BaseCandidate],
 ) -> Option<Scope> {
-    if key_of(&base.reg).is_none() {
-        return None;
-    }
+    key_of(&base.reg)?;
     if !body.iter().any(|c| c.writes_base) {
         return Some(Scope::Whole);
     }
@@ -825,15 +820,12 @@ pub(super) fn refs_through_base(
             _ => {}
         }
         m.apply(op, ctx, fall_through);
-        if let Some(o) = &op.out {
-            if ctx.is_register(o) {
-                if let Some((v, pc)) = m.konst(o) {
-                    if v != fall_through || !super::xrefs::links(ops) {
+        if let Some(o) = &op.out
+            && ctx.is_register(o)
+                && let Some((v, pc)) = m.konst(o)
+                    && (v != fall_through || !super::xrefs::links(ops)) {
                         admit((v, pc), XrefKind::Data, &mut out);
                     }
-                }
-            }
-        }
     }
     out.sort_unstable();
     out.dedup();

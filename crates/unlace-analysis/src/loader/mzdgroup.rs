@@ -379,10 +379,10 @@ impl<'a> Tracer<'a> {
             _ if step.call => Flow::Call(callee(op, &step, state.vals[CS])),
             _ => {
                 state.kill(step.writes & !(1 << CS));
-                if !wide {
-                    if let Some(reg) = state.assign(op, cs_override, imm_at, image, self.popped) {
-                        self.assigned.push((vma, reg));
-                    }
+                if !wide
+                    && let Some(reg) = state.assign(op, cs_override, imm_at, image, self.popped)
+                {
+                    self.assigned.push((vma, reg));
                 }
                 for &target in step
                     .targets
@@ -530,10 +530,10 @@ pub fn walk(
                     None if tracer.skippable() => votes.add(ds),
                     None => dgroup = Some(votes.verdict(ds)?),
                 }
-                if let (Some(ds), Some((at, cs))) = (ds, target) {
-                    if !keeps_ds(image, at, cs, ds, &mut others, &mut decode) {
-                        return None;
-                    }
+                if let (Some(ds), Some((at, cs))) = (ds, target)
+                    && !keeps_ds(image, at, cs, ds, &mut others, &mut decode)
+                {
+                    return None;
                 }
                 if dgroup.is_some() {
                     tracer.fall(state.after_call(), end);

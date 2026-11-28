@@ -56,11 +56,10 @@ impl Tree {
         let off = self.next;
         self.next += 1;
         d.parent = parent;
-        if let Some(p) = parent {
-            if let Some(pd) = self.dies.get_mut(&p) {
+        if let Some(p) = parent
+            && let Some(pd) = self.dies.get_mut(&p) {
                 pd.children.push(off);
             }
-        }
         self.dies.insert(off, d);
         off
     }

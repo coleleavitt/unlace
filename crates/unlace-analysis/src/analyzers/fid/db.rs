@@ -32,10 +32,6 @@
 //! version-1 file still loads, and a database none of whose records carries a
 //! prototype is still written as version 1.
 
-#[expect(
-    clippy::disallowed_types,
-    reason = "lookup indices; output ordering is explicit"
-)]
 use std::collections::{BTreeMap, HashMap, hash_map::Entry};
 use std::rc::Rc;
 
@@ -121,10 +117,6 @@ pub struct FidDb {
     /// The `FULL_HASH_COL` index: `full_hash -> records sharing it`. A full hash
     /// can map to several functions (a genuine collision, or the same function
     /// under several names).
-    #[expect(
-        clippy::disallowed_types,
-        reason = "records sorts hashes before serialization"
-    )]
     by_full_hash: HashMap<u64, Vec<FidRecord>>,
     /// The number of records (the `by_full_hash` buckets may merge collisions, so
     /// this is tracked separately for a faithful round-trip count).
@@ -144,10 +136,6 @@ impl FidDb {
         cspec_id: impl Into<String>,
         records: Vec<FidRecord>,
     ) -> Self {
-        #[expect(
-            clippy::disallowed_types,
-            reason = "insertion order is retained inside each hash bucket"
-        )]
         let mut by_full_hash: HashMap<u64, Vec<FidRecord>> = HashMap::new();
         let n_records = records.len();
         for rec in records {
@@ -186,17 +174,9 @@ impl FidDb {
 
         // Intern strings into the blob, mapping each distinct one to its offset.
         let mut blob: Vec<u8> = Vec::new();
-        #[expect(
-            clippy::disallowed_types,
-            reason = "lookup only; blob order follows sorted records"
-        )]
         let mut name_off: HashMap<&str, u32> = HashMap::new();
         let mut offsets: Vec<(u32, u32, (u32, u32))> = Vec::with_capacity(records.len());
         let mut types: Vec<u32> = Vec::new();
-        #[expect(
-            clippy::disallowed_types,
-            reason = "lookup only; table order follows sorted records"
-        )]
         let mut runs: HashMap<Vec<u32>, u32> = HashMap::new();
         for rec in &records {
             let name = intern(&mut name_off, &mut blob, Some(&rec.name));
@@ -375,10 +355,6 @@ impl FidDatabase for FidDb {
 }
 
 /// The blob offset of `text`, appended on first use; [`NO_STRING`] for none.
-#[expect(
-    clippy::disallowed_types,
-    reason = "lookup only; blob order follows sorted records"
-)]
 fn intern<'a>(
     offsets: &mut HashMap<&'a str, u32>,
     blob: &mut Vec<u8>,

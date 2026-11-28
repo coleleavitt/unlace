@@ -152,11 +152,10 @@ pub fn is_call_argument(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
                     }
                 }
                 OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_MULTIEQUAL => {
-                    if let Some(out) = o.get_out() {
-                        if let Some(v) = fd.vbank().get(out) {
+                    if let Some(out) = o.get_out()
+                        && let Some(v) = fd.vbank().get(out) {
                             next.extend(v.descend_iter().map(|user| (user, out)));
                         }
-                    }
                 }
                 _ => {}
             }

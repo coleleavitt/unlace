@@ -859,7 +859,7 @@ impl crate::optionset::UnlaceOption for CallResultUse {
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
-        Ok(crate::callresultuse::OptionCallResultUse.apply(value)?)
+        crate::callresultuse::OptionCallResultUse.apply(value)
     }
 }
 

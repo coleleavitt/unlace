@@ -158,11 +158,10 @@ impl UnitExtras {
                     .and_then(|value| value.udata_value())
             })
             .flatten();
-        if !self.metadata_only && kind == Some(18) {
-            if let Some(element) = self.reference(entry, gimli::DwAt(0x2902)) {
+        if !self.metadata_only && kind == Some(18)
+            && let Some(element) = self.reference(entry, gimli::DwAt(0x2902)) {
                 self.channel_elements.insert(entry.offset().0, element);
             }
-        }
         let location = if entry.tag() == gimli::DW_TAG_formal_parameter {
             entry
                 .attr_value(gimli::DW_AT_location)
@@ -216,7 +215,7 @@ impl UnitExtras {
                         .attr_address(unit, entry.attr_value(gimli::DW_AT_low_pc)?)
                         .ok()??;
                     let high = entry.attr_value(gimli::DW_AT_high_pc)?;
-                    match dwarf.attr_address(unit, high.clone()).ok()? {
+                    match dwarf.attr_address(unit, high).ok()? {
                         Some(address) => address.checked_sub(low),
                         None => high.udata_value(),
                     }
@@ -268,7 +267,7 @@ fn empty_entry_location(
         return None;
     }
     let entry = entry?;
-    let mut locations = dwarf.attr_locations(unit, location.clone()).ok()??;
+    let mut locations = dwarf.attr_locations(unit, *location).ok()??;
     let base = match locations.next_raw().ok()?? {
         gimli::RawLocListEntry::BaseAddress { addr } => addr,
         gimli::RawLocListEntry::BaseAddressx { addr } => dwarf.address(unit, addr).ok()?,
@@ -422,11 +421,10 @@ impl Facts {
             .values()
             .filter(|die| die.tag == gimli::DW_TAG_subprogram && !die.declaration)
         {
-            if let Some(entry) = die.low_pc {
-                if !entries.insert(entry) {
+            if let Some(entry) = die.low_pc
+                && !entries.insert(entry) {
                     repeated.insert(entry);
                 }
-            }
         }
         self.dies
             .iter()
@@ -676,12 +674,11 @@ impl Facts {
         if parameters.is_empty() || seen != inherited {
             return None;
         }
-        if unique {
-            if let Some((pieces, site)) = self.channel_status(arch, sub.low_pc?, name, &parameters)
+        if unique
+            && let Some((pieces, site)) = self.channel_status(arch, sub.low_pc?, name, &parameters)
             {
                 return Some((pieces, Some(site), None, None));
             }
-        }
         let receiver = method
             .filter(|_| unique && origin.is_none())
             .and_then(|method| self.pointer_receiver(sub, &parameters, method));
@@ -931,13 +928,11 @@ impl Facts {
                 return None;
             }
         }
-        if !int_error {
-            if let [Some((_, _, register)), None] = &outputs {
-                if !storage_matches(arch, &assigned[0], register, pieces.outtype.as_ref()?) {
+        if !int_error
+            && let [Some((_, _, register)), None] = &outputs
+                && !storage_matches(arch, &assigned[0], register, pieces.outtype.as_ref()?) {
                     return None;
                 }
-            }
-        }
         if let Some(pointer) = &error_pointer {
             if !goerror::storage_matches(arch, &assigned[0]) {
                 return None;
@@ -1175,11 +1170,10 @@ impl Facts {
             }
             _ => return None,
         };
-        if let Some(kind) = kind {
-            if !kind_matches(kind, meta, size) {
+        if let Some(kind) = kind
+            && !kind_matches(kind, meta, size) {
                 return None;
             }
-        }
         Some(Scalar {
             size,
             meta,

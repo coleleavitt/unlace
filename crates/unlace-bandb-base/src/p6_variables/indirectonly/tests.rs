@@ -20,7 +20,7 @@ use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
 use crate::varnode::varnode_flags;
 
-use super::{OptionIndirectOnly, check_indirect_use, mark_indirect_only};
+use super::{check_indirect_use, mark_indirect_only};
 
 const SP_OFF: u64 = 0x20;
 

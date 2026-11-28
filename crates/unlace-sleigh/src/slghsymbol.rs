@@ -2416,6 +2416,7 @@ impl LabelTableSymbol {
 /// Runtime and compiler symbol payloads. [`SymbolTable::purge`] removes the
 /// compiler-only variants before encoding.
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum SymbolKind {
     /// C++ `SpaceSymbol`.
     Space(SpaceSymbol),
@@ -4236,10 +4237,10 @@ impl SymbolTable {
             }
         }
         // Make sure patternorder contains all operands (mark the rest).
-        for i in 0..n {
-            if !self.operand_symbol(operand_ids[i])?.is_marked() {
+        for (i, &id) in operand_ids.iter().enumerate() {
+            if !self.operand_symbol(id)?.is_marked() {
                 patternorder.push(i as i32);
-                self.operand_symbol_mut(operand_ids[i])?.set_mark();
+                self.operand_symbol_mut(id)?.set_mark();
             }
         }
 
@@ -4489,10 +4490,10 @@ impl SymbolTable {
         // Fix parent ids through the remap (C++ keeps the pointer, whose id was
         // updated in place; we remap the stored parent id).
         for slot in newtable.iter_mut() {
-            if let Some(scope) = slot.as_mut() {
-                if let Some(p) = scope.parent {
-                    scope.parent = scope_remap.get(p as usize).copied().flatten();
-                }
+            if let Some(scope) = slot.as_mut()
+                && let Some(p) = scope.parent
+            {
+                scope.parent = scope_remap.get(p as usize).copied().flatten();
             }
         }
         // Build the symbol-id remap (old id -> new id) first, so cross-refs
@@ -4872,10 +4873,10 @@ impl SymbolTable {
             }
             SymbolType::Value => {
                 // C++ ValueSymbol::decode
-                if let SymbolKind::Value(v) = self.kind_of(id) {
-                    if v.patval.is_some() {
-                        return Err(UnlaceError::decoder("Already decoded symbol"));
-                    }
+                if let SymbolKind::Value(v) = self.kind_of(id)
+                    && v.patval.is_some()
+                {
+                    return Err(UnlaceError::decoder("Already decoded symbol"));
                 }
                 let patval = {
                     let resolver = TableResolver {
@@ -4891,10 +4892,10 @@ impl SymbolTable {
             }
             SymbolType::ValueMap => {
                 // C++ ValueMapSymbol::decode
-                if let SymbolKind::ValueMap(v) = self.kind_of(id) {
-                    if v.value.patval.is_some() {
-                        return Err(UnlaceError::decoder("Already decoded symbol"));
-                    }
+                if let SymbolKind::ValueMap(v) = self.kind_of(id)
+                    && v.value.patval.is_some()
+                {
+                    return Err(UnlaceError::decoder("Already decoded symbol"));
                 }
                 let (patval, valuetable) = {
                     let resolver = TableResolver {
@@ -4920,10 +4921,10 @@ impl SymbolTable {
             }
             SymbolType::Name => {
                 // C++ NameSymbol::decode
-                if let SymbolKind::Name(v) = self.kind_of(id) {
-                    if v.value.patval.is_some() {
-                        return Err(UnlaceError::decoder("Already decoded symbol"));
-                    }
+                if let SymbolKind::Name(v) = self.kind_of(id)
+                    && v.value.patval.is_some()
+                {
+                    return Err(UnlaceError::decoder("Already decoded symbol"));
                 }
                 let (patval, nametable) = {
                     let resolver = TableResolver {
@@ -4993,10 +4994,10 @@ impl SymbolTable {
                 if low_missing || high_missing {
                     return Err(UnlaceError::decoder("Missing high/low attributes"));
                 }
-                if let SymbolKind::Context(v) = self.kind_of(id) {
-                    if v.value.patval.is_some() {
-                        return Err(UnlaceError::decoder("Already decoded symbol"));
-                    }
+                if let SymbolKind::Context(v) = self.kind_of(id)
+                    && v.value.patval.is_some()
+                {
+                    return Err(UnlaceError::decoder("Already decoded symbol"));
                 }
                 let patval = {
                     let resolver = TableResolver {
@@ -5016,10 +5017,10 @@ impl SymbolTable {
             }
             SymbolType::VarnodeList => {
                 // C++ VarnodeListSymbol::decode
-                if let SymbolKind::VarnodeList(v) = self.kind_of(id) {
-                    if v.value.patval.is_some() {
-                        return Err(UnlaceError::decoder("Already decoded symbol"));
-                    }
+                if let SymbolKind::VarnodeList(v) = self.kind_of(id)
+                    && v.value.patval.is_some()
+                {
+                    return Err(UnlaceError::decoder("Already decoded symbol"));
                 }
                 let (patval, varnode_table) = {
                     let resolver = TableResolver {
@@ -5050,10 +5051,10 @@ impl SymbolTable {
                 }
             }
             SymbolType::Operand => {
-                if let SymbolKind::Operand(v) = self.symbol(id)?.kind() {
-                    if v.defexp.is_some() || v.localexp.is_some() {
-                        return Err(UnlaceError::decoder("Already decoded symbol"));
-                    }
+                if let SymbolKind::Operand(v) = self.symbol(id)?.kind()
+                    && (v.defexp.is_some() || v.localexp.is_some())
+                {
+                    return Err(UnlaceError::decoder("Already decoded symbol"));
                 }
                 let operand = {
                     let resolver = TableResolver {
@@ -5184,10 +5185,10 @@ struct TableResolver<'a> {
 
 impl OperandValueResolver for TableResolver<'_> {
     fn num_constructors(&self, table_id: u32) -> UnlaceResult<i32> {
-        if let Some((cur_id, cur_num)) = self.current {
-            if cur_id == table_id {
-                return Ok(cur_num);
-            }
+        if let Some((cur_id, cur_num)) = self.current
+            && cur_id == table_id
+        {
+            return Ok(cur_num);
         }
         self.table.num_constructors(table_id)
     }

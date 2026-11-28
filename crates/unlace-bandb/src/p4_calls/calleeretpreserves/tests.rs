@@ -71,10 +71,11 @@ fn with_convention(fd: &Funcdata, fc: &mut FuncCallSpecs) {
         (0x08, effect_type::KILLEDBYCALL),
         (0x10, effect_type::UNAFFECTED),
     ] {
-        let mut vd = unlace_num::pcoderaw::VarnodeData::default();
-        vd.space = Some(Rc::clone(&ram));
-        vd.offset = off;
-        vd.size = 8;
+        let vd = unlace_num::pcoderaw::VarnodeData {
+            space: Some(Rc::clone(&ram)),
+            offset: off,
+            size: 8,
+        };
         model.push_effect(EffectRecord::from_varnode(vd, ty));
     }
     let void_ty = Rc::new(Datatype::new(0, type_metatype::TYPE_VOID));
@@ -345,10 +346,11 @@ fn an_explicit_effect_override_wins_over_the_body_proof() {
     let (mut fc, entry) = build_call(&mut fd, 0x2000);
     fc.proto_mut().set_output_lock(true);
     fd.unlace_set_callee_ret_writes(&entry, cookie_checker(&fd));
-    let mut vd = unlace_num::pcoderaw::VarnodeData::default();
-    vd.space = Some(space(&fd, "ram"));
-    vd.offset = 0x00;
-    vd.size = 8;
+    let vd = unlace_num::pcoderaw::VarnodeData {
+        space: Some(space(&fd, "ram")),
+        offset: 0x00,
+        size: 8,
+    };
     fc.proto_mut()
         .push_effect_override(EffectRecord::from_varnode(vd, effect_type::KILLEDBYCALL));
     let rax = Address::new(space(&fd, "ram"), 0x00);
@@ -361,10 +363,11 @@ fn an_exact_cookie_marker_does_not_override_an_explicit_effect() {
     let (mut fc, entry) = build_call(&mut fd, 0x2000);
     fc.proto_mut().set_output_lock(true);
     fd.unlace_set_callee_ret_writes(&entry, cookie_checker(&fd));
-    let mut vd = unlace_num::pcoderaw::VarnodeData::default();
-    vd.space = Some(space(&fd, "ram"));
-    vd.offset = 0x00;
-    vd.size = 8;
+    let vd = unlace_num::pcoderaw::VarnodeData {
+        space: Some(space(&fd, "ram")),
+        offset: 0x00,
+        size: 8,
+    };
     fc.proto_mut()
         .push_effect_override(EffectRecord::from_varnode(vd, effect_type::KILLEDBYCALL));
     let rax = Address::new(space(&fd, "ram"), 0x00);
@@ -437,10 +440,11 @@ fn with_two_return_registers(fd: &Funcdata, fc: &mut FuncCallSpecs, second: u64)
         (0x20, effect_type::KILLEDBYCALL),
         (0x10, effect_type::UNAFFECTED),
     ] {
-        let mut vd = unlace_num::pcoderaw::VarnodeData::default();
-        vd.space = Some(Rc::clone(&ram));
-        vd.offset = off;
-        vd.size = 8;
+        let vd = unlace_num::pcoderaw::VarnodeData {
+            space: Some(Rc::clone(&ram)),
+            offset: off,
+            size: 8,
+        };
         model.push_effect(EffectRecord::from_varnode(vd, ty));
     }
     fc.proto_mut().set_model(Some(Rc::new(model)));

@@ -182,10 +182,9 @@ fn probe_target(
         if let (Some(a), Some(b)) = (
             listing.function_containing(site).map(|f| f.entry),
             target_fn,
-        ) {
-            if a == b {
-                return Err(Guard::SameFunction);
-            }
+        ) && a == b
+        {
+            return Err(Guard::SameFunction);
         }
     }
     let gap_hi = listing

@@ -328,11 +328,10 @@ fn plan(
 ) -> Option<(BlockId, usize, Plan)> {
     let graph = data.sblocks_ref();
     let leaf = graph.get_front_leaf(jump_target(graph, g)?)?;
-    if let Some(w) = innermost_loop(graph, g).filter(|_| gates.brk) {
-        if !in_switch(graph, g, w) && flow_after(graph, w) == Some(leaf) {
+    if let Some(w) = innermost_loop(graph, g).filter(|_| gates.brk)
+        && !in_switch(graph, g, w) && flow_after(graph, w) == Some(leaf) {
             return Some((w, 0, Plan::Break));
         }
-    }
     if !gates.tails {
         return None;
     }
@@ -344,8 +343,8 @@ fn plan(
     };
     let site = dest(graph, graph.block(g).get_parent()?, g, true);
     let carried = carrier(graph, g);
-    if let Some((c, list, at)) = carried {
-        if c != g && list == rl && k > at + 1 {
+    if let Some((c, list, at)) = carried
+        && c != g && list == rl && k > at + 1 {
             return Some((
                 rl,
                 k,
@@ -357,7 +356,6 @@ fn plan(
                 },
             ));
         }
-    }
     let rest_flow = carried.and_then(|(_, list, _)| {
         dest(graph, list, *graph.block(list).get_list().last()?, false).map(|(d, _)| d)
     });
@@ -380,8 +378,8 @@ fn plan(
             };
             return Some((rl, k, Plan::Converged(m, mark)));
         }
-        if let Some((c, list, at)) = carried {
-            if after.is_some() && after == rest_flow && !contains(graph, list, members[k]) {
+        if let Some((c, list, at)) = carried
+            && after.is_some() && after == rest_flow && !contains(graph, list, members[k]) {
                 return Some((
                     rl,
                     k,
@@ -393,7 +391,6 @@ fn plan(
                     },
                 ));
             }
-        }
     }
     let w = graph.block(rl).get_parent()?;
     let continues = graph.block(w).get_type() != BlockType::DoWhile || gates.do_while_continue;
@@ -439,12 +436,11 @@ fn apply_once(data: &mut Funcdata, gates: Gates) -> Option<BlockId> {
     while let Some(id) = stack.pop() {
         let graph = data.sblocks_ref();
         stack.extend(graph.block(id).get_list().iter().copied());
-        if jump_target(graph, id).is_some() {
-            if let Some(p) = plan(data, id, &header, gates) {
+        if jump_target(graph, id).is_some()
+            && let Some(p) = plan(data, id, &header, gates) {
                 found = Some((id, p));
                 break;
             }
-        }
     }
     let (g, (rl, k, plan)) = found?;
     let graph = data.sblocks_mut();

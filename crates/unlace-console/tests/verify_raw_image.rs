@@ -434,8 +434,8 @@ fn ret_transfer_probes_do_not_change_another_functions_return_ip() {
             out: Option<&VarnodeData>,
             inputs: &[VarnodeData],
         ) {
-            if code == OpCode::CPUI_COPY {
-                if let (Some(out), Some(value)) = (
+            if code == OpCode::CPUI_COPY
+                && let (Some(out), Some(value)) = (
                     out,
                     inputs
                         .first()
@@ -443,16 +443,14 @@ fn ret_transfer_probes_do_not_change_another_functions_return_ip() {
                 ) {
                     self.saved = Some((out.get_addr(), value.offset));
                 }
-            }
-            if code == OpCode::CPUI_STORE {
-                if let Some(value) = inputs.get(2) {
+            if code == OpCode::CPUI_STORE
+                && let Some(value) = inputs.get(2) {
                     self.pushed = self
                         .saved
                         .as_ref()
                         .filter(|(at, _)| *at == value.get_addr())
                         .map(|(_, n)| *n);
                 }
-            }
         }
     }
 

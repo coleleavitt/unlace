@@ -18,7 +18,7 @@
 //!
 //! - [`arm_markers`] -- ARM/Thumb mapping-symbol (`$t`/`$a`/`$d`) + STT_FUNC-LSB
 //!   decode-mode (`TMode`) painting (the unlace analog of ARM's `ARM_ElfExtension`
-//!   + `ArmSymbolAnalyzer`): paints the SLEIGH `TMode` context variable so Thumb
+//!   and `ArmSymbolAnalyzer`): paints the SLEIGH `TMode` context variable so Thumb
 //!   code decodes as Thumb. ARM-only (no-op on every other language).
 //!
 //! - [`mips_markers`] -- MIPS `$gp` recovery via per-function `t9` register-value

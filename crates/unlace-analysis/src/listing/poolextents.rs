@@ -254,12 +254,11 @@ pub(crate) fn returning_entries(listing: &Listing) -> BTreeSet<u64> {
         }
     };
     for (i, insn) in insns.iter().enumerate() {
-        if insn.flow.kind == FlowKind::Return {
-            if let Some(lr) = returns_through_lr(insn) {
+        if insn.flow.kind == FlowKind::Return
+            && let Some(lr) = returns_through_lr(insn) {
                 reaches[i] = if lr { LR } else { STACK };
                 work.push((i, reaches[i]));
             }
-        }
     }
     let past_table = |f: &DiscoveredFunction| {
         f.name.as_deref().is_some_and(|name| {
@@ -269,8 +268,8 @@ pub(crate) fn returning_entries(listing: &Listing) -> BTreeSet<u64> {
         })
     };
     while let Some((s, flags)) = work.pop() {
-        if let Some(f) = entry_at[s] {
-            if !f.has_no_return && !past_table(f) && returns.insert(f.entry) {
+        if let Some(f) = entry_at[s]
+            && !f.has_no_return && !past_table(f) && returns.insert(f.entry) {
                 for &c in call_sites.get(&f.entry).map(Vec::as_slice).unwrap_or(&[]) {
                     if let Some(&b) = insns[c].fall_through.as_ref().and_then(|f| index.get(f)) {
                         let from = reaches[b];
@@ -278,7 +277,6 @@ pub(crate) fn returning_entries(listing: &Listing) -> BTreeSet<u64> {
                     }
                 }
             }
-        }
         for &p in branch_preds.of(s) {
             mark(&mut reaches, &mut work, p, flags);
         }

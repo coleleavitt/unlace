@@ -91,11 +91,10 @@ pub fn site_producer(
     invalid: Option<u32>,
     breakpoint: Option<u32>,
 ) -> Option<OpId> {
-    if let Some(bp) = breakpoint {
-        if let Some((callother, imm)) = crate::brktrap::brk_site(data, op, bp) {
+    if let Some(bp) = breakpoint
+        && let Some((callother, imm)) = crate::brktrap::brk_site(data, op, bp) {
             return (imm == LINUX_BUG_BRK_IMM).then_some(callother);
         }
-    }
     let invalid = invalid?;
     let id = crate::brktrap::trap_producer(data, op)?;
     let prev = data.obank().get(id)?;

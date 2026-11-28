@@ -320,8 +320,8 @@ fn merged(
     how: Combine,
 ) -> Option<Form> {
     let reuse = |vn: VarnodeId, positive: bool| positive.then_some(Form::Reuse(vn));
-    if let (Some((v1, mut r1)), Some((v2, mut r2))) = (range_of(data, x), range_of(data, y)) {
-        if v1 == v2 && how != Combine::Xor && (px || r1.invert() == 0) && (py || r2.invert() == 0) {
+    if let (Some((v1, mut r1)), Some((v2, mut r2))) = (range_of(data, x), range_of(data, y))
+        && v1 == v2 && how != Combine::Xor && (px || r1.invert() == 0) && (py || r2.invert() == 0) {
             let mut r = r1.clone();
             let ok = match how {
                 Combine::Or => r.circle_union(&r2) == 0,
@@ -333,13 +333,11 @@ fn merged(
             if ok && r.equals(&r2) {
                 return reuse(y, py);
             }
-            if ok {
-                if let Some(f) = range_form(data, v1, &r) {
+            if ok
+                && let Some(f) = range_form(data, v1, &r) {
                     return Some(f);
                 }
-            }
         }
-    }
     let (mut r1, mut r2) = pair(data, x, y)?;
     if !px {
         r1.mask = r1.all() & !r1.mask;

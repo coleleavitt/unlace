@@ -259,11 +259,10 @@ fn walk_block(data: &Funcdata, block: BlockId, state: &mut State, sp: Key, out: 
                         .map(|v| v.get_size()),
                 ) {
                     out.stores.entry(block).or_default().push((*at, size, val));
-                    if let Val::Off { at: field, .. } = val {
-                        if field == *at {
+                    if let Val::Off { at: field, .. } = val
+                        && field == *at {
                             out.steps.push((block, *at, id));
                         }
-                    }
                 }
                 continue;
             }
@@ -414,13 +413,11 @@ pub fn rewrite(data: &mut Funcdata) {
                 .map(|s| s.vals.get(&sp).copied())
                 .collect();
             let mut s = State::default();
-            if sps.len() == 1 {
-                if let Some(Some(v)) = sps.iter().next() {
-                    if matches!(v, Val::Sp(_)) {
+            if sps.len() == 1
+                && let Some(Some(v)) = sps.iter().next()
+                    && matches!(v, Val::Sp(_)) {
                         s.vals.insert(sp, *v);
                     }
-                }
-            }
             s
         };
         walk_block(data, b, &mut state, sp, &mut walk);

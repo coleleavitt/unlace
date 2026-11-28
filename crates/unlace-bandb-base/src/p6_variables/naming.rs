@@ -91,17 +91,17 @@ fn unlace_to_lower(s: &mut String) {
 /// more decimal digits and nothing else.
 pub fn unlace_is_generated_name(nm: &str) -> bool {
     let bytes = nm.as_bytes();
-    let start: usize;
-    if nm.len() >= 6 && &nm[0..6] == "param_" {
-        start = 6;
+    
+    let start: usize = if nm.len() >= 6 && &nm[0..6] == "param_" {
+        6
     } else if bytes.len() >= 2
         && (bytes[0] == b'v' || bytes[0] == b'a')
         && bytes[1].is_ascii_digit()
     {
-        start = 1;
+        1
     } else {
         return false;
-    }
+    };
     for &b in &bytes[start..] {
         if !b.is_ascii_digit() {
             return false;
@@ -180,13 +180,11 @@ pub fn unlace_storage_comment(view: &StorageView) -> String {
     }
 
     // Split value -> its constituent register pieces ("rdx:rax").
-    if spc.get_type() == spacetype::IPTR_JOIN {
-        if let Some(pieces) = &view.join_pieces {
-            if !pieces.is_empty() {
+    if spc.get_type() == spacetype::IPTR_JOIN
+        && let Some(pieces) = &view.join_pieces
+            && !pieces.is_empty() {
                 return pieces.join(":");
             }
-        }
-    }
 
     // A decompiler-internal temporary (unique space) with no machine register or
     // stack home: annotate it honestly so every local still carries a location.

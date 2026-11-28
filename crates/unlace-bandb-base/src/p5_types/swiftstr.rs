@@ -505,11 +505,10 @@ fn compare_partner(data: &Funcdata, op: OpId, index: int4, object: u64) -> Optio
     let here = graph.block(block);
     if here.size_in() == 1 {
         let pred = here.get_in(0);
-        if let Some(branch) = data.bb_op_tail(pred).and_then(|t| data.obank().get(t)) {
-            if branch.code() == OpCode::CPUI_CBRANCH {
+        if let Some(branch) = data.bb_op_tail(pred).and_then(|t| data.obank().get(t))
+            && branch.code() == OpCode::CPUI_CBRANCH {
                 conditions.extend(branch.get_in(1));
             }
-        }
     }
     let mut found: Option<u64> = None;
     for cond in conditions {

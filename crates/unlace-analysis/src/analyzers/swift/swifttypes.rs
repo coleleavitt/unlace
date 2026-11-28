@@ -254,13 +254,11 @@ impl<'a> Types<'a> {
         let mut by_path: HashMap<String, u64> = HashMap::new();
         let mut ambiguous = HashSet::new();
         for ctx in md.contexts.values() {
-            if ctx.kind.is_nominal() {
-                if let Some(p) = namer.path(ctx.addr, 0) {
-                    if by_path.insert(p.clone(), ctx.addr).is_some() {
+            if ctx.kind.is_nominal()
+                && let Some(p) = namer.path(ctx.addr, 0)
+                    && by_path.insert(p.clone(), ctx.addr).is_some() {
                         ambiguous.insert(p);
                     }
-                }
-            }
         }
         for p in &ambiguous {
             by_path.remove(p);
@@ -538,11 +536,10 @@ impl<'a> Types<'a> {
                     .imports
                     .get(&slot)
                     .is_some_and(|n| n.ends_with("_TtCs12_SwiftObject")));
-        if swift_root {
-            if let Ok(word) = self.tf.get_base(8, type_metatype::TYPE_UINT) {
+        if swift_root
+            && let Ok(word) = self.tf.get_base(8, type_metatype::TYPE_UINT) {
                 header.push(TypeField::new(1, 8, "refcounts".to_string(), word));
             }
-        }
         header
     }
 
@@ -696,8 +693,8 @@ impl<'a> Types<'a> {
                 // C type of that name when the image has one (DWARF, the
                 // Objective-C pass), inline for a struct, through a pointer
                 // for a class.
-                if let Some(c_name) = full.strip_prefix("__C.") {
-                    if let Some(t) = tf
+                if let Some(c_name) = full.strip_prefix("__C.")
+                    && let Some(t) = tf
                         .find_by_name(c_name)
                         .ok()
                         .flatten()
@@ -709,7 +706,6 @@ impl<'a> Types<'a> {
                             (t.get_size() as u32 <= hint).then_some(t)
                         };
                     }
-                }
                 if inner.kind == Kind::Class {
                     let st = match self.by_path.get(&full) {
                         Some(&addr) => self
@@ -1101,8 +1097,8 @@ impl<'a> Types<'a> {
                     type_: t,
                 });
             }
-            if ctx.kind != ContextKind::Class {
-                if let Some((w, t)) = self
+            if ctx.kind != ContextKind::Class
+                && let Some((w, t)) = self
                     .local_witness_table(meta)
                     .and_then(|w| Some((w, self.table_struct_at(w)?)))
                 {
@@ -1112,7 +1108,6 @@ impl<'a> Types<'a> {
                         type_: t,
                     });
                 }
-            }
             // An accessor returns a `MetadataResponse`: the metadata and its
             // state, two words. The bodies `locate_metadata` admits compute the
             // address into the return register and never read the request.

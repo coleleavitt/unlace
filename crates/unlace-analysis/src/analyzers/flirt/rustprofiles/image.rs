@@ -100,14 +100,13 @@ impl Request {
             .chain(file.dynamic_symbols())
             .filter(|symbol| symbol.is_definition() && symbol.kind() == object::SymbolKind::Text)
         {
-            if let Ok(name) = symbol.name() {
-                if known
+            if let Ok(name) = symbol.name()
+                && known
                     .insert(symbol.address(), name.to_owned())
                     .is_some_and(|old| old != name)
                 {
                     conflicting.insert(symbol.address());
                 }
-            }
         }
         known.retain(|address, _| !conflicting.contains(address));
         let mut result = ImageReport {

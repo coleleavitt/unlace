@@ -209,8 +209,7 @@ fn panic_message_recovers_string_payload() {
 /// payload built by the standard library).
 #[test]
 fn panic_message_recovers_unwrap_payload() {
-    let payload =
-        std::panic::catch_unwind(|| Option::<u32>::None.unwrap()).expect_err("the closure panics");
+    let payload = std::panic::catch_unwind(|| panic!()).expect_err("the closure panics");
     assert!(
         panic_message(payload).contains("called `Option::unwrap()` on a `None` value"),
         "unwrap panics must round-trip their standard-library message"
@@ -379,9 +378,7 @@ fn variable_merging_stops_once_a_probe_sees_the_budget_spent() {
 
 #[test]
 fn a_jump_table_value_walk_stops_once_a_probe_sees_the_budget_spent() {
-    use crate::jumptable::{
-        JumpValues, JumpValuesRange, JumpValuesRangeDefault, JumpValuesSetters,
-    };
+    use crate::jumptable::{JumpValues, JumpValuesRange, JumpValuesRangeDefault};
     use crate::rangeutil::CircleRange;
     let walks: [fn() -> Box<dyn JumpValues>; 2] = [
         || Box::new(JumpValuesRange::new()),

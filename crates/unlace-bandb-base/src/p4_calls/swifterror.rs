@@ -120,11 +120,10 @@ fn write_before_return(data: &Funcdata, ret: OpId, reg: &Address, size: int4) ->
         if is_call(op.code()) {
             return None;
         }
-        if let Some(out) = op.get_out().and_then(|o| data.vbank().get(o)) {
-            if overlaps(out.get_addr(), out.get_size(), reg, size) {
+        if let Some(out) = op.get_out().and_then(|o| data.vbank().get(o))
+            && overlaps(out.get_addr(), out.get_size(), reg, size) {
                 return (out.get_addr() == reg && out.get_size() == size).then_some(id);
             }
-        }
         cur = data.op_previous_op(id);
     }
     None

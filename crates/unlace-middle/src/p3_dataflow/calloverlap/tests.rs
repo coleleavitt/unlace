@@ -120,9 +120,9 @@ fn auto_excludes_high_words_float_slots_and_multiple_slots() {
 fn levels_are_ordered_so_the_gate_can_use_a_threshold() {
     // Both guards read `level >= LEVEL_IN` / `level >= LEVEL_FULL`, and
     // `auto` enables a subset of `in`, so the vocabulary must stay monotone.
-    assert!(LEVEL_OFF < LEVEL_AUTO);
-    assert!(LEVEL_AUTO < LEVEL_IN);
-    assert!(LEVEL_IN < LEVEL_FULL);
+    const _: () = assert!(LEVEL_OFF < LEVEL_AUTO);
+    const _: () = assert!(LEVEL_AUTO < LEVEL_IN);
+    const _: () = assert!(LEVEL_IN < LEVEL_FULL);
 }
 
 #[test]

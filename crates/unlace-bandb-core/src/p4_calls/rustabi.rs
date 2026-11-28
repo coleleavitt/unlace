@@ -755,13 +755,11 @@ impl unlace_sleigh::translate::PcodeEmit for ProbeEmit {
         outvar: Option<&unlace_num::pcoderaw::VarnodeData>,
         vars: &[unlace_num::pcoderaw::VarnodeData],
     ) {
-        if let Some(o) = outvar {
-            if let Some(sp) = &o.space {
-                if sp.get_type() == unlace_base::space::spacetype::IPTR_PROCESSOR {
+        if let Some(o) = outvar
+            && let Some(sp) = &o.space
+                && sp.get_type() == unlace_base::space::spacetype::IPTR_PROCESSOR {
                     self.writes.push((sp.get_index(), o.offset, o.size as int4));
                 }
-            }
-        }
         match opc {
             // The vector of an `INT imm8` reaches the `swi` user-op through an
             // internal temp, so the constant has to be carried that far.
@@ -769,11 +767,10 @@ impl unlace_sleigh::translate::PcodeEmit for ProbeEmit {
                 if let (Some(o), Some(v)) = (outvar, vars.first()) {
                     let internal_out = o.space.as_ref().map(|sp| sp.get_type())
                         == Some(unlace_base::space::spacetype::IPTR_INTERNAL);
-                    if internal_out {
-                        if let Some(val) = self.const_value(v) {
+                    if internal_out
+                        && let Some(val) = self.const_value(v) {
                             self.temp_consts.push((o.offset, o.size as int4, val));
                         }
-                    }
                 }
             }
             // A Windows `int 0x29` is `__fastfail`: the path ends there, so the
@@ -821,8 +818,8 @@ impl unlace_sleigh::translate::PcodeEmit for ProbeEmit {
                 if let Some(v) = vars.first() {
                     self.return_inputs.push(v.clone());
                 }
-                if let Some(v) = vars.first() {
-                    if let Some(sp) = v
+                if let Some(v) = vars.first()
+                    && let Some(sp) = v
                         .space
                         .as_ref()
                         .filter(|sp| sp.get_type() == spacetype::IPTR_PROCESSOR)
@@ -832,7 +829,6 @@ impl unlace_sleigh::translate::PcodeEmit for ProbeEmit {
                             self.return_targets.push(target);
                         }
                     }
-                }
             }
             // The `<spaceid>` operand's offset IS the space-manager index
             // (`Varnode::getSpaceFromConst`).
@@ -1048,13 +1044,11 @@ pub fn classify_call_output_pair(
     }
     // The one piece of callee evidence this seam can obtain: a bounded decode of
     // the callee body that proves the second register is never written.
-    if let Some(entry) = callee_entry {
-        if let Some(w) = data.unlace_callee_ret_writes(entry) {
-            if w.proves_untouched_for(model, &second_addr, second_size) {
+    if let Some(entry) = callee_entry
+        && let Some(w) = data.unlace_callee_ret_writes(entry)
+            && w.proves_untouched_for(model, &second_addr, second_size) {
                 return CallPairRepr::CalleeScalar;
             }
-        }
-    }
     CallPairRepr::ScalarPair
 }
 
@@ -1300,7 +1294,7 @@ impl crate::optionset::UnlaceOption for RustAbiMode {
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
-        Ok(parse_rust_abi_mode(value)?)
+        parse_rust_abi_mode(value)
     }
 }
 

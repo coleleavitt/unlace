@@ -308,13 +308,11 @@ impl<'a> Types<'a> {
             .ok()
             .filter(|&s| (IVARS..=MAX_INSTANCE).contains(&s) && s % 8 == 0)?;
         let mut fields = Vec::new();
-        if c.super_name != c.name {
-            if let Some(sup) = self.class(&c.super_name, depth + 1) {
-                if sup.get_size() <= size - IVARS {
+        if c.super_name != c.name
+            && let Some(sup) = self.class(&c.super_name, depth + 1)
+                && sup.get_size() <= size - IVARS {
                     fields.push(TypeField::new(0, 0, "super", sup));
                 }
-            }
-        }
         let ivars = opaque_ptr(self.t, &format!("{name}_IVars"), &self.void_ptr);
         fields.push(TypeField::new(
             fields.len() as i32,

@@ -297,6 +297,7 @@ fn get_const_offset_back_shared_sum_drops_constant() {
     assert_eq!(r_shared, 0, "a shared sum contributes no constant");
 }
 
+#[test]
 fn get_const_offset_back_depth_limit_stops() {
     // A written non-const, non-add/mult op at depth 0 -> 0 (maxLevel guard).
     let mut fd = build_fd();

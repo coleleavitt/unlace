@@ -363,12 +363,10 @@ fn slice_of(data: &Funcdata, vn: VarnodeId) -> Option<Slice> {
         .get_def()
         .filter(|_| v.is_written())
         .and_then(|d| data.obank().get(d))
-    {
-        if def.code() == OpCode::CPUI_SUBPIECE {
+        && def.code() == OpCode::CPUI_SUBPIECE {
             let off = data.vbank().get(def.get_in(1)?)?.get_offset();
             return Some(Slice::Piece(def.get_in(0)?, off));
         }
-    }
     let addr = v.get_addr().clone();
     Some(Slice::Direct(
         addr.get_space()?.get_index() as usize,
@@ -665,17 +663,15 @@ pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> UnlaceResul
             let Some(o) = data.obank().get(op) else {
                 continue;
             };
-            if o.code() == OpCode::CPUI_INT_MULT {
-                if let Some(a) = addr_of(data, o.get_in(1)) {
-                    if a.get_space().map(|s| s.get_index())
+            if o.code() == OpCode::CPUI_INT_MULT
+                && let Some(a) = addr_of(data, o.get_in(1))
+                    && a.get_space().map(|s| s.get_index())
                         == r_addr.get_space().map(|s| s.get_index())
                         && a.get_offset() != r_addr.get_offset()
                     {
                         src = Some(a);
                         break;
                     }
-                }
-            }
         }
     }
     // The merge source is a copy the instruction makes after the user-op (of the
@@ -734,16 +730,14 @@ pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> UnlaceResul
         if !unique_writes(data, op) {
             continue;
         }
-        if o.code() == OpCode::CPUI_COPY && mask.is_none() {
-            if let Some(v) = o.get_in(0).and_then(|v| data.vbank().get(v)) {
-                if v.get_addr()
+        if o.code() == OpCode::CPUI_COPY && mask.is_none()
+            && let Some(v) = o.get_in(0).and_then(|v| data.vbank().get(v))
+                && v.get_addr()
                     .get_space()
                     .is_some_and(|s| s.get_name() == "register")
                 {
                     mask = Some((v.get_addr().clone(), v.get_size()));
                 }
-            }
-        }
         doomed.push(op);
     }
     let Some((mask_addr, mask_size)) = mask else {

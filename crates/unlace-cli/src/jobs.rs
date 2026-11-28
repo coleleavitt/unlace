@@ -1798,10 +1798,6 @@ fn merge_chunk(
     produced: Vec<FuncResult>,
     reason: &str,
 ) -> (Vec<FuncResult>, Vec<bool>) {
-    #[expect(
-        clippy::disallowed_types,
-        reason = "Lookup only; chunk order determines output and duplicate targets consume once."
-    )]
     let mut by_addr: std::collections::HashMap<u64, FuncResult> =
         produced.into_iter().map(|r| (r.byte_address, r)).collect();
     chunk

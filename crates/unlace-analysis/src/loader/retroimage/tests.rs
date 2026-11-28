@@ -81,9 +81,17 @@ fn psx_rejects_an_entry_outside_the_stored_text() {
 fn n64_reads_every_dump_byte_order_alike() {
     let big = fixture!("hello.z64").to_vec();
     let mut swapped = big.clone();
-    swapped.chunks_exact_mut(2).for_each(|pair| pair.swap(0, 1));
+    swapped
+        .as_chunks_mut::<2>()
+        .0
+        .iter_mut()
+        .for_each(|pair| pair.swap(0, 1));
     let mut little = big.clone();
-    little.chunks_exact_mut(4).for_each(|word| word.reverse());
+    little
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .for_each(|word| word.reverse());
     let image = load("hello.z64");
     assert_eq!(
         (image.language, image.base, image.entry),

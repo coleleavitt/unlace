@@ -723,11 +723,10 @@ impl CastContext for MockCtx {
     fn op_is_bool_output(&self, op: OpRef) -> bool {
         // Mirror the def's bool-output flag if set, else use the op-code's
         // booloutput property (PcodeOp::booloutput, op.rs `pcodeop_flags`).
-        if let Some(out) = self.ops[op.0].out {
-            if self.vns[out.0].bool_output_def {
+        if let Some(out) = self.ops[op.0].out
+            && self.vns[out.0].bool_output_def {
                 return true;
             }
-        }
         (crate::typeop::type_op_info(self.ops[op.0].code).get_flags()
             & crate::op::pcodeop_flags::booloutput)
             != 0

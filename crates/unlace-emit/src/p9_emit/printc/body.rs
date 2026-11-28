@@ -529,15 +529,14 @@ impl PrintC {
     /// gave it.
     #[doc(hidden)]
     pub fn block_label_name(&self, fd: &Funcdata, bl: BlockId) -> String {
-        if !self.label_names.is_empty() {
-            if let Some(name) = fd
+        if !self.label_names.is_empty()
+            && let Some(name) = fd
                 .sblocks_ref()
                 .get_front_leaf(bl)
                 .and_then(|f| self.label_names.get(&f))
             {
                 return name.clone();
             }
-        }
         self.address_label_name(fd, bl)
     }
 
@@ -696,8 +695,8 @@ impl PrintC {
                 self.commsorter.mark_last_emitted();
                 continue;
             }
-            if self.options.warn_inline && (tp & ct::WARNING) != 0 {
-                if let (Some(space), text_str) = (
+            if self.options.warn_inline && (tp & ct::WARNING) != 0
+                && let (Some(space), text_str) = (
                     addr.get_space().map(std::rc::Rc::clone),
                     String::from_utf8_lossy(&text),
                 ) {
@@ -710,7 +709,6 @@ impl PrintC {
                     self.commsorter.mark_last_emitted();
                     continue;
                 }
-            }
             self.emit_line_comment(-1, &text, &addr);
             if let Some(warning) = warning {
                 self.record_warning(warning, &String::from_utf8_lossy(&text));

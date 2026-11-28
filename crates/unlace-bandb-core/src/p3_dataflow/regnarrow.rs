@@ -89,11 +89,10 @@ fn web_of(data: &Funcdata, seed: VarnodeId) -> Vec<VarnodeId> {
             continue;
         };
         let mut next = Vec::new();
-        if let Some(o) = v.get_def().and_then(|d| data.obank().get(d)) {
-            if o.code() == OpCode::CPUI_MULTIEQUAL {
+        if let Some(o) = v.get_def().and_then(|d| data.obank().get(d))
+            && o.code() == OpCode::CPUI_MULTIEQUAL {
                 next.extend((0..o.num_input()).filter_map(|k| o.get_in(k)));
             }
-        }
         for op in v.descend_iter() {
             if let Some(o) = data
                 .obank()
@@ -233,11 +232,10 @@ pub fn narrow_locals(data: &mut Funcdata) -> int4 {
             .filter_map(|&vn| data.vbank().get(vn))
             .fold(0, |m, v| m | v.get_nz_mask());
         let Some(w) = narrow_width(nz, size) else {
-            if signed {
-                if let Some(w) = signed_width(data, &web, size) {
+            if signed
+                && let Some(w) = signed_width(data, &web, size) {
                     count += narrow_signed_web(data, seed, w, &mut seen);
                 }
-            }
             continue;
         };
         if !narrowing_defs(data, &web, w) || masked_copy(data, &web) {
@@ -342,11 +340,10 @@ fn feeds_switch(data: &Funcdata, web: &[VarnodeId]) -> bool {
                 if o.code() == OpCode::CPUI_BRANCHIND {
                     return true;
                 }
-                if let Some(out) = o.get_out() {
-                    if seen.len() < 512 && seen.insert(out) {
+                if let Some(out) = o.get_out()
+                    && seen.len() < 512 && seen.insert(out) {
                         next.push(out);
                     }
-                }
             }
         }
         if next.is_empty() {

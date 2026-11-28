@@ -812,8 +812,8 @@ fn declared_contradicts(data: &Funcdata, op: OpId, outvn: VarnodeId, ct: &Dataty
         let Some(node) = data.vbank().get(v) else {
             continue;
         };
-        if let Some(def) = node.get_def().filter(|&d| d != op) {
-            if data
+        if let Some(def) = node.get_def().filter(|&d| d != op)
+            && data
                 .obank()
                 .get(def)
                 .is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
@@ -821,7 +821,6 @@ fn declared_contradicts(data: &Funcdata, op: OpId, outvn: VarnodeId, ct: &Dataty
             {
                 return true;
             }
-        }
         for r in node.descend_iter() {
             let Some(o) = data.obank().get(r) else {
                 continue;

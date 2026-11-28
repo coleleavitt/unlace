@@ -1,4 +1,5 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
+#![allow(clippy::duplicate_mod)]
 #[path = "arcv2_loops.rs"]
 mod arcv2_loops;
 #[path = "chip8.rs"]

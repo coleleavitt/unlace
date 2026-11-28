@@ -114,6 +114,7 @@ fn a_stated_callee_excludes_its_physical_site_from_got_proof() {
                 slot
             }
         };
+        #[allow(clippy::mutable_key_type)]
         let stated = program.arch().unlace_callee_overrides.clone();
         let index = xrefs::build(
             &file,

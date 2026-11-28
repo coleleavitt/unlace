@@ -470,8 +470,7 @@ pub fn declared_member_type(fd: &Funcdata, id: VarnodeId) -> Option<Rc<Datatype>
         if let Some((_, offset, Some(ty))) =
             fd.get_arch()
                 .name_for_global_varnode(value.get_addr(), value.get_size(), &usepoint)
-        {
-            if ty.get_metatype() == type_metatype::TYPE_ARRAY {
+            && ty.get_metatype() == type_metatype::TYPE_ARRAY {
                 let types = fd.get_arch().types()?;
                 return crate::stackviews::scalar_piece(types, ty, offset.max(0), value.get_size())
                     .or_else(|| {
@@ -488,7 +487,6 @@ pub fn declared_member_type(fd: &Funcdata, id: VarnodeId) -> Option<Rc<Datatype>
                             .flatten()
                     });
             }
-        }
     }
     let declared = crate::printc::declared_variable_type(fd, id)?;
     if !fd

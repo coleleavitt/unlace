@@ -69,7 +69,7 @@ fn build_elf(is64: bool, machine: u16, secs: &[Sec], got_len: u64) -> Vec<u8> {
         out.push(0);
     }
     let shoff = out.len();
-    out.extend(std::iter::repeat(0).take(shnum * shentsize));
+    out.extend(std::iter::repeat_n(0, shnum * shentsize));
     let filesz = out.len() as u64;
 
     fn put(o: &mut [u8], at: usize, v: u64, w: usize) {

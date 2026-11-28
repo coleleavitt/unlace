@@ -369,12 +369,12 @@ struct ResolvedRelocationTarget {
     thumb: Option<bool>,
 }
 
-/// Lay a relocatable object (an ELF `ET_REL` or a COFF `.obj`) out into a
-/// loadable image: synthesize the section layout, apply the relocations, and
-/// rebase / extern-bind the symbols.  The unlace analog of angr CLE's `ELF`
-/// relocatable backend.
-///
-/// `fmt` supplies the two per-format questions — which sections are memory-
+// Lay a relocatable object (an ELF `ET_REL` or a COFF `.obj`) out into a
+// loadable image: synthesize the section layout, apply the relocations, and
+// rebase / extern-bind the symbols.  The unlace analog of angr CLE's `ELF`
+// relocatable backend.
+//
+// `fmt` supplies the two per-format questions — which sections are memory-
 
 /// The static TLS block a relocatable object's `SHF_TLS` sections (`.tdata`,
 /// `.tbss`) would form linked alone: each at its alignment, in section order.
@@ -622,6 +622,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
     let opd_index = opd.as_ref().map(|s| s.index());
 
     // --- Pass 2: apply relocations, patching each laid-out section's bytes.
+    #[allow(clippy::needless_range_loop)]
     for li in 0..laid.len() {
         let sec_index = laid[li].index;
         let sec_vma = laid[li].vma;
@@ -639,15 +640,15 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             let gp_value = g.gp();
             let mut resolve = |target: RelocationTarget| {
                 let local = mipsreloc::is_local(file, target);
-                if let RelocationTarget::Symbol(idx) = target {
-                    if let Some(special) = mipsreloc::special_symbol(file, idx, gp_value) {
-                        let address = special.unwrap_or(0);
-                        return Some(mipsreloc::Target {
-                            address,
-                            local,
-                            gp_disp: special.is_none(),
-                        });
-                    }
+                if let RelocationTarget::Symbol(idx) = target
+                    && let Some(special) = mipsreloc::special_symbol(file, idx, gp_value)
+                {
+                    let address = special.unwrap_or(0);
+                    return Some(mipsreloc::Target {
+                        address,
+                        local,
+                        gp_disp: special.is_none(),
+                    });
                 }
                 let address = match target {
                     RelocationTarget::Symbol(idx) => {
@@ -676,10 +677,9 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             for (_, reloc) in &relocs {
                 if let (Some(r_type), RelocationTarget::Symbol(idx)) =
                     (mipsreloc::r_type_of(reloc), reloc.target())
+                    && mipsreloc::targets_code(r_type)
                 {
-                    if mipsreloc::targets_code(r_type) {
-                        code_externs.insert(idx);
-                    }
+                    code_externs.insert(idx);
                 }
             }
             let applied = g.apply_section(
@@ -1085,19 +1085,19 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         if !is_func {
             continue;
         }
-        if let Ok(n) = sym.name_bytes() {
-            if !n.is_empty() {
-                symbol_info.push(RelocSymbolInfo {
-                    name: String::from_utf8_lossy(n).into_owned(),
-                    vma: *addr,
-                    section_index: None,
-                    section_name: None,
-                    section_offset: None,
-                    binding: symbol_binding(&sym),
-                    undefined: true,
-                });
-                funcsyms.push((*addr, n.to_vec()));
-            }
+        if let Ok(n) = sym.name_bytes()
+            && !n.is_empty()
+        {
+            symbol_info.push(RelocSymbolInfo {
+                name: String::from_utf8_lossy(n).into_owned(),
+                vma: *addr,
+                section_index: None,
+                section_name: None,
+                section_offset: None,
+                binding: symbol_binding(&sym),
+                undefined: true,
+            });
+            funcsyms.push((*addr, n.to_vec()));
         }
     }
 

@@ -32,6 +32,9 @@ pub const SEC_CLASSLIST: &str = "__objc_classlist";
 /// record's own reads plus the symbols and strings the pass keeps for it.
 pub const RECORD_WORK: u64 = 64;
 
+/// Reads up to `n` bytes at an address outside the image's own sections.
+pub type OutsideReader<'a> = Rc<dyn Fn(u64, usize) -> Option<Vec<u8>> + 'a>;
+
 /// A read-only view over a Mach-O image's mapped sections, keyed by VMA range, so
 /// an absolute pointer in the ObjC metadata can be dereferenced to bytes.
 pub struct MachoImage<'a> {
@@ -59,7 +62,7 @@ pub struct MachoImage<'a> {
     /// Up to `n` bytes at an address outside the image's own sections: the dyld
     /// shared cache regions an image's selector references, class references
     /// and method names point into. `None` on a standalone image.
-    outside: Option<Rc<dyn Fn(u64, usize) -> Option<Vec<u8>> + 'a>>,
+    outside: Option<OutsideReader<'a>>,
     /// The selector base a direct-selector method list (`0x40000000`) offsets
     /// its selectors from: the dyld shared cache's.
     pub selector_base: Option<u64>,
@@ -83,7 +86,7 @@ impl<'a> MachoImage<'a> {
     /// and resolve direct selectors from `selector_base`.
     pub fn with_cache(
         mut self,
-        outside: Rc<dyn Fn(u64, usize) -> Option<Vec<u8>> + 'a>,
+        outside: OutsideReader<'a>,
         selector_base: Option<u64>,
     ) -> MachoImage<'a> {
         self.outside = Some(outside);
@@ -177,10 +180,10 @@ impl<'a> MachoImage<'a> {
             }
             // An ELF's unmapped sections (`.symtab`, `.strtab`, debug info)
             // sit at address 0 and would shadow the mapped ones there.
-            if let object::SectionFlags::Elf { sh_flags } = sec.flags() {
-                if sh_flags & u64::from(object::elf::SHF_ALLOC) == 0 {
-                    continue;
-                }
+            if let object::SectionFlags::Elf { sh_flags } = sec.flags()
+                && sh_flags & u64::from(object::elf::SHF_ALLOC) == 0
+            {
+                continue;
             }
             let addr = sec.address();
             let size = sec.size();

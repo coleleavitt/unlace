@@ -126,16 +126,14 @@ where
     let mut current = Some(branch);
     while let Some(id) = current {
         let op = data.obank().get(id)?;
-        if op.code() == OpCode::CPUI_CALLOTHER {
-            if let Some(input) = op.get_in(0).and_then(|v| data.vbank().get(v)) {
-                if input.is_constant()
+        if op.code() == OpCode::CPUI_CALLOTHER
+            && let Some(input) = op.get_in(0).and_then(|v| data.vbank().get(v))
+                && input.is_constant()
                     && userop_name(input.get_offset() as u32).as_deref()
                         == Some(ILLEGAL_INSTRUCTION_TRAP)
                 {
                     return Some(id);
                 }
-            }
-        }
         if op.is_instruction_start() {
             break;
         }

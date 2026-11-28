@@ -73,11 +73,10 @@ impl FuncdataFacingExt for Funcdata {
             // inherited `TypePointer::findResolve` — the same cache consult, keyed on
             // the (stripped-pointer) ptrto id.  Match both kinds here.
             DatatypeKind::Pointer { ptrto, .. } | DatatypeKind::PointerRel { ptrto, .. } => {
-                if ptrto.get_metatype() == type_metatype::TYPE_UNION {
-                    if let Some(res) = self.get_union_field(ct, op, slot) {
+                if ptrto.get_metatype() == type_metatype::TYPE_UNION
+                    && let Some(res) = self.get_union_field(ct, op, slot) {
                         return Rc::clone(res.get_datatype());
                     }
-                }
                 Rc::clone(ct)
             }
             // TypeArray::findResolve (type.cc:1470-1478): cache, else the element.
@@ -122,13 +121,11 @@ impl FuncdataFacingExt for Funcdata {
     /// data-type, resolved against the *write* edge (`slot == -1`) when it needs
     /// union resolution.  `vn` **must** be written.
     fn vn_type_def_facing(&self, vn: VarnodeId) -> Rc<Datatype> {
-        if crate::stackviews::enabled(self) {
-            if let Some(op) = self.vbank().get(vn).and_then(|v| v.get_def()) {
-                if let Some(view) = crate::stackviews::access_type(self, vn, op, -1) {
+        if crate::stackviews::enabled(self)
+            && let Some(op) = self.vbank().get(vn).and_then(|v| v.get_def())
+                && let Some(view) = crate::stackviews::access_type(self, vn, op, -1) {
                     return view;
                 }
-            }
-        }
         let v = self.vbank().get(vn).expect("vn_type_def_facing: stale vn");
         let ty = Rc::clone(v.get_type());
         if !ty.needs_resolution() {
@@ -168,13 +165,11 @@ impl FuncdataFacingExt for Funcdata {
     /// union resolution.  This is the def-facing node of the type graph the Casts
     /// stage walks.
     fn vn_high_type_def_facing(&mut self, vn: VarnodeId) -> Rc<Datatype> {
-        if crate::stackviews::enabled(self) {
-            if let Some(op) = self.vbank().get(vn).and_then(|v| v.get_def()) {
-                if let Some(view) = crate::stackviews::access_type(self, vn, op, -1) {
+        if crate::stackviews::enabled(self)
+            && let Some(op) = self.vbank().get(vn).and_then(|v| v.get_def())
+                && let Some(view) = crate::stackviews::access_type(self, vn, op, -1) {
                     return view;
                 }
-            }
-        }
         let ct = self
             .high_get_type(vn)
             .unwrap_or_else(|| Rc::clone(self.vbank().get(vn).expect("stale vn").get_type()));

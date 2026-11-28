@@ -363,13 +363,12 @@ fn prove_linear(data: &Funcdata, in0: VarnodeId, in1: VarnodeId) -> Option<bool>
 fn constant_result(data: &Funcdata, op: OpId) -> Option<bool> {
     let o = data.obank().get(op)?;
     let (code, in0, in1) = (o.code(), o.get_in(0)?, o.get_in(1)?);
-    if matches!(code, OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL) {
-        if let Some(equal) =
+    if matches!(code, OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL)
+        && let Some(equal) =
             prove_linear(data, in0, in1).or_else(|| prove_never_equal(data, in0, in1))
         {
             return Some(equal == (code == OpCode::CPUI_INT_EQUAL));
         }
-    }
     let signed = matches!(code, OpCode::CPUI_INT_SLESS | OpCode::CPUI_INT_SLESSEQUAL);
     let low_bits = if signed {
         None

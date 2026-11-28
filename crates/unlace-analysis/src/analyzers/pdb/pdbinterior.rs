@@ -208,7 +208,7 @@ pub fn suppress_owned_interior_entries(
     let mut called: BTreeSet<u64> = BTreeSet::new();
     for (start, end) in sorted {
         let owned = start < end
-            && used_end.map_or(true, |prev| prev <= start)
+            && used_end.is_none_or(|prev| prev <= start)
             && (admitted.binary_search(&start).is_ok() || is_function(start));
         if !owned {
             continue;

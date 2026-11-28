@@ -518,11 +518,10 @@ pub fn reconcile(fd: &mut Funcdata) {
                 .vbank_mut()
                 .get_mut(vn)
                 .is_some_and(|v| v.update_type(Rc::clone(&t)));
-            if let (true, Some(h)) = (changed, high) {
-                if let Some(hh) = fd.high_bank_mut().get_mut(h) {
+            if let (true, Some(h)) = (changed, high)
+                && let Some(hh) = fd.high_bank_mut().get_mut(h) {
                     hh.type_dirty();
                 }
-            }
         }
         let addr = unlace_base::address::Address::new(Rc::clone(&space), off);
         let sym = fd

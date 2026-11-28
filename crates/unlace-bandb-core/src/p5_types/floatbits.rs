@@ -353,7 +353,7 @@ impl Shape {
             o.get_in(k)
                 .and_then(|c| data.vbank().get(c))
                 .filter(|c| c.is_constant() && c.get_size() == 8)
-                .map(|c| c.get_offset() as u64)
+                .map(|c| c.get_offset())
         };
         match o.code() {
             OpCode::CPUI_INT_AND
@@ -412,7 +412,7 @@ pub fn compares_as_a_float(data: &Funcdata, c: VarnodeId) -> bool {
     let Some(node) = data.vbank().get(c).filter(|n| n.is_constant()) else {
         return false;
     };
-    let bits = node.get_offset() as u64;
+    let bits = node.get_offset();
     let (exponent, mantissa) = match node.get_size() {
         4 => ((bits >> 23) & 0xff, bits & 0x7f_ffff),
         8 => ((bits >> 52) & 0x7ff, bits & 0xf_ffff_ffff_ffff),
@@ -572,7 +572,7 @@ fn flips_the_sign(data: &Funcdata, o: &crate::op::PcodeOp) -> bool {
         return false;
     };
     let bits = 8 * c.get_size() as u32;
-    bits <= 64 && c.get_offset() as u64 == 1u64 << (bits - 1)
+    bits <= 64 && c.get_offset() == 1u64 << (bits - 1)
 }
 
 fn is_constant(data: &Funcdata, vn: Option<VarnodeId>) -> bool {

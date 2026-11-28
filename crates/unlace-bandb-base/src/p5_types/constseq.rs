@@ -145,7 +145,7 @@ impl ArraySequence {
     #[doc(hidden)]
     pub fn check_interference(&mut self, data: &Funcdata, root_op: OpId) -> bool {
         // sort(moveOps) by block order
-        self.move_ops.sort_by(|a, b| a.order.cmp(&b.order));
+        self.move_ops.sort_by_key(|a| a.order);
         let mut pos = self.move_ops.len();
         for (i, node) in self.move_ops.iter().enumerate() {
             if node.op == root_op {
@@ -257,9 +257,9 @@ impl ArraySequence {
         if count != self.move_ops.len() as int4 {
             let max_off = root_off.wrapping_add((count * big_el_size) as u64);
             let mut final_ops: Vec<WriteNode> = Vec::new();
-            for i in 0..self.move_ops.len() {
-                if self.move_ops[i].offset < max_off {
-                    final_ops.push(self.move_ops[i]);
+            for node in &self.move_ops {
+                if node.offset < max_off {
+                    final_ops.push(*node);
                 }
             }
             self.move_ops = final_ops;
@@ -281,15 +281,15 @@ impl ArraySequence {
         // analogue of the C++ pointer-identity `==`.  Falls through to the C++
         // default `BUILTIN_MEMCPY` only when neither identity matches.
         if let Some(types) = data.get_arch().types_rc() {
-            if let Ok(narrow) = types.get_type_char(types.get_size_of_char()) {
-                if Rc::ptr_eq(&self.char_type, &narrow) {
-                    return (BUILTIN_STRNCPY as uintb, self.num_elements);
-                }
+            if let Ok(narrow) = types.get_type_char(types.get_size_of_char())
+                && Rc::ptr_eq(&self.char_type, &narrow)
+            {
+                return (BUILTIN_STRNCPY as uintb, self.num_elements);
             }
-            if let Ok(wide) = types.get_type_char(types.get_size_of_wchar()) {
-                if Rc::ptr_eq(&self.char_type, &wide) {
-                    return (BUILTIN_WCSNCPY as uintb, self.num_elements);
-                }
+            if let Ok(wide) = types.get_type_char(types.get_size_of_wchar())
+                && Rc::ptr_eq(&self.char_type, &wide)
+            {
+                return (BUILTIN_WCSNCPY as uintb, self.num_elements);
             }
         }
         let index = self.num_elements * self.char_type.get_align_size();
@@ -676,8 +676,7 @@ impl HeapSequence {
         let mut non_const_adds = Vec::new();
         self.base_offset = self.calc_ptradd_offset(data, root_in1, &mut non_const_adds);
         self.non_const_adds = non_const_adds;
-        for i in 0..init_stores.len() {
-            let op = init_stores[i];
+        for &op in init_stores.iter() {
             let mut non_const_comp: Vec<VarnodeId> = Vec::new();
             let cur_offset =
                 self.calc_ptradd_offset(data, op_get_in(data, op, 1), &mut non_const_comp);
@@ -737,11 +736,11 @@ impl HeapSequence {
             let mut index_vn: Option<VarnodeId> = None;
             if !self.non_const_adds.is_empty() {
                 let mut iv = self.non_const_adds[0];
-                for i in 1..self.non_const_adds.len() {
+                for &nca in self.non_const_adds.iter().skip(1) {
                     let add_op = data.new_op(2, insert_addr.clone());
                     data.op_set_opcode_code(add_op, OpCode::CPUI_INT_ADD);
                     data.op_set_input(add_op, iv, 0).ok();
-                    data.op_set_input(add_op, self.non_const_adds[i], 1).ok();
+                    data.op_set_input(add_op, nca, 1).ok();
                     let iv_size = data.vbank().get(iv).unwrap().get_size();
                     let new_iv = data.new_unique_out(iv_size, add_op).expect("newUniqueOut");
                     data.vbank_mut()
@@ -813,10 +812,10 @@ impl HeapSequence {
         let len_vn = data.new_constant(4, index as u64);
         // inputTypeLocal(3) for the builtin is its int4 length parameter; build it
         // directly from the factory (equivalent to the userop's typed param).
-        if let Some(types) = data.get_arch().types() {
-            if let Ok(int4t) = types.get_base(4, type_metatype::TYPE_INT) {
-                data.vbank_mut().get_mut(len_vn).unwrap().update_type(int4t);
-            }
+        if let Some(types) = data.get_arch().types()
+            && let Ok(int4t) = types.get_base(4, type_metatype::TYPE_INT)
+        {
+            data.vbank_mut().get_mut(len_vn).unwrap().update_type(int4t);
         }
         data.op_set_input(copy_op, len_vn, 3).ok();
         data.op_insert_before(copy_op, insert_point);
@@ -830,8 +829,8 @@ impl HeapSequence {
         indirects: &mut Vec<OpId>,
         pairs: &mut Vec<IndirectPair>,
     ) {
-        for i in 0..self.base.move_ops.len() {
-            let mut op_opt = data.op_previous_op(self.base.move_ops[i].op);
+        for mo in &self.base.move_ops {
+            let mut op_opt = data.op_previous_op(mo.op);
             while let Some(op) = op_opt {
                 if data.obank().get(op).expect("stale op").code() != OpCode::CPUI_INDIRECT {
                     break;
@@ -841,8 +840,7 @@ impl HeapSequence {
                 op_opt = data.op_previous_op(op);
             }
         }
-        for i in 0..indirects.len() {
-            let op = indirects[i];
+        for &op in indirects.iter() {
             let outvn = data.obank().get(op).and_then(|o| o.get_out());
             let outvn = match outvn {
                 Some(v) => v,
@@ -912,8 +910,7 @@ impl HeapSequence {
 
         let mut head = order[0];
         let mut dup_count = 0;
-        for k in 1..order.len() {
-            let cur = order[k];
+        for &cur in order.iter().skip(1) {
             let head_out = pairs[head].out_vn;
             let cur_out = pairs[cur].out_vn;
             let overlap = {
@@ -936,8 +933,7 @@ impl HeapSequence {
         }
         if dup_count > 0 {
             let mut head = order[0];
-            for k in 1..order.len() {
-                let cur = order[k];
+            for &cur in order.iter().skip(1) {
                 if pairs[cur].duplicate {
                     let from = pairs[cur].out_vn;
                     let to = pairs[head].out_vn;
@@ -965,9 +961,8 @@ impl HeapSequence {
                 data.op_unset_output(def);
             }
         }
-        for i in 0..self.base.move_ops.len() {
-            let op = self.base.move_ops[i].op;
-            data.op_destroy_recursive(op, &mut scratch);
+        for mo in &self.base.move_ops {
+            data.op_destroy_recursive(mo.op, &mut scratch);
         }
         for &op in indirects.iter() {
             data.op_destroy(op);
@@ -1072,11 +1067,7 @@ impl StringSequence {
         let mut parent_type: Option<Rc<Datatype>> = Some(Rc::clone(&seq.entry.sym_type));
         let mut array_type: Option<Rc<Datatype>> = None;
         let mut last_off: int8 = 0;
-        loop {
-            let pt = match &parent_type {
-                Some(p) => Rc::clone(p),
-                None => break, // parentType == 0
-            };
+        while let Some(pt) = parent_type.clone() {
             if Rc::ptr_eq(&pt, &seq.base.char_type) {
                 break;
             }
@@ -1465,14 +1456,8 @@ impl StringSequence {
             std::collections::HashMap::new();
         let mut points: Vec<RemovePoint> = Vec::new();
         let mut dead_ops: Vec<WriteNode> = Vec::new();
-        for i in 0..self.base.move_ops.len() {
-            Self::remove_forward(
-                data,
-                self.base.move_ops[i],
-                &mut concat_set,
-                &mut points,
-                &mut dead_ops,
-            );
+        for &mo in self.base.move_ops.iter() {
+            Self::remove_forward(data, mo, &mut concat_set, &mut points, &mut dead_ops);
         }
         let mut pos = 0;
         while pos < dead_ops.len() {
@@ -1519,11 +1504,11 @@ impl StringSequence {
                 data.op_insert_before(ind_op, replace_op);
             }
         }
-        for i in 0..self.base.move_ops.len() {
-            data.op_destroy(self.base.move_ops[i].op);
+        for mo in &self.base.move_ops {
+            data.op_destroy(mo.op);
         }
-        for i in 0..dead_ops.len() {
-            data.op_destroy(dead_ops[i].op);
+        for d in &dead_ops {
+            data.op_destroy(d.op);
         }
     }
 
@@ -1587,11 +1572,7 @@ impl StringSequence {
         let mut parent_type: Option<Rc<Datatype>> = Some(Rc::clone(&seq.entry.sym_type));
         let mut array_type: Option<Rc<Datatype>> = None;
         let mut last_off: int8 = 0;
-        loop {
-            let pt = match &parent_type {
-                Some(p) => Rc::clone(p),
-                None => break,
-            };
+        while let Some(pt) = parent_type.clone() {
             if Rc::ptr_eq(&pt, &seq.base.char_type) {
                 break;
             }

@@ -514,13 +514,12 @@ fn walk_back(
                         }
                     }
                     OpCode::CPUI_COPY => {
-                        if let Some(v) = o.get_in(0).and_then(|v| data.vbank().get(v)) {
-                            if !v.is_constant() {
+                        if let Some(v) = o.get_in(0).and_then(|v| data.vbank().get(v))
+                            && !v.is_constant() {
                                 *a = v.get_addr().clone();
                                 *sz = v.get_size();
                                 return true;
                             }
-                        }
                     }
                     _ => {}
                 }
@@ -575,11 +574,10 @@ fn walk_back(
             }
             _ => {}
         }
-        if let Some(t) = sp_pointer(data, cur, sp).map(|c| d + c) {
-            if (0..top).contains(&t) && !claimed[t as usize] {
+        if let Some(t) = sp_pointer(data, cur, sp).map(|c| d + c)
+            && (0..top).contains(&t) && !claimed[t as usize] {
                 pointers.push(t);
             }
-        }
         match sp_delta(data, cur, sp) {
             None => {}
             Some(None) => return None,

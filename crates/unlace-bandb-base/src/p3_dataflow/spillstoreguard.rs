@@ -63,11 +63,10 @@ pub fn build(
         if existing.contains(&store) {
             continue;
         }
-        if let Some(&(start, written_size)) = bounds.get(&store) {
-            if !overlaps(&stack, start, written_size, addr.get_offset(), size) {
+        if let Some(&(start, written_size)) = bounds.get(&store)
+            && !overlaps(&stack, start, written_size, addr.get_offset(), size) {
                 continue;
             }
-        }
         let indirect = fd.new_indirect_op(store, addr, size, pcodeop_flags::indirect_store);
         let op = fd.obank().get(indirect).expect("spill store guard");
         let input = op.get_in(0).expect("spill store input");

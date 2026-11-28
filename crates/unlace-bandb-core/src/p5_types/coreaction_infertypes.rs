@@ -95,52 +95,50 @@ pub fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
             .x87_integer_userops
             .iter()
             .find_map(|&(id, width)| (u64::from(id) == in0_off).then_some(width));
-        if integer_width == Some(out_size) {
-            if let Some(Ok(ty)) = arch
+        if integer_width == Some(out_size)
+            && let Some(Ok(ty)) = arch
                 .types()
                 .map(|types| types.get_base(out_size, type_metatype::TYPE_INT))
-            {
-                return ty;
-            }
+        {
+            return ty;
         }
-        if in0_off == crate::userop::BUILTIN_STRINGDATA as u64 {
-            if let Some(out) = o.get_out().and_then(|v| data.vbank().get(v)) {
-                return Rc::clone(out.get_type());
-            }
+        if in0_off == crate::userop::BUILTIN_STRINGDATA as u64
+            && let Some(out) = o.get_out().and_then(|v| data.vbank().get(v))
+        {
+            return Rc::clone(out.get_type());
         }
         // (unlace strlenscan) `DatatypeUserOp::getOutputLocal` for the `strlen`
         // builtin: the length is an unsigned integer of the output's width.
-        if in0_off == crate::userop::BUILTIN_STRLEN as u64 {
-            if let Some(Ok(t)) = arch
+        if in0_off == crate::userop::BUILTIN_STRLEN as u64
+            && let Some(Ok(t)) = arch
                 .types()
                 .map(|t| t.get_base(out_size, type_metatype::TYPE_UINT))
-            {
-                return t;
-            }
+        {
+            return t;
         }
         // (unlace swiftcall) a throwing call's error is an object reference.
-        if in0_off == crate::userop::BUILTIN_SWIFT_ERROR as u64 {
-            if let Some(Ok(t)) = arch.types().map(|t| {
+        if in0_off == crate::userop::BUILTIN_SWIFT_ERROR as u64
+            && let Some(Ok(t)) = arch.types().map(|t| {
                 t.get_type_void()
                     .and_then(|v| t.get_type_pointer(out_size, v, 1))
-            }) {
-                return t;
-            }
+            })
+        {
+            return t;
         }
         // (unlace alloca) `void *alloca(size_t)`.
-        if in0_off == crate::userop::BUILTIN_ALLOCA as u64 {
-            if let Some(tlst) = arch.types() {
-                let ws = arch
-                    .manage()
-                    .get_default_data_space()
-                    .map(|s| s.get_word_size())
-                    .unwrap_or(1);
-                if let Ok(ptr) = tlst
-                    .get_type_void()
-                    .and_then(|v| tlst.get_type_pointer(out_size, v, ws))
-                {
-                    return ptr;
-                }
+        if in0_off == crate::userop::BUILTIN_ALLOCA as u64
+            && let Some(tlst) = arch.types()
+        {
+            let ws = arch
+                .manage()
+                .get_default_data_space()
+                .map(|s| s.get_word_size())
+                .unwrap_or(1);
+            if let Ok(ptr) = tlst
+                .get_type_void()
+                .and_then(|v| tlst.get_type_pointer(out_size, v, ws))
+            {
+                return ptr;
             }
         }
         // (unlace vectorabi) a vector user-op's result is an Intel vector type.
@@ -149,15 +147,13 @@ pub fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
         }
         // (unlace javatry) the try dispatch and the exceptional-edge test are
         // `bool`; the caught exception has its catch clause's class type.
-        if in0_off == crate::userop::BUILTIN_JAVA_TRY as u64
-            || in0_off == crate::userop::BUILTIN_JAVA_THROWS as u64
-        {
-            if let Some(Ok(t)) = arch
+        if (in0_off == crate::userop::BUILTIN_JAVA_TRY as u64
+            || in0_off == crate::userop::BUILTIN_JAVA_THROWS as u64)
+            && let Some(Ok(t)) = arch
                 .types()
                 .map(|t| t.get_base(out_size, type_metatype::TYPE_BOOL))
-            {
-                return t;
-            }
+        {
+            return t;
         }
         if in0_off == crate::userop::BUILTIN_JAVA_CAUGHT as u64 {
             let handler = o
@@ -177,15 +173,13 @@ pub fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
         }
         // (unlace `bitidioms`, `helperroles`) `abs`/`labs` return a signed
         // integer, `strcpy` its `char *` destination.
-        if in0_off == crate::userop::BUILTIN_ABS as u64
-            || in0_off == crate::userop::BUILTIN_LABS as u64
-        {
-            if let Some(Ok(t)) = arch
+        if (in0_off == crate::userop::BUILTIN_ABS as u64
+            || in0_off == crate::userop::BUILTIN_LABS as u64)
+            && let Some(Ok(t)) = arch
                 .types()
                 .map(|t| t.get_base(out_size, type_metatype::TYPE_INT))
-            {
-                return t;
-            }
+        {
+            return t;
         }
         // (unlace `vaarg`) an SSE-class `va_arg` reads a `double`.
         if in0_off == crate::userop::BUILTIN_VAARG as u64
@@ -193,39 +187,36 @@ pub fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
             && o.get_in(2)
                 .and_then(|v| data.vbank().get(v))
                 .is_some_and(|v| v.is_constant() && v.get_offset() == 1)
-        {
-            if let Some(Ok(t)) = arch
+            && let Some(Ok(t)) = arch
                 .types()
                 .map(|t| t.get_base(8, type_metatype::TYPE_FLOAT))
-            {
-                return t;
-            }
+        {
+            return t;
         }
-        if in0_off == crate::userop::BUILTIN_STRCPY as u64 {
-            if let Some(tlst) = arch.types() {
-                let ws = data
-                    .get_arch()
-                    .manage()
-                    .get_default_data_space()
-                    .map(|s| s.get_word_size())
-                    .unwrap_or(1);
-                if let Ok(ptr) = tlst
-                    .get_type_char(1)
-                    .and_then(|c| tlst.get_type_pointer(out_size, c, ws))
-                {
-                    return ptr;
-                }
+        if in0_off == crate::userop::BUILTIN_STRCPY as u64
+            && let Some(tlst) = arch.types()
+        {
+            let ws = data
+                .get_arch()
+                .manage()
+                .get_default_data_space()
+                .map(|s| s.get_word_size())
+                .unwrap_or(1);
+            if let Ok(ptr) = tlst
+                .get_type_char(1)
+                .and_then(|c| tlst.get_type_pointer(out_size, c, ws))
+            {
+                return ptr;
             }
         }
         // (unlace itaniumeh) the exceptional-edge test is a `bool`, the
         // exception a `void *` and the selector a signed integer.
-        if in0_off == crate::userop::BUILTIN_EH_UNWINDING as u64 {
-            if let Some(Ok(t)) = arch
+        if in0_off == crate::userop::BUILTIN_EH_UNWINDING as u64
+            && let Some(Ok(t)) = arch
                 .types()
                 .map(|t| t.get_base(out_size, type_metatype::TYPE_BOOL))
-            {
-                return t;
-            }
+        {
+            return t;
         }
         if in0_off == crate::userop::BUILTIN_EH_SELECTOR as u64
             && let Some(Ok(t)) = arch
@@ -280,10 +271,10 @@ pub fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
     // (non-VOID) return data-type.  This is what lets a deindirected CALL to a
     // known-proto function (e.g. `int4 *obtainPtr(char *)`) type its return Varnode
     // directly, so `ActionSetCasts` inserts no spurious `(int4 *)` cast.
-    if o.code() == OpCode::CPUI_CALL || o.code() == OpCode::CPUI_CALLIND {
-        if let Some(ct) = call_output_type_local(data, op, o.code()) {
-            return ct;
-        }
+    if (o.code() == OpCode::CPUI_CALL || o.code() == OpCode::CPUI_CALLIND)
+        && let Some(ct) = call_output_type_local(data, op, o.code())
+    {
+        return ct;
     }
     let info = type_op_info(o.code());
     match arch.types() {
@@ -393,10 +384,11 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
     // with a recovered prototype, the suggested input type is the *callee's* locked
     // parameter type.  This is what flows a typed call argument (e.g. a `mystruct *`)
     // back onto the argument Varnode so the stack-frame member access is recovered.
-    if (opcode == OpCode::CPUI_CALL || opcode == OpCode::CPUI_CALLIND) && slot > 0 {
-        if let Some(ct) = call_input_type_local(data, op, slot, opcode, recovered) {
-            return ct;
-        }
+    if (opcode == OpCode::CPUI_CALL || opcode == OpCode::CPUI_CALLIND)
+        && slot > 0
+        && let Some(ct) = call_input_type_local(data, op, slot, opcode, recovered)
+    {
+        return ct;
     }
 
     // (unlace vectorabi) a vector user-op's vector operands are Intel vector types.
@@ -434,20 +426,19 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
             .and_then(|v| data.vbank().get(v))
             .map(|v| v.get_offset())
             == Some(crate::userop::BUILTIN_STRLEN as u64)
+        && let Some(tlst) = arch.types()
     {
-        if let Some(tlst) = arch.types() {
-            let ws = data
-                .get_arch()
-                .manage()
-                .get_default_data_space()
-                .map(|s| s.get_word_size())
-                .unwrap_or(1);
-            if let Ok(ptr) = tlst
-                .get_type_char(1)
-                .and_then(|c| tlst.get_type_pointer(in_size, c, ws))
-            {
-                return ptr;
-            }
+        let ws = data
+            .get_arch()
+            .manage()
+            .get_default_data_space()
+            .map(|s| s.get_word_size())
+            .unwrap_or(1);
+        if let Ok(ptr) = tlst
+            .get_type_char(1)
+            .and_then(|c| tlst.get_type_pointer(in_size, c, ws))
+        {
+            return ptr;
         }
     }
 
@@ -459,17 +450,15 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
             .and_then(|v| data.vbank().get(v))
             .map(|v| v.get_offset())
             == Some(crate::userop::BUILTIN_VA_START as u64)
+        && let Some(tlst) = arch.types()
     {
-        if let Some(tlst) = arch.types() {
-            for (name, size) in [("__va_list_tag", 24), ("__va_list", 32)] {
-                if let Ok(ptr) = tlst
-                    .get_type_struct(name)
-                    .and_then(|t| tlst.get_type_pointer(8, t, 1))
-                {
-                    if ptr.get_ptr_to().is_some_and(|t| t.get_size() == size) {
-                        return ptr;
-                    }
-                }
+        for (name, size) in [("__va_list_tag", 24), ("__va_list", 32)] {
+            if let Ok(ptr) = tlst
+                .get_type_struct(name)
+                .and_then(|t| tlst.get_type_pointer(8, t, 1))
+                && ptr.get_ptr_to().is_some_and(|t| t.get_size() == size)
+            {
+                return ptr;
             }
         }
     }
@@ -485,10 +474,9 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
             if (id == Some(crate::userop::BUILTIN_ABS as u64)
                 || id == Some(crate::userop::BUILTIN_LABS as u64))
                 && slot == 1
+                && let Ok(t) = tlst.get_base(in_size, type_metatype::TYPE_INT)
             {
-                if let Ok(t) = tlst.get_base(in_size, type_metatype::TYPE_INT) {
-                    return t;
-                }
+                return t;
             }
             if id == Some(crate::userop::BUILTIN_STRCPY as u64) && slot <= 2 {
                 let ws = data
@@ -514,25 +502,24 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
             .and_then(|v| data.vbank().get(v))
             .map(|v| v.get_offset())
             == Some(crate::userop::BUILTIN_KERNEL_WARN as u64)
+        && let Some(tlst) = arch.types()
     {
-        if let Some(tlst) = arch.types() {
-            if in_size == 4 {
-                if let Ok(t) = tlst.get_base(4, type_metatype::TYPE_INT) {
-                    return t;
-                }
-            }
-            let ws = data
-                .get_arch()
-                .manage()
-                .get_default_data_space()
-                .map(|s| s.get_word_size())
-                .unwrap_or(1);
-            if let Ok(ptr) = tlst
-                .get_type_char(1)
-                .and_then(|c| tlst.get_type_pointer(in_size, c, ws))
-            {
-                return ptr;
-            }
+        if in_size == 4
+            && let Ok(t) = tlst.get_base(4, type_metatype::TYPE_INT)
+        {
+            return t;
+        }
+        let ws = data
+            .get_arch()
+            .manage()
+            .get_default_data_space()
+            .map(|s| s.get_word_size())
+            .unwrap_or(1);
+        if let Ok(ptr) = tlst
+            .get_type_char(1)
+            .and_then(|c| tlst.get_type_pointer(in_size, c, ws))
+        {
+            return ptr;
         }
     }
 
@@ -560,10 +547,11 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
     }
 
     // (unlace `swiftcall`) A Swift function's two-word result is its pair.
-    if opcode == OpCode::CPUI_RETURN && slot >= 1 {
-        if let Some(ct) = crate::swiftinfer::pair_return_type(data, op, slot) {
-            return ct;
-        }
+    if opcode == OpCode::CPUI_RETURN
+        && slot >= 1
+        && let Some(ct) = crate::swiftinfer::pair_return_type(data, op, slot)
+    {
+        return ct;
     }
 
     // C++ `TypeOpReturn::getInputLocal` (typeop.cc:903-921): a RETURN's value input
@@ -576,12 +564,14 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
     // a parent).  The `has_store()` precondition is the W4 no-store STUB guard: an
     // unrecovered proto has no output type to consult (typeop.cc:917 `getFuncProto`
     // is always backed by a store in C++; the merged tree may lack one).
-    if opcode == OpCode::CPUI_RETURN && slot >= 1 && data.get_func_proto().has_store() {
-        if let Some(ct) = data.get_func_proto().get_output_type() {
-            if ct.get_metatype() != type_metatype::TYPE_VOID && ct.get_size() == in_size {
-                return Rc::clone(ct);
-            }
-        }
+    if opcode == OpCode::CPUI_RETURN
+        && slot >= 1
+        && data.get_func_proto().has_store()
+        && let Some(ct) = data.get_func_proto().get_output_type()
+        && ct.get_metatype() != type_metatype::TYPE_VOID
+        && ct.get_size() == in_size
+    {
+        return Rc::clone(ct);
     }
 
     let info = type_op_info(opcode);
@@ -700,15 +690,15 @@ fn call_output_type_local(data: &Funcdata, op: OpId, opcode: OpCode) -> Option<R
     // (unlace `sitetypelock`) A per-call-site locked output IS this call's stated
     // result type: report it here so the cast plane sees no mismatch with the
     // output Varnode the lock pinned (same size guard as the apply).
-    if let Some(o) = data.obank().get(op) {
-        if let Some(ct) = data.get_override().find_output_typelock(o.get_addr()) {
-            let out_size = o
-                .get_out()
-                .and_then(|v| data.vbank().get(v))
-                .map(|v| v.get_size());
-            if out_size == Some(ct.get_size()) {
-                return Some(Rc::clone(ct));
-            }
+    if let Some(o) = data.obank().get(op)
+        && let Some(ct) = data.get_override().find_output_typelock(o.get_addr())
+    {
+        let out_size = o
+            .get_out()
+            .and_then(|v| data.vbank().get(v))
+            .map(|v| v.get_size());
+        if out_size == Some(ct.get_size()) {
+            return Some(Rc::clone(ct));
         }
     }
     // C++ `TypeOpCall`: the prototype lives only when in(0) is an fspec reference;
@@ -818,10 +808,8 @@ fn get_local_type(data: &Funcdata, vn: VarnodeId) -> (Rc<Datatype>, bool) {
             }
         });
     }
-    if weighted {
-        if let Some(best) = crate::lvarvote::weighted_pick(&votes) {
-            ct = Some(best);
-        }
+    if weighted && let Some(best) = crate::lvarvote::weighted_pick(&votes) {
+        ct = Some(best);
     }
     // C++ throws on a null local type; a live Varnode always has a def or a
     // descendant, but guard with a size-correct UNKNOWN to avoid a panic.
@@ -1093,10 +1081,10 @@ fn write_back(data: &mut Funcdata) -> bool {
         if changed {
             // C++ `Varnode::updateType` calls `high->typeDirty()`; the merged-tree
             // setter cannot reach the high bank, so dirty it here.
-            if let Some(h) = high {
-                if let Some(hh) = data.high_bank_mut().get_mut(h) {
-                    hh.type_dirty();
-                }
+            if let Some(h) = high
+                && let Some(hh) = data.high_bank_mut().get_mut(h)
+            {
+                hh.type_dirty();
             }
             change = true;
         }
@@ -1319,10 +1307,10 @@ fn propagate_from_pointer(
         let parent = dt.get_rel_parent()?;
         let byte_off = dt.get_byte_offset()?;
         let res = tlst.get_exact_piece(parent, byte_off, sz).ok()?;
-        if let Some(res) = res {
-            if res.is_enum_type() {
-                return Some(res);
-            }
+        if let Some(res) = res
+            && res.is_enum_type()
+        {
+            return Some(res);
         }
     } else if ptrto.is_enum_type() && !ptrto.has_stripped() {
         return tlst.get_type_partial_enum(ptrto, 0, sz).ok();
@@ -1656,10 +1644,10 @@ fn propagate_load_store(
         // with no width.  The test lives here rather than inside the ported
         // `propagate_from_pointer`, whose C++ body (typeop.cc:207) has no such
         // case.
-        if let Some(ptrto) = alttype.get_ptr_to() {
-            if crate::codescalar::blocks_value_type(&ptrto) {
-                return None;
-            }
+        if let Some(ptrto) = alttype.get_ptr_to()
+            && crate::codescalar::blocks_value_type(&ptrto)
+        {
+            return None;
         }
         let value = match propagate_from_pointer(tlst, Rc::clone(&alttype), out_size) {
             Some(value) if value.get_metatype() != type_metatype::TYPE_UNKNOWN => value,
@@ -1914,9 +1902,9 @@ fn propagate_int_add(
         .unwrap_or(false);
     if outvn_const && alttype.get_metatype() != type_metatype::TYPE_PTR {
         Some(alttype)
-    } else if inslot == -1 {
-        None // Don't propagate pointer types output -> input
-    } else if crate::valuewitness::outside_header(data, op, inslot, &alttype) {
+    } else if inslot == -1 // Don't propagate pointer types output -> input
+        || crate::valuewitness::outside_header(data, op, inslot, &alttype)
+    {
         None
     } else {
         propagate_add_in2_out(data, alttype, op, inslot)
@@ -2481,13 +2469,13 @@ fn propagate_spacebase_ref(data: &mut Funcdata, spcvn: VarnodeId) {
                     Some(v) => (v.is_constant(), v.get_offset(), v.get_size()),
                     None => continue,
                 };
-                if is_const {
-                    if let (Some(addr), Some(outvn)) = (
+                if is_const
+                    && let (Some(addr), Some(outvn)) = (
                         sbtype.spacebase_get_address(voff, vsz, &op_addr, manager),
                         data.obank().get(op).and_then(|o| o.get_out()),
-                    ) {
-                        propagate_ref(data, outvn, &addr);
-                    }
+                    )
+                {
+                    propagate_ref(data, outvn, &addr);
                 }
             }
             OpCode::CPUI_PTRADD => {
@@ -2677,10 +2665,10 @@ fn propagate_all(data: &mut Funcdata) {
     let spcid = data
         .get_scope_local()
         .map(|sl| std::rc::Rc::clone(sl.get_space_id()));
-    if let Some(spcid) = spcid {
-        if let Some(spcvn) = data.find_spacebase_input(&spcid) {
-            propagate_spacebase_ref(data, spcvn);
-        }
+    if let Some(spcid) = spcid
+        && let Some(spcvn) = data.find_spacebase_input(&spcid)
+    {
+        propagate_spacebase_ref(data, spcvn);
     }
 }
 

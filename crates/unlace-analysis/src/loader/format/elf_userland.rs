@@ -77,10 +77,10 @@ pub fn is_os_userland_image(bytes: &[u8]) -> bool {
             elf.word(sh, 32, 20),
             elf.word(sh, 48, 32),
         );
-        if let (Some(offset), Some(size)) = (offset, size) {
-            if elf.has_os_note(offset, size, align.unwrap_or(4)) {
-                return true;
-            }
+        if let (Some(offset), Some(size)) = (offset, size)
+            && elf.has_os_note(offset, size, align.unwrap_or(4))
+        {
+            return true;
         }
     }
     false
@@ -100,7 +100,7 @@ pub fn is_linux_image(bytes: &[u8]) -> bool {
         ELFOSABI_GNU => true,
         ELFOSABI_NONE => elf
             .os_note_owner()
-            .map_or(true, |owner| LINUX_NOTE_OWNERS.contains(&owner)),
+            .is_none_or(|owner| LINUX_NOTE_OWNERS.contains(&owner)),
         _ => false,
     }
 }
@@ -251,10 +251,10 @@ impl<'a> Elf<'a> {
             let name_end = name_at.checked_add(namesz as usize)?;
             let name = self.bytes.get(name_at..name_end.min(end))?;
             let owner = name.strip_suffix(b"\0").unwrap_or(name);
-            if kind == 1 {
-                if let Some(known) = OS_NOTE_OWNERS.iter().copied().find(|o| *o == owner) {
-                    return Some(known);
-                }
+            if kind == 1
+                && let Some(known) = OS_NOTE_OWNERS.iter().copied().find(|o| *o == owner)
+            {
+                return Some(known);
             }
             let desc_at = up(name_end)?;
             let next = desc_at.checked_add(descsz as usize).and_then(up)?;
@@ -279,10 +279,10 @@ impl<'a> Elf<'a> {
                 self.word(ph, 32, 16),
                 self.word(ph, 48, 28),
             );
-            if let (Some(offset), Some(filesz)) = (offset, filesz) {
-                if let Some(owner) = self.note_owner(offset, filesz, align.unwrap_or(4)) {
-                    return Some(owner);
-                }
+            if let (Some(offset), Some(filesz)) = (offset, filesz)
+                && let Some(owner) = self.note_owner(offset, filesz, align.unwrap_or(4))
+            {
+                return Some(owner);
             }
         }
         for i in 0..self.shnum {
@@ -295,10 +295,10 @@ impl<'a> Elf<'a> {
                 self.word(sh, 32, 20),
                 self.word(sh, 48, 32),
             );
-            if let (Some(offset), Some(size)) = (offset, size) {
-                if let Some(owner) = self.note_owner(offset, size, align.unwrap_or(4)) {
-                    return Some(owner);
-                }
+            if let (Some(offset), Some(size)) = (offset, size)
+                && let Some(owner) = self.note_owner(offset, size, align.unwrap_or(4))
+            {
+                return Some(owner);
             }
         }
         None

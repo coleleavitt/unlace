@@ -314,22 +314,22 @@ pub fn detect_fill_run(data: &Funcdata, move_ops: &mut Vec<WriteNode>) -> Option
         return None;
     }
     // sort by offset.
-    move_ops.sort_by(|a, b| a.offset.cmp(&b.offset));
+    move_ops.sort_by_key(|a| a.offset);
     let fb: u8 = (copy_const_offset(data, move_ops[0].op) & 0xff) as u8;
     let run_start: u64 = move_ops[0].offset;
     let mut expect: u64 = run_start;
     let mut last_idx: i64 = -1;
-    for i in 0..move_ops.len() {
+    for (i, mo) in move_ops.iter().enumerate() {
         // Gap or overlap
-        if move_ops[i].offset != expect {
+        if mo.offset != expect {
             break;
         }
         // Different fill byte
-        if (copy_const_offset(data, move_ops[i].op) & 0xff) as u8 != fb {
+        if (copy_const_offset(data, mo.op) & 0xff) as u8 != fb {
             break;
         }
         // slot holds the COPY byte-size
-        expect = move_ops[i].offset + move_ops[i].slot as u64;
+        expect = mo.offset + mo.slot as u64;
         last_idx = i as i64;
     }
     // A memset is a RUN: require at least 2 COPYs

@@ -468,8 +468,8 @@ fn emit_facts(
             out.readonly.push((t.addr, t.addr + size));
             continue;
         }
-        if let (Some(types), Some(slot)) = (types, &slot) {
-            if let Ok(type_) = types.get_type_array(t.len as int4, Rc::clone(slot)) {
+        if let (Some(types), Some(slot)) = (types, &slot)
+            && let Ok(type_) = types.get_type_array(t.len as int4, Rc::clone(slot)) {
                 out.typed_data.push(TypedDataFact {
                     addr: t.addr,
                     name,
@@ -477,7 +477,6 @@ fn emit_facts(
                 });
                 continue;
             }
-        }
         out.data_objects.push(DataObjectFact {
             addr: t.addr,
             name,

@@ -141,10 +141,10 @@ fn facts(rec: &Recovery, names: &HashMap<u64, String>) -> VtableFacts {
         for i in 0..width {
             let mut targets: Vec<u64> = Vec::new();
             for v in &views {
-                if let Some(Some(f)) = v.get(i) {
-                    if !targets.contains(f) {
-                        targets.push(*f);
-                    }
+                if let Some(Some(f)) = v.get(i)
+                    && !targets.contains(f)
+                {
+                    targets.push(*f);
                 }
             }
             let name = targets

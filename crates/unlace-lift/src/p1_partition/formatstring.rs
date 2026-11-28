@@ -214,7 +214,7 @@ impl crate::optionset::UnlaceOption for FormatStringMode {
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
-        Ok(crate::formatstring::parse_formatstring_mode(value)?)
+        crate::formatstring::parse_formatstring_mode(value)
     }
 }
 

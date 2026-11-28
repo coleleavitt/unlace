@@ -544,6 +544,7 @@ impl JvmModel {
 /// user-op indices, read from the architecture once per payload.
 struct JvmEnv {
     sp: VarnodeData,
+    #[allow(dead_code)]
     lva: VarnodeData,
     call_target: VarnodeData,
     return_value: VarnodeData,
@@ -552,6 +553,7 @@ struct JvmEnv {
     unique: Rc<AddrSpace>,
     ram: u64,
     parameters: u64,
+    #[allow(dead_code)]
     locals: u64,
     userops: Vec<Vec<u8>>,
 }

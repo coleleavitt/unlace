@@ -319,11 +319,10 @@ impl PcodeEmit for ScalarCapture {
         vars: &[VarnodeData],
     ) {
         for v in vars {
-            if let Some(space) = &v.space {
-                if space.get_type() == spacetype::IPTR_CONSTANT {
+            if let Some(space) = &v.space
+                && space.get_type() == spacetype::IPTR_CONSTANT {
                     self.consts.push(v.offset);
                 }
-            }
         }
         let mut ins = [Operand::Const(0); 2];
         for (slot, v) in ins.iter_mut().zip(vars) {
@@ -455,11 +454,10 @@ impl IndexedBases {
             (OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT, &[v, ..]) => self.base_of(&v),
             (OpCode::CPUI_LOAD, &[_, addr]) => {
                 let wide = out.is_some_and(|(_, size)| size >= 2);
-                if let Some(base) = self.base_of(&addr).filter(|_| wide) {
-                    if !self.bases.contains(&base) {
+                if let Some(base) = self.base_of(&addr).filter(|_| wide)
+                    && !self.bases.contains(&base) {
                         self.bases.push(base);
                     }
-                }
                 None
             }
             _ => None,
@@ -618,7 +616,7 @@ pub(crate) fn relative_string_table(
     };
     let mut strings: Vec<u64> = Vec::new();
     for (k, entry) in bytes
-        .chunks_exact(4)
+        .as_chunks::<4>().0.iter()
         .take(RELATIVE_TABLE_ENTRIES)
         .enumerate()
     {

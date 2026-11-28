@@ -370,9 +370,7 @@ fn the_windowed_load_turns_the_discovery_walk_off_unless_the_caller_named_it() {
     for name in WINDOW_SUPPRESSED {
         assert_eq!(
             suppressed
-                .iter()
-                .filter(|(o, _)| o == name)
-                .next_back()
+                .iter().rfind(|(o, _)| o == name)
                 .map(|(_, v)| v.as_str()),
             Some("off"),
             "{name} must end the list off"
@@ -385,16 +383,12 @@ fn the_windowed_load_turns_the_discovery_walk_off_unless_the_caller_named_it() {
     merged.extend(named.clone());
     let kept = windowed_options(&merged, &named);
     assert_eq!(
-        kept.iter()
-            .filter(|(o, _)| o == "fast_funcdisc")
-            .next_back()
+        kept.iter().rfind(|(o, _)| o == "fast_funcdisc")
             .map(|(_, v)| v.as_str()),
         Some("on")
     );
     assert_eq!(
-        kept.iter()
-            .filter(|(o, _)| o == "listing")
-            .next_back()
+        kept.iter().rfind(|(o, _)| o == "listing")
             .map(|(_, v)| v.as_str()),
         Some("off")
     );

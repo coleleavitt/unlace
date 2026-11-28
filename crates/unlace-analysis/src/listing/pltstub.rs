@@ -132,8 +132,8 @@ impl<'a> PltStubs<'a> {
         let mut released = Vec::new();
         if let Some(mut chain) = self.open.remove(&vma) {
             let mut values = Values::holding(self.data_space, &chain);
-            if chain.adds > 0 {
-                if let Some(slot) = values
+            if chain.adds > 0
+                && let Some(slot) = values
                     .load_jump(ops)
                     .filter(|&slot| in_range(self.mapped, slot))
                 {
@@ -143,9 +143,8 @@ impl<'a> PltStubs<'a> {
                     }
                     return released;
                 }
-            }
-            if chain.adds < MAX_ADDS {
-                if let Some(value) = values.add_to(ops, &chain.reg) {
+            if chain.adds < MAX_ADDS
+                && let Some(value) = values.add_to(ops, &chain.reg) {
                     chain.value = value;
                     chain.adds += 1;
                     hold(&mut chain.held, vma, drefs, text);
@@ -157,7 +156,6 @@ impl<'a> PltStubs<'a> {
                     );
                     return released;
                 }
-            }
             released = chain.held;
         }
         if let Some((reg, value)) = Values::new(self.data_space).single_write(ops) {

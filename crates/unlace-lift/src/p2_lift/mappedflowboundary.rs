@@ -89,7 +89,6 @@ pub fn truncated_instruction(
 }
 
 #[doc(hidden)]
-
 pub fn truncated_warning(addr: &Address) -> String {
     let mut raw = String::new();
     let _ = addr.print_raw(&mut raw);

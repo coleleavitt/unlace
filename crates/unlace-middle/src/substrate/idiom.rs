@@ -328,11 +328,10 @@ fn block_has_other_call(data: &Funcdata, bl: BlockId, keep: OpId) -> bool {
         if op == keep {
             continue;
         }
-        if let Some(o) = data.obank().get(op) {
-            if o.get_parent() == Some(bl) {
+        if let Some(o) = data.obank().get(op)
+            && o.get_parent() == Some(bl) {
                 return true;
             }
-        }
     }
     false
 }
@@ -446,11 +445,10 @@ fn barrier_threads_return(data: &Funcdata, call_op: OpId, arm: BlockId) -> bool 
             .and_then(|iop| data.vbank().get(iop))
             .map(|iv| crate::funcdata_varnode::op_iop_decode(iv.get_addr().get_offset()) == call_op)
             .unwrap_or(false);
-        if affects_call {
-            if let Some(out) = o.get_out() {
+        if affects_call
+            && let Some(out) = o.get_out() {
                 stack.push((out, 0));
             }
-        }
     }
     if stack.is_empty() {
         return false;
@@ -527,14 +525,13 @@ fn vn_roots_at_call(data: &Funcdata, mut vn: VarnodeId, root_op: OpId, arm: Bloc
         // effect rather than its formal output: accept an INDIRECT in the arm
         // whose affecting op (the iop input) IS the matched call.
         if op.code() == OpCode::CPUI_INDIRECT && op.get_parent() == Some(arm) {
-            if let Some(iop_vn) = op.get_in(1) {
-                if let Some(iv) = data.vbank().get(iop_vn) {
+            if let Some(iop_vn) = op.get_in(1)
+                && let Some(iv) = data.vbank().get(iop_vn) {
                     let aff = crate::funcdata_varnode::op_iop_decode(iv.get_addr().get_offset());
                     if aff == root_op {
                         return true;
                     }
                 }
-            }
             return false;
         }
         // Stay inside the arm: a base defined elsewhere is not the buffer.

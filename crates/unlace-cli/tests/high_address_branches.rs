@@ -49,7 +49,7 @@ fn macho(base: u64, instruction: u32) -> std::path::PathBuf {
         bytes[offset + 8..offset + 16].copy_from_slice(&address.to_le_bytes());
     }
     bytes[0x320..0x331].copy_from_slice(b"\0_caller\0_callee\0");
-    for chunk in bytes[0x1000..].chunks_exact_mut(4) {
+    for chunk in bytes[0x1000..].as_chunks_mut::<4>().0 {
         chunk.copy_from_slice(&0xd503201fu32.to_le_bytes());
     }
     bytes[0x1000..0x1004].copy_from_slice(&instruction.to_le_bytes());

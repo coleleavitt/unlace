@@ -141,10 +141,10 @@ fn volume(fv: &[u8], depth: usize, w: &mut Walk) {
     let hlen = u16_at(fv, 0x30).unwrap_or(0x48) as usize;
     let ext = u16_at(fv, 0x34).unwrap_or(0) as usize;
     let mut off = hlen;
-    if ext != 0 {
-        if let Some(size) = u32_at(fv, ext + 16) {
-            off = off.max(ext + size as usize);
-        }
+    if ext != 0
+        && let Some(size) = u32_at(fv, ext + 16)
+    {
+        off = off.max(ext + size as usize);
     }
     let erased = if u32_at(fv, 0x2c).unwrap_or(0) & 0x800 != 0 {
         0xff
@@ -241,7 +241,9 @@ fn sections(mut data: &[u8], file: &File, depth: usize, w: &mut Walk, found: &mu
             0x12 => found.images.push((true, body.to_vec())),
             0x15 => {
                 let units: Vec<u16> = body
-                    .chunks_exact(2)
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
                     .map(|c| u16::from_le_bytes([c[0], c[1]]))
                     .take_while(|&u| u != 0)
                     .collect();

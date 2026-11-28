@@ -158,8 +158,8 @@ fn bind_name(fixups: &ChainedFixups, slot: u64) -> Option<String> {
 fn a64_stub_slot(stub: &[u8], pc: u64) -> Option<u64> {
     let mut regs = [None; 32];
     let mut slot = [None; 32];
-    for (i, word) in stub.chunks_exact(4).enumerate() {
-        let w = u32::from_le_bytes(word.try_into().ok()?);
+    for (i, word) in stub.as_chunks::<4>().0.iter().enumerate() {
+        let w = u32::from_le_bytes(*word);
         let pc = pc.checked_add(i as u64 * 4)?;
         let rd = (w & 31) as usize;
         let rn = ((w >> 5) & 31) as usize;

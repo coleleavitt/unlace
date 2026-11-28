@@ -512,7 +512,7 @@ fn mips_whole_load(arch: &Architecture, index: &Index, at: u64, insn: &Insn, lo:
         return false;
     }
     let w: Vec<u32> = buf
-        .chunks_exact(4)
+        .as_chunks::<4>().0.iter()
         .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
         .collect();
     let (op, base, rt, off) = (
@@ -722,7 +722,7 @@ impl Index {
                     continue;
                 }
                 let words: Vec<u32> = buf
-                    .chunks_exact(4)
+                    .as_chunks::<4>().0.iter()
                     .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
                     .collect();
                 mips_pic_calls(start, &words, &mut word, &mut calls, &mut pic);
@@ -1404,11 +1404,10 @@ impl PathFacts {
             }
             Cond::Eq(a, b) if v => {
                 for (r, other) in [(a, b), (b, a)] {
-                    if let (Cond::Reg(k), Some(x)) = (r.as_ref(), self.value(other)) {
-                        if k.2 == 1 && self.value(r).is_none() {
+                    if let (Cond::Reg(k), Some(x)) = (r.as_ref(), self.value(other))
+                        && k.2 == 1 && self.value(r).is_none() {
                             self.regs.insert(*k, x);
                         }
-                    }
                 }
             }
             _ => {}
@@ -1556,14 +1555,12 @@ fn site_use(
             && t < caller.1
             && seen.len() < MAX_SITE_INSNS
             && seen.insert((t, branched, f.clone()))
-        {
-            if let Some(i) = insns
+            && let Some(i) = insns
                 .entry(t)
                 .or_insert_with(|| decode(arch, &index.at(t)).map(Rc::new))
             {
                 todo.push((t, Rc::clone(i), 0, f, BTreeMap::new(), branched));
             }
-        }
     };
     while let Some((at, insn, mut op, mut facts, mut deriv, branched)) = todo.pop() {
         if at != site && op == 0 {

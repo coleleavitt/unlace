@@ -186,12 +186,11 @@ impl PrintC {
         self.emit.end_return_type(idret);
         self.emit.spaces(1, 0);
         // option_convention: print the model name when shown.
-        if self.options.convention {
-            if let Some(m) = model_name {
+        if self.options.convention
+            && let Some(m) = model_name {
                 self.emit.print(m, SyntaxHighlight::KeywordColor);
                 self.emit.spaces(1, 0);
             }
-        }
         let id1g = self.emit.open_group();
         self.emit
             .tag_func_name(display_name, SyntaxHighlight::FuncnameColor, &markup);
@@ -749,8 +748,7 @@ impl PrintC {
                         .pointer_candidate
                         .as_ref()
                         .is_some_and(|c| Some(op_key(c.address_op)) == entry.op)
-                {
-                    if let (Some(mut candidate), PrintEmit::NoMarkup(emit), Some(record)) = (
+                    && let (Some(mut candidate), PrintEmit::NoMarkup(emit), Some(record)) = (
                         self.pointer_candidate.take(),
                         &mut self.emit,
                         self.pointer_record.as_mut(),
@@ -758,7 +756,6 @@ impl PrintC {
                         candidate.call.position = emit.position();
                         record.calls.push(candidate.call);
                     }
-                }
                 self.emit.tag_op(
                     self.op_spelling(entry.tok),
                     SyntaxHighlight::NoColor,
@@ -809,11 +806,10 @@ impl PrintC {
         // Persist any id2 update for the corresponding stack entry: find the
         // top entry whose token/id matches and copy id2 (the only mutated
         // field).  push_op/push_atom re-read the top after calling emit_op.
-        if let Some(top) = self.revpol.last_mut() {
-            if std::ptr::eq(top.tok, entry.tok) && top.id == entry.id {
+        if let Some(top) = self.revpol.last_mut()
+            && std::ptr::eq(top.tok, entry.tok) && top.id == entry.id {
                 top.id2 = entry.id2;
             }
-        }
     }
 
     /// C++ `PrintLanguage::emitAtom` (printlanguage.cc:379) — send a leaf token

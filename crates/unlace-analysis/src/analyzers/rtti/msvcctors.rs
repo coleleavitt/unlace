@@ -144,15 +144,15 @@ pub fn run(ctx: &AnalysisCtx) -> AnalysisOutput {
     for (i, (_, c)) in list.iter().enumerate() {
         for t in c.tables.iter().filter(|t| t.offset == 0) {
             for &g in &t.vt.slots {
-                if !walked_slots.contains_key(&g) {
+                walked_slots.entry(g).or_insert_with(|| {
                     let walk = walker.walk(g, &owner_of, MAX_DTOR_INSNS);
                     if let Some(owner) = inlined_deleting_dtor(&walk, &owner_of, &vtables)
                         && tests_delete_flag(&code, g, is64)
                     {
                         inlined.insert(g, owner);
                     }
-                    walked_slots.insert(g, walk.calls);
-                }
+                    walk.calls
+                });
                 called_by_slots[i].extend(walked_slots[&g].iter().copied());
             }
         }

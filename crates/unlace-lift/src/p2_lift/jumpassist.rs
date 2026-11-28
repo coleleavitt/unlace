@@ -131,7 +131,7 @@ impl Script {
             context.inputlist.push(VarnodeData {
                 space: Some(Rc::clone(&unique)),
                 offset: slot,
-                size: core.get_input(i).get_size() as u32,
+                size: core.get_input(i).get_size(),
             });
             slot += 0x20;
         }
@@ -139,7 +139,7 @@ impl Script {
             context.output.push(VarnodeData {
                 space: Some(Rc::clone(&unique)),
                 offset: slot,
-                size: core.get_output(i).get_size() as u32,
+                size: core.get_output(i).get_size(),
             });
             slot += 0x20;
         }

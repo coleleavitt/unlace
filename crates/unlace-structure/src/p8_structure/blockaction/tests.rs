@@ -1274,7 +1274,7 @@ fn condfold_rule_b_enforces_the_total_statement_cap() {
             (bb_x, MAX_SHAPE_STMTS),
             (bb_bl, MAX_SHAPE_STMTS),
         ]));
-    assert!(
+    const _: () = assert!(
         3 * MAX_SHAPE_STMTS > MAX_JOIN_TOTAL_STMTS,
         "the fixture must actually exceed the cap"
     );

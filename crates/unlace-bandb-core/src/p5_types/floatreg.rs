@@ -1269,7 +1269,7 @@ pub fn spells(data: &Funcdata, c: VarnodeId) -> bool {
     let Some(format) = data.get_arch().get_float_format(node.get_size()) else {
         return false;
     };
-    let bits = node.get_offset() as u64;
+    let bits = node.get_offset();
     if format.get_host_float(bits).1 != unlace_num::float::floatclass::nan {
         return true;
     }

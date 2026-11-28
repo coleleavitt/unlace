@@ -507,7 +507,8 @@ fn intern_header_shells(tf: &dyn TypeFactory, width: int4) {
     };
     let u8w =
         |tf: &dyn TypeFactory, w: int4| tf.get_base(w, type_metatype::TYPE_UINT).expect("uint");
-    let rows: [(&str, Vec<(&str, Rc<Datatype>)>, LangFacet); 4] = [
+    type HeaderRow<'a> = (&'a str, Vec<(&'a str, Rc<Datatype>)>, LangFacet);
+    let rows: [HeaderRow; 4] = [
         (
             "go.string",
             vec![("data", ptr(tf)), ("len", u8w(tf, width))],
@@ -591,20 +592,15 @@ fn intern_named_structs(
         // itself is that pointer's pointee. Consider both the record and, for
         // a pointer, the record it points at.
         let mut candidates: Vec<GoType> = Vec::new();
-        if t.kind == KIND_POINTER {
-            if let Some(elem) = word(img, t.vma + img.type_base()) {
-                if elem >= meta.types
-                    && elem
-                        .checked_add(img.type_base())
-                        .is_some_and(|end| end <= meta.etypes)
-                {
-                    if let Some(p) =
-                        read_type(img, meta.types, meta.etypes, (elem - meta.types) as u32)
-                    {
-                        candidates.push(p);
-                    }
-                }
-            }
+        if t.kind == KIND_POINTER
+            && let Some(elem) = word(img, t.vma + img.type_base())
+            && elem >= meta.types
+            && elem
+                .checked_add(img.type_base())
+                .is_some_and(|end| end <= meta.etypes)
+            && let Some(p) = read_type(img, meta.types, meta.etypes, (elem - meta.types) as u32)
+        {
+            candidates.push(p);
         }
         candidates.push(t);
         for c in candidates {

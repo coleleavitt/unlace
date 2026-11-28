@@ -669,11 +669,10 @@ impl Action for ActionVarnodeProps {
                     if data.fillin_read_only(vn).unwrap_or(false) {
                         self.base.count += 1;
                     }
-                } else if is_volatile {
-                    if data.replace_volatile(vn).unwrap_or(false) {
+                } else if is_volatile
+                    && data.replace_volatile(vn).unwrap_or(false) {
                         self.base.count += 1;
                     }
-                }
             } else if (nz_mask & consume) == 0 && (vn_size as usize) <= std::mem::size_of::<uintb>()
             {
                 // FIXME: uintb should be arbitrary precision

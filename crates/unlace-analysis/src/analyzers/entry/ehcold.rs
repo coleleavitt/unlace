@@ -139,13 +139,12 @@ pub fn cold_tail_owners(file: &object::File, bytes: &[u8]) -> Vec<((u64, u64), (
         .collect()
 }
 
+type OwnedPart = ((u64, u64), (u64, u64), Vec<u64>);
+
 /// Every FDE body with no function symbol at its start and no direct call into
 /// it, whose direct `jmp`/`jcc rel32` entries from outside all come from one other
 /// FDE body: `(body, owner, jump sources)`.
-fn single_owner_parts(
-    file: &object::File,
-    bytes: &[u8],
-) -> Vec<((u64, u64), (u64, u64), Vec<u64>)> {
+fn single_owner_parts(file: &object::File, bytes: &[u8]) -> Vec<OwnedPart> {
     let bodies = scan_fde_bodies(file);
     let named = existing_function_addrs(file, bytes);
     let execs = executable_sections(file);

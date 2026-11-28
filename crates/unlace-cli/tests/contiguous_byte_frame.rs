@@ -62,9 +62,9 @@ fn emitted_frame_preserves_bytes_and_object_bounds() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     assert!(!compilers.is_empty(), "a C compiler is required");
+    let pieces = regex::Regex::new(r"(\w+)\._0_4_ = ([^;\n]+);").unwrap();
     for mutable in [false, true] {
         let code = emitted_frame(mutable, &[]);
-        let pieces = regex::Regex::new(r"(\w+)\._0_4_ = ([^;\n]+);").unwrap();
         let compilable = pieces.replace_all(&code, "store_word($1, $2);");
         let source = common::scratch_file("contiguous-byte-frame", "c");
         std::fs::write(

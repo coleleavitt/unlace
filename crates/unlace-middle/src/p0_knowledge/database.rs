@@ -874,12 +874,11 @@ impl Symbol {
     /// `database.cc:227-233`).
     pub fn check_size_type_lock(&mut self) {
         self.dispflags &= !symbol_dispflags::SIZE_TYPELOCK;
-        if self.is_type_locked() {
-            if let Some(t) = &self.dtype {
-                if t.get_metatype() == type_metatype::TYPE_UNKNOWN {
-                    self.dispflags |= symbol_dispflags::SIZE_TYPELOCK;
-                }
-            }
+        if self.is_type_locked()
+            && let Some(t) = &self.dtype
+            && t.get_metatype() == type_metatype::TYPE_UNKNOWN
+        {
+            self.dispflags |= symbol_dispflags::SIZE_TYPELOCK;
         }
     }
 
@@ -1179,10 +1178,10 @@ impl ScopeResolve {
     /// Remove the range owned by `scope` starting at `first` (C++ clearResolve
     /// erases the matching `(first, scope)` pair).
     fn erase_at(&mut self, first: &Address, scope: ScopeId) {
-        if let Some((_, s)) = self.ranges.get(first) {
-            if *s == scope {
-                self.ranges.remove(first);
-            }
+        if let Some((_, s)) = self.ranges.get(first)
+            && *s == scope
+        {
+            self.ranges.remove(first);
         }
     }
 }
@@ -1538,7 +1537,7 @@ impl Database {
             s.children.get(&key).copied()
         } else {
             // Linear scan in id order (C++ iterates children in ScopeMap order).
-            for (_, &child) in s.children.iter() {
+            for &child in s.children.values() {
                 if self.scopes[child].name == nm {
                     return Some(child);
                 }
@@ -2255,35 +2254,35 @@ impl Database {
         usepoint: &Address,
     ) -> UnlaceResult<(SymbolId, EntryRef)> {
         self.unlace_gen += 1;
-        if ct.get_size() > 0 {
-            if let Some(space) = addr.get_space() {
-                let first = u128::from(addr.get_offset());
-                let end = first + ct.get_size() as u128;
-                let inferred: Vec<SymbolId> = self.scopes[scope]
-                    .maptable
-                    .get(space.get_index() as usize)
-                    .and_then(|map| map.as_ref())
-                    .into_iter()
-                    .flat_map(|map| map.records())
-                    .filter_map(|(_, record)| {
-                        let entry = &record.entry;
-                        let at = u128::from(entry.get_addr().get_offset());
-                        let symbol = &self.symbols[entry.symbol];
-                        (at != first
-                            && at < end
-                            && at + entry.get_size().max(0) as u128 > first
-                            && symbol.is_type_locked()
-                            && !symbol.is_name_locked()
-                            && symbol.mapentry.len() == 1
-                            && symbol.dtype.as_ref().is_some_and(|ty| {
-                                ty.get_array_base().is_some_and(|base| base.is_char_print())
-                            }))
-                        .then_some(entry.symbol)
-                    })
-                    .collect();
-                for symbol in inferred {
-                    self.remove_symbol(symbol);
-                }
+        if ct.get_size() > 0
+            && let Some(space) = addr.get_space()
+        {
+            let first = u128::from(addr.get_offset());
+            let end = first + ct.get_size() as u128;
+            let inferred: Vec<SymbolId> = self.scopes[scope]
+                .maptable
+                .get(space.get_index() as usize)
+                .and_then(|map| map.as_ref())
+                .into_iter()
+                .flat_map(|map| map.records())
+                .filter_map(|(_, record)| {
+                    let entry = &record.entry;
+                    let at = u128::from(entry.get_addr().get_offset());
+                    let symbol = &self.symbols[entry.symbol];
+                    (at != first
+                        && at < end
+                        && at + entry.get_size().max(0) as u128 > first
+                        && symbol.is_type_locked()
+                        && !symbol.is_name_locked()
+                        && symbol.mapentry.len() == 1
+                        && symbol.dtype.as_ref().is_some_and(|ty| {
+                            ty.get_array_base().is_some_and(|base| base.is_char_print())
+                        }))
+                    .then_some(entry.symbol)
+                })
+                .collect();
+            for symbol in inferred {
+                self.remove_symbol(symbol);
             }
         }
         let existing = self
@@ -2865,14 +2864,12 @@ impl Database {
             .wrapping_sub(1);
         while let Some(idx) = it.next_back() {
             let entry = self.mapped_entry(scope, space_index, idx);
-            if entry.get_last() >= end {
-                if entry.get_size() < oldsize || oldsize == -1 {
-                    bestentry = Some(EntryRef::Mapped { space_index, idx });
-                    if entry.get_size() == size {
-                        break;
-                    }
-                    oldsize = entry.get_size();
+            if entry.get_last() >= end && (entry.get_size() < oldsize || oldsize == -1) {
+                bestentry = Some(EntryRef::Mapped { space_index, idx });
+                if entry.get_size() == size {
+                    break;
                 }
+                oldsize = entry.get_size();
             }
         }
         bestentry
@@ -3141,10 +3138,9 @@ impl Database {
             pointer_receiver,
             ..
         } = &mut symbol.kind
+            && pieces.pieces.name == receiver.symbol
         {
-            if pieces.pieces.name == receiver.symbol {
-                *pointer_receiver = Some(Box::new(receiver));
-            }
+            *pointer_receiver = Some(Box::new(receiver));
         }
     }
 
@@ -3286,10 +3282,10 @@ impl Database {
     /// global scope first (the common case), then the scopes that mapped a
     /// function at `addr`, returning the first in scope order.
     pub fn find_function_across_scopes(&self, addr: &Address) -> Option<(SymbolId, ScopeId)> {
-        if let Some(g) = self.get_global_scope() {
-            if let Some(sid) = self.find_function(g, addr) {
-                return Some((sid, g));
-            }
+        if let Some(g) = self.get_global_scope()
+            && let Some(sid) = self.find_function(g, addr)
+        {
+            return Some((sid, g));
         }
         let key = (addr.get_space()?.get_index() as usize, addr.get_offset());
         self.function_scopes
@@ -3438,10 +3434,9 @@ impl Database {
             .nametree
             .range((Included(lo), Unbounded))
             .next()
+            && k.name == nm
         {
-            if k.name == nm {
-                return true;
-            }
+            return true;
         }
         let par = match self.scopes[scope].parent {
             None => return false,
@@ -4140,40 +4135,40 @@ impl Database {
         }
 
         // ---- upstream (ghidra) branch ----
-        if let Some(rep) = vn {
-            if !rep.is_constant {
-                // C++ uses vn->getUsePoint(*fd) / vn->getHigh()->isInput(); the
-                // representative carries the usepoint and is_input it precomputed.
-                let usepoint = rep.usepoint.clone();
-                let dt = self.symbols[sym].dtype.clone();
-                if category == symbol_category::FUNCTION_PARAMETER || rep.is_input {
-                    let mut index: int4 = -1;
-                    if category == symbol_category::FUNCTION_PARAMETER {
-                        index = self.symbols[sym].get_category_index() as int4 + 1;
-                    }
-                    return self.build_variable_name(
-                        scope,
-                        &rep.addr,
-                        &usepoint,
-                        dt.as_deref(),
-                        &mut index,
-                        rep.flags | varnode_flags::input,
-                        arch,
-                    );
+        if let Some(rep) = vn
+            && !rep.is_constant
+        {
+            // C++ uses vn->getUsePoint(*fd) / vn->getHigh()->isInput(); the
+            // representative carries the usepoint and is_input it precomputed.
+            let usepoint = rep.usepoint.clone();
+            let dt = self.symbols[sym].dtype.clone();
+            if category == symbol_category::FUNCTION_PARAMETER || rep.is_input {
+                let mut index: int4 = -1;
+                if category == symbol_category::FUNCTION_PARAMETER {
+                    index = self.symbols[sym].get_category_index() as int4 + 1;
                 }
-                let mut idx = *base;
-                let nm = self.build_variable_name(
+                return self.build_variable_name(
                     scope,
                     &rep.addr,
                     &usepoint,
                     dt.as_deref(),
-                    &mut idx,
-                    rep.flags,
+                    &mut index,
+                    rep.flags | varnode_flags::input,
                     arch,
-                )?;
-                *base = idx;
-                return Ok(nm);
+                );
             }
+            let mut idx = *base;
+            let nm = self.build_variable_name(
+                scope,
+                &rep.addr,
+                &usepoint,
+                dt.as_deref(),
+                &mut idx,
+                rep.flags,
+                arch,
+            )?;
+            *base = idx;
+            return Ok(nm);
         }
         if self.symbols[sym].num_entries() != 0 {
             let eref = self.symbols[sym].mapentry[0];
@@ -4751,19 +4746,16 @@ impl Database {
                 if alias_block_level == 3 {
                     aliason = false;
                 } else {
-                    match self.symbols[sym].dtype.clone() {
-                        Some(ct) => {
-                            let meta = ct.get_metatype();
-                            // C++ varmap.cc: structures always block aliases; arrays block
-                            // only when alias_block_level > 1 (the two C++ `if`/`else if`
-                            // arms have the same body — collapsed here to keep clippy happy).
-                            if meta == type_metatype::TYPE_STRUCT
-                                || (meta == type_metatype::TYPE_ARRAY && alias_block_level > 1)
-                            {
-                                aliason = false;
-                            }
+                    if let Some(ct) = self.symbols[sym].dtype.clone() {
+                        let meta = ct.get_metatype();
+                        // C++ varmap.cc: structures always block aliases; arrays block
+                        // only when alias_block_level > 1 (the two C++ `if`/`else if`
+                        // arms have the same body — collapsed here to keep clippy happy).
+                        if meta == type_metatype::TYPE_STRUCT
+                            || (meta == type_metatype::TYPE_ARRAY && alias_block_level > 1)
+                        {
+                            aliason = false;
                         }
-                        _ => {}
                     }
                 }
             }
@@ -4922,11 +4914,11 @@ impl WireSymbol {
         }
         // The uselimit rangelist (REQUIRED; may be empty).
         let mut uselimit = RangeList::default();
-        if !self.usepoint.is_invalid() {
-            if let Some(spc) = self.usepoint.get_space() {
-                let off = self.usepoint.get_offset();
-                uselimit.insert_range(Rc::clone(spc), off, off);
-            }
+        if !self.usepoint.is_invalid()
+            && let Some(spc) = self.usepoint.get_space()
+        {
+            let off = self.usepoint.get_offset();
+            uselimit.insert_range(Rc::clone(spc), off, off);
         }
         uselimit.encode(encoder);
         encoder.close_element(&ELEM_MAPSYM);
@@ -5075,7 +5067,7 @@ impl Database {
     pub fn encodable_symbol_ids(&self, scope: ScopeId) -> std::collections::BTreeSet<u64> {
         let mut out = std::collections::BTreeSet::new();
         let sc = &self.scopes[scope];
-        for (_, &sid) in sc.nametree.iter() {
+        for &sid in sc.nametree.values() {
             let sym = &self.symbols[sid];
             if Self::symbol_is_encodable(sym) {
                 out.insert(sym.symbol_id);
@@ -5175,7 +5167,7 @@ impl Database {
         sc.rangetree.encode(encoder);
         if !sc.nametree.is_empty() || !wire_symbols.is_empty() {
             encoder.open_element(&ELEM_SYMBOLLIST);
-            for (_, &sid) in sc.nametree.iter() {
+            for &sid in sc.nametree.values() {
                 let sym = &self.symbols[sid];
                 // (unlace divergence, defensive) Java-side hard throws: a symbol
                 // with no id ("missing unique symbol id"), and a mapped entry
@@ -5859,7 +5851,7 @@ mod tests {
         let m = build_manager();
         let ram = space(&m, 2);
         let (mut db, g) = db_with_global(m.num_spaces());
-        use crate::dtype::TypeFactory;
+
         let types = crate::dtype::TypeFactoryImpl::new();
         types.set_default_alignment_map();
         types
@@ -6100,9 +6092,11 @@ mod tests {
         assert_eq!(db.find_function_across_scopes(&alias), Some((first, g)));
         assert!(db.add_function_alias(&a, &b).is_err());
         assert_eq!(db.find_function_across_scopes(&b), Some((second, g)));
-        let mut pieces = crate::fspec::PrototypePieces::default();
-        pieces.name = "optional".into();
-        pieces.intypes = vec![dt(4)];
+        let pieces = crate::fspec::PrototypePieces {
+            name: "optional".into(),
+            intypes: vec![dt(4)],
+            ..Default::default()
+        };
         db.set_function_proto_pieces(first, pieces);
         assert_eq!(
             db.function_proto_pieces(g, &alias).unwrap().intypes.len(),
@@ -6167,11 +6161,13 @@ mod tests {
 
         // Park a prototype with one input on the declared callee (any shape — the
         // mechanism is generic; here a single int4-ish input named "val").
-        let mut pieces = crate::fspec::PrototypePieces::default();
-        pieces.name = "declared_callee".to_string();
-        pieces.intypes = vec![dt(4)];
-        pieces.innames = vec!["val".to_string()];
-        pieces.first_var_arg_slot = -1;
+        let pieces = crate::fspec::PrototypePieces {
+            name: "declared_callee".to_string(),
+            intypes: vec![dt(4)],
+            innames: vec!["val".to_string()],
+            first_var_arg_slot: -1,
+            ..Default::default()
+        };
         db.set_function_proto_pieces(declared, pieces);
 
         // The declared callee now reports its pieces by address; the plain one does not.

@@ -158,7 +158,7 @@ pub fn preserve_array_base(data: &Funcdata, root: OpId) -> bool {
         let magnitude = displacement.wrapping_neg() & mask;
         let sign_bit = (mask >> 1) + 1;
         if displacement & sign_bit == 0
-            || magnitude % size as uintb != 0
+            || !magnitude.is_multiple_of(size as uintb)
             || (magnitude > object.get_size() as uintb
                 && entry.all_flags & varnode_flags::namelock == 0)
         {
@@ -184,9 +184,8 @@ pub fn preserve_array_base(data: &Funcdata, root: OpId) -> bool {
                 .get(id)
                 .and_then(|v| v.get_def())
                 .and_then(|o| data.obank().get(o))
-            {
-                if shift.code() == OpCode::CPUI_INT_LEFT {
-                    if let Some(amount) = shift
+                && shift.code() == OpCode::CPUI_INT_LEFT
+                    && let Some(amount) = shift
                         .get_in(1)
                         .and_then(|v| data.vbank().get(v))
                         .filter(|v| v.is_constant())
@@ -196,8 +195,6 @@ pub fn preserve_array_base(data: &Funcdata, root: OpId) -> bool {
                             .and_then(|shift| 1u64.checked_shl(shift))
                             .unwrap_or(0);
                     }
-                }
-            }
             let mask = data
                 .vbank()
                 .get(id)
@@ -253,8 +250,8 @@ fn address_terms(data: &Funcdata, root: OpId) -> Option<SmallVec<[VarnodeId; 8]>
         if value.get_size() != width {
             return None;
         }
-        if !value.is_constant() && address_reader(data, id).is_some() {
-            if let Some(op) = value.get_def().and_then(|id| data.obank().get(id)) {
+        if !value.is_constant() && address_reader(data, id).is_some()
+            && let Some(op) = value.get_def().and_then(|id| data.obank().get(id)) {
                 match op.code() {
                     OpCode::CPUI_INT_ADD => {
                         pending.push(op.get_in(0)?);
@@ -268,7 +265,6 @@ fn address_terms(data: &Funcdata, root: OpId) -> Option<SmallVec<[VarnodeId; 8]>
                     _ => {}
                 }
             }
-        }
         terms.push(id);
     }
     None

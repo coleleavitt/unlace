@@ -106,11 +106,10 @@ impl PcodeEmit for OpCapture {
         // LOADs from that absolute address and STOREs a temporary; harvesting
         // LOAD slot 1 would falsely turn the memory address into a callback.
         let Some(vn) = vars.get(2) else { return };
-        if let Some(value) = self.scalar_origin(vn) {
-            if super::xrefs::looks_like_address(value) {
+        if let Some(value) = self.scalar_origin(vn)
+            && super::xrefs::looks_like_address(value) {
                 self.stored_scalar_values.push(value);
             }
-        }
     }
 }
 

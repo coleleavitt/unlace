@@ -490,7 +490,7 @@ impl Project {
                         .into(),
                 ));
             }
-            let columns: Vec<String> = stmt.column_names().into_iter().map(String::from).collect();
+            let columns: Vec<String> = stmt.column_names().map(String::from).collect();
             let width = columns.len();
             let mut rows = stmt.query([])?;
             let mut out = Vec::new();

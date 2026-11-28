@@ -423,7 +423,7 @@ fn read_imports_dyld_chained_import() {
     blob[12..16].copy_from_slice(&36u32.to_le_bytes()); // symbols_offset
     blob[16..20].copy_from_slice(&2u32.to_le_bytes()); // imports_count
     blob[20..24].copy_from_slice(&import_format::IMPORT.to_le_bytes());
-    blob.extend_from_slice(&((0u32 << 9) | 2).to_le_bytes()); // name_offset 0, lib 2
+    blob.extend_from_slice(&2u32.to_le_bytes()); // name_offset 0, lib 2
     blob.extend_from_slice(&((4u32 << 9) | 1).to_le_bytes()); // name_offset 4
     blob.extend_from_slice(b"_ab\0_OBJC_CLASS_$_X\0");
     let imports = read_imports(&blob);

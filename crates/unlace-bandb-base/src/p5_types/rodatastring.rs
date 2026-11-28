@@ -172,8 +172,7 @@ fn try_recover(root: OpId, data: &mut Funcdata) -> Option<StringSequence> {
         return None;
     }
     let str_len = sym_type.get_size();
-    if str_len < ArraySequence::MINIMUM_SEQUENCE_LENGTH
-        || str_len > ArraySequence::MAXIMUM_SEQUENCE_LENGTH
+    if !(ArraySequence::MINIMUM_SEQUENCE_LENGTH..=ArraySequence::MAXIMUM_SEQUENCE_LENGTH).contains(&str_len)
     {
         return None;
     }

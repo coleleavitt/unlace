@@ -279,13 +279,12 @@ fn pe_trace_names_only_free_placeholders() {
         );
         let bytes = std::fs::read(object).unwrap();
         let file = object::File::parse(bytes.as_slice()).unwrap();
-        let text = file
-            .section_by_name(".text")
+
+        file.section_by_name(".text")
             .unwrap()
             .data()
             .unwrap()
-            .to_vec();
-        text
+            .to_vec()
     };
     let expected = text(&only, &root.join("original.obj"));
     for mode in ["on", "lines"] {

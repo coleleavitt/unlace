@@ -814,6 +814,8 @@ fn fault_from_env() -> Option<Fault> {
     }
 }
 
+type PanicHook = Box<dyn Fn(&std::panic::PanicHookInfo<'_>) + Sync + Send + 'static>;
+
 /// Silence the default panic hook for as long as it is held.
 ///
 /// A lane fault is already reported, once, as `decode: serial (lane fault)`, and
@@ -826,7 +828,7 @@ fn fault_from_env() -> Option<Fault> {
 /// Not installed at all when [`DECODE_STATS_ENV`], [`DECODE_SELFCHECK_ENV`] or
 /// `RUST_BACKTRACE` is set: a genuine bug in the lanes has to stay reportable,
 /// and anyone who set one of those is debugging.
-struct PanicHush(Option<Box<dyn Fn(&std::panic::PanicHookInfo<'_>) + Sync + Send + 'static>>);
+struct PanicHush(Option<PanicHook>);
 
 impl PanicHush {
     fn install() -> PanicHush {

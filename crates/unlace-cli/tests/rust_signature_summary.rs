@@ -253,7 +253,7 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
     let (_temp, binary, _) = fixture();
     let specs = common::repo_root().join("specs").display().to_string();
     for listing in [false, true] {
-        let mut program = Bootstrap::new(&[specs.clone()])
+        let mut program = Bootstrap::new(std::slice::from_ref(&specs))
             .options(&LoadOptions::default())
             .object(binary.to_str().unwrap())
             .unwrap();
@@ -724,7 +724,7 @@ fn application_consumes_one_observation_and_console_rejects_effective_overlays()
         optimization: 3,
     };
     for overlay in [false, true] {
-        let mut program = Bootstrap::new(&[specs.clone()])
+        let mut program = Bootstrap::new(std::slice::from_ref(&specs))
             .options(&LoadOptions::default())
             .object(binary.to_str().unwrap())
             .unwrap();

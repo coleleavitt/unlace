@@ -126,7 +126,7 @@ fn ensure_function(arch: &mut Architecture, addr: &Address) -> bool {
         return false;
     };
     let min_size = arch.min_funcsymbol_size;
-    let num_spaces = arch.manage().num_spaces() as i32;
+    let num_spaces = arch.manage().num_spaces();
     let Ok((scope, base)) = arch
         .symboltab
         .find_create_scope_from_symbol_name(&name, "::", None, num_spaces)

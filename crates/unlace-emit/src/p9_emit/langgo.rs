@@ -439,14 +439,13 @@ impl PrintC {
                         .go_pointer_receiver(fd.get_address())
                         .is_some()
             })
+            && let Some(receiver) = proto.get_param(0)
         {
-            if let Some(receiver) = proto.get_param(0) {
-                let paren = self.emit.open_paren("(", 0);
-                self.emit_go_parameter(arch, receiver, 0, markup);
-                self.emit.close_paren(")", paren);
-                self.emit.print(" ", SyntaxHighlight::NoColor);
-                first = 1;
-            }
+            let paren = self.emit.open_paren("(", 0);
+            self.emit_go_parameter(arch, receiver, 0, markup);
+            self.emit.close_paren(")", paren);
+            self.emit.print(" ", SyntaxHighlight::NoColor);
+            first = 1;
         }
         self.emit
             .tag_func_name(&name, SyntaxHighlight::FuncnameColor, markup);
@@ -770,7 +769,7 @@ pub fn escape(output: &mut String, value: i32, quote: char) {
             output.push(quote);
         }
         32..=126 => output.push(char::from_u32(value as u32).unwrap()),
-        0..=127 => {
+        0..=31 | 127 => {
             let _ = write!(output, "\\x{value:02x}");
         }
         128..=65535 => {

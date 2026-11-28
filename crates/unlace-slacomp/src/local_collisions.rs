@@ -10,10 +10,6 @@ use unlace_sleigh::slghsymbol::{Constructor, SymbolKind};
 
 use crate::slgh_compile::SymbolId;
 
-#[expect(
-    clippy::disallowed_types,
-    reason = "Only visited membership is observed; operand and constructor order drive traversal"
-)]
 type VisitedSymbols = std::collections::HashSet<SymbolId>;
 
 pub(crate) fn find_collision(base: &SleighBase, ct: &Constructor) -> Option<(SymbolId, SymbolId)> {

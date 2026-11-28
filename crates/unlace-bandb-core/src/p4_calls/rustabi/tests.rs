@@ -917,9 +917,9 @@ fn write_probe_only_stops_at_unconditional_known_terminal_calls() {
     for (known, conditional) in [(true, false), (false, false), (true, true)] {
         let mut emit = ProbeEmit::default();
         if conditional {
-            emit.dump(&at, OpCode::CPUI_CBRANCH, None, &[branch.clone()]);
+            emit.dump(&at, OpCode::CPUI_CBRANCH, None, std::slice::from_ref(&branch));
         }
-        emit.dump(&at, OpCode::CPUI_CALL, None, &[target.clone()]);
+        emit.dump(&at, OpCode::CPUI_CALL, None, std::slice::from_ref(&target));
         let facts = emit.resolve_calls(&|_| known);
         assert_eq!(
             facts,
@@ -970,8 +970,8 @@ fn write_probe_reads_through_the_mode_switch_of_a_return() {
         ..ProbeEmit::default()
     };
     ret.dump(&at, OpCode::CPUI_CALLOTHER, None, &[konst(7), tb.clone()]);
-    ret.dump(&at, OpCode::CPUI_COPY, Some(&pc), &[lr.clone()]);
-    ret.dump(&at, OpCode::CPUI_RETURN, None, &[pc.clone()]);
+    ret.dump(&at, OpCode::CPUI_COPY, Some(&pc), std::slice::from_ref(&lr));
+    ret.dump(&at, OpCode::CPUI_RETURN, None, std::slice::from_ref(&pc));
     assert!(!ret.unresolved && ret.ends_flow && ret.mode_switched);
     assert_eq!(ret.return_targets, vec![(ram.get_index(), 0x80, 4)]);
 

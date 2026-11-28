@@ -690,16 +690,10 @@ impl ActionMultiCse {
         }
         let addr_tied = |vn: VarnodeId| data.vbank().get(vn).is_some_and(|v| v.is_addr_tied());
         let internal = unlace_base::space::spacetype::IPTR_INTERNAL;
-        if !addr_tied(out1) {
-            if addr_tied(out2) {
-                return true;
-            } else if multicse_space_type(data, out1) == Some(internal)
-                && multicse_space_type(data, out2) != Some(internal)
-            {
-                return true;
-            }
-        }
-        false
+        !addr_tied(out1)
+            && (addr_tied(out2)
+                || (multicse_space_type(data, out1) == Some(internal)
+                    && multicse_space_type(data, out2) != Some(internal)))
     }
 
     /// C++ `ActionMultiCse::skipCopy`: a value a COPY produces stands for the
@@ -708,16 +702,13 @@ impl ActionMultiCse {
         let Some(v) = data.vbank().get(vn) else {
             return vn;
         };
-        if v.is_written() {
-            if let Some(def) = v.get_def() {
-                if let Some(o) = data.obank().get(def) {
-                    if o.code() == OpCode::CPUI_COPY {
-                        if let Some(src) = o.get_in(0) {
-                            return src;
-                        }
-                    }
-                }
-            }
+        if v.is_written()
+            && let Some(def) = v.get_def()
+            && let Some(o) = data.obank().get(def)
+            && o.code() == OpCode::CPUI_COPY
+            && let Some(src) = o.get_in(0)
+        {
+            return src;
         }
         vn
     }
@@ -1218,25 +1209,25 @@ impl Action for ActionConstantPtr {
                 // the address is read-only and reads to the NUL itself, and falls
                 // back to the integer print if either fails. So the worst case is
                 // today's output.
-                if rampoint != entry.entry_addr {
-                    if let Some(elem) = entry
+                if rampoint != entry.entry_addr
+                    && let Some(elem) = entry
                         .symbol_type
                         .as_ref()
                         .filter(|t| t.get_metatype() == type_metatype::TYPE_ARRAY)
                         .and_then(|t| t.get_array_base())
                         .filter(|e| e.is_char_print())
-                    {
-                        use crate::dtype::TypeFactory as _;
-                        let charptr = data.get_arch().types_rc().and_then(|t| {
-                            t.get_type_pointer(size, elem, rspc.get_word_size()).ok()
-                        });
-                        if let Some(charptr) = charptr {
-                            if let Some(v) = data.vbank_mut().get_mut(vn) {
-                                v.update_type_locked(charptr, true, true);
-                            }
-                            self.base.count += 1;
-                            continue;
+                {
+                    use crate::dtype::TypeFactory as _;
+                    let charptr = data
+                        .get_arch()
+                        .types_rc()
+                        .and_then(|t| t.get_type_pointer(size, elem, rspc.get_word_size()).ok());
+                    if let Some(charptr) = charptr {
+                        if let Some(v) = data.vbank_mut().get_mut(vn) {
+                            v.update_type_locked(charptr, true, true);
                         }
+                        self.base.count += 1;
+                        continue;
                     }
                 }
                 // C++ `spacebaseConstant` never returns an error; the Rust signature
@@ -1272,12 +1263,11 @@ fn search_for_space_attribute(
     for _ in 0..3 {
         // If the Varnode is explicitly a pointer carrying a space attribute, use it.
         let dt = Rc::clone(data.vbank().get(vn)?.get_type());
-        if dt.get_metatype() == type_metatype::TYPE_PTR {
-            if let Some(spc) = dt.get_pointer_space() {
-                if spc.get_addr_size() as int4 == data.vbank().get(vn)?.get_size() {
-                    return Some(spc);
-                }
-            }
+        if dt.get_metatype() == type_metatype::TYPE_PTR
+            && let Some(spc) = dt.get_pointer_space()
+            && spc.get_addr_size() as int4 == data.vbank().get(vn)?.get_size()
+        {
+            return Some(spc);
         }
         let opc = data.obank().get(op)?.code();
         match opc {
@@ -1353,12 +1343,11 @@ fn space_from_const(data: &Funcdata, vn: VarnodeId) -> Rc<AddrSpace> {
 fn select_infer_space(data: &Funcdata, vn: VarnodeId, op: OpId) -> Option<Rc<AddrSpace>> {
     let vn_size = data.vbank().get(vn)?.get_size();
     let dt = Rc::clone(data.vbank().get(vn)?.get_type());
-    if dt.get_metatype() == type_metatype::TYPE_PTR {
-        if let Some(spc) = dt.get_pointer_space() {
-            if spc.get_addr_size() as int4 == vn_size {
-                return Some(spc);
-            }
-        }
+    if dt.get_metatype() == type_metatype::TYPE_PTR
+        && let Some(spc) = dt.get_pointer_space()
+        && spc.get_addr_size() as int4 == vn_size
+    {
+        return Some(spc);
     }
     let mut res_space: Option<Rc<AddrSpace>> = None;
     for spc in data.get_arch().infer_ptr_spaces().iter() {
@@ -1418,14 +1407,14 @@ fn check_copy(data: &Funcdata, op: OpId) -> bool {
         .and_then(|r| data.obank().get(r))
         .is_some_and(|r| r.code() == OpCode::CPUI_RETURN);
     let proto = data.get_func_proto();
-    if feeds_return && proto.is_output_locked() {
-        if let Some(verdict) = proto
+    if feeds_return
+        && proto.is_output_locked()
+        && let Some(verdict) = proto
             .get_output()
             .get_type()
             .and_then(|t| declared_slot_infers(data, t))
-        {
-            return verdict;
-        }
+    {
+        return verdict;
     }
     data.get_arch().infer_pointers()
 }
@@ -1438,15 +1427,14 @@ fn check_call_input(data: &Funcdata, op: OpId, slot: int4) -> bool {
     let fc = data
         .get_call_specs_index(op)
         .map(|i| data.get_call_specs(i));
-    if let Some(fc) = fc.filter(|fc| fc.is_input_locked() && fc.proto().num_params() > slot - 1) {
-        if let Some(verdict) = fc
+    if let Some(fc) = fc.filter(|fc| fc.is_input_locked() && fc.proto().num_params() > slot - 1)
+        && let Some(verdict) = fc
             .proto()
             .get_param(slot - 1)
             .and_then(|p| p.get_type())
             .and_then(|t| declared_slot_infers(data, t))
-        {
-            return verdict;
-        }
+    {
+        return verdict;
     }
     data.get_arch().infer_pointers()
 }
@@ -1591,15 +1579,14 @@ fn is_pointer(
     // rampoint, 1, Address())` — routed through `glb`'s frozen global-scope snapshot.
     let invalid = Address::new_invalid();
     let entry = glb.query_container_global(&rampoint, 1, &invalid)?;
-    if let Some(ptr_type) = entry.symbol_type.as_ref() {
-        if ptr_type.get_metatype() == type_metatype::TYPE_ARRAY {
-            if let Some(base) = ptr_type.get_array_base() {
-                // In the special case of strings (character arrays) we allow the
-                // constant pointer to refer to the middle of the string.
-                if base.is_char_print() {
-                    needexacthit = false;
-                }
-            }
+    if let Some(ptr_type) = entry.symbol_type.as_ref()
+        && ptr_type.get_metatype() == type_metatype::TYPE_ARRAY
+        && let Some(base) = ptr_type.get_array_base()
+    {
+        // In the special case of strings (character arrays) we allow the
+        // constant pointer to refer to the middle of the string.
+        if base.is_char_print() {
+            needexacthit = false;
         }
     }
     if needexacthit && entry.entry_addr != rampoint {
@@ -3018,8 +3005,8 @@ fn dc_propagate_consumed(data: &mut Funcdata, worklist: &mut Vec<VarnodeId>) {
             if in_is_const(data, 1) {
                 let mut sz = vn_size;
                 let sa = in_off(data, 1) as i32;
-                let a;
-                if sz > usize_bits {
+
+                let a = if sz > usize_bits {
                     let mut aa;
                     if sa >= 8 * usize_bits {
                         aa = !0u64;
@@ -3034,10 +3021,10 @@ fn dc_propagate_consumed(data: &mut Funcdata, worklist: &mut Vec<VarnodeId>) {
                         mask <<= sz;
                         aa &= !mask;
                     }
-                    a = aa;
+                    aa
                 } else {
-                    a = outc >> sa;
-                }
+                    outc >> sa
+                };
                 let b = if outc == 0 { 0 } else { !0u64 };
                 let (i0, i1) = (in_n(data, 0), in_n(data, 1));
                 dc_push_consumed(data, a, i0, worklist);
@@ -3532,10 +3519,10 @@ fn deadcode_apply(data: &mut Funcdata) -> ApplyResult {
             if !is_assignment {
                 continue;
             }
-            if data.obank().get(op).expect("stale op").hold_output() {
-                if let Some(out) = data.obank().get(op).expect("stale op").get_out() {
-                    dc_push_consumed(data, !0u64, out, &mut worklist);
-                }
+            if data.obank().get(op).expect("stale op").hold_output()
+                && let Some(out) = data.obank().get(op).expect("stale op").get_out()
+            {
+                dc_push_consumed(data, !0u64, out, &mut worklist);
             }
         } else if !is_assignment {
             if opc == OpCode::CPUI_RETURN {
@@ -3588,10 +3575,10 @@ fn deadcode_apply(data: &mut Funcdata) -> ApplyResult {
                 }
             }
         }
-        if let Some(out) = data.obank().get(op).expect("stale op").get_out() {
-            if data.vbank().get(out).expect("stale out").is_auto_live() {
-                dc_push_consumed(data, !0u64, out, &mut worklist);
-            }
+        if let Some(out) = data.obank().get(op).expect("stale op").get_out()
+            && data.vbank().get(out).expect("stale out").is_auto_live()
+        {
+            dc_push_consumed(data, !0u64, out, &mut worklist);
         }
     }
 
@@ -3911,7 +3898,7 @@ impl Action for ActionUnjustifiedParams {
                         };
                         if v.get_addr()
                             .get_space()
-                            .map_or(true, |s| !Rc::ptr_eq(s, &vspace))
+                            .is_none_or(|s| !Rc::ptr_eq(s, &vspace))
                         {
                             continue;
                         }
@@ -3933,7 +3920,7 @@ impl Action for ActionUnjustifiedParams {
                         };
                         if v.get_addr()
                             .get_space()
-                            .map_or(true, |s| !Rc::ptr_eq(s, &vspace))
+                            .is_none_or(|s| !Rc::ptr_eq(s, &vspace))
                         {
                             continue;
                         }

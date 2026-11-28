@@ -218,8 +218,8 @@ fn record(data: &[u8], files_left: usize) -> Option<Result<(Trace, usize), Cappe
         pc = pc.checked_add(advance)?;
         let start = previous.max(covered);
         covered = covered.max(pc.checked_add(1)?);
-        if func != 0 && start >= low && start < high && line > 0 && line <= i64::from(u32::MAX) {
-            if let Some(file) = file {
+        if func != 0 && start >= low && start < high && line > 0 && line <= i64::from(u32::MAX)
+            && let Some(file) = file {
                 out.lines.push(Line {
                     func_addr: u64::from(func),
                     start: u64::from(start),
@@ -228,7 +228,6 @@ fn record(data: &[u8], files_left: usize) -> Option<Result<(Trace, usize), Cappe
                     line: line as u32,
                 });
             }
-        }
     }
     Some(Ok((out, count)))
 }

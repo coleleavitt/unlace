@@ -30,10 +30,11 @@ fn with_convention(fd: &Funcdata, fc: &mut FuncCallSpecs) {
         (0x10u64, effect_type::UNAFFECTED),
         (0x08, effect_type::KILLEDBYCALL),
     ] {
-        let mut vd = unlace_num::pcoderaw::VarnodeData::default();
-        vd.space = Some(std::rc::Rc::clone(&ram));
-        vd.offset = off;
-        vd.size = 4;
+        let vd = unlace_num::pcoderaw::VarnodeData {
+            space: Some(std::rc::Rc::clone(&ram)),
+            offset: off,
+            size: 4,
+        };
         model.push_effect(EffectRecord::from_varnode(vd, ty));
     }
     fc.proto_mut().set_model(Some(std::rc::Rc::new(model)));
@@ -186,10 +187,11 @@ fn an_explicit_effect_override_wins() {
     );
     let edx = Address::new(space(&fd, "ram"), 0x08);
     assert!(callee_preserves_range(&fd, &fc, &edx, 4));
-    let mut vd = unlace_num::pcoderaw::VarnodeData::default();
-    vd.space = Some(space(&fd, "ram"));
-    vd.offset = 0x08;
-    vd.size = 4;
+    let vd = unlace_num::pcoderaw::VarnodeData {
+        space: Some(space(&fd, "ram")),
+        offset: 0x08,
+        size: 4,
+    };
     fc.proto_mut()
         .push_effect_override(EffectRecord::from_varnode(vd, effect_type::KILLEDBYCALL));
     assert!(!callee_preserves_range(&fd, &fc, &edx, 4));
@@ -263,10 +265,11 @@ fn a_mode_switched_walk_keeps_no_argument_register() {
         (0x08, effect_type::KILLEDBYCALL),
         (0x0c, effect_type::KILLEDBYCALL),
     ] {
-        let mut vd = unlace_num::pcoderaw::VarnodeData::default();
-        vd.space = Some(Rc::clone(&ram));
-        vd.offset = off;
-        vd.size = 4;
+        let vd = unlace_num::pcoderaw::VarnodeData {
+            space: Some(Rc::clone(&ram)),
+            offset: off,
+            size: 4,
+        };
         model.push_effect(EffectRecord::from_varnode(vd, ty));
     }
     fc.proto_mut().set_model(Some(Rc::new(model)));

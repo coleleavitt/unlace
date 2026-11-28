@@ -168,13 +168,13 @@ pub fn shadow(fd: &Funcdata) -> ShadowReport {
             let Some(v) = fd.vbank().get(vn) else {
                 continue;
             };
-            if let Some(def) = v.get_def().and_then(|op| fd.obank().get(op)) {
-                if same_sign_op(def.code()) {
+            if let Some(def) = v.get_def().and_then(|op| fd.obank().get(op))
+                && same_sign_op(def.code()) {
                     let ends: Vec<usize> = def
                         .get_out()
                         .into_iter()
                         .chain((0..def.num_input()).filter_map(|s| def.get_in(s)))
-                        .filter_map(|x| node_of(x))
+                        .filter_map(&node_of)
                         .collect();
                     if let Some((&first, rest)) = ends.split_first() {
                         for &e in rest {
@@ -183,7 +183,6 @@ pub fn shadow(fd: &Funcdata) -> ShadowReport {
                         }
                     }
                 }
-            }
             for op in v.descend_iter() {
                 let Some(reader) = fd.obank().get(op) else {
                     continue;
@@ -228,9 +227,7 @@ pub fn shadow(fd: &Funcdata) -> ShadowReport {
         .iter()
         .enumerate()
         .filter_map(|(i, &id)| {
-            if fd.high_bank().get(id)?.unlace_name().is_none() {
-                return None;
-            }
+            fd.high_bank().get(id)?.unlace_name()?;
             Some(ShadowRow {
                 high: id,
                 solved: Solved::from_bits(bits[i]),

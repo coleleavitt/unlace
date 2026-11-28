@@ -131,14 +131,13 @@ pub fn goto_rewrites(
             }
         }
         // A switch's own `BlockMultiGoto` lists the case edges handled below.
-        if let BlockKind::MultiGoto { gotoedges, .. } = blk.kind() {
-            if blk
+        if let BlockKind::MultiGoto { gotoedges, .. } = blk.kind()
+            && blk
                 .get_parent()
                 .is_none_or(|p| graph.block(p).get_type() != BlockType::Switch)
             {
                 kept.extend(gotoedges.iter().filter_map(|&t| leaf(t)));
             }
-        }
         let cases = blk.switch_caseblocks();
         if cases.iter().any(|c| c.gototype == block_flags::f_goto_goto) {
             let scope = plans.hosts.get(&id).copied().unwrap_or(id);

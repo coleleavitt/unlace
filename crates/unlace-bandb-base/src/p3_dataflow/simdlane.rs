@@ -122,6 +122,12 @@ pub struct RuleSimdShuffleLane {
     group: String,
 }
 
+impl Default for RuleSimdShuffleLane {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RuleSimdShuffleLane {
     /// Build the rule in the default `analysis` group.
     pub fn new() -> RuleSimdShuffleLane {

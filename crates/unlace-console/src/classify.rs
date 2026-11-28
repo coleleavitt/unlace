@@ -67,7 +67,7 @@ impl Classifier {
     /// `"thunk"`/`"func"`).
     pub fn new(prog: &ConsoleProgram, binary: &str, entries: impl Iterator<Item = u64>) -> Self {
         let bytes = unlace_analysis::loader::elf_shdr::read_image(binary).unwrap_or_default();
-        match unlace_analysis::loadimage_object::parse_object(&*bytes) {
+        match unlace_analysis::loadimage_object::parse_object(&bytes) {
             Ok(file) => Classifier::from_object(prog, Some(&file), entries),
             Err(_) => Classifier::from_object(prog, None, entries),
         }
@@ -167,26 +167,23 @@ fn collect_imports(f: &object::File, out: &mut BTreeSet<String>) {
     match f.format() {
         object::BinaryFormat::Elf => {
             for sym in f.dynamic_symbols() {
-                if sym.is_undefined() {
-                    if let Ok(name) = sym.name() {
-                        if !name.is_empty() {
+                if sym.is_undefined()
+                    && let Ok(name) = sym.name()
+                        && !name.is_empty() {
                             out.insert(name.to_string());
                         }
-                    }
-                }
             }
         }
         object::BinaryFormat::MachO => {
             for sym in f.symbols() {
-                if sym.is_undefined() {
-                    if let Ok(name) = sym.name() {
+                if sym.is_undefined()
+                    && let Ok(name) = sym.name() {
                         // Mach-O C symbols carry one leading underscore.
                         let name = name.strip_prefix('_').unwrap_or(name);
                         if !name.is_empty() {
                             out.insert(name.to_string());
                         }
                     }
-                }
             }
         }
         object::BinaryFormat::Pe => {

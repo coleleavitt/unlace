@@ -168,7 +168,7 @@ impl ArmFrames {
             let mut claimed = BTreeMap::new();
             let mut validated = BTreeSet::new();
             for &root in roots {
-                if !self.bodies.contains_key(&root) {
+                if let std::collections::btree_map::Entry::Vacant(e) = self.bodies.entry(root) {
                     let gap_hi = listing
                         .next_instruction_start_after(root)
                         .unwrap_or(u64::MAX);
@@ -181,7 +181,7 @@ impl ArmFrames {
                             .collect();
                         self.validated(root, spans, decoder);
                     } else {
-                        self.bodies.insert(root, None);
+                        e.insert(None);
                     }
                 }
                 if let Some(body) = &self.bodies[&root] {

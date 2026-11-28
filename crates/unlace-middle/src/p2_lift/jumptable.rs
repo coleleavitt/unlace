@@ -541,14 +541,14 @@ impl PathMeld {
             return;
         }
         if val {
-            for i in 0..=(start_op as usize) {
-                if let Some(op) = self.op_meld[i].op {
+            for meld in &self.op_meld[..=(start_op as usize)] {
+                if let Some(op) = meld.op {
                     fd.obank_mut().get_mut(op).unwrap().set_mark();
                 }
             }
         } else {
-            for i in 0..=(start_op as usize) {
-                if let Some(op) = self.op_meld[i].op {
+            for meld in &self.op_meld[..=(start_op as usize)] {
+                if let Some(op) = meld.op {
                     fd.obank_mut().get_mut(op).unwrap().clear_mark();
                 }
             }
@@ -2633,12 +2633,11 @@ impl JumpBasicModel {
             if i != 0 {
                 // Check that this CBRANCH isn't protecting some other switch.
                 let otherbl = fd.bblocks_ref().block(prevbl).get_out(1 - indpath);
-                if let Some(otherop) = fd.bb_op_tail(otherbl) {
-                    if fd.obank().get(otherop).unwrap().code() == OpCode::CPUI_BRANCHIND
-                        && otherop != indirect
-                    {
-                        break;
-                    }
+                if let Some(otherop) = fd.bb_op_tail(otherbl)
+                    && fd.obank().get(otherop).unwrap().code() == OpCode::CPUI_BRANCHIND
+                    && otherop != indirect
+                {
+                    break;
                 }
             }
             let mut toswitchval = indpath == 1;
@@ -3066,16 +3065,16 @@ impl JumpBasicModel {
         let mut cur = fd.bblocks_ref().block(bl).get_in(slot);
         // Cap the peel depth to keep the walk bounded.
         for _ in 0..4 {
-            if let Some(t) = fd.bb_op_tail(cur) {
-                if fd.obank().get(t)?.code() == OpCode::CPUI_CBRANCH {
-                    // The toward-switch out-slot at `cur` is the rev-index of the
-                    // edge (cur -> child) as recorded on `child`.
-                    let outslot = fd
-                        .bblocks_ref()
-                        .block(child)
-                        .get_in_rev_index(child_revslot);
-                    return Some((t, outslot));
-                }
+            if let Some(t) = fd.bb_op_tail(cur)
+                && fd.obank().get(t)?.code() == OpCode::CPUI_CBRANCH
+            {
+                // The toward-switch out-slot at `cur` is the rev-index of the
+                // edge (cur -> child) as recorded on `child`.
+                let outslot = fd
+                    .bblocks_ref()
+                    .block(child)
+                    .get_in_rev_index(child_revslot);
+                return Some((t, outslot));
             }
             // Only peel pure trampolines: exactly one in, exactly one out.
             if fd.bblocks_ref().block(cur).size_in() != 1
@@ -3113,10 +3112,7 @@ impl JumpBasicModel {
         var_array.push(fd.obank().get(op0)?.get_in(1)?); // boolean input to CBRANCH
         let first_cbranch = op0;
         for i in 1..size_in {
-            let (op, outslot) = match Self::guard_cbranch_for_edge(fd, bl, i) {
-                Some(p) => p,
-                None => return None, // all edges must reach a CBRANCH guard
-            };
+            let (op, outslot) = Self::guard_cbranch_for_edge(fd, bl, i)?;
             if fd.obank().get(op)?.is_boolean_flip() != is_op_flip {
                 return None;
             }
@@ -3208,8 +3204,8 @@ impl JumpBasicModel {
         };
         // Verify the remaining paths before mutating the array (upstream mutates
         // in place; we replicate that only after every check passes for an entry).
-        for i in 1..var_array.len() {
-            let vni = var_array[i];
+        for entry in var_array.iter_mut().skip(1) {
+            let vni = *entry;
             let vi = match fd.vbank().get(vni) {
                 Some(v) => v,
                 None => return false,
@@ -3248,7 +3244,7 @@ impl JumpBasicModel {
                 Some(v) => v,
                 None => return false,
             };
-            var_array[i] = newi;
+            *entry = newi;
         }
         var_array[0] = new0;
         true
@@ -4186,10 +4182,10 @@ impl JumpBasicModel {
                 | OpCode::CPUI_INT_SEXT
                 | OpCode::CPUI_MULTIEQUAL => {
                     for s in 0..op.num_input() {
-                        if let Some(inv) = op.get_in(s) {
-                            if !fd.vbank().get(inv).map(|x| x.is_constant()).unwrap_or(true) {
-                                stack.push(inv);
-                            }
+                        if let Some(inv) = op.get_in(s)
+                            && !fd.vbank().get(inv).map(|x| x.is_constant()).unwrap_or(true)
+                        {
+                            stack.push(inv);
                         }
                     }
                 }
@@ -4204,10 +4200,10 @@ impl JumpBasicModel {
                 | OpCode::CPUI_INT_SCARRY
                 | OpCode::CPUI_INT_SBORROW => {
                     for s in 0..op.num_input() {
-                        if let Some(inv) = op.get_in(s) {
-                            if let Some((_, pos)) = self.resolve_to_meld(fd, inv) {
-                                cand.insert(pos);
-                            }
+                        if let Some(inv) = op.get_in(s)
+                            && let Some((_, pos)) = self.resolve_to_meld(fd, inv)
+                        {
+                            cand.insert(pos);
                         }
                     }
                 }
@@ -4252,10 +4248,11 @@ impl JumpBasicModel {
             if !ok {
                 continue;
             }
-            if let Some(n) = n {
-                if n >= 2 && n <= cap {
-                    return Some((iv, pos, n));
-                }
+            if let Some(n) = n
+                && n >= 2
+                && n <= cap
+            {
+                return Some((iv, pos, n));
             }
         }
         None
@@ -4296,34 +4293,34 @@ impl JumpBasicModel {
             // Case A: x = iv + c  (x's def is INT_ADD/SUB on iv).
             if let Some(xd) = fd.vbank().get(x).and_then(|v| v.get_def()) {
                 let code = fd.obank().get(xd).map(|o| o.code());
-                if let Some((other, c, slot1)) = add_const(fd, xd) {
-                    if other == iv {
-                        let off = match code {
-                            Some(OpCode::CPUI_INT_ADD) => c,
-                            Some(OpCode::CPUI_INT_SUB) if slot1 => c.wrapping_neg(),
-                            _ => {
-                                continue;
-                            }
-                        };
-                        map.entry(x).or_insert(off);
-                        continue;
-                    }
+                if let Some((other, c, slot1)) = add_const(fd, xd)
+                    && other == iv
+                {
+                    let off = match code {
+                        Some(OpCode::CPUI_INT_ADD) => c,
+                        Some(OpCode::CPUI_INT_SUB) if slot1 => c.wrapping_neg(),
+                        _ => {
+                            continue;
+                        }
+                    };
+                    map.entry(x).or_insert(off);
+                    continue;
                 }
             }
             // Case B: iv = x + c  (iv's def is INT_ADD/SUB on x)  ->  x = iv - c.
             if let Some(ivd) = iv_def {
                 let code = fd.obank().get(ivd).map(|o| o.code());
-                if let Some((other, c, slot1)) = add_const(fd, ivd) {
-                    if other == x {
-                        let off = match code {
-                            Some(OpCode::CPUI_INT_ADD) => c.wrapping_neg(),
-                            Some(OpCode::CPUI_INT_SUB) if slot1 => c,
-                            _ => {
-                                continue;
-                            }
-                        };
-                        map.entry(x).or_insert(off);
-                    }
+                if let Some((other, c, slot1)) = add_const(fd, ivd)
+                    && other == x
+                {
+                    let off = match code {
+                        Some(OpCode::CPUI_INT_ADD) => c.wrapping_neg(),
+                        Some(OpCode::CPUI_INT_SUB) if slot1 => c,
+                        _ => {
+                            continue;
+                        }
+                    };
+                    map.entry(x).or_insert(off);
                 }
             }
         }
@@ -4706,19 +4703,19 @@ impl JumpBasicModel {
                 }
                 OpCode::CPUI_MULTIEQUAL => {
                     for s in 0..dop.num_input() {
-                        if let Some(inv) = dop.get_in(s) {
-                            if inv != cur {
-                                stack.push(inv);
-                            }
+                        if let Some(inv) = dop.get_in(s)
+                            && inv != cur
+                        {
+                            stack.push(inv);
                         }
                     }
                 }
                 // `lea base+disp` SLEIGH residue: base reached through ADD-by-const.
                 OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB => {
-                    if let Some(slot) = self.nonconst_slot(fd, def) {
-                        if let Some(iv) = dop.get_in(slot) {
-                            stack.push(iv);
-                        }
+                    if let Some(slot) = self.nonconst_slot(fd, def)
+                        && let Some(iv) = dop.get_in(slot)
+                    {
+                        stack.push(iv);
                     }
                     // (a non-constant + non-constant add is a real address calc,
                     //  not the base — do not explore it.)
@@ -4788,6 +4785,7 @@ impl JumpBasicModel {
             return RowMatch::Rejected;
         }
         let values: BTreeSet<uintb> = rows.values.iter().flatten().copied().collect();
+        #[allow(clippy::mutable_key_type)]
         let targets: BTreeSet<&Address> = rows.addresses.iter().collect();
         let mut result = RowMatch::Exact;
         loop {
@@ -4801,13 +4799,14 @@ impl JumpBasicModel {
                     .emulate_path(v, &self.path_meld, op, vn)
                     .map(|raw| Self::destination(&spc, mask, raw));
                 let loads = emul.take_loadpoints().unwrap_or_default();
-                if let Ok(dest) = &dest {
-                    if targets.contains(dest) && rows.may_be_dispatched(&loads) {
-                        if !rows.default.contains(dest) {
-                            return RowMatch::Rejected;
-                        }
-                        result = RowMatch::ThroughDefault;
+                if let Ok(dest) = &dest
+                    && targets.contains(dest)
+                    && rows.may_be_dispatched(&loads)
+                {
+                    if !rows.default.contains(dest) {
+                        return RowMatch::Rejected;
                     }
+                    result = RowMatch::ThroughDefault;
                 }
             }
             match jr.next() {
@@ -5001,7 +5000,9 @@ impl JumpBasicModel {
         };
         let pass: Vec<bool> = rows.iter().map(|&(_, dispatched)| dispatched).collect();
         let kept = Self::reasonable_rows(fd, &dests);
+        #[allow(clippy::mutable_key_type)]
         let kept_dests: BTreeSet<&Address> = dests[..kept].iter().collect();
+        #[allow(clippy::mutable_key_type)]
         let kept_dispatched: BTreeSet<&Address> = (0..kept)
             .filter(|&row| pass[row])
             .map(|row| &dests[row])
@@ -5312,10 +5313,10 @@ impl JumpBasicModel {
             ));
         }
         // Hand back any collected LOAD records.
-        if let Some(lp) = loadpoints.as_mut() {
-            if let Some(collected) = emul.take_loadpoints() {
-                lp.extend(collected);
-            }
+        if let Some(lp) = loadpoints.as_mut()
+            && let Some(collected) = emul.take_loadpoints()
+        {
+            lp.extend(collected);
         }
         Ok(())
     }
@@ -5727,16 +5728,18 @@ impl JumpModel for JumpBasicModel {
         if i != addresstable.len() {
             addresstable.truncate(i);
             self.jrange_range_mut().truncate(i as int4);
-            if let Some(lc) = loadcounts {
-                if i >= 1 && (i - 1) < lc.len() {
-                    loadpoints.truncate(lc[i - 1] as usize);
-                }
+            if let Some(lc) = loadcounts
+                && i >= 1
+                && (i - 1) < lc.len()
+            {
+                loadpoints.truncate(lc[i - 1] as usize);
             }
         }
-        if (fd.hooks().segmentize_table_leaves_image)(fd, indop, addresstable) {
-            return Ok(false);
-        }
-        Ok(true)
+        Ok(!(fd.hooks().segmentize_table_leaves_image)(
+            fd,
+            indop,
+            addresstable,
+        ))
     }
 
     fn clone_box(&self) -> Box<dyn JumpModel> {
@@ -7165,16 +7168,16 @@ impl JumpTable {
             .and_then(|v| v.get_def())
             .and_then(|def| fd.obank().get(def))
             .is_some_and(|def| def.code() == OpCode::CPUI_CALLOTHER);
-        if callother {
-            if let Some(model) = (fd.hooks().jumpassist_recover)(
+        if callother
+            && let Some(model) = (fd.hooks().jumpassist_recover)(
                 fd,
                 indirect,
                 self.addresstable.len() as uint4,
                 max_table_size,
-            )? {
-                self.jmodel = Some(model);
-                return Ok(());
-            }
+            )?
+        {
+            self.jmodel = Some(model);
+            return Ok(());
         }
 
         // Try the basic model.
@@ -7246,16 +7249,15 @@ impl JumpTable {
         }
         // (unlace `rawswitch`) A table flow matched from its instructions keeps
         // that model when the value-range models still fail on the whole function.
-        if !self.addresstable.is_empty() {
-            if let Some(model) =
+        if !self.addresstable.is_empty()
+            && let Some(model) =
                 (fd.hooks().rawswitch_recover)(self, fd, indirect, matchsize, max_table_size)?
-            {
-                let mut rows = Vec::new();
-                model.build_addresses(fd, indirect, &mut rows, None, None)?;
-                if rows == self.addresstable {
-                    self.jmodel = Some(model);
-                    return Ok(());
-                }
+        {
+            let mut rows = Vec::new();
+            model.build_addresses(fd, indirect, &mut rows, None, None)?;
+            if rows == self.addresstable {
+                self.jmodel = Some(model);
+                return Ok(());
             }
         }
         // No model matched.
@@ -7968,10 +7970,10 @@ impl JumpTable {
                 lp.encode(encoder)?;
             }
         }
-        if let Some(m) = &self.jmodel {
-            if m.is_override() {
-                m.encode(encoder)?;
-            }
+        if let Some(m) = &self.jmodel
+            && m.is_override()
+        {
+            m.encode(encoder)?;
         }
         encoder.close_element(&ELEM_JUMPTABLE);
         Ok(())

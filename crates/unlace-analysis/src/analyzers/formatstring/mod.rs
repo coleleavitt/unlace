@@ -243,12 +243,12 @@ fn is_double(spec: &str) -> bool {
 
 /// `isIntegerPointer` — `FormatStringParser.java:844`. Set `"n"`.
 fn is_integer_pointer(spec: &str) -> bool {
-    spec.chars().next() == Some('n')
+    spec.starts_with('n')
 }
 
 /// `isVoidPointer` — `FormatStringParser.java:850`. Set `"p"`.
 fn is_void_pointer(spec: &str) -> bool {
-    spec.chars().next() == Some('p')
+    spec.starts_with('p')
 }
 
 /// `Character.isDigit` — ASCII-digit semantics (the format grammar is ASCII).
@@ -553,18 +553,16 @@ fn analyze_format_string_with_parameters(fmt: &[char]) -> Option<Vec<FmtArg>> {
         if data.in_conversion {
             if data.length_modifier.is_some() {
                 data.conversion_specifier = detect_conversion_specifier(c);
-                match data.conversion_specifier.clone() {
-                    None => return None,
-                    Some(cs) => {
-                        map_put(
-                            &mut format_argument_map,
-                            data.parameter_index,
-                            FmtArg::new(data.length_modifier.as_deref(), &cs),
-                        );
-                        data.in_conversion = false;
-                        i += 1;
-                        continue;
-                    }
+                {
+                    let cs = data.conversion_specifier.clone()?;
+                    map_put(
+                        &mut format_argument_map,
+                        data.parameter_index,
+                        FmtArg::new(data.length_modifier.as_deref(), &cs),
+                    );
+                    data.in_conversion = false;
+                    i += 1;
+                    continue;
                 }
             }
             data.length_modifier = detect_length_modifier(c);
@@ -685,9 +683,9 @@ fn convert_map_to_list(map: &[Option<FmtArg>]) -> Option<Vec<FmtArg>> {
     let size = map.iter().filter(|e| e.is_some()).count();
     let mut list = Vec::with_capacity(size);
     for idx in 1..=size {
-        match map.get(idx - 1).and_then(|e| e.clone()) {
-            None => return None,
-            Some(arg) => list.push(arg),
+        {
+            let arg = map.get(idx - 1).and_then(|e| e.clone())?;
+            list.push(arg)
         }
     }
     Some(list)
@@ -822,7 +820,7 @@ pub fn convert_to_format_argument_list(fmt: &str, is_output_type: bool) -> Optio
             // Java: if any substring contains '$', retry as a positional string.
             let has_positional = format_str_argument_list
                 .iter()
-                .any(|s| s.iter().any(|&c| c == '$'));
+                .any(|s| s.contains(&'$'));
             if has_positional {
                 return analyze_format_string_with_parameters(&chars);
             }

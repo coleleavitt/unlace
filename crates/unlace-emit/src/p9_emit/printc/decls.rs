@@ -2,6 +2,19 @@
 
 use super::*;
 
+/// A declaration's original storage key: (space name, space, offset).
+pub(super) type StorageKey = Option<(String, std::rc::Rc<unlace_base::space::AddrSpace>, u64)>;
+pub(super) type DeclDatatype = Option<std::rc::Rc<crate::dtype::Datatype>>;
+pub(super) type RenderedLocalDecl = (
+    String,
+    String,
+    Option<(String, int4)>,
+    StorageKey,
+    DeclDatatype,
+);
+pub(super) type LocalDeclTypeAndComment = (((String, String), StorageKey), DeclDatatype);
+pub(super) type EmittedHighSymbol = (String, int4, DeclDatatype);
+
 impl PrintC {
     /// (unlace `structdefs`) Emit the definitions of the composite/enum/typedef
     /// types this function's C names, above the function.
@@ -84,18 +97,18 @@ impl PrintC {
         // (unlace java) `PrintJava::docFunction` prints in the scope of the class, so
         // the method name stands alone.
         let mut java_ctor = false;
-        if self.out_lang == crate::lang::OutLang::Java {
-            if let Some((scope, base)) = display.rsplit_once("::") {
-                // (unlace javanew) A constructor is declared by its class name.
-                java_ctor = arch.unlace_options.get::<crate::javanew::JavaNew>().0
-                    && (base == "<init>" || base.starts_with("<init>_"));
-                display = if java_ctor {
-                    let class = scope.rsplit("::").next().unwrap_or(scope);
-                    class.rsplit('$').next().unwrap_or(class).to_string()
-                } else {
-                    base.to_string()
-                };
-            }
+        if self.out_lang == crate::lang::OutLang::Java
+            && let Some((scope, base)) = display.rsplit_once("::")
+        {
+            // (unlace javanew) A constructor is declared by its class name.
+            java_ctor = arch.unlace_options.get::<crate::javanew::JavaNew>().0
+                && (base == "<init>" || base.starts_with("<init>_"));
+            display = if java_ctor {
+                let class = scope.rsplit("::").next().unwrap_or(scope);
+                class.rsplit('$').next().unwrap_or(class).to_string()
+            } else {
+                base.to_string()
+            };
         }
         let display = crate::cppshortnames::function_name(arch, display);
         // Return type from the recovered proto output (C++ `getFuncProto().
@@ -1069,16 +1082,15 @@ impl PrintC {
                 .unlace_options
                 .get::<crate::coreoptions::NameStyleAngr>()
                 .0
+                && let Some((ctext, spc, off)) = comment
             {
-                if let Some((ctext, spc, off)) = comment {
-                    self.emit.spaces(1, 0);
-                    self.emit.tag_comment(
-                        &format!("// {ctext}"),
-                        SyntaxHighlight::CommentColor,
-                        &spc,
-                        off,
-                    );
-                }
+                self.emit.spaces(1, 0);
+                self.emit.tag_comment(
+                    &format!("// {ctext}"),
+                    SyntaxHighlight::CommentColor,
+                    &spc,
+                    off,
+                );
             }
         }
         // (unlace `vaarg`) The `ap` a `va_start(ap,..)` or `va_arg(ap,T)` of the
@@ -1231,7 +1243,7 @@ impl PrintC {
         &self,
         fd: &Funcdata,
         high: crate::context::HighVariableId,
-    ) -> Option<(String, int4, Option<std::rc::Rc<crate::dtype::Datatype>>)> {
+    ) -> Option<EmittedHighSymbol> {
         let name = self.emitted_high_name(fd, high)?;
         if self.local_name_standalones.contains(&high) {
             return Some((name, -1, None));
@@ -1258,13 +1270,7 @@ impl PrintC {
         fd: &Funcdata,
         arch: &Architecture,
         high: crate::context::HighVariableId,
-    ) -> (
-        String,
-        String,
-        Option<(String, int4)>,
-        Option<(String, std::rc::Rc<unlace_base::space::AddrSpace>, u64)>,
-        Option<std::rc::Rc<crate::dtype::Datatype>>,
-    ) {
+    ) -> RenderedLocalDecl {
         // Type: the high's recovered type name (W8-unknown -> `undefined<N>`).
         let ((mut type_name, comment), mut declared) =
             self.local_decl_type_and_comment(fd, arch, high);
@@ -1516,13 +1522,7 @@ impl PrintC {
         fd: &Funcdata,
         arch: &Architecture,
         high: crate::context::HighVariableId,
-    ) -> (
-        (
-            (String, String),
-            Option<(String, std::rc::Rc<unlace_base::space::AddrSpace>, u64)>,
-        ),
-        Option<std::rc::Rc<crate::dtype::Datatype>>,
-    ) {
+    ) -> LocalDeclTypeAndComment {
         if fd.high_bank().get(high).is_none() {
             return ((("undefined1".to_string(), String::new()), None), None);
         }

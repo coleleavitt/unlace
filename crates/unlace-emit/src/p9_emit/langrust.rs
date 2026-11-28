@@ -969,11 +969,10 @@ impl PrintC {
             if o.not_printed() || o.is_branch() {
                 continue;
             }
-            if let Some(out) = o.get_out() {
-                if fd.vbank().get(out).map(|v| v.is_implied()).unwrap_or(false) {
+            if let Some(out) = o.get_out()
+                && fd.vbank().get(out).map(|v| v.is_implied()).unwrap_or(false) {
                     continue;
                 }
-            }
             return true;
         }
         false

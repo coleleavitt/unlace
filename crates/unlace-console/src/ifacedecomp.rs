@@ -677,8 +677,8 @@ fn read_varnode(
         if let Some(op) = fd.obank().find_op(&seq) {
             let n = fd.obank().get(op).map(|o| o.num_input()).unwrap_or(0);
             for i in 0..n {
-                if let Some(tmpvn) = fd.obank().get(op).and_then(|o| o.get_in(i)) {
-                    if fd
+                if let Some(tmpvn) = fd.obank().get(op).and_then(|o| o.get_in(i))
+                    && fd
                         .vbank()
                         .get(tmpvn)
                         .map(|v| v.get_addr() == loc)
@@ -686,7 +686,6 @@ fn read_varnode(
                     {
                         return Ok(Some(tmpvn));
                     }
-                }
             }
         }
         Ok(None)
@@ -2095,11 +2094,10 @@ decomp_command!(
         let nocode = s.read_token();
         let dcp = dcp_mut(status)?;
         dcp.fd = Some(fd);
-        if nocode == "nocode" {
-            if let Some(fd) = dcp.fd.as_mut() {
+        if nocode == "nocode"
+            && let Some(fd) = dcp.fd.as_mut() {
                 fd.set_no_code(true);
             }
-        }
         Ok(())
     }
 );
@@ -2771,17 +2769,14 @@ decomp_command!(
                     dcp.stopped_flow = Some(recipe);
                 }
             } else {
-                match build_and_follow_flow_with_override(
+                if let Ok(fd) = build_and_follow_flow_with_override(
                     prog.arch_mut(),
                     &recipe.name,
                     recipe.entry.clone(),
                     recipe.size,
                     &recipe.flow_overrides,
                 ) {
-                    Ok(fd) => {
-                        dcp_mut(status)?.fd = Some(fd);
-                    }
-                    _ => {}
+                    dcp_mut(status)?.fd = Some(fd);
                 }
             }
         }
@@ -2872,11 +2867,10 @@ decomp_command!(
                 // shell behind, and a front-end that reads only the C (`unlace
                 // decompile`'s text surface) cannot otherwise tell it from a
                 // genuinely empty function.
-                if let Some(fd) = dcp.fd.as_mut() {
-                    if fd.get_address() == &stamp_addr {
+                if let Some(fd) = dcp.fd.as_mut()
+                    && fd.get_address() == &stamp_addr {
                         fd.set_unlace_pipeline_failure(&msg);
                     }
-                }
                 if msg.contains("LOSS-131") {
                     status.out(&format!("Skipping {name}: {msg}\n"));
                     Ok(())

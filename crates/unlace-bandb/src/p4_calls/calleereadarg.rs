@@ -16,7 +16,7 @@
 //! unlace printed `return ext() + 1;`. gcc's `int fwd(int *p) { int x = *p; if (x
 //! > 5) return x; return getk(x); }` loses `getk`'s argument the same way: the
 //! value it loads into `edi` is compared, returned on one path and tail-called
-//! on the other.
+//! >    on the other.
 //!
 //! # Why the argument is lost
 //!
@@ -254,11 +254,10 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
         )
     });
     let own = data.unlace_callee_entry_dead(data.get_address());
-    if let (Some(own), Some((a, s))) = (own, last.as_ref()) {
-        if own.proves_read(a, *s) {
+    if let (Some(own), Some((a, s))) = (own, last.as_ref())
+        && own.proves_read(a, *s) {
             return None;
         }
-    }
     // A read that only stores the register is evidence only where callers mark
     // their variadic calls: the convention returns in a register that carries
     // no argument (x86-64 `al`). AArch64 gcc bounds a variadic callee's save to

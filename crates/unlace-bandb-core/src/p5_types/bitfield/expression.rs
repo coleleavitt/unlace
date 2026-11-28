@@ -330,10 +330,7 @@ impl InsertStoreExpression {
         let def_facing = data.vn_type_def_facing(value);
         self.expr
             .get_structures(&def_facing, 0, least_bit_off, spc.is_big_endian());
-        let the_struct = match &self.expr.the_struct {
-            Some(s) => Rc::clone(s),
-            None => return None,
-        };
+        let the_struct = Rc::clone(self.expr.the_struct.as_ref()?);
         // structPtr = recoverStructurePointer(store->getIn(1), byteRangeOffset);
         let store_ptr = data.obank().get(store)?.get_in(1)?;
         self.struct_ptr =
@@ -421,10 +418,7 @@ impl PullExpression {
         let bit_size = data.vbank().get(po.get_in(2)?)?.get_offset() as int4;
         self.expr
             .get_structures(&dt, offset, least_bit_off, spc.is_big_endian());
-        let the_struct = match &self.expr.the_struct {
-            Some(s) => Rc::clone(s),
-            None => return None,
-        };
+        let the_struct = Rc::clone(self.expr.the_struct.as_ref()?);
         if let Some(load_op) = self.load_op {
             let load_ptr = data.obank().get(load_op)?.get_in(1)?;
             self.struct_ptr =

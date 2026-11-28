@@ -163,21 +163,17 @@ fn masks_a_derived_address(data: &Funcdata, family: &[VarnodeId]) -> bool {
                 | OpCode::CPUI_INT_LEFT
                 | OpCode::CPUI_INT_RIGHT
                 | OpCode::CPUI_INT_SRIGHT => {
-                    if hops > 0 {
-                        return true;
-                    }
-                    false
+                    hops > 0
                 }
                 _ => false,
             };
             if !derived || hops + 1 >= HOP_CAP {
                 continue;
             }
-            if let Some(out) = o.get_out() {
-                if seen.insert(out) {
+            if let Some(out) = o.get_out()
+                && seen.insert(out) {
                     work.push_back((out, hops + 1));
                 }
-            }
         }
     }
     false
@@ -209,11 +205,10 @@ pub fn provably_a_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
         if node.is_input() && stated_pointer(data, node.get_addr(), node.get_size()) {
             return true;
         }
-        if let Some(def) = node.get_def() {
-            if declared_pointer_result(data, def) {
+        if let Some(def) = node.get_def()
+            && declared_pointer_result(data, def) {
                 return true;
             }
-        }
         node.descend_iter()
             .any(|r| declared_pointer_argument(data, r, v))
     })
@@ -232,14 +227,13 @@ fn same_value(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
             continue;
         };
         let mut next: Vec<VarnodeId> = Vec::new();
-        if let Some(o) = node.get_def().and_then(|d| data.obank().get(d)) {
-            if matches!(
+        if let Some(o) = node.get_def().and_then(|d| data.obank().get(d))
+            && matches!(
                 o.code(),
                 OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT
             ) {
                 next.extend(o.get_in(0));
             }
-        }
         for r in node.descend_iter() {
             let Some(o) = data.obank().get(r) else {
                 continue;
@@ -311,10 +305,7 @@ fn dereferenced(data: &Funcdata, family: &[VarnodeId]) -> bool {
             };
             let carries = match o.code() {
                 OpCode::CPUI_LOAD | OpCode::CPUI_STORE => {
-                    if o.get_in(1) == Some(v) {
-                        return true;
-                    }
-                    false
+                    o.get_in(1) == Some(v)
                 }
                 OpCode::CPUI_COPY | OpCode::CPUI_CAST => true,
                 OpCode::CPUI_INDIRECT | OpCode::CPUI_PTRSUB | OpCode::CPUI_PTRADD => {
@@ -335,11 +326,10 @@ fn dereferenced(data: &Funcdata, family: &[VarnodeId]) -> bool {
             if !carries || hops + 1 >= HOP_CAP {
                 continue;
             }
-            if let Some(out) = o.get_out() {
-                if seen.insert(out) {
+            if let Some(out) = o.get_out()
+                && seen.insert(out) {
                     work.push_back((out, hops + 1));
                 }
-            }
         }
     }
     false

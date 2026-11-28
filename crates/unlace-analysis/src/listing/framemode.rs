@@ -47,12 +47,11 @@ impl<'a> FrameModes<'a> {
         if !self.roots.contains(&root) {
             return;
         }
-        if let Some((_, span)) = self.spans.range_mut(..at).next_back() {
-            if span.end == at && span.root == root && span.mode == mode {
+        if let Some((_, span)) = self.spans.range_mut(..at).next_back()
+            && span.end == at && span.root == root && span.mode == mode {
                 span.end = end;
                 return;
             }
-        }
         self.spans.insert(at, Span { end, root, mode });
     }
 
@@ -63,12 +62,11 @@ impl<'a> FrameModes<'a> {
     pub fn decoded_paints(&self) -> Vec<crate::pass::ContextPaint> {
         let mut paints: Vec<crate::pass::ContextPaint> = Vec::new();
         for (&addr, &(end, value)) in self.decoded.iter().flat_map(|decoded| decoded.iter()) {
-            if let Some(last) = paints.last_mut() {
-                if last.end == Some(addr) && last.value == value {
+            if let Some(last) = paints.last_mut()
+                && last.end == Some(addr) && last.value == value {
                     last.end = Some(end);
                     continue;
                 }
-            }
             paints.push(crate::pass::ContextPaint {
                 addr,
                 end: Some(end),

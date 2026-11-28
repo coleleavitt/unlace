@@ -350,7 +350,7 @@ fn layout_from_relocations(
     code.sort_unstable();
     let n = code.len();
     let size = data.len();
-    if n == 0 || size % n != 0 {
+    if n == 0 || !size.is_multiple_of(n) {
         return None;
     }
     let stride = size / n;
@@ -386,7 +386,7 @@ fn layout_from_relocations(
 /// probing [`PROBE_STRIDES`] in order.
 fn layout_by_probe(image: &Image, data: &[u8], vma: u64, big: bool) -> Option<Layout> {
     PROBE_STRIDES.iter().copied().find_map(|stride| {
-        if data.len() % stride != 0 || data.is_empty() {
+        if !data.len().is_multiple_of(stride) || data.is_empty() {
             return None;
         }
         let entries = (0..data.len()).step_by(stride);

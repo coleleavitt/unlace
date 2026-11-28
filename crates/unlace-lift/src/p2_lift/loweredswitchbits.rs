@@ -202,9 +202,7 @@ fn node(data: &Funcdata, bl: BlockId) -> Option<Node> {
     let mut pure = true;
     let mut readers = BTreeSet::new();
     for o in data.bb_ops(bl) {
-        let Some(p) = data.obank().get(o) else {
-            return None;
-        };
+        let p = data.obank().get(o)?;
         if o == tail {
             continue;
         }

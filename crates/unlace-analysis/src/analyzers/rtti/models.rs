@@ -49,10 +49,10 @@ impl<'a> ImageBytes<'a> {
             if addr == 0 {
                 continue;
             }
-            if let Ok(data) = sec.data() {
-                if !data.is_empty() {
-                    sections.push((addr, data));
-                }
+            if let Ok(data) = sec.data()
+                && !data.is_empty()
+            {
+                sections.push((addr, data));
             }
         }
         sections.sort_by_key(|&(a, _)| a);
@@ -74,10 +74,10 @@ impl<'a> ImageBytes<'a> {
                 continue;
             }
             let off = (vma - base) as usize;
-            if let Some(end) = off.checked_add(len) {
-                if end <= data.len() {
-                    return Some(&data[off..end]);
-                }
+            if let Some(end) = off.checked_add(len)
+                && end <= data.len()
+            {
+                return Some(&data[off..end]);
             }
         }
         None
@@ -133,10 +133,10 @@ impl<'a> ImageBytes<'a> {
         for &(base, data) in &self.sections {
             let mut off = 0usize;
             while off + rs <= data.len() {
-                if let Some(resolved) = rk.resolve_ref(&data[off..off + rs]) {
-                    if targets.contains(&resolved) {
-                        hits.entry(resolved).or_default().push(base + off as u64);
-                    }
+                if let Some(resolved) = rk.resolve_ref(&data[off..off + rs])
+                    && targets.contains(&resolved)
+                {
+                    hits.entry(resolved).or_default().push(base + off as u64);
                 }
                 off += rs;
             }

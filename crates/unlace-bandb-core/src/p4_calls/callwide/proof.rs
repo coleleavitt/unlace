@@ -402,14 +402,11 @@ impl Image<'_> {
                 self.arch.translate().get_register_data("ra"),
                 self.arch.translate().get_register_data("pc"),
                 self.arch.translate().get_register_data("ISAModeSwitch"),
-            ) {
-                if let Ok(index) = usize::try_from(userop.get_index()) {
-                    if names.get(index).is_some_and(|name| name == "setISAMode")
-                        && return_mode(&collect, &ra, &pc, &mode, index as u64)
-                    {
-                        collect.0.remove(2);
-                    }
-                }
+            ) && let Ok(index) = usize::try_from(userop.get_index())
+                && names.get(index).is_some_and(|name| name == "setISAMode")
+                && return_mode(&collect, &ra, &pc, &mode, index as u64)
+            {
+                collect.0.remove(2);
             }
         }
         Some((next, collect))
@@ -681,7 +678,7 @@ impl Image<'_> {
                 let location = VarnodeData {
                     space: part.space.clone(),
                     offset: part.offset,
-                    size: u32::try_from(part.size).ok()?,
+                    size: part.size,
                 };
                 if location.size != 4
                     || location.space.as_ref()?.get_index()
@@ -716,7 +713,7 @@ impl Image<'_> {
                 let location = VarnodeData {
                     space: piece.space.clone(),
                     offset: piece.offset,
-                    size: u32::try_from(piece.size).ok()?,
+                    size: piece.size,
                 };
                 self.write(values, &location, &vec![0; location.size as usize])?;
             }

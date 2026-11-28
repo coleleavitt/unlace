@@ -220,9 +220,11 @@ fn bytes_at<'a>(
 
 fn words(file: &object::File<'_>, bytes: &[u8]) -> Vec<u32> {
     bytes
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|b| {
-            let word = b.try_into().unwrap();
+            let word = *b;
             if file.is_little_endian() {
                 u32::from_le_bytes(word)
             } else {
@@ -246,7 +248,8 @@ impl<'a> LazyResolver<'a> {
             .section_by_name(".dynamic")?
             .data()
             .ok()?
-            .chunks_exact(16)
+            .as_chunks::<16>()
+            .0
         {
             let tag = read64(file, entry);
             if tag == 0 {

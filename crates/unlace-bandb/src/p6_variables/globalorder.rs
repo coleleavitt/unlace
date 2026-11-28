@@ -130,13 +130,9 @@ pub fn write_moves(data: &Funcdata, copy: OpId, source: VarnodeId) -> bool {
 pub fn value_definition(data: &Funcdata, mut source: VarnodeId) -> Option<OpId> {
     let mut depth = 0;
     loop {
-        let Some(v) = data.vbank().get(source) else {
-            return None;
-        };
-        let Some(def) = v.get_def() else { return None };
-        let Some(o) = data.obank().get(def) else {
-            return None;
-        };
+        let v = data.vbank().get(source)?;
+        let def = v.get_def()?;
+        let o = data.obank().get(def)?;
         if o.code() != OpCode::CPUI_COPY || depth == 64 {
             return Some(def);
         }

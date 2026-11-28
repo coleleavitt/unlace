@@ -174,6 +174,7 @@ int main(void) {{
 
 #[test]
 fn overlapping_output_preserves_the_initializer_and_call_result() {
+    let result_slot = regex::Regex::new(r"v[0-9]+ \[23\]").unwrap();
     for (entry, name, off_words, factor, addend) in [("0x1100", "overlapping_output", 11, 11, 2)] {
         let off = decompile(entry, name, "off", None);
         assert!(
@@ -183,12 +184,7 @@ fn overlapping_output_preserves_the_initializer_and_call_result() {
             "{off}"
         );
         let code = decompile(entry, name, "on", None);
-        assert!(
-            regex::Regex::new(r"v[0-9]+ \[23\]")
-                .unwrap()
-                .is_match(&code),
-            "{code}"
-        );
+        assert!(result_slot.is_match(&code), "{code}");
         let program = format!(
             r#"
 unsigned int observe_words(unsigned int *in) {{

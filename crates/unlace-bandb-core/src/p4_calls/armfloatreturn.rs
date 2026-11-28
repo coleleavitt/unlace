@@ -222,7 +222,7 @@ fn add_pairs(list: &mut ParamListStandard, manager: &AddrSpaceManager, limit: us
         .filter(|e| e.get_type() == type_class::TYPECLASS_FLOAT && e.get_size() == 4)
         .cloned()
         .collect();
-    for pair in entries.chunks_exact(2).take(limit) {
+    for pair in entries.as_chunks::<2>().0.iter().take(limit) {
         let (lo, hi) = (&pair[0], &pair[1]);
         if lo.get_space().get_index() != hi.get_space().get_index()
             || lo.get_base() + 4 != hi.get_base()
@@ -370,15 +370,14 @@ fn partial_sources(
             let whole = op
                 .get_in(0)
                 .and_then(|v| high_source(data, v, addr, budget));
-            if let Some(whole) = whole {
-                if op
+            if let Some(whole) = whole
+                && op
                     .get_in(1)
                     .is_some_and(|v| single_write(data, v, whole, budget) == Some(true))
                     && !sources.contains(&whole)
                 {
                     sources.push(whole);
                 }
-            }
             true
         }
         _ => true,

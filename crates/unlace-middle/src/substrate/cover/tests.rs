@@ -498,7 +498,7 @@ fn random_block(r: &mut Rng) -> CoverBlock {
         cb.set_all();
         return cb;
     }
-    let mut pt = |r: &mut Rng| match r.below(6) {
+    let pt = |r: &mut Rng| match r.below(6) {
         0 => None,
         1 => Some(CoverPoint::Begin),
         2 => Some(CoverPoint::End),

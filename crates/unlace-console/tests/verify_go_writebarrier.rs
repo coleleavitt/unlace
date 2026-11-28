@@ -240,19 +240,15 @@ fn program_store_count(code: &str) -> usize {
     // Phantom thunk-register locals (`unsigned long *v5; // r11`).
     let mut bufvars: Vec<String> = Vec::new();
     for l in &lines {
-        if let Some((decl, comment)) = l.split_once("//") {
-            if comment.contains("r11") && decl.trim_end().ends_with(';') {
-                if let Some(tok) = decl
+        if let Some((decl, comment)) = l.split_once("//")
+            && comment.contains("r11") && decl.trim_end().ends_with(';')
+                && let Some(tok) = decl
                     .trim_end()
                     .trim_end_matches(';')
-                    .split(|c: char| !c.is_alphanumeric() && c != '_')
-                    .filter(|t| !t.is_empty())
-                    .last()
+                    .split(|c: char| !c.is_alphanumeric() && c != '_').rfind(|t| !t.is_empty())
                 {
                     bufvars.push(tok.to_string());
                 }
-            }
-        }
     }
     let mut n = 0;
     for (i, l) in lines.iter().enumerate() {

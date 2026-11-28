@@ -955,13 +955,10 @@ impl ContextDatabase for ContextInternal {
         let res = value.array.as_slice();
         // C++: first = before.getOffset(), else 0 when (valid&1) or before in another space
         let first = match before {
-            Some(before) if (valid & 1) == 0 => {
-                if space_eq(before, addr) {
+            Some(before) if (valid & 1) == 0
+                && space_eq(before, addr) => {
                     before.get_offset()
-                } else {
-                    0
                 }
-            }
             _ => 0,
         };
         // C++: last = after.getOffset()-1, else space->getHighest() when (valid&2) or after in another space

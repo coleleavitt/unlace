@@ -40,7 +40,7 @@ pub fn budget_probe() -> bool {
         c.set(n);
         n
     });
-    if n % PROBE_STRIDE != 0 || !deadline_passed() {
+    if !n.is_multiple_of(PROBE_STRIDE) || !deadline_passed() {
         return false;
     }
     FN_SPENT.with(|s| s.set(true));

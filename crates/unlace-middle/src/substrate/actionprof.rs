@@ -22,10 +22,6 @@ struct OpenFrame {
 struct Profiler {
     root: String,
     stack: Vec<OpenFrame>,
-    #[expect(
-        clippy::disallowed_types,
-        reason = "recording is lookup-only; rendered rows are fully sorted"
-    )]
     totals: std::collections::HashMap<String, (u128, u64)>,
 }
 

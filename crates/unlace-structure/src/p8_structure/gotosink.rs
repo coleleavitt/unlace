@@ -295,7 +295,7 @@ fn sink_once(data: &mut Funcdata, list: BlockId) -> Option<BlockId> {
             continue;
         };
         let graph = data.sblocks_mut();
-        let clause = if j - i - 1 == 1 {
+        let _clause = if j - i - 1 == 1 {
             comps[i + 1]
         } else {
             graph.unlace_wrap_components(list, i + 1, j - 1, BlockKind::Ls)

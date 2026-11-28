@@ -1,8 +1,8 @@
 //! DWARF `.debug_line` source-line mapping — the unlace analog of Ghidra's
 //! `DWARFLineInfoCommentScript` (the line-number side of the DWARF analyzer).
 //!
-//! The sibling [`DwarfPass`](super::DwarfPass) recovers names + typed signatures
-//! + stack locals from the `.debug_info`/`.debug_abbrev`/`.debug_str*` sections.
+//! The sibling [`DwarfPass`](super::DwarfPass) recovers names, typed signatures
+//! and stack locals from the `.debug_info`/`.debug_abbrev`/`.debug_str*` sections.
 //! This pass reads the **`.debug_line`** program — the PC→`file:line` mapping the
 //! compiler emits under `-g` — and surfaces each instruction's source location
 //! as a comment on the decompiled output.
@@ -115,8 +115,7 @@ impl AnalysisPass for DwarfLinesPass {
         // Stable output: sort by (func, addr); a single comment per address (keep
         // the first), so the printed annotation set is deterministic regardless of
         // CU / row iteration order.
-        out.comments
-            .sort_by(|a, b| (a.func_addr, a.addr).cmp(&(b.func_addr, b.addr)));
+        out.comments.sort_by_key(|a| (a.func_addr, a.addr));
         out.comments
             .dedup_by(|a, b| a.func_addr == b.func_addr && a.addr == b.addr);
         out

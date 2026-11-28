@@ -86,7 +86,7 @@ impl crate::optionset::UnlaceOption for CppSigMode {
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
-        Ok(crate::cppsig::parse_cppsig_mode(value)?)
+        crate::cppsig::parse_cppsig_mode(value)
     }
 }
 

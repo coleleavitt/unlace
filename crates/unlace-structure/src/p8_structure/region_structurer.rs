@@ -301,12 +301,11 @@ fn compute_switch_maps(
     let nbb = data.bblocks_get_size();
     for i in 0..nbb {
         let bb = data.bblocks_get_block(i);
-        if data.bblocks_ref().block(bb).is_switch_out() {
-            if let Some(indop) = data.bb_op_tail(bb) {
-                if let Some(jt_idx) = data.find_jump_table_index(indop) {
-                    switch_blocks.insert(bb, jt_idx);
-                }
-            }
+        if data.bblocks_ref().block(bb).is_switch_out()
+            && let Some(indop) = data.bb_op_tail(bb)
+            && let Some(jt_idx) = data.find_jump_table_index(indop)
+        {
+            switch_blocks.insert(bb, jt_idx);
         }
     }
     let mut switch_case_edges: std::collections::BTreeMap<(BlockId, BlockId), (int4, bool)> =
@@ -519,13 +518,12 @@ impl<'a> RegionStructurer<'a> {
             return false;
         }
         // Rule A.
-        if self.graph.block(orblock).get_type() == BlockType::Copy {
-            if let Some(basic) = self.graph.block(orblock).get_copy() {
-                if self.condfold_sets.prefix.contains(&basic) {
-                    crate::condfold::trace_admit_fold("region_structurer", "prefix", bl, orblock);
-                    return true;
-                }
-            }
+        if self.graph.block(orblock).get_type() == BlockType::Copy
+            && let Some(basic) = self.graph.block(orblock).get_copy()
+            && self.condfold_sets.prefix.contains(&basic)
+        {
+            crate::condfold::trace_admit_fold("region_structurer", "prefix", bl, orblock);
+            return true;
         }
         // Rule B.
         self.shape_admits(bl, orblock)
@@ -1469,14 +1467,11 @@ impl<'a> RegionStructurer<'a> {
         }
         if !defaultnottoexit
             && self.graph.block(switchbl).get_type() == crate::block::BlockType::MultiGoto
-        {
-            if let crate::block::BlockKind::MultiGoto { defaultswitch, .. } =
+            && let crate::block::BlockKind::MultiGoto { defaultswitch, .. } =
                 self.graph.block(switchbl).kind()
-            {
-                if *defaultswitch {
-                    defaultnottoexit = true;
-                }
-            }
+            && *defaultswitch
+        {
+            defaultnottoexit = true;
         }
         if !defaultnottoexit {
             return Ok(true);
@@ -2203,11 +2198,11 @@ impl<'a> RegionStructurer<'a> {
             if bl == head {
                 continue;
             }
-            if let Some(a) = self.component_addr(bl) {
-                if body_addrs.contains(&a) {
-                    members.push(bl);
-                    member_set.insert(bl);
-                }
+            if let Some(a) = self.component_addr(bl)
+                && body_addrs.contains(&a)
+            {
+                members.push(bl);
+                member_set.insert(bl);
             }
         }
         let dbg = unlace_base::env::var_os("UNLACE_RS_DEBUG").is_some();
@@ -2371,25 +2366,20 @@ impl<'a> RegionStructurer<'a> {
         while let Some(cur) = stack.pop() {
             match self.graph.block(cur).get_type() {
                 BlockType::Goto => {
-                    if let Some(tgt) = self.graph.block(cur).get_goto_target() {
-                        if self.component_addr(tgt) == Some(head_addr) {
-                            if let BlockKind::Goto { gototype, .. } =
-                                self.graph.block_mut(cur).kind_mut()
-                            {
-                                *gototype = block_flags::f_continue_goto;
-                            }
-                        }
+                    if let Some(tgt) = self.graph.block(cur).get_goto_target()
+                        && self.component_addr(tgt) == Some(head_addr)
+                        && let BlockKind::Goto { gototype, .. } =
+                            self.graph.block_mut(cur).kind_mut()
+                    {
+                        *gototype = block_flags::f_continue_goto;
                     }
                 }
                 BlockType::If => {
-                    if let Some(tgt) = self.graph.block(cur).get_if_goto_target() {
-                        if self.component_addr(tgt) == Some(head_addr) {
-                            if let BlockKind::If { gototype, .. } =
-                                self.graph.block_mut(cur).kind_mut()
-                            {
-                                *gototype = block_flags::f_continue_goto;
-                            }
-                        }
+                    if let Some(tgt) = self.graph.block(cur).get_if_goto_target()
+                        && self.component_addr(tgt) == Some(head_addr)
+                        && let BlockKind::If { gototype, .. } = self.graph.block_mut(cur).kind_mut()
+                    {
+                        *gototype = block_flags::f_continue_goto;
                     }
                 }
                 _ => {}
@@ -2454,10 +2444,10 @@ impl<'a> RegionStructurer<'a> {
                 let n = self.size();
                 for i in 0..n {
                     let comp = self.component(i);
-                    if let Some(a) = self.component_addr(comp) {
-                        if l.body.contains(&a) {
-                            s.insert(comp);
-                        }
+                    if let Some(a) = self.component_addr(comp)
+                        && l.body.contains(&a)
+                    {
+                        s.insert(comp);
                     }
                 }
                 // `head` must be in the body set (it carries the head address).
@@ -2631,26 +2621,26 @@ impl<'a> RegionStructurer<'a> {
         exit_edges: &[(BlockId, int4, BlockId)],
         exit_addrs: &Option<std::collections::BTreeSet<uintb>>,
     ) -> Option<BlockId> {
-        if let Some(addrs) = exit_addrs {
-            if !addrs.is_empty() {
-                // Among the live exit-edge destinations, pick the one whose address
-                // is smallest (BTreeSet iterates ascending, so the first matching
-                // frontier address that has a live edge wins).
-                let mut best: Option<(uintb, BlockId)> = None;
-                for &(_, _, dst) in exit_edges.iter() {
-                    if let Some(a) = self.component_addr(dst) {
-                        if addrs.contains(&a) {
-                            match best {
-                                None => best = Some((a, dst)),
-                                Some((ba, _)) if a < ba => best = Some((a, dst)),
-                                _ => {}
-                            }
-                        }
+        if let Some(addrs) = exit_addrs
+            && !addrs.is_empty()
+        {
+            // Among the live exit-edge destinations, pick the one whose address
+            // is smallest (BTreeSet iterates ascending, so the first matching
+            // frontier address that has a live edge wins).
+            let mut best: Option<(uintb, BlockId)> = None;
+            for &(_, _, dst) in exit_edges.iter() {
+                if let Some(a) = self.component_addr(dst)
+                    && addrs.contains(&a)
+                {
+                    match best {
+                        None => best = Some((a, dst)),
+                        Some((ba, _)) if a < ba => best = Some((a, dst)),
+                        _ => {}
                     }
                 }
-                if let Some((_, dst)) = best {
-                    return Some(dst);
-                }
+            }
+            if let Some((_, dst)) = best {
+                return Some(dst);
             }
         }
         self.choose_normal_exit(exit_edges)
@@ -2966,6 +2956,7 @@ impl<'a> RegionStructurer<'a> {
     ///     `not dominates(src, dst)` but the other direction holds),
     ///   * `other`     — `src` dominates `dst` (a forward tree edge; never chosen
     ///     here, exactly as angr drops `other_edges`).
+    ///
     /// Virtualize from `crossing` if non-empty, else `secondary`.  Within the chosen
     /// bucket, order by the SAILR heuristic and return the first edge.
     fn order_virtualizable_edges_sailr<'e>(
@@ -3055,13 +3046,14 @@ impl<'a> RegionStructurer<'a> {
 
         // H2: post-dominator count (capped).  Bounded exactly as angr:
         // `len(edges) <= postdom_max_edges && len(graph) <= postdom_max_graph_size`.
-        if best.len() as int4 <= POSTDOM_MAX_EDGES && graph.num_nodes() <= POSTDOM_MAX_GRAPH_SIZE {
-            if let Some(h2) = self.sailr_h2_postdom(pool, graph, id_of, &best) {
-                if h2.len() == 1 {
-                    return h2[0];
-                }
-                best = h2;
+        if best.len() as int4 <= POSTDOM_MAX_EDGES
+            && graph.num_nodes() <= POSTDOM_MAX_GRAPH_SIZE
+            && let Some(h2) = self.sailr_h2_postdom(pool, graph, id_of, &best)
+        {
+            if h2.len() == 1 {
+                return h2[0];
             }
+            best = h2;
         }
 
         // H3: prefer an edge whose destination is a simple return (a graph sink).
@@ -3173,10 +3165,11 @@ impl<'a> RegionStructurer<'a> {
             // skipping the synthetic tail (angr filters `TemporaryNode`s).
             let mut cnt = 0usize;
             for &nid in &real_nodes {
-                if let Some(&d) = idom.get(&nid) {
-                    if d != nid && d != tail {
-                        cnt += 1;
-                    }
+                if let Some(&d) = idom.get(&nid)
+                    && d != nid
+                    && d != tail
+                {
+                    cnt += 1;
                 }
             }
             if cnt > max_count {

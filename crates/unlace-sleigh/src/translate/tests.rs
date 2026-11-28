@@ -727,9 +727,11 @@ fn test_translate_address_resolver() {
 /// A PcodeEmit implementation collecting dumped ops; decode_op via XML
 /// and via the packed format, including the void-output and <spaceid>
 /// paths and the negative-size error.
+type CollectedOp = (u64, OpCode, Option<(u64, u32)>, Vec<(u64, u32)>);
+
 #[derive(Default)]
 struct CollectEmit {
-    ops: Vec<(u64, OpCode, Option<(u64, u32)>, Vec<(u64, u32)>)>,
+    ops: Vec<CollectedOp>,
 }
 
 impl PcodeEmit for CollectEmit {
@@ -980,6 +982,7 @@ fn test_translate_trait_object_and_lookup_install() {
     dyn_trans.allow_context_set(true);
     assert_eq!(trans.context_calls.borrow().as_slice(), ["allow(true)"]);
 
+    #[allow(clippy::mutable_key_type)]
     let mut regs = BTreeMap::new();
     dyn_trans.get_all_registers(&mut regs);
     // BTreeMap keyed by VarnodeData order: (space index, offset, size)

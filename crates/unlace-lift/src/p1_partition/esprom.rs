@@ -138,7 +138,7 @@ impl crate::optionset::UnlaceOption for EspRom {
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
-        Ok(crate::esprom::parse_esprom(value)?)
+        crate::esprom::parse_esprom(value)
     }
 }
 

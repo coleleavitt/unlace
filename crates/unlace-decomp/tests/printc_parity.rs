@@ -7,6 +7,7 @@
 //!      the committed C++ `decomp_test_dbg` (under `decompiler/cpp/`) with
 //!      `UNLACE_DUMP=1`, slicing the `===UNLACE_DUMP_BEGIN===..===UNLACE_DUMP_MID===`
 //!      block,
+//!
 //! then **byte-compares** the two and reports how many match.
 //!
 //! ## What this gate establishes (the honest measurement)

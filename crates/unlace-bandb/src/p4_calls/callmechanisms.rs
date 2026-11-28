@@ -768,7 +768,7 @@ impl crate::optionset::UnlaceOption for CallMechanismMode {
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
-        Ok(crate::callmechanisms::OptionCallMechanisms.apply(value)?)
+        crate::callmechanisms::OptionCallMechanisms.apply(value)
     }
 }
 

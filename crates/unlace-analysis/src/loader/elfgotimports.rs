@@ -50,10 +50,10 @@ pub(crate) fn resolve(file: &object::File) -> Vec<(u64, Vec<u8>)> {
         if reloc.flags() != (RelocationFlags::Elf { r_type: r_glob_dat }) {
             continue;
         }
-        if let RelocationTarget::Symbol(idx) = reloc.target() {
-            if let Some(name) = imports.get(&idx.0) {
-                out.push((offset, name.clone()));
-            }
+        if let RelocationTarget::Symbol(idx) = reloc.target()
+            && let Some(name) = imports.get(&idx.0)
+        {
+            out.push((offset, name.clone()));
         }
     }
     out

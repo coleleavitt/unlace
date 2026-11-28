@@ -158,10 +158,10 @@ pub(super) fn locate_itablinks_slice(
         if tried >= 1 && ok == tried {
             let mut out = Vec::with_capacity(n.min(GOTYPES_MAX_TYPELINKS));
             for k in 0..n.min(GOTYPES_MAX_TYPELINKS) {
-                if let Some(it) = word(img, ptr + (k as u64) * img.word_size) {
-                    if read_itab(img, types, etypes, it).is_some() {
-                        out.push(it);
-                    }
+                if let Some(it) = word(img, ptr + (k as u64) * img.word_size)
+                    && read_itab(img, types, etypes, it).is_some()
+                {
+                    out.push(it);
                 }
             }
             if !out.is_empty() {
@@ -202,10 +202,10 @@ pub(super) fn locate_itab_region(
         if !mapped(img, start) || !mapped(img, end - 1) {
             continue;
         }
-        if let Some(out) = walk_itab_region(img, types, etypes, start, end) {
-            if !out.is_empty() {
-                return Some(out);
-            }
+        if let Some(out) = walk_itab_region(img, types, etypes, start, end)
+            && !out.is_empty()
+        {
+            return Some(out);
         }
     }
     None

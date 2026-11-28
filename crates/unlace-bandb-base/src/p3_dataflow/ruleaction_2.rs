@@ -771,8 +771,8 @@ impl Rule for RuleAndCompare {
         let subop = vn_def(data, subvn).expect("subop def");
         let basevn;
         let baseconst;
-        let andconst;
-        match op_code(data, subop) {
+        
+        let andconst = match op_code(data, subop) {
             OpCode::CPUI_SUBPIECE => {
                 basevn = op_in(data, subop, 0);
                 if vn_size(data, basevn) as usize > std::mem::size_of::<uintb>() {
@@ -780,15 +780,15 @@ impl Rule for RuleAndCompare {
                 }
                 baseconst = vn_offset(data, op_in(data, andop, 1));
                 // shift count = SUBPIECE offset*8, can reach 64; x86-masked in C++ (ADR-0003).
-                andconst = baseconst.wshl((vn_offset(data, op_in(data, subop, 1)) * 8) as u32);
+                baseconst.wshl((vn_offset(data, op_in(data, subop, 1)) * 8) as u32)
             }
             OpCode::CPUI_INT_ZEXT => {
                 basevn = op_in(data, subop, 0);
                 baseconst = vn_offset(data, op_in(data, andop, 1));
-                andconst = baseconst & calc_mask(vn_size(data, basevn));
+                baseconst & calc_mask(vn_size(data, basevn))
             }
             _ => return 0,
-        }
+        };
 
         if baseconst == calc_mask(vn_size(data, andvn)) {
             return 0; // Degenerate AND
@@ -1963,20 +1963,20 @@ impl Rule for RuleBitUndistribute {
                 // Test for full equality of shift operation
                 let s1 = op_in(data, vn_def(data, vn1).expect("vn1 def"), 1);
                 let s2 = op_in(data, vn_def(data, vn2).expect("vn2 def"), 1);
-                let vnextra;
-                if vn_constant(data, s1) && vn_constant(data, s2) {
+                
+                let vnextra = if vn_constant(data, s1) && vn_constant(data, s2) {
                     if vn_offset(data, s1) != vn_offset(data, s2) {
                         return 0;
                     }
-                    vnextra = data.new_constant(vn_size(data, s1), vn_offset(data, s1));
+                    data.new_constant(vn_size(data, s1), vn_offset(data, s1))
                 } else if s1 != s2 {
                     return 0;
                 } else {
                     if vn_free(data, s1) {
                         return 0;
                     }
-                    vnextra = s1;
-                }
+                    s1
+                };
                 in1 = op_in(data, vn_def(data, vn1).expect("vn1 def"), 0);
                 if vn_free(data, in1) {
                     return 0;

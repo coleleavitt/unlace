@@ -352,9 +352,9 @@ fn canon_switch_var(data: &Funcdata, mut vn: VarnodeId) -> CanonSwitchVar {
                 }
             }
         }
-        if oc == OpCode::CPUI_SUBPIECE {
-            if let Some(in1) = op_in(data, def, 1) {
-                if vn_is_constant(data, in1) && vn_offset(data, in1) == 0 {
+        if oc == OpCode::CPUI_SUBPIECE
+            && let Some(in1) = op_in(data, def, 1)
+                && vn_is_constant(data, in1) && vn_offset(data, in1) == 0 {
                     match op_in(data, def, 0) {
                         Some(v) => {
                             let input_size = vn_size(data, v);
@@ -388,8 +388,6 @@ fn canon_switch_var(data: &Funcdata, mut vn: VarnodeId) -> CanonSwitchVar {
                         }
                     }
                 }
-            }
-        }
         return CanonSwitchVar {
             var: vn,
             effective_size,
@@ -655,11 +653,10 @@ fn analyze_cmp(data: &Funcdata, bl: BlockId) -> CmpNode {
         // selector than the post-extension compare spelling.  The two must agree:
         // ZEXT+SLESS and SEXT+LESS are ambiguous once the tree is erased, so the
         // detector fails closed instead of promoting a switch with wrong labels.
-        if let Some(extension_signedness) = canon.extension_signedness {
-            if extension_signedness != opcode_signedness {
+        if let Some(extension_signedness) = canon.extension_signedness
+            && extension_signedness != opcode_signedness {
                 res.evidence_ambiguous = true;
             }
-        }
         res.range_signedness = Some(opcode_signedness);
 
         // Normalize to angr's "gt-form" so recover_cascade can classify a range
@@ -836,9 +833,7 @@ fn recover_cascade(
         }
         if let Some(next) = cn.extension_signedness {
             path_signedness = reconcile_range_signedness(path_signedness, Some(next));
-            if path_signedness.is_none() {
-                return None;
-            }
+            path_signedness?;
         }
 
         if cn.is_equality {
@@ -874,9 +869,7 @@ fn recover_cascade(
             // candidate — the distinction the convergence guard below relies on.
             saw_range = true;
             range_signedness = reconcile_range_signedness(range_signedness, cn.range_signedness);
-            if range_signedness.is_none() {
-                return None;
-            }
+            range_signedness?;
             let value = cn.range_value;
             let gt = cn.gt_out.expect("range node has gt_out");
             let le = cn.le_out.expect("range node has le_out");
@@ -1302,7 +1295,7 @@ impl ActionLowerSwitchDetect {
         // Find the head: a cascade node for swvar that no other cascade node
         // continues into.
         let mut is_child: BTreeSet<BlockId> = BTreeSet::new();
-        for (_, cn) in cmpmap.iter() {
+        for cn in cmpmap.values() {
             if cn.var != Some(swvar) {
                 continue;
             }
@@ -1312,11 +1305,10 @@ impl ActionLowerSwitchDetect {
                     Some(b) if block_type(data, b) == BlockType::Basic => b,
                     _ => continue,
                 };
-                if let Some(sc) = cmpmap.get(&s) {
-                    if sc.var == Some(swvar) {
+                if let Some(sc) = cmpmap.get(&s)
+                    && sc.var == Some(swvar) {
                         is_child.insert(s);
                     }
-                }
             }
         }
         let spine: BTreeSet<BlockId> = cmpmap

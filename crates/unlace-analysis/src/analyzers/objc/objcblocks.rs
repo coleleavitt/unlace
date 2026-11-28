@@ -27,8 +27,6 @@ mod x86;
 
 /// `Block_layout.flags` bit: the descriptor has copy/dispose helpers.
 const BLOCK_HAS_COPY_DISPOSE: u32 = 1 << 25;
-/// `Block_layout.flags` bit: the descriptor has a signature string.
-const BLOCK_HAS_SIGNATURE: u32 = 1 << 30;
 
 /// The `Block_layout` struct, interned once: `isa`, `flags`, `reserved`,
 /// `invoke`, `descriptor`.
@@ -406,11 +404,11 @@ impl<'a> Scan<'a> {
                 self.store(pc, off, 4, false, rd);
                 self.store(pc, off.wrapping_add(4), 4, false, rt2);
             }
-        } else if w & 0xFFC0_0000 == 0x6D00_0000 {
-            if let Some(off) = self.frame(rn, imm7 * 8) {
-                self.store(pc, off, 8, true, rd);
-                self.store(pc, off.wrapping_add(8), 8, true, rt2);
-            }
+        } else if w & 0xFFC0_0000 == 0x6D00_0000
+            && let Some(off) = self.frame(rn, imm7 * 8)
+        {
+            self.store(pc, off, 8, true, rd);
+            self.store(pc, off.wrapping_add(8), 8, true, rt2);
         }
     }
 }
@@ -425,7 +423,7 @@ fn stack_block_sites(
     let mut cells = Vec::new();
     for &(base, data) in text {
         let mut scan = Scan::new(read_ptr, isa_slots);
-        for (i, c) in data.chunks_exact(4).enumerate() {
+        for (i, c) in data.as_chunks::<4>().0.iter().enumerate() {
             let w = u32::from_le_bytes([c[0], c[1], c[2], c[3]]);
             let pc = base + 4 * i as u64;
             if w == 0xD65F_03C0 {
@@ -465,9 +463,7 @@ fn copy_helper_kinds(
             match runtime.get(&target).map(String::as_str) {
                 Some("objc_retain") => out.extend(last_ldr[0].map(|o| (o, 3))),
                 Some("objc_retainBlock") => out.extend(last_ldr[0].map(|o| (o, 7))),
-                Some("_Block_object_assign") => {
-                    out.extend(last_ldr[1].zip(imm[2]).map(|(o, f)| (o, f)))
-                }
+                Some("_Block_object_assign") => out.extend(last_ldr[1].zip(imm[2])),
                 _ => {}
             }
             if w & 0x8000_0000 == 0 {

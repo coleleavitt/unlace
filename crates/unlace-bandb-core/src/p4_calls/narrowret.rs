@@ -254,8 +254,8 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     } else {
         narrow_return(data)
     };
-    if trace() {
-        if let Some(s) = &stated {
+    if trace()
+        && let Some(s) = &stated {
             let truth = if s.truth() { ", a truth value" } else { "" };
             eprintln!(
                 "[narrowret] 0x{:x} returns {} bytes zero-extended{truth}",
@@ -263,7 +263,6 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
                 s.size
             );
         }
-    }
     match stated {
         Some(s) => {
             arch.unlace_tables

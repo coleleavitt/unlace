@@ -46,7 +46,7 @@ fn pe(size_of_headers: u32, text_rva: u32) -> Vec<u8> {
     o.extend_from_slice(&0u32.to_le_bytes()); // LoaderFlags
     o.extend_from_slice(&(DIRS as u32).to_le_bytes());
     assert_eq!(o.len(), PE32_FIXED);
-    o.extend_from_slice(&vec![0u8; DIRS * 8]);
+    o.extend_from_slice(&[0u8; DIRS * 8]);
     b.extend_from_slice(&o);
 
     let mut s: Vec<u8> = b".text\0\0\0".to_vec();

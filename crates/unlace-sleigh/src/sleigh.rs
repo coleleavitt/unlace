@@ -1136,6 +1136,7 @@ impl PcodeCacher {
 
 struct ParserContextGuard {
     context: Option<Box<ParserContext>>,
+    #[allow(clippy::vec_box)]
     pool: Rc<RefCell<Vec<Box<ParserContext>>>>,
 }
 
@@ -1660,6 +1661,7 @@ pub struct Sleigh {
     cache: RefCell<ContextCache>,
     /// Reusable parser arenas. Checked-out contexts are removed from the pool,
     /// so nested `inst_next2` and delay-slot decodes receive distinct storage.
+    #[allow(clippy::vec_box)]
     parser_contexts: Rc<RefCell<Vec<Box<ParserContext>>>>,
     /// Reusable p-code arena, moved out during decoding so nested calls can
     /// use a separate arena.
@@ -2202,16 +2204,16 @@ impl Sleigh {
             }
             if oper >= numoper {
                 let handle = constructor.get_templ();
-                if let Some(h) = handle {
-                    if let Some(res) = self.base.template(h)?.get_result() {
-                        let mut hand = FixedHandle::default();
-                        {
-                            let reader = walker.as_reader();
-                            res.fix(&mut hand, &reader)?;
-                        }
-                        let parent = walker.point();
-                        walker.ctx.state[parent].hand = hand;
+                if let Some(h) = handle
+                    && let Some(res) = self.base.template(h)?.get_result()
+                {
+                    let mut hand = FixedHandle::default();
+                    {
+                        let reader = walker.as_reader();
+                        res.fix(&mut hand, &reader)?;
                     }
+                    let parent = walker.point();
+                    walker.ctx.state[parent].hand = hand;
                 }
                 walker.pop_operand();
             }
@@ -2894,15 +2896,16 @@ impl Sleigh {
                 }
             }
         }
-        if context_free && self.context_queries.get() == queries.wrapping_add(1) {
-            if let Some(key) = reusable {
-                *key = Some(
-                    self.cache
-                        .borrow()
-                        .effective_context(self.context_db.borrow().get_context(baseaddr))
-                        .collect(),
-                );
-            }
+        if context_free
+            && self.context_queries.get() == queries.wrapping_add(1)
+            && let Some(key) = reusable
+        {
+            *key = Some(
+                self.cache
+                    .borrow()
+                    .effective_context(self.context_db.borrow().get_context(baseaddr))
+                    .collect(),
+            );
         }
         Ok(fall_offset)
     }

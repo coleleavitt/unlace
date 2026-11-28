@@ -36,14 +36,11 @@ impl PrintC {
             .unlace_options
             .get::<crate::analysisgates::Godwarfsig>()
             .0
+            && let Some(operation) = fd.obank().get(op)
+            && let (Some(input), Some(output)) = (operation.get_in(0), operation.get_out())
+            && self.push_pair_carrier(fd, arch, input, op, &fd.vn_type_def_facing(output))
         {
-            if let Some(operation) = fd.obank().get(op) {
-                if let (Some(input), Some(output)) = (operation.get_in(0), operation.get_out()) {
-                    if self.push_pair_carrier(fd, arch, input, op, &fd.vn_type_def_facing(output)) {
-                        return;
-                    }
-                }
-            }
+            return;
         }
         if self.out_lang == crate::lang::OutLang::Go {
             self.op_go_cast(fd, arch, op);
@@ -58,15 +55,14 @@ impl PrintC {
                 .and_then(|stmt| fd.obank().get(stmt).and_then(|o| o.get_out()))
                 .and_then(|vn| self.bytearray_access(fd, vn))
                 .is_some()
+            && let Some(input) = crate::bytearrayc::integer_array_cast(fd, op)
         {
-            if let Some(input) = crate::bytearrayc::integer_array_cast(fd, op) {
-                let size = fd.vbank().get(input).unwrap().get_size();
-                if let Ok(ty) = arch.types().get_base(size, type_metatype::TYPE_UINT) {
-                    self.push_cast_open(&ty, op);
-                    self.push_vn_ir(fd, arch, input, op);
-                    self.push_cast_close(&ty);
-                    return;
-                }
+            let size = fd.vbank().get(input).unwrap().get_size();
+            if let Ok(ty) = arch.types().get_base(size, type_metatype::TYPE_UINT) {
+                self.push_cast_open(&ty, op);
+                self.push_vn_ir(fd, arch, input, op);
+                self.push_cast_close(&ty);
+                return;
             }
         }
         // C++ `opTypeCast` (printc.cc:468-484): when the target type is a
@@ -80,15 +76,15 @@ impl PrintC {
             .get(op)
             .and_then(|o| o.get_out())
             .map(|out| fd.vn_type_def_facing(out));
-        if self.out_lang == crate::lang::OutLang::Rust && !self.options.nocasts {
-            if let (Some(target), Some(value)) = (
+        if self.out_lang == crate::lang::OutLang::Rust
+            && !self.options.nocasts
+            && let (Some(target), Some(value)) = (
                 out_def.as_ref(),
                 fd.obank().get(op).and_then(|o| o.get_in(0)),
-            ) {
-                if self.push_rust_array_pointer(fd, arch, value, op, target) {
-                    return;
-                }
-            }
+            )
+            && self.push_rust_array_pointer(fd, arch, value, op, target)
+        {
+            return;
         }
         if out_def
             .as_ref()
@@ -114,20 +110,20 @@ impl PrintC {
                     .unwrap_or_else(|| fd.vn_type_def_facing(out))
             })
         };
-        if self.out_lang == crate::lang::OutLang::Rust {
-            if let (Some(ct), Some(vn)) = (
+        if self.out_lang == crate::lang::OutLang::Rust
+            && let (Some(ct), Some(vn)) = (
                 cast_ty.as_ref(),
                 fd.obank().get(op).and_then(|o| o.get_in(0)),
-            ) {
-                if self.push_rust_boolean_conversion(fd, arch, vn, op, ct) {
-                    return;
-                }
-                if self.push_rust_array_address_cast(fd, arch, vn, op, ct) {
-                    return;
-                }
-                if self.push_rust_integer_conversion(fd, arch, vn, op, ct, true) {
-                    return;
-                }
+            )
+        {
+            if self.push_rust_boolean_conversion(fd, arch, vn, op, ct) {
+                return;
+            }
+            if self.push_rust_array_address_cast(fd, arch, vn, op, ct) {
+                return;
+            }
+            if self.push_rust_integer_conversion(fd, arch, vn, op, ct, true) {
+                return;
             }
         }
         if let Some(ct) = &cast_ty {
@@ -229,52 +225,51 @@ impl PrintC {
             .unwrap_or(false)
         {
             let ptrsub = fd.vbank().get(vnin).and_then(|v| v.get_def());
-            if let Some(ptrsub) = ptrsub {
-                if fd.obank().get(ptrsub).map(|o| o.code()) == Some(OpCode::CPUI_PTRSUB) {
-                    let root_in0 = fd.obank().get(ptrsub).and_then(|o| o.get_in(0));
-                    let root_type = root_in0.and_then(|vn| {
-                        fd.vbank()
-                            .get(vn)
-                            .map(|_| fd.vn_type_read_facing(vn, ptrsub))
-                    });
-                    if let Some(root_type) = root_type {
-                        if root_type.get_metatype() == type_metatype::TYPE_PTR {
-                            if let Some(root_ptr_to) = root_type.get_ptr_to() {
-                                let off = fd
-                                    .obank()
-                                    .get(ptrsub)
-                                    .and_then(|o| o.get_in(1))
-                                    .and_then(|v| fd.vbank().get(v))
-                                    .map(|v| v.get_offset())
-                                    .unwrap_or(0) as int8;
-                                // The virtual `getSubType` is `TypeSpacebase::getSubType`
-                                // (type.cc:3411) for a spacebase root — it indexes the
-                                // symbol-table Scope, which the bare `Datatype::get_sub_type`
-                                // cannot reach (it routes to a `STUB(W6)` Err).  Route a
-                                // spacebase through `Funcdata::spacebase_get_sub_type` (the
-                                // ported `TypeSpacebase::getSubType`, funcdata_spacebase.rs),
-                                // exactly as the spacebase-PTRSUB cast wave does; every other
-                                // root keeps the pure `Datatype::get_sub_type`.
-                                let resolved: Option<(std::rc::Rc<crate::dtype::Datatype>, int8)> =
-                                    if root_ptr_to.get_metatype() == type_metatype::TYPE_SPACEBASE {
-                                        fd.spacebase_get_sub_type(&root_ptr_to, off)
-                                    } else {
-                                        match root_ptr_to.get_sub_type(off) {
-                                            Ok((sub, newoff)) => sub.map(|s| (s, newoff)),
-                                            Err(_) => return false,
-                                        }
-                                    };
-                                match resolved {
-                                    Some((sub, newoff)) => {
-                                        if newoff != 0 {
-                                            return false;
-                                        }
-                                        symbol_type = Some(sub);
-                                    }
-                                    None => return false,
-                                }
+            if let Some(ptrsub) = ptrsub
+                && fd.obank().get(ptrsub).map(|o| o.code()) == Some(OpCode::CPUI_PTRSUB)
+            {
+                let root_in0 = fd.obank().get(ptrsub).and_then(|o| o.get_in(0));
+                let root_type = root_in0.and_then(|vn| {
+                    fd.vbank()
+                        .get(vn)
+                        .map(|_| fd.vn_type_read_facing(vn, ptrsub))
+                });
+                if let Some(root_type) = root_type
+                    && root_type.get_metatype() == type_metatype::TYPE_PTR
+                    && let Some(root_ptr_to) = root_type.get_ptr_to()
+                {
+                    let off = fd
+                        .obank()
+                        .get(ptrsub)
+                        .and_then(|o| o.get_in(1))
+                        .and_then(|v| fd.vbank().get(v))
+                        .map(|v| v.get_offset())
+                        .unwrap_or(0) as int8;
+                    // The virtual `getSubType` is `TypeSpacebase::getSubType`
+                    // (type.cc:3411) for a spacebase root — it indexes the
+                    // symbol-table Scope, which the bare `Datatype::get_sub_type`
+                    // cannot reach (it routes to a `STUB(W6)` Err).  Route a
+                    // spacebase through `Funcdata::spacebase_get_sub_type` (the
+                    // ported `TypeSpacebase::getSubType`, funcdata_spacebase.rs),
+                    // exactly as the spacebase-PTRSUB cast wave does; every other
+                    // root keeps the pure `Datatype::get_sub_type`.
+                    let resolved: Option<(std::rc::Rc<crate::dtype::Datatype>, int8)> =
+                        if root_ptr_to.get_metatype() == type_metatype::TYPE_SPACEBASE {
+                            fd.spacebase_get_sub_type(&root_ptr_to, off)
+                        } else {
+                            match root_ptr_to.get_sub_type(off) {
+                                Ok((sub, newoff)) => sub.map(|s| (s, newoff)),
+                                Err(_) => return false,
                             }
+                        };
+                    match resolved {
+                        Some((sub, newoff)) => {
+                            if newoff != 0 {
+                                return false;
+                            }
+                            symbol_type = Some(sub);
                         }
+                        None => return false,
                     }
                 }
             }
@@ -283,12 +278,8 @@ impl PrintC {
             Some(s) => s,
             None => return false,
         };
-        if symbol_type.get_metatype() != type_metatype::TYPE_ARRAY
-            || symbol_type.get_size() != array_size
-        {
-            return false;
-        }
-        true
+        !(symbol_type.get_metatype() != type_metatype::TYPE_ARRAY
+            || symbol_type.get_size() != array_size)
     }
 
     /// C++ `PrintC::opHiddenFunc` (printc.cc:494): the syntax represents `op`
@@ -327,9 +318,9 @@ impl PrintC {
             None => return self.op_func_ir(fd, arch, op),
         };
         if strat.is_zext_cast(&outtype, &intype) {
-            if self.options.hide_exts && self.is_extension_cast_implied(fd, &strat, op, read_op) {
-                self.op_hidden_func_ir(fd, arch, op);
-            } else if self.widen_drops(fd, arch, op, read_op) {
+            if (self.options.hide_exts && self.is_extension_cast_implied(fd, &strat, op, read_op))
+                || self.widen_drops(fd, arch, op, read_op)
+            {
                 self.op_hidden_func_ir(fd, arch, op);
             } else if self.implied_cast_drops(fd, arch, op, read_op) {
                 self.op_type_cast_ir_with(fd, arch, op, true);
@@ -359,25 +350,26 @@ impl PrintC {
             Some(t) => t,
             None => return self.op_func_ir(fd, arch, op),
         };
-        if self.out_lang == crate::lang::OutLang::Rust && !self.options.nocasts {
-            if let Some(narrow) = crate::rustextend::signed_text_input(&intype, &outtype) {
-                self.push_cast_open(&outtype, op);
-                self.push_op(self.lang().tok_typecast, Some(op_key(op)));
-                let input = fd.obank().get(op).unwrap().get_in(0).unwrap();
-                self.push_vn_ir(fd, arch, input, op);
-                self.push_atom(&Atom::syntax(
-                    narrow,
-                    TagType::TypeToken,
-                    crate::printlanguage::SyntaxHighlight::type_color,
-                ));
-                self.push_cast_close(&outtype);
-                return;
-            }
+        if self.out_lang == crate::lang::OutLang::Rust
+            && !self.options.nocasts
+            && let Some(narrow) = crate::rustextend::signed_text_input(&intype, &outtype)
+        {
+            self.push_cast_open(&outtype, op);
+            self.push_op(self.lang().tok_typecast, Some(op_key(op)));
+            let input = fd.obank().get(op).unwrap().get_in(0).unwrap();
+            self.push_vn_ir(fd, arch, input, op);
+            self.push_atom(&Atom::syntax(
+                narrow,
+                TagType::TypeToken,
+                crate::printlanguage::SyntaxHighlight::type_color,
+            ));
+            self.push_cast_close(&outtype);
+            return;
         }
         if strat.is_sext_cast(&outtype, &intype) {
-            if self.options.hide_exts && self.is_extension_cast_implied(fd, &strat, op, read_op) {
-                self.op_hidden_func_ir(fd, arch, op);
-            } else if self.widen_drops(fd, arch, op, read_op) {
+            if (self.options.hide_exts && self.is_extension_cast_implied(fd, &strat, op, read_op))
+                || self.widen_drops(fd, arch, op, read_op)
+            {
                 self.op_hidden_func_ir(fd, arch, op);
             } else if self.implied_cast_drops(fd, arch, op, read_op) {
                 self.op_type_cast_ir_with(fd, arch, op, true);
@@ -458,29 +450,28 @@ impl PrintC {
                 // byte subscripts for the floating transfer emitted here.
                 && fd.vbank().get(input).and_then(|value| value.get_def())
                     .is_some_and(|definition| self.local_array_assignment(fd, arch, definition).is_some())
+                && let Some((name, element)) = self.local_byte_array_name(fd, arch, input)
             {
-                if let Some((name, element)) = self.local_byte_array_name(fd, arch, input) {
-                    let byte = subpiece_byte_offset_for_composite(fd, op);
-                    let size = fd.vbank().get(input).unwrap().get_size() as i64;
-                    if byte >= 0 && byte < size {
-                        let output = operation.get_out().unwrap();
-                        let datatype = read_op
-                            .map(|read| fd.vn_type_read_facing(output, read))
-                            .unwrap_or_else(|| fd.vn_type_def_facing(output));
-                        if !matches!(datatype.compare(&element, 10), Ok(0)) {
-                            self.push_cast_open(&datatype, op);
-                        }
-                        self.push_op(&tokens::SUBSCRIPT, Some(op_key(op)));
-                        self.push_atom(&Atom::with_op_vn(
-                            name,
-                            TagType::VarToken,
-                            crate::printlanguage::SyntaxHighlight::var_color,
-                            op_key(op),
-                            vn_key(input),
-                        ));
-                        self.push_constant_ir(byte as u64, 4, op);
-                        return;
+                let byte = subpiece_byte_offset_for_composite(fd, op);
+                let size = fd.vbank().get(input).unwrap().get_size() as i64;
+                if byte >= 0 && byte < size {
+                    let output = operation.get_out().unwrap();
+                    let datatype = read_op
+                        .map(|read| fd.vn_type_read_facing(output, read))
+                        .unwrap_or_else(|| fd.vn_type_def_facing(output));
+                    if !matches!(datatype.compare(&element, 10), Ok(0)) {
+                        self.push_cast_open(&datatype, op);
                     }
+                    self.push_op(&tokens::SUBSCRIPT, Some(op_key(op)));
+                    self.push_atom(&Atom::with_op_vn(
+                        name,
+                        TagType::VarToken,
+                        crate::printlanguage::SyntaxHighlight::var_color,
+                        op_key(op),
+                        vn_key(input),
+                    ));
+                    self.push_constant_ir(byte as u64, 4, op);
+                    return;
                 }
             }
         }
@@ -494,105 +485,91 @@ impl PrintC {
             let in0 = fd.obank().get(op).and_then(|o| o.get_in(0));
             if let Some(vn) = in0 {
                 let ct = fd.vbank().get(vn).map(|_| fd.vn_type_read_facing(vn, op));
-                if let Some(ct) = ct {
-                    if ct.is_piece_structured() {
-                        let byte_off = subpiece_byte_offset_for_composite(fd, op);
-                        let out_sz = fd
-                            .obank()
-                            .get(op)
-                            .and_then(|o| o.get_out())
-                            .and_then(|v| fd.vbank().get(v))
-                            .map(|v| v.get_size())
-                            .unwrap_or(0);
-                        // The unlace_name binding stands in for C++ getSymbol().
-                        let high = fd.vbank().get(vn).and_then(|v| v.get_high());
-                        let is_explicit =
-                            fd.vbank().get(vn).map(|v| v.is_explicit()).unwrap_or(false);
-                        let sym = high.and_then(|high| self.emitted_high_symbol(fd, high));
-                        match (sym, is_explicit) {
-                            (Some((name, sym_off, Some(sym_type))), true) => {
-                                let mut boff = byte_off;
-                                if sym_off > 0 {
-                                    boff += sym_off as int8;
-                                }
-                                let slot = if sym_type.needs_resolution() { 1 } else { 0 };
-                                let smt = sym_type.get_metatype();
-                                if (smt == type_metatype::TYPE_STRUCT
-                                    || smt == type_metatype::TYPE_UNION)
-                                    && self.push_partial_symbol_ir(
-                                        fd,
-                                        arch,
-                                        &name,
-                                        std::rc::Rc::clone(&sym_type),
-                                        boff,
-                                        out_sz,
-                                        vn,
-                                        op,
-                                        slot,
-                                        true,
-                                    )
-                                {
-                                    return;
-                                }
-                                // Fall through to the cast/functional dispatch below.
+                if let Some(ct) = ct
+                    && ct.is_piece_structured()
+                {
+                    let byte_off = subpiece_byte_offset_for_composite(fd, op);
+                    let out_sz = fd
+                        .obank()
+                        .get(op)
+                        .and_then(|o| o.get_out())
+                        .and_then(|v| fd.vbank().get(v))
+                        .map(|v| v.get_size())
+                        .unwrap_or(0);
+                    // The unlace_name binding stands in for C++ getSymbol().
+                    let high = fd.vbank().get(vn).and_then(|v| v.get_high());
+                    let is_explicit = fd.vbank().get(vn).map(|v| v.is_explicit()).unwrap_or(false);
+                    let sym = high.and_then(|high| self.emitted_high_symbol(fd, high));
+                    match (sym, is_explicit) {
+                        (Some((name, sym_off, Some(sym_type))), true) => {
+                            let mut boff = byte_off;
+                            if sym_off > 0 {
+                                boff += sym_off as int8;
                             }
-                            _ => {
-                                if ct.get_metatype() == type_metatype::TYPE_STRUCT {
-                                    if let Ok(Some((idx, off2))) =
-                                        ct.find_truncation(byte_off, out_sz, op, 1)
-                                    {
-                                        if let Some(f) = ct.get_field(idx) {
-                                            let extraction = super::super::fieldextract::plan(
-                                                fd, op, &ct, idx, off2,
-                                            );
-                                            if off2 == 0 || extraction.is_some() {
-                                                if let Some(extraction) = &extraction {
-                                                    if !self.options.nocasts {
-                                                        self.push_cast_open(&extraction.target, op);
-                                                    }
-                                                    if extraction.shift != 0 {
-                                                        self.push_op(
-                                                            &tokens::SHIFT_RIGHT,
-                                                            Some(op_key(op)),
-                                                        );
-                                                    }
-                                                }
-                                                let fname = f.name.clone();
-                                                let fident = f.ident;
-                                                self.push_op(
-                                                    &tokens::OBJECT_MEMBER,
-                                                    Some(op_key(op)),
-                                                );
-                                                self.push_vn_ir(fd, arch, vn, op);
-                                                self.push_atom(&Atom::field(
-                                                    fname,
-                                                    TagType::FieldToken,
-                                                    crate::printlanguage::SyntaxHighlight::no_color,
-                                                    0,
-                                                    fident,
-                                                    op_key(op),
-                                                ));
-                                                if let Some(extraction) = &extraction {
-                                                    if extraction.shift != 0 {
-                                                        self.push_constant_ir(
-                                                            extraction.shift,
-                                                            4,
-                                                            op,
-                                                        );
-                                                    }
-                                                    if !self.options.nocasts {
-                                                        self.push_cast_close(&extraction.target);
-                                                    }
-                                                }
-                                                return;
-                                            }
+                            let slot = if sym_type.needs_resolution() { 1 } else { 0 };
+                            let smt = sym_type.get_metatype();
+                            if (smt == type_metatype::TYPE_STRUCT
+                                || smt == type_metatype::TYPE_UNION)
+                                && self.push_partial_symbol_ir(
+                                    fd,
+                                    arch,
+                                    &name,
+                                    std::rc::Rc::clone(&sym_type),
+                                    boff,
+                                    out_sz,
+                                    vn,
+                                    op,
+                                    slot,
+                                    true,
+                                )
+                            {
+                                return;
+                            }
+                            // Fall through to the cast/functional dispatch below.
+                        }
+                        _ => {
+                            if ct.get_metatype() == type_metatype::TYPE_STRUCT
+                                && let Ok(Some((idx, off2))) =
+                                    ct.find_truncation(byte_off, out_sz, op, 1)
+                                && let Some(f) = ct.get_field(idx)
+                            {
+                                let extraction =
+                                    super::super::fieldextract::plan(fd, op, &ct, idx, off2);
+                                if off2 == 0 || extraction.is_some() {
+                                    if let Some(extraction) = &extraction {
+                                        if !self.options.nocasts {
+                                            self.push_cast_open(&extraction.target, op);
+                                        }
+                                        if extraction.shift != 0 {
+                                            self.push_op(&tokens::SHIFT_RIGHT, Some(op_key(op)));
                                         }
                                     }
+                                    let fname = f.name.clone();
+                                    let fident = f.ident;
+                                    self.push_op(&tokens::OBJECT_MEMBER, Some(op_key(op)));
+                                    self.push_vn_ir(fd, arch, vn, op);
+                                    self.push_atom(&Atom::field(
+                                        fname,
+                                        TagType::FieldToken,
+                                        crate::printlanguage::SyntaxHighlight::no_color,
+                                        0,
+                                        fident,
+                                        op_key(op),
+                                    ));
+                                    if let Some(extraction) = &extraction {
+                                        if extraction.shift != 0 {
+                                            self.push_constant_ir(extraction.shift, 4, op);
+                                        }
+                                        if !self.options.nocasts {
+                                            self.push_cast_close(&extraction.target);
+                                        }
+                                    }
+                                    return;
                                 }
                             }
                         }
-                        // Fall thru to functional/cast printing (printc.cc:889).
                     }
+                    // Fall thru to functional/cast printing (printc.cc:889).
                 }
             }
         }
@@ -600,11 +577,11 @@ impl PrintC {
             self.op_float_slice_ir(fd, arch, op, slice);
             return;
         }
-        if self.out_lang == crate::lang::OutLang::C {
-            if let Some((slice, cast)) = crate::bytearrayslice::recognize(fd, op) {
-                self.push_word_slice_ir(fd, arch, op, slice, cast);
-                return;
-            }
+        if self.out_lang == crate::lang::OutLang::C
+            && let Some((slice, cast)) = crate::bytearrayslice::recognize(fd, op)
+        {
+            self.push_word_slice_ir(fd, arch, op, slice, cast);
+            return;
         }
         if let Some((transfer, target)) = crate::bitcast::truncated_float_storage(fd, op) {
             self.push_cast_open(&target, op);

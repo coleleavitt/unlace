@@ -1351,14 +1351,12 @@ impl Datatype {
                 stripped,
                 offset,
             } => {
-                if container.get_metatype() == type_metatype::TYPE_ARRAY {
-                    if let Some(eltype) = container.get_array_base() {
-                        if eltype.get_metatype() != type_metatype::TYPE_UNKNOWN
-                            && (*offset % eltype.get_align_size()) == 0
-                        {
-                            return Some(eltype);
-                        }
-                    }
+                if container.get_metatype() == type_metatype::TYPE_ARRAY
+                    && let Some(eltype) = container.get_array_base()
+                    && eltype.get_metatype() != type_metatype::TYPE_UNKNOWN
+                    && (*offset % eltype.get_align_size()) == 0
+                {
+                    return Some(eltype);
                 }
                 Some(Rc::clone(stripped))
             }
@@ -3357,12 +3355,12 @@ impl Datatype {
         }
         let is_struct_or_array = self.metatype == type_metatype::TYPE_ARRAY
             || self.metatype == type_metatype::TYPE_STRUCT;
-        if is_struct_or_array && self.num_depend() > 0 {
-            if let Some(component) = self.get_depend(0) {
-                if component.get_size() == self.get_size() {
-                    return component.is_primitive_whole();
-                }
-            }
+        if is_struct_or_array
+            && self.num_depend() > 0
+            && let Some(component) = self.get_depend(0)
+            && component.get_size() == self.get_size()
+        {
+            return component.is_primitive_whole();
         }
         false
     }
@@ -4580,8 +4578,8 @@ impl Ord for TreeKey {
 /// graph cannot make one comparison unbounded.
 const SHAPE_DEPTH: u8 = 8;
 
-/// Mutable interning state of a [`TypeFactoryImpl`] (the C++ `tree`, `nametree`,
-/// `typecache*`, `charcache`).
+// Mutable interning state of a [`TypeFactoryImpl`] (the C++ `tree`, `nametree`,
+// `typecache*`, `charcache`).
 // -- Wire type-vocabulary marshaling ids (upstream numbers, type.cc:29-74) --
 
 /// Marshaling element `<coretypes>` (C++ `ELEM_CORETYPES`, type.cc:48).
@@ -5332,10 +5330,10 @@ impl TypeFactoryImpl {
         }
         m[0] = 1;
         let mut cur_align = 1;
-        for sz in 1..m.len() {
-            let tmp_align = m[sz];
+        for slot in m.iter_mut().skip(1) {
+            let tmp_align = *slot;
             if tmp_align == -1 {
-                m[sz] = cur_align; // Copy alignment from nearest explicitly set value
+                *slot = cur_align; // Copy alignment from nearest explicitly set value
             } else {
                 cur_align = tmp_align;
             }
@@ -5657,10 +5655,10 @@ impl TypeFactoryImpl {
         }
         let newrc = Rc::new(newct);
         self.insert(Rc::clone(&newrc))?; // tree.insert + nametree.insert
-        if !newrc.is_incomplete() {
-            if let Some(link) = &ct.record_completion {
-                *link.borrow_mut() = Rc::downgrade(&newrc);
-            }
+        if !newrc.is_incomplete()
+            && let Some(link) = &ct.record_completion
+        {
+            *link.borrow_mut() = Rc::downgrade(&newrc);
         }
         Ok(newrc)
     }
@@ -5681,10 +5679,10 @@ impl TypeFactoryImpl {
         newct.set_display_format(format);
         let newrc = Rc::new(newct);
         self.insert(Rc::clone(&newrc))?;
-        if !newrc.is_incomplete() {
-            if let Some(link) = &ct.record_completion {
-                *link.borrow_mut() = Rc::downgrade(&newrc);
-            }
+        if !newrc.is_incomplete()
+            && let Some(link) = &ct.record_completion
+        {
+            *link.borrow_mut() = Rc::downgrade(&newrc);
         }
         Ok(newrc)
     }
@@ -6649,10 +6647,11 @@ impl TypeFactoryImpl {
     /// Get a "base" data-type by size and metatype, NOT preferring char (C++
     /// `TypeFactory::getBaseNoChar`, type.cc:4100-4106).
     fn get_base_no_char_impl(&self, s: int4, m: type_metatype) -> UnlaceResult<Rc<Datatype>> {
-        if s == 1 && m == type_metatype::TYPE_INT {
-            if let Some(nc) = self.store.borrow().type_nochar.clone() {
-                return Ok(nc);
-            }
+        if s == 1
+            && m == type_metatype::TYPE_INT
+            && let Some(nc) = self.store.borrow().type_nochar.clone()
+        {
+            return Ok(nc);
         }
         self.get_base_impl(s, m)
     }
@@ -6735,10 +6734,10 @@ impl TypeFactoryImpl {
     /// alone indexes `charcache[s]` with a negative size, which is a process abort
     /// in Rust. A negative size now takes the unsupported-size error below.
     fn get_type_char_sized(&self, s: int4) -> UnlaceResult<Rc<Datatype>> {
-        if (0..5).contains(&s) {
-            if let Some(res) = self.store.borrow().charcache[s as usize].clone() {
-                return Ok(res);
-            }
+        if (0..5).contains(&s)
+            && let Some(res) = self.store.borrow().charcache[s as usize].clone()
+        {
+            return Ok(res);
         }
         Err(UnlaceError::lowlevel(
             "Request for unsupported character data-type",
@@ -6938,15 +6937,15 @@ impl TypeFactoryImpl {
         ws: uint4,
     ) -> UnlaceResult<Rc<Datatype>> {
         let mut pt = pt;
-        if pt.has_stripped() {
-            if let Some(st) = pt.get_stripped() {
-                pt = st;
-            }
+        if pt.has_stripped()
+            && let Some(st) = pt.get_stripped()
+        {
+            pt = st;
         }
-        if pt.get_metatype() == type_metatype::TYPE_ARRAY {
-            if let Some(base) = pt.get_array_base() {
-                pt = base; // Strip the first ARRAY type
-            }
+        if pt.get_metatype() == type_metatype::TYPE_ARRAY
+            && let Some(base) = pt.get_array_base()
+        {
+            pt = base; // Strip the first ARRAY type
         }
         if let Some(named) = self.named_pointer(s, &pt, ws) {
             return Ok(named);
@@ -6976,10 +6975,10 @@ impl TypeFactoryImpl {
         ws: uint4,
     ) -> UnlaceResult<Rc<Datatype>> {
         let mut pt = pt;
-        if pt.has_stripped() {
-            if let Some(st) = pt.get_stripped() {
-                pt = st;
-            }
+        if pt.has_stripped()
+            && let Some(st) = pt.get_stripped()
+        {
+            pt = st;
         }
         if let Some(named) = self.named_pointer(s, &pt, ws) {
             return Ok(named);
@@ -6997,10 +6996,10 @@ impl TypeFactoryImpl {
         n: &str,
     ) -> UnlaceResult<Rc<Datatype>> {
         let mut pt = pt;
-        if pt.has_stripped() {
-            if let Some(st) = pt.get_stripped() {
-                pt = st;
-            }
+        if pt.has_stripped()
+            && let Some(st) = pt.get_stripped()
+        {
+            pt = st;
         }
         let mut tmp = self.build_pointer(s, pt, ws);
         tmp.name = n.to_string();
@@ -7019,10 +7018,10 @@ impl TypeFactoryImpl {
         let mut pt = ptr
             .get_ptr_to()
             .ok_or_else(|| UnlaceError::lowlevel("resizePointer: argument is not a pointer"))?;
-        if pt.has_stripped() {
-            if let Some(st) = pt.get_stripped() {
-                pt = st;
-            }
+        if pt.has_stripped()
+            && let Some(st) = pt.get_stripped()
+        {
+            pt = st;
         }
         let ws = ptr.get_word_size().unwrap_or(1);
         self.find_add(self.build_pointer(new_size, pt, ws))
@@ -7048,10 +7047,10 @@ impl TypeFactoryImpl {
     /// Construct an array data-type (C++ `getTypeArray`, type.cc:4376-4383).
     fn get_type_array_impl(&self, as_: int4, ao: Rc<Datatype>) -> UnlaceResult<Rc<Datatype>> {
         let mut ao = ao;
-        if ao.has_stripped() {
-            if let Some(st) = ao.get_stripped() {
-                ao = st;
-            }
+        if ao.has_stripped()
+            && let Some(st) = ao.get_stripped()
+        {
+            ao = st;
         }
         if as_.checked_mul(ao.get_align_size()).is_none() {
             return Err(UnlaceError::lowlevel(format!(

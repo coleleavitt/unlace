@@ -33,10 +33,8 @@ use unlace_base::space::{
 };
 use unlace_base::types::int4;
 
-use crate::action::{Action, ActionContext};
 use crate::context::{ArchContext, BlockId, TypeOp};
 use crate::dtype::{Datatype, type_metatype};
-use crate::fspec::{FuncCallSpecs, ProtoModel};
 
 const SP_OFF: u64 = 0x20;
 const SP_SIZE: int4 = 8;
@@ -180,25 +178,6 @@ fn sign_extend_reads_negative_deltas() {
 }
 
 // --- cookie_cancel ------------------------------------------------------------
-
-/// `phi = MULTIEQUAL(a, b)` placed at the head of `bl`.
-fn phi(
-    fd: &mut Funcdata,
-    bl: BlockId,
-    at: u64,
-    a: VarnodeId,
-    b: VarnodeId,
-    out_reg: u64,
-) -> VarnodeId {
-    let op = mk_op(fd, 2, at, OpCode::CPUI_MULTIEQUAL);
-    fd.op_set_input(op, a, 0).unwrap();
-    fd.op_set_input(op, b, 1).unwrap();
-    let addr = reg(fd, out_reg);
-    let out = fd.vbank_mut().create(8, addr, unk(8));
-    fd.op_set_output(op, out).unwrap();
-    fd.op_insert_begin(op, bl);
-    out
-}
 
 // --- cookie_check_op ---------------------------------------------------------
 

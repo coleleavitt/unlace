@@ -630,7 +630,7 @@ fn pdata_owners(bytes: &[u8], img: &ImageBytes, image_base: u64) -> Vec<(u64, u6
         return Vec::new();
     };
     let mut out = Vec::new();
-    for rec in data.chunks_exact(12) {
+    for rec in data.as_chunks::<12>().0 {
         let begin = u32_at(rec, 0) as u64;
         let end = u32_at(rec, 4) as u64;
         if begin == 0 || end <= begin {

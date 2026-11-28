@@ -1146,7 +1146,7 @@ impl PrintC {
         if !vn.is_constant() || vn.get_offset() > 1 {
             return None;
         }
-        Some((ret, u64::try_from(vn.get_offset()).ok()?))
+        Some((ret, vn.get_offset()))
     }
 
     /// (unlace `retternary`) An `if`/`else` (no goto) whose arms each print only a `return` of

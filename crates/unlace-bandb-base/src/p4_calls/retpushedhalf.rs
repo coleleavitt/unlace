@@ -211,11 +211,10 @@ pub fn observe_instruction(data: &mut Funcdata, ops: &[OpId]) {
                 continue;
             }
             let Some(val) = o.get_in(2) else { continue };
-            if let Some(loc) = stored_register(data, ops, val, 0) {
-                if !overlaps(&loc, &sploc) {
+            if let Some(loc) = stored_register(data, ops, val, 0)
+                && !overlaps(&loc, &sploc) {
                     saved.push(loc);
                 }
-            }
         }
     }
 

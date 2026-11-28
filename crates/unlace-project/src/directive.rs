@@ -111,13 +111,11 @@ pub fn typedef_name(decl: &str) -> String {
         .split(|c: char| !(c.is_alphanumeric() || c == '_'))
         .filter(|w| !w.is_empty());
     let first = words.next().unwrap_or("");
-    if matches!(first, "struct" | "union" | "enum") {
-        if let Some(tag) = words.next() {
-            if !d.trim_start().starts_with("typedef") {
+    if matches!(first, "struct" | "union" | "enum")
+        && let Some(tag) = words.next()
+            && !d.trim_start().starts_with("typedef") {
                 return format!("{first} {tag}");
             }
-        }
-    }
     if first == "typedef" {
         // a function-pointer typedef names the identifier after `(*`
         if let Some(at) = d.find("(*") {

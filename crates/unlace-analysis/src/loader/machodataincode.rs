@@ -57,7 +57,9 @@ pub fn entries(file: &object::File) -> Vec<DataInCode> {
         }
     };
     let list: Vec<DataInCode> = data
-        .chunks_exact(8)
+        .as_chunks::<8>()
+        .0
+        .iter()
         .take(MAX_ENTRIES)
         .map(|e| DataInCode {
             offset: u32_at(&e[0..4]),

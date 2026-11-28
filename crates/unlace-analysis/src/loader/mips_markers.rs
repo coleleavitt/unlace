@@ -298,16 +298,15 @@ pub(crate) fn scan_mips_isa_markers(file: &object::File) -> AnalysisOutput {
         // needed (and emitting one would be a harmless idempotent duplicate; we
         // skip it to mirror Ghidra, which only moves the LSB-set symbol). Named
         // symbols only — an unnamed entry has no name to re-home.
-        if lsb_set {
-            if let Ok(name) = sym.name() {
-                if !name.is_empty() {
-                    out.symbols.push(SymFact {
-                        addr: even,
-                        name: name.to_string(),
-                        kind: SymKind::Function,
-                    });
-                }
-            }
+        if lsb_set
+            && let Ok(name) = sym.name()
+            && !name.is_empty()
+        {
+            out.symbols.push(SymFact {
+                addr: even,
+                name: name.to_string(),
+                kind: SymKind::Function,
+            });
         }
     }
 

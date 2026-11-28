@@ -297,7 +297,7 @@ impl Types {
                 let name = last_ident(tail);
                 if let Some(name) = name {
                     let tag = rest
-                        .split(|c: char| c == '{' || c == '*')
+                        .split(['{', '*'])
                         .next()
                         .unwrap_or("")
                         .trim();
@@ -329,21 +329,18 @@ impl Types {
                     .nth(1)
                     .and_then(|s| s.split(')').next())
                     .map(str::trim)
-                {
-                    if !name.is_empty() {
+                    && !name.is_empty() {
                         self.typedefs.insert(name.to_string(), "@?".to_string());
                     }
-                }
                 continue;
             }
             // typedef <type> <Name> [MACROS];
             let toks = tokens(rest);
             let toks = drop_macros(&toks);
-            if let Some((name, ty)) = toks.split_last() {
-                if is_ident(name) && !ty.is_empty() {
+            if let Some((name, ty)) = toks.split_last()
+                && is_ident(name) && !ty.is_empty() {
                     self.typedefs.insert(name.to_string(), ty.join(" "));
                 }
-            }
         }
     }
 
@@ -665,7 +662,7 @@ fn erase_generics(text: &str, generics: &[String]) -> String {
             word.push(c);
             continue;
         }
-        out.push_str(if generics.iter().any(|g| *g == word) {
+        out.push_str(if generics.contains(&word) {
             "id"
         } else {
             &word

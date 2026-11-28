@@ -287,9 +287,9 @@ fn write_uint(bytes: &mut [u8], off: usize, width: usize, le: bool, value: u64) 
     let Some(slice) = bytes.get_mut(off..off + width) else {
         return;
     };
-    for i in 0..width {
+    for (i, b) in slice.iter_mut().enumerate() {
         let shift = if le { 8 * i } else { 8 * (width - 1 - i) };
-        slice[i] = ((value >> shift) & 0xff) as u8;
+        *b = ((value >> shift) & 0xff) as u8;
     }
 }
 

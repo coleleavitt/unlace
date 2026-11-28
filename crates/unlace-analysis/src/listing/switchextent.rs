@@ -145,11 +145,10 @@ impl<'a> FunctionTables<'a> {
                     continue;
                 };
                 invalidate(&mut vals, Some(key));
-                if let Some(val) = folded {
-                    if vals.len() < MAX_TRACKED {
+                if let Some(val) = folded
+                    && vals.len() < MAX_TRACKED {
                         vals.push((key, val));
                     }
-                }
             }
             at = at.wrapping_add(u64::from(len));
         }

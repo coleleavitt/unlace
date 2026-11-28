@@ -755,11 +755,9 @@ impl MergeContext for Funcdata {
                 }
                 if let Some((sym, addr, size, _)) =
                     lm.container_symbol_link(v.get_addr(), &self.vn_use_point(vn))
-                {
-                    if addr == *v.get_addr() && size == v.get_size() {
+                    && addr == *v.get_addr() && size == v.get_size() {
                         return Some(sym.data().as_ffi() & SYM_ID_LOCAL_MASK);
                     }
-                }
             }
         }
         self.unlace_mapped_symbol_id(high)
@@ -842,9 +840,9 @@ impl MergeContext for Funcdata {
                 continue;
             }
             let usepoint = self.vn_use_point(vn);
-            if let Some(lm) = self.get_scope_local() {
-                if let Some(info) = lm.query_container_for_link(&addr, &usepoint) {
-                    if info.is_isolated
+            if let Some(lm) = self.get_scope_local()
+                && let Some(info) = lm.query_container_for_link(&addr, &usepoint)
+                    && info.is_isolated
                         && (self.vbank().get(vn).is_some_and(|v| v.is_addr_tied())
                             || self.vbank().get(vn).is_some_and(|v| {
                                 info.entry_addr == *v.get_addr() && info.entry_size == v.get_size()
@@ -852,8 +850,6 @@ impl MergeContext for Funcdata {
                     {
                         return true;
                     }
-                }
-            }
             // Global covering entry: not isolated in the merged-tree snapshots.
         }
         false

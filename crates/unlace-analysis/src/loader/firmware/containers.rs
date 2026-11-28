@@ -52,15 +52,16 @@ pub fn detect(bytes: &[u8]) -> Result<Option<Container>, String> {
     if bytes.starts_with(b"bFLT") {
         return bflt(bytes).map(Some);
     }
-    if bytes.first() == Some(&b':') {
-        if let Some(c) = ihex(bytes)? {
-            return Ok(Some(c));
-        }
+    if bytes.first() == Some(&b':')
+        && let Some(c) = ihex(bytes)?
+    {
+        return Ok(Some(c));
     }
-    if bytes.first() == Some(&b'S') && bytes.get(1).is_some_and(|c| c.is_ascii_digit()) {
-        if let Some(c) = srec(bytes)? {
-            return Ok(Some(c));
-        }
+    if bytes.first() == Some(&b'S')
+        && bytes.get(1).is_some_and(|c| c.is_ascii_digit())
+        && let Some(c) = srec(bytes)?
+    {
+        return Ok(Some(c));
     }
     if let Some(c) = md1img(bytes)? {
         return Ok(Some(c));
@@ -153,7 +154,9 @@ fn uimage(b: &[u8]) -> Result<Container, String> {
 /// MIPS byte order by which reading finds more `jr ra` (0x03e00008).
 pub(super) fn mips_endian(code: &[u8]) -> &'static str {
     let count = |be: bool| {
-        code.chunks_exact(4)
+        code.as_chunks::<4>()
+            .0
+            .iter()
             .filter(|w| {
                 let v = if be {
                     u32::from_be_bytes([w[0], w[1], w[2], w[3]])

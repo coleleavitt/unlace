@@ -44,8 +44,9 @@ fn nested(n: usize) -> Vec<u32> {
     const STAGE: usize = 31;
     let out = 3 + n * STAGE + 1;
     let get_state = out + 4;
-    let branch =
-        |op: u32, from: usize, to: usize| op | ((to as i64 - from as i64) as u32 * 4 & 0x03ff_fffc);
+    let branch = |op: u32, from: usize, to: usize| {
+        op | (((to as i64 - from as i64) as u32 * 4) & 0x03ff_fffc)
+    };
     let mut code = vec![0x7c0802a6, 0xf8010010, 0xf821ff71];
     for k in 0..n {
         let s = code.len();

@@ -46,10 +46,10 @@ pub(super) fn read(img: &ImageBytes, at: u64, ptr_size: u8, end: End) -> Option<
 /// The records in `body`, which must hold a whole number of them. A negative size
 /// is not a frame object and rejects the table.
 pub(super) fn parse(body: &[u8], end: End) -> Option<Vec<StackObject>> {
-    if body.len() % RECORD != 0 {
+    if !body.len().is_multiple_of(RECORD) {
         return None;
     }
-    body.chunks_exact(RECORD)
+    body.as_chunks::<RECORD>().0.iter()
         .map(|r| {
             let size = rd_u32(&r[4..], end) as i32;
             (size >= 0).then(|| StackObject {

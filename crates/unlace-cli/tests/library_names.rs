@@ -297,12 +297,10 @@ fn a_library_name_takes_a_suffix_past_a_global() {
 /// takes in either language.
 #[test]
 fn a_keyword_is_never_a_library_name() {
+    let keyword = regex::Regex::new(r"\btype\b").unwrap();
     for language in ["c", "rust"] {
         let code = decompile_in("libcnames_O0_x86_64", "can", &["--language", language], &[]);
-        assert!(
-            !regex::Regex::new(r"\btype\b").unwrap().is_match(&code),
-            "{language}:\n{code}"
-        );
+        assert!(!keyword.is_match(&code), "{language}:\n{code}");
     }
 }
 

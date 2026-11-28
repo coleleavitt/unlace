@@ -198,8 +198,8 @@ fn stack_rooted(data: &Funcdata, vn: VarnodeId, depth: usize) -> bool {
     if node.is_spacebase() {
         return true;
     }
-    if let Some(sp) = crate::spillargtrial::stack_pointer_storage(data) {
-        if !node.is_constant()
+    if let Some(sp) = crate::spillargtrial::stack_pointer_storage(data)
+        && !node.is_constant()
             && sp
                 .space
                 .as_ref()
@@ -208,7 +208,6 @@ fn stack_rooted(data: &Funcdata, vn: VarnodeId, depth: usize) -> bool {
         {
             return true;
         }
-    }
     let Some(o) = node.get_def().and_then(|d| data.obank().get(d)) else {
         return false;
     };

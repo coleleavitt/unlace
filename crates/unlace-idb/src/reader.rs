@@ -28,6 +28,7 @@ impl Width {
         value & self.max()
     }
 
+    #[allow(clippy::wrong_self_convention)]
     pub(crate) fn from_le(self, bytes: &[u8]) -> Option<u64> {
         match (self.wide, bytes.len()) {
             (true, 8) => Some(u64::from_le_bytes(bytes.try_into().ok()?)),
@@ -36,6 +37,7 @@ impl Width {
         }
     }
 
+    #[allow(clippy::wrong_self_convention)]
     pub(crate) fn from_be(self, bytes: &[u8]) -> Option<u64> {
         match (self.wide, bytes.len()) {
             (true, 8) => Some(u64::from_be_bytes(bytes.try_into().ok()?)),

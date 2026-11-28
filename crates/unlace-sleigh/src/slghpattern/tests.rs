@@ -107,8 +107,10 @@ fn patternblock_normalization_preserves_byte_alignment() {
             let values: Vec<u8> = (0..16).map(|i| i * 13 + 7).collect();
             let words = |bytes: &[u8]| {
                 bytes
-                    .chunks_exact(4)
-                    .map(|b| u32::from_be_bytes(b.try_into().unwrap()))
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|b| u32::from_be_bytes(*b))
                     .collect::<Vec<_>>()
             };
             let start = 4 + first / 8;

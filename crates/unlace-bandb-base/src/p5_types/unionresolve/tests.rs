@@ -402,7 +402,7 @@ fn constants_and_helpers_present() {
     // sign_extend/int8/uint8/uintb are used by the seamed driver helpers;
     // exercise sign_extend here to keep the import live and pin its behavior
     // for the INT_ADD constant-offset arm (C++ `sign_extend(off,size*8-1)`).
-    let off: int8 = sign_extend(0xff, 8 * 1 - 1);
+    let off: int8 = sign_extend(0xff, 8 - 1);
     assert_eq!(off, -1);
     let _ = (0u64 as uint8, 0u64 as uintb);
 }

@@ -216,11 +216,10 @@ impl Funcdata {
             if v.is_annotation() {
                 continue;
             }
-            if let Some(h) = v.get_high() {
-                if seen.insert(h) {
+            if let Some(h) = v.get_high()
+                && seen.insert(h) {
                     order.push(h);
                 }
-            }
         }
         enc.open_element(&ELEM_HIGHLIST);
         for high in order {

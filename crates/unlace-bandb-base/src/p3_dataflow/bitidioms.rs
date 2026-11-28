@@ -181,8 +181,8 @@ fn rotate_source(
         if let (Some((x, n)), Some((y, m))) = (
             shift(l, OpCode::CPUI_INT_LEFT),
             shift(r, OpCode::CPUI_INT_RIGHT),
-        ) {
-            if x == y
+        )
+            && x == y
                 && n > 0
                 && n < width
                 && n + m == width
@@ -190,7 +190,6 @@ fn rotate_source(
             {
                 return Some((x, n));
             }
-        }
     }
     None
 }
@@ -295,7 +294,7 @@ fn unrotate(
         .get(op)
         .map(|o| o.get_addr().clone())
         .ok_or_else(|| unlace_base::error::UnlaceError::lowlevel("unrotate: stale op"))?;
-    let mut half = |code: OpCode,
+    let half = |code: OpCode,
                     by: u64,
                     data: &mut Funcdata|
      -> unlace_base::error::UnlaceResult<VarnodeId> {

@@ -251,11 +251,9 @@ impl<'a> AddTreeState<'a> {
         if self.base_type.get_metatype() == type_metatype::TYPE_SPACEBASE {
             if let (Some(lm), Some(types)) =
                 (self.data.get_scope_local(), self.data.get_arch().types_rc())
-            {
-                if let Ok((t, newoff)) = lm.spacebase_get_sub_type(off, types.as_ref()) {
+                && let Ok((t, newoff)) = lm.spacebase_get_sub_type(off, types.as_ref()) {
                     return (Some(t), newoff);
                 }
-            }
             return (None, off);
         }
         match self.base_type.get_sub_type(off) {
@@ -329,11 +327,10 @@ impl<'a> AddTreeState<'a> {
                 return (true, off_after);
             }
         }
-        if let (Some(_), newoff) = self.base_get_sub_type(off) {
-            if newoff == off_before || newoff == off_after {
+        if let (Some(_), newoff) = self.base_get_sub_type(off)
+            && (newoff == off_before || newoff == off_after) {
                 return (true, newoff); // Offset is contained in an arrayed component
             }
-        }
         let dist_before = if off_before < 0 {
             (-off_before) as uintb
         } else {
@@ -560,15 +557,14 @@ impl<'a> AddTreeState<'a> {
             let extra = AddrSpace::byte_to_address_int(extra, word_size);
             self.offset = self.offset.wrapping_sub(extra as uintb) & self.ptrmask;
             self.correct = self.correct.wrapping_sub(extra as uintb) & self.ptrmask;
-            if let Some(rel) = &self.p_rel_type {
-                if self.offset == rel.get_address_offset().unwrap_or(0) as uintb {
+            if let Some(rel) = &self.p_rel_type
+                && self.offset == rel.get_address_offset().unwrap_or(0) as uintb {
                     // Offset falls within basic ptrto.
                     if rel.evaluate_thru_parent(0) != Some(true) {
                         self.valid = false;
                         return;
                     }
                 }
-            }
             self.is_subtype = true;
         } else if self.base_type.get_metatype() == type_metatype::TYPE_ARRAY {
             self.is_subtype = true;
@@ -602,11 +598,10 @@ impl<'a> AddTreeState<'a> {
             let new_type = (self.data.hooks().coreaction_infertypes_propagate_type_pub)(
                 self.data, in_type, op, vn, out, 0, -1,
             );
-            if let Some(nt) = new_type {
-                if let Some(v) = self.data.vbank_mut().get_mut(out) {
+            if let Some(nt) = new_type
+                && let Some(v) = self.data.vbank_mut().get_mut(out) {
                     v.update_type(nt);
                 }
-            }
         }
     }
 

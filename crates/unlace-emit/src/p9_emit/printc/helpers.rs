@@ -229,14 +229,9 @@ pub(super) fn elidable_void_tail_return(fd: &Funcdata) -> Option<OpId> {
 
     // (2) the last structured leaf, descending only non-printing containers.
     let mut cur = fd.sblocks_ref().root?;
-    loop {
-        match fd.sblocks_ref().block(cur).get_type() {
-            BlockType::Graph | BlockType::Ls => {
-                let list = fd.sblocks_ref().block(cur).get_list();
-                cur = *list.last()?;
-            }
-            _ => break,
-        }
+    while let BlockType::Graph | BlockType::Ls = fd.sblocks_ref().block(cur).get_type() {
+        let list = fd.sblocks_ref().block(cur).get_list();
+        cur = *list.last()?;
     }
     if !matches!(
         fd.sblocks_ref().block(cur).get_type(),
@@ -295,10 +290,10 @@ pub(super) fn elidable_void_tail_return(fd: &Funcdata) -> Option<OpId> {
                 if o.not_printed() || o.code() == OpCode::CPUI_BRANCH {
                     continue;
                 }
-                if let Some(out) = o.get_out() {
-                    if fd.vbank().get(out).map(|v| v.is_implied()).unwrap_or(false) {
-                        continue;
-                    }
+                if let Some(out) = o.get_out()
+                    && fd.vbank().get(out).map(|v| v.is_implied()).unwrap_or(false)
+                {
+                    continue;
                 }
                 other_printed = true;
             }

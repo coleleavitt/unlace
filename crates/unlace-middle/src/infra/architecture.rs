@@ -283,10 +283,7 @@ pub struct Architecture {
 
     /// MIPS ELF t9 register and its entry probe: the seed value where the loader
     /// recognizes PIC setup. Probed only for an entry no seed already covers.
-    pub loader_mips_t9: Option<(
-        unlace_num::pcoderaw::VarnodeData,
-        Rc<dyn Fn(&Address) -> Option<u64>>,
-    )>,
+    pub loader_mips_t9: Option<(unlace_num::pcoderaw::VarnodeData, MipsT9Probe)>,
 
     /// Loader-proven tail transfers: a call whose callee returns to this
     /// function's caller, decoded as a call followed by a return.
@@ -997,6 +994,8 @@ struct SymbolSnapshots {
 /// Every declared callee's parked prototype, keyed by `(space index, entry
 /// offset)` -- the [`ArchContext::callee_protos`](crate::context::ArchContext)
 /// snapshot, shared rather than copied per function.
+pub type MipsT9Probe = Rc<dyn Fn(&Address) -> Option<u64>>;
+
 type CalleeProtoSnapshot = Rc<Vec<(int4, uintb, crate::fspec::PrototypePieces)>>;
 
 /// The helper calling convention of a language, or `None` when it has none here.
@@ -1453,7 +1452,7 @@ impl Architecture {
     /// `reset_defaults_internal`), the printer's context state (integer
     /// format, comment indent + header/instruction flags, namespace strategy,
     /// language — a fresh `PrintContext`), and the PrintC-proper option block
-    /// + emitter indent increment
+    /// plus emitter indent increment
     /// (`PrintC::reset_wire_option_defaults`: nullprinting, inplaceops,
     /// conventionprinting, nocastprinting, hideimpliedexts, the brace
     /// formats, indentincrement, maxlinewidth).  NOT covered: the action-database
@@ -2369,21 +2368,20 @@ impl Architecture {
                     track.push(seed.clone());
                 }
             }
-            if let Some((loc, probe)) = self.loader_mips_t9.as_ref() {
-                if !track.iter().any(|value| value.loc == *loc) {
-                    if let Some(val) = probe(entry) {
-                        track.push(unlace_sleigh::globalcontext::TrackedContext {
-                            loc: loc.clone(),
-                            val,
-                        });
-                    }
-                }
+            if let Some((loc, probe)) = self.loader_mips_t9.as_ref()
+                && !track.iter().any(|value| value.loc == *loc)
+                && let Some(val) = probe(entry)
+            {
+                track.push(unlace_sleigh::globalcontext::TrackedContext {
+                    loc: loc.clone(),
+                    val,
+                });
             }
-            if track.len() != before {
-                if let Some(stop) = entry.get_offset().checked_add(1) {
-                    let end = Address::new(Rc::clone(entry.get_space().unwrap()), stop);
-                    *ctx.tracked_sets.clear_range(entry, &end) = track;
-                }
+            if track.len() != before
+                && let Some(stop) = entry.get_offset().checked_add(1)
+            {
+                let end = Address::new(Rc::clone(entry.get_space().unwrap()), stop);
+                *ctx.tracked_sets.clear_range(entry, &end) = track;
             }
         }
         Rc::new(ctx)
@@ -2761,10 +2759,10 @@ impl Architecture {
         });
         let mut last_space: Option<Rc<AddrSpace>> = None;
         for spc in copy_list.into_iter() {
-            if let Some(ref last) = last_space {
-                if Rc::ptr_eq(last, &spc) {
-                    continue; // dedup (sorted)
-                }
+            if let Some(ref last) = last_space
+                && Rc::ptr_eq(last, &spc)
+            {
+                continue; // dedup (sorted)
             }
             last_space = Some(Rc::clone(&spc));
             if spc.get_delay() == 0 {
@@ -2924,10 +2922,10 @@ impl Architecture {
                 // empty form to spc->getHighest().  No register lookup needed.
                 // A range over a space that only a cspec `<spacebase>` declares
                 // (not modelled here) is skipped rather than failing the load.
-                if let Some(space_name) = attr_str(child, "space") {
-                    if self.manage().get_space_by_name(&space_name).is_none() {
-                        continue;
-                    }
+                if let Some(space_name) = attr_str(child, "space")
+                    && self.manage().get_space_by_name(&space_name).is_none()
+                {
+                    continue;
                 }
                 let mut decoder = XmlDecode::new_with_root(&manager, &registry, child, 0);
                 let mut props = RangeProperties::new();
@@ -4885,14 +4883,12 @@ impl Architecture {
         // <returnaddress> (C++ Architecture::parseExtraRules / decode); parse that
         // root element directly here so the per-call retaddr store is modeled even
         // when the <prototype> omits its own <returnaddress> (the x86-64-gcc case).
-        if !saw_retaddr {
-            if let Some(ra_block) = find_child(root, "returnaddress") {
-                self.decode_effect_block(
-                    &ra_block,
-                    &mut model,
-                    crate::fspec::effect_type::RETURN_ADDRESS,
-                )?;
-            }
+        if !saw_retaddr && let Some(ra_block) = find_child(root, "returnaddress") {
+            self.decode_effect_block(
+                &ra_block,
+                &mut model,
+                crate::fspec::effect_type::RETURN_ADDRESS,
+            )?;
         }
         // (unlace, ida) State the x86 direction-flag guarantee the compiler spec
         // leaves implicit. See `unlace_dfunaffected`: without it every call plants
@@ -5018,10 +5014,10 @@ impl Architecture {
         // C++ `parseCompilerConfig` tail, architecture.cc:1342 — "We must have a
         // __thiscall calling convention": when the spec declares none, clone it
         // off the default so `getModel("__thiscall")` resolves on every language.
-        if !byname.contains_key("__thiscall") {
-            if let Ok(m) = create_model_alias("__thiscall", defaultfp) {
-                out.push(Rc::new(m));
-            }
+        if !byname.contains_key("__thiscall")
+            && let Ok(m) = create_model_alias("__thiscall", defaultfp)
+        {
+            out.push(Rc::new(m));
         }
         out
     }
@@ -5282,10 +5278,10 @@ impl Architecture {
         // ConvertToPointer rule (a SizeRestrictedFilter(pointermax+1,0) feeding a
         // ConvertToPointer action).  `pointermax` is the `<input>`/`<output>`
         // element attribute (default 0 => no rule).
-        if let Some(pmax) = attr_str(list_el, "pointermax").and_then(|s| s.parse::<int4>().ok()) {
-            if pmax > 0 {
-                plist.push_pointermax_rule(pmax);
-            }
+        if let Some(pmax) = attr_str(list_el, "pointermax").and_then(|s| s.parse::<int4>().ok())
+            && pmax > 0
+        {
+            plist.push_pointermax_rule(pmax);
         }
         Ok(())
     }

@@ -104,7 +104,7 @@ pub(crate) fn line_comments(
             }
         }
     }
-    out.sort_by(|a, b| (a.func_addr, a.addr).cmp(&(b.func_addr, b.addr)));
+    out.sort_by_key(|a| (a.func_addr, a.addr));
     out.dedup_by(|a, b| a.func_addr == b.func_addr && a.addr == b.addr);
     out
 }

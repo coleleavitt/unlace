@@ -79,7 +79,7 @@ fn hashed(fd: &Funcdata, vn: VarnodeId, keccak: &dyn Fn(u64) -> bool, depth: u32
             .is_some_and(|x| keccak(x.get_offset()));
     }
     (0..o.num_input()).any(|s| {
-        o.get_in(s as i32)
+        o.get_in(s)
             .is_some_and(|x| hashed(fd, x, keccak, depth + 1))
     })
 }

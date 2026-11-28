@@ -653,12 +653,16 @@ fn merge_backout_on_cover_intersection() {
     let mut m = Mock::new();
     // Two highs whose covers intersect on block 0 (overlapping ranges) and
     // whose instances are NOT copy shadows -> blockIntersection true.
-    let mut a = HighState::default();
-    a.cover = overlap_cover(0);
-    a.instances = vec![vid(1)];
-    let mut b = HighState::default();
-    b.cover = overlap_cover(0);
-    b.instances = vec![vid(2)];
+    let a = HighState {
+        cover: overlap_cover(0),
+        instances: vec![vid(1)],
+        ..Default::default()
+    };
+    let b = HighState {
+        cover: overlap_cover(0),
+        instances: vec![vid(2)],
+        ..Default::default()
+    };
     add_high(&mut m, 1, a);
     add_high(&mut m, 2, b);
     m.copy_shadow = false; // not shadows -> a real intersection
@@ -688,11 +692,13 @@ fn merge_linear_merges_compatible_disjoint_highs() {
     // disjoint instance covers -> all merge into the earliest-block high.
     let shared = dt(4, type_metatype::TYPE_INT);
     for n in 1..=3u32 {
-        let mut s = HighState::default();
-        s.has_cover = true;
-        s.type_ = Some(shared.clone());
-        s.cover = cover_block(n as int4 - 1, 0, 5);
-        s.instances = vec![vid(n as u64)];
+        let s = HighState {
+            has_cover: true,
+            type_: Some(shared.clone()),
+            cover: cover_block(n as int4 - 1, 0, 5),
+            instances: vec![vid(n as u64)],
+            ..Default::default()
+        };
         add_high(&mut m, n, s);
         m.vn_addr
             .insert(vkey(vid(n as u64)), Address::new_invalid());
@@ -719,12 +725,14 @@ fn merge_linear_does_not_pair_up_globals() {
     let shared = dt(8, type_metatype::TYPE_UNKNOWN);
     let globals = 300u32;
     for n in 1..=globals + 2 {
-        let mut s = HighState::default();
-        s.has_cover = true;
-        s.type_ = Some(shared.clone());
-        s.cover = cover_block(n as int4 - 1, 0, 5);
-        s.instances = vec![vid(n as u64)];
-        s.persist = n != 7 && n != 200;
+        let s = HighState {
+            has_cover: true,
+            type_: Some(shared.clone()),
+            cover: cover_block(n as int4 - 1, 0, 5),
+            instances: vec![vid(n as u64)],
+            persist: n != 7 && n != 200,
+            ..Default::default()
+        };
         add_high(&mut m, n, s);
         m.vn_addr
             .insert(vkey(vid(n as u64)), Address::new_invalid());

@@ -166,11 +166,10 @@ impl<'a> HalfwordTables<'a> {
             let Some(out) = &op.out else { continue };
             let key = key_of(out, data);
             invalidate(&mut vals, key);
-            if let (Some(key), Some(val)) = (key, folded) {
-                if vals.len() < MAX_TRACKED {
+            if let (Some(key), Some(val)) = (key, folded)
+                && vals.len() < MAX_TRACKED {
                     vals.push((key, val));
                 }
-            }
         }
         (Vec::new(), None)
     }
@@ -277,11 +276,10 @@ pub(super) fn guard_cases(
                 return Err(None);
             }
         }
-        if inclusive.is_none() {
-            if let Some(range) = range_branch(ops, cur, from, translate, data) {
+        if inclusive.is_none()
+            && let Some(range) = range_branch(ops, cur, from, translate, data) {
                 inclusive = Some(range.ok_or(None)?);
             }
-        }
         cur = prev;
     }
     Err(None)

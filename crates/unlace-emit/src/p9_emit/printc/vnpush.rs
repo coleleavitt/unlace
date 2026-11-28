@@ -188,8 +188,8 @@ impl PrintC {
             self.java_load_ir(fd, arch, op);
             return;
         }
-        if self.out_lang == crate::lang::OutLang::Go {
-            if let Some(view) = super::super::gostringindex::prove(fd, op) {
+        if self.out_lang == crate::lang::OutLang::Go
+            && let Some(view) = super::super::gostringindex::prove(fd, op) {
                 self.push_op(&tokens::SUBSCRIPT, Some(op_key(op)));
                 self.push_go_call("unsafe.String", op);
                 self.push_op(&tokens::COMMA, Some(op_key(op)));
@@ -198,18 +198,15 @@ impl PrintC {
                 self.push_vn_ir(fd, arch, view.index, op);
                 return;
             }
-        }
-        if self.out_lang == crate::lang::OutLang::C {
-            if let Some(mut access) = crate::stackmem::access(fd, op) {
-                if self.stmt_op == Some(op) {
-                    if let Some(target) = self.storage_load_member_type(fd, arch, op, access.size) {
+        if self.out_lang == crate::lang::OutLang::C
+            && let Some(mut access) = crate::stackmem::access(fd, op) {
+                if self.stmt_op == Some(op)
+                    && let Some(target) = self.storage_load_member_type(fd, arch, op, access.size) {
                         access.datatype = target;
                     }
-                }
                 self.op_storage_copy_ir(fd, arch, op, access);
                 return;
             }
-        }
 
         let ptr = match fd.obank().get(op).and_then(|o| o.get_in(1)) {
             Some(v) => v,
@@ -316,8 +313,8 @@ impl PrintC {
         {
             return;
         }
-        if self.out_lang == crate::lang::OutLang::C {
-            if let Some(mut access) = crate::stackmem::access(fd, op) {
+        if self.out_lang == crate::lang::OutLang::C
+            && let Some(mut access) = crate::stackmem::access(fd, op) {
                 if let Some(target) = access
                     .value
                     .and_then(|value| self.partial_piece_type(fd, arch, value, op, 2))
@@ -328,7 +325,6 @@ impl PrintC {
                 self.op_storage_copy_ir(fd, arch, op, access);
                 return;
             }
-        }
         let mods = self.context.mods();
         self.push_op(&tokens::ASSIGNMENT, Some(op_key(op)));
         let ptr = match fd.obank().get(op).and_then(|o| o.get_in(1)) {

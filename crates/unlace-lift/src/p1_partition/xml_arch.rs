@@ -261,24 +261,21 @@ impl XmlArchitecture {
         let mut iter = children.iter();
         let mut registered: Vec<Rc<Element>> = Vec::new();
         let mut next = iter.next();
-        if let Some(el) = next {
-            if el.get_name() == "binaryimage" {
+        if let Some(el) = next
+            && el.get_name() == "binaryimage" {
                 registered.push(Rc::clone(el));
                 next = iter.next();
             }
-        }
-        if let Some(el) = next {
-            if el.get_name() == "specextensions" {
+        if let Some(el) = next
+            && el.get_name() == "specextensions" {
                 registered.push(Rc::clone(el));
                 next = iter.next();
             }
-        }
-        if let Some(el) = next {
-            if el.get_name() == "coretypes" {
+        if let Some(el) = next
+            && el.get_name() == "coretypes" {
                 registered.push(Rc::clone(el));
                 next = iter.next();
             }
-        }
         // init(store);  -- STUB(W6/W8): the type-factory/print/spec-decode flow.
         let rest = next.map(Rc::clone);
         Ok(XmlRestore {

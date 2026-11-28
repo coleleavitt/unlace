@@ -200,14 +200,14 @@ impl crate::optionset::UnlaceOption for StoreTypeMode {
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
-        Ok(crate::storetype::StoreTypeMode::parse(value.trim())
+        crate::storetype::StoreTypeMode::parse(value.trim())
             .map_err(unlace_base::error::UnlaceError::parse)
             .map(|mode| {
                 (
                     mode,
                     format!("global typing from stored values set to {}", mode.as_str()),
                 )
-            })?)
+            })
     }
 }
 

@@ -1733,10 +1733,7 @@ impl SubvariableFlow {
                     return Ok(false);
                 }
                 let rop = self.create_op(data, OpCode::CPUI_COPY, 1, rvn);
-                if !self.create_link(data, rop, mask, 0, i0)? {
-                    return Ok(false);
-                }
-                Ok(true)
+                Ok(self.create_link(data, rop, mask, 0, i0)?)
             }
             OpCode::CPUI_INT_ADD => {
                 if (mask & 1) == 0 {
@@ -1852,10 +1849,7 @@ impl SubvariableFlow {
                     return Ok(false); // break -- subvariable is truncated by shift
                 }
                 let rop = self.create_op(data, OpCode::CPUI_COPY, 1, rvn);
-                if !self.create_link(data, rop, newmask, 0, i0)? {
-                    return Ok(false);
-                }
-                Ok(true)
+                Ok(self.create_link(data, rop, newmask, 0, i0)?)
             }
             OpCode::CPUI_INT_SRIGHT => {
                 let i1 = data
@@ -1884,10 +1878,7 @@ impl SubvariableFlow {
                     return Ok(false); // break -- subvariable is truncated by shift
                 }
                 let rop = self.create_op(data, OpCode::CPUI_COPY, 1, rvn);
-                if !self.create_link(data, rop, newmask, 0, i0)? {
-                    return Ok(false);
-                }
-                Ok(true)
+                Ok(self.create_link(data, rop, newmask, 0, i0)?)
             }
             OpCode::CPUI_INT_MULT => {
                 let sa = leastsigbit_set(mask);
@@ -2000,10 +1991,7 @@ impl SubvariableFlow {
                     .expect("stale op")
                     .get_in(0)
                     .expect("in0");
-                if !self.create_link(data, rop, newmask, 0, i0)? {
-                    return Ok(false);
-                }
-                Ok(true)
+                Ok(self.create_link(data, rop, newmask, 0, i0)?)
             }
             OpCode::CPUI_PIECE => {
                 let i1 = data
@@ -2041,10 +2029,7 @@ impl SubvariableFlow {
                 Ok(false) // break
             }
             OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-                if self.try_call_return_push(data, op, rvn)? {
-                    return Ok(true);
-                }
-                Ok(false) // break
+                Ok(self.try_call_return_push(data, op, rvn)?) // break
             }
             OpCode::CPUI_INT_EQUAL
             | OpCode::CPUI_INT_NOTEQUAL
@@ -2298,10 +2283,7 @@ impl SubvariableFlow {
                     return Ok(false);
                 }
                 let rop = self.create_op(data, OpCode::CPUI_COPY, 1, rvn);
-                if !self.create_link(data, rop, mask, 0, i0)? {
-                    return Ok(false);
-                }
-                Ok(true)
+                Ok(self.create_link(data, rop, mask, 0, i0)?)
             }
             OpCode::CPUI_INT_SRIGHT => {
                 // A sign-extended logical value is arithmetically right-shifted
@@ -2331,10 +2313,7 @@ impl SubvariableFlow {
                 Ok(true)
             }
             OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-                if !self.zext_uses && self.try_call_return_push(data, op, rvn)? {
-                    return Ok(true);
-                }
-                Ok(false) // break
+                Ok(!self.zext_uses && self.try_call_return_push(data, op, rvn)?) // break
             }
             _ => Ok(false),
         }
@@ -2620,10 +2599,7 @@ impl SubvariableFlow {
         bitmask = (bitmask << self.bitsize) - 1;
         let mut mask = v.get_consume();
         mask |= bitmask as uintb;
-        if mask == self.rv(rvn).mask {
-            return true;
-        }
-        false // If more of the varnode is consumed than is in just this flow
+        mask == self.rv(rvn).mask // If more of the varnode is consumed than is in just this flow
     }
 
     /// Calculate address of replacement Varnode for given subgraph variable node
@@ -4995,17 +4971,17 @@ impl SplitDatatype {
             lo = data.vbank().get(i1).expect("stale in1").get_offset();
             losize = data.vbank().get(i1).expect("stale in1").get_size();
         }
-        for i in 0..self.data_type_pieces.len() {
-            let dt = Rc::clone(&self.data_type_pieces[i].in_type);
+        for piece in &self.data_type_pieces {
+            let dt = Rc::clone(&piece.in_type);
             if dt.get_size() as usize > std::mem::size_of::<uintb>() {
                 in_varnodes.clear();
                 return Ok(false);
             }
             // cast: piece offset + size are bounded by full_size (a Varnode size).
             let sa: int4 = if is_big_endian {
-                full_size - (self.data_type_pieces[i].offset + dt.get_size())
+                full_size - (piece.offset + dt.get_size())
             } else {
-                self.data_type_pieces[i].offset
+                piece.offset
             };
             if sa < 0 || sa + dt.get_size() > full_size {
                 in_varnodes.clear();
@@ -5034,12 +5010,12 @@ impl SplitDatatype {
     ) {
         let base_val = data.vbank().get(root_vn).expect("stale root").get_offset();
         let root_size = data.vbank().get(root_vn).expect("stale root").get_size();
-        for i in 0..self.data_type_pieces.len() {
-            let dt = Rc::clone(&self.data_type_pieces[i].in_type);
+        for piece in &self.data_type_pieces {
+            let dt = Rc::clone(&piece.in_type);
             let off = if big_endian {
-                root_size - self.data_type_pieces[i].offset - dt.get_size()
+                root_size - piece.offset - dt.get_size()
             } else {
-                self.data_type_pieces[i].offset
+                piece.offset
             };
             let val = crate::constantbytes::word(base_val, off, dt.get_size());
             let out_vn = data.new_constant(dt.get_size(), val);
@@ -5076,9 +5052,9 @@ impl SplitDatatype {
             .expect("stale follow")
             .get_addr()
             .clone();
-        for i in 0..self.data_type_pieces.len() {
-            let dt = Rc::clone(&self.data_type_pieces[i].in_type);
-            let mut off = self.data_type_pieces[i].offset;
+        for piece in &self.data_type_pieces {
+            let dt = Rc::clone(&piece.in_type);
+            let mut off = piece.offset;
             let mut addr = &base_addr + off as i64;
             addr.renormalize(dt.get_size(), data.get_arch().manage())?;
             if addr.is_big_endian() {
@@ -5116,9 +5092,9 @@ impl SplitDatatype {
             .expect("stale root")
             .get_addr()
             .clone();
-        for i in 0..self.data_type_pieces.len() {
-            let dt = Rc::clone(&self.data_type_pieces[i].out_type);
-            let off = self.data_type_pieces[i].offset;
+        for piece in &self.data_type_pieces {
+            let dt = Rc::clone(&piece.out_type);
+            let off = piece.offset;
             let mut addr = &base_addr + off as i64;
             addr.renormalize(dt.get_size(), data.get_arch().manage())?;
             let out_vn = data.new_varnode(dt.get_size(), &addr, Some(dt));
@@ -8279,10 +8255,7 @@ impl LaneDivide {
             }
         }
         self.tm.clear_varnode_marks(data);
-        if !retval || (!self.lane_progress && !self.whole_input_ops.is_empty()) {
-            return false;
-        }
-        true
+        !(!retval || (!self.lane_progress && !self.whole_input_ops.is_empty()))
     }
 
     /// Apply the constructed transform (C++ base `TransformManager::apply`).

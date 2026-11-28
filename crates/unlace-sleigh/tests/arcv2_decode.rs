@@ -16,7 +16,7 @@ use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
-use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit, Translate};
+use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit};
 
 struct MemImg {
     base: u64,
@@ -111,7 +111,7 @@ fn hex(text: &str) -> Vec<u8> {
 fn decodes(sla: &str, address: u64, bytes: &str, want: &str) {
     let bytes = hex(bytes);
     let len = bytes.len() as i32;
-    let mut sleigh = arc(sla, address, bytes);
+    let sleigh = arc(sla, address, bytes);
     let mut text = Text::default();
     let got = sleigh.print_assembly(&mut text, &at(&sleigh, address));
     assert_eq!(
@@ -155,7 +155,7 @@ fn big_endian_words_share_the_patterns() {
 #[test]
 fn loop_end_instruction_branches_back_to_the_loop_start() {
     let base = 0x101c;
-    let mut sleigh = arc(
+    let sleigh = arc(
         "arcv2_le.sla",
         base,
         hex("0a248070a820400104130c029860e07e"),

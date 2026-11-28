@@ -217,13 +217,12 @@ impl Action for ActionPrototypeTypes {
             }
             (e, _) => e,
         };
-        if let Some(evalfp) = evalfp {
-            if !data.get_func_proto().is_model_locked()
+        if let Some(evalfp) = evalfp
+            && !data.get_func_proto().is_model_locked()
                 && !data.get_func_proto().has_matching_model(&evalfp)
             {
                 data.get_func_proto_mut().set_model(Some(evalfp));
             }
-        }
         // (unlace) Establish the local-variable discovery window from the (now-set)
         // proto model's stack ranges.  C++ runs `localmap->resetLocalWindow()` at
         // `Funcdata` construction (via `funcp.setScope`, funcdata.cc:70), where the
@@ -324,8 +323,8 @@ impl Action for ActionPrototypeTypes {
         }
 
         let stack = data.get_arch().manage().get_stack_space().cloned();
-        if let Some(stack) = stack {
-            if data.bblocks_get_size() > 0 {
+        if let Some(stack) = stack
+            && data.bblocks_get_size() > 0 {
                 let top = data.bblocks_get_block(0);
                 for i in 0..stack.num_spacebase() {
                     let full = stack.get_spacebase_full(i).expect("stack base register");
@@ -357,7 +356,6 @@ impl Action for ActionPrototypeTypes {
                     self.base.count += 1;
                 }
             }
-        }
 
         // Force locked inputs to exist as Varnodes.  Needed so a big locked input
         // exists even when only part is used (SUBPIECE can then be built off it).
@@ -780,13 +778,12 @@ impl Action for ActionDefaultParams {
                 }
                 // C++ `fc->copy(otherfunc->getFuncProto())` carries the callee's
                 // own extrapop, which `option extrapop <n> <name>` may have set.
-                if has_funcdata {
-                    if let Some(expop) =
+                if has_funcdata
+                    && let Some(expop) =
                         arch.query_function_extra_pop(data.get_call_specs(i).get_entry_address())
                     {
                         data.get_call_specs_mut(i).proto_mut().set_extra_pop(expop);
                     }
-                }
             } else if arch
                 .callee_proto_model(data.get_call_specs(i).get_entry_address())
                 .is_some()
@@ -1502,20 +1499,20 @@ impl ActionParamDouble {
                     let vn1 = pd_input(data, op, slot);
                     let vn2 = pd_input(data, op, slot + 1);
                     let mut whole = unlace_bandb_base::double::SplitVarnode::empty();
-                    let isslothi;
-                    if whole.in_hand_hi(data, vn1) {
+                    
+                    let isslothi = if whole.in_hand_hi(data, vn1) {
                         if whole.get_lo() != Some(vn2) {
                             continue;
                         }
-                        isslothi = true;
+                        true
                     } else if whole.in_hand_lo(data, vn1) {
                         if whole.get_hi() != Some(vn2) {
                             continue;
                         }
-                        isslothi = false;
+                        false
                     } else {
                         continue;
-                    }
+                    };
                     let vn1_size = pd_size(data, vn1);
                     let vn2_size = pd_size(data, vn2);
                     if !data
@@ -1747,11 +1744,9 @@ impl ActionActiveParam {
             .get_call_specs_mut(idx)
             .get_active_input()
             .is_fully_checked()
-        {
-            if let Some(ac) = aliascheck.as_mut() {
+            && let Some(ac) = aliascheck.as_mut() {
                 check_input_trial_use(idx, data, ac, held);
             }
-        }
         data.get_call_specs_mut(idx)
             .get_active_input()
             .finish_pass();
@@ -1847,16 +1842,13 @@ impl Action for ActionActiveParam {
                         continue;
                     }
                     ready.push(idx);
-                    if !ctx.deadline_expired() {
-                        if let Some(entry) = crate::calleetrial::split_trial_callee(data, idx) {
-                            if let Some(key) = crate::protoorder::stated_key(&entry) {
-                                if self.contract_requested.insert(key) {
+                    if !ctx.deadline_expired()
+                        && let Some(entry) = crate::calleetrial::split_trial_callee(data, idx)
+                            && let Some(key) = crate::protoorder::stated_key(&entry)
+                                && self.contract_requested.insert(key) {
                                     data.unlace_queue_callee_split_call(entry);
                                     pause = true;
                                 }
-                            }
-                        }
-                    }
                 }
                 if pause {
                     self.ready_calls = Some(ready);
@@ -2152,31 +2144,28 @@ impl ActionReturnRecovery {
             let join = retaddr.as_ref().and_then(|at| {
                 crate::rustabi::pair_join_address(data, &hi_addr, hi_size, &lo_addr, lo_size, at)
             });
-            match join {
-                Some(joinaddr) => {
-                    let retaddr = data.obank().get(retop).map(|o| o.get_addr().clone());
-                    if let Some(retaddr) = retaddr {
-                        let newop = data.new_op(2, retaddr);
-                        data.op_set_opcode_code(newop, OpCode::CPUI_PIECE);
-                        if let Ok(newwhole) =
-                            data.new_varnode_out(hi_size + lo_size, &joinaddr, newop)
-                        {
-                            // Don't let the new whole cause additional heritage.
-                            if let Some(v) = data.vbank_mut().get_mut(newwhole) {
-                                v.set_write_mask();
-                            }
-                            data.op_insert_before(newop, retop);
-                            newparam.pop();
-                            let last = newparam.len() - 1;
-                            newparam[last] = newwhole;
-                            let _ = data.op_set_all_input(retop, &newparam);
-                            let _ = data.op_set_input(newop, hivn, 0); // most-sig
-                            let _ = data.op_set_input(newop, lovn, 1); // least-sig
-                            return;
+            if let Some(joinaddr) = join {
+                let retaddr = data.obank().get(retop).map(|o| o.get_addr().clone());
+                if let Some(retaddr) = retaddr {
+                    let newop = data.new_op(2, retaddr);
+                    data.op_set_opcode_code(newop, OpCode::CPUI_PIECE);
+                    if let Ok(newwhole) =
+                        data.new_varnode_out(hi_size + lo_size, &joinaddr, newop)
+                    {
+                        // Don't let the new whole cause additional heritage.
+                        if let Some(v) = data.vbank_mut().get_mut(newwhole) {
+                            v.set_write_mask();
                         }
+                        data.op_insert_before(newop, retop);
+                        newparam.pop();
+                        let last = newparam.len() - 1;
+                        newparam[last] = newwhole;
+                        let _ = data.op_set_all_input(retop, &newparam);
+                        let _ = data.op_set_input(newop, hivn, 0); // most-sig
+                        let _ = data.op_set_input(newop, lovn, 1); // least-sig
+                        return;
                     }
                 }
-                None => {}
             }
             // Fall back to the first piece if the join could not be constructed.
             newparam.truncate(2);
@@ -2201,8 +2190,8 @@ impl ActionReturnRecovery {
                     members.push((vn, trial.get_address().clone(), trial.get_size()));
                 }
             }
-            if crate::hfareturn::per_register_members(data, &members) {
-                if let Some(joined) = crate::hfareturn::join_members(data, retop, &members) {
+            if crate::hfareturn::per_register_members(data, &members)
+                && let Some(joined) = crate::hfareturn::join_members(data, retop, &members) {
                     let mut finalparam = Vec::new();
                     if let Some(in0) = data.obank().get(retop).and_then(|o| o.get_in(0)) {
                         finalparam.push(in0);
@@ -2211,7 +2200,6 @@ impl ActionReturnRecovery {
                     let _ = data.op_set_all_input(retop, &finalparam);
                     return;
                 }
-            }
         }
         // Many-piece single-container concatenation (coreaction.cc:1915-1951):
         // walk the contiguous used trials, building a PIECE chain at the earliest

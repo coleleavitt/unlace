@@ -670,9 +670,9 @@ pub fn redo_replaces(first: &FuncResult, again: &FuncResult) -> bool {
 /// surface a type name reaches. The match is on whole identifiers, so `struct_1`
 /// does not answer for `struct_10`.
 pub fn names_any_type(r: &FuncResult, names: &[String]) -> bool {
-    let mut hit = |hay: &str| names.iter().any(|n| contains_identifier(hay, n));
-    r.code.as_deref().is_some_and(&mut hit)
-        || r.proto.as_deref().is_some_and(&mut hit)
+    let hit = |hay: &str| names.iter().any(|n| contains_identifier(hay, n));
+    r.code.as_deref().is_some_and(hit)
+        || r.proto.as_deref().is_some_and(hit)
         || r.call_declarations
             .iter()
             .any(|declaration| hit(declaration))
@@ -1104,11 +1104,10 @@ pub fn decompile_pulled(
                     &fd,
                 );
                 let original_display = fd.get_display_name().to_string();
-                if header_carries_types {
-                    if let Some(display) = crate::projectfunctionnames::display(prog.arch(), &fd) {
+                if header_carries_types
+                    && let Some(display) = crate::projectfunctionnames::display(prog.arch(), &fd) {
                         fd.set_display_name(&display);
                     }
-                }
                 let emitted_name = fd.get_display_name().to_string();
                 prog.arch_mut()
                     .print_mut()
@@ -1709,8 +1708,8 @@ pub fn deferred_callwide_header<'a>(
     };
     for result in &results {
         for contract in &result.callwide_prototypes {
-            if let Some(previous) = contracts.insert(contract.name.as_str(), contract) {
-                if !agrees(previous, contract) {
+            if let Some(previous) = contracts.insert(contract.name.as_str(), contract)
+                && !agrees(previous, contract) {
                     if same_words(previous, contract) && can_wait(contract) {
                         pending.insert(contract.entry);
                     } else {
@@ -1720,7 +1719,6 @@ pub fn deferred_callwide_header<'a>(
                         ));
                     }
                 }
-            }
             if contract.definition {
                 if contract.entry != result.byte_address
                     || !result.proto.as_deref().is_some_and(|proto| {
@@ -2018,7 +2016,7 @@ fn global_declarations(
                 let (t, d) = by_addr.range(address.saturating_add(1)..end).next()?.1;
                 t.iter().chain(d.iter()).next().map(|g| g.name.as_str())
             });
-        if reach.map_or(true, |(r, _)| end > r) {
+        if reach.is_none_or(|(r, _)| end > r) {
             reach = Some((end, name));
         }
         let names: BTreeSet<&str> = taken
@@ -2332,11 +2330,10 @@ pub fn collect_dat_addrs(results: &[FuncResult]) -> BTreeSet<u64> {
             }
             let prev_ok = start == 0 || !is_ident(b[start - 1]);
             let next_ok = hex_end == b.len() || !is_ident(b[hex_end]);
-            if prev_ok && next_ok && hex_end > hex_start {
-                if let Ok(vma) = u64::from_str_radix(&code[hex_start..hex_end], 16) {
+            if prev_ok && next_ok && hex_end > hex_start
+                && let Ok(vma) = u64::from_str_radix(&code[hex_start..hex_end], 16) {
                     out.insert(vma);
                 }
-            }
             i = hex_end.max(hex_start);
         }
     }

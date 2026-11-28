@@ -101,8 +101,8 @@ impl Funcdata {
         {
             self.affecting_ops_changed();
         }
-        if t_op.get_opcode() != OpCode::CPUI_COPY {
-            if let Some(output) = self
+        if t_op.get_opcode() != OpCode::CPUI_COPY
+            && let Some(output) = self
                 .obank()
                 .get(op)
                 .and_then(|operation| operation.get_out())
@@ -120,7 +120,6 @@ impl Funcdata {
                     self.unlace_mark_call_transport_projection(output, size);
                 }
             }
-        }
         self.obank_mut().change_opcode(op, t_op);
     }
     /// `data.opSetOpcode(op, opc)` taking a bare [`OpCode`] and resolving it
@@ -465,13 +464,11 @@ impl Funcdata {
                 l.database().symbol(sym).get_category() == crate::database::symbol_category::EQUATE
             })
             .unwrap_or(false);
-        if is_equate {
-            if let Some(high) = self.vbank().get(dst).and_then(|v| v.get_high()) {
-                if let Some(h) = self.high_bank_mut().get_mut(high) {
+        if is_equate
+            && let Some(high) = self.vbank().get(dst).and_then(|v| v.get_high())
+                && let Some(h) = self.high_bank_mut().get_mut(high) {
                     h.set_unlace_equate_symbol(sym);
                 }
-            }
-        }
     }
 
     /// C++ `Varnode::copySymbolIfValid` (varnode.cc:528): copy symbol info from the
@@ -1710,8 +1707,8 @@ impl Funcdata {
                 uc
             }
         };
-        if let Some(oop) = other_op {
-            if oop != used_copy {
+        if let Some(oop) = other_op
+            && oop != used_copy {
                 let from = self
                     .obank()
                     .get(oop)
@@ -1727,7 +1724,6 @@ impl Funcdata {
                 self.total_replace(from, to)?;
                 self.op_destroy(oop);
             }
-        }
         Ok(self
             .obank()
             .get(used_copy)
@@ -1973,11 +1969,10 @@ impl Funcdata {
             if op_ref.get_eval_type() == pcodeop_flags::special {
                 match op_ref.code() {
                     OpCode::CPUI_LOAD => {
-                        if let Some(o) = this_out {
-                            if self.vbank().get(o).unwrap().is_addr_tied() {
+                        if let Some(o) = this_out
+                            && self.vbank().get(o).unwrap().is_addr_tied() {
                                 return false;
                             }
-                        }
                     }
                     OpCode::CPUI_STORE => {
                         if moving_load {
@@ -1986,11 +1981,10 @@ impl Funcdata {
                             if !tied_list.is_empty() {
                                 return false;
                             }
-                            if let Some(o) = this_out {
-                                if self.vbank().get(o).unwrap().is_addr_tied() {
+                            if let Some(o) = this_out
+                                && self.vbank().get(o).unwrap().is_addr_tied() {
                                     return false;
                                 }
-                            }
                         }
                     }
                     OpCode::CPUI_INDIRECT | OpCode::CPUI_SEGMENTOP | OpCode::CPUI_CPOOLREF => {
@@ -2275,7 +2269,7 @@ impl Funcdata {
             return Ok(());
         }
         // Sort by hash (.first).
-        list.sort_by(|a, b| a.0.cmp(&b.0));
+        list.sort_by_key(|a| a.0);
         let mut idx = 1;
         while idx < list.len() {
             let (h1, op1) = list[idx - 1];
@@ -3033,11 +3027,10 @@ impl Funcdata {
                         return Some(op);
                     }
                 }
-                OpCode::CPUI_RETURN => {
-                    if findreturn {
+                OpCode::CPUI_RETURN
+                    if findreturn => {
                         return Some(op);
                     }
-                }
                 _ => {}
             }
         }

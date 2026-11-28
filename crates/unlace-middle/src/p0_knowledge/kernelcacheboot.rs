@@ -62,13 +62,12 @@ impl KernelcacheBoot {
 /// refused.
 pub fn parse_kernelcache_boot(value: &str) -> UnlaceResult<(KernelcacheBoot, String)> {
     let choice = KernelcacheBoot::parse(value);
-    if let KernelcacheBoot::Path(path) = &choice {
-        if !path.exists() {
+    if let KernelcacheBoot::Path(path) = &choice
+        && !path.exists() {
             return Err(UnlaceError::parse(format!(
                 "kernelcache-boot expects auto, off, or the path of a kernel collection or its directory; {value:?} does not exist"
             )));
         }
-    }
     let msg = format!("Linked kernel collections set to {}", choice.as_str());
     Ok((choice, msg))
 }

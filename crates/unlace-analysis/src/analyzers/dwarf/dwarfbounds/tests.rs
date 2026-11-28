@@ -31,7 +31,7 @@ fn origins_signed_bounds_and_explicit_counts() {
     }
     let dynamic = gimli::AttributeValue::UnitRef(gimli::UnitOffset(1));
     assert_eq!(
-        array_count(Some(dynamic.clone()), None, Some(Udata(3)), None),
+        array_count(Some(dynamic), None, Some(Udata(3)), None),
         None
     );
     assert_eq!(array_count(None, Some(dynamic), Some(Udata(3)), None), None);

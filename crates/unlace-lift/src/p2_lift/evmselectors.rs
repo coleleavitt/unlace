@@ -60,12 +60,11 @@ pub fn solidity_selector(signature: &str) -> [u8; 4] {
 /// Keccak-256 of `data`.
 pub fn evm_keccak256(data: &[u8]) -> [u8; 32] {
     let mut state = [0u64; 25];
-    let mut blocks = data.chunks_exact(RATE);
-    for block in blocks.by_ref() {
+    let (blocks, rest) = data.as_chunks::<RATE>();
+    for block in blocks {
         absorb(&mut state, block);
         keccak_f1600(&mut state);
     }
-    let rest = blocks.remainder();
     let mut last = [0u8; RATE];
     last[..rest.len()].copy_from_slice(rest);
     last[rest.len()] ^= 0x01;
@@ -74,17 +73,15 @@ pub fn evm_keccak256(data: &[u8]) -> [u8; 32] {
     keccak_f1600(&mut state);
 
     let mut out = [0u8; 32];
-    for (chunk, lane) in out.chunks_exact_mut(8).zip(state.iter()) {
+    for (chunk, lane) in out.as_chunks_mut::<8>().0.iter_mut().zip(state.iter()) {
         chunk.copy_from_slice(&lane.to_le_bytes());
     }
     out
 }
 
 fn absorb(state: &mut [u64; 25], block: &[u8]) {
-    for (lane, bytes) in state.iter_mut().zip(block.chunks_exact(8)) {
-        let mut word = [0u8; 8];
-        word.copy_from_slice(bytes);
-        *lane ^= u64::from_le_bytes(word);
+    for (lane, bytes) in state.iter_mut().zip(block.as_chunks::<8>().0.iter()) {
+        *lane ^= u64::from_le_bytes(*bytes);
     }
 }
 

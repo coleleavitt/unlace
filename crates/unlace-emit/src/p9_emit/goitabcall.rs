@@ -215,14 +215,13 @@ fn field_table(fd: &Funcdata, arch: &Architecture, address: VarnodeId) -> Option
     let mut offset: i64 = 0;
     for _ in 0..MAX_NESTING {
         let ty = fd.vbank().get(vn)?.get_type();
-        if ty.get_metatype() == type_metatype::TYPE_PTR {
-            if let Some(found) = ty
+        if ty.get_metatype() == type_metatype::TYPE_PTR
+            && let Some(found) = ty
                 .get_ptr_to()
                 .and_then(|record| struct_field_interface(arch, &record, offset, MAX_NESTING))
             {
                 return Some(found);
             }
-        }
         let Some((base, step)) = constant_offset(fd, vn) else {
             return receiver_field_interface(fd, arch, vn, offset);
         };
@@ -378,11 +377,9 @@ fn struct_field_interface(
     }
     if let Some(LangFacet::GoInterfaceFields { fields }) =
         arch.types().unlace_lang_facet(record.get_name())
-    {
-        if let Some((_, interface)) = fields.iter().find(|(at, _)| i64::from(*at) == offset) {
+        && let Some((_, interface)) = fields.iter().find(|(at, _)| i64::from(*at) == offset) {
             return Some(interface.clone());
         }
-    }
     let field = (0..record.num_depend())
         .filter_map(|i| record.get_field(i))
         .find(|field| {

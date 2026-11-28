@@ -22,7 +22,14 @@ fn storage_transfers_preserve_float_bits_and_numeric_conversions_keep_their_valu
         !compilers.is_empty(),
         "the round trip requires a C compiler"
     );
-    let cases: &[(&str, Architecture, bool, &str, &[(&str, u64, u64)])] = &[
+    type Case = (
+        &'static str,
+        Architecture,
+        bool,
+        &'static str,
+        &'static [(&'static str, u64, u64)],
+    );
+    let cases: &[Case] = &[
         (
             "arm",
             Architecture::Arm,
@@ -78,7 +85,9 @@ fn storage_transfers_preserve_float_bits_and_numeric_conversions_keep_their_valu
                 .unwrap();
             let bytes: Vec<_> = hex
                 .as_bytes()
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|b| u8::from_str_radix(std::str::from_utf8(b).unwrap(), 16).unwrap())
                 .collect();
             let mut obj = Object::new(BinaryFormat::Elf, architecture, Endianness::Little);

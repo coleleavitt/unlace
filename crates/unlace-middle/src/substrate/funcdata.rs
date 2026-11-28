@@ -1869,7 +1869,7 @@ impl Funcdata {
                 (ind, order, fc)
             })
             .collect();
-        keyed.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+        keyed.sort_by_key(|a| (a.0, a.1));
         self.qlst = keyed.into_iter().map(|(_, _, fc)| fc).collect();
     }
 
@@ -2182,16 +2182,19 @@ impl Funcdata {
     }
 
     /// (unlace `condstmts`) Block starts to structure as complex.
+    #[allow(clippy::mutable_key_type)]
     pub fn condstmts_seed(&self) -> &std::collections::BTreeSet<Address> {
         &self.unlace_condstmts_seed
     }
 
     /// (unlace `condstmts`) Install the block starts to structure as complex.
+    #[allow(clippy::mutable_key_type)]
     pub fn set_condstmts_seed(&mut self, seed: std::collections::BTreeSet<Address>) {
         self.unlace_condstmts_seed = seed;
     }
 
     /// (unlace `condstmts`) Block starts the final structure folded over the cap.
+    #[allow(clippy::mutable_key_type)]
     pub fn condstmts_hits(&self) -> &std::collections::BTreeSet<Address> {
         &self.unlace_condstmts_hits
     }
@@ -2437,19 +2440,16 @@ impl Funcdata {
                 // through the default `resolveInFlow` field instead of the user's.
                 // The console form is always non-addr-based (`addr_based == false`).
                 if spec.category == symbol_category::UNION_FACET {
-                    if let Some((field_num, _addr_based)) = spec.union_facet {
-                        if let Ok(sym) = lm.add_union_facet_symbol(
+                    if let Some((field_num, _addr_based)) = spec.union_facet
+                        && let Ok(sym) = lm.add_union_facet_symbol(
                             &spec.name,
                             std::rc::Rc::clone(&spec.dtype),
                             field_num,
                             &spec.addr,
                             spec.hash,
-                        ) {
-                            lm.set_attribute(
-                                sym,
-                                varnode_flags::namelock | varnode_flags::typelock,
-                            );
-                        }
+                        )
+                    {
+                        lm.set_attribute(sym, varnode_flags::namelock | varnode_flags::typelock);
                     }
                     continue;
                 }
@@ -2511,7 +2511,6 @@ impl Funcdata {
         &mut self,
         specs: &[(String, std::rc::Rc<crate::dtype::Datatype>, Address, u64)],
     ) -> Vec<(String, u64)> {
-        use crate::dtype::TypeFactory;
         use crate::dwarfregbind::{BindBlock, BindPoint, BindWrite};
         use crate::varnode::varnode_flags;
         let ids: Vec<_> = (0..self.bblocks_get_size())
@@ -2734,12 +2733,11 @@ impl Funcdata {
         // A wire-only symbol first (the encode-time link pass synthesized it
         // for a high the analysis left symbol-less), then the real scope
         // symbol the naming pass / analysis bound.
-        if let Some(idx) = self.unlace_wire_symbol_for_high.get(&high) {
-            if let Some(w) = self.unlace_wire_symbols.get(*idx) {
-                if w.is_encodable() {
-                    return Some(w.id);
-                }
-            }
+        if let Some(idx) = self.unlace_wire_symbol_for_high.get(&high)
+            && let Some(w) = self.unlace_wire_symbols.get(*idx)
+            && w.is_encodable()
+        {
+            return Some(w.id);
         }
         let h = self.high_bank.get(high)?;
         // `unlace_ref_symbol` last of the recorded binds: it is the Symbol a
@@ -3276,10 +3274,9 @@ impl Funcdata {
                 .and_then(|v| v.get_def())
                 .and_then(|op| self.obank.get(op))
                 .and_then(|op| op.get_in(0))
+                && (self.hooks().is_call_transport)(self, input)
             {
-                if (self.hooks().is_call_transport)(self, input) {
-                    (self.hooks().record_call_transport)(self, input);
-                }
+                (self.hooks().record_call_transport)(self, input);
             }
         }
         if !transport
@@ -3448,7 +3445,7 @@ impl Funcdata {
                 0
             };
         let ranges = self.unlace_denied_storage_writes.entry(key).or_default();
-        if ranges.iter().any(|range| *range == (offset, size)) {
+        if ranges.contains(&(offset, size)) {
             return;
         }
         ranges.push((offset, size));
@@ -3817,15 +3814,15 @@ impl Funcdata {
     #[doc(hidden)]
     pub fn vn_use_point(&self, vn: VarnodeId) -> Address {
         let v = self.vbank().get(vn).expect("vn_use_point: stale vn");
-        if v.is_written() {
-            if let Some(op) = v.get_def() {
-                return self
-                    .obank()
-                    .get(op)
-                    .expect("vn_use_point: stale def")
-                    .get_addr()
-                    .clone();
-            }
+        if v.is_written()
+            && let Some(op) = v.get_def()
+        {
+            return self
+                .obank()
+                .get(op)
+                .expect("vn_use_point: stale def")
+                .get_addr()
+                .clone();
         }
         // fd.getAddress()+-1
         &self.get_address().clone() + -1
@@ -3913,10 +3910,10 @@ impl Funcdata {
                         .types()
                         .and_then(|types| lm.build_localtype_seed_at(&addr, size, &usepoint, types))
                 });
-            if let Some(dt) = local_type {
-                if let Some(v) = self.vbank_mut().get_mut(vn) {
-                    v.update_type_locked(dt, true, true);
-                }
+            if let Some(dt) = local_type
+                && let Some(v) = self.vbank_mut().get_mut(vn)
+            {
+                v.update_type_locked(dt, true, true);
             }
             // C++ `Varnode::setSymbolProperties` (varnode.cc:429) -> `entry->updateType`
             // (database.cc:136): a type-locked covering Symbol forces its
@@ -3938,10 +3935,10 @@ impl Funcdata {
                     .get_arch()
                     .types()
                     .and_then(|t| t.get_exact_piece(symtype, off, size).ok().flatten());
-                if let Some(dt) = dt {
-                    if let Some(v) = self.vbank_mut().get_mut(vn) {
-                        v.update_type_locked(dt, true, true);
-                    }
+                if let Some(dt) = dt
+                    && let Some(v) = self.vbank_mut().get_mut(vn)
+                {
+                    v.update_type_locked(dt, true, true);
                 }
             }
         }
@@ -3985,10 +3982,8 @@ impl Funcdata {
                 .get(vn)
                 .map(|v| v.cover().is_some())
                 .unwrap_or(false);
-            if realloced {
-                if let Some(h) = self.vbank().get(vn).and_then(|v| v.get_high()) {
-                    self.high_bank_mut().cover_dirty(h);
-                }
+            if realloced && let Some(h) = self.vbank().get(vn).and_then(|v| v.get_high()) {
+                self.high_bank_mut().cover_dirty(h);
             }
         }
     }
@@ -4760,12 +4755,11 @@ impl Funcdata {
             .get_mut(vn)
             .map(|v| v.update_type(ct))
             .unwrap_or(false);
-        if changed {
-            if let Some(h) = high {
-                if let Some(hh) = self.high_bank_mut().get_mut(h) {
-                    hh.type_dirty();
-                }
-            }
+        if changed
+            && let Some(h) = high
+            && let Some(hh) = self.high_bank_mut().get_mut(h)
+        {
+            hh.type_dirty();
         }
         changed
     }
@@ -4790,12 +4784,11 @@ impl Funcdata {
             .get_mut(vn)
             .map(|v| v.update_type_locked(ct, lock, over))
             .unwrap_or(false);
-        if changed {
-            if let Some(h) = high {
-                if let Some(hh) = self.high_bank_mut().get_mut(h) {
-                    hh.type_dirty();
-                }
-            }
+        if changed
+            && let Some(h) = high
+            && let Some(hh) = self.high_bank_mut().get_mut(h)
+        {
+            hh.type_dirty();
         }
         changed
     }
@@ -4817,14 +4810,14 @@ impl Funcdata {
                 return (0, code);
             } else if code == OpCode::CPUI_INDIRECT {
                 // INDIRECTs are at the location of the op they are indirect for.
-                if let Some(in1) = o.get_in(1) {
-                    if let Some(vn) = self.vbank.get(in1) {
-                        let addr = vn.get_addr();
-                        // getOpFromConst: the iop offset is the op's slotmap ffi key
-                        let target = OpId::from(slotmap::KeyData::from_ffi(addr.get_offset()));
-                        if let Some(t) = self.obank.get(target) {
-                            return (t.get_seq_num().get_order(), code);
-                        }
+                if let Some(in1) = o.get_in(1)
+                    && let Some(vn) = self.vbank.get(in1)
+                {
+                    let addr = vn.get_addr();
+                    // getOpFromConst: the iop offset is the op's slotmap ffi key
+                    let target = OpId::from(slotmap::KeyData::from_ffi(addr.get_offset()));
+                    if let Some(t) = self.obank.get(target) {
+                        return (t.get_seq_num().get_order(), code);
                     }
                 }
                 // Fall through to the default order if the iop target is gone.
@@ -5214,10 +5207,9 @@ impl Funcdata {
             .get(in_vn)
             .map(|v| v.is_mapped())
             .unwrap_or(false)
+            && let Some(v) = self.vbank.get_mut(out_vn)
         {
-            if let Some(v) = self.vbank.get_mut(out_vn) {
-                v.set_flags_pub(crate::varnode::varnode_flags::mapped);
-            }
+            v.set_flags_pub(crate::varnode::varnode_flags::mapped);
         }
         Ok(copy_op)
     }
@@ -5312,10 +5304,10 @@ impl Funcdata {
                 return ty;
             }
         }
-        if let Some(tlst) = self.get_arch().types() {
-            if let Ok(ct) = crate::typeop::type_op_info(opc).get_output_local(tlst, sz) {
-                return ct;
-            }
+        if let Some(tlst) = self.get_arch().types()
+            && let Ok(ct) = crate::typeop::type_op_info(opc).get_output_local(tlst, sz)
+        {
+            return ct;
         }
         Rc::new(Datatype::new(sz, crate::dtype::type_metatype::TYPE_UNKNOWN))
     }
@@ -5342,10 +5334,10 @@ impl Funcdata {
                 return ty;
             }
         }
-        if let Some(tlst) = self.get_arch().types() {
-            if let Ok(ct) = crate::typeop::type_op_info(opc).get_input_local(tlst, slot, sz) {
-                return ct;
-            }
+        if let Some(tlst) = self.get_arch().types()
+            && let Ok(ct) = crate::typeop::type_op_info(opc).get_input_local(tlst, slot, sz)
+        {
+            return ct;
         }
         Rc::new(Datatype::new(sz, crate::dtype::type_metatype::TYPE_UNKNOWN))
     }
@@ -5601,16 +5593,15 @@ impl Funcdata {
                     .expect("build_dominant_copy: stale high")
                     .get_instance(i);
                 let mut skip = false;
-                if self.vbank.get(vn).map(|v| v.is_written()).unwrap_or(false) {
-                    if let Some(op) = self.vbank.get(vn).and_then(|v| v.get_def()) {
-                        if self.obank.get(op).map(|o| o.code()) == Some(OpCode::CPUI_COPY) {
-                            let in0 = self.obank.get(op).and_then(|o| o.get_in(0));
-                            if let Some(in0) = in0 {
-                                if self.varnode_copy_shadow(in0, root_vn) {
-                                    skip = true;
-                                }
-                            }
-                        }
+                if self.vbank.get(vn).map(|v| v.is_written()).unwrap_or(false)
+                    && let Some(op) = self.vbank.get(vn).and_then(|v| v.get_def())
+                    && self.obank.get(op).map(|o| o.code()) == Some(OpCode::CPUI_COPY)
+                {
+                    let in0 = self.obank.get(op).and_then(|o| o.get_in(0));
+                    if let Some(in0) = in0
+                        && self.varnode_copy_shadow(in0, root_vn)
+                    {
+                        skip = true;
                     }
                 }
                 if skip {
@@ -5687,12 +5678,12 @@ impl Funcdata {
             }
         }
 
-        if count > 0 && dom_copy_is_new {
-            if let Some(dom_high) = self.vbank.get(dom_vn).and_then(|v| v.get_high()) {
-                if dom_high != high {
-                    self.merge_two_highs(high, dom_high, true)?;
-                }
-            }
+        if count > 0
+            && dom_copy_is_new
+            && let Some(dom_high) = self.vbank.get(dom_vn).and_then(|v| v.get_high())
+            && dom_high != high
+        {
+            self.merge_two_highs(high, dom_high, true)?;
         }
         Ok(())
     }
@@ -6097,14 +6088,13 @@ impl Funcdata {
         // the early `ActionDynamicMapping` may bind the constant before its High is
         // built, so the render must still see the equate.  The fallback only applies
         // when the bound Symbol is an equate (the render reads its display format).
-        if let Some(high) = self.vbank.get(vn).and_then(|v| v.get_high()) {
-            if let Some(sym) = self
+        if let Some(high) = self.vbank.get(vn).and_then(|v| v.get_high())
+            && let Some(sym) = self
                 .high_bank
                 .get(high)
                 .and_then(|h| h.unlace_equate_symbol())
-            {
-                return Some(sym);
-            }
+        {
+            return Some(sym);
         }
         let sym = self.vbank.get(vn)?.unlace_symbol_entry()?;
         let localmap = self.localmap.as_ref()?;
@@ -6192,10 +6182,10 @@ impl Funcdata {
             if let Some(v) = self.vbank.get_mut(vn) {
                 v.set_unlace_symbol_entry(sym_id);
             }
-            if let Some(high) = self.vbank.get(vn).and_then(|v| v.get_high()) {
-                if let Some(h) = self.high_bank.get_mut(high) {
-                    h.set_unlace_equate_symbol(sym_id);
-                }
+            if let Some(high) = self.vbank.get(vn).and_then(|v| v.get_high())
+                && let Some(h) = self.high_bank.get_mut(high)
+            {
+                h.set_unlace_equate_symbol(sym_id);
             }
             return Ok(true);
         }
@@ -6244,10 +6234,10 @@ impl Funcdata {
             if let Some(v) = self.vbank.get_mut(vn) {
                 v.set_unlace_symbol_entry(sym_id);
             }
-            if let Some(high) = self.vbank.get(vn).and_then(|v| v.get_high()) {
-                if let Some(h) = self.high_bank.get_mut(high) {
-                    h.set_unlace_equate_symbol(sym_id);
-                }
+            if let Some(high) = self.vbank.get(vn).and_then(|v| v.get_high())
+                && let Some(h) = self.high_bank.get_mut(high)
+            {
+                h.set_unlace_equate_symbol(sym_id);
             }
             return Ok(true);
         }
@@ -6288,10 +6278,10 @@ impl Funcdata {
                     }
                 }
             }
-            if let Some(nv) = newvn {
-                if self.vbank.get(nv).map(|v| v.is_explicit()).unwrap_or(false) {
-                    vn = nv;
-                }
+            if let Some(nv) = newvn
+                && self.vbank.get(nv).map(|v| v.is_explicit()).unwrap_or(false)
+            {
+                vn = nv;
             }
         }
 
@@ -6347,20 +6337,19 @@ impl Funcdata {
                 };
                 match o.code() {
                     OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT => {
-                        if o.get_in(0) == Some(x) {
-                            if let Some(out2) = o.get_out() {
-                                if carriers.insert(out2) {
-                                    work.push(out2);
-                                }
-                            }
+                        if o.get_in(0) == Some(x)
+                            && let Some(out2) = o.get_out()
+                            && carriers.insert(out2)
+                        {
+                            work.push(out2);
                         }
                     }
                     OpCode::CPUI_MULTIEQUAL => {
                         phis.push(op);
-                        if let Some(out2) = o.get_out() {
-                            if carriers.insert(out2) {
-                                work.push(out2);
-                            }
+                        if let Some(out2) = o.get_out()
+                            && carriers.insert(out2)
+                        {
+                            work.push(out2);
                         }
                     }
                     _ => {}
@@ -6376,10 +6365,10 @@ impl Funcdata {
                 continue;
             };
             for k in 0..o.num_input() {
-                if let Some(ik) = o.get_in(k) {
-                    if !derives_from_banks(&self.vbank, &self.obank, ik, out, &mut memo, 0) {
-                        return false;
-                    }
+                if let Some(ik) = o.get_in(k)
+                    && !derives_from_banks(&self.vbank, &self.obank, ik, out, &mut memo, 0)
+                {
+                    return false;
                 }
             }
         }

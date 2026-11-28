@@ -20,11 +20,11 @@ impl PrintC {
                 return;
             }
         }
-        if self.out_lang == crate::lang::OutLang::C {
-            if let Some(assignment) = self.local_array_assignment(fd, arch, op) {
-                self.emit_storage_assignment_ir(fd, arch, op, assignment);
-                return;
-            }
+        if self.out_lang == crate::lang::OutLang::C
+            && let Some(assignment) = self.local_array_assignment(fd, arch, op)
+        {
+            self.emit_storage_assignment_ir(fd, arch, op, assignment);
+            return;
         }
         if self.emit_wide_copy(fd, arch, op) {
             return;
@@ -99,18 +99,18 @@ impl PrintC {
             }
             self.push_cast_open(target, op);
         }
-        if self.out_lang == crate::lang::OutLang::Go {
-            if let Some(out) = outvn {
-                let declared = self.go_value_type(fd, arch, out, op);
-                if self.push_go_constant_copy(fd, arch, op, &declared) {
-                    return;
-                }
-                let actual = fd.vn_type_def_facing(out);
-                if declarator_parts(&declared, self.rt_ctx.clone()).0
-                    != declarator_parts(&actual, self.rt_ctx.clone()).0
-                {
-                    self.push_go_conversion(&declared, &actual, op);
-                }
+        if self.out_lang == crate::lang::OutLang::Go
+            && let Some(out) = outvn
+        {
+            let declared = self.go_value_type(fd, arch, out, op);
+            if self.push_go_constant_copy(fd, arch, op, &declared) {
+                return;
+            }
+            let actual = fd.vn_type_def_facing(out);
+            if declarator_parts(&declared, self.rt_ctx.clone()).0
+                != declarator_parts(&actual, self.rt_ctx.clone()).0
+            {
+                self.push_go_conversion(&declared, &actual, op);
             }
         }
         self.stmt_op = outvn.map(|_| op);
@@ -176,16 +176,16 @@ impl PrintC {
         read_op: Option<OpId>,
         opc: OpCode,
     ) {
-        if arch.unlace_options.get::<crate::wideconst::WideConst>().0 {
-            if let Some(tok) = crate::wideconst::wide_literal(fd, op) {
-                self.push_atom(&Atom::with_op(
-                    tok,
-                    TagType::Syntax,
-                    crate::printlanguage::SyntaxHighlight::const_color,
-                    op_key(op),
-                ));
-                return;
-            }
+        if arch.unlace_options.get::<crate::wideconst::WideConst>().0
+            && let Some(tok) = crate::wideconst::wide_literal(fd, op)
+        {
+            self.push_atom(&Atom::with_op(
+                tok,
+                TagType::Syntax,
+                crate::printlanguage::SyntaxHighlight::const_color,
+                op_key(op),
+            ));
+            return;
         }
         if matches!(
             opc,
@@ -193,15 +193,14 @@ impl PrintC {
                 | OpCode::CPUI_INT_NOTEQUAL
                 | OpCode::CPUI_BOOL_AND
                 | OpCode::CPUI_BOOL_OR
-        ) {
-            if let Some((fold, equal)) = self.strcmp_op_fold(fd, arch, op) {
-                let negated = self.context.is_set(modifiers::NEGATETOKEN);
-                if negated {
-                    self.context.unset_mod(modifiers::NEGATETOKEN);
-                }
-                self.push_strcmp_fold(fd, arch, &fold, equal != negated, op);
-                return;
+        ) && let Some((fold, equal)) = self.strcmp_op_fold(fd, arch, op)
+        {
+            let negated = self.context.is_set(modifiers::NEGATETOKEN);
+            if negated {
+                self.context.unset_mod(modifiers::NEGATETOKEN);
             }
+            self.push_strcmp_fold(fd, arch, &fold, equal != negated, op);
+            return;
         }
         if self.out_lang == crate::lang::OutLang::C {
             if opc == OpCode::CPUI_INT_ADD && self.op_named_pointer_add_ir(fd, arch, op, read_op) {
@@ -212,11 +211,12 @@ impl PrintC {
                 return;
             }
         }
-        if self.lang().caps.ternary && arch.unlace_options.get::<crate::selectmul::SelectMul>().0 {
-            if let Some(plan) = crate::selectmul::select_plan(fd, op) {
-                self.op_select_ir(fd, arch, op, plan);
-                return;
-            }
+        if self.lang().caps.ternary
+            && arch.unlace_options.get::<crate::selectmul::SelectMul>().0
+            && let Some(plan) = crate::selectmul::select_plan(fd, op)
+        {
+            self.op_select_ir(fd, arch, op, plan);
+            return;
         }
         let printed = |vn, slot| self.partial_piece_type(fd, arch, vn, op, slot);
         if let Some(transfer) = crate::bitcast::storage_transfer(fd, op, printed) {
@@ -542,13 +542,12 @@ impl PrintC {
                 }
                 return;
             }
-            if tok.print1 == "<<" {
-                if let Some(plan) = crate::armconstantshift::plan_arm_constant_lsl(fd, arch, op)
+            if tok.print1 == "<<"
+                && let Some(plan) = crate::armconstantshift::plan_arm_constant_lsl(fd, arch, op)
                     .or_else(|| self.fixed64_shift_plan(fd, arch, op))
-                {
-                    self.emit_constant_lsl(fd, arch, op, plan);
-                    return;
-                }
+            {
+                self.emit_constant_lsl(fd, arch, op, plan);
+                return;
             }
         }
         let tok = if self.context.is_set(modifiers::NEGATETOKEN) {
@@ -583,17 +582,18 @@ impl PrintC {
             self.context.unset_mod(modifiers::CONDITION_CONTEXT);
             // (unlace outlang) truthycond (DIV-37) renders `x != 0` as `x`, which is
             // not a condition in a language without implicit bool conversion.
-            if self.options.truthy_cond && self.lang().caps.implicit_bool_conditions {
-                if let Some(other) = self.truthy_other_operand(fd, op) {
-                    if tok.print1 == "==" {
-                        self.push_op(&tokens::BOOLEAN_NOT, Some(op_key(op)));
-                    }
-                    self.context.push_mod();
-                    self.context.set_mod(modifiers::CONDITION_CONTEXT);
-                    self.push_vn_ir(fd, arch, other, op);
-                    self.context.pop_mod();
-                    return;
+            if self.options.truthy_cond
+                && self.lang().caps.implicit_bool_conditions
+                && let Some(other) = self.truthy_other_operand(fd, op)
+            {
+                if tok.print1 == "==" {
+                    self.push_op(&tokens::BOOLEAN_NOT, Some(op_key(op)));
                 }
+                self.context.push_mod();
+                self.context.set_mod(modifiers::CONDITION_CONTEXT);
+                self.push_vn_ir(fd, arch, other, op);
+                self.context.pop_mod();
+                return;
             }
         }
         // (unlace `constright`) `c < x` prints as `x > c`.
@@ -859,14 +859,13 @@ impl PrintC {
         }
         // Look through ONE implied CAST (the `(char *)0x0` shape when a real
         // CAST op was inserted rather than the constant being retyped).
-        if v.is_implied() && v.is_written() {
-            if let Some(def) = v.get_def() {
-                if fd.obank().get(def).map(|o| o.code()) == Some(OpCode::CPUI_CAST) {
-                    if let Some(inner) = fd.obank().get(def).and_then(|o| o.get_in(0)) {
-                        return eligible_const(fd, inner, def);
-                    }
-                }
-            }
+        if v.is_implied()
+            && v.is_written()
+            && let Some(def) = v.get_def()
+            && fd.obank().get(def).map(|o| o.code()) == Some(OpCode::CPUI_CAST)
+            && let Some(inner) = fd.obank().get(def).and_then(|o| o.get_in(0))
+        {
+            return eligible_const(fd, inner, def);
         }
         false
     }
@@ -1165,48 +1164,6 @@ impl PrintC {
         true
     }
 
-    /// (unlace `neonintrin`) Render `SUBPIECE(v, off)` of an ACLE vector `v` that
-    /// reads exactly one lane as `vgetq_lane_s32(v, n)`.
-    pub(super) fn push_neon_lane(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
-        if !arch
-            .unlace_options
-            .get::<crate::neonintrin::NeonIntrin>()
-            .on
-        {
-            return false;
-        }
-        let Some(o) = fd.obank().get(op) else {
-            return false;
-        };
-        let (Some(src), Some(off), Some(out)) = (o.get_in(0), o.get_in(1), o.get_out()) else {
-            return false;
-        };
-        let (Some(sv), Some(offv), Some(outv)) = (
-            fd.vbank().get(src),
-            fd.vbank().get(off),
-            fd.vbank().get(out),
-        ) else {
-            return false;
-        };
-        let ty = sv.get_type_def_facing().get_name().to_string();
-        let Some((name, index)) =
-            crate::neonintrin::lane_getter(&ty, offv.get_offset(), outv.get_size())
-        else {
-            return false;
-        };
-        self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
-        self.push_atom(&Atom::with_op(
-            name,
-            TagType::OpToken,
-            crate::printlanguage::SyntaxHighlight::funcname_color,
-            op_key(op),
-        ));
-        self.push_op(&tokens::COMMA, Some(op_key(op)));
-        self.push_vn_ir(fd, arch, src, op);
-        self.push_constant_ir_fmt_sign(index, 4, op, display_format::FORCE_DEC, false);
-        true
-    }
-
     /// (unlace `acleintrinsics`) Render a user op under its ACLE spelling.
     pub(super) fn push_acle_intrinsic(
         &mut self,
@@ -1324,17 +1281,16 @@ impl PrintC {
         }
         if self.out_lang == crate::lang::OutLang::C
             && arch.unlace_options.get::<crate::evmstorage::EvmStorage>().0
+            && let Some(name) = userop.map(|u| u.get_name())
         {
-            if let Some(name) = userop.map(|u| u.get_name()) {
-                let keccak = |index: u64| {
-                    arch.userops
-                        .get_op(index as u32)
-                        .is_some_and(|u| u.get_name() == &b"keccak256"[..])
-                };
-                if let Some(access) = crate::evmstorage::access(fd, op, name, keccak) {
-                    self.op_evm_storage_ir(fd, arch, op, access);
-                    return;
-                }
+            let keccak = |index: u64| {
+                arch.userops
+                    .get_op(index as u32)
+                    .is_some_and(|u| u.get_name() == &b"keccak256"[..])
+            };
+            if let Some(access) = crate::evmstorage::access(fd, op, name, keccak) {
+                self.op_evm_storage_ir(fd, arch, op, access);
+                return;
             }
         }
         if display == 0 {
@@ -1396,11 +1352,11 @@ impl PrintC {
                     .and_then(|v| fd.vbank().get(v))
                     .map(|v| v.get_size())
                     .unwrap_or(0);
-                if let Some((intr, args)) = crate::avxintrin::intrinsic_sized(&nm, size, src) {
-                    if args.len() == order.len() {
-                        nm = intr;
-                        order = args.iter().map(|&a| a as int4 + 1).collect();
-                    }
+                if let Some((intr, args)) = crate::avxintrin::intrinsic_sized(&nm, size, src)
+                    && args.len() == order.len()
+                {
+                    nm = intr;
+                    order = args.iter().map(|&a| a as int4 + 1).collect();
                 }
             }
             self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
@@ -1473,37 +1429,36 @@ impl PrintC {
                 .map(|v| std::rc::Rc::clone(v.get_type()));
             let mut s = String::new();
             let mut ok = false;
-            if let Some(ct) = pointer.as_ref() {
-                if ct.get_metatype() == crate::dtype::type_metatype::TYPE_PTR {
-                    if let Some(subct) = ct.get_ptr_to() {
-                        // printCharacterConstant(str, op->getIn(1)->getAddr(), subct)
-                        let in1addr = fd
-                            .obank()
-                            .get(op)
-                            .and_then(|o| o.get_in(1))
-                            .and_then(|v| fd.vbank().get(v).map(|vn| vn.get_addr().clone()));
-                        if let Some(addr) = in1addr {
-                            let mut chars_emitted: int4 = 0;
-                            if self.print_character_constant(
-                                arch,
-                                &mut s,
-                                &addr,
-                                &subct,
-                                &mut chars_emitted,
-                                false,
-                            ) {
-                                ok = true;
-                            }
-                        }
+            if let Some(ct) = pointer.as_ref()
+                && ct.get_metatype() == crate::dtype::type_metatype::TYPE_PTR
+                && let Some(subct) = ct.get_ptr_to()
+            {
+                // printCharacterConstant(str, op->getIn(1)->getAddr(), subct)
+                let in1addr = fd
+                    .obank()
+                    .get(op)
+                    .and_then(|o| o.get_in(1))
+                    .and_then(|v| fd.vbank().get(v).map(|vn| vn.get_addr().clone()));
+                if let Some(addr) = in1addr {
+                    let mut chars_emitted: int4 = 0;
+                    if self.print_character_constant(
+                        arch,
+                        &mut s,
+                        &addr,
+                        &subct,
+                        &mut chars_emitted,
+                        false,
+                    ) {
+                        ok = true;
                     }
                 }
             }
             if !ok {
                 s.push_str("\"badstring\"");
-            } else if self.out_lang == crate::lang::OutLang::Go {
-                if let Some(pointer) = pointer.as_ref() {
-                    self.push_go_string_pointer(&mut s, pointer, op);
-                }
+            } else if self.out_lang == crate::lang::OutLang::Go
+                && let Some(pointer) = pointer.as_ref()
+            {
+                self.push_go_string_pointer(&mut s, pointer, op);
             }
             if let Some(ovn) = outvn {
                 self.push_atom(&Atom::with_op_vn(
@@ -1862,7 +1817,7 @@ impl PrintC {
         let (Some(source_id), Some(widened_id)) = (cast.get_in(0), cast.get_out()) else {
             return false;
         };
-        let model = crate::ctypes::CDataModel::from_types(&*arch.types());
+        let model = crate::ctypes::CDataModel::from_types(arch.types());
         let (Some(source), Some(widened)) = (fd.vbank().get(source_id), fd.vbank().get(widened_id))
         else {
             return false;

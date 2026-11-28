@@ -162,12 +162,12 @@ impl FlowEnvironment for ArchFlowEnv {
         // getMappedSymbols answer through the lazy RemoteScope (query-through);
         // the live symboltab is empty in that mode.  Standalone: no provider
         // installed, fall through to the symbol table unchanged.
-        if let Some(remote) = &arch.remote_scope {
-            if let Some(facts) = remote.function_at(entry) {
-                // The DISPLAY form: callee tokens print the label when the host
-                // sent one (the raw name is the Java-side identity only).
-                return Some(facts.display_name);
-            }
+        if let Some(remote) = &arch.remote_scope
+            && let Some(facts) = remote.function_at(entry)
+        {
+            // The DISPLAY form: callee tokens print the label when the host
+            // sent one (the raw name is the Java-side identity only).
+            return Some(facts.display_name);
         }
         // C++ FlowInfo::queryCall -> getScopeLocal()->getParent()->queryFunction(entry):
         // resolve the callee's display name from the symbol table (populated by
@@ -325,7 +325,8 @@ impl FlowEnvironment for ArchFlowEnv {
                     vn.size,
                 )
             };
-            let rows: Vec<(OpCode, Option<(i32, u64, u32)>, Vec<(i32, u64, u32)>)> = ops
+            type VnKey = (i32, u64, u32);
+            let rows: Vec<(OpCode, Option<VnKey>, Vec<VnKey>)> = ops
                 .iter()
                 .map(|op| {
                     (
@@ -375,12 +376,11 @@ impl FlowEnvironment for ArchFlowEnv {
         // The callee's parked inject id (IfcFixupApply); -1 for none.  In
         // ghidra mode it is the host's `<inject>` on the callee's prototype.
         let arch = self.arch();
-        if let Some(remote) = &arch.remote_scope {
-            if let Some(facts) = remote.function_at(entry) {
-                if facts.inject_id >= 0 {
-                    return facts.inject_id;
-                }
-            }
+        if let Some(remote) = &arch.remote_scope
+            && let Some(facts) = remote.function_at(entry)
+            && facts.inject_id >= 0
+        {
+            return facts.inject_id;
         }
         let id = arch.symboltab.function_inject_id_across_scopes(entry);
         if id >= 0 {
@@ -432,24 +432,22 @@ impl FlowEnvironment for ArchFlowEnv {
         if op.get_type() != crate::userop::userop_type::injected {
             return false;
         }
-        if let Some(id) = op.get_inject_id() {
-            if arch.octeon_upstream_inject.contains(&(id as int4)) {
-                return arch
-                    .unlace_options
-                    .get::<crate::octeoneffects::OcteonEffectsMode>()
-                    == crate::octeoneffects::OcteonEffectsMode::Off;
-            }
+        if let Some(id) = op.get_inject_id()
+            && arch.octeon_upstream_inject.contains(&(id as int4))
+        {
+            return arch
+                .unlace_options
+                .get::<crate::octeoneffects::OcteonEffectsMode>()
+                == crate::octeoneffects::OcteonEffectsMode::Off;
         }
         if !arch
             .unlace_options
             .get::<crate::cortexmpriv::Cortexmpriv>()
             .0
+            && let Some(id) = op.get_inject_id()
+            && crate::cortexmpriv::is_our_fixup(arch.cortexmpriv_inject, id as int4)
         {
-            if let Some(id) = op.get_inject_id() {
-                if crate::cortexmpriv::is_our_fixup(arch.cortexmpriv_inject, id as int4) {
-                    return false;
-                }
-            }
+            return false;
         }
         true
     }
@@ -1018,10 +1016,10 @@ impl ArchFlowEnv {
         let key = dest
             .get_space()
             .map(|sp| (sp.get_index(), dest.get_offset()));
-        if let Some(k) = key {
-            if let Some(hit) = self.return_discard_memo.borrow().get(&k) {
-                return *hit;
-            }
+        if let Some(k) = key
+            && let Some(hit) = self.return_discard_memo.borrow().get(&k)
+        {
+            return *hit;
         }
         let arch = self.arch();
         let Some(sp) = arch
@@ -2042,10 +2040,9 @@ fn bootstrap_tail_callees(arch: &mut Architecture, root: &Funcdata) {
             &entry,
             Some(MAX_TAIL_CALLEE_INSTRUCTIONS),
             false,
-        ) {
-            if let Some(key) = crate::protoorder::stated_key(&entry) {
-                stated.push((key, types));
-            }
+        ) && let Some(key) = crate::protoorder::stated_key(&entry)
+        {
+            stated.push((key, types));
         }
     }
     *arch
@@ -2243,10 +2240,10 @@ fn reaches(
         if next == target {
             return true;
         }
-        if seen.insert(next) {
-            if let Some(out) = edges.get(&next) {
-                stack.extend(out.iter().copied());
-            }
+        if seen.insert(next)
+            && let Some(out) = edges.get(&next)
+        {
+            stack.extend(out.iter().copied());
         }
     }
     false
@@ -3004,19 +3001,20 @@ fn decompile_func_full_with_objects_inner(
             fid_withdrawn = true;
             continue;
         }
-        if got_ledger.is_some() && got_rounds < MAX_GOT_ROUNDS {
-            if let Ok(fd) = &result {
-                let step = crate::gottailcall::single_step(
-                    arch,
-                    &funcaddr,
-                    fd,
-                    &mut got_tried,
-                    recover_got_callee,
-                );
-                if step == crate::gottailcall::SingleStep::Redo {
-                    got_rounds += 1;
-                    continue;
-                }
+        if got_ledger.is_some()
+            && got_rounds < MAX_GOT_ROUNDS
+            && let Ok(fd) = &result
+        {
+            let step = crate::gottailcall::single_step(
+                arch,
+                &funcaddr,
+                fd,
+                &mut got_tried,
+                recover_got_callee,
+            );
+            if step == crate::gottailcall::SingleStep::Redo {
+                got_rounds += 1;
+                continue;
             }
         }
         break result;
@@ -4444,9 +4442,9 @@ fn emit_inject(
         }
         None if !arch.jvm_models().is_empty()
             && payload.core().get_type() == crate::pcodeinject::CALLOTHERFIXUP_TYPE
-            && crate::jvm::is_payload(&payload.core().get_name()[..]) =>
+            && crate::jvm::is_payload(payload.core().get_name()) =>
         {
-            crate::jvm::emit_payload(arch, &payload.core().get_name()[..], context, emit)
+            crate::jvm::emit_payload(arch, payload.core().get_name(), context, emit)
         }
         None => arch.translate().fetch_inject_pcode(
             payload.core().get_name(),

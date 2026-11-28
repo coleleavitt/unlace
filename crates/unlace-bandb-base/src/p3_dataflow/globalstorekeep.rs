@@ -70,7 +70,7 @@ pub fn reads_signedness(code: OpCode, slot: int4, size: int4, other_const: Optio
         | OpCode::CPUI_INT_SLESS
         | OpCode::CPUI_INT_SLESSEQUAL => true,
         OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL if size > 0 && size < 4 => {
-            other_const.map_or(true, |c| (c >> (size * 8 - 1)) & 1 != 0)
+            other_const.is_none_or(|c| (c >> (size * 8 - 1)) & 1 != 0)
         }
         _ => false,
     }
@@ -283,9 +283,7 @@ fn reads_of(data: &Funcdata, w: VarnodeId) -> Option<(BTreeSet<OpId>, BTreeSet<B
             }
             match rop.code() {
                 OpCode::CPUI_MULTIEQUAL => {
-                    let Some(rb) = rop.get_parent() else {
-                        return None;
-                    };
+                    let rb = rop.get_parent()?;
                     let blk = data.bblocks_ref().block(rb);
                     for i in 0..rop.num_input().min(blk.size_in()) {
                         if rop.get_in(i) == Some(x) {
@@ -458,20 +456,20 @@ fn value_read_sign_sensitively(data: &Funcdata, start: VarnodeId) -> bool {
         let Some(xv) = data.vbank().get(x) else {
             continue;
         };
-        if reach == Reach::Member {
-            if let Some(def) = xv.get_def().and_then(|d| data.obank().get(d)) {
-                let joined = match def.code() {
-                    OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT => 1,
-                    OpCode::CPUI_MULTIEQUAL => def.num_input(),
-                    _ => 0,
-                };
-                stack.extend(
-                    (0..joined)
-                        .filter_map(|i| def.get_in(i))
-                        .filter(|&i| carries(i))
-                        .map(|i| (i, Reach::Member)),
-                );
-            }
+        if reach == Reach::Member
+            && let Some(def) = xv.get_def().and_then(|d| data.obank().get(d))
+        {
+            let joined = match def.code() {
+                OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT => 1,
+                OpCode::CPUI_MULTIEQUAL => def.num_input(),
+                _ => 0,
+            };
+            stack.extend(
+                (0..joined)
+                    .filter_map(|i| def.get_in(i))
+                    .filter(|&i| carries(i))
+                    .map(|i| (i, Reach::Member)),
+            );
         }
         let size = xv.get_size();
         for d in xv.descend_iter() {

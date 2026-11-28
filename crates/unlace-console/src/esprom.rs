@@ -87,11 +87,10 @@ fn chip_in_force(prog: &ConsoleProgram) -> Option<EspChip> {
         .unlace_options
         .get::<unlace_decomp::esprom::EspRom>()
     {
-        EspRom::Auto => prog
+        EspRom::Auto => *prog
             .arch()
             .unlace_tables
-            .get::<unlace_decomp::esprom::ImageChip>()
-            .clone(),
+            .get::<unlace_decomp::esprom::ImageChip>(),
         value => value.chip(),
     }
 }

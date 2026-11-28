@@ -165,7 +165,7 @@ fn is_vararg_slot(data: &Funcdata, op: OpId, slot: int4) -> bool {
         return false;
     };
     let fc = data.get_call_specs(idx);
-    fc.is_dotdotdot() && slot - 1 >= fc.proto().num_params()
+    fc.is_dotdotdot() && slot > fc.proto().num_params()
 }
 
 #[cfg(test)]

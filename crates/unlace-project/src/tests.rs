@@ -77,11 +77,11 @@ fn a_later_set_replaces_the_value_and_keeps_the_other_columns() {
     p.set("name v1 total").unwrap();
     let d = p.directives().unwrap();
     assert!(
-        d.contains(&"function 0x1000-0x1040=second".to_string()),
+        d.iter().any(|i| i == "function 0x1000-0x1040=second"),
         "{d:?}"
     );
-    assert!(d.contains(&"type v1 int".to_string()), "{d:?}");
-    assert!(d.contains(&"name v1 total".to_string()), "{d:?}");
+    assert!(d.iter().any(|i| i == "type v1 int"), "{d:?}");
+    assert!(d.iter().any(|i| i == "name v1 total"), "{d:?}");
 }
 
 #[test]

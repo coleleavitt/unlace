@@ -30,6 +30,12 @@ pub struct RuleOvLessSimplify {
     group: String,
 }
 
+impl Default for RuleOvLessSimplify {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RuleOvLessSimplify {
     /// Default group `"analysis"` (the main simplification pool, where the
     /// boolean cone is stable).

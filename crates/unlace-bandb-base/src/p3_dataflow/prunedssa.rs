@@ -168,8 +168,8 @@ pub fn prune_merges(fd: &Funcdata, addr: &Address, size: int4, merges: &mut Vec<
 }
 
 fn push(fd: &Funcdata, op: OpId, kind: u8, events: &mut Vec<Event>) {
-    if let Some(o) = fd.obank().get(op) {
-        if let Some(bl) = o.get_parent() {
+    if let Some(o) = fd.obank().get(op)
+        && let Some(bl) = o.get_parent() {
             events.push((
                 fd.bblocks_ref().block(bl).get_index() as usize,
                 o.get_seq_num().get_order(),
@@ -177,7 +177,6 @@ fn push(fd: &Funcdata, op: OpId, kind: u8, events: &mut Vec<Event>) {
                 op,
             ));
         }
-    }
 }
 
 /// Block-level liveness of one range over `events`, which [`Liveness::solve`]

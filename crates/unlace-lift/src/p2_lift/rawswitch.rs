@@ -208,7 +208,7 @@ pub fn match_dispatch(bytes: &[u8], jmp: uintb, len: usize) -> Option<RawTable> 
         (match_lea(&w, cstart, base, jmp)?.1, bound)
     };
     let rows = bound.checked_add(1)?;
-    (rows >= 2 && rows <= MAX_ROWS).then_some(RawTable { table, rows })
+    (2..=MAX_ROWS).contains(&rows).then_some(RawTable { table, rows })
 }
 
 /// The `rawswitch` model: a table matched from its instructions.

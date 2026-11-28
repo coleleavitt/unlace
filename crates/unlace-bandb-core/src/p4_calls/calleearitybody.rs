@@ -182,8 +182,8 @@ pub fn capture_lone_call(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingB
             .map(|x| x.is_constant())
             .unwrap_or(false);
         let mut vn = None;
-        if !t.is_definitely_not_used() && !t.is_unref() {
-            if let Some(v) = at_slot {
+        if !t.is_definitely_not_used() && !t.is_unref()
+            && let Some(v) = at_slot {
                 // The normal path would insert a truncating SUBPIECE here; the
                 // retry runs after the trials are gone, so an oversized Varnode
                 // is declined instead.
@@ -191,7 +191,6 @@ pub fn capture_lone_call(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingB
                     vn = Some(v);
                 }
             }
-        }
         trials.push(BodyTrial {
             addr,
             size,

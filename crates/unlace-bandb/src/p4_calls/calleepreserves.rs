@@ -194,11 +194,10 @@ fn body_departs_from_convention(
                 .map(|sp| (sp.get_index(), p.offset, p.size as u64))
         });
     for &(idx, off, sz) in w.written_ranges() {
-        if let Some((sidx, soff, ssz)) = stack_pointer {
-            if idx == sidx && off < soff + ssz && soff < off + sz as u64 {
+        if let Some((sidx, soff, ssz)) = stack_pointer
+            && idx == sidx && off < soff + ssz && soff < off + sz as u64 {
                 continue;
             }
-        }
         if w.is_return_target(idx, off, sz) {
             continue;
         }

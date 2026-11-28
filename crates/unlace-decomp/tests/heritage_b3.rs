@@ -326,11 +326,10 @@ fn rust_phi_blocks(fd: &Funcdata) -> Vec<i32> {
     use unlace_num::opcodes::OpCode;
     let mut blocks = Vec::new();
     for op in fd.obank().iter_alive() {
-        if fd.obank().get(op).expect("phi: stale op").code() == OpCode::CPUI_MULTIEQUAL {
-            if let Some(bl) = fd.obank().get(op).and_then(|o| o.get_parent()) {
+        if fd.obank().get(op).expect("phi: stale op").code() == OpCode::CPUI_MULTIEQUAL
+            && let Some(bl) = fd.obank().get(op).and_then(|o| o.get_parent()) {
                 blocks.push(fd.bblocks_ref().block(bl).get_index());
             }
-        }
     }
     blocks.sort_unstable();
     blocks

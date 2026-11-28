@@ -145,8 +145,8 @@ pub fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
         && stackview_container
         && !pointer_copy
         && (operation.not_printed() || value.is_implied() || physical_merged_source);
-    if matches!(size, 1 | 2 | 4 | 8) && !keep.iter().any(|keep| *keep) {
-        if !matches!(
+    if matches!(size, 1 | 2 | 4 | 8) && !keep.iter().any(|keep| *keep)
+        && !matches!(
             fd.vn_type_def_facing(output).get_metatype(),
             type_metatype::TYPE_ARRAY | type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION
         ) && !stackview_scalar_copy
@@ -159,7 +159,6 @@ pub fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
                 info.sym_type.as_ref().map_or("<none>", |ty| ty.get_name())
             );
         }
-    }
     let mut ranges: Vec<Range> = Vec::new();
     for (index, byte) in bytes.into_iter().enumerate() {
         if keep[index] {

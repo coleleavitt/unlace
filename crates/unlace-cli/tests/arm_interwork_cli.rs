@@ -13,7 +13,7 @@
 mod arm_images;
 use crate::common;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const THUMB_HELPER: u64 = 0x10040;
@@ -127,18 +127,18 @@ fn unlace(args: &[&str]) -> String {
     text
 }
 
-fn decompile_with(path: &PathBuf, addr: u64, extra: &[&str]) -> String {
+fn decompile_with(path: &Path, addr: u64, extra: &[&str]) -> String {
     let addr = format!("{addr:#x}");
     let mut args = vec!["decompile", path.to_str().unwrap(), &addr, "--json"];
     args.extend_from_slice(extra);
     unlace(&args)
 }
 
-fn decompile(path: &PathBuf, addr: u64, mode: &str) -> String {
+fn decompile(path: &Path, addr: u64, mode: &str) -> String {
     decompile_with(path, addr, &["--mode", mode])
 }
 
-fn decompile_off(path: &PathBuf, addr: u64) -> String {
+fn decompile_off(path: &Path, addr: u64) -> String {
     decompile_with(
         path,
         addr,
@@ -177,7 +177,7 @@ fn body(all: &str, name: &str) -> String {
 /// A32 `b .`, a function that never returns.
 const SPIN: u32 = 0xEAFF_FFFE;
 
-fn assert_helpers(path: &PathBuf, extra: &[&str]) {
+fn assert_helpers(path: &Path, extra: &[&str]) {
     let arm = decompile_with(path, ARM_HELPER, extra);
     assert!(
         arm.contains("return a0 + 1;"),

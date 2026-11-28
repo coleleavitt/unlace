@@ -726,11 +726,10 @@ impl SplitVarnode {
     /// `findDefinitionPoint`).
     fn find_definition_point(&mut self, data: &Funcdata) -> bool {
         // If one but not both is constant
-        if let Some(hi) = self.hi {
-            if vn_is_constant(data, hi) {
+        if let Some(hi) = self.hi
+            && vn_is_constant(data, hi) {
                 return false;
             }
-        }
         let lo = self.lo.expect("find_definition_point: lo");
         if vn_is_constant(data, lo) {
             return false;
@@ -1966,10 +1965,7 @@ impl AddForm {
                 } else {
                     return false;
                 }
-                if vn_is_constant(data, self.lo2.expect("cfc: lo2")) {
-                    return false;
-                }
-                true
+                !vn_is_constant(data, self.lo2.expect("cfc: lo2"))
             }
             OpCode::CPUI_INT_LESS => {
                 // Possible CARRY
@@ -1992,14 +1988,14 @@ impl AddForm {
                     if op_code(data, loadd_op) != OpCode::CPUI_INT_ADD {
                         return false;
                     }
-                    let othervn;
-                    if op_get_in(data, loadd_op, 0) == lo1 {
-                        othervn = op_get_in(data, loadd_op, 1);
+                    
+                    let othervn = if op_get_in(data, loadd_op, 0) == lo1 {
+                        op_get_in(data, loadd_op, 1)
                     } else if op_get_in(data, loadd_op, 1) == lo1 {
-                        othervn = op_get_in(data, loadd_op, 0);
+                        op_get_in(data, loadd_op, 0)
                     } else {
                         return false; // One side of the add must be lo1
-                    }
+                    };
                     if vn_is_constant(data, othervn) {
                         self.negconst = vn_get_offset(data, othervn);
                         self.lo2 = None;
@@ -2017,10 +2013,7 @@ impl AddForm {
                     } else {
                         self.lo2 = Some(othervn); // Other side of putative loadd must be lo2
                         let compvn = op_get_in(data, carryop, 1);
-                        if compvn == self.lo2.expect("cfc: lo2") || compvn == lo1 {
-                            return true;
-                        }
-                        false
+                        compvn == self.lo2.expect("cfc: lo2") || compvn == lo1
                     }
                 } else {
                     false
@@ -3094,10 +3087,7 @@ impl LessThreeWay {
         }
         let hilessbl = bl_get_in(data, hieqbl, 0);
         self.hilessbl = Some(hilessbl);
-        if bl_size_out(data, hilessbl) != 2 {
-            return false;
-        }
-        true
+        bl_size_out(data, hilessbl) == 2
     }
 
     fn map_ops_from_blocks(&mut self, data: &Funcdata) -> bool {
@@ -3226,10 +3216,7 @@ impl LessThreeWay {
     }
 
     fn check_signedness(&self) -> bool {
-        if self.midlessform && self.midsigncompare != self.signcompare {
-            return false;
-        }
-        true
+        !(self.midlessform && self.midsigncompare != self.signcompare)
     }
 
     fn normalize_hi(&mut self, data: &Funcdata) -> bool {
@@ -3398,16 +3385,11 @@ impl LessThreeWay {
         let (_hieqtrue, hieqfalse) =
             get_true_false(data, self.hieqbool.expect("cbf: hieqbool"), self.equalflip);
         let hieqtrue = _hieqtrue;
-        if hilesstrue == lolesstrue
+        hilesstrue == lolesstrue
             && hieqfalse == lolessfalse
             && Some(hilessfalse) == self.hieqbl
             && Some(hieqtrue) == self.lolessbl
-            && otherwise_empty(data, self.hieqbool.expect("cbf: hieqbool"))
-            && otherwise_empty(data, self.lolessbool.expect("cbf: lolessbool"))
-        {
-            return true;
-        }
-        false
+            && otherwise_empty(data, self.hieqbool.expect("cbf: hieqbool")) && otherwise_empty(data, self.lolessbool.expect("cbf: lolessbool"))
     }
 
     fn check_op_form(&mut self, data: &Funcdata) -> bool {
@@ -3951,10 +3933,7 @@ impl ShiftForm {
             return false; // If shift amount is so big, we would not use this form
         }
         let val = (8 * losize) as uintb - val;
-        if vn_get_offset(data, samid) != val {
-            return false;
-        }
-        true
+        vn_get_offset(data, samid) == val
     }
 
     fn verify_left(&mut self, data: &Funcdata, h: VarnodeId, l: VarnodeId, loop_: OpId) -> bool {
@@ -5273,11 +5252,10 @@ impl RuleDoubleLoad {
                     return None;
                 }
                 _ => {
-                    if let Some(outvn) = op_get_out(data, curop) {
-                        if vn_space_index(data, outvn) == spc {
+                    if let Some(outvn) = op_get_out(data, curop)
+                        && vn_space_index(data, outvn) == spc {
                             return None;
                         }
-                    }
                 }
             }
         }

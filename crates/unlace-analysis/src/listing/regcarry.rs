@@ -911,16 +911,18 @@ impl Tracker {
                 }
                 OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_CALLOTHER => {
                     let dest = op.ins.first().filter(|_| op.opcode == OpCode::CPUI_CALLIND);
-                    if let Some(d) = dest.and_then(|vn| frame.read(m, vn)) {
-                        if d.loaded && d.carried && !joined {
-                            hits.push(Hit {
-                                to: d.v,
-                                kind: XrefKind::Call,
-                                age: d.age,
-                                base: None,
-                                page: false,
-                            });
-                        }
+                    if let Some(d) = dest.and_then(|vn| frame.read(m, vn))
+                        && d.loaded
+                        && d.carried
+                        && !joined
+                    {
+                        hits.push(Hit {
+                            to: d.v,
+                            kind: XrefKind::Call,
+                            age: d.age,
+                            base: None,
+                            page: false,
+                        });
                     }
                     if let Some(out) = &op.out {
                         frame.write(m, out, None);
@@ -964,30 +966,20 @@ impl Tracker {
                         if completes {
                             v.half = false;
                         }
-                        if completes
+                        if (completes
                             && m.halves == HalfPairs::On
                             && v.carried
                             && !joined
                             && m.is_register(out)
                             && looks_like_address(v.v)
-                            && m.admits(v.v, false)
-                        {
-                            let base = base_of(found, v, v.v);
-                            hits.push(Hit {
-                                to: v.v,
-                                kind: XrefKind::Data,
-                                age: v.age,
-                                base,
-                                page: false,
-                            });
-                            v.formed = Some(first + hits.len() - 1);
-                        } else if v.carried
-                            && !joined
-                            && !v.bias
-                            && v.composed == Some(out.size)
-                            && m.is_register(out)
-                            && !(calls && v.v == fall_vma)
-                            && m.admits(v.v, v.addr)
+                            && m.admits(v.v, false))
+                            || (v.carried
+                                && !joined
+                                && !v.bias
+                                && v.composed == Some(out.size)
+                                && m.is_register(out)
+                                && !(calls && v.v == fall_vma)
+                                && m.admits(v.v, v.addr))
                         {
                             let base = base_of(found, v, v.v);
                             hits.push(Hit {
@@ -1028,10 +1020,10 @@ impl Tracker {
                 .copied()
                 .collect();
             trail.push(vma);
-            if let Some(i) = h.base {
-                if found[i].page || !frame.regs.iter().any(|&(_, _, v)| v.formed == Some(i)) {
-                    found[i].stepped.push(trail.clone());
-                }
+            if let Some(i) = h.base
+                && (found[i].page || !frame.regs.iter().any(|&(_, _, v)| v.formed == Some(i)))
+            {
+                found[i].stepped.push(trail.clone());
             }
             let writeback = h.kind == XrefKind::Data
                 && hits

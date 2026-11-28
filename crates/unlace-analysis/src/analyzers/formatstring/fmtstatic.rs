@@ -298,7 +298,7 @@ impl AnalysisPass for FormatStringStaticPass {
                 .extend(super::fmtcallee::infer(&inputs, &mut lifts));
         }
         out.format_sites
-            .sort_by(|a, b| (a.func, a.callpoint).cmp(&(b.func, b.callpoint)));
+            .sort_by_key(|a| (a.func, a.callpoint));
         out.format_sites
             .dedup_by(|a, b| a.func == b.func && a.callpoint == b.callpoint);
         out
@@ -460,9 +460,9 @@ fn previous_instruction(listing: &Listing, vma: u64) -> Option<u64> {
     let lo = vma.saturating_sub(64);
     listing
         .instructions_in_range(lo, Some(vma))
-        .filter(|&(&addr, ref insn)| addr + u64::from(insn.len) == vma)
+        .filter(|&(&addr, insn)| addr + u64::from(insn.len) == vma)
         .map(|(&addr, _)| addr)
-        .last()
+        .next_back()
 }
 
 /// A constant-folding key: one storage location.

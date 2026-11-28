@@ -301,8 +301,8 @@ pub const MAX_PREFIX_STMTS_ANGR: int4 = 5;
 /// source-level block, for two reasons that have nothing to do with the fold's
 /// soundness:
 ///
-/// * argument recovery — where angr renders `find_closing_delim(p, v11, *(char *)(v10
-///   + cur), &v7)` as ONE statement, unlace may recover only the first two arguments
+/// * argument recovery — where angr renders
+///   `find_closing_delim(p, v11, *(char *)(v10 + cur), &v7)` as ONE statement, unlace may recover only the first two arguments
 ///   and print the remaining operand computations as separate assignments;
 /// * address-tied copy shadows — a stack variable that also lives in a register
 ///   prints a `v14 = v1;` / `v14 = v14;` pair the AIL never materializes.
@@ -465,15 +465,14 @@ pub fn printed_shape(data: &Funcdata, ops: &[OpId]) -> Option<PrintedShape> {
         // printc/ emit_basic_block_ops: ops whose out varnode is implied are
         // inlined into their consumer and never printed as a statement.  This skip
         // is *why* MAX_PREFIX_ROOT_CALLS counts statement roots only.
-        if let Some(outvn) = o.get_out() {
-            if data
+        if let Some(outvn) = o.get_out()
+            && data
                 .vbank()
                 .get(outvn)
                 .map(|v| v.is_implied())
                 .unwrap_or(false)
-            {
-                continue;
-            }
+        {
+            continue;
         }
         if o.is_call() {
             out.root_calls += 1;

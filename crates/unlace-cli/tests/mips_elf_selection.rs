@@ -1,8 +1,4 @@
 use crate::common;
-use object::write::{Object, Symbol, SymbolSection};
-use object::{
-    Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
-};
 use std::{path::Path, process::Command};
 
 fn elf(little: bool, flags: u32, words: &[u32]) -> Vec<u8> {
@@ -512,17 +508,19 @@ fn with_symbols(little: bool, mut data: Vec<u8>, symbols: &[(&str, u32, u32)]) -
             v.to_be_bytes()
         }
     };
-    let read = |b: &[u8]| {
+    let read = |b: &[u8; 4]| {
         if little {
-            u32::from_le_bytes(b.try_into().unwrap())
+            u32::from_le_bytes(*b)
         } else {
-            u32::from_be_bytes(b.try_into().unwrap())
+            u32::from_be_bytes(*b)
         }
     };
-    let sh = read(&data[32..36]) as usize;
+    let sh = read(data[32..36].try_into().unwrap()) as usize;
     let mut headers: Vec<Vec<u32>> = data[sh..sh + 160]
-        .chunks_exact(40)
-        .map(|row| row.chunks_exact(4).map(read).collect())
+        .as_chunks::<40>()
+        .0
+        .iter()
+        .map(|row| row.as_chunks::<4>().0.iter().map(read).collect())
         .collect();
     let mut strings = vec![0];
     let mut offsets = Vec::new();

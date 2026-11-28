@@ -58,11 +58,10 @@ impl<'d> PointerSlots<'d> {
             }
             let lo = sec.address();
             slots.loaded.push((lo, lo.saturating_add(size)));
-            if let Ok(bytes) = sec.data() {
-                if !bytes.is_empty() {
+            if let Ok(bytes) = sec.data()
+                && !bytes.is_empty() {
                     slots.data.push((lo, bytes));
                 }
-            }
         }
         slots
     }
@@ -71,7 +70,7 @@ impl<'d> PointerSlots<'d> {
     /// the image relocates, or, when it lists none, one whose value lies in an
     /// allocated section?
     pub(crate) fn holds_address(&self, addr: u64) -> bool {
-        if self.loaded.is_empty() || addr % self.width != 0 {
+        if self.loaded.is_empty() || !addr.is_multiple_of(self.width) {
             return false;
         }
         if let Some(relocated) = &self.relocated {

@@ -395,8 +395,8 @@ pub fn cookie_check_op(
     if o.code() != OpCode::CPUI_CALL || o.get_parent().is_none() {
         return None;
     }
-    if let Some(out) = o.get_out() {
-        if data
+    if let Some(out) = o.get_out()
+        && data
             .vbank()
             .get(out)
             .map(|v| !v.has_no_descend())
@@ -404,7 +404,6 @@ pub fn cookie_check_op(
         {
             return None;
         }
-    }
     let mut found: Option<Vec<OpId>> = None;
     let mut budget = MAX_MATCH_STEPS;
     for j in 1..o.num_input() {

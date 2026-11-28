@@ -30,6 +30,12 @@ pub struct RuleBoolSignShift {
     group: String,
 }
 
+impl Default for RuleBoolSignShift {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RuleBoolSignShift {
     /// C++ `RuleBoolSignShift(const string &g)`.  The default group is
     /// `"analysis"` (the C++ registers `new RuleBoolSignShift("analysis")` in

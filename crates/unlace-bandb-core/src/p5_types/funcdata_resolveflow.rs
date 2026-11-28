@@ -349,8 +349,8 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
             if crate::aggregatefields::returns_whole_container(self, op, slot, parent) {
                 return Ok(-1);
             }
-        } else if o.is_call() {
-            if let Some(idx) = self.get_call_specs_index(op) {
+        } else if o.is_call()
+            && let Some(idx) = self.get_call_specs_index(op) {
                 let fc = self.get_call_specs(idx);
                 let proto = fc.proto();
                 let param_type: Option<Rc<Datatype>> = if slot >= 1 && proto.is_input_locked() {
@@ -362,13 +362,11 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
                 } else {
                     None
                 };
-                if let Some(pt) = param_type {
-                    if Rc::ptr_eq(&pt, parent) {
+                if let Some(pt) = param_type
+                    && Rc::ptr_eq(&pt, parent) {
                         return Ok(-1); // Function signature refers to parent directly
                     }
-                }
             }
-        }
         Ok(0) // In all other cases resolve to the component
     }
 
@@ -407,8 +405,8 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
                 })?;
                 let resolved = self.resolve_truncation(&parent_union, cur_off, op, slot)?;
                 cur_type = None;
-                if let Some((field_idx, _newoff)) = resolved {
-                    if let Some(ftype) = parent_union
+                if let Some((field_idx, _newoff)) = resolved
+                    && let Some(ftype) = parent_union
                         .get_field(field_idx)
                         .map(|f| Rc::clone(&f.field_type))
                     {
@@ -417,7 +415,6 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
                         })?;
                         cur_type = typegrp.get_exact_piece(ftype, cur_off as int4, size)?;
                     }
-                }
                 cur_off = 0;
             } else if meta == type_metatype::TYPE_UNION {
                 let resolved = self.resolve_truncation(&cur, cur_off, op, slot)?;
@@ -466,13 +463,12 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
             .map(|r| r.get_field_num());
         if have_cached.is_none() {
             let op_addr = self.obank().get(op).map(|o| o.get_addr().clone());
-            if let Some(addr) = &op_addr {
-                if let Some(res) = self.get_address_based_union_field(ct, addr, slot) {
+            if let Some(addr) = &op_addr
+                && let Some(res) = self.get_address_based_union_field(ct, addr, slot) {
                     let res = res.clone();
                     have_cached = Some(res.get_field_num());
                     self.set_union_field(ct, op, slot, res);
                 }
-            }
         }
         if let Some(field_num) = have_cached {
             if field_num >= 0 {

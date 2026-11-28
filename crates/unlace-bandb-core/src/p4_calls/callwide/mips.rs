@@ -358,11 +358,11 @@ fn closed(
         {
             return None;
         }
-        for (index, chunk) in region.bytes.chunks_exact(4).enumerate() {
+        for (index, chunk) in region.bytes.as_chunks::<4>().0.iter().enumerate() {
             if words
                 .insert(
                     region.address + index as u64 * 4,
-                    u32::from_be_bytes(chunk.try_into().ok()?),
+                    u32::from_be_bytes(*chunk),
                 )
                 .is_some()
             {

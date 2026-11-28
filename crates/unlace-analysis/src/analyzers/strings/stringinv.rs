@@ -291,7 +291,7 @@ fn utf8_text(bytes: &[u8]) -> String {
 /// Read a 2-byte fact back as text (low bytes only — the units are all in the
 /// 1-byte charset by construction).
 fn utf16_text(bytes: &[u8]) -> String {
-    bytes.chunks_exact(2).map(|u| u[0] as char).collect()
+    bytes.as_chunks::<2>().0.iter().map(|u| u[0] as char).collect()
 }
 
 /// Enumerate the image's string literals.
@@ -360,11 +360,10 @@ fn inventory_with_ranges(
         let Some(region) = region_of(&regions, index.as_deref(), run.addr) else {
             continue;
         };
-        if let Some(want) = &q.section {
-            if !section_matches(region.name.as_deref(), want) {
+        if let Some(want) = &q.section
+            && !section_matches(region.name.as_deref(), want) {
                 continue;
             }
-        }
         let Some(bytes) = region.slice(run.addr, run.visible_len) else {
             continue;
         };
@@ -397,7 +396,7 @@ fn inventory_with_ranges(
             section: region.name.clone(),
         });
     }
-    strings.sort_by(|a, b| (a.addr, a.encoding).cmp(&(b.addr, b.encoding)));
+    strings.sort_by_key(|a| (a.addr, a.encoding));
 
     let names = regions.iter().filter_map(|r| r.name.clone()).collect();
     Inventory {

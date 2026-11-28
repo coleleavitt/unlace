@@ -134,13 +134,11 @@ fn instruction(fd: &Funcdata, ops: &[OpId]) -> Option<Instruction> {
             && target.2 == width
         {
             let source = storage(fd, op.get_in(0)?)?;
-            if let Some((_, def)) = definitions.iter().rev().find(|(loc, _)| *loc == source) {
-                if loads.contains(def) {
-                    if old_load.replace(*def).is_some() {
+            if let Some((_, def)) = definitions.iter().rev().find(|(loc, _)| *loc == source)
+                && loads.contains(def)
+                    && old_load.replace(*def).is_some() {
                         return None;
                     }
-                }
-            }
         }
         definitions.retain(|(loc, _)| !overlaps(*loc, target));
         definitions.push((target, id));

@@ -98,8 +98,8 @@ fn used_as_address(ctx: &mut dyn MergeContext, value: HighVariableId) -> bool {
         if seen.len() > WALK_BOUND {
             return true;
         }
-        if member {
-            if let Some(def) = ctx.vn_def(vn) {
+        if member
+            && let Some(def) = ctx.vn_def(vn) {
                 let joined = match ctx.op_code(def) {
                     OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT => 1,
                     OpCode::CPUI_MULTIEQUAL => ctx.op_num_input(def),
@@ -111,7 +111,6 @@ fn used_as_address(ctx: &mut dyn MergeContext, value: HighVariableId) -> bool {
                     }
                 }
             }
-        }
         for op in ctx.vn_descend(vn) {
             if ctx.op_is_dead(op) {
                 continue;

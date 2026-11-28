@@ -11,7 +11,7 @@ use std::rc::Rc;
 use unlace_base::address::{Address, RangeList};
 use unlace_base::marshal::{Decoder, PackedDecode, PackedEncode};
 use unlace_base::space::{AddrSpace, AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
-use unlace_base::types::{int4, uint4};
+use unlace_base::types::int4;
 
 use super::*;
 

@@ -321,7 +321,6 @@ pub enum InputVerdict {
 }
 
 #[doc(hidden)]
-
 pub fn classify_input(
     data: &Funcdata,
     input: VarnodeId,
@@ -456,15 +455,14 @@ pub fn head_compare_operand(
                 .rev()
                 .find_map(|(p, &o)| overlap(o).map(|exact| (o, p, exact)));
             let candidate = space == home_space && v.get_size() == size;
-            if let Some((o, p, _)) = prior {
-                if v.get_size() > size {
-                    if let Some(inner) = extended_low_bytes(data, o, space, off, v.get_size()) {
-                        if seen.insert(o) {
-                            work.push((inner, p));
-                        }
-                        continue;
-                    }
+            if let Some((o, p, _)) = prior
+                && v.get_size() > size
+                && let Some(inner) = extended_low_bytes(data, o, space, off, v.get_size())
+            {
+                if seen.insert(o) {
+                    work.push((inner, p));
                 }
+                continue;
             }
             match prior {
                 Some((o, _, true)) if data.obank().get(o)?.code() == OpCode::CPUI_LOAD => {

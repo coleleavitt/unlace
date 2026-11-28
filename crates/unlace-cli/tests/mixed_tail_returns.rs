@@ -158,7 +158,8 @@ fn words(code: &[u32]) -> Vec<u8> {
 /// `eq7`, which returns only where `cmp w0,#7` found `w0` equal to 7, each with
 /// its `b <callee>` at the offset given.
 fn aarch64_object() -> Vec<u8> {
-    let funcs: [(&str, Vec<u8>, Option<(&str, u64)>); 5] = [
+    type Func = (&'static str, Vec<u8>, Option<(&'static str, u64)>);
+    let funcs: [Func; 5] = [
         // adrp x8,0; ldr w8,[x8]; add w0,w8,w8,lsl #1; ret
         (
             "getv",

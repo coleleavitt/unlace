@@ -190,7 +190,7 @@ fn ambiguous_object_symbols_never_establish_a_string_writer() {
     ];
     for (name, method) in names {
         let known = (0x1000, Some(name.to_owned()));
-        assert_eq!(writer_symbols(&[known.clone()]).get(&0x1000), Some(&method));
+        assert_eq!(writer_symbols(std::slice::from_ref(&known)).get(&0x1000), Some(&method));
         for alias in [
             None,
             Some("user::write_fmt".into()),

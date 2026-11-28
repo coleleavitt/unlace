@@ -70,7 +70,9 @@ fn u16s(raw: &[u8], offset: usize, count: usize) -> Result<Vec<u16>, String> {
         .get(offset..end)
         .ok_or("slide info page table runs past its blob")?;
     Ok(bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|c| u16::from_le_bytes([c[0], c[1]]))
         .collect())
 }

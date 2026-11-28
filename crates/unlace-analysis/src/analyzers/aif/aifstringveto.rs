@@ -32,7 +32,9 @@ fn run(bytes: &[u8], at: usize, wide: bool) -> usize {
         bytes
             .get(at..)
             .unwrap_or_default()
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .take_while(|c| c[1] == 0 && printable(c[0]))
             .count()
     } else {

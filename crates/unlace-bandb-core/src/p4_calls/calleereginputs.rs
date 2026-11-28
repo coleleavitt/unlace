@@ -811,7 +811,7 @@ fn registers(arch: &Architecture) -> Option<Regs> {
     let sp = VarnodeData {
         space: base.space.clone(),
         offset: base.offset,
-        size: base.size as u32,
+        size: base.size,
     };
     Some(Regs { tracked, sp })
 }

@@ -60,7 +60,9 @@ fn pair(code: &[u32]) -> Option<BTreeMap<u64, Vec<u64>>> {
     )
 }
 
-fn process(extra: &[u32]) -> (u64, CodeRegion, Vec<(u64, u64)>, BTreeSet<(u64, u64)>) {
+type Process = (u64, CodeRegion, Vec<(u64, u64)>, BTreeSet<(u64, u64)>);
+
+fn process(extra: &[u32]) -> Process {
     let mut code = leaf();
     code.extend(caller());
     let mut entries = vec![(BASE, 20), (BASE + 20, 44)];
@@ -97,7 +99,7 @@ fn sealed_entry_calls_an_ordinary_coordinator_then_only_spins() {
 fn an_unknown_external_return_boundary_is_not_a_closed_process() {
     let (root, region, entries, refs) = process(&[]);
     for entry in [BASE, BASE + 20, root + 4, root + 8] {
-        assert!(closed_image(entry, &[region.clone()], &entries, &refs).is_none());
+        assert!(closed_image(entry, std::slice::from_ref(&region), &entries, &refs).is_none());
     }
 }
 
@@ -188,7 +190,7 @@ fn numeric_code_addresses_do_not_create_executed_indirect_edges() {
         vec![0x2c02_0001, 0x0002_1500, JR, 0],
     ] {
         let (root, region, entries, refs) = process(&code);
-        assert!(closed_image(root, &[region.clone()], &entries, &refs).is_some());
+        assert!(closed_image(root, std::slice::from_ref(&region), &entries, &refs).is_some());
         assert!(closed_image(BASE + 20, &[region], &entries, &refs).is_none());
     }
 }
@@ -431,7 +433,7 @@ fn region_entry_and_work_bounds_refuse_the_whole_image() {
         vec![(BASE, 24)],
         vec![(BASE, 0)],
     ] {
-        assert!(closed_functions(&[r.clone()], &entries, &BTreeSet::new()).is_none());
+        assert!(closed_functions(std::slice::from_ref(&r), &entries, &BTreeSet::new()).is_none());
     }
     let huge = CodeRegion {
         address: BASE,

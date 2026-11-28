@@ -38,8 +38,8 @@ impl Regs {
     }
 
     fn clobber_call(&mut self) {
-        for r in 0..=18 {
-            self.0[r] = None;
+        for r in &mut self.0[..=18] {
+            *r = None;
         }
         self.0[30] = None;
     }

@@ -48,7 +48,6 @@ fn with(start: intb, ev: Evidence, unproven: Vec<intb>, reaches: Vec<Reach>) -> 
 fn counts(c: &[(intb, Says)]) -> Evidence {
     Evidence {
         counts: c.iter().map(|&(b, s)| (b, s, false)).collect(),
-        ..Default::default()
     }
 }
 
@@ -160,7 +159,6 @@ fn a_library_length_one_short_of_sixteen_keeps_the_terminator() {
     );
     let terminated = Evidence {
         counts: vec![(0xfff, Says::Fills, true)],
-        ..Default::default()
     };
     assert_eq!(
         fits(&with(0x100, terminated, Vec::new(), Vec::new()), 0x1008),

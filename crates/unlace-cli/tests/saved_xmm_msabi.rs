@@ -20,9 +20,7 @@ const SAVED_LANES: &[i64] = &[
 fn compilers() -> Vec<&'static str> {
     ["gcc", "clang"]
         .into_iter()
-        .filter(|cc| {
-            common::process::optional_output(&mut Command::new(cc).arg("--version")).is_some()
-        })
+        .filter(|cc| common::process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect()
 }
 
@@ -141,10 +139,9 @@ fn stack_offsets_in_comments(code: &str) -> Vec<i64> {
             let stack = comment.split_once("stack")?.1.trim_start();
             let (sign, value) = if let Some(value) = stack.strip_prefix('-') {
                 (-1, value.trim_start())
-            } else if let Some(value) = stack.strip_prefix('+') {
-                (1, value.trim_start())
             } else {
-                return None;
+                let value = stack.strip_prefix('+')?;
+                (1, value.trim_start())
             };
             let value = value.strip_prefix("0x")?;
             let digits: String = value

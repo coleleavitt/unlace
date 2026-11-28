@@ -133,12 +133,12 @@ fn got_call_slots(file: &object::File, plt_slots: &HashSet<u64>) -> Vec<PltSym> 
     }
     let mut funcs: HashMap<usize, Vec<u8>> = HashMap::new();
     for s in file.dynamic_symbols() {
-        if s.is_undefined() && s.kind() == object::SymbolKind::Text {
-            if let Ok(n) = s.name_bytes() {
-                if !n.is_empty() {
-                    funcs.insert(s.index().0, strip_version(n));
-                }
-            }
+        if s.is_undefined()
+            && s.kind() == object::SymbolKind::Text
+            && let Ok(n) = s.name_bytes()
+            && !n.is_empty()
+        {
+            funcs.insert(s.index().0, strip_version(n));
         }
     }
     let Some(relocs) = file.dynamic_relocations() else {
@@ -377,20 +377,20 @@ fn plt_section_priority(name: &str) -> Option<u8> {
 fn build_got_name_map(file: &object::File) -> HashMap<u64, Vec<u8>> {
     let mut dynnames: HashMap<usize, Vec<u8>> = HashMap::new();
     for s in file.dynamic_symbols() {
-        if let Ok(n) = s.name_bytes() {
-            if !n.is_empty() {
-                dynnames.insert(s.index().0, strip_version(n));
-            }
+        if let Ok(n) = s.name_bytes()
+            && !n.is_empty()
+        {
+            dynnames.insert(s.index().0, strip_version(n));
         }
     }
 
     let mut map: HashMap<u64, Vec<u8>> = HashMap::new();
     if let Some(relocs) = file.dynamic_relocations() {
         for (got_off, reloc) in relocs {
-            if let RelocationTarget::Symbol(idx) = reloc.target() {
-                if let Some(name) = dynnames.get(&idx.0) {
-                    map.entry(got_off).or_insert_with(|| name.clone());
-                }
+            if let RelocationTarget::Symbol(idx) = reloc.target()
+                && let Some(name) = dynnames.get(&idx.0)
+            {
+                map.entry(got_off).or_insert_with(|| name.clone());
             }
         }
     }
@@ -417,11 +417,11 @@ fn build_got_ifunc_map(file: &object::File) -> HashMap<u64, u64> {
     }
     if let Some(relocs) = file.dynamic_relocations() {
         for (got_off, reloc) in relocs {
-            if let object::RelocationFlags::Elf { r_type } = reloc.flags() {
-                if r_type == R_X86_64_IRELATIVE {
-                    // The resolver address is the reloc addend (no symbol).
-                    map.entry(got_off).or_insert(reloc.addend() as u64);
-                }
+            if let object::RelocationFlags::Elf { r_type } = reloc.flags()
+                && r_type == R_X86_64_IRELATIVE
+            {
+                // The resolver address is the reloc addend (no symbol).
+                map.entry(got_off).or_insert(reloc.addend() as u64);
             }
         }
     }
@@ -447,15 +447,16 @@ fn decode_x86_64_ifunc_stubs(
             let disp = i32::from_le_bytes([data[i + 2], data[i + 3], data[i + 4], data[i + 5]]);
             let insn_addr = vma + i as u64;
             let got = insn_addr.wrapping_add(6).wrapping_add(disp as i64 as u64);
-            if let Some(&resolver) = ifunc.get(&got) {
-                if !named.contains_key(&got) && named_got.insert(got) {
-                    let stub = vma + x86_stub_start(data, i, &[0xF3, 0x0F, 0x1E, 0xFA]) as u64;
-                    out.push(PltSym {
-                        addr: stub,
-                        name: format!("ifunc_{resolver:x}").into_bytes(),
-                        slot: None,
-                    });
-                }
+            if let Some(&resolver) = ifunc.get(&got)
+                && !named.contains_key(&got)
+                && named_got.insert(got)
+            {
+                let stub = vma + x86_stub_start(data, i, &[0xF3, 0x0F, 0x1E, 0xFA]) as u64;
+                out.push(PltSym {
+                    addr: stub,
+                    name: format!("ifunc_{resolver:x}").into_bytes(),
+                    slot: None,
+                });
             }
             i += 6;
         } else {
@@ -535,14 +536,14 @@ pub(super) fn record(
     out: &mut Vec<PltSym>,
     named_got: &mut HashSet<u64>,
 ) {
-    if let Some(name) = map.get(&got) {
-        if named_got.insert(got) {
-            out.push(PltSym {
-                addr: stub,
-                name: name.clone(),
-                slot: Some(got),
-            });
-        }
+    if let Some(name) = map.get(&got)
+        && named_got.insert(got)
+    {
+        out.push(PltSym {
+            addr: stub,
+            name: name.clone(),
+            slot: Some(got),
+        });
     }
 }
 

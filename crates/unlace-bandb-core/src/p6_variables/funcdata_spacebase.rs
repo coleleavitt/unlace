@@ -165,35 +165,31 @@ impl FuncdataSpacebaseExt for Funcdata {
                         // Already marked spacebase: give descendants a chance to be
                         // eliminated naturally, then force a split if it still has
                         // multiple descendants of an INT_ADD def.
-                        if let Some(op) = def {
-                            if self.obank().get(op).map(|o| o.code()) == Some(OpCode::CPUI_INT_ADD)
+                        if let Some(op) = def
+                            && self.obank().get(op).map(|o| o.code()) == Some(OpCode::CPUI_INT_ADD)
                             {
                                 self.split_uses(vn);
                             }
-                        }
                     } else {
                         // Mark all base registers (not just input).
                         if let Some(v) = self.vbank_mut().get_mut(vn) {
                             v.set_spacebase();
                         }
                         // Only set the type on the input spacebase register.
-                        if is_input {
-                            if let Some(ptr) = ptr.clone() {
+                        if is_input
+                            && let Some(ptr) = ptr.clone() {
                                 let high = self.vbank().get(vn).and_then(|v| v.get_high());
                                 let changed = self
                                     .vbank_mut()
                                     .get_mut(vn)
                                     .map(|v| v.update_type_locked(ptr, true, true))
                                     .unwrap_or(false);
-                                if changed {
-                                    if let Some(h) = high {
-                                        if let Some(hh) = self.high_bank_mut().get_mut(h) {
+                                if changed
+                                    && let Some(h) = high
+                                        && let Some(hh) = self.high_bank_mut().get_mut(h) {
                                             hh.type_dirty();
                                         }
-                                    }
-                                }
                             }
-                        }
                     }
                 }
             }
@@ -219,9 +215,9 @@ impl FuncdataSpacebaseExt for Funcdata {
     ) -> bool {
         use crate::dtype::type_metatype;
         // Only the TYPE_PTR -> TYPE_SPACEBASE case needs scope resolution.
-        if ptrtype.get_metatype() == type_metatype::TYPE_PTR {
-            if let Some(ptrto) = ptrtype.get_ptr_to() {
-                if ptrto.get_metatype() == type_metatype::TYPE_SPACEBASE {
+        if ptrtype.get_metatype() == type_metatype::TYPE_PTR
+            && let Some(ptrto) = ptrtype.get_ptr_to()
+                && ptrto.get_metatype() == type_metatype::TYPE_SPACEBASE {
                     let word_size = ptrtype.get_word_size().unwrap_or(1);
                     let new_off =
                         unlace_base::space::AddrSpace::address_to_byte_int(off, word_size);
@@ -246,8 +242,6 @@ impl FuncdataSpacebaseExt for Funcdata {
                     }
                     return true;
                 }
-            }
-        }
         // Non-spacebase: the pure method is fully faithful.
         ptrtype
             .is_ptrsub_matching(off, extra, multiplier)
@@ -853,13 +847,11 @@ impl FuncdataSpacebaseExt for Funcdata {
                     .get_mut(vn)
                     .map(|v| v.update_type_locked(Rc::clone(&dt), true, false))
                     .unwrap_or(false);
-                if changed {
-                    if let Some(h) = high {
-                        if let Some(hh) = self.high_bank_mut().get_mut(h) {
+                if changed
+                    && let Some(h) = high
+                        && let Some(hh) = self.high_bank_mut().get_mut(h) {
                             hh.type_dirty();
                         }
-                    }
-                }
             }
         }
     }
@@ -1009,13 +1001,11 @@ impl FuncdataSpacebaseExt for Funcdata {
                     (ov.extraflags & (varnode_flags::precislo | varnode_flags::precishi)) != 0
                         && (ov.extraflags & varnode_flags::mapped) == 0;
                 if ov.entry_size >= ex_size {
-                    if update_datatypes {
-                        if let Some(t) = &ov.sized_type {
-                            if t.get_metatype() != crate::dtype::type_metatype::TYPE_UNKNOWN {
+                    if update_datatypes
+                        && let Some(t) = &ov.sized_type
+                            && t.get_metatype() != crate::dtype::type_metatype::TYPE_UNKNOWN {
                                 ct = Some(Rc::clone(t));
                             }
-                        }
-                    }
                 } else {
                     // Overlapping but not containing: drop typelock/namelock.
                     flags &= !(varnode_flags::typelock | varnode_flags::namelock);
@@ -1600,11 +1590,10 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
         // copymarker self-assign (`d.field_b = d.field_b`).
         if (fl & varnode_flags::addrtied) != 0 && !entry_is_join_piece {
             for &vn in group {
-                if let Some(v) = self.vbank_mut().get_mut(vn) {
-                    if !v.is_free() {
+                if let Some(v) = self.vbank_mut().get_mut(vn)
+                    && !v.is_free() {
                         v.set_flags_pub(varnode_flags::addrtied);
                     }
-                }
             }
         }
 
@@ -1646,11 +1635,10 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
                     .unwrap_or(false);
                 if changed {
                     update_occurred = true;
-                    if let Some(h) = high {
-                        if let Some(hh) = self.high_bank_mut().get_mut(h) {
+                    if let Some(h) = high
+                        && let Some(hh) = self.high_bank_mut().get_mut(h) {
                             hh.type_dirty();
                         }
-                    }
                 }
             }
         }
@@ -1844,19 +1832,18 @@ impl FuncdataAliasExt for Funcdata {
                 match code {
                     OpCode::CPUI_COPY => {
                         nonadduse = true; // COPY is both a non-add use and part of an ADD chain.
-                        if let Some(subvn) = o.get_out() {
-                            if marked.insert(subvn) {
+                        if let Some(subvn) = o.get_out()
+                            && marked.insert(subvn) {
                                 vnqueue.push((subvn, indexvn));
                             }
-                        }
                     }
                     OpCode::CPUI_INT_SUB => {
                         if o.get_in(1) == Some(vn) {
                             nonadduse = true; // Subtracting the pointer.
                         } else {
                             let othervn = o.get_in(1);
-                            if let Some(ov) = othervn {
-                                if !self
+                            if let Some(ov) = othervn
+                                && !self
                                     .vbank()
                                     .get(ov)
                                     .map(|x| x.is_constant())
@@ -1864,12 +1851,10 @@ impl FuncdataAliasExt for Funcdata {
                                 {
                                     indexvn = Some(ov);
                                 }
-                            }
-                            if let Some(subvn) = o.get_out() {
-                                if marked.insert(subvn) {
+                            if let Some(subvn) = o.get_out()
+                                && marked.insert(subvn) {
                                     vnqueue.push((subvn, indexvn));
                                 }
-                            }
                         }
                     }
                     OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRADD => {
@@ -1878,8 +1863,8 @@ impl FuncdataAliasExt for Funcdata {
                         if othervn == Some(vn) {
                             othervn = o.get_in(0);
                         }
-                        if let Some(ov) = othervn {
-                            if !self
+                        if let Some(ov) = othervn
+                            && !self
                                 .vbank()
                                 .get(ov)
                                 .map(|x| x.is_constant())
@@ -1887,19 +1872,16 @@ impl FuncdataAliasExt for Funcdata {
                             {
                                 indexvn = Some(ov);
                             }
-                        }
-                        if let Some(subvn) = o.get_out() {
-                            if marked.insert(subvn) {
+                        if let Some(subvn) = o.get_out()
+                            && marked.insert(subvn) {
                                 vnqueue.push((subvn, indexvn));
                             }
-                        }
                     }
                     OpCode::CPUI_PTRSUB | OpCode::CPUI_SEGMENTOP => {
-                        if let Some(subvn) = o.get_out() {
-                            if marked.insert(subvn) {
+                        if let Some(subvn) = o.get_out()
+                            && marked.insert(subvn) {
                                 vnqueue.push((subvn, indexvn));
                             }
-                        }
                     }
                     _ => {
                         // (unlace) A stack-pointer scramble against a live value

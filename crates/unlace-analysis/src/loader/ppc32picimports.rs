@@ -101,9 +101,9 @@ impl State {
 
     fn entry() -> Self {
         let mut state = Self::top();
-        for r in 0..32 {
+        for (r, reg) in state.regs.iter_mut().enumerate() {
             if NONVOLATILE & (1 << r) != 0 {
-                state.regs[r] = Value::Entry(r as u8);
+                *reg = Value::Entry(r as u8);
             }
         }
         state.regs[1] = Value::Stack(0);
@@ -247,13 +247,13 @@ impl State {
 
     fn preserved(&self) -> u32 {
         let mut mask = 0;
-        for r in 0..32 {
+        for (r, &reg) in self.regs.iter().enumerate() {
             let entry = if r == 1 {
                 Value::Stack(0)
             } else {
                 Value::Entry(r as u8)
             };
-            if NONVOLATILE & (1 << r) != 0 && self.regs[r] == entry {
+            if NONVOLATILE & (1 << r) != 0 && reg == entry {
                 mask |= 1 << r;
             }
         }
@@ -966,10 +966,10 @@ impl Analysis<'_, '_> {
         if image.sites.contains(&pc) {
             walk.evidence.reached.push(pc);
         }
-        if calls(pc, word) {
-            if let Some(pad) = image.pad(pc) {
-                self.flow(walk, pad, state.keep(NONVOLATILE));
-            }
+        if calls(pc, word)
+            && let Some(pad) = image.pad(pc)
+        {
+            self.flow(walk, pad, state.keep(NONVOLATILE));
         }
         let next = pc.wrapping_add(4);
         if let Some(b) = branch(pc, word) {
@@ -1026,8 +1026,8 @@ impl Analysis<'_, '_> {
     /// The state at the return address, or `None` when the callee never returns.
     fn call(&mut self, walk: &mut Walk, target: u32, state: State) -> Option<State> {
         let image = self.image;
-        for r in 3..=10 {
-            walk.evidence.escape(image, state.regs[r]);
+        for &v in &state.regs[3..=10] {
+            walk.evidence.escape(image, v);
         }
         if let Some(stub) = image.stub_at(target) {
             if stub == target {
@@ -1405,7 +1405,7 @@ fn resolver_exit(file: &object::File<'_>, code: &[(u32, u32)]) -> BTreeSet<u32> 
         return exits;
     };
     let mut got = None;
-    for tag in bytes.chunks_exact(8) {
+    for tag in bytes.as_chunks::<8>().0 {
         let key = super::ppc32_imports::word(file, tag);
         if key == 0 {
             break;
@@ -1791,7 +1791,12 @@ fn prove(
         if start & 3 != 0 {
             continue;
         }
-        let words: Vec<_> = bytes.chunks_exact(4).map(|b| image.read(b)).collect();
+        let words: Vec<_> = bytes
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| image.read(b))
+            .collect();
         for (i, window) in words.windows(4).enumerate() {
             if let Some(delta) = unlace_decomp::ppc32piccalls::stub_delta(window) {
                 image.stubs.insert(start + i as u32 * 4, delta);
@@ -1870,7 +1875,7 @@ fn prove(
         }
     }
     for section in image.data.iter().filter(|d| d.pointers) {
-        for word in section.bytes.chunks_exact(4) {
+        for word in section.bytes.as_chunks::<4>().0 {
             let value = image.read(word);
             block(&mut blocked, &image, u64::from(value));
             if file.kind() == object::ObjectKind::Executable {
@@ -1899,10 +1904,11 @@ fn prove(
         if symbol.is_global() {
             exported.insert(addr);
         }
-        if symbol.kind() == SymbolKind::Text && symbol.size() != 0 {
-            if let Ok(end) = u32::try_from(symbol.address() + symbol.size()) {
-                functions.push((addr, end));
-            }
+        if symbol.kind() == SymbolKind::Text
+            && symbol.size() != 0
+            && let Ok(end) = u32::try_from(symbol.address() + symbol.size())
+        {
+            functions.push((addr, end));
         }
     }
     if let Ok(entry) = u32::try_from(file.entry()) {
@@ -1911,7 +1917,7 @@ fn prove(
         exported.insert(entry);
     }
     if let Some(dynamic) = file.section_by_name(".dynamic").and_then(|s| s.data().ok()) {
-        for tag in dynamic.chunks_exact(8) {
+        for tag in dynamic.as_chunks::<8>().0 {
             if matches!(image.read(tag), 12 | 13) {
                 let value = image.read(&tag[4..]);
                 block(&mut blocked, &image, u64::from(value));

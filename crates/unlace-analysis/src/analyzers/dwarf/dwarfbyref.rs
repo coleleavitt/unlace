@@ -87,12 +87,12 @@ pub(super) fn location_at_entry<'a>(
     entry: Option<u64>,
 ) -> Option<gimli::Expression<Reader<'a>>> {
     match location {
-        gimli::AttributeValue::Exprloc(expression) => return Some(expression.clone()),
-        gimli::AttributeValue::Block(bytes) => return Some(gimli::Expression(bytes.clone())),
+        gimli::AttributeValue::Exprloc(expression) => return Some(*expression),
+        gimli::AttributeValue::Block(bytes) => return Some(gimli::Expression(*bytes)),
         _ => {}
     }
     let entry = entry?;
-    let mut locations = dwarf.attr_locations(unit, location.clone()).ok()??;
+    let mut locations = dwarf.attr_locations(unit, *location).ok()??;
     let mut found = None;
     for _ in 0..4096 {
         let Some(location) = locations.next().ok()? else {

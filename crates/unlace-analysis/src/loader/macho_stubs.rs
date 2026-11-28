@@ -178,10 +178,10 @@ where
             if let Ok(st) = symtab_command.symbols::<Mach, _>(endian, bytes) {
                 symtab = Some(st);
             }
-        } else if let Ok(Some(dysymtab_command)) = command.dysymtab() {
-            if let Ok(idx) = dysymtab_command.indirect_symbols(endian, bytes) {
-                indirect = idx;
-            }
+        } else if let Ok(Some(dysymtab_command)) = command.dysymtab()
+            && let Ok(idx) = dysymtab_command.indirect_symbols(endian, bytes)
+        {
+            indirect = idx;
         }
     }
 
@@ -359,8 +359,8 @@ fn push_kext_bound_slots<Mach: MachHeader<Endian = Endianness>>(
             continue;
         };
         let base: u64 = sec.addr(endian).into();
-        for (i, word) in data.chunks_exact(WIDTH as usize).enumerate() {
-            let target = u64::from_le_bytes(word.try_into().unwrap());
+        for (i, word) in data.as_chunks::<{ WIDTH as usize }>().0.iter().enumerate() {
+            let target = u64::from_le_bytes(*word);
             let Some(addr) = base
                 .checked_add(i as u64 * WIDTH)
                 .filter(|a| !named.contains(a))
@@ -507,6 +507,8 @@ struct NamedExport {
     absolute: bool,
 }
 
+type CacheEntry = ([Vec<u8>; 4], Arc<[NamedExport]>);
+
 /// The image's named exports: the external-defined `nlist` entries `object`
 /// reads, then, in address order, each export-trie name
 /// ([`super::macho_trie`]) they do not already hold at that address, so an
@@ -517,7 +519,7 @@ struct NamedExport {
 /// reaches this, so the last two answers are kept, keyed by the bytes they are
 /// read from (compared in full, so an image never reads another's answer).
 fn named_exports(neutral: &object::File) -> Arc<[NamedExport]> {
-    static CACHE: Mutex<Vec<([Vec<u8>; 4], Arc<[NamedExport]>)>> = Mutex::new(Vec::new());
+    static CACHE: Mutex<Vec<CacheEntry>> = Mutex::new(Vec::new());
     let key = super::macho_trie::export_inputs(neutral);
     if let Some(key) = key {
         let cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());

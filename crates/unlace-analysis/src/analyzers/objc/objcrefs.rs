@@ -301,13 +301,11 @@ pub(super) fn emit(
                 if let Some(enc) = selectors
                     .stub_encoding(&sel)
                     .filter(|e| img.charge(e.len() as u64))
-                {
-                    if let Some(pieces) =
+                    && let Some(pieces) =
                         stub_prototype(&name, enc, file.architecture(), arch, tctx)
                     {
                         out.prototypes_at.push((stub_va, pieces));
                     }
-                }
                 out.fid_names.push(FidMatch {
                     addr: stub_va,
                     name,
@@ -598,7 +596,7 @@ pub fn stubs(arch: object::Architecture, base: u64, data: &[u8]) -> Vec<(u64, u6
 fn stubs_arm64(base: u64, data: &[u8]) -> Vec<(u64, u64)> {
     let mut out = Vec::new();
     let words: Vec<u32> = data
-        .chunks_exact(4)
+        .as_chunks::<4>().0.iter()
         .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
         .collect();
     for i in 0..words.len().saturating_sub(1) {

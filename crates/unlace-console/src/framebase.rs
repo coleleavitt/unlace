@@ -234,11 +234,10 @@ impl Run {
         if *opc == OpCode::CPUI_STORE {
             let at = ins.get(1).and_then(|a| self.stack(a));
             let reg = ins.get(2).and_then(|v| self.entry_of(v));
-            if let (Some(at), Some(reg)) = (at, reg) {
-                if !self.saved.iter().any(|(r, _)| *r == reg) {
+            if let (Some(at), Some(reg)) = (at, reg)
+                && !self.saved.iter().any(|(r, _)| *r == reg) {
                     self.saved.push((reg, at));
                 }
-            }
             return;
         }
         let Some(out) = out else { return };

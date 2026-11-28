@@ -1626,7 +1626,7 @@ fn index_bound_at(fd: &Funcdata, vn: VarnodeId, depth: u32) -> Option<uintb> {
                     .and_then(|c| fd.vbank().get(c))
                     .filter(|c| c.is_constant())
                     .map_or(0, |c| c.get_offset());
-                return Some(if divisor == 0 || divisor - 1 >= sign_bit {
+                return Some(if divisor == 0 || divisor > sign_bit {
                     mask
                 } else {
                     mask.min(divisor - 1)

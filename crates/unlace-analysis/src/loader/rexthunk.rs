@@ -80,11 +80,10 @@ pub(crate) fn declared_starts<Pe: ImageNtHeaders>(
     if let Some(dir) = pe
         .data_directories()
         .get(object::pe::IMAGE_DIRECTORY_ENTRY_EXCEPTION)
+        && let Ok(data) = dir.data(bytes, &pe.section_table())
     {
-        if let Ok(data) = dir.data(bytes, &pe.section_table()) {
-            for rec in data.chunks_exact(12) {
-                starts.push(base + u32::from_le_bytes([rec[0], rec[1], rec[2], rec[3]]) as u64);
-            }
+        for rec in data.as_chunks::<12>().0 {
+            starts.push(base + u32::from_le_bytes([rec[0], rec[1], rec[2], rec[3]]) as u64);
         }
     }
     if let Ok(exports) = neutral.exports() {
@@ -142,8 +141,8 @@ fn fingerprint(
     }
     for &(_, data) in image {
         let (mut a, mut b) = (h, h.rotate_left(32) ^ K);
-        let mut chunks = data.chunks_exact(16);
-        for c in &mut chunks {
+        let (chunks, rest) = data.as_chunks::<16>();
+        for c in chunks {
             a = mix(
                 a,
                 u64::from_le_bytes([c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7]]),
@@ -153,7 +152,7 @@ fn fingerprint(
                 u64::from_le_bytes([c[8], c[9], c[10], c[11], c[12], c[13], c[14], c[15]]),
             );
         }
-        for &byte in chunks.remainder() {
+        for &byte in rest {
             a = mix(a, byte as u64);
         }
         h = mix(a, b);

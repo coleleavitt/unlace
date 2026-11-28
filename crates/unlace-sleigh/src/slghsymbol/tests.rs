@@ -673,7 +673,6 @@ fn encode_full_table(manager: &AddrSpaceManager) -> Vec<u8> {
     tokenfield(0, 3).encode(&mut enc);
     enc.close_element(&sla::ELEM_VALUE_SYM);
     enc.close_element(&sla::ELEM_SYMBOL_TABLE);
-    drop(enc);
     buf
 }
 

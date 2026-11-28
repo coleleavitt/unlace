@@ -344,15 +344,14 @@ pub(super) fn decompress(
         let dist = (high << 8) | usize::from(low);
         let written = w.out.len();
 
-        if let Some((area_end, in_history)) = unc_area {
-            if !in_history && dist > written - area_end {
+        if let Some((area_end, in_history)) = unc_area
+            && !in_history && dist > written - area_end {
                 return Err(PkliteError::Unsupported(
                     "a match reaches back into an uncompressed area, whose original bytes the \
                      file does not keep"
                         .into(),
                 ));
             }
-        }
         let prehistory = p.allow_prehistory && dist == written + 1;
         if !prehistory && (dist == 0 || dist > written) {
             return Err(corrupt(&format!(

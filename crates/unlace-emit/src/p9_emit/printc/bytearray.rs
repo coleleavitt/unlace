@@ -185,8 +185,10 @@ impl PrintC {
             fd.vbank().get(vn).map(|v| v.get_size()) == fd.vbank().get(out).map(|v| v.get_size())
         });
         self.stmt_op = Some(op);
-        if operation.code() == OpCode::CPUI_CAST && input.is_some() {
-            self.push_vn_ir(fd, arch, input.unwrap(), op);
+        if operation.code() == OpCode::CPUI_CAST
+            && let Some(input) = input
+        {
+            self.push_vn_ir(fd, arch, input, op);
         } else {
             self.op_push_ir(fd, arch, op, None);
         }

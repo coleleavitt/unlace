@@ -1291,10 +1291,10 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
             .expect("update_target: stale new")
             .get_seq_num()
             .clone();
-        if let Some(stat) = self.visited.get_mut(&oldaddr) {
-            if stat.seqnum == oldseq {
-                stat.seqnum = newseq;
-            }
+        if let Some(stat) = self.visited.get_mut(&oldaddr)
+            && stat.seqnum == oldseq
+        {
+            stat.seqnum = newseq;
         }
     }
 
@@ -2387,22 +2387,20 @@ following this call as a branch"
             .java_try
             .as_ref()
             .filter(|_| !self.is_flow_for_inline())
-        {
-            if let Some(first) =
+            && let Some(first) =
                 crate::javatry::before_instruction(&mut self.data, plan, model, curaddr)?
-            {
-                self.op_mark_start_basic(first);
-            }
+        {
+            self.op_mark_start_basic(first);
         }
 
         let mode = self
             .arm_context
             .then(|| self.env.arm_decode_mode(curaddr))
             .flatten();
-        if curaddr == self.data.get_address() {
-            if let Some(mode) = mode {
-                self.env.preserve_arm_decode_mode(curaddr, mode, true);
-            }
+        if curaddr == self.data.get_address()
+            && let Some(mode) = mode
+        {
+            self.env.preserve_arm_decode_mode(curaddr, mode, true);
         }
         let mut emit = FlowEmit::new(&mut self.data, self.env);
         let decoded = match self.env.mapped_flow_image() {
@@ -2501,23 +2499,23 @@ truncating the fall-through here"
 
         // (unlace javatry) Dalvik `throw` ends its path: its RETURN is a halt, so
         // return recovery gives it no value.
-        if let Some((_, model)) = self.java_try.as_ref() {
-            if model.bytes_at(curaddr.get_offset(), 1) == Some(&[0x27]) {
-                let mut cur = if emptyflag {
-                    self.dead_head()
-                } else {
-                    marker.and_then(|m| self.dead_next(m))
-                };
-                while let Some(op) = cur {
-                    cur = self.dead_next(op);
-                    if self
-                        .data
-                        .obank()
-                        .get(op)
-                        .is_some_and(|o| o.code() == OpCode::CPUI_RETURN)
-                    {
-                        self.data.op_mark_halt(op, pcodeop_flags::noreturn)?;
-                    }
+        if let Some((_, model)) = self.java_try.as_ref()
+            && model.bytes_at(curaddr.get_offset(), 1) == Some(&[0x27])
+        {
+            let mut cur = if emptyflag {
+                self.dead_head()
+            } else {
+                marker.and_then(|m| self.dead_next(m))
+            };
+            while let Some(op) = cur {
+                cur = self.dead_next(op);
+                if self
+                    .data
+                    .obank()
+                    .get(op)
+                    .is_some_and(|o| o.code() == OpCode::CPUI_RETURN)
+                {
+                    self.data.op_mark_halt(op, pcodeop_flags::noreturn)?;
                 }
             }
         }
@@ -2573,13 +2571,12 @@ truncating the fall-through here"
             while let Some(next) = self.dead_next(*insn_ops.last().expect("non-empty")) {
                 insn_ops.push(next);
             }
-            if flowoverride == crate::overrides::flow_type::NONE {
-                if let Some(first) = super::atomics::rewrite(&mut self.data, &insn_ops) {
-                    if first != firstop {
-                        firstop = first;
-                        insn_ops.insert(0, first);
-                    }
-                }
+            if flowoverride == crate::overrides::flow_type::NONE
+                && let Some(first) = super::atomics::rewrite(&mut self.data, &insn_ops)
+                && first != firstop
+            {
+                firstop = first;
+                insn_ops.insert(0, first);
             }
             (self.data.hooks().retpushedhalf_observe_instruction)(&mut self.data, &insn_ops);
             if flowoverride == crate::overrides::flow_type::NONE {
@@ -3703,23 +3700,22 @@ truncating the fall-through here"
                         .get_jump_table(jt_idx as int4)
                         .unlace_return_default()
                         .cloned()
+                        && !self.unlace_return_stub(&stub)?
                     {
-                        if !self.unlace_return_stub(&stub)? {
-                            self.data
-                                .get_jump_table_mut(jt_idx as int4)
-                                .unlace_drop_return_default();
-                            let address = self
-                                .data
-                                .obank()
-                                .get(indop)
-                                .expect("dispatch op")
-                                .get_addr()
-                                .clone();
-                            self.data.warning(
-                                "Indirect jump caller return overlaps decoded code",
-                                &address,
-                            );
-                        }
+                        self.data
+                            .get_jump_table_mut(jt_idx as int4)
+                            .unlace_drop_return_default();
+                        let address = self
+                            .data
+                            .obank()
+                            .get(indop)
+                            .expect("dispatch op")
+                            .get_addr()
+                            .clone();
+                        self.data.warning(
+                            "Indirect jump caller return overlaps decoded code",
+                            &address,
+                        );
                     }
                     let num = self.data.get_jump_table(jt_idx as int4).num_entries();
                     for i in 0..num {
@@ -3744,10 +3740,9 @@ truncating the fall-through here"
                                     .get_jump_table(jt_idx as int4)
                                     .unlace_return_default()
                                     != Some(&addr)
+                                && let Ok(to) = self.target(&addr)
                             {
-                                if let Ok(to) = self.target(&addr) {
-                                    new_edges.push((indop, to));
-                                }
+                                new_edges.push((indop, to));
                             }
                             self.new_address(indop, &addr)?;
                         }
@@ -3887,10 +3882,8 @@ truncating the fall-through here"
             let res = jt.check_for_multistage(&self.data);
             let indop = jt.get_indirect_op();
             *self.data.get_jump_table_mut(i) = jt;
-            if res? {
-                if let Some(op) = indop {
-                    self.tablelist.push(op);
-                }
+            if res? && let Some(op) = indop {
+                self.tablelist.push(op);
             }
         }
         Ok(())
@@ -3969,10 +3962,9 @@ truncating the fall-through here"
             .get_space()
             .map(|sp| sp.get_type() == unlace_base::space::spacetype::IPTR_FSPEC)
             .unwrap_or(false)
+            && let Some(info) = unlace_base::space::fspec_lookup(entry.get_offset())
         {
-            if let Some(info) = unlace_base::space::fspec_lookup(entry.get_offset()) {
-                entry = info.entry;
-            }
+            entry = info.entry;
         }
         // (unlace `objcresolve`) A send whose method a first decompile resolved
         // goes to the IMP.
@@ -3995,7 +3987,7 @@ truncating the fall-through here"
         if numeric {
             let target = self
                 .data
-                .new_constant(entry.get_addr_size() as i32, entry.get_offset());
+                .new_constant(entry.get_addr_size(), entry.get_offset());
             self.data.op_set_input(op, target, 0)?;
             self.data.op_set_opcode_code(op, OpCode::CPUI_CALLIND);
             return self.setup_callind_specs(op);
@@ -4005,13 +3997,13 @@ truncating the fall-through here"
         self.qlst_count += 1;
         // While weaving a call-fixup body, a nested direct CALL to the SAME
         // fixup entry must NOT re-inject (cycle break; C++ cancelInjectId).
-        if self.injecting_entry.as_ref() == Some(&entry) {
-            if let Some(idx) = self.data.get_call_specs_index(op) {
-                self.data
-                    .get_call_specs_mut(idx)
-                    .proto_mut()
-                    .cancel_inject_id();
-            }
+        if self.injecting_entry.as_ref() == Some(&entry)
+            && let Some(idx) = self.data.get_call_specs_index(op)
+        {
+            self.data
+                .get_call_specs_mut(idx)
+                .proto_mut()
+                .cancel_inject_id();
         }
         self.check_for_flow_modification(op, &entry)
     }
@@ -4053,13 +4045,13 @@ truncating the fall-through here"
                 .get(op)
                 .is_some_and(|o| self.data.get_override().is_no_return_call(o.get_addr()));
         if !no_return && self.trap_follows_call(op) {
-            if !entry.is_invalid() {
-                if let Some(idx) = self.data.get_call_specs_index(op) {
-                    self.data
-                        .get_call_specs_mut(idx)
-                        .proto_mut()
-                        .set_no_return(true);
-                }
+            if !entry.is_invalid()
+                && let Some(idx) = self.data.get_call_specs_index(op)
+            {
+                self.data
+                    .get_call_specs_mut(idx)
+                    .proto_mut()
+                    .set_no_return(true);
             }
             no_return = true;
         }
@@ -4344,10 +4336,8 @@ truncating the fall-through here"
             }
             fc.set_callee_moves_stack(self.env.query_call_moves_stack(&callee));
         }
-        if indirect {
-            if let Some(call_at) = self.data.obank().get(op).map(|o| o.get_addr().clone()) {
-                fc.set_callind_cleanup(self.env.query_callind_cleanup(&call_at));
-            }
+        if indirect && let Some(call_at) = self.data.obank().get(op).map(|o| o.get_addr().clone()) {
+            fc.set_callind_cleanup(self.env.query_callind_cleanup(&call_at));
         }
         // C++ `data.getOverride().applyPrototype(data, *res)` (flow.cc:706 direct /
         // flow.cc:732 indirect, BEFORE `queryCall`): an `override prototype <addr>
@@ -4380,20 +4370,16 @@ truncating the fall-through here"
             if let Some(proto) = ov.and_then(|ov| ov.prototype()) {
                 fc.proto_mut().copy(proto);
             } else {
-                match ov
+                if let Some(pieces) = ov
                     .and_then(|ov| ov.pieces())
                     .cloned()
                     .or_else(|| self.env.query_call_site_pieces(&op_addr))
+                    && let Some(proto) = self.env.build_override_proto(&pieces)?
                 {
-                    Some(pieces) => {
-                        if let Some(proto) = self.env.build_override_proto(&pieces)? {
-                            fc.proto_mut().copy(&proto);
-                            if self.data.get_override().is_format_call(&op_addr) {
-                                fc.set_format_arity(Some(pieces.intypes.len() as int4));
-                            }
-                        }
+                    fc.proto_mut().copy(&proto);
+                    if self.data.get_override().is_format_call(&op_addr) {
+                        fc.set_format_arity(Some(pieces.intypes.len() as int4));
                     }
-                    _ => {}
                 }
             }
         }
@@ -4477,11 +4463,11 @@ truncating the fall-through here"
                         .eval_fp_called()
                         .or_else(|| self.data.get_arch().default_fp())
                         .cloned();
-                    if let Some(evalfp) = evalfp {
-                        if !fc.proto().is_model_locked() && !fc.proto().has_matching_model(&evalfp)
-                        {
-                            fc.proto_mut().set_model(Some(evalfp));
-                        }
+                    if let Some(evalfp) = evalfp
+                        && !fc.proto().is_model_locked()
+                        && !fc.proto().has_matching_model(&evalfp)
+                    {
+                        fc.proto_mut().set_model(Some(evalfp));
                     }
                     if self.env.msvc_locked_entry(&entry) {
                         (self
@@ -5144,10 +5130,12 @@ truncating the fall-through here"
             .clone();
 
         // No inputlist/output (unlike the user-op path).
-        let mut icontext = crate::pcodeinject::InjectContext::default();
-        icontext.baseaddr = Some(baseaddr.clone());
-        icontext.nextaddr = Some(baseaddr);
-        icontext.calladdr = Some(entry.clone());
+        let mut icontext = crate::pcodeinject::InjectContext {
+            baseaddr: Some(baseaddr.clone()),
+            nextaddr: Some(baseaddr),
+            calladdr: Some(entry.clone()),
+            ..Default::default()
+        };
 
         // While the body's emitted ops are xref-classified, a nested CALL/CALLIND
         // to the SAME fixup entry must not re-inject (C++ passes `fc` to
@@ -5233,10 +5221,8 @@ truncating the fall-through here"
         let lastop = lastop.unwrap_or(firstop);
         let _ = isfallthru; // (the injection's fallthru is implied by the next op)
 
-        if startbasic {
-            if let Some(nextop) = self.dead_next(op) {
-                self.op_mark_start_basic(nextop);
-            }
+        if startbasic && let Some(nextop) = self.dead_next(op) {
+            self.op_mark_start_basic(nextop);
         }
 
         let incidental = match source {

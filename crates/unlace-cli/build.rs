@@ -60,6 +60,7 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) {
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo::rustc-check-cfg=cfg(feature, values(\"dynamic_linking\"))");
     dynamic_linking_rpath();
     if env::var_os("CARGO_FEATURE_EMBED_SPECS").is_none() {
         return;

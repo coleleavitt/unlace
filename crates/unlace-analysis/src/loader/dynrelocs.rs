@@ -314,52 +314,52 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
     // The run-time loader's view first: `PT_DYNAMIC`'s tables, which also hold
     // the RELR and Android packed encodings and survive a stripped section
     // table. An image without `PT_DYNAMIC` falls back to the section walk.
-    let entries: Vec<(u64, u32, Option<(u64, bool, u64)>, Option<i64>)> =
-        match dtable::ElfView::new(bytes).and_then(|view| {
-            let (entries, symtab) = dtable::dynamic_relocations(&view)?;
-            Some(
-                entries
-                    .into_iter()
-                    .map(|e| {
-                        let r_type = if e.r_type == dtable::RELR_RELATIVE {
-                            types.relative
-                        } else {
-                            e.r_type
-                        };
-                        let sym = symtab
-                            .filter(|_| e.sym != 0)
-                            .and_then(|table| view.symbol(table, e.sym))
-                            .map(|s| (s.value, !s.defined, s.size));
-                        (e.offset, r_type, sym, e.addend)
-                    })
-                    .collect(),
-            )
-        }) {
-            Some(entries) => entries,
-            None => {
-                let Some(relocs) = file.dynamic_relocations() else {
-                    return out;
-                };
-                let mut dynsyms: std::collections::HashMap<usize, (u64, bool, u64)> =
-                    std::collections::HashMap::new();
-                for s in file.dynamic_symbols() {
-                    dynsyms.insert(s.index().0, (s.address(), s.is_undefined(), s.size()));
-                }
-                relocs
-                    .filter_map(|(offset, reloc)| {
-                        let RelocationFlags::Elf { r_type } = reloc.flags() else {
-                            return None;
-                        };
-                        let sym = match reloc.target() {
-                            RelocationTarget::Symbol(idx) => dynsyms.get(&idx.0).copied(),
-                            _ => None,
-                        };
-                        let addend = (!reloc.has_implicit_addend()).then(|| reloc.addend());
-                        Some((offset, r_type, sym, addend))
-                    })
-                    .collect()
+    type DynEntry = (u64, u32, Option<(u64, bool, u64)>, Option<i64>);
+    let entries: Vec<DynEntry> = match dtable::ElfView::new(bytes).and_then(|view| {
+        let (entries, symtab) = dtable::dynamic_relocations(&view)?;
+        Some(
+            entries
+                .into_iter()
+                .map(|e| {
+                    let r_type = if e.r_type == dtable::RELR_RELATIVE {
+                        types.relative
+                    } else {
+                        e.r_type
+                    };
+                    let sym = symtab
+                        .filter(|_| e.sym != 0)
+                        .and_then(|table| view.symbol(table, e.sym))
+                        .map(|s| (s.value, !s.defined, s.size));
+                    (e.offset, r_type, sym, e.addend)
+                })
+                .collect(),
+        )
+    }) {
+        Some(entries) => entries,
+        None => {
+            let Some(relocs) = file.dynamic_relocations() else {
+                return out;
+            };
+            let mut dynsyms: std::collections::HashMap<usize, (u64, bool, u64)> =
+                std::collections::HashMap::new();
+            for s in file.dynamic_symbols() {
+                dynsyms.insert(s.index().0, (s.address(), s.is_undefined(), s.size()));
             }
-        };
+            relocs
+                .filter_map(|(offset, reloc)| {
+                    let RelocationFlags::Elf { r_type } = reloc.flags() else {
+                        return None;
+                    };
+                    let sym = match reloc.target() {
+                        RelocationTarget::Symbol(idx) => dynsyms.get(&idx.0).copied(),
+                        _ => None,
+                    };
+                    let addend = (!reloc.has_implicit_addend()).then(|| reloc.addend());
+                    Some((offset, r_type, sym, addend))
+                })
+                .collect()
+        }
+    };
 
     // unlace maps a linked image at the vaddrs the ELF itself declares, so the load
     // bias every `RELATIVE` relocation adds is zero. Named rather than folded
@@ -455,14 +455,6 @@ struct ElfFixup {
     addend: Option<i64>,
     /// The value the dynamic loader stores, where this image determines it.
     value: Option<u64>,
-}
-
-impl ElfFixup {
-    /// The value [`resolve`] writes: a `RELATIVE` slot's, or a `GLOB_DAT` /
-    /// `JUMP_SLOT` slot's whose symbol this image defines.
-    fn written(&self) -> Option<u64> {
-        self.value.filter(|_| self.kind != FixupKind::Relocation)
-    }
 }
 
 impl ElfTable {

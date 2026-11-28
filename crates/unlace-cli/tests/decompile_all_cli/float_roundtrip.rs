@@ -1634,7 +1634,8 @@ fn soft_float_imports_keep_their_core_register_values() {
     ] {
         assert!(stdout.contains(want), "missing `{want}`:\n{stdout}");
     }
-    for bad in ["pow(v1,v2)"] {
+    {
+        let bad = "pow(v1,v2)";
         assert!(
             !stdout.contains(bad),
             "`{bad}` reads VFP registers the code never sets:\n{stdout}"

@@ -1441,9 +1441,9 @@ impl BlockGraph {
         let mut bl = this_id;
         while self.arena[bl].get_type() != BlockType::Copy {
             let sub = self.sub_block(bl, 0);
-            match sub {
-                Some(s) => bl = s,
-                None => return None,
+            {
+                let s = sub?;
+                bl = s
             }
         }
         Some(bl)
@@ -1513,9 +1513,7 @@ impl BlockGraph {
                     return None;
                 }
                 let cases = self.arena[this_id].switch_caseblocks();
-                let Some(idx) = cases.iter().position(|c| c.block == bl) else {
-                    return None;
-                };
+                let idx = cases.iter().position(|c| c.block == bl)?;
                 // Fall-thru must be a goto block (else there is a break).
                 if self.arena[bl].get_type() != BlockType::Goto
                     && !(case_fallthru && !cases[idx].isexit)
@@ -2142,18 +2140,18 @@ impl BlockGraph {
             // `goto label_X;` with no `label_X:` whenever the target happened to be
             // the next block in flow.  The mark is never narrower than the print.
             BlockType::Goto => {
-                if self.arena[this_id].get_goto_type() == block_flags::f_goto_goto {
-                    if let Some(target) = self.arena[this_id].get_goto_target() {
-                        self.mark_copy_block(target, block_flags::f_unstructured_targ);
-                    }
+                if self.arena[this_id].get_goto_type() == block_flags::f_goto_goto
+                    && let Some(target) = self.arena[this_id].get_goto_target()
+                {
+                    self.mark_copy_block(target, block_flags::f_unstructured_targ);
                 }
             }
             // BlockIf::markUnstructured: an if-goto with a real goto target.
             BlockType::If => {
-                if self.arena[this_id].get_if_goto_type() == block_flags::f_goto_goto {
-                    if let Some(target) = self.arena[this_id].get_if_goto_target() {
-                        self.mark_copy_block(target, block_flags::f_unstructured_targ);
-                    }
+                if self.arena[this_id].get_if_goto_type() == block_flags::f_goto_goto
+                    && let Some(target) = self.arena[this_id].get_if_goto_target()
+                {
+                    self.mark_copy_block(target, block_flags::f_unstructured_targ);
                 }
             }
             // BlockSwitch::markUnstructured: each case whose edge is a real goto.
@@ -2249,12 +2247,11 @@ impl BlockGraph {
                     counts.multigoto_edges += gotoedges.len() as int4;
                 }
             }
-            BlockType::If => {
+            BlockType::If
                 if self.arena[this_id].get_if_goto_target().is_some()
-                    && self.arena[this_id].get_if_goto_type() == block_flags::f_goto_goto
-                {
-                    counts.ifgoto_edges += 1;
-                }
+                    && self.arena[this_id].get_if_goto_type() == block_flags::f_goto_goto =>
+            {
+                counts.ifgoto_edges += 1;
             }
             _ => {}
         }
@@ -2970,10 +2967,10 @@ impl BlockGraph {
                 gotoedges.push(targetbl);
             }
             self.remove_edge(ret, targetbl);
-            if isdefaultedge {
-                if let BlockKind::MultiGoto { defaultswitch, .. } = &mut self.arena[ret].kind {
-                    *defaultswitch = true;
-                }
+            if isdefaultedge
+                && let BlockKind::MultiGoto { defaultswitch, .. } = &mut self.arena[ret].kind
+            {
+                *defaultswitch = true;
             }
             ret
         } else {
@@ -2994,10 +2991,10 @@ impl BlockGraph {
                 }
                 self.remove_edge(ret, targetbl);
             }
-            if isdefaultedge {
-                if let BlockKind::MultiGoto { defaultswitch, .. } = &mut self.arena[ret].kind {
-                    *defaultswitch = true;
-                }
+            if isdefaultedge
+                && let BlockKind::MultiGoto { defaultswitch, .. } = &mut self.arena[ret].kind
+            {
+                *defaultswitch = true;
             }
             ret
         }
@@ -3244,22 +3241,20 @@ impl BlockGraph {
         // Fillin fall-thru chaining: a t_goto case targeting another case chains.
         for i in 0..caseblocks.len() {
             let casebl = caseblocks[i].block;
-            if self.arena[casebl].get_type() == BlockType::Goto {
-                if let Some(targetbl) = self.arena[casebl].get_goto_target() {
-                    if let Some(front) = self.get_front_leaf(targetbl) {
-                        if let Some(basicbl) = self.sub_block(front, 0) {
-                            // inindex of the switch into the target's front leaf.
-                            let inindex = self.arena[front].get_in_index(switch_root);
-                            if inindex != -1 {
-                                let oidx = self.arena[front].get_in_rev_index(inindex);
-                                if (oidx as usize) < casemap.len() {
-                                    caseblocks[i].chain = casemap[oidx as usize];
-                                }
-                            }
-                            let _ = basicbl;
-                        }
+            if self.arena[casebl].get_type() == BlockType::Goto
+                && let Some(targetbl) = self.arena[casebl].get_goto_target()
+                && let Some(front) = self.get_front_leaf(targetbl)
+                && let Some(basicbl) = self.sub_block(front, 0)
+            {
+                // inindex of the switch into the target's front leaf.
+                let inindex = self.arena[front].get_in_index(switch_root);
+                if inindex != -1 {
+                    let oidx = self.arena[front].get_in_rev_index(inindex);
+                    if (oidx as usize) < casemap.len() {
+                        caseblocks[i].chain = casemap[oidx as usize];
                     }
                 }
+                let _ = basicbl;
             }
         }
         // cs[0] t_multigoto: marked switch edges become f_goto_goto cases.
@@ -4460,10 +4455,10 @@ pub fn iop_block_info(
 /// Get the starting address of code in a block (C++ `FlowBlock::getStart`
 /// virtual: invalid for non-basic, first cover range for basic, `block.cc:2323`).
 pub fn block_get_start(arena: &BlockArena, this_id: BlockId) -> Address {
-    if let BlockKind::Basic(bd) = &arena[this_id].kind {
-        if let Some(range) = bd.cover.get_first_range() {
-            return range.get_first_addr();
-        }
+    if let BlockKind::Basic(bd) = &arena[this_id].kind
+        && let Some(range) = bd.cover.get_first_range()
+    {
+        return range.get_first_addr();
     }
     Address::new_invalid()
 }
@@ -4471,10 +4466,10 @@ pub fn block_get_start(arena: &BlockArena, this_id: BlockId) -> Address {
 /// Get the ending address of code in a block (C++ `FlowBlock::getStop`
 /// virtual: invalid for non-basic, last cover range for basic, `block.cc:2332`).
 pub fn block_get_stop(arena: &BlockArena, this_id: BlockId) -> Address {
-    if let BlockKind::Basic(bd) = &arena[this_id].kind {
-        if let Some(range) = bd.cover.get_last_range() {
-            return range.get_last_addr();
-        }
+    if let BlockKind::Basic(bd) = &arena[this_id].kind
+        && let Some(range) = bd.cover.get_last_range()
+    {
+        return range.get_last_addr();
     }
     Address::new_invalid()
 }

@@ -985,10 +985,10 @@ impl PatternExpression {
         };
         let prepared =
             prepared.get_or_init(|| crate::expressionplan::ExpressionPlan::new(self).map(Box::new));
-        if let Some(plan) = prepared {
-            if plan.applies_to(self) {
-                return plan.get_value(walker);
-            }
+        if let Some(plan) = prepared
+            && plan.applies_to(self)
+        {
+            return plan.get_value(walker);
         }
         self.evaluate(&mut |value| value.get_value(walker))
     }
@@ -1730,13 +1730,12 @@ impl TokenPattern {
 /// C++ static `TokenPattern::buildSingle(int4 startbit,int4 endbit,uintm
 /// byteval)`: a mask/value pattern within a single word.  bit 0 is the MOST
 /// significant bit of the word.
-fn build_single(mut startbit: i32, mut endbit: i32, mut byteval: u32) -> PatternBlock {
+fn build_single(mut startbit: i32, endbit: i32, mut byteval: u32) -> PatternBlock {
     let mut offset = 0;
     let size = endbit - startbit + 1;
     while startbit >= 8 {
         offset += 1;
         startbit -= 8;
-        endbit -= 8;
     }
     // shift count in [0,32) for valid fields
     let mut mask: u32 = (!0u32).wshl((32 - size) as u32);
@@ -1787,11 +1786,10 @@ fn build_little_block(
     bitend %= 8;
     bitstart %= 8;
 
-    let block: PatternBlock;
-    if startbit == endbit {
+    let block: PatternBlock = if startbit == endbit {
         startbit += 7 - bitend;
         let e = endbit + 7 - bitstart;
-        block = build_single(startbit, e, value as u32);
+        build_single(startbit, e, value as u32)
     } else {
         let mut blk = build_single(startbit, startbit + (7 - bitstart), value as u32);
         value = value.wshr((8 - bitstart) as u32); // Cut off bits we just encoded
@@ -1804,8 +1802,8 @@ fn build_little_block(
         }
         let tmpblock = build_single(endbit + (7 - bitend), endbit + 7, value as u32);
         blk = blk.intersect(&tmpblock);
-        block = blk;
-    }
+        blk
+    };
     block
 }
 

@@ -156,8 +156,8 @@ impl ExpressionPlan {
 fn fuse_bit_tests(steps: Vec<Step>) -> Vec<Step> {
     let mut result = Vec::with_capacity(steps.len());
     for step in steps {
-        if matches!(&step, Step::Immediate(BinaryOp::And, 1)) && result.len() >= 2 {
-            if let Some(Step::Immediate(BinaryOp::Shr, shift)) = result.last() {
+        if matches!(&step, Step::Immediate(BinaryOp::And, 1)) && result.len() >= 2
+            && let Some(Step::Immediate(BinaryOp::Shr, shift)) = result.last() {
                 let shift = *shift as u32;
                 if matches!(
                     &result[result.len() - 2],
@@ -184,7 +184,6 @@ fn fuse_bit_tests(steps: Vec<Step>) -> Vec<Step> {
                     continue;
                 }
             }
-        }
         result.push(step);
     }
     result
@@ -251,13 +250,12 @@ fn compile(
         }
         _ => {
             let (op, left, right) = binary(expression).expect("binary expression");
-            if !matches!(right, PatternExpression::Value(_)) {
-                if let Some(value) = constant(left) {
+            if !matches!(right, PatternExpression::Value(_))
+                && let Some(value) = constant(left) {
                     compile(right, steps, depth, maximum);
                     steps.push(Step::LeftImmediate(op, value));
                     return;
                 }
-            }
             compile(left, steps, depth, maximum);
             if let Some(value) = constant(right) {
                 steps.push(Step::Immediate(op, value));

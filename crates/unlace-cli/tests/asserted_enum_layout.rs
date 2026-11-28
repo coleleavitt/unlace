@@ -8,7 +8,7 @@ use object::write::{Object, Symbol, SymbolSection};
 use object::{
     Architecture, BinaryFormat, Endianness, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// `enum Mode { FIRST = 1, SECOND = 2 }; struct Packet { enum Mode mode; float
@@ -74,7 +74,7 @@ fn object_file(stem: &str, arch: Architecture, functions: &[(&str, &[u8])]) -> P
 }
 
 /// Decompile `func` under `asserts` (all of which must apply) and return its C.
-fn decompile(input: &PathBuf, func: &str, asserts: &[&str]) -> String {
+fn decompile(input: &Path, func: &str, asserts: &[&str]) -> String {
     let mut args = vec![
         "decompile",
         input.to_str().unwrap(),

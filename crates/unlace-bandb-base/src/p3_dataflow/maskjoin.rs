@@ -57,14 +57,13 @@ fn masked(data: &Funcdata, vn: VarnodeId) -> Option<(VarnodeId, uintb)> {
 fn piece_of(data: &Funcdata, piece: VarnodeId) -> Option<(VarnodeId, uintb)> {
     let sub = def_of(data, piece, OpCode::CPUI_SUBPIECE)?;
     let (whole, k) = (input(data, sub, 0)?, constant(data, input(data, sub, 1)?)?);
-    if k == 0 {
-        if let Some(shr) = def_of(data, whole, OpCode::CPUI_INT_RIGHT) {
+    if k == 0
+        && let Some(shr) = def_of(data, whole, OpCode::CPUI_INT_RIGHT) {
             let bits = constant(data, input(data, shr, 1)?)?;
             if bits % 8 == 0 && bits > 0 {
                 return Some((input(data, shr, 0)?, bits / 8));
             }
         }
-    }
     Some((whole, k))
 }
 

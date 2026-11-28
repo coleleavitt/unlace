@@ -408,7 +408,7 @@ fn call_targets(img: &MachoImage, starts: &[u64], imp: u64, max: u64) -> Vec<u64
         return Vec::new();
     };
     let mut out = Vec::new();
-    for (k, w) in code.chunks_exact(4).enumerate() {
+    for (k, w) in code.as_chunks::<4>().0.iter().enumerate() {
         let insn = u32::from_le_bytes([w[0], w[1], w[2], w[3]]);
         if matches!(insn & 0xfc00_0000, 0x9400_0000 | 0x1400_0000) {
             let imm = (((insn & 0x03ff_ffff) << 6) as i32 >> 4) as i64;

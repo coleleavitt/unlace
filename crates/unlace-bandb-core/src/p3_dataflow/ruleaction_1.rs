@@ -179,11 +179,10 @@ impl RuleEarlyRemoval {
             .expect("RuleEarlyRemoval: stale vn")
             .get_space()
             .clone();
-        if spc.does_deadcode() {
-            if !data.dead_removal_allowed_seen(&spc) {
+        if spc.does_deadcode()
+            && !data.dead_removal_allowed_seen(&spc) {
                 return false;
             }
-        }
 
         let mut memo = volatileload::Memo::new();
         !(volatileload::is_volatile_with(data, op, &mut memo)
@@ -283,8 +282,8 @@ impl Rule for RuleCollectTerms {
             .expect("RuleCollectTerms: INT_ADD has no output");
         let nextop = data.lone_descend(outvn);
         // Do we have the root of an ADD tree
-        if let Some(no) = nextop {
-            if data
+        if let Some(no) = nextop
+            && data
                 .obank()
                 .get(no)
                 .expect("RuleCollectTerms: stale nextop")
@@ -293,7 +292,6 @@ impl Rule for RuleCollectTerms {
             {
                 return 0;
             }
-        }
 
         let mut termorder = TermOrder::new(op);
         termorder.collect(data);
@@ -493,8 +491,8 @@ impl Rule for RuleSelectCse {
             .get(op)
             .expect("RuleSelectCse: stale op")
             .code();
-        if crate::ruleaction_7::RulePtrFlow::is_live(data) {
-            if let Some(out) = data
+        if crate::ruleaction_7::RulePtrFlow::is_live(data)
+            && let Some(out) = data
                 .obank()
                 .get(op)
                 .expect("RuleSelectCse: stale op")
@@ -510,7 +508,6 @@ impl Rule for RuleSelectCse {
                     return 0;
                 }
             }
-        }
 
         // (unlace) `getCseHash`/`cseEliminateList`/`cseElimination` are ported
         // (op.rs / funcdata_op.rs), and the `isHeritaged(outvn)` test —
@@ -917,10 +914,10 @@ impl Rule for RuleAndMask {
             .get(outvn)
             .expect("RuleAndMask: stale outvn")
             .get_consume();
-        let vn: VarnodeId;
+        
         // Result of AND is always zero
-        if andmask == 0 || (andmask & consume) == 0 {
-            vn = data.new_constant(size, 0);
+        let vn: VarnodeId = if andmask == 0 || (andmask & consume) == 0 {
+            data.new_constant(size, 0)
         } else if andmask == mask1 {
             let in1 = data
                 .obank()
@@ -937,16 +934,16 @@ impl Rule for RuleAndMask {
                 return 0;
             }
             // Result of AND is equal to input(0)
-            vn = data
+            data
                 .obank()
                 .get(op)
                 .expect("RuleAndMask: stale op")
                 .get_in(0)
-                .expect("RuleAndMask: INT_AND has no in0");
+                .expect("RuleAndMask: INT_AND has no in0")
         } else {
             // else return 0;
             return 0;
-        }
+        };
         if !data
             .vbank()
             .get(vn)

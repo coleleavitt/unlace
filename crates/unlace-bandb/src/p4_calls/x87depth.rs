@@ -376,14 +376,13 @@ pub fn call_leaves<T: unlace_sleigh::translate::Translate + ?Sized>(
             match code {
                 OpCode::CPUI_BRANCHIND => return calls.value(delta),
                 OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH => {
-                    if let Some(sp) = ins.first().and_then(|v| v.space.as_ref()) {
-                        if sp.get_type() != unlace_base::space::spacetype::IPTR_CONSTANT {
+                    if let Some(sp) = ins.first().and_then(|v| v.space.as_ref())
+                        && sp.get_type() != unlace_base::space::spacetype::IPTR_CONSTANT {
                             todo.push((Address::new(std::rc::Rc::clone(sp), ins[0].offset), d));
                             if code == OpCode::CPUI_BRANCH {
                                 ends = true;
                             }
                         }
-                    }
                 }
                 _ => {}
             }

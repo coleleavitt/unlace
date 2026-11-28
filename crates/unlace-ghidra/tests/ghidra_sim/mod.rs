@@ -1487,10 +1487,11 @@ pub fn unique_leaks(c: &str) -> usize {
         .into_iter()
         .filter(|id| {
             for prefix in ["Unique", "Stack"] {
-                if let Some(rest) = id.strip_prefix(prefix) {
-                    if !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_hexdigit()) {
-                        return true;
-                    }
+                if let Some(rest) = id.strip_prefix(prefix)
+                    && !rest.is_empty()
+                    && rest.bytes().all(|b| b.is_ascii_hexdigit())
+                {
+                    return true;
                 }
             }
             false
@@ -1504,12 +1505,12 @@ pub fn placeholder_addrs(c: &str) -> BTreeMap<&'static str, BTreeSet<u64>> {
     let mut out: BTreeMap<&'static str, BTreeSet<u64>> = BTreeMap::new();
     for id in identifiers(c) {
         for kind in ["sub_", "FUN_", "dat_", "DAT_"] {
-            if let Some(rest) = id.strip_prefix(kind) {
-                if !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_hexdigit()) {
-                    if let Ok(addr) = u64::from_str_radix(rest, 16) {
-                        out.entry(kind).or_default().insert(addr);
-                    }
-                }
+            if let Some(rest) = id.strip_prefix(kind)
+                && !rest.is_empty()
+                && rest.bytes().all(|b| b.is_ascii_hexdigit())
+                && let Ok(addr) = u64::from_str_radix(rest, 16)
+            {
+                out.entry(kind).or_default().insert(addr);
             }
         }
     }

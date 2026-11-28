@@ -65,11 +65,10 @@ pub fn protocols(img: &MachoImage, file: &object::File) -> Vec<Protocol> {
         let size = img
             .read_u32(addr.wrapping_add(protocol_t::SIZE))
             .unwrap_or(0) as u64;
-        if size > protocol_t::CLASS_PROPERTIES {
-            if let Some(list) = img.rebase_ptr(addr.wrapping_add(protocol_t::CLASS_PROPERTIES)) {
+        if size > protocol_t::CLASS_PROPERTIES
+            && let Some(list) = img.rebase_ptr(addr.wrapping_add(protocol_t::CLASS_PROPERTIES)) {
                 properties.extend(super::objcprops::declarations(img, list));
             }
-        }
         out.push(Protocol {
             addr,
             name,

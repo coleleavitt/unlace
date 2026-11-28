@@ -1189,11 +1189,10 @@ impl EmitMarkup {
             if hl != SyntaxHighlight::NoColor {
                 e.write_unsigned_integer(&ids::ATTRIB_COLOR, hl.value());
             }
-            if let Some(id) = tid {
-                if id != 0 {
+            if let Some(id) = tid
+                && id != 0 {
                     e.write_unsigned_integer(&ids::ATTRIB_ID, id);
                 }
-            }
             e.write_string(&ids::ATTRIB_CONTENT, name.as_bytes());
             e.close_element(&ids::ELEM_TYPE);
         });
@@ -1440,11 +1439,10 @@ impl Emit for EmitMarkup {
             }
             if let Some(nm) = tname {
                 e.write_string(&ids::ATTRIB_NAME, nm.as_bytes());
-                if let Some(id) = tid {
-                    if id != 0 {
+                if let Some(id) = tid
+                    && id != 0 {
                         e.write_unsigned_integer(&ids::ATTRIB_ID, id);
                     }
-                }
                 e.write_signed_integer(&ids::ATTRIB_OFF, off as i64);
                 if let Some(o) = op {
                     e.write_unsigned_integer(&ids::ATTRIB_OPREF, o);
@@ -1466,11 +1464,10 @@ impl Emit for EmitMarkup {
             if let Some(nm) = tname {
                 e.write_string(&ids::ATTRIB_NAME, nm.as_bytes());
             }
-            if let Some(t) = tid {
-                if t != 0 {
+            if let Some(t) = tid
+                && t != 0 {
                     e.write_unsigned_integer(&ids::ATTRIB_ID, t);
                 }
-            }
             e.write_signed_integer(&ids::ATTRIB_OFF, id as i64);
             if let Some(o) = op {
                 e.write_unsigned_integer(&ids::ATTRIB_OPREF, o);

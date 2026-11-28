@@ -135,8 +135,8 @@ fn store_conversion_preserves_every_overlapping_byte_in_both_endiannesses() {
                 expected,
                 "big={big}, write=({write_off:x},{write_size}), effect=({effect_off:x},{effect_size})"
             );
-            if let Some(marker) = data.obank().get(effect) {
-                if !marker.is_dead() {
+            if let Some(marker) = data.obank().get(effect)
+                && !marker.is_dead() {
                     assert_ne!(marker.code(), OpCode::CPUI_INDIRECT);
                     let ops = data.bb_ops(block);
                     assert!(
@@ -148,7 +148,6 @@ fn store_conversion_preserves_every_overlapping_byte_in_both_endiannesses() {
                             < ops.iter().position(|&op| op == reader)
                     );
                 }
-            }
         }
     }
 }

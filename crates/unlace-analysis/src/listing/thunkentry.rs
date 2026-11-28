@@ -183,11 +183,10 @@ fn shared_targets(listing: &Listing, targets: &BTreeSet<u64>) -> BTreeSet<u64> {
 fn impure_targets(listing: &Listing, targets: &BTreeSet<u64>) -> BTreeSet<u64> {
     let mut impure = BTreeSet::new();
     for (_, insn) in listing.instructions() {
-        if let Some(fall) = insn.fall_through {
-            if targets.contains(&fall) {
+        if let Some(fall) = insn.fall_through
+            && targets.contains(&fall) {
                 impure.insert(fall);
             }
-        }
         if insn.flow.kind == FlowKind::ConditionalBranch {
             impure.extend(insn.flows.iter().copied().filter(|t| targets.contains(t)));
         }

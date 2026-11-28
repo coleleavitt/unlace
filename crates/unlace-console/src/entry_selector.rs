@@ -39,18 +39,16 @@ impl EntrySelector {
     /// callers implementing an explicit `--addr` surface construct
     /// [`EntrySelector::Numeric`] after applying that surface's number grammar.
     pub fn parse(token: &str) -> Self {
-        if let Some((section, offset)) = token.split_once('+') {
-            if section.starts_with('.') {
-                if let Some(offset) = parse_number(offset) {
+        if let Some((section, offset)) = token.split_once('+')
+            && section.starts_with('.')
+                && let Some(offset) = parse_number(offset) {
                     return Self::SectionOffset {
                         section: section.to_string(),
                         offset,
                     };
                 }
-            }
-        }
-        if let Some((section_index, offset)) = token.split_once(':') {
-            if let (Ok(section_index), Some(offset)) =
+        if let Some((section_index, offset)) = token.split_once(':')
+            && let (Ok(section_index), Some(offset)) =
                 (section_index.parse::<usize>(), parse_number(offset))
             {
                 return Self::SectionIndexOffset {
@@ -58,12 +56,10 @@ impl EntrySelector {
                     offset,
                 };
             }
-        }
-        if token.starts_with("0x") || token.starts_with("0X") {
-            if let Some(value) = parse_number(token) {
+        if (token.starts_with("0x") || token.starts_with("0X"))
+            && let Some(value) = parse_number(token) {
                 return Self::Numeric(value);
             }
-        }
         Self::Name(token.to_string())
     }
 

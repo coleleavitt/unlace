@@ -151,7 +151,7 @@ fn link(abi: Abi, cc: &str, ld: &Path, level: &str, sources: &[&Path], out: &Pat
 
 fn run(qemu: &str, image: &Path) -> i32 {
     let output = process::output_with_timeout(
-        &mut Command::new(qemu).arg(image),
+        Command::new(qemu).arg(image),
         std::time::Duration::from_secs(30),
         std::time::Duration::from_millis(10),
     )

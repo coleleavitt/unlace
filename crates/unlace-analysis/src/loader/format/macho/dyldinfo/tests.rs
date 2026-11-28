@@ -88,7 +88,7 @@ fn a_repeating_program_is_bounded() {
 #[test]
 fn a_long_symbol_is_shared_between_its_slots() {
     let mut program = vec![BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM];
-    program.extend(std::iter::repeat(b'A').take(100_000));
+    program.extend(std::iter::repeat_n(b'A', 100_000));
     program.push(0);
     program.extend_from_slice(&[BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB, 0]);
     program.extend_from_slice(&[BIND_OPCODE_DO_BIND_ULEB_TIMES_SKIPPING_ULEB, 0x80, 0x10, 0]);

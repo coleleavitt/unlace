@@ -667,13 +667,11 @@ impl Cls {
                 let Some(o) = data.obank().get(op) else {
                     continue;
                 };
-                if o.code() == OpCode::CPUI_LOAD {
-                    if let (Some(p), Some(out)) = (o.get_in(1), o.get_out()) {
-                        if let Some(f) = field(data, p) {
+                if o.code() == OpCode::CPUI_LOAD
+                    && let (Some(p), Some(out)) = (o.get_in(1), o.get_out())
+                        && let Some(f) = field(data, p) {
                             cls.fields.entry(f).or_default().push(out);
                         }
-                    }
-                }
             }
         }
         for (c, (x, _, class, r, m)) in tests {
@@ -702,11 +700,10 @@ impl Cls {
                 let Some(o) = data.obank().get(op) else {
                     continue;
                 };
-                if o.code() == OpCode::CPUI_LOAD && !cls.reads.contains_key(&op) {
-                    if let Some(p) = o.get_in(1) {
+                if o.code() == OpCode::CPUI_LOAD && !cls.reads.contains_key(&op)
+                    && let Some(p) = o.get_in(1) {
                         cls.overflow_web(data, p);
                     }
-                }
             }
         }
         cls.joins(data);

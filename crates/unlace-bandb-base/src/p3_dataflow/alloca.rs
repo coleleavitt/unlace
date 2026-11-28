@@ -169,7 +169,7 @@ fn unrounded(data: &Funcdata, vn: VarnodeId) -> Option<VarnodeId> {
     match def(data, strip_extension(data, sum))? {
         (OpCode::CPUI_INT_ADD, ins)
             if ins.len() == 2
-                && constant(data, ins[1]).is_some_and(|c| c >= 3 && c < MAX_SLACK) =>
+                && constant(data, ins[1]).is_some_and(|c| (3..MAX_SLACK).contains(&c)) =>
         {
             Some(ins[0])
         }

@@ -715,7 +715,8 @@ fn apply_fixups(
     let mut segs = segments(bytes, 0).ok_or("malformed MH_FILESET segments")?;
     segs.retain(|s| s.filesize > 0);
     segs.sort_by_key(|s| s.vmaddr);
-    let (rebases, targets, signed): (Vec<(u64, u64)>, Vec<(u64, u8, u64)>, SignedImage) = {
+    type Fixups = (Vec<(u64, u64)>, Vec<(u64, u8, u64)>, SignedImage);
+    let (rebases, targets, signed): Fixups = {
         let file = object::File::parse(&*bytes).map_err(|e| format!("MH_FILESET: {e}"))?;
         let fixups = resolve_chained_fixups(&file, bytes);
         (

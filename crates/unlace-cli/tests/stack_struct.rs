@@ -256,13 +256,9 @@ fn wide_pieces_print_as_c() {
         pair_code.contains("return *(unsigned __int128 *)v1;"),
         "{pair_code}"
     );
+    let partial = regex::Regex::new(r"\._[0-9]+_[0-9]+_").unwrap();
     for text in [&code, &pair_code] {
         assert!(!text.contains("(*)["), "{text}");
-        assert!(
-            !regex::Regex::new(r"\._[0-9]+_[0-9]+_")
-                .unwrap()
-                .is_match(text),
-            "{text}"
-        );
+        assert!(!partial.is_match(text), "{text}");
     }
 }

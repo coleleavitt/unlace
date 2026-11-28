@@ -373,8 +373,8 @@ pub fn printed_ops(data: &Funcdata, bb: BlockId) -> Vec<OpId> {
                 continue;
             }
             // An op whose output is implied is inlined at its use — no statement.
-            if let Some(outvn) = opref.get_out() {
-                if data
+            if let Some(outvn) = opref.get_out()
+                && data
                     .vbank()
                     .get(outvn)
                     .map(|v| v.is_implied())
@@ -382,7 +382,6 @@ pub fn printed_ops(data: &Funcdata, bb: BlockId) -> Vec<OpId> {
                 {
                     continue;
                 }
-            }
             out.push(o);
         }
     }

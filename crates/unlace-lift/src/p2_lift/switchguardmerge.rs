@@ -382,13 +382,12 @@ impl Action for ActionSwitchGuardMerge {
             if !ok {
                 return 0;
             }
-            if let Some((g, off)) = m.guard {
-                if data.remove_branch(g, off).is_err()
-                    || data.remove_unreachable_blocks(false, true).is_err()
+            if let Some((g, off)) = m.guard
+                && (data.remove_branch(g, off).is_err()
+                    || data.remove_unreachable_blocks(false, true).is_err())
                 {
                     return 0;
                 }
-            }
             data.sblocks_clear();
             self.base_mut().count += 1;
         }

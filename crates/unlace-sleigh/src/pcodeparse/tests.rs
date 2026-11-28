@@ -71,13 +71,12 @@ impl SnippetLanguage for TestLang {
             let vsym = VarnodeSymbol::new_for_test(Rc::clone(&self.ram), *off, *size as i32);
             return Some(SnippetSymbol::Varnode(vsym, name.to_vec()));
         }
-        if let Some((uname, idx)) = &self.userop {
-            if uname == name {
+        if let Some((uname, idx)) = &self.userop
+            && uname == name {
                 let mut u = UserOpSymbol::default();
                 u.set_index(*idx);
                 return Some(SnippetSymbol::UserOp(u));
             }
-        }
         // Special address symbols (inst_start/inst_next): the snippet ctor
         // adds inst_dest/inst_ref; inst_start/inst_next come from the language.
         match name {

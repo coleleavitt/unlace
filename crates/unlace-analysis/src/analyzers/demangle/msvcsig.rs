@@ -815,11 +815,10 @@ pub(super) fn msvc_imports(ctx: &AnalysisCtx) -> Vec<(u64, String)> {
 fn image_msvc_names(file: &object::File) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
     for sym in file.symbols().chain(file.dynamic_symbols()) {
-        if let Ok(n) = sym.name() {
-            if n.starts_with('?') {
+        if let Ok(n) = sym.name()
+            && n.starts_with('?') {
                 names.push(n.to_string());
             }
-        }
     }
     if let Ok(imports) = file.imports() {
         for i in imports {

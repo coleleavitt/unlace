@@ -35,6 +35,6 @@ fn namespace_guard() {
     assert!(!matches_noreturn_extern_name("Menu::exit"));
     assert!(!matches_noreturn_extern_name("Menu::_exit"));
     // The sole allowed non-global namespace is `std`.
-    assert!(matches_noreturn_extern_name("std::terminate") == false); // base "terminate" not on the ELF list
+    assert!(!matches_noreturn_extern_name("std::terminate")); // base "terminate" not on the ELF list
     assert!(matches_noreturn_extern_name("std::abort")); // base "abort" is on the list, std allowed
 }

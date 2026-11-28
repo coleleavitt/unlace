@@ -131,6 +131,7 @@ pub(super) fn interface_method_sets(
 /// Intern `go.itab.<interface>` for `interface`'s method list (64-bit layout)
 /// and register its facet. An existing record of that name is left alone
 /// unless it is an empty shell. Returns whether the record is in place.
+#[cfg(test)]
 pub(super) fn intern_record(tf: &dyn TypeFactory, interface: &str, methods: &[String]) -> bool {
     intern_record_slots(tf, interface, methods, &[])
 }

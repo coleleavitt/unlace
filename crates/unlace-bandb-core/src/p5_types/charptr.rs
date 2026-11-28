@@ -316,11 +316,10 @@ fn walk_is_char(data: &Funcdata, start: VarnodeId) -> Evidence {
                 Use::Forward(next) => forward = Some((next, offsetted)),
                 Use::ForwardOffset(next) => forward = Some((next, true)),
             }
-            if let Some((next, off)) = forward {
-                if hops + 1 < HOP_CAP && seen.insert(next) {
+            if let Some((next, off)) = forward
+                && hops + 1 < HOP_CAP && seen.insert(next) {
                     work.push_back((next, hops + 1, off));
                 }
-            }
         }
     }
     ev

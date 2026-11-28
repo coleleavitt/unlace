@@ -270,7 +270,7 @@ fn native_receiver(fd: &Funcdata, id: OpId) -> Option<(Address, i32)> {
         NativeWrite::Copy(original, address, width)
             if *original == point && address == out.get_addr() && *width == out.get_size() =>
         {
-            ()
+            
         }
         _ => return None,
     }
@@ -311,11 +311,10 @@ fn collect(fd: &mut Funcdata) {
             let op = fd.obank().get(id).unwrap();
             let call = matches!(op.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND);
             let receiver = native_receiver(fd, id);
-            if let Some((_, input)) = published_input(fd, id) {
-                if crate::stackranges::frame_address(fd, input).is_some() {
+            if let Some((_, input)) = published_input(fd, id)
+                && crate::stackranges::frame_address(fd, input).is_some() {
                     frame_publications.push(id);
                 }
-            }
             if !call && receiver.is_none() {
                 continue;
             }
@@ -756,15 +755,12 @@ fn accesses_fit_early(
         .map(|v| v.get_size())
         .filter(|&size| size > 0)
         .ok_or(Refusal::Unavailable)?;
-        if op.code() == OpCode::CPUI_STORE {
-            if let Some(NativeWrite::Store(point, original)) =
+        if op.code() == OpCode::CPUI_STORE
+            && let Some(NativeWrite::Store(point, original)) =
                 fd.local_stack_views().native.get(&id)
-            {
-                if *original != bytes || Some(*point) != SourcePoint::op(fd, id) {
+                && (*original != bytes || Some(*point) != SourcePoint::op(fd, id)) {
                     return Err(Refusal::Unavailable);
                 }
-            }
-        }
         let extent = if index == stack.get_index() as u64 && pointer_vn.is_constant() {
             Some((pointer_vn.get_offset(), bytes))
         } else {
@@ -851,11 +847,10 @@ fn stores_fit(fd: &Funcdata, start: u64, size: i32) -> bool {
         else {
             return false;
         };
-        if let Some(NativeWrite::Store(point, original)) = fd.local_stack_views().native.get(&id) {
-            if *original != width || Some(*point) != SourcePoint::op(fd, id) {
+        if let Some(NativeWrite::Store(point, original)) = fd.local_stack_views().native.get(&id)
+            && (*original != width || Some(*point) != SourcePoint::op(fd, id)) {
                 return false;
             }
-        }
         let extent = if index == stack.get_index() as u64 && pointer.is_constant() {
             Some((pointer.get_offset(), width))
         } else {

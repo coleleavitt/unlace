@@ -1091,11 +1091,10 @@ impl OpTpl {
 
     /// C++ `isZeroSize`: return true if any input or output has zero size.
     pub fn is_zero_size(&self) -> bool {
-        if let Some(output) = &self.output {
-            if output.is_zero_size() {
+        if let Some(output) = &self.output
+            && output.is_zero_size() {
                 return true;
             }
-        }
         for vn in &self.input {
             if vn.is_zero_size() {
                 return true;

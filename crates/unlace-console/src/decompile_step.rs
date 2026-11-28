@@ -266,11 +266,10 @@ fn decompile_one_prefollowed_once(
         .cloned()
         .map(|site| (site, unlace_decomp::overrides::flow_type::CALL))
         .collect::<Vec<_>>();
-    if let Some((site, _target)) = push_immediate_ret.as_ref() {
-        if !seed.flow_overrides.iter().any(|(at, _)| at == site) {
+    if let Some((site, _target)) = push_immediate_ret.as_ref()
+        && !seed.flow_overrides.iter().any(|(at, _)| at == site) {
             flow_overrides.push((site.clone(), unlace_decomp::overrides::flow_type::BRANCH));
         }
-    }
     flow_overrides.extend(seed.flow_overrides.iter().filter_map(|(site, kind)| {
         // RETURN on a raw RETURN link is the original instruction semantics,
         // not an override the engine can apply. Treat it as a clean veto.
@@ -400,8 +399,8 @@ fn decompile_one_prefollowed_once(
         _ => Vec::new(),
     };
     let mut discovered: Vec<(Address, PrototypePieces)> = Vec::new();
-    if formatstring_mode.loop_pass() {
-        if let Ok(fd) = &result {
+    if formatstring_mode.loop_pass()
+        && let Ok(fd) = &result {
             for (callpoint, pieces) in extract_format_string_overrides(arch, fd) {
                 // Only the call-site overrides not already installed (a
                 // hand-typed `override prototype` at the same callpoint wins).
@@ -417,7 +416,6 @@ fn decompile_one_prefollowed_once(
                 }
             }
         }
-    }
     let redo_entry = entry.clone();
     let mut last_overrides: Vec<(Address, PrototypePieces)> = proto_overrides.to_vec();
     if !dropped.is_empty() || !discovered.is_empty() {
@@ -712,17 +710,15 @@ pub(crate) fn resolve_const_pointer(
         | OpCode::CPUI_CAST => {
             let mut acc: Option<uintb> = None;
             for slot in 0..op.num_input() {
-                if let Some(in_id) = op.get_in(slot) {
-                    if let Some(in_vn) = fd.vbank().get(in_id) {
-                        if in_vn.is_constant() {
+                if let Some(in_id) = op.get_in(slot)
+                    && let Some(in_vn) = fd.vbank().get(in_id)
+                        && in_vn.is_constant() {
                             let off = in_vn.get_offset();
                             // Skip a zero base; sum the rest (PTRADD/INT_ADD).
                             if off != 0 {
                                 acc = Some(acc.unwrap_or(0).wrapping_add(off));
                             }
                         }
-                    }
-                }
             }
             acc
         }
@@ -943,11 +939,10 @@ fn objc_retargets(arch: &mut Architecture, fd: &unlace_decomp::funcdata::Funcdat
                 }
             }
             let imp = Address::new(space, send.imp);
-            if let Some(declared) = arch.symboltab.function_proto_pieces_across_scopes(&imp) {
-                if declared.outtype.is_some() {
+            if let Some(declared) = arch.symboltab.function_proto_pieces_across_scopes(&imp)
+                && declared.outtype.is_some() {
                     pieces.outtype = declared.outtype.clone();
                 }
-            }
             pieces.name = send.label.clone();
             arch.unlace_objc_site_pieces.insert(site, pieces);
         }

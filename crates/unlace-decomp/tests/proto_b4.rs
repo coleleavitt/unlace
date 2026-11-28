@@ -160,14 +160,13 @@ fn bootstrap(dt: &DataTest) -> Result<XmlArchitecture, String> {
         .map_err(|e| format!("build_translator: {e}"))?;
     // Hand the resolved cspec XML to the architecture so build_default_proto
     // decodes the real <default_proto> input/output param lists (proto recovery).
-    if !specs.compilerfile.is_empty() {
-        if let Ok(cspec) = std::fs::read(&specs.compilerfile) {
+    if !specs.compilerfile.is_empty()
+        && let Ok(cspec) = std::fs::read(&specs.compilerfile) {
             arch.sleigh_mut()
                 .base_mut()
                 .ok_or("no Architecture base after build_translator")?
                 .set_cspec_xml(cspec);
         }
-    }
     arch.sleigh_mut()
         .base_mut()
         .ok_or("no Architecture base after build_translator")?

@@ -849,11 +849,10 @@ impl Varnode {
     /// This is \b only called by the Merge class which knows when to call it.
     pub fn update_cover(&mut self, ctx: &dyn CoverContext, self_id: VarnodeId) {
         if (self.flags & varnode_flags::coverdirty) != 0 {
-            if self.has_cover() {
-                if let Some(cover) = self.cover.as_mut() {
+            if self.has_cover()
+                && let Some(cover) = self.cover.as_mut() {
                     cover.rebuild(ctx, self_id);
                 }
-            }
             self.clear_flags(varnode_flags::coverdirty);
         }
     }
@@ -1536,10 +1535,7 @@ impl Varnode {
             }
             return true;
         }
-        if b >= a.wadd(self.size as i64 as u64) {
-            return false;
-        }
-        true
+        b < a.wadd(self.size as i64 as u64)
     }
 
     /// Return 0, 1, or 2 for "no overlap", "partial overlap", "identical
@@ -1617,14 +1613,13 @@ impl Varnode {
         if self.is_written() {
             return false; // op-graph branch deferred to the op-aware caller
         }
-        if use_annotation && !self.is_free() {
-            if (self.flags & (varnode_flags::input | varnode_flags::typelock))
+        if use_annotation && !self.is_free()
+            && (self.flags & (varnode_flags::input | varnode_flags::typelock))
                 == (varnode_flags::input | varnode_flags::typelock)
             {
                 return self.size == 1
                     && self.get_type().get_metatype() == type_metatype::TYPE_BOOL;
             }
-        }
         false
     }
 

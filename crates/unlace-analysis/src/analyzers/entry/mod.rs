@@ -24,8 +24,8 @@
 //!   that Ghidra disassembles into a function.
 //! - `ExternalEntryFunctionAnalyzer.java` ("External Entry References") — turns
 //!   each external-entry-point-with-code into a function. The commit seam's
-//!   `out.entries` path (`engine.rs::commit_analysis_output` step 2: `name_function`
-//!   + `add_function` + `register_symbol`) is exactly this step, so the pass need
+//!   `out.entries` path (`engine.rs::commit_analysis_output` step 2: `name_function`,
+//!   `add_function`, `register_symbol`) is exactly this step, so the pass need
 //!   only emit the VMAs.
 //! - `FunctionStartAnalyzer.java` ("Function Start Search") — the prologue
 //!   byte-pattern matcher (`DittedBitSequence`). We port the bit matcher
@@ -649,7 +649,7 @@ pub fn collect_entry_names(file: &object::File, kept: &[u64]) -> Vec<(u64, Strin
     }
     // A VMA can be named by at most one dynamic source (INIT vs FINI tables are
     // disjoint pointer arrays); dedup defensively to keep the overlay a clean map.
-    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out.sort_by_key(|a| a.0);
     out.dedup_by(|a, b| a.0 == b.0);
     out
 }
@@ -1075,10 +1075,11 @@ fn section_bytes_containing(file: &object::File, vma: u64) -> Option<(u64, Vec<u
         if size == 0 {
             continue;
         }
-        if vma >= addr && vma < addr.saturating_add(size) {
-            if let Ok(d) = sec.data() {
-                return Some((addr, d.to_vec()));
-            }
+        if vma >= addr
+            && vma < addr.saturating_add(size)
+            && let Ok(d) = sec.data()
+        {
+            return Some((addr, d.to_vec()));
         }
     }
     None
@@ -1197,13 +1198,12 @@ fn x86_64_immediate_main_target(file: &object::File, window: &[u8]) -> Option<u6
         } else {
             None
         };
-        if let Some((len, main)) = hit {
-            if main != 0
-                && in_executable_section(&execs, main)
-                && x86_64_call_follows(window, i + len)
-            {
-                hits.push(main);
-            }
+        if let Some((len, main)) = hit
+            && main != 0
+            && in_executable_section(&execs, main)
+            && x86_64_call_follows(window, i + len)
+        {
+            hits.push(main);
         }
         i += 1;
     }
@@ -1232,12 +1232,11 @@ fn x86_64_call_follows(window: &[u8], off: usize) -> bool {
             return true;
         }
         // `ff /2` = CALL r/m: the ModRM reg field selects the opcode extension.
-        if window[i] == 0xff {
-            if let Some(&modrm) = window.get(i + 1) {
-                if (modrm >> 3) & 0x7 == 2 {
-                    return true;
-                }
-            }
+        if window[i] == 0xff
+            && let Some(&modrm) = window.get(i + 1)
+            && (modrm >> 3) & 0x7 == 2
+        {
+            return true;
         }
         i += 1;
     }
@@ -1442,17 +1441,17 @@ fn thumb_entry_paints(file: &object::File) -> Vec<ContextPaint> {
     if entry == 0 {
         return out;
     }
-    if let Some(raw) = arm_main_target_raw(file, entry) {
-        if raw & 1 == 1 {
-            // Thumb `main`: paint TMode=1 at the even (decode) VMA. `end: None` is
-            // the point-set shape `arm_markers`/`ArmSymbolAnalyzer` use.
-            out.push(ContextPaint {
-                addr: raw & !1,
-                end: None,
-                var: "TMode",
-                value: 1,
-            });
-        }
+    if let Some(raw) = arm_main_target_raw(file, entry)
+        && raw & 1 == 1
+    {
+        // Thumb `main`: paint TMode=1 at the even (decode) VMA. `end: None` is
+        // the point-set shape `arm_markers`/`ArmSymbolAnalyzer` use.
+        out.push(ContextPaint {
+            addr: raw & !1,
+            end: None,
+            var: "TMode",
+            value: 1,
+        });
     }
     out
 }
@@ -1829,7 +1828,7 @@ fn prologue_pattern_starts(execs: &[(u64, u64, Vec<u8>)]) -> Vec<u64> {
         let mut off = 0usize;
         while off < data.len() {
             let vma = addr + off as u64;
-            if vma % FUNC_ALIGN == 0 && pats.iter().any(|p| p.matches(&data[off..])) {
+            if vma.is_multiple_of(FUNC_ALIGN) && pats.iter().any(|p| p.matches(&data[off..])) {
                 out.push(vma);
             }
             off += 1;
@@ -2159,10 +2158,11 @@ impl PersonalityNames {
         use object::ObjectSymbolTable;
         let mut at = std::collections::HashMap::new();
         for sym in file.symbols().chain(file.dynamic_symbols()) {
-            if let Ok(name) = sym.name() {
-                if sym.address() != 0 && name.contains("personality") {
-                    at.insert(sym.address(), name.to_string());
-                }
+            if let Ok(name) = sym.name()
+                && sym.address() != 0
+                && name.contains("personality")
+            {
+                at.insert(sym.address(), name.to_string());
             }
         }
         let mut slot = std::collections::HashMap::new();
@@ -2170,14 +2170,13 @@ impl PersonalityNames {
             (file.dynamic_relocations(), file.dynamic_symbol_table())
         {
             for (off, r) in relocs {
-                if let object::RelocationTarget::Symbol(idx) = r.target() {
-                    if let Some(name) = dynsym
+                if let object::RelocationTarget::Symbol(idx) = r.target()
+                    && let Some(name) = dynsym
                         .symbol_by_index(idx)
                         .ok()
                         .and_then(|s| s.name().ok().map(str::to_string))
-                    {
-                        slot.insert(off, name);
-                    }
+                {
+                    slot.insert(off, name);
                 }
             }
         }

@@ -287,7 +287,7 @@ impl DexModel {
                     _ => {
                         let width = word(1)?;
                         let size = word(2)? | (word(3)? << 16);
-                        (size * width + 1) / 2 + 4
+                        (size * width).div_ceil(2) + 4
                     }
                 }
             }

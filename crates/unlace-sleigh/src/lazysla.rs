@@ -464,7 +464,7 @@ impl SlaStream {
     /// their symbol ids), and the other elements are copied, in order, into
     /// one stream to decode now.
     #[allow(clippy::type_complexity)]
-    pub fn scan_contents(
+    pub(crate) fn scan_contents(
         self,
         const_space: Rc<AddrSpace>,
     ) -> UnlaceResult<(

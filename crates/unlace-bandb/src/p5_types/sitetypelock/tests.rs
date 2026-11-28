@@ -60,7 +60,7 @@ fn call_at(data: &mut Funcdata, pc: u64, with_out: bool) -> (OpId, Address) {
     let fc = FuncCallSpecs::new(
         op,
         Address::new(
-            Rc::clone(&data.get_arch().manage().get_space_by_name("ram").unwrap()),
+            Rc::clone(data.get_arch().manage().get_space_by_name("ram").unwrap()),
             0x2000,
         ),
     );

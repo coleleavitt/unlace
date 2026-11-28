@@ -898,14 +898,14 @@ impl Rule for RuleEqual2Constant {
         let leftop = lv.get_def().unwrap();
         let opc = data.obank().get(leftop).unwrap().code();
 
-        let newconst: u64;
-        if opc == OpCode::CPUI_INT_ADD {
+        
+        let newconst: u64 = if opc == OpCode::CPUI_INT_ADD {
             let otherconst = data.obank().get(leftop).unwrap().get_in(1).unwrap();
             let oc = data.vbank().get(otherconst).unwrap();
             if !oc.is_constant() {
                 return 0;
             }
-            newconst = cvn_off.wrapping_sub(oc.get_offset()) & calc_mask(cvn_size);
+            cvn_off.wrapping_sub(oc.get_offset()) & calc_mask(cvn_size)
         } else if opc == OpCode::CPUI_INT_MULT {
             let otherconst = data.obank().get(leftop).unwrap().get_in(1).unwrap();
             let oc = data.vbank().get(otherconst).unwrap();
@@ -917,13 +917,13 @@ impl Rule for RuleEqual2Constant {
             if oc.get_offset() != calc_mask(oc_size) {
                 return 0;
             }
-            newconst = cvn_off.wrapping_neg() & calc_mask(oc_size);
+            cvn_off.wrapping_neg() & calc_mask(oc_size)
         } else if opc == OpCode::CPUI_INT_NEGATE {
-            newconst = (!cvn_off) & calc_mask(lhs_size);
+            (!cvn_off) & calc_mask(lhs_size)
         } else {
             // else return 0;
             return 0;
-        }
+        };
 
         let a = data.obank().get(leftop).unwrap().get_in(0).unwrap();
         let a_size = data.vbank().get(a).unwrap().get_size();
@@ -1056,13 +1056,12 @@ pub fn evaluate_pointer_expression(data: &Funcdata, op: OpId, slot: int4) -> int
         }
     }
     let other = data.obank().get(op).and_then(|o| o.get_in(1 - slot));
-    if let Some(other) = other {
-        if data.vn_type_read_facing(other, op).get_metatype()
+    if let Some(other) = other
+        && data.vn_type_read_facing(other, op).get_metatype()
             == crate::dtype::type_metatype::TYPE_PTR
         {
             res = 2;
         }
-    }
     let out_vn = match data.obank().get(op).and_then(|o| o.get_out()) {
         Some(v) => v,
         None => return 0,
@@ -1616,18 +1615,16 @@ fn duplicate_need(data: &mut Funcdata, op: OpId) {
             .unwrap_or(0);
         let new_op = data.new_op(num, op_addr.clone());
         let new_out = build_varnode_out(data, out_vn, new_op);
-        if let Some(ot) = &out_type {
-            if let Some(v) = data.vbank_mut().get_mut(new_out) {
+        if let Some(ot) = &out_type
+            && let Some(v) = data.vbank_mut().get_mut(new_out) {
                 v.update_type(ot.clone());
             }
-        }
         data.op_set_opcode_code(new_op, opc);
         let _ = data.op_set_input(new_op, in_vn, 0);
-        if num > 1 {
-            if let Some(in1) = in1 {
+        if num > 1
+            && let Some(in1) = in1 {
                 let _ = data.op_set_input(new_op, in1, 1);
             }
-        }
         let _ = data.op_set_input(dec_op, new_out, slot);
         data.op_insert_before(new_op, dec_op);
     }

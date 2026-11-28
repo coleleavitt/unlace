@@ -54,11 +54,10 @@ pub fn moves_return(pieces: &PrototypePieces) -> bool {
 pub fn declarations(arch: &Architecture) -> Option<Rc<ProtoModel>> {
     let base = arch.default_fp()?;
     let mut cache = arch.unlace_vfp_variadic.borrow_mut();
-    if let Some((key, derived)) = cache.as_ref() {
-        if Rc::ptr_eq(key, base) {
+    if let Some((key, derived)) = cache.as_ref()
+        && Rc::ptr_eq(key, base) {
             return derived.clone();
         }
-    }
     let derived = model(base, arch.manage());
     *cache = Some((Rc::clone(base), derived.clone()));
     derived

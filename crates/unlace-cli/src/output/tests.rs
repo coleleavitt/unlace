@@ -5,7 +5,7 @@ struct FailingWriter;
 
 impl Write for FailingWriter {
     fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "synthetic failure"))
+        Err(io::Error::other("synthetic failure"))
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -30,6 +30,6 @@ fn a_broken_pipe_keeps_the_verdict() {
 
 #[test]
 fn any_other_write_failure_forces_one() {
-    let err = io::Error::new(io::ErrorKind::Other, "disk full");
+    let err = io::Error::other("disk full");
     assert_eq!(status_after(err, 0), 1);
 }

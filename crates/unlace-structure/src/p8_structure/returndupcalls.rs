@@ -107,9 +107,7 @@ fn reload_pointer(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<OpId>) -> Optio
         OpCode::CPUI_MULTIEQUAL => {
             let mut ptr: Option<VarnodeId> = None;
             for slot in 0..o.num_input() {
-                let Some(input) = o.get_in(slot) else {
-                    return None;
-                };
+                let input = o.get_in(slot)?;
                 let in_def = data.vbank().get(input).and_then(|v| v.get_def());
                 if in_def.is_some_and(|d| seen.contains(&d)) {
                     continue;

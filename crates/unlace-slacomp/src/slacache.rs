@@ -42,7 +42,7 @@ use std::sync::Mutex;
 use std::time::SystemTime;
 
 use unlace_sleigh::lazysla::{index_raw_image, split_raw_image};
-use unlace_sleigh::slaformat::{RAW_SLA_HEADER, raw_sla_image};
+use unlace_sleigh::slaformat::raw_sla_image;
 
 use crate::slgh_compile::SleighCompile;
 

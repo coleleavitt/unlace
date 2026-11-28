@@ -203,15 +203,15 @@ fn assert_dispatch_rows(idx: &XrefIndex, sw: &Switch) {
 #[test]
 fn an_add_pc_branch_table_walks_every_case_with_the_dispatch_base() {
     let idx = index();
-    assert_cases_walked(&idx, &ADD);
-    assert_dispatch_rows(&idx, &ADD);
+    assert_cases_walked(idx, &ADD);
+    assert_dispatch_rows(idx, &ADD);
 }
 
 #[test]
 fn an_ldr_pc_word_table_walks_every_case_with_the_dispatch_base() {
     let idx = index();
-    assert_cases_walked(&idx, &LDR);
-    assert_dispatch_rows(&idx, &LDR);
+    assert_cases_walked(idx, &LDR);
+    assert_dispatch_rows(idx, &LDR);
 }
 
 /// The table words are data the dispatch reads, not code and not pointers.

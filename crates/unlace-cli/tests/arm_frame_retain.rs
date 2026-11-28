@@ -1,9 +1,9 @@
 //! A frame `armframes` recovers keeps the routine its tail branch reaches.
 use serde_json::Value;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn entries(path: &PathBuf, extra: &[&str]) -> Vec<u64> {
+fn entries(path: &Path, extra: &[&str]) -> Vec<u64> {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args([
             "functions",

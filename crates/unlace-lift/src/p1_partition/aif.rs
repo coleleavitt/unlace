@@ -83,7 +83,7 @@ impl crate::optionset::UnlaceOption for AifMode {
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
-        Ok(crate::aif::parse_aif_mode(value)?)
+        crate::aif::parse_aif_mode(value)
     }
 }
 

@@ -300,11 +300,10 @@ fn arm(implied: &ImpliedCasts, p: &dyn PrintedForms, fd: &Funcdata, op: OpId) ->
                     conv: None,
                 });
             }
-            if !v.is_explicit() && !v.is_annotation() {
-                if let Some(def) = v.get_def().filter(|&d| is_conversion(fd, d)) {
+            if !v.is_explicit() && !v.is_annotation()
+                && let Some(def) = v.get_def().filter(|&d| is_conversion(fd, d)) {
                     return conversion_arm(implied, p, fd, def, Some(op));
                 }
-            }
             let t = v.get_type_read_facing(op).clone();
             let kept = value_set(&implied.operand_type(p, fd, vn, op), &t)?;
             Some(Arm { kept, conv: None })

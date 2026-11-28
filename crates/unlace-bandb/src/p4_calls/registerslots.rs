@@ -150,11 +150,10 @@ pub fn apply(data: &mut Funcdata) -> UnlaceResult<()> {
             continue;
         };
         for slot in 0..op.num_input() {
-            if let Some(vn) = op.get_in(slot).and_then(|vn| data.vbank().get(vn)) {
-                if !vn.is_constant() {
+            if let Some(vn) = op.get_in(slot).and_then(|vn| data.vbank().get(vn))
+                && !vn.is_constant() {
                     reads.push((vn.get_space().get_index(), vn.get_offset(), vn.get_size()));
                 }
-            }
         }
     }
     let read = |extension: &Extension| {

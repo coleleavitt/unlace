@@ -98,10 +98,9 @@ fn refresh_placeholder_high_names(data: &mut Funcdata) {
             .and_then(|lm| lm.query_container_for_link(&addr, &usepoint))
             .filter(|info| !info.is_name_undefined)
             .map(|info| info.display_name);
-        if let Some(name) = resolved {
-            if let Some(h) = data.high_bank_mut().get_mut(high) {
+        if let Some(name) = resolved
+            && let Some(h) = data.high_bank_mut().get_mut(high) {
                 h.set_unlace_name(name);
             }
-        }
     }
 }

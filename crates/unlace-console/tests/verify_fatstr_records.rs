@@ -199,16 +199,15 @@ fn rust_str_records_segment_the_glued_nul_run() {
         "the record-stated extent is the literal's own 21 bytes"
     );
 
-    match committed_extent(bin, vma, Some("off")) {
-        // The glued NUL-run symbol: it cannot end at the record boundary,
-        // because the next piece's bytes are printable.
-        Some(glued) => assert!(
+    // The glued NUL-run symbol: it cannot end at the record boundary, because
+    // the next piece's bytes are printable. Or no symbol at all, if the scan
+    // rejected the run for other reasons — either way, nothing states the
+    // literal's true extent.
+    if let Some(glued) = committed_extent(bin, vma, Some("off")) {
+        assert!(
             glued > WITNESS.len() as i32,
             "with fatstr off the NUL scan glues past the literal (got {glued})"
-        ),
-        // Or no symbol at all, if the scan rejected the run for other reasons —
-        // either way, nothing states the literal's true extent.
-        None => {}
+        );
     }
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -241,12 +240,11 @@ fn go_string_records_bound_the_blob_literal() {
         "the Go header-stated extent is the literal's own 21 bytes"
     );
 
-    match committed_extent(bin, vma, Some("off")) {
-        Some(glued) => assert!(
+    if let Some(glued) = committed_extent(bin, vma, Some("off")) {
+        assert!(
             glued != WITNESS.len() as i32,
             "with fatstr off nothing states the literal's exact extent"
-        ),
-        None => {}
+        )
     }
 
     let _ = std::fs::remove_dir_all(&dir);

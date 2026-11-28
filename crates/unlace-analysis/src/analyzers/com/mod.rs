@@ -73,11 +73,10 @@ fn parse_interfaces(text: &'static str) -> BTreeMap<&'static str, Interface> {
                 },
             );
             current = Some(name);
-        } else if let (Some(name), Some((method, kinds))) = (current, line.split_once(' ')) {
-            if let Some(entry) = table.get_mut(name) {
+        } else if let (Some(name), Some((method, kinds))) = (current, line.split_once(' '))
+            && let Some(entry) = table.get_mut(name) {
                 entry.methods.push((method, kinds));
             }
-        }
     }
     table
 }

@@ -20,6 +20,7 @@
 //!   - a `Data` [`SymFact`] at each `CompleteObjectLocator` named
 //!     `<Class>::RTTI_Complete_Object_Locator`;
 //!   - a `Data` [`SymFact`] at the recovered vftable named `<Class>::vftable`;
+//!
 //! so the decompiled output labels the metadata graph and the class names
 //! (`Box`, `Shape`) surface as recovered symbols.
 //!
@@ -412,6 +413,7 @@ pub(super) fn pick_common_type_info_vftable(descriptors: &[TypeDescriptor]) -> O
 /// Validate the chain rooted at `col` and emit the class-name + label facts:
 ///   - the COL's own class (its `pTypeDescriptor`), and
 ///   - every base class reachable through RTTI3→RTTI2→RTTI1.
+///
 /// Also labels the COL, each TypeDescriptor, and the recovered vftable.
 fn emit_for_col(
     img: &ImageBytes,
@@ -511,6 +513,7 @@ fn vfunc_name(class: &str, slot: usize) -> String {
 ///     target VA (the virtual method the dispatch jumps to), staged in `named`
 ///     so a shared target is named for its defining class ([`SlotNames::emit`]);
 ///   - the slot array's VMA range as read-only ([`AnalysisOutput::readonly`]).
+///
 /// The `SymFact{Function}` commit is an idempotent ADD (`find_function`-gated), so a
 /// slot target that already carries a real `.symtab`/import name keeps it; only a
 /// never-symboled virtual method takes the `<Class>::vfunc_<i>` name.

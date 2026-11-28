@@ -346,11 +346,10 @@ fn classify_pass(img: &Image, pops: &BTreeMap<u64, i32>) -> BTreeMap<u64, Ev> {
             if before.contains(pc) {
                 continue;
             }
-            if let Ev::Call { target, .. } = ev {
-                if entries.insert(*target) {
+            if let Ev::Call { target, .. } = ev
+                && entries.insert(*target) {
                     new_entries.push(*target);
                 }
-            }
         }
         for t in new_entries {
             state.insert(t, Vec::new());
@@ -695,11 +694,10 @@ pub fn image_map(
     let code = read_code(manage, loader)?;
     let key = fingerprint(&code);
     MEMO.with(|m| {
-        if let Some((k, map)) = m.borrow().as_ref() {
-            if *k == key {
+        if let Some((k, map)) = m.borrow().as_ref()
+            && *k == key {
                 return Some(Rc::clone(map));
             }
-        }
         let map = Rc::new(classify(&code));
         *m.borrow_mut() = Some((key, Rc::clone(&map)));
         Some(map)
@@ -890,13 +888,12 @@ impl Action for ActionEvmCalls {
         };
         let mut changed = 0;
         let entry = data.get_address().get_offset();
-        if let Some((args, Some(pop))) = map.functions.get(&entry).copied() {
-            if !data.get_func_proto().is_input_locked()
+        if let Some((args, Some(pop))) = map.functions.get(&entry).copied()
+            && !data.get_func_proto().is_input_locked()
                 && shape_function(data, args, pop, map.keeps_label.contains(&entry))
             {
                 changed += 1;
             }
-        }
         for i in 0..data.num_calls() {
             let op = data.get_call_specs(i).get_op();
             let Some(site) = data.obank().get(op).map(|o| o.get_addr().get_offset()) else {

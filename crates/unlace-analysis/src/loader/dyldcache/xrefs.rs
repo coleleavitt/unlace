@@ -79,7 +79,9 @@ pub fn decode(blob: &[u8]) -> Vec<Xref> {
     };
     let mut allowance = names.len();
     blob[4..names_at]
-        .chunks_exact(16)
+        .as_chunks::<16>()
+        .0
+        .iter()
         .map_while(|e| {
             let kind = match u32_at(e, 8) {
                 0 => XrefKind::Call,
@@ -173,7 +175,7 @@ pub(super) fn collect<'v>(
                 if !a64 {
                     continue;
                 }
-                for (i, w) in bytes.chunks_exact(4).enumerate() {
+                for (i, w) in bytes.as_chunks::<4>().0.iter().enumerate() {
                     let w = u32_at(w, 0);
                     if w & 0x7C00_0000 == 0x1400_0000 {
                         let pc = sec.addr + i as u64 * 4;
@@ -240,7 +242,7 @@ fn sign_extend(v: u32, bits: u32) -> i64 {
 fn follow_stub(cache: &DyldCache, addr: u64) -> Option<u64> {
     let code = cache.read_va(addr, 16).ok()?;
     let mut regs = [None::<u64>; 32];
-    for (i, w) in code.chunks_exact(4).enumerate() {
+    for (i, w) in code.as_chunks::<4>().0.iter().enumerate() {
         let w = u32_at(w, 0);
         let pc = addr + i as u64 * 4;
         let rd = (w & 31) as usize;
@@ -544,7 +546,7 @@ impl<'a> Names<'a> {
                 && addr < s.addr.saturating_add(s.size)
         })?;
         let stride = sec.reserved2 as u64;
-        if stride == 0 || (addr - sec.addr) % stride != 0 {
+        if stride == 0 || !(addr - sec.addr).is_multiple_of(stride) {
             return None;
         }
         let image = self.image(index);

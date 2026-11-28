@@ -538,11 +538,10 @@ fn vararg_count_read(data: &Funcdata, stores: bool) -> bool {
                 return true;
             }
         }
-        if let Some(v) = o.get_out().and_then(|v| data.vbank().get(v)) {
-            if return_only(proto, v.get_addr(), v.get_size()) {
+        if let Some(v) = o.get_out().and_then(|v| data.vbank().get(v))
+            && return_only(proto, v.get_addr(), v.get_size()) {
                 written.push((v.get_offset(), v.get_size()));
             }
-        }
         cur = o.basic_neighbours().1;
     }
     false

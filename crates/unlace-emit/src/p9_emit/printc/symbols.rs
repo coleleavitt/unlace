@@ -28,8 +28,8 @@ impl PrintC {
         // size = glb->userops.getOp(userind)->extractAnnotationSize(vn, op) for a
         // CALLOTHER; 0 otherwise.
         let mut size = 0i32;
-        if let Some(o) = fd.obank().get(op) {
-            if o.code() == OpCode::CPUI_CALLOTHER {
+        if let Some(o) = fd.obank().get(op)
+            && o.code() == OpCode::CPUI_CALLOTHER {
                 let userind = o
                     .get_in(0)
                     .and_then(|c| fd.vbank().get(c))
@@ -50,7 +50,6 @@ impl PrintC {
                     size = u.extract_annotation_size(out_size, in2_size);
                 }
             }
-        }
 
         // entry = symScope->queryContainer(addr, size||1, op->getAddr()).  The
         // `map addr` global Symbol lives in the architecture's global scope, which
@@ -90,8 +89,8 @@ impl PrintC {
                     let composite = st.get_array_base().is_some_and(|elem| {
                         matches!(elem.get_metatype(), TYPE_ARRAY | TYPE_STRUCT | TYPE_UNION)
                     });
-                    if st.get_metatype() == TYPE_ARRAY && !composite {
-                        if let Some(elem) = st.get_array_base() {
+                    if st.get_metatype() == TYPE_ARRAY && !composite
+                        && let Some(elem) = st.get_array_base() {
                             let elsize = elem.get_align_size().max(1);
                             if sym_off >= 0
                                 && (sym_off % elsize) == 0
@@ -123,7 +122,6 @@ impl PrintC {
                                 return;
                             }
                         }
-                    }
                     if self.push_partial_symbol_ir(
                         fd,
                         arch,
@@ -298,8 +296,7 @@ impl PrintC {
                 if !v.is_synthetic_literal()
                     && off != 0
                     && !crate::elemptr::reaches_element_pointer(fd, vn)
-                {
-                    if let Some(sub) = ct.get_ptr_to() {
+                    && let Some(sub) = ct.get_ptr_to() {
                         // (unlace `cfstrings`) An entry reads as its string whatever its type,
                         // and so does a literal (unlace `cstringconst`).
                         let sub = if sub.is_char_print() {
@@ -339,7 +336,6 @@ impl PrintC {
                             }
                         }
                     }
-                }
                 // C++ `pushConstant` TYPE_PTR/TYPE_PTRREL arm (printc.cc:1842-1880).
                 // After the `pushPtrCharConstant` string short-circuit (above) and
                 // the TYPE_CODE function-name sub-arm (a documented LOSS) fail, the
@@ -376,8 +372,7 @@ impl PrintC {
                                 || self.options.header_carries_types
                                 || to.get_metatype() == crate::dtype::type_metatype::TYPE_VOID)
                     })
-                {
-                    if let Some(expression) = self.named_globals.object_address(fd, arch, off) {
+                    && let Some(expression) = self.named_globals.object_address(fd, arch, off) {
                         if !self.options.nocasts {
                             self.push_cast_open(&ct, op);
                         }
@@ -393,7 +388,6 @@ impl PrintC {
                         }
                         return;
                     }
-                }
                 if let Some(addr) = (!v.is_synthetic_literal())
                     .then(|| self.globalref.decide(fd, arch, vn, op, off, &ct))
                     .flatten()
@@ -420,8 +414,8 @@ impl PrintC {
             // (unlace `cstringconst`) A constant at the start of a literal that a
             // call takes as an argument its prototype does not declare a scalar
             // reads as the literal.
-            if !v.is_synthetic_literal() && self.out_lang == crate::lang::OutLang::C {
-                if let Some(sub) = crate::cstringconst::call_literal_char(arch, fd, op, vn, off, sz)
+            if !v.is_synthetic_literal() && self.out_lang == crate::lang::OutLang::C
+                && let Some(sub) = crate::cstringconst::call_literal_char(arch, fd, op, vn, off, sz)
                 {
                     let point = fd
                         .obank()
@@ -432,7 +426,6 @@ impl PrintC {
                         return;
                     }
                 }
-            }
             // Integer path.  Inside `push_integer` (printc.cc:1376) the varnode
             // high's equate-Symbol format OVERRIDES the read-facing type's format
             // when present.  So: equate-Symbol format wins; otherwise the
@@ -575,9 +568,9 @@ impl PrintC {
                 // the access is at a non-base offset (or the symbol is strictly
                 // larger than the access), render `name[index]` (C++
                 // `PrintC::pushSymbolDetail`'s array branch).
-                if let Some(st) = &sym_type {
-                    if st.get_metatype() == crate::dtype::type_metatype::TYPE_ARRAY {
-                        if let Some(elem) = st.get_array_base() {
+                if let Some(st) = &sym_type
+                    && st.get_metatype() == crate::dtype::type_metatype::TYPE_ARRAY
+                        && let Some(elem) = st.get_array_base() {
                             // C++ `TypeArray::getSubEntry` (type.cc:1430-1434)
                             // strides by the element's *aligned* size, not its raw
                             // size: e.g. a 10-byte `float10` occupies 16 bytes per
@@ -614,8 +607,6 @@ impl PrintC {
                                 return;
                             }
                         }
-                    }
-                }
                 // Scalar partial-cover access (C++ `pushSymbolDetail`,
                 // printlanguage.cc:256-258): when a Varnode reads only PART of a
                 // mapped SCALAR Symbol — `symboloff + vn->getSize() <=
@@ -738,38 +729,33 @@ impl PrintC {
         let mut loc = v.get_addr().clone();
         let mut size = v.get_size();
         let mut stack_pointer_storage = false;
-        if let Some(h) = v.get_high() {
-            if let Some(hv) = fd.high_bank().get(h) {
+        if let Some(h) = v.get_high()
+            && let Some(hv) = fd.high_bank().get(h) {
                 for i in 0..hv.num_instances() {
                     let ivn = hv.get_instance(i);
-                    if let Some(iv) = fd.vbank().get(ivn) {
-                        if iv.is_spacebase() && iv.is_input() && iv.is_unaffected() {
+                    if let Some(iv) = fd.vbank().get(ivn)
+                        && iv.is_spacebase() && iv.is_input() && iv.is_unaffected() {
                             loc = iv.get_addr().clone();
                             size = iv.get_size();
                             stack_pointer_storage = true;
                             break;
                         }
-                    }
                 }
             }
-        }
-        if !stack_pointer_storage && !renders_as_global(&loc, size) {
-            if let Some(h) = v.get_high() {
-                if let Some(hv) = fd.high_bank().get(h) {
+        if !stack_pointer_storage && !renders_as_global(&loc, size)
+            && let Some(h) = v.get_high()
+                && let Some(hv) = fd.high_bank().get(h) {
                     for i in 0..hv.num_instances() {
                         let ivn = hv.get_instance(i);
-                        if let Some(iv) = fd.vbank().get(ivn) {
-                            if iv.is_addr_tied() && renders_as_global(iv.get_addr(), iv.get_size())
+                        if let Some(iv) = fd.vbank().get(ivn)
+                            && iv.is_addr_tied() && renders_as_global(iv.get_addr(), iv.get_size())
                             {
                                 loc = iv.get_addr().clone();
                                 size = iv.get_size();
                                 break;
                             }
-                        }
                     }
                 }
-            }
-        }
         let name = match if stack_pointer_storage {
             unlace_storage_location_name(&loc)
         } else {
@@ -838,8 +824,8 @@ impl PrintC {
             .and_then(|o| o.get_in(1))
             .and_then(|v| fd.vbank().get(v))
             .is_some_and(|v| v.is_constant());
-        if !valueon && constant_offset && self.out_lang() == crate::lang::OutLang::C {
-            if let Some(address) = loc
+        if !valueon && constant_offset && self.out_lang() == crate::lang::OutLang::C
+            && let Some(address) = loc
                 .as_ref()
                 .and_then(|loc| crate::callerstack::address(arch, fd, loc, ptr_size))
             {
@@ -851,7 +837,6 @@ impl PrintC {
                 ));
                 return;
             }
-        }
         let name = loc.and_then(|loc| unlace_unnamed_location_name(arch, &loc, ptr_size));
         let name = match name {
             Some(n) => n,
@@ -1137,12 +1122,11 @@ impl PrintC {
             };
             let mut arrayvalue = false;
             // The '&' is dropped if the field is an array.
-            if let Some(ft) = &fieldtype {
-                if ft.get_metatype() == crate::dtype::type_metatype::TYPE_ARRAY {
+            if let Some(ft) = &fieldtype
+                && ft.get_metatype() == crate::dtype::type_metatype::TYPE_ARRAY {
                     arrayvalue = valueon; // If printing value, use [0]
                     valueon = true; // Don't print &
                 }
-            }
             let field_atom = Atom::field(
                 fieldname,
                 TagType::FieldToken,
@@ -1304,19 +1288,18 @@ impl PrintC {
             // off==0 + printing-ptr) so every other symbol reference renders
             // EXACTLY as before — the XML datatest corpus never reaches this branch
             // with a readonly char-array spacebase symbol.
-            if sym_off == 0 && !arrayvalue {
-                if let Some(st) = &sym_type {
+            if sym_off == 0 && !arrayvalue
+                && let Some(st) = &sym_type {
                     // (unlace `cfstrings`) A `__cfstring` entry reads as its string.
                     let cfstr = if valueon {
                         None
                     } else {
                         cfstring_char(arch, in1const)
                     };
-                    if st.get_metatype() == crate::dtype::type_metatype::TYPE_ARRAY
-                        || cfstr.is_some()
-                    {
-                        if let Some(elem) = cfstr.or_else(|| st.get_array_base()) {
-                            if elem.is_char_print() {
+                    if (st.get_metatype() == crate::dtype::type_metatype::TYPE_ARRAY
+                        || cfstr.is_some())
+                        && let Some(elem) = cfstr.or_else(|| st.get_array_base())
+                            && elem.is_char_print() {
                                 let point = fd
                                     .obank()
                                     .get(op)
@@ -1335,13 +1318,10 @@ impl PrintC {
                                     return;
                                 }
                             }
-                        }
-                    }
                 }
-            }
 
-            if self.out_lang == crate::lang::OutLang::C {
-                if let Some(address) =
+            if self.out_lang == crate::lang::OutLang::C
+                && let Some(address) =
                     spacebase_unnamed_address(arch, fd, op, &ct, in1const, ptr_size)
                 {
                     match ptrsub_value_access(fd, op, valueon && !arrayvalue) {
@@ -1351,7 +1331,6 @@ impl PrintC {
                         None => self.named_globals.record(fd, arch, &address, &name),
                     }
                 }
-            }
 
             if !valueon {
                 // EMIT  &name  (printc.cc:1095)
@@ -1373,8 +1352,7 @@ impl PrintC {
                 ) && sym_type
                     .as_ref()
                     .is_some_and(|ty| ty.get_metatype() == crate::dtype::type_metatype::TYPE_CODE)
-                {
-                    if let Some(address) =
+                    && let Some(address) =
                         spacebase_unnamed_address(arch, fd, op, &ct, in1const, ptr_size)
                     {
                         let point = fd
@@ -1412,7 +1390,6 @@ impl PrintC {
                             }
                         }
                     }
-                }
                 // off == 0: pushSymbol(symbol, 0, op) — the bare name.
                 let atom = match in1 {
                     Some(vn) => Atom::with_op_vn(

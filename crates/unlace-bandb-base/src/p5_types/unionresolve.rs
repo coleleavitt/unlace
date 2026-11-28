@@ -490,12 +490,11 @@ pub fn score_parameter(
     param_slot: int4,
 ) -> int4 {
     use type_metatype::*;
-    if let Some(p) = proto {
-        if p.input_locked && p.num_params > param_slot {
+    if let Some(p) = proto
+        && p.input_locked && p.num_params > param_slot {
             // cast: paramSlot is a valid parameter index (the > check guards it).
             return score_locked_type(ct, &p.param_types[param_slot as usize]);
         }
-    }
     let meta = ct.get_metatype();
     if meta == TYPE_ARRAY || meta == TYPE_STRUCT || meta == TYPE_UNION || meta == TYPE_CODE {
         return -1; // Vaguely unlikely thing to pass as a param
@@ -509,13 +508,11 @@ pub fn score_parameter(
 /// STUB(W4): proto facts arrive as [`LockedProtoFacts`].
 pub fn score_return_type(ct: &Rc<Datatype>, proto: Option<&LockedProtoFacts>) -> int4 {
     use type_metatype::*;
-    if let Some(p) = proto {
-        if p.output_locked {
-            if let Some(out) = &p.output_type {
+    if let Some(p) = proto
+        && p.output_locked
+            && let Some(out) = &p.output_type {
                 return score_locked_type(ct, out);
             }
-        }
-    }
     let meta = ct.get_metatype();
     if meta == TYPE_ARRAY || meta == TYPE_STRUCT || meta == TYPE_UNION || meta == TYPE_CODE {
         return -1; // Vaguely unlikely thing to return from a function
@@ -560,14 +557,13 @@ pub fn deref_pointer(
             let (next, _newoff) = st.get_sub_type(0)?;
             sub_type = next;
         }
-        if let Some(st) = &sub_type {
-            if st.get_size() == vn_size {
+        if let Some(st) = &sub_type
+            && st.get_size() == vn_size {
                 return Ok(DerefResult {
                     score: 10,
                     res_type: Some(Rc::clone(st)),
                 });
             }
-        }
         if max_length != 0 && ptrto.get_size() != 0 && (vn_size % ptrto.get_size()) == 0 {
             let arr = typegrp.get_type_array(vn_size / ptrto.get_size(), ptrto)?;
             return Ok(DerefResult {
@@ -607,9 +603,9 @@ pub fn score_truncation(
     result_base: Option<&Rc<Datatype>>,
 ) -> UnlaceResult<(int4, Option<Rc<Datatype>>)> {
     use type_metatype::*;
-    let score: int4;
+    
     let mut ct_out: Option<Rc<Datatype>> = Some(Rc::clone(ct));
-    if ct.get_metatype() == TYPE_UNION {
+    let score: int4 = if ct.get_metatype() == TYPE_UNION {
         // ct = 0;  // Don't recurse a data-type from truncation of a union
         ct_out = None;
         // score = -10;  // Negative score if the union has no field matching the size
@@ -621,15 +617,14 @@ pub fn score_truncation(
             })?;
             if field.offset == offset && field.field_type.get_size() == vn_size {
                 score_local = 10;
-                if let Some(base) = result_base {
-                    if Rc::ptr_eq(base, ct) {
+                if let Some(base) = result_base
+                    && Rc::ptr_eq(base, ct) {
                         score_local += 5;
                     }
-                }
                 break;
             }
         }
-        score = score_local;
+        score_local
     } else {
         // score = 10;  // If we can find a size match for the truncation
         let mut score_local = 10;
@@ -669,8 +664,8 @@ pub fn score_truncation(
         if ct_out.is_none() {
             score_local = -10;
         }
-        score = score_local;
-    }
+        score_local
+    };
     Ok((score, ct_out))
 }
 

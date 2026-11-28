@@ -25,6 +25,9 @@ fn notype_memset_call_types_pointer_parameter_and_return() {
         0x48, 0x83, 0xec, 8, 0x31, 0xf6, 0xba, 0xa8, 0, 0, 0, 0xe8, 0, 0, 0, 0, 0x48, 0x89, 0x04,
         0x24, 0x48, 0x8b, 0x04, 0x24, 0x48, 0x83, 0xc4, 8, 0xc3,
     ];
+    let return_type = regex::Regex::new(r"^void\s*\*\s*clear\(").unwrap();
+    let parameter_type = regex::Regex::new(r"clear\(void\s*\*\s*\w+\)").unwrap();
+    let return_call = regex::Regex::new(r"return\s+memset\([^,]+,\s*0,\s*0xa8\);").unwrap();
     for (architecture, endian, bytes, offset, addend, r_type) in [
         (
             Architecture::Sparc,
@@ -94,21 +97,15 @@ fn notype_memset_call_types_pointer_parameter_and_return() {
             .find(|line| line.contains("clear("))
             .expect("signature");
         assert!(
-            regex::Regex::new(r"^void\s*\*\s*clear\(")
-                .unwrap()
-                .is_match(signature),
+            return_type.is_match(signature),
             "return type {architecture:?}: {code}"
         );
         assert!(
-            regex::Regex::new(r"clear\(void\s*\*\s*\w+\)")
-                .unwrap()
-                .is_match(signature),
+            parameter_type.is_match(signature),
             "parameter type {architecture:?}: {code}"
         );
         assert!(
-            regex::Regex::new(r"return\s+memset\([^,]+,\s*0,\s*0xa8\);")
-                .unwrap()
-                .is_match(code),
+            return_call.is_match(code),
             "return call result {architecture:?}: {code}"
         );
     }

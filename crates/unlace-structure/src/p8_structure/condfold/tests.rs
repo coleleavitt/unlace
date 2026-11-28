@@ -11,7 +11,7 @@ fn on_matches_the_angr_policy_constants() {
     assert_eq!(MAX_PREFIX_ROOT_CALLS, 1);
     // `wide` only ever loosens the shared printed-width budget, never a call cap,
     // never the shape allowlist, never a cross-leaf cap.
-    assert!(MAX_PREFIX_STMTS_WIDE > MAX_PREFIX_STMTS_ANGR);
+    const _: () = assert!(MAX_PREFIX_STMTS_WIDE > MAX_PREFIX_STMTS_ANGR);
 }
 
 #[test]
@@ -23,7 +23,7 @@ fn the_width_budget_is_shared_by_both_rules() {
     // facts that made that bug possible, so it cannot silently return:
     //   1. the scored cap is NOT a width cap and is far below the width budget;
     //   2. the budget an operator sets is the width one.
-    assert!(MAX_SHAPE_STMTS < MAX_PREFIX_STMTS_ANGR);
+    const _: () = assert!(MAX_SHAPE_STMTS < MAX_PREFIX_STMTS_ANGR);
     assert_eq!(
         OptionCondFold.apply("on").expect("on").0,
         MAX_PREFIX_STMTS_ANGR
@@ -39,13 +39,13 @@ fn rule_b_caps_are_tighter_per_block_than_rule_a() {
     // Rule B admits a *shape*, not a length: its per-block scored budget is
     // deliberately far below the shared width budget, and it pays for that with a
     // nested-operand recursion Rule A does not have.
-    assert!(MAX_SHAPE_STMTS < MAX_PREFIX_STMTS_ANGR);
+    const _: () = assert!(MAX_SHAPE_STMTS < MAX_PREFIX_STMTS_ANGR);
     // Rule B counts every call, so its cap is allowed to be higher than Rule A's
     // statement-root-only count.
-    assert!(MAX_SHAPE_CALLS >= MAX_PREFIX_ROOT_CALLS);
+    const _: () = assert!(MAX_SHAPE_CALLS >= MAX_PREFIX_ROOT_CALLS);
     // The cross-leaf caps must at least admit the #56 target (3 leaves).
-    assert!(MAX_JOIN_LEAVES >= 3);
-    assert!(MAX_JOIN_TOTAL_STMTS >= MAX_SHAPE_STMTS);
+    const _: () = assert!(MAX_JOIN_LEAVES >= 3);
+    const _: () = assert!(MAX_JOIN_TOTAL_STMTS >= MAX_SHAPE_STMTS);
 }
 
 #[test]

@@ -252,6 +252,6 @@ impl crate::optionset::UnlaceOption for OcteonEffectsMode {
     }
 
     fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
-        Ok(OcteonEffectsMode::parse(value)?)
+        OcteonEffectsMode::parse(value)
     }
 }

@@ -1,12 +1,11 @@
 //! Exact caller-side memory intervals of a completely decoded leaf callee.
 
 use crate::calleememory::FuncdataCalleememoryExt;
-use slotmap::SecondaryMap;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
 
-use crate::context::{OpId, VarnodeId};
+use crate::context::VarnodeId;
 use crate::fspec::{FuncCallSpecs, OFFSET_UNKNOWN};
 use crate::funcdata::Funcdata;
 
@@ -126,7 +125,7 @@ fn resolve(fd: &Funcdata, call: &FuncCallSpecs) -> Option<Vec<(u64, u64)>> {
         if call.get_spacebase_offset() == OFFSET_UNKNOWN
             || stack.get_word_size() != 1
             || return_address.offset != 0
-            || return_address.size != stack.get_addr_size() as u32
+            || return_address.size != stack.get_addr_size()
             || return_address.space.as_ref().map(|s| s.get_index()) != Some(stack.get_index())
         {
             return None;
@@ -134,7 +133,7 @@ fn resolve(fd: &Funcdata, call: &FuncCallSpecs) -> Option<Vec<(u64, u64)>> {
     }
     let mut ranges = Vec::new();
     for (root_space, root_offset, root_size, offset, size) in summary.global_accesses()? {
-        if root_size != space.get_addr_size() as u32 {
+        if root_size != space.get_addr_size() {
             return None;
         }
         let mut actual = None;

@@ -210,11 +210,10 @@ fn read_small_direct(
 /// method list) is demangled to unlace's name-only form; any other string, or a
 /// mangled name outside the demangler's coverage, is returned unchanged.
 pub fn display_selector(raw: String) -> String {
-    if raw.starts_with("$s") || raw.starts_with("_$s") {
-        if let Some(name) = crate::demangle::swift::demangle_swift_name(&raw) {
+    if (raw.starts_with("$s") || raw.starts_with("_$s"))
+        && let Some(name) = crate::demangle::swift::demangle_swift_name(&raw) {
             return name;
         }
-    }
     raw
 }
 

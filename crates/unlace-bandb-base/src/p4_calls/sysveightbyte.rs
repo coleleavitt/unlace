@@ -177,7 +177,7 @@ fn classify_field_into(
     }
     let size = kind.size_in_bytes();
     let align = kind.align_in_bytes();
-    if align != 0 && offset % align != 0 {
+    if align != 0 && !offset.is_multiple_of(align) {
         return None;
     }
     let end = offset.checked_add(size)?;

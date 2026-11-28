@@ -82,12 +82,8 @@ fn call_type(fd: &Funcdata, base: VarnodeId) -> Option<(Rc<Datatype>, Vec<OpId>)
 }
 
 fn call_indirect_input(fd: &Funcdata, vn: VarnodeId, calls: &[OpId]) -> Option<VarnodeId> {
-    let Some(def) = fd.vbank().get(vn).and_then(|v| v.get_def()) else {
-        return None;
-    };
-    let Some(op) = fd.obank().get(def) else {
-        return None;
-    };
+    let def = fd.vbank().get(vn).and_then(|v| v.get_def())?;
+    let op = fd.obank().get(def)?;
     (op.code() == OpCode::CPUI_INDIRECT
         && op
             .get_in(1)

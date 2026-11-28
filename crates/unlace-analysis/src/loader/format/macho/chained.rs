@@ -408,14 +408,13 @@ where
             continue;
         }
         // LC_DYLD_CHAINED_FIXUPS is a LinkeditData command; match on its cmd id.
-        if let Ok(variant) = command.variant() {
-            if let LoadCommandVariant::LinkeditData(linkedit) = variant {
-                if command.cmd() == object::macho::LC_DYLD_CHAINED_FIXUPS {
-                    let off = linkedit.dataoff.get(endian) as u64;
-                    let size = linkedit.datasize.get(endian) as u64;
-                    fixups_range = Some((off, size));
-                }
-            }
+        if let Ok(variant) = command.variant()
+            && let LoadCommandVariant::LinkeditData(linkedit) = variant
+            && command.cmd() == object::macho::LC_DYLD_CHAINED_FIXUPS
+        {
+            let off = linkedit.dataoff.get(endian) as u64;
+            let size = linkedit.datasize.get(endian) as u64;
+            fixups_range = Some((off, size));
         }
     }
 
@@ -738,8 +737,8 @@ fn walk_segment(
         }
         // Several chains on one page: the low bits index the overflow list
         // that follows `page_start[]`, its last entry flagged PTR_START_LAST.
-        let mut j = (page_start & !PTR_START_MULTI) as usize;
-        for _ in 0..0x8000u32 {
+        let first = (page_start & !PTR_START_MULTI) as usize;
+        for (j, _) in (first..).zip(0..0x8000u32) {
             if out.starts >= start_budget {
                 return out.damaged(exhausted);
             }
@@ -765,7 +764,6 @@ fn walk_segment(
             if start & PTR_START_LAST != 0 {
                 break;
             }
-            j += 1;
         }
     }
 }
@@ -1023,7 +1021,7 @@ fn auth_context(raw: u64, pointer_format: u16) -> Option<AuthContext> {
             | ptr_format::ARM64E_FIRMWARE
             | ptr_format::PTR_64_KERNEL_CACHE
     );
-    (arm64e && (raw >> 63) & 1 == 1).then(|| AuthContext {
+    (arm64e && (raw >> 63) & 1 == 1).then_some(AuthContext {
         key: ((raw >> 49) & 3) as u8,
         addr_div: (raw >> 48) & 1 == 1,
         diversity: ((raw >> 32) & 0xFFFF) as u16,

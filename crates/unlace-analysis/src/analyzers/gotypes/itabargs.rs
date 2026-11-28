@@ -94,10 +94,10 @@ fn call_after(listing: &Listing, at: u64, reg: &'static str) -> Option<(u64, Vec
         }
         let copied = copy_of_held(&insn.mnemonic, &insn.operands, &held);
         held.retain(|r| !may_write(&insn.mnemonic, &insn.operands, r));
-        if let Some(dest) = copied {
-            if !held.contains(&dest) {
-                held.push(dest);
-            }
+        if let Some(dest) = copied
+            && !held.contains(&dest)
+        {
+            held.push(dest);
         }
         if held.is_empty() {
             return None;
@@ -131,7 +131,7 @@ fn copy_of_held(mnemonic: &str, operands: &str, held: &[&'static str]) -> Option
     }
     let (dest, source) = operands.split_once(',')?;
     let source = source.trim();
-    if !held.iter().any(|reg| *reg == source) {
+    if !held.contains(&source) {
         return None;
     }
     INTEGER_REGISTERS
@@ -264,10 +264,10 @@ fn decoded_call_after(
         }
         let copied = copy_of_held(&decoded.mnemonic, &decoded.operands, &held);
         held.retain(|r| !may_write(&decoded.mnemonic, &decoded.operands, r));
-        if let Some(dest) = copied {
-            if !held.contains(&dest) {
-                held.push(dest);
-            }
+        if let Some(dest) = copied
+            && !held.contains(&dest)
+        {
+            held.push(dest);
         }
         if held.is_empty() {
             return None;

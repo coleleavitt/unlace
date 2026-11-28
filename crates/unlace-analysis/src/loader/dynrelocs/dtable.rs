@@ -155,16 +155,6 @@ impl<'a> ElfView<'a> {
         })
     }
 
-    /// The `width`-byte word at `vaddr` in the file's bytes.
-    pub fn read_at(&self, vaddr: u64, width: usize) -> Option<u64> {
-        let at = self.file_offset(vaddr)?;
-        if width == 8 {
-            self.u64(at)
-        } else {
-            self.u32(at).map(u64::from)
-        }
-    }
-
     /// The `(tag, value)` pairs of `PT_DYNAMIC`.
     fn dynamic_tags(&self) -> Vec<(u64, u64)> {
         let Some((offset, size)) = self.dynamic else {

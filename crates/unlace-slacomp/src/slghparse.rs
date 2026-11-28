@@ -2542,12 +2542,11 @@ impl SleighParser {
     /// defines `space local`): Ghidra's Java grammar reads a keyword as an
     /// identifier there (`identifier: strict_id | key_as_id`).
     fn space_symbol(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<SymId> {
-        if let Some(name) = keyword_text(self.peek(d)?) {
-            if d.as_host().find_symbol_kind(name) == Some(SymbolTokenKind::Space) {
+        if let Some(name) = keyword_text(self.peek(d)?)
+            && d.as_host().find_symbol_kind(name) == Some(SymbolTokenKind::Space) {
                 self.next(d)?;
                 return Ok(d.resolve_symbol(name));
             }
-        }
         self.expect_symbol(d, TokenKind::SpaceSym)
     }
 

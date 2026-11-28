@@ -6,10 +6,6 @@
 
 use std::borrow::Cow;
 
-#[expect(
-    clippy::disallowed_types,
-    reason = "membership and subset checks only; output follows block and item order"
-)]
 type Definitions<'a> = std::collections::HashSet<&'a str>;
 
 pub(crate) fn merge_type_definitions(blocks: &[String], tag: &str) -> String {

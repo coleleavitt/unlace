@@ -2166,8 +2166,8 @@ fn an_int_kept_in_a_stack_slot_proves_no_loaded_pair() {
 /// `(u32)((x ^ y) >> 32) & 0xffff` in `$2:$3` and masks `$2` alone, and clang
 /// -O0 on MIPS reloads a 64-bit hash's spilled `mfhi` into `$3` beside
 /// `(u32)x`. Joined in the ABI's order, each returned that stale half as its
-/// low word (`xy_shr48` printed `CONCAT44(a2 + a0 + CARRY4(a3,a1) >> 0x10,a3
-/// + a1)`). A first register that shifts, masks, offsets, negates or
+/// low word (`xy_shr48` printed `CONCAT44(a2 + a0 + CARRY4(a3,a1) >> 0x10,a3 +
+/// a1)`). A first register that shifts, masks, offsets, negates or
 /// multiplies a sum's high word, or applies such a literal operation to a
 /// value the low word never reads, or reads the low half of the product whose
 /// high half is the low word, keeps the first-register-low join; the 64-bit

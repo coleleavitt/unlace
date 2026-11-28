@@ -4,6 +4,7 @@ use crate::interface::{IfaceError, IfaceResult};
 use std::collections::BTreeMap;
 use unlace_decomp::fspec::PrototypePieces;
 
+#[allow(clippy::mutable_key_type)]
 pub(crate) fn update(
     program: &mut ConsoleProgram,
     pending: &mut BTreeMap<String, PrototypePieces>,
@@ -42,6 +43,7 @@ pub(crate) fn update(
 }
 
 /// Retain an exact entry through the console's later Funcdata rebuilds.
+#[allow(clippy::mutable_key_type)]
 pub(crate) fn remember(
     named: &mut BTreeMap<String, PrototypePieces>,
     addressed: &mut BTreeMap<unlace_base::address::Address, PrototypePieces>,

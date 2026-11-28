@@ -289,7 +289,7 @@ impl Walk<'_> {
             .load_fill(&mut words, &Address::new(Rc::clone(self.code_space), table))
             .ok()?;
         let targets: Vec<u64> = words
-            .chunks_exact(2)
+            .as_chunks::<2>().0.iter()
             .map(|word| base + u64::from(u16::from_le_bytes([word[0], word[1]])))
             .take_while(|target| (range.0..range.1).contains(target))
             .filter(|target| (entry..bound).contains(target))

@@ -593,13 +593,12 @@ pub fn decode_mapsym(
     // Scope::addMap sizes an entry by the symbol's bytes consumed, not by the
     // wire storage: Java maps an import slot as one byte, yet it is read as a
     // whole pointer.
-    if rec.extern_ref.is_some() {
-        if let Some(size) = rec.dtype.as_ref().map(|t| t.get_size()) {
+    if rec.extern_ref.is_some()
+        && let Some(size) = rec.dtype.as_ref().map(|t| t.get_size()) {
             for e in rec.entries.iter_mut().filter(|e| !e.addr.is_invalid()) {
                 e.size = size;
             }
         }
-    }
     Ok(rec)
 }
 
@@ -811,8 +810,8 @@ fn decode_localdb_params(
                             .iter()
                             .find(|e| e.addr.is_invalid() && e.hash != 0);
                         let entry = mapped.or(dynamic);
-                        if let (Some(e), Some(dt)) = (entry, rec.dtype.clone()) {
-                            if dt.get_size() > 0 && !rec.display_name.is_empty() {
+                        if let (Some(e), Some(dt)) = (entry, rec.dtype.clone())
+                            && dt.get_size() > 0 && !rec.display_name.is_empty() {
                                 let first_use = e
                                     .uselimit
                                     .iter()
@@ -839,7 +838,6 @@ fn decode_localdb_params(
                                     },
                                 });
                             }
-                        }
                     }
                 }
                 decoder.close_element(list_el)?;
@@ -1469,12 +1467,12 @@ impl RemoteScope {
             } else {
                 func.display_name.clone()
             };
-            if !func.entry.is_invalid() {
-                if let Some(spc) = func.entry.get_space() {
+            if !func.entry.is_invalid()
+                && let Some(spc) = func.entry.get_space() {
                     let key = (spc.get_index(), func.entry.get_offset());
                     let mut pieces: Option<PrototypePieces> = None;
-                    if let Some(p) = &func.proto {
-                        if p.is_input_locked() {
+                    if let Some(p) = &func.proto
+                        && p.is_input_locked() {
                             let pc = p.to_pieces(&fname);
                             // Park the locked signature as a TypeCode carrying
                             // the HOST-DECLARED prototype model, so storage
@@ -1495,7 +1493,6 @@ impl RemoteScope {
                             st.callee_pieces.push((key.0, key.1, pc.clone()));
                             pieces = Some(pc);
                         }
-                    }
                     // The host's committed parameter storage + convention,
                     // carried verbatim so the echoed `<localdb>`/`<prototype>`
                     // match the database (Java's `checkFullCommit`).  Only
@@ -1504,8 +1501,8 @@ impl RemoteScope {
                     let mut param_storage: Vec<(int4, String, crate::fspec::ParameterPieces)> =
                         Vec::new();
                     let mut model_name: Option<String> = None;
-                    if let Some(p) = &func.proto {
-                        if p.is_input_locked() {
+                    if let Some(p) = &func.proto
+                        && p.is_input_locked() {
                             if !p.model.is_empty() {
                                 model_name = Some(p.model.clone());
                             }
@@ -1542,7 +1539,6 @@ impl RemoteScope {
                                 ));
                             }
                         }
-                    }
                     st.functions.insert(
                         key,
                         RemoteFunctionFacts {
@@ -1559,7 +1555,6 @@ impl RemoteScope {
                         },
                     );
                 }
-            }
             // FunctionSymbol::buildType: a function without a declared prototype
             // is still typed as code, which is what a constant pointer to it binds
             // to (ActionConstantPtr -> spacebaseConstant).

@@ -1997,12 +1997,11 @@ impl<'p, 'l, 's> Parser<'p, 'l, 's> {
             lhs = self.apply_binop(info, lhs, rhs)?;
             if prec == PREC_CMP {
                 // %nonassoc: do not allow another comparison operator to chain.
-                if let Some((next_prec, _)) = self.peek_binop() {
-                    if next_prec == PREC_CMP {
+                if let Some((next_prec, _)) = self.peek_binop()
+                    && next_prec == PREC_CMP {
                         self.failed = true;
                         return None;
                     }
-                }
             }
         }
         Some(lhs)

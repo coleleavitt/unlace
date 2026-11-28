@@ -318,7 +318,7 @@ fn find_whole_built_from_pieces_finds_concat() {
     s.wholesize = 8;
     assert!(s.find_whole_built_from_pieces(&fd));
     assert_eq!(s.get_whole(), Some(whole));
-    assert_eq!(s.get_def_point().is_some(), true);
+    assert!(s.get_def_point().is_some());
 }
 
 // --- form matrix: LogicalForm::verify ------------------------------------

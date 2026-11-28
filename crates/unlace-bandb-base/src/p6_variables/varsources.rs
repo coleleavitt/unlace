@@ -154,16 +154,15 @@ pub fn high_comment(
     Some((text, space, offset))
 }
 
+type Home = (Rc<AddrSpace>, u64);
+
 /// The storage homes [`high_comment`] lists for `high`, keyed by their text, and
 /// the storage of its first instance as the fallback for a high with none.
 pub fn high_homes(
     fd: &Funcdata,
     arch: &Architecture,
     high: HighVariableId,
-) -> Option<(
-    BTreeMap<String, (Rc<AddrSpace>, u64)>,
-    Option<(Rc<AddrSpace>, u64)>,
-)> {
+) -> Option<(BTreeMap<String, Home>, Option<Home>)> {
     let mut homes = BTreeMap::new();
     let fallback = visit_homes(fd, high, &mut |address, size| {
         if let Some((text, space, offset)) = storage_comment(fd, arch, address, size) {
@@ -232,18 +231,18 @@ fn visit_homes(
                 visit(&source.address, source.size);
             }
         }
-        if let Some(op) = varnode.get_def().and_then(|op| fd.obank().get(op)) {
-            if matches!(op.code(), OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL) {
-                for i in 0..op.num_input() {
-                    if let Some(input) = op.get_in(i).filter(|&input| {
-                        fd.vbank().get(input).is_some_and(|v| {
-                            !v.is_constant()
-                                && v.get_size() == varnode.get_size()
-                                && (!v.is_persist() || v.get_high() == Some(own))
-                        })
-                    }) {
-                        pending.push(input);
-                    }
+        if let Some(op) = varnode.get_def().and_then(|op| fd.obank().get(op))
+            && matches!(op.code(), OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL)
+        {
+            for i in 0..op.num_input() {
+                if let Some(input) = op.get_in(i).filter(|&input| {
+                    fd.vbank().get(input).is_some_and(|v| {
+                        !v.is_constant()
+                            && v.get_size() == varnode.get_size()
+                            && (!v.is_persist() || v.get_high() == Some(own))
+                    })
+                }) {
+                    pending.push(input);
                 }
             }
         }

@@ -394,11 +394,10 @@ impl CommentDatabase for CommentDatabaseInternal {
         // First element less than the probe (predecessor of lower_bound).
         let pred = self.commentset.range(..probe).next_back();
         newcom.uniq = 0;
-        if let Some((_, prev)) = pred {
-            if prev.get_addr() == ad && prev.get_func_addr() == fad {
+        if let Some((_, prev)) = pred
+            && prev.get_addr() == ad && prev.get_func_addr() == fad {
                 newcom.uniq = prev.get_uniq() + 1;
             }
-        }
         self.commentset.insert(CommentKey::of(&newcom), newcom);
     }
 
@@ -826,11 +825,10 @@ impl CommentSorter {
     /// as emitted (C++ `Comment::setEmitted(true)`, called from
     /// `emitLineComment`).  A later walk over the same window then skips it.
     pub fn mark_last_emitted(&mut self) {
-        if let Some(key) = self.last_returned {
-            if let Some(c) = self.commmap.get_mut(&key) {
+        if let Some(key) = self.last_returned
+            && let Some(c) = self.commmap.get_mut(&key) {
                 c.set_emitted(true);
             }
-        }
     }
 
     // --- BTreeMap cursor helpers (the C++ map::lower_bound/upper_bound) ------

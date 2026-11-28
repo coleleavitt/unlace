@@ -577,13 +577,11 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
             // non-core types, the comment database, the decoded strings
             // (`Architecture::flush_remote_caches`).
             CommandKind::FlushNative => {
-                if let Some(slot) = cmd.slot {
-                    if let Some(session) = self.archlist[slot].as_mut() {
-                        if let Some(arch) = session.architecture.as_mut() {
+                if let Some(slot) = cmd.slot
+                    && let Some(session) = self.archlist[slot].as_mut()
+                        && let Some(arch) = session.architecture.as_mut() {
                             arch.flush_remote_caches();
                         }
-                    }
-                }
                 cmd.res = 0;
                 Ok(())
             }
@@ -696,8 +694,8 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                 // per-address host facts (MIPS gp, PPC TOC, a user 'Set
                 // Register Value') reach ActionConstbase.  Cached in the
                 // provider until flushNative.
-                if let Some(remote) = &remote {
-                    if let Some(wire_set) = remote.tracked_at(&addr) {
+                if let Some(remote) = &remote
+                    && let Some(wire_set) = remote.tracked_at(&addr) {
                         // Write when the wire reports values OR a previous
                         // epoch merged here (the revert case: the host STOPPED
                         // reporting a value, so the pristine layer must be
@@ -737,7 +735,6 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                             }
                         }
                     }
-                }
 
                 // Snapshot the render flags before taking `&mut Architecture`.
                 let (send_syntax_tree, send_c_code, send_param_measures, current_action) = {
@@ -1019,8 +1016,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                 let mut warnings: Vec<String> = Vec::new();
                 if let (Some(bytes), Some(session)) =
                     (cmd.optionslist.take(), self.archlist[slot].as_mut())
-                {
-                    if let Some(arch) = session.architecture.as_mut() {
+                    && let Some(arch) = session.architecture.as_mut() {
                         // The upstream reset-then-apply contract
                         // (ghidra_process.cc:435-445): Java delta-encodes the
                         // list, so a previously-sent non-default option must
@@ -1043,7 +1039,6 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                             )),
                         }
                     }
-                }
                 for w in &warnings {
                     self.print_message(cmd.slot, w);
                 }
@@ -1152,8 +1147,8 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
             // all when rawAction was aborted) — nothing here
             CommandKind::DecompileAt => {}
         }
-        if let Some(slot) = cmd.slot {
-            if let Some(session) = self.archlist[slot].as_ref() {
+        if let Some(slot) = cmd.slot
+            && let Some(session) = self.archlist[slot].as_ref() {
                 write_burst(self.client.borrow_mut().sout_mut(), BURST_MESSAGE_OPEN)?;
                 self.client
                     .borrow_mut()
@@ -1162,7 +1157,6 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                     .map_err(WireError::Io)?;
                 write_burst(self.client.borrow_mut().sout_mut(), BURST_MESSAGE_CLOSE)?;
             }
-        }
         Ok(())
     }
 
@@ -1178,11 +1172,10 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
     /// before the fallible `build_architecture`, so a construction failure
     /// routes here and ships on the 16/17 frame.
     fn print_message(&mut self, slot: Option<usize>, message: &str) {
-        if let Some(slot) = slot {
-            if let Some(session) = self.archlist[slot].as_mut() {
+        if let Some(slot) = slot
+            && let Some(session) = self.archlist[slot].as_mut() {
                 session.print_message(message);
             }
-        }
     }
 }
 

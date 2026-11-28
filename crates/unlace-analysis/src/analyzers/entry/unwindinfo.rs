@@ -142,10 +142,9 @@ where
             if trim(sec.name()) == b"__unwind_info"
                 && trim(sec.segment_name()) == b"__TEXT"
                 && unwind.is_none()
+                && let Some((off, size)) = sec.file_range(endian)
             {
-                if let Some((off, size)) = sec.file_range(endian) {
-                    unwind = Some((off, size));
-                }
+                unwind = Some((off, size));
             }
         }
     }

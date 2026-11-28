@@ -207,7 +207,6 @@ impl StringManager {
     /// C++ throws for a negative or out-of-range codepoint.
     pub fn write_utf8(out: &mut Vec<uint1>, codepoint: int4) {
         let mut bytes = [0u8; 4];
-        let size: int4;
 
         if codepoint < 0 {
             panic!("Negative unicode codepoint");
@@ -220,23 +219,23 @@ impl StringManager {
         if bits > 21 {
             panic!("Bad unicode codepoint");
         }
-        if bits < 12 {
+        let size: int4 = if bits < 12 {
             // Encode with two bytes
             bytes[0] = 0xc0 ^ ((codepoint >> 6) & 0x1f) as uint1;
             bytes[1] = 0x80 ^ (codepoint & 0x3f) as uint1;
-            size = 2;
+            2
         } else if bits < 17 {
             bytes[0] = 0xe0 ^ ((codepoint >> 12) & 0xf) as uint1;
             bytes[1] = 0x80 ^ ((codepoint >> 6) & 0x3f) as uint1;
             bytes[2] = 0x80 ^ (codepoint & 0x3f) as uint1;
-            size = 3;
+            3
         } else {
             bytes[0] = 0xf0 ^ ((codepoint >> 18) & 7) as uint1;
             bytes[1] = 0x80 ^ ((codepoint >> 12) & 0x3f) as uint1;
             bytes[2] = 0x80 ^ ((codepoint >> 6) & 0x3f) as uint1;
             bytes[3] = 0x80 ^ (codepoint & 0x3f) as uint1;
-            size = 4;
-        }
+            4
+        };
         out.extend_from_slice(&bytes[..size as usize]);
     }
 
@@ -264,11 +263,13 @@ impl StringManager {
         }
         let hash = StringManager::calc_internal_hash(addr, buf, size);
         let const_addr = manager.get_constant(hash);
-        let mut data = StringData::default();
-        data.decode_key = Some(StringDecodeKey {
-            char_size: charsize,
-            opaque: char_type.is_opaque_string(),
-        });
+        let mut data = StringData {
+            decode_key: Some(StringDecodeKey {
+                char_size: charsize,
+                opaque: char_type.is_opaque_string(),
+            }),
+            ..Default::default()
+        };
         // assignStringData borrows `self` immutably while mutating `data`; build
         // the StringData detached, then insert it (one `stringMap[constAddr]`
         // slot, matching the C++ which mutates the single map entry in place).

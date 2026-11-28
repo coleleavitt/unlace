@@ -68,19 +68,18 @@ impl StorageIndex {
                     bucket.push(entry);
                 }
             }
-            if let Some(space) = stack_space {
-                if varnode
+            if let Some(space) = stack_space
+                && varnode
                     .get_addr()
                     .get_space()
                     .is_some_and(|s| s.get_index() == space.get_index())
-                {
-                    let key = StorageKey::Stack(
-                        signed_space_offset(space, varnode.get_offset()),
-                        varnode.get_size() as i64,
-                    );
-                    if let Some(bucket) = matches.get_mut(&key) {
-                        bucket.push((entry.0, entry.1, false));
-                    }
+            {
+                let key = StorageKey::Stack(
+                    signed_space_offset(space, varnode.get_offset()),
+                    varnode.get_size() as i64,
+                );
+                if let Some(bucket) = matches.get_mut(&key) {
+                    bucket.push((entry.0, entry.1, false));
                 }
             }
         }

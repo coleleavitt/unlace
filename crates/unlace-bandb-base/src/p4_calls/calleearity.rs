@@ -156,10 +156,10 @@ pub fn best_witness_for(entry: &Address, op: OpId, data: &Funcdata) -> Vec<(Addr
         if sib.get_entry_address() != entry {
             continue;
         }
-        if let Some(args) = witness_storage(data, sib) {
-            if args.len() > best.len() {
-                best = args;
-            }
+        if let Some(args) = witness_storage(data, sib)
+            && args.len() > best.len()
+        {
+            best = args;
         }
     }
     best
@@ -207,13 +207,10 @@ pub fn plan_promotions(witness: &[(Address, int4)], trials: &[TrialView]) -> Opt
     }
     let mut promote = Vec::new();
     for (addr, size) in witness {
-        let Some((i, t)) = trials
+        let (i, t) = trials
             .iter()
             .enumerate()
-            .find(|(_, t)| t.addr == *addr && t.size == *size)
-        else {
-            return None;
-        };
+            .find(|(_, t)| t.addr == *addr && t.size == *size)?;
         if t.definitely_not_used || t.unref || !t.has_value {
             return None;
         }

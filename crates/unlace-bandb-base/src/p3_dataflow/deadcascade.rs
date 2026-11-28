@@ -23,6 +23,7 @@ use crate::funcdata::Funcdata;
 /// Remove `op`, which `removable` accepted, and when it is a join or a guard
 /// the dead chain of joins and guards behind it.
 #[doc(hidden)]
+#[allow(clippy::mutable_key_type)]
 pub fn remove(data: &mut Funcdata, op: OpId, removable: fn(OpId, &mut Funcdata) -> bool) {
     let o = data.obank().get(op).expect("deadcascade: stale op");
     if !o.is_marker() {
@@ -48,6 +49,7 @@ pub fn remove(data: &mut Funcdata, op: OpId, removable: fn(OpId, &mut Funcdata) 
 
 /// File the live definitions of `op`'s inputs that sit before `cursor`: into
 /// `later` when they also sit before `op` (`at`), else into `same`.
+#[allow(clippy::mutable_key_type)]
 fn behind(
     data: &Funcdata,
     op: OpId,

@@ -128,10 +128,10 @@ impl<'a> LiteralWords<'a> {
             };
             if word % 4 == 0 && in_exec(word) && !listing.is_instruction_start(word) {
                 self.words.insert(word);
-                if thumb {
-                    if let Some(value) = self.read(word, 4).filter(|&v| v & 1 == 0 && in_exec(v)) {
-                        self.data_pointers.insert(value);
-                    }
+                if thumb
+                    && let Some(value) = self.read(word, 4).filter(|&v| v & 1 == 0 && in_exec(v))
+                {
+                    self.data_pointers.insert(value);
                 }
             }
         }

@@ -152,10 +152,9 @@ pub fn parse_type_name(name: &str) -> Option<(Elem, u32, i32)> {
         (Elem::S, r)
     } else if let Some(r) = body.strip_prefix("float") {
         (Elem::F, r)
-    } else if let Some(r) = body.strip_prefix("poly") {
-        (Elem::P, r)
     } else {
-        return None;
+        let r = body.strip_prefix("poly")?;
+        (Elem::P, r)
     };
     let (bits, lanes) = rest.split_once('x')?;
     let (bits, lanes): (u32, u32) = (bits.parse().ok()?, lanes.parse().ok()?);
@@ -168,7 +167,7 @@ pub fn parse_type_name(name: &str) -> Option<(Elem, u32, i32)> {
 /// `name`, when `size` bytes at byte `offset` are exactly that lane.
 pub fn lane_getter(name: &str, offset: u64, size: i32) -> Option<(String, u64)> {
     let (elem, lane, total) = parse_type_name(name)?;
-    if size as u32 != lane || offset % u64::from(lane) != 0 || offset >= total as u64 {
+    if size as u32 != lane || !offset.is_multiple_of(u64::from(lane)) || offset >= total as u64 {
         return None;
     }
     let q = if total == 16 { "q" } else { "" };

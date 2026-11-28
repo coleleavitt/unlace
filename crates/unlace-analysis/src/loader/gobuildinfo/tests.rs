@@ -109,7 +109,8 @@ fn inline_blob_parses_and_old_forms_refuse() {
 fn corpus_binaries_state_their_toolchains() {
     // The campaign corpus carries both eras; missing files skip (the
     // corpus is machine-local state, not a repo fixture).
-    for (p, want) in [("/home/mahaloz/kwt/multilang/corpus/go/hello", (1u16, 22u16))] {
+    {
+        let (p, want) = ("/home/mahaloz/kwt/multilang/corpus/go/hello", (1u16, 22u16));
         if let Ok(bytes) = std::fs::read(p) {
             assert_eq!(go_toolchain_version(&bytes), Some(want), "{p}");
         }

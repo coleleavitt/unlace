@@ -526,6 +526,7 @@ fn rename_returns_invalid_entry_input_errors_from_all_paths() {
         let mut h = Heritage::new();
         h.build_info_list(&fd);
         h.build_adt(&fd);
+        #[allow(clippy::mutable_key_type)]
         let mut stack = VariableStack::new();
         match path {
             "read" | "child" => {
@@ -733,6 +734,7 @@ fn rename_recurse_walks_a_deep_dominator_chain() {
             heritage.domchild = (0..DEPTH)
                 .map(|i| blocks.get(i + 1).copied().into_iter().collect())
                 .collect();
+            #[allow(clippy::mutable_key_type)]
             let mut varstack = Default::default();
             heritage
                 .rename_recurse(&mut fd, blocks[0], &mut varstack)

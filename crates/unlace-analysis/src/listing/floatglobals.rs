@@ -181,6 +181,7 @@ struct FloatRegisters {
 }
 
 impl FloatRegisters {
+    #[allow(clippy::mutable_key_type)]
     fn new(translate: &dyn Translate, family: &str) -> FloatRegisters {
         let numbered = |name: &str, prefixes: &[&str]| {
             prefixes.iter().any(|p| {
@@ -1091,10 +1092,9 @@ fn step(
                             if let Some(x) = state
                                 .set_slot(o, v.size, kept)
                                 .filter(|&x| ctx.image.is_data(x))
+                                && let Some(ev) = evidence.as_deref_mut()
                             {
-                                if let Some(ev) = evidence.as_deref_mut() {
-                                    ev.escapes.insert(x);
-                                }
+                                ev.escapes.insert(x);
                             }
                         }
                         None => {
@@ -1103,10 +1103,11 @@ fn step(
                             });
                             if let (Some(ev), Some(Val::Const(x))) =
                                 (evidence.as_deref_mut(), stored)
+                                && lost
+                                && v.size == ctx.ptr
+                                && ctx.image.is_data(x)
                             {
-                                if lost && v.size == ctx.ptr && ctx.image.is_data(x) {
-                                    ev.escapes.insert(x);
-                                }
+                                ev.escapes.insert(x);
                             }
                         }
                     }
@@ -1170,19 +1171,18 @@ fn step(
             if let Some(x) = state
                 .set_reg(out.offset, out.size, kept)
                 .filter(|&x| ctx.image.is_data(x))
+                && let Some(ev) = evidence.as_deref_mut()
             {
-                if let Some(ev) = evidence.as_deref_mut() {
-                    ev.escapes.insert(x);
-                }
+                ev.escapes.insert(x);
             }
         }
     }
     if insn.is_call {
         state.kill(&ctx.clobbered);
-        if let (Some((off, size)), Some(pop)) = (ctx.sp, ctx.extrapop) {
-            if let Some(Val::Stack(o)) = state.get_reg(off, size, big) {
-                state.set_reg(off, size, Some(Val::Stack(o + pop)));
-            }
+        if let (Some((off, size)), Some(pop)) = (ctx.sp, ctx.extrapop)
+            && let Some(Val::Stack(o)) = state.get_reg(off, size, big)
+        {
+            state.set_reg(off, size, Some(Val::Stack(o + pop)));
         }
     }
     state

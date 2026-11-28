@@ -27,11 +27,10 @@ pub fn merge_symbols(symbols: &mut Vec<SymFact>, cpp: Vec<SymFact>) {
         .iter()
         .filter(|fact| fact.kind == SymKind::Function && fact.name.contains("::"))
     {
-        if let Some(name) = names.get_mut(&fact.addr) {
-            if *name != Some(fact.name.as_str()) {
+        if let Some(name) = names.get_mut(&fact.addr)
+            && *name != Some(fact.name.as_str()) {
                 *name = None;
             }
-        }
     }
     symbols.retain(|fact| {
         if fact.kind != SymKind::Function || fact.name.contains("::") {

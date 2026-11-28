@@ -227,7 +227,7 @@ impl<'d> Code<'d> {
     /// Every `bl` in the text, as `(call site, target)`.
     fn for_each_call(&self, mut f: impl FnMut(u64, u64)) {
         for (base, data) in &self.sections {
-            for (i, c) in data.chunks_exact(4).enumerate() {
+            for (i, c) in data.as_chunks::<4>().0.iter().enumerate() {
                 let w = u32::from_le_bytes([c[0], c[1], c[2], c[3]]);
                 let pc = base.wrapping_add(4 * i as u64);
                 if let Some(t) = bl_target(pc, w) {
@@ -259,21 +259,19 @@ impl<'d> Code<'d> {
             if is_adrp(w) && w & 31 == want {
                 return seen_add.then(|| Value::Addr(adrp_page(pc, w).wrapping_add(addend)));
             }
-            if let Some((rd, rn, imm)) = add_imm(w) {
-                if rd == want && !seen_add && rn != 31 {
+            if let Some((rd, rn, imm)) = add_imm(w)
+                && rd == want && !seen_add && rn != 31 {
                     want = rn;
                     addend = imm;
                     seen_add = true;
                     continue;
                 }
-            }
-            if let Some((rt, rn, imm)) = ldr_imm(w) {
-                if rt == want && !seen_add {
+            if let Some((rt, rn, imm)) = ldr_imm(w)
+                && rt == want && !seen_add {
                     return self
                         .page_before(pc, rn)
                         .map(|p| Value::Slot(p.wrapping_add(imm)));
                 }
-            }
             return None;
         }
         None
@@ -530,8 +528,8 @@ impl CalleeNames<'_, '_, '_> {
                 return Some(page.wrapping_add(imm));
             }
         }
-        if let (Some((rd, rn, imm)), Some((rt, rn2, 0))) = (add_imm(b), ldr_imm(c)) {
-            if rd == r
+        if let (Some((rd, rn, imm)), Some((rt, rn2, 0))) = (add_imm(b), ldr_imm(c))
+            && rd == r
                 && rn == r
                 && rn2 == r
                 && d & 0xffff_fc00 == 0xd71f_0800
@@ -539,7 +537,6 @@ impl CalleeNames<'_, '_, '_> {
             {
                 return Some(page.wrapping_add(imm));
             }
-        }
         None
     }
 

@@ -349,10 +349,10 @@ fn note_direct_storage(data: &Funcdata, vn: VarnodeId, cache: &mut Cache) {
     if !data.unlace_elemptr_objects() {
         return;
     }
-    if let Some(off) = in_data(data, vn) {
-        if cache.direct.insert(off) {
-            data.unlace_elemptr_note(Obj::Table(off), GlobalVerdict::Scalar);
-        }
+    if let Some(off) = in_data(data, vn)
+        && cache.direct.insert(off)
+    {
+        data.unlace_elemptr_note(Obj::Table(off), GlobalVerdict::Scalar);
     }
 }
 
@@ -601,8 +601,10 @@ fn decide(
     if input.is_some_and(|k| data.unlace_elemptr_input(k) == Some(true)) {
         return None;
     }
-    let mut ev = Evidence::default();
-    ev.base_is_ptr = cur.get_metatype() == type_metatype::TYPE_PTR;
+    let mut ev = Evidence {
+        base_is_ptr: cur.get_metatype() == type_metatype::TYPE_PTR,
+        ..Default::default()
+    };
     let held = if kind == Kind::Global {
         same_storage(data, vn)
     } else {
@@ -639,18 +641,19 @@ fn decide(
         .into_iter()
         .chain(globals_held.iter().map(|&g| Obj::Held(g)))
         .find_map(|o| data.unlace_elemptr_adopted(o));
-    if let (Some((shape, signed)), Some(e)) = (adopted, elem.as_ref()) {
-        if !ev.firm && elem_key(e).0 == shape {
-            let meta = if signed {
-                type_metatype::TYPE_INT
-            } else {
-                type_metatype::TYPE_UINT
-            };
-            elem = arch
-                .types()
-                .and_then(|t| t.get_base(e.get_size(), meta).ok())
-                .or(elem);
-        }
+    if let (Some((shape, signed)), Some(e)) = (adopted, elem.as_ref())
+        && !ev.firm
+        && elem_key(e).0 == shape
+    {
+        let meta = if signed {
+            type_metatype::TYPE_INT
+        } else {
+            type_metatype::TYPE_UINT
+        };
+        elem = arch
+            .types()
+            .and_then(|t| t.get_base(e.get_size(), meta).ok())
+            .or(elem);
     }
     if trace_on() {
         eprintln!(
@@ -1222,10 +1225,11 @@ fn walk(data: &Funcdata, starts: &[VarnodeId], ev: &mut Evidence) {
             None => continue,
         };
         for op in descend {
-            if let Some((next, noff)) = base_use(data, op, vn, off, ev) {
-                if hops + 1 < HOP_CAP && seen.insert(next) {
-                    work.push_back((next, noff, hops + 1));
-                }
+            if let Some((next, noff)) = base_use(data, op, vn, off, ev)
+                && hops + 1 < HOP_CAP
+                && seen.insert(next)
+            {
+                work.push_back((next, noff, hops + 1));
             }
             if ev.refused.is_some() {
                 return;
@@ -1438,11 +1442,8 @@ fn base_use(
                     ev.refuse("compare-literal");
                 }
             } else {
-                match pointee_of(data, other, op) {
-                    Some(p) => {
-                        ev.pointees.push(p);
-                    }
-                    _ => {}
+                if let Some(p) = pointee_of(data, other, op) {
+                    ev.pointees.push(p);
                 }
             }
             None
@@ -1505,17 +1506,15 @@ fn indexed(data: &Funcdata, sum: VarnodeId, scale: intb, off: intb, ev: &mut Evi
             let mut next = None;
             // An element's address kept in a variable already typed a pointer at
             // something (`v9 = &a3[v13]` with `unsigned short *v9`) names the element.
-            if matches!(o.code(), OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL) {
-                if let Some(t) = out
+            if matches!(o.code(), OpCode::CPUI_COPY | OpCode::CPUI_MULTIEQUAL)
+                && let Some(t) = out
                     .and_then(|x| data.vbank().get(x))
                     .map(|x| Rc::clone(x.get_type()))
-                {
-                    if t.get_metatype() == type_metatype::TYPE_PTR && !points_at_nothing(&t) {
-                        if let Some(p) = t.get_ptr_to() {
-                            ev.pointees.push(p);
-                        }
-                    }
-                }
+                && t.get_metatype() == type_metatype::TYPE_PTR
+                && !points_at_nothing(&t)
+                && let Some(p) = t.get_ptr_to()
+            {
+                ev.pointees.push(p);
             }
             match o.code() {
                 OpCode::CPUI_LOAD | OpCode::CPUI_STORE if slot == 1 => {
@@ -1618,10 +1617,11 @@ fn indexed(data: &Funcdata, sum: VarnodeId, scale: intb, off: intb, ev: &mut Evi
                 | OpCode::CPUI_INT_AND => ev.refuse("arithmetic-sum"),
                 _ => {}
             }
-            if let Some((n, noff)) = next {
-                if hops + 1 < HOP_CAP && seen.insert(n) {
-                    work.push((n, noff, hops + 1));
-                }
+            if let Some((n, noff)) = next
+                && hops + 1 < HOP_CAP
+                && seen.insert(n)
+            {
+                work.push((n, noff, hops + 1));
             }
             if ev.refused.is_some() {
                 return;
@@ -1661,10 +1661,11 @@ fn element_access(
         return;
     }
     let Some(val) = o.get_out() else { return };
-    if let Some(t) = data.vbank().get(val).map(|v| Rc::clone(v.get_type())) {
-        if t.get_metatype() == type_metatype::TYPE_PTR && !points_at_nothing(&t) {
-            ev.elem_types.push(t);
-        }
+    if let Some(t) = data.vbank().get(val).map(|v| Rc::clone(v.get_type()))
+        && t.get_metatype() == type_metatype::TYPE_PTR
+        && !points_at_nothing(&t)
+    {
+        ev.elem_types.push(t);
     }
     loaded_sign(data, val, w, ev);
     let readers: Vec<OpId> = data
@@ -1904,10 +1905,10 @@ fn call_argument(data: &Funcdata, op: OpId, slot: int4, ev: &mut Evidence) {
     let declared = crate::coreaction_infertypes::declared_input_type_local(data, op, slot);
     match declared.get_metatype() {
         type_metatype::TYPE_PTR => {
-            if !points_at_nothing(&declared) {
-                if let Some(p) = declared.get_ptr_to() {
-                    ev.pointees.push(p);
-                }
+            if !points_at_nothing(&declared)
+                && let Some(p) = declared.get_ptr_to()
+            {
+                ev.pointees.push(p);
             }
         }
         type_metatype::TYPE_UNKNOWN => {}
@@ -2242,13 +2243,9 @@ fn has_pointer_use(data: &Funcdata, x: VarnodeId) -> bool {
                 OpCode::CPUI_LOAD | OpCode::CPUI_STORE if slot == 1 => return true,
                 OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB if slot == 0 => return true,
                 OpCode::CPUI_CALL | OpCode::CPUI_CALLIND if slot > 0 => {
-                    if crate::coreaction_infertypes::declared_input_type_local(data, op, slot)
+                    crate::coreaction_infertypes::declared_input_type_local(data, op, slot)
                         .get_metatype()
                         == type_metatype::TYPE_PTR
-                    {
-                        return true;
-                    }
-                    false
                 }
                 OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_MULTIEQUAL => true,
                 OpCode::CPUI_INDIRECT => slot == 0,
@@ -2584,10 +2581,10 @@ fn element_source(data: &Funcdata, start: VarnodeId) -> Option<&'static str> {
                     work.extend((0..o.num_input()).filter_map(|i| o.get_in(i)));
                 }
                 OpCode::CPUI_INDIRECT => work.extend(o.get_in(0)),
-                OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-                    if callee_stated(data, d).is_some_and(|st| st.ret) {
-                        elem = elem.or(Some("ret"));
-                    }
+                OpCode::CPUI_CALL | OpCode::CPUI_CALLIND
+                    if callee_stated(data, d).is_some_and(|st| st.ret) =>
+                {
+                    elem = elem.or(Some("ret"));
                 }
                 _ => {}
             }
@@ -2631,10 +2628,11 @@ fn element_source(data: &Funcdata, start: VarnodeId) -> Option<&'static str> {
                         return None;
                     }
                 }
-                OpCode::CPUI_STORE if o.get_in(2) == Some(v) => {
-                    if stored_global(data, o).is_some_and(|a| held_typed(data, a)) {
-                        elem = elem.or(Some("store"));
-                    }
+                OpCode::CPUI_STORE
+                    if o.get_in(2) == Some(v)
+                        && stored_global(data, o).is_some_and(|a| held_typed(data, a)) =>
+                {
+                    elem = elem.or(Some("store"));
                 }
                 _ => {}
             }
@@ -2647,7 +2645,6 @@ fn element_source(data: &Funcdata, start: VarnodeId) -> Option<&'static str> {
 /// of it, to a byte, or a 4-byte `wchar_t`, the program reads as a character of
 /// a C string ([`string_character`])? A wide string walked to its zero unit is a
 /// string read, not an index: the caller's constant prints as the literal.
-
 fn reads_to_a_zero(data: &Funcdata, op: OpId, depth: usize) -> bool {
     let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else {
         return false;

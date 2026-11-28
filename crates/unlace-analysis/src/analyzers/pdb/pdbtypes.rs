@@ -302,9 +302,9 @@ pub(crate) fn module_procs(
         let kind = symbol.raw_kind();
         let raw = symbol.raw_bytes();
         let Some(proc) = current.as_mut() else {
-            if super::walk::PROCEDURE_KINDS.contains(&kind) {
-                if let Ok(pdb::SymbolData::Procedure(p)) = symbol.parse() {
-                    if let Some(start) = vma(p.offset) {
+            if super::walk::PROCEDURE_KINDS.contains(&kind)
+                && let Ok(pdb::SymbolData::Procedure(p)) = symbol.parse()
+                    && let Some(start) = vma(p.offset) {
                         current = Some(Proc {
                             start,
                             name: p.name.to_string().into_owned(),
@@ -317,8 +317,6 @@ pub(crate) fn module_procs(
                         inline_depth = 0;
                         pending = None;
                     }
-                }
-            }
             continue;
         };
         if symbol.ends_scope() {
@@ -560,14 +558,13 @@ fn emit_proc(proc: &Proc, family: Family, tpi: &mut TpiMapper<'_, '_>, out: &mut
         if params.len() == ty.pieces.intypes.len() {
             ty.pieces.innames = params.iter().map(|v| v.name.clone()).collect();
         }
-        if ty.has_this {
-            if let Some(first) = ty.pieces.innames.first_mut().filter(|n| n.is_empty()) {
+        if ty.has_this
+            && let Some(first) = ty.pieces.innames.first_mut().filter(|n| n.is_empty()) {
                 *first = "this".to_string();
             }
-        }
         ty.pieces.name = proc.name.clone();
-        if family == Family::X86 {
-            if let Some(model) = x86_model(ty.calling_convention) {
+        if family == Family::X86
+            && let Some(model) = x86_model(ty.calling_convention) {
                 out.models.push(ModelFact {
                     func_addr: proc.start,
                     model,
@@ -575,7 +572,6 @@ fn emit_proc(proc: &Proc, family: Family, tpi: &mut TpiMapper<'_, '_>, out: &mut
                     maybe_self: false,
                 });
             }
-        }
         out.prototypes_at.push((proc.start, ty.pieces));
     }
     let mut names = Names::default();

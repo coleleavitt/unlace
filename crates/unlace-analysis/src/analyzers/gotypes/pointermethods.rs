@@ -97,7 +97,7 @@ fn methods(
     let mut names = BTreeSet::new();
     let rows = in_types(img, meta, start.checked_add(first.into())?, count * 16)?;
     let mut result = Vec::with_capacity(count);
-    for row in rows.chunks_exact(16) {
+    for row in rows.as_chunks::<16>().0 {
         let name = offset_name(img, meta, &row[..4])?;
         if !names.insert(name.clone()) {
             return None;

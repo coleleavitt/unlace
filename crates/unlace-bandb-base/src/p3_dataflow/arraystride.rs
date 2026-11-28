@@ -183,13 +183,11 @@ fn unlace_is_zero_init(data: &Funcdata, vn: VarnodeId) -> bool {
     }
     if vn_is_written(data, vn) {
         let def = vn_def(data, vn).expect("vn written");
-        if op_code(data, def) == OpCode::CPUI_COPY {
-            if let Some(src) = op_in(data, def, 0) {
-                if vn_is_constant(data, src) {
+        if op_code(data, def) == OpCode::CPUI_COPY
+            && let Some(src) = op_in(data, def, 0)
+                && vn_is_constant(data, src) {
                     return vn_offset(data, src) == 0;
                 }
-            }
-        }
     }
     false
 }
@@ -238,13 +236,12 @@ fn unlace_is_induction_phi(
                     self_vn = Some(b);
                     cst = Some(a);
                 }
-                if let (Some(_self), Some(cst)) = (self_vn, cst) {
-                    if vn_is_constant(data, cst) && vn_offset(data, cst) != 0 {
+                if let (Some(_self), Some(cst)) = (self_vn, cst)
+                    && vn_is_constant(data, cst) && vn_offset(data, cst) != 0 {
                         add_idx = i;
                         foundadd = Some(def);
                         foundstep = vn_offset(data, cst);
                     }
-                }
             }
         }
     }

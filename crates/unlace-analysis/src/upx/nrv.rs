@@ -180,11 +180,10 @@ pub fn decompress(
         if dst.len() + copy > u_len {
             return Err(NrvError::OutputOverrun);
         }
-        let mut pos = dst.len() - m_off;
-        for _ in 0..copy {
+        let start = dst.len() - m_off;
+        for pos in start..start + copy {
             let b = dst[pos];
             dst.push(b);
-            pos += 1;
         }
     }
 

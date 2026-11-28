@@ -73,8 +73,8 @@
 use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
-use unlace_base::address::{Address, leastsigbit_set, mostsigbit_set};
-use unlace_base::types::{int4, uintb};
+use unlace_base::address::Address;
+use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
@@ -354,12 +354,10 @@ impl BitFieldTransform {
             // (`getParent` returns the `container`, which is `get_partial_base` for a
             // partial-struct; `getOffset` is `get_partial_offset`.)
             if let (Some(parent), Some(part_off)) = (dt.get_partial_base(), dt.get_partial_offset())
-            {
-                if parent.get_metatype() == type_metatype::TYPE_STRUCT {
+                && parent.get_metatype() == type_metatype::TYPE_STRUCT {
                     initial_offset = off + part_off;
                     parent_struct = Some(parent);
                 }
-            }
         }
         BitFieldTransform {
             parent_struct,
@@ -612,11 +610,10 @@ pub(crate) fn bitfield_container(data: &Funcdata, vn: VarnodeId) -> Option<(Rc<D
             |sym| sym.dtype.as_ref().is_some_and(|t| t.has_bitfields()),
         )
     });
-    if let Some(info) = containing {
-        if let (Some(ty), true) = (info.sym_type, info.sym_off >= 0) {
+    if let Some(info) = containing
+        && let (Some(ty), true) = (info.sym_type, info.sym_off >= 0) {
             return Some((ty, info.sym_off));
         }
-    }
     let own = data.vn_type_def_facing(vn);
     own.has_bitfields().then_some((own, 0))
 }

@@ -74,10 +74,10 @@ fn arch_attribute(blob: &[u8], little: bool) -> Result<Option<String>, &'static 
                 .checked_add(size)
                 .filter(|e| *e <= section_end)
                 .ok_or(MALFORMED)?;
-            if tag == TAG_FILE {
-                if let Some(arch) = file_arch(blob, cursor + 5, sub_end).ok_or(MALFORMED)? {
-                    return Ok(Some(arch.to_ascii_lowercase()));
-                }
+            if tag == TAG_FILE
+                && let Some(arch) = file_arch(blob, cursor + 5, sub_end).ok_or(MALFORMED)?
+            {
+                return Ok(Some(arch.to_ascii_lowercase()));
             }
             cursor = sub_end;
         }

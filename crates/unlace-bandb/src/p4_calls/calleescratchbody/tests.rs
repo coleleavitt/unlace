@@ -33,10 +33,11 @@ fn with_convention(fd: &Funcdata, fc: &mut FuncCallSpecs) {
         (0x18u64, effect_type::UNAFFECTED),
         (0x00, effect_type::KILLEDBYCALL),
     ] {
-        let mut vd = unlace_num::pcoderaw::VarnodeData::default();
-        vd.space = Some(Rc::clone(&ram));
-        vd.offset = off;
-        vd.size = 8;
+        let vd = unlace_num::pcoderaw::VarnodeData {
+            space: Some(Rc::clone(&ram)),
+            offset: off,
+            size: 8,
+        };
         model.push_effect(EffectRecord::from_varnode(vd, ty));
     }
     fc.proto_mut().set_model(Some(Rc::new(model)));

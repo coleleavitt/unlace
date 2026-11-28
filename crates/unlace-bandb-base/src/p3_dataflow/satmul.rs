@@ -218,11 +218,10 @@ fn guard(data: &Funcdata, cond: VarnodeId) -> Option<(Guard, bool)> {
             }
             return None;
         }
-        if o.code() == OpCode::CPUI_INT_MULT && xs % 2 == 0 && k == mask(xs / 2) {
-            if let Some((a, b)) = wide_product(data, x, xs / 2) {
+        if o.code() == OpCode::CPUI_INT_MULT && xs % 2 == 0 && k == mask(xs / 2)
+            && let Some((a, b)) = wide_product(data, x, xs / 2) {
                 return Some((Guard::Wide(a, b, xs / 2), pol));
             }
-        }
     }
     if constant(data, x).is_some() {
         return None;

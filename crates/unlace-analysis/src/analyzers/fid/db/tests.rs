@@ -121,7 +121,9 @@ fn serialization_interns_names_in_sorted_record_order() {
     );
     let table = &bytes[22..22 + 4 * 24];
     let fields: Vec<_> = table
-        .chunks_exact(24)
+        .as_chunks::<24>()
+        .0
+        .iter()
         .map(|record| {
             (
                 u64::from_le_bytes(record[..8].try_into().unwrap()),

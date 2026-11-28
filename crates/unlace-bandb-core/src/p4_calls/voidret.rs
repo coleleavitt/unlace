@@ -580,13 +580,13 @@ fn held_as_float(
     let float_ty =
         |t: &crate::dtype::Datatype| t.get_metatype() == crate::dtype::type_metatype::TYPE_FLOAT;
     let float =
-        |v: crate::context::VarnodeId| data.vbank().get(v).is_some_and(|n| float_ty(&n.get_type()));
+        |v: crate::context::VarnodeId| data.vbank().get(v).is_some_and(|n| float_ty(n.get_type()));
     let family = crate::protoorder::value_family(data, result);
     let reinterpreted = |o: &crate::op::PcodeOp| {
         o.code() == OpCode::CPUI_CAST
             && o.get_in(0)
                 .and_then(|i| data.vbank().get(i))
-                .is_some_and(|i| float_ty(&i.get_type()))
+                .is_some_and(|i| float_ty(i.get_type()))
             && o.get_out()
                 .and_then(|x| data.vbank().get(x))
                 .is_some_and(|x| {
@@ -610,7 +610,7 @@ fn held_as_float(
             if node
                 .get_def()
                 .and_then(|d| data.obank().get(d))
-                .is_some_and(|o| reinterpreted(o))
+                .is_some_and(reinterpreted)
             {
                 return true;
             }

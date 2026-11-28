@@ -11,8 +11,6 @@
 //!
 //! Integration tests require the built processor specs under `specs/`.
 
-use std::process::Command;
-
 use unlace_testkit::repo_root;
 
 fn fixture(name: &str) -> String {
@@ -56,15 +54,7 @@ fn pe_imports() -> String {
 
 /// Run the built `unlace` binary, returning `(stdout, stderr, exit code)`.
 fn run_unlace(args: &[&str]) -> (String, String, i32) {
-    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(args)
-        .output()
-        .expect("failed to spawn the unlace binary");
-    (
-        String::from_utf8_lossy(&out.stdout).into_owned(),
-        String::from_utf8_lossy(&out.stderr).into_owned(),
-        out.status.code().unwrap_or(-1),
-    )
+    unlace_testkit::run_bin(env!("CARGO_BIN_EXE_unlace"), args).into_triple()
 }
 
 /// Run `unlace xrefs ...` and return its stdout.

@@ -6,7 +6,6 @@
 //! Integration tests require the built processor specs under `specs/`.
 
 use std::path::PathBuf;
-use std::process::Command;
 
 use unlace_testkit::repo_root;
 
@@ -62,15 +61,9 @@ fn specs() -> String {
 }
 
 fn run_unlace(args: &[&str]) -> (String, String, bool) {
-    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(args)
-        .output()
-        .expect("failed to spawn the unlace binary");
-    (
-        String::from_utf8_lossy(&out.stdout).into_owned(),
-        String::from_utf8_lossy(&out.stderr).into_owned(),
-        out.status.success(),
-    )
+    let run = unlace_testkit::run_bin(env!("CARGO_BIN_EXE_unlace"), args);
+    let ok = run.success();
+    (run.stdout, run.stderr, ok)
 }
 
 /// A per-test scratch directory that removes itself, so a `-o` target never

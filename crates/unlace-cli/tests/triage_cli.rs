@@ -16,8 +16,6 @@
 //!
 //! Integration tests require the built processor specs under `specs/`.
 
-use std::process::Command;
-
 use unlace_testkit::repo_root;
 
 fn fauxware() -> String {
@@ -33,16 +31,13 @@ fn specs() -> String {
 }
 
 fn run_unlace(args: &[&str]) -> (String, String, i32) {
-    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(args)
-        .env("SLEIGHHOME", specs())
-        .output()
-        .expect("failed to spawn the unlace binary");
-    (
-        String::from_utf8_lossy(&out.stdout).into_owned(),
-        String::from_utf8_lossy(&out.stderr).into_owned(),
-        out.status.code().unwrap_or(-1),
+    let specs = specs();
+    unlace_testkit::run_bin_env(
+        env!("CARGO_BIN_EXE_unlace"),
+        args,
+        &[("SLEIGHHOME", specs.as_str())],
     )
+    .into_triple()
 }
 
 /// Every `0x…\t<name>` row of a plain `unlace functions` listing, as `(addr, name)`.

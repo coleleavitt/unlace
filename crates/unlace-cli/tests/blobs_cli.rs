@@ -7,7 +7,6 @@
 //! needs no spec.
 
 use std::path::PathBuf;
-use std::process::Command;
 
 fn fixture() -> String {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -21,15 +20,7 @@ fn fixture() -> String {
 }
 
 fn run_unlace(args: &[&str]) -> (String, String, i32) {
-    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(args)
-        .output()
-        .expect("spawn unlace");
-    (
-        String::from_utf8_lossy(&out.stdout).into_owned(),
-        String::from_utf8_lossy(&out.stderr).into_owned(),
-        out.status.code().unwrap_or(-1),
-    )
+    unlace_testkit::run_bin(env!("CARGO_BIN_EXE_unlace"), args).into_triple()
 }
 
 fn rows(text: &str) -> Vec<Vec<String>> {

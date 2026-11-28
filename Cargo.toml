@@ -35,6 +35,39 @@ unlace-cli.workspace = true
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# Plain `cargo build/check/test` skips the browser front-end (`unlace-wasm`); build it with
+# `-p unlace-wasm` or `--workspace`. Keep this list in sync when adding crates.
+default-members = [
+    ".",
+    "crates/unlace",
+    "crates/unlace-analysis",
+    "crates/unlace-bandb",
+    "crates/unlace-bandb-base",
+    "crates/unlace-bandb-core",
+    "crates/unlace-base",
+    "crates/unlace-bench",
+    "crates/unlace-cli",
+    "crates/unlace-console",
+    "crates/unlace-ctree",
+    "crates/unlace-decomp",
+    "crates/unlace-emit",
+    "crates/unlace-fuzz",
+    "crates/unlace-ghidra",
+    "crates/unlace-harness",
+    "crates/unlace-idb",
+    "crates/unlace-lift",
+    "crates/unlace-lift-diff",
+    "crates/unlace-lumina",
+    "crates/unlace-middle",
+    "crates/unlace-num",
+    "crates/unlace-plugin",
+    "crates/unlace-project",
+    "crates/unlace-slacomp",
+    "crates/unlace-sleigh",
+    "crates/unlace-stagefile",
+    "crates/unlace-structure",
+    "crates/unlace-testkit",
+]
 # The dev-only dynamic-link facade is built only through a front-end's `dynamic_linking` feature.
 exclude = ["crates/unlace-decomp-dylib"]
 

@@ -6,7 +6,6 @@
 //! PyInstaller CArchive cookie appended).
 
 use std::path::PathBuf;
-use std::process::Command;
 
 fn fixture(name: &str) -> String {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -21,17 +20,13 @@ fn fixture(name: &str) -> String {
 }
 
 fn run_unlace(args: &[&str]) -> (String, String, i32) {
-    let specs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../specs");
-    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(args)
-        .env("SLEIGHHOME", specs)
-        .output()
-        .expect("failed to spawn the unlace binary");
-    (
-        String::from_utf8_lossy(&out.stdout).into_owned(),
-        String::from_utf8_lossy(&out.stderr).into_owned(),
-        out.status.code().unwrap_or(-1),
+    let specs = unlace_testkit::specs_dir();
+    unlace_testkit::run_bin_env(
+        env!("CARGO_BIN_EXE_unlace"),
+        args,
+        &[("SLEIGHHOME", specs.to_str().expect("utf-8 path"))],
     )
+    .into_triple()
 }
 
 const PYI_HINT: &str = "PyInstaller bundle (Python 3.12): extract with pyinstxtractor-ng";

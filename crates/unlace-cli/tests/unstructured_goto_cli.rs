@@ -12,8 +12,6 @@
 //!
 //! Integration tests require the built processor specs under `specs/`.
 
-use std::process::Command;
-
 use unlace_testkit::repo_root;
 
 /// A checked-in non-PIE x86-64 ELF whose entry point is a two-entry (irreducible)
@@ -27,16 +25,13 @@ fn fixture() -> String {
 }
 
 fn run_unlace(args: &[&str]) -> (String, String, Option<i32>) {
-    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .env("SLEIGHHOME", repo_root().join("specs"))
-        .args(args)
-        .output()
-        .expect("failed to spawn the unlace binary");
-    (
-        String::from_utf8_lossy(&out.stdout).into_owned(),
-        String::from_utf8_lossy(&out.stderr).into_owned(),
-        out.status.code(),
-    )
+    let specs = repo_root().join("specs");
+    let run = unlace_testkit::run_bin_env(
+        env!("CARGO_BIN_EXE_unlace"),
+        args,
+        &[("SLEIGHHOME", specs.to_str().expect("utf-8 path"))],
+    );
+    (run.stdout, run.stderr, run.code)
 }
 
 /// The marker the printer emits, spelled here exactly once so a drift in

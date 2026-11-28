@@ -12,7 +12,6 @@
 //! Integration tests require the built processor specs under `specs/`.
 
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static TEMP_ID: AtomicU64 = AtomicU64::new(0);
@@ -35,15 +34,8 @@ fn specs() -> String {
 
 /// Run the built `unlace` binary, returning `(stdout, stderr, exit code)`.
 fn run_unlace(args: &[&str]) -> (String, String, Option<i32>) {
-    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(args)
-        .output()
-        .expect("failed to spawn the unlace binary");
-    (
-        String::from_utf8_lossy(&out.stdout).into_owned(),
-        String::from_utf8_lossy(&out.stderr).into_owned(),
-        out.status.code(),
-    )
+    let run = unlace_testkit::run_bin(env!("CARGO_BIN_EXE_unlace"), args);
+    (run.stdout, run.stderr, run.code)
 }
 
 fn json_field(doc: &str, key: &str) -> Option<String> {

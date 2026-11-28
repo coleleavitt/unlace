@@ -43,15 +43,9 @@ fn out_dir(tag: &str) -> PathBuf {
 }
 
 fn run_unlace(args: &[&str]) -> (String, String, bool) {
-    let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
-        .args(args)
-        .output()
-        .expect("failed to spawn the unlace binary");
-    (
-        String::from_utf8_lossy(&out.stdout).into_owned(),
-        String::from_utf8_lossy(&out.stderr).into_owned(),
-        out.status.success(),
-    )
+    let run = unlace_testkit::run_bin(env!("CARGO_BIN_EXE_unlace"), args);
+    let ok = run.success();
+    (run.stdout, run.stderr, ok)
 }
 
 /// Export `fixture_name` and return the project directory.
@@ -2184,10 +2178,10 @@ fn a_sectionless_image_never_reports_a_sweeping_asm_at_jobs_1() {
 
     let mut seen: Vec<String> = Vec::new();
     while child.try_wait().unwrap().is_none() {
-        if let Ok(status) = std::fs::read_to_string(dir.join(".streaming")) {
-            if seen.last().map(String::as_str) != Some(status.trim()) {
-                seen.push(status.trim().to_string());
-            }
+        if let Ok(status) = std::fs::read_to_string(dir.join(".streaming"))
+            && seen.last().map(String::as_str) != Some(status.trim())
+        {
+            seen.push(status.trim().to_string());
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }

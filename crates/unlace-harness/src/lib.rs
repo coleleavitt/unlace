@@ -1,8 +1,8 @@
 //! unlace-harness: dev-only differential helpers for the unlace Rust port.
 //!
 //! No C++ counterpart -- this crate never ships in the engine. It holds
-//! tooling that diffs the Rust crates against the C++ oracle
-//! (`decompiler/cpp/`, kept green throughout the port): golden-output
+//! tooling that diffs the Rust crates against recorded Ghidra output (the vendored
+//! datatests and golden vectors; the C++ tree itself is not in this repo): golden-output
 //! comparison, phase-boundary dump diffing, and ad-hoc harnesses for running
 //! both engines over the same inputs.
 //!

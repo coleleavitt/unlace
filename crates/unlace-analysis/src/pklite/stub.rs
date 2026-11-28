@@ -228,24 +228,26 @@ pub(super) fn analyze(
 
     let mut scramble = 0u8;
     let mut copier_pos = position2;
-    if matches!(intro, Intro::V112 | Intro::V114 | Intro::V150) && position2 + 200 <= EP_LEN as i64
-        && let Some(d) = descrambler(ep, position2) {
-            scramble = match ep[d.op as usize] {
-                0x33 => 1,
-                0x03 => 2,
-                op => {
-                    return Err(unsupported(format!(
-                        "the descrambler combines words with opcode {op:#04x}, neither XOR nor ADD"
-                    )));
-                }
-            };
-            let count = (u16_at(ep, d.count) - 1).max(0);
-            let last = ip_to_eprel(u16_at(ep, d.endpos));
-            copier_pos = follow_jump(ep, d.jmp);
-            if count >= 1 {
-                descramble(ep, scramble, count, last, key)?;
+    if matches!(intro, Intro::V112 | Intro::V114 | Intro::V150)
+        && position2 + 200 <= EP_LEN as i64
+        && let Some(d) = descrambler(ep, position2)
+    {
+        scramble = match ep[d.op as usize] {
+            0x33 => 1,
+            0x03 => 2,
+            op => {
+                return Err(unsupported(format!(
+                    "the descrambler combines words with opcode {op:#04x}, neither XOR nor ADD"
+                )));
             }
+        };
+        let count = (u16_at(ep, d.count) - 1).max(0);
+        let last = ip_to_eprel(u16_at(ep, d.endpos));
+        copier_pos = follow_jump(ep, d.jmp);
+        if count >= 1 {
+            descramble(ep, scramble, count, last, key)?;
         }
+    }
 
     let mut decompr_pos = 0;
     let (mut copier_byte17, mut copier_byte23) = (0, 0);

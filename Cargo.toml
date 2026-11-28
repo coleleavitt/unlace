@@ -28,9 +28,14 @@ doc = false
 # `cargo install --features embed-specs`: carry the compiled SLEIGH tree inside the binary,
 # so it runs without this checkout.
 embed-specs = ["unlace-cli/embed-specs"]
+dynamic_linking = ["dep:unlace-decomp-dylib", "unlace-cli/dynamic_linking"]
 
 [dependencies]
 unlace-cli.workspace = true
+unlace-decomp-dylib = { workspace = true, optional = true }
+
+[lints]
+workspace = true
 
 [workspace]
 resolver = "3"

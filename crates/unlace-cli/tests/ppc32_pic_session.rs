@@ -4,7 +4,7 @@
 
 mod common;
 #[path = "fixtures/ppc32_import_fixture.rs"]
-#[allow(dead_code)]
+#[allow(dead_code, clippy::chunks_exact_to_as_chunks)]
 mod fixture;
 
 use std::sync::{Mutex, MutexGuard};

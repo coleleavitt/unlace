@@ -2,6 +2,7 @@ use crate::common;
 use object::Object as _;
 use std::process::Command;
 #[path = "fixtures/ppc32_import_fixture.rs"]
+#[allow(dead_code, clippy::chunks_exact_to_as_chunks)]
 mod fixture;
 use fixture::{Fixture, Plt};
 

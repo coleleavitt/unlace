@@ -1,6 +1,7 @@
 use crate::common;
 use std::process::Command;
 #[path = "fixtures/ppc32_import_fixture.rs"]
+#[allow(dead_code, clippy::chunks_exact_to_as_chunks)]
 mod fixture;
 
 fn decompile(bytes: &[u8], entry: &str, enabled: bool) -> String {

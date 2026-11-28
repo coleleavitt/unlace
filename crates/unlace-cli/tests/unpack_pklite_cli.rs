@@ -6,6 +6,7 @@
 
 use crate::common;
 #[path = "../../unlace-analysis/tests/fixtures/pklite_synth.rs"]
+#[allow(clippy::collapsible_if)]
 mod synth;
 
 fn packed(name: &str) -> (Vec<u8>, Vec<u8>) {

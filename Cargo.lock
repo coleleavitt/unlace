@@ -1539,6 +1539,7 @@ name = "unlace-install"
 version = "0.1.0"
 dependencies = [
  "unlace-cli",
+ "unlace-decomp-dylib",
 ]
 
 [[package]]

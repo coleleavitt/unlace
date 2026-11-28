@@ -699,6 +699,7 @@ fn unpack_com(image: &[u8]) -> Result<Unpacked, PkliteError> {
 
 #[cfg(test)]
 #[path = "../../tests/fixtures/pklite_synth.rs"]
+#[allow(clippy::collapsible_if)]
 mod synth;
 
 #[cfg(test)]
